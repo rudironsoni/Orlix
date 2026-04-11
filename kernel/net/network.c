@@ -486,15 +486,15 @@ ssize_t __ixland_recv_impl(int sockfd, void *buf, size_t len, int flags) {
 }
 
 ssize_t __ixland_sendto_impl(int sockfd, const void *buf, size_t len, int flags,
-                          const struct sockaddr *dest_addr, socklen_t addrlen) {
+                             const struct sockaddr *dest_addr, socklen_t addrlen) {
     /* For connectionless sockets */
     (void)dest_addr;
     (void)addrlen;
     return __ixland_send_impl(sockfd, buf, len, flags);
 }
 
-ssize_t __ixland_recvfrom_impl(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr,
-                            socklen_t *addrlen) {
+ssize_t __ixland_recvfrom_impl(int sockfd, void *buf, size_t len, int flags,
+                               struct sockaddr *src_addr, socklen_t *addrlen) {
     /* For connectionless sockets */
     (void)src_addr;
     (void)addrlen;
@@ -506,7 +506,7 @@ ssize_t __ixland_recvfrom_impl(int sockfd, void *buf, size_t len, int flags, str
  * ============================================================================ */
 
 int __ixland_setsockopt_impl(int sockfd, int level, int optname, const void *optval,
-                          socklen_t optlen) {
+                             socklen_t optlen) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -625,12 +625,12 @@ ssize_t ixland_recv(int sockfd, void *buf, size_t len, int flags) {
 }
 
 ssize_t ixland_sendto(int sockfd, const void *buf, size_t len, int flags,
-                   const struct sockaddr *dest_addr, socklen_t addrlen) {
+                      const struct sockaddr *dest_addr, socklen_t addrlen) {
     return __ixland_sendto_impl(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
 ssize_t ixland_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr,
-                     socklen_t *addrlen) {
+                        socklen_t *addrlen) {
     return __ixland_recvfrom_impl(sockfd, buf, len, flags, src_addr, addrlen);
 }
 

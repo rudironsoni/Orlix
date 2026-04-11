@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "ixland/ixland_types.h"
+#include "../include/ixland/ixland_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,15 +87,19 @@ void ixland_vfs_deinit(void);
 int ixland_vfs_mount(const char *source, const char *target, ixland_vfs_ops_t *ops);
 int ixland_vfs_umount(const char *target);
 
-int ixland_vfs_open(const char *path, int flags, mode_t mode, ixland_vnode_t **vnode);
+int ixland_vfs_open(const char *path, int flags, mode_t mode);
 int ixland_vfs_close(ixland_vnode_t *vnode);
 int ixland_vfs_stat(const char *path, struct stat *st);
+int ixland_vfs_lstat(const char *path, struct stat *st);
+int ixland_vfs_access(const char *path, int mode);
 int ixland_vfs_mkdir(const char *path, mode_t mode);
 int ixland_vfs_unlink(const char *path);
 int ixland_vfs_rmdir(const char *path);
 
 int ixland_vfs_lookup(ixland_fs_t *fs, const char *path, ixland_vnode_t **vnode);
 int ixland_vfs_path_walk(ixland_fs_t *fs, const char *path, ixland_vnode_t **vnode);
+int ixland_vfs_translate(const char *vpath, char *ios_path, size_t ios_path_len);
+int ixland_vfs_reverse_translate(const char *ios_path, char *vpath, size_t vpath_len);
 
 #ifdef __cplusplus
 }

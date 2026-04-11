@@ -3,6 +3,8 @@
  * Path resolution, validation, and manipulation
  */
 
+#include "../include/ixland/ixland_path.h"
+
 #include <libgen.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -11,6 +13,7 @@
 #include <unistd.h>
 
 #include "../internal/ixland_internal.h"
+#include "vfs.h"
 
 /* ============================================================================
  * PATH RESOLUTION

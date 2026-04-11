@@ -12,7 +12,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include "../src/ixland/internal/ixland_internal.h"
+#include "../internal/ixland_internal.h"
 
 /* ============================================================================
  * RLIMIT - Resource limits

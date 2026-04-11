@@ -22,8 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 
-typedef sigset_t ixland_host_sigset_t;
-
+#include "../include/ixland/ixland_signal.h"
 #include "../internal/ixland_internal.h"
 
 /* Define sighandler_t if needed */
@@ -153,43 +152,16 @@ int __ixland_lchown_impl(const char *pathname, uid_t owner, gid_t group) {
  * are implemented in ixland_process.c with full functionality
  * ============================================================================ */
 
-static __thread sigset_t ixland_thread_sigmask;
-static __thread bool ixland_thread_sigmask_initialized = false;
-
-static void ixland_linux_sigmask_init_if_needed(void) {
-    if (!ixland_thread_sigmask_initialized) {
-        memset(&ixland_thread_sigmask, 0, sizeof(ixland_thread_sigmask));
-        ixland_thread_sigmask_initialized = true;
-    }
-}
-
-static int ixland_linux_sigset_validate_signum(int signum, size_t words, size_t *word_index,
-                                               unsigned long *bit_mask) {
-    const size_t bits_per_word = 8U * sizeof(unsigned long);
-
-    if (signum <= 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    size_t idx = (size_t)signum / bits_per_word;
-    if (idx >= words) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    *word_index = idx;
-    *bit_mask = 1UL << ((size_t)signum % bits_per_word);
-    return 0;
-}
-
 int __ixland_sigprocmask_impl(int how, const sigset_t *set, sigset_t *oldset) {
-    const size_t words = sizeof(ixland_thread_sigmask.sig) / sizeof(ixland_thread_sigmask.sig[0]);
+    ixland_sigset_t *thread_mask = ixland_thread_sigmask();
+    ixland_sigset_t ixland_set;
 
-    ixland_linux_sigmask_init_if_needed();
+    if (set) {
+        ixland_sigset_from_host(set, &ixland_set);
+    }
 
     if (oldset) {
-        *oldset = ixland_thread_sigmask;
+        ixland_sigset_to_host(thread_mask, oldset);
     }
 
     if (!set) {
@@ -198,17 +170,14 @@ int __ixland_sigprocmask_impl(int how, const sigset_t *set, sigset_t *oldset) {
 
     switch (how) {
     case SIG_BLOCK:
-        for (size_t i = 0; i < words; i++) {
-            ixland_thread_sigmask.sig[i] |= set->sig[i];
-        }
+        ixland_sigorset(thread_mask, thread_mask, &ixland_set);
         return 0;
     case SIG_UNBLOCK:
-        for (size_t i = 0; i < words; i++) {
-            ixland_thread_sigmask.sig[i] &= ~set->sig[i];
-        }
+        ixland_signotset(&ixland_set, &ixland_set);
+        ixland_sigandset(thread_mask, thread_mask, &ixland_set);
         return 0;
     case SIG_SETMASK:
-        ixland_thread_sigmask = *set;
+        *thread_mask = ixland_set;
         return 0;
     default:
         errno = EINVAL;
@@ -226,9 +195,10 @@ int __ixland_sigpending_impl(sigset_t *set) {
 }
 
 int __ixland_sigsuspend_impl(const sigset_t *mask) {
-    ixland_linux_sigmask_init_if_needed();
     if (mask) {
-        ixland_thread_sigmask = *mask;
+        ixland_sigset_t ixland_mask;
+        ixland_sigset_from_host(mask, &ixland_mask);
+        ixland_sigset_to_host(&ixland_mask, (sigset_t *)ixland_thread_sigmask());
     }
     errno = EINTR;
     return -1;
@@ -253,56 +223,29 @@ int __ixland_sigfillset_impl(sigset_t *set) {
 }
 
 int __ixland_sigaddset_impl(sigset_t *set, int signum) {
-    const size_t words = sizeof(set->sig) / sizeof(set->sig[0]);
-    size_t word_index = 0;
-    unsigned long bit_mask = 0;
-
     if (!set) {
         errno = EINVAL;
         return -1;
     }
-
-    if (ixland_linux_sigset_validate_signum(signum, words, &word_index, &bit_mask) < 0) {
-        return -1;
-    }
-
-    set->sig[word_index] |= bit_mask;
+    sigaddset(set, signum);
     return 0;
 }
 
 int __ixland_sigdelset_impl(sigset_t *set, int signum) {
-    const size_t words = sizeof(set->sig) / sizeof(set->sig[0]);
-    size_t word_index = 0;
-    unsigned long bit_mask = 0;
-
     if (!set) {
         errno = EINVAL;
         return -1;
     }
-
-    if (ixland_linux_sigset_validate_signum(signum, words, &word_index, &bit_mask) < 0) {
-        return -1;
-    }
-
-    set->sig[word_index] &= ~bit_mask;
+    sigdelset(set, signum);
     return 0;
 }
 
 int __ixland_sigismember_impl(const sigset_t *set, int signum) {
-    const size_t words = sizeof(set->sig) / sizeof(set->sig[0]);
-    size_t word_index = 0;
-    unsigned long bit_mask = 0;
-
     if (!set) {
         errno = EINVAL;
         return -1;
     }
-
-    if (ixland_linux_sigset_validate_signum(signum, words, &word_index, &bit_mask) < 0) {
-        return -1;
-    }
-
-    return (set->sig[word_index] & bit_mask) != 0 ? 1 : 0;
+    return sigismember(set, signum);
 }
 
 unsigned int __ixland_alarm_impl(unsigned int seconds) {
@@ -450,35 +393,13 @@ int ixland_lchown(const char *pathname, uid_t owner, gid_t group) {
     return __ixland_lchown_impl(pathname, owner, group);
 }
 
-/* Signal wrappers - main implementations in ixland_process.c */
+/* Signal wrappers - main implementations in ixland_process.c and signal_mask.c */
 /* __sighandler_t ixland_signal(int signum, __sighandler_t handler) - in ixland_process.c */
 /* int ixland_kill(pid_t pid, int sig) - in ixland_process.c */
 /* int ixland_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) - in
  * ixland_process.c */
-int ixland_sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    return __ixland_sigprocmask_impl(how, set, oldset);
-}
-int ixland_sigpending(sigset_t *set) {
-    return __ixland_sigpending_impl(set);
-}
-int ixland_sigsuspend(const sigset_t *mask) {
-    return __ixland_sigsuspend_impl(mask);
-}
-int ixland_sigemptyset(sigset_t *set) {
-    return __ixland_sigemptyset_impl(set);
-}
-int ixland_sigfillset(sigset_t *set) {
-    return __ixland_sigfillset_impl(set);
-}
-int ixland_sigaddset(sigset_t *set, int signum) {
-    return __ixland_sigaddset_impl(set, signum);
-}
-int ixland_sigdelset(sigset_t *set, int signum) {
-    return __ixland_sigdelset_impl(set, signum);
-}
-int ixland_sigismember(const sigset_t *set, int signum) {
-    return __ixland_sigismember_impl(set, signum);
-}
+/* ixland_sigprocmask, sigpending, sigsuspend, sigemptyset, sigfillset, sigaddset, sigdelset,
+ * sigismember - implemented in signal_mask.c for ixland_sigset_t type */
 unsigned int ixland_alarm(unsigned int seconds) {
     return __ixland_alarm_impl(seconds);
 }

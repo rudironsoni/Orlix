@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#include "ixland/ixland_types.h"
+#include "../include/ixland/ixland_types.h"
 
 #define IXLAND_MAX_NAME 256
 #define IXLAND_NSIG 64

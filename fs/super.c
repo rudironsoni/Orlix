@@ -13,7 +13,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "../src/ixland/internal/ixland_internal.h"
+#include "../internal/ixland_internal.h"
 
 /* ============================================================================
  * SYNC - Flush filesystem buffers
@@ -28,7 +28,12 @@ int ixland_fsync(int fd) {
 }
 
 int ixland_fdatasync(int fd) {
-    return fdatasync(fd);
+    /* fdatasync not available on iOS, use fsync or F_FULLFSYNC */
+#ifdef F_FULLFSYNC
+    return fcntl(fd, F_FULLFSYNC);
+#else
+    return fsync(fd);
+#endif
 }
 
 int ixland_syncfs(int fd) {

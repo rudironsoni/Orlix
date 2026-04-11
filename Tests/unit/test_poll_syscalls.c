@@ -24,7 +24,7 @@
  * The internal ixland_poll() and ixland_select() functions use the Linux-compatible
  * types defined in the internal header (linux_pollfd, linux_fd_set_t, etc.).
  */
-#include "../../src/ixland/internal/ixland_internal.h"
+#include "../../internal/ixland_internal.h"
 
 /* Helper: Create a connected socket pair */
 static int create_socket_pair(int fds[2]) {

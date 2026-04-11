@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "../src/ixland/internal/ixland_internal.h"
+#include "../internal/ixland_internal.h"
 
 int __ixland_dup_impl(int oldfd) {
     if (oldfd < 0 || oldfd >= IXLAND_MAX_FD) {

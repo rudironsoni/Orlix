@@ -8,9 +8,11 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-typedef sigset_t ixland_native_sigset_t;
+#include "../include/ixland/ixland_signal.h"
+#include "../internal/ixland_internal.h"
+#include "select_internal.h"
 
-#include "../src/ixland/internal/ixland_internal.h"
+typedef sigset_t ixland_native_sigset_t;
 
 static short ixland_kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
     short revents = 0;

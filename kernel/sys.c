@@ -11,6 +11,9 @@
 #include "../fs/exec.h"
 #include "task.h"
 
+/* extern declaration for environ (not available on all platforms) */
+extern char **environ;
+
 int ixland_setpgrp(void) {
     /* setpgrp() is equivalent to setpgid(0, 0) */
     return ixland_setpgid(0, 0);

@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#include "../../src/ixland/internal/ixland_internal.h"
+#include "../../internal/ixland_internal.h"
 #include "../harness/ixland_test.h"
 
 IXLAND_TEST(getuid_returns_consistent_uid) {

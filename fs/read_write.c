@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "../src/ixland/internal/ixland_internal.h"
+#include "../internal/ixland_internal.h"
 
 ssize_t __ixland_read_impl(int fd, void *buf, size_t count) {
     if (!buf) {

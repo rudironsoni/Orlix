@@ -10,6 +10,16 @@
 
 #include "exec.h"
 
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+/* environ is not available on iOS; use _NSGetEnviron() */
+#include <crt_externs.h>
+#define environ (*_NSGetEnviron())
+
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
 #include "../runtime/native/registry.h"

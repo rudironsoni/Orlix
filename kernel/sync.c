@@ -12,7 +12,7 @@
 #include <errno.h>
 #include <pthread.h>
 
-#include "../src/ixland/internal/ixland_internal.h"
+#include "../internal/ixland_internal.h"
 
 /* ============================================================================
  * FUTEX - Fast Userspace muTEX (simulated on iOS)

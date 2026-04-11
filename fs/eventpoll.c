@@ -2,17 +2,29 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/event.h>
+#include <unistd.h>
+
+#include "epoll_internal.h"
+
+/* Forward declarations for epoll functions */
+int ixland_epoll_create1(int flags);
 
 typedef sigset_t ixland_native_sigset_t;
 
-#include "../src/ixland/internal/ixland_internal.h"
+#include "../internal/ixland_internal.h"
+
+/* Forward declarations for epoll wait functions */
+int ixland_epoll_pwait(int epfd, struct linux_epoll_event *events, int maxevents, int timeout,
+                       const void *sigmask);
 
 typedef struct ixland_epitem {
     int fd;
-    struct epoll_event event;
+    struct linux_epoll_event event;
     uint32_t registered_events;
     bool is_registered;
     bool edge_triggered;
@@ -225,7 +237,7 @@ int ixland_epoll_create1(int flags) {
     return epfd;
 }
 
-int ixland_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
+int ixland_epoll_ctl(int epfd, int op, int fd, struct linux_epoll_event *event) {
     ixland_epoll_instance_t *ep = ixland_epoll_lookup_instance(epfd);
     if (!ep) {
         errno = EBADF;
@@ -268,7 +280,7 @@ int ixland_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
         }
 
         item->fd = fd;
-        memcpy(&item->event, event, sizeof(struct epoll_event));
+        memcpy(&item->event, event, sizeof(struct linux_epoll_event));
         item->is_registered = true;
         item->edge_triggered = (event->events & EPOLLET) != 0;
 
@@ -329,7 +341,7 @@ int ixland_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
             kevent(ep->kq, changes, nchanges, NULL, 0, NULL);
         }
 
-        memcpy(&item->event, event, sizeof(struct epoll_event));
+        memcpy(&item->event, event, sizeof(struct linux_epoll_event));
         item->edge_triggered = (event->events & EPOLLET) != 0;
 
         nchanges =
@@ -355,11 +367,11 @@ int ixland_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
     return 0;
 }
 
-int ixland_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout) {
+int ixland_epoll_wait(int epfd, struct linux_epoll_event *events, int maxevents, int timeout) {
     return ixland_epoll_pwait(epfd, events, maxevents, timeout, NULL);
 }
 
-int ixland_epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout,
+int ixland_epoll_pwait(int epfd, struct linux_epoll_event *events, int maxevents, int timeout,
                        const struct ixland_sigset *sigmask) {
     if (!events || maxevents <= 0) {
         errno = EINVAL;
@@ -445,7 +457,7 @@ int ixland_epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int 
     return ready_count;
 }
 
-int ixland_epoll_pwait2(int epfd, struct epoll_event *events, int maxevents,
+int ixland_epoll_pwait2(int epfd, struct linux_epoll_event *events, int maxevents,
                         const struct ixland_timespec *timeout,
                         const struct ixland_sigset *sigmask) {
     int timeout_ms = -1;
