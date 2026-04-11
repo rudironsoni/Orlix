@@ -1,0 +1,90 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00100001D4B5C0000F1A2B0 /* IXLANDTestHelpers.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C0 /* IXLANDTestHelpers.mm */; };
+		A00100001D4B5C0000F1A2B1 /* IXLANDProcessTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C1 /* IXLANDProcessTests.mm */; };
+		A00100001D4B5C0000F1A2B2 /* IXLANDFileTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C2 /* IXLANDFileTests.mm */; };
+		A00100001D4B5C0000F1A2B3 /* IXLANDFilesystemTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C3 /* IXLANDFilesystemTests.mm */; };
+		A00100001D4B5C0000F1A2B4 /* IXLANDEnvironmentTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C4 /* IXLANDEnvironmentTests.mm */; };
+		A00100001D4B5C0000F1A2B5 /* IXLANDSignalTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C5 /* IXLANDSignalTests.mm */; };
+		A00100001D4B5C0000F1A2B6 /* IXLANDMemoryTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C6 /* IXLANDMemoryTests.mm */; };
+		A00100001D4B5C0000F1A2B7 /* IXLANDTimeTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C7 /* IXLANDTimeTests.mm */; };
+		A00100001D4B5C0000F1A2B8 /* IXLANDTtyTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C8 /* IXLANDTtyTests.mm */; };
+		A00100001D4B5C0000F1A2B9 /* IXLANDNetworkStubTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2C9 /* IXLANDNetworkStubTests.mm */; };
+		A00100001D4B5C0000F1A2BA /* libixland-sim.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2D0 /* libixland-sim.a */; };
+		A00100001D4B5C0000F1A2BB /* libiwasm.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A00100001D4B5C0000F1A2D1 /* libiwasm.a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A00100001D4B5C0000F1A2A0 /* IXLANDTestSuite.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IXLANDTestSuite.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00100001D4B5C0000F1A2C0 /* IXLANDTestHelpers.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = IXLANDTestHelpers.mm; sourceTree = "<group>"; };
+		A00100001D4B5C0000F1A2D0 /* libixland-sim.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libixland-sim.a"; path = "../../lib/libixland-sim.a"; sourceTree = "<group>"; };
+		A00100001D4B5C0000F1A2D1 /* libiwasm.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libiwasm.a"; path = "../../build/wamr-simulator/libiwasm.a"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00100001D4B5C0000F1A2A3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100001D4B5C0000F1A2BA /* libixland-sim.a in Frameworks */,
+				A00100001D4B5C0000F1A2BB /* libiwasm.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00100001D4B5C0000F1A2A1 = {
+			isa = PBXGroup;
+			children = (
+				A00100001D4B5C0000F1A2AF /* IXLANDTestSuite */,
+				A00100001D4B5C0000F1A2A4 /* Products */,
+				A00100001D4B5C0000F1A2B9 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		A00100001D4B5C0000F1A2A4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00100001D4B5C0000F1A2A0 /* IXLANDTestSuite.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00100001D4B5C0000F1A2AF /* IXLANDTestSuite */ = {
+			isa = PBXGroup;
+			children = (
+				A00100001D4B5C0000F1A2C0 /* IXLANDTestHelpers.mm */,
+				A00100001D4B5C0000F1A2C1 /* IXLANDProcessTests.mm */,
+				A00100001D4B5C0000F1A2C2 /* IXLANDFileTests.mm */,
+				A00100001D4B5C0000F1A2C3 /* IXLANDFilesystemTests.mm */,
+				A00100001D4B5C0000F1A2C4 /* IXLANDEnvironmentTests.mm */,
+				A00100001D4B5C0000F1A2C5 /* IXLANDSignalTests.mm */,
+				A00100001D4B5C0000F1A2C6 /* IXLANDMemoryTests.mm */,
+				A00100001D4B5C0000F1A2C7 /* IXLANDTimeTests.mm */,
+				A00100001D4B5C0000F1A2C8 /* IXLANDTtyTests.mm */,
+				A00100001D4B5C0000F1A2C9 /* IXLANDNetworkStubTests.mm */,
+			);
+			path = IXLANDTestSuite;
+			sourceTree = "<group>";
+		};
+		A00100001D4B5C0000F1A2B9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A00100001D4B5C0000F1A2D0 /* libixland-sim.a */,
+				A00100001D4B5C0000F1A2D1 /* libiwasm.a */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+	};
+}

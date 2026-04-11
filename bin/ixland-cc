@@ -1,0 +1,131 @@
+#!/bin/bash
+# ixland-cc - Linux-to-iOS Cross Compiler
+# Usage: ixland-cc [options] file...
+
+set -e
+
+# Configuration
+IXLAND_PREFIX="${IXLAND_PREFIX:-/usr/local}"
+IXLAND_SYSROOT="${IXLAND_SYSROOT:-${IXLAND_PREFIX}/share/ixland/sysroot}"
+
+# iOS SDK detection
+IOSSDK_PATH="${IOSSDK_PATH:-$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || echo '')}"
+if [ -z "$IOSSDK_PATH" ]; then
+    echo "Error: iOS SDK not found" >&2
+    exit 1
+fi
+
+# Default target
+TARGET="${IXLAND_TARGET:-arm64-apple-ios16.0}"
+
+# Parse arguments
+OUTPUT=""
+SOURCES=()
+ARGS=()
+LINK_IXLAND=true
+VERBOSE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -o)
+            OUTPUT="$2"
+            ARGS+=("$1" "$2")
+            shift 2
+            ;;
+        -c)
+            LINK_IXLAND=false
+            ARGS+=("$1")
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        --target=*)
+            TARGET="${1#*=}"
+            shift
+            ;;
+        --sysroot=*)
+            IXLAND_SYSROOT="${1#*=}"
+            shift
+            ;;
+        --help)
+            cat << 'EOF'
+ixland-cc - Linux-to-iOS Cross Compiler
+
+Usage: ixland-cc [options] file...
+
+Options:
+  -o <file>           Output file
+  -c                  Compile only (don't link)
+  -v, --verbose       Verbose output
+  --target=<triple>   Target triple (default: arm64-apple-ios16.0)
+  --sysroot=<path>    System root path
+  --help              Show this help
+
+Environment Variables:
+  IXLAND_PREFIX          Installation prefix (default: /usr/local)
+  IXLAND_TARGET          Target triple
+  IXLAND_SYSROOT         System root for headers and libraries
+  IOSSDK_PATH         iOS SDK path
+
+Examples:
+  ixland-cc hello.c -o hello
+  ixland-cc -c module.c -o module.o
+  ixland-cc --target=x86_64-apple-ios16.0-simulator test.c
+
+EOF
+            exit 0
+            ;;
+        -*)
+            ARGS+=("$1")
+            shift
+            ;;
+        *)
+            SOURCES+=("$1")
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Compiler flags
+CFLAGS=(
+    "-target" "$TARGET"
+    "-isysroot" "$IOSSDK_PATH"
+    "-isystem" "${IXLAND_PREFIX}/include/ixland"
+    "-isystem" "${IXLAND_PREFIX}/include/ixland/sys"
+    "-I${IXLAND_SYSROOT}/usr/include"
+    "-D__IXLAND__=1"
+    "-D__linux__=1"  # Pretend to be Linux for compatibility
+)
+
+# Linker flags
+LDFLAGS=()
+if $LINK_IXLAND; then
+    LDFLAGS+=(
+        "-L${IXLAND_PREFIX}/lib"
+        "-lixland"
+        "-lpthread"
+        "-Wl,-e,_ixland_start"  # Custom entry point
+    )
+fi
+
+# Debug output
+if $VERBOSE; then
+    echo "ixland-cc: Target: $TARGET"
+    echo "ixland-cc: iOS SDK: $IOSSDK_PATH"
+    echo "ixland-cc: IXLAND Prefix: $IXLAND_PREFIX"
+    echo "ixland-cc: Sources: ${SOURCES[*]}"
+    echo "ixland-cc: CFLAGS: ${CFLAGS[*]}"
+    $LINK_IXLAND && echo "ixland-cc: LDFLAGS: ${LDFLAGS[*]}"
+fi
+
+# Compile and link
+if $LINK_IXLAND; then
+    clang "${CFLAGS[@]}" "${ARGS[@]}" "${LDFLAGS[@]}"
+else
+    clang "${CFLAGS[@]}" "${ARGS[@]}"
+fi
+
+exit 0
