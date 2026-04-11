@@ -1,12 +1,12 @@
-# Agent Guide: ixland
+# Agent Guide: IXLandSystem
 
 ## Overview
 
-**ixland** is a Linux-like virtual kernel subsystem for iOS, designed for maximum practical Linux userland compatibility within App Store constraints. It is not a compatibility shim—it is a virtual kernel substrate that implements Linux process, filesystem, signal, and terminal semantics.
+**IXLandSystem** is a Linux-like virtual kernel subsystem for iOS, designed for maximum practical Linux userland compatibility within App Store constraints. It is not a compatibility shim—it is a virtual kernel substrate that implements Linux process, filesystem, signal, and terminal semantics.
 
 ## Mission Statement
 
-Transform the current project from a fragmented compatibility layer into one coherent Linux-like virtual subsystem for iOS, achieving:
+Transform the project into one coherent Linux-like virtual subsystem for iOS, achieving:
 
 1. Maximum practical Linux userland compatibility (bash, coreutils, etc.)
 2. Zero reliance on real host `fork()` or image replacement
@@ -25,15 +25,20 @@ Transform the current project from a fragmented compatibility layer into one coh
 
 **Hard constraint**: Configure must hard-fail if not targeting iOS.
 
+## Build System
+
+**Xcode-only. No CMake. No Make. No CTest.**
+
+The build truth is in `IXLand/IXLand.xcodeproj`. IXLandSystem is built as part of the app project.
+
 ## Architectural Principles
 
 ### Single Canonical Execution Object
 
 There is exactly one canonical execution object: **`ixland_task`**.
 
-- `ixland_context.c` is a competing model—**must be eliminated**
-- Global FD table in `ixland_file.c`—**must be eliminated**
 - All FDs live only under `task->files`
+- No global state for process concepts
 
 ### WAMR as Execution Backend
 
@@ -48,10 +53,10 @@ WAMR is a secondary execution backend, not a separate universe:
 
 No reliance on host `fork()` or `execve()`:
 
-- `fork()`: Virtual process creation inside ixland task system
+- `fork()`: Virtual process creation inside IXLand task system
 - `execve()`: Virtual image replacement (native/WASI/script)
 - Parent and child are separate `ixland_task` objects
-- All semantics implemented by ixland, not host kernel
+- All semantics implemented by IXLand, not host kernel
 
 ### Native Command Registry
 
@@ -100,56 +105,43 @@ typedef struct ixland_task {
 ## Repository Layout
 
 ```
-ixland/
-├── kernel/              # Kernel subsystems
-│   ├── task/            # Process management
-│   ├── signal/          # Signal delivery
-│   ├── exec/            # Exec dispatch
-│   ├── time/            # Clocks
-│   └── resource/        # rlimits
-├── fs/                  # Filesystem
-│   ├── vfs/             # VFS
-│   ├── proc/            # /proc
-│   ├── dev/             # /dev
-│   ├── devpts/          # /dev/pts
-│   └── pipe/            # Pipes
-├── drivers/
-│   └── tty/             # PTY, termios
-├── runtime/             # Execution backends
-│   ├── native/          # Native commands
-│   ├── wasi/            # WAMR WASI
-│   └── script/          # Shebang scripts
-├── compat/
-│   ├── posix/           # POSIX compat
-│   └── interpose/       # Symbol interposition
-├── tests/               # Test suite
-└── tools/               # Build scripts
-```
-
-## Build System (CMake Only)
-
-### Requirements
-
-1. CMake is single source of truth
-2. Checked-in `CMakePresets.json`
-3. iOS-only builds (hard fail otherwise)
-4. Xcode generator
-5. Deterministic test commands
-
-### Supported Presets
-
-- `ios-simulator-debug`
-- `ios-simulator-release`
-- `ios-simulator-asan`
-- `ios-device-debug`
-- `ios-device-release`
-
-### Fresh Clone Bootstrap
-
-```bash
-tools/bootstrap.sh   # Setup
-tools/doctor.sh      # Verify
-tools/test-simulator.sh  # Test
+IXLandSystem/
+├── kernel/              # Kernel subsystems - canonical ownership
+│   ├── task.c           # Process management
+│   ├── fork.c           # Fork implementation
+│   ├── exit.c           # Exit handling
+│   ├── wait.c           # Waitpid implementation
+│   ├── pid.c            # PID allocation
+│   ├── cred.c           # Credentials
+│   ├── sys.c            # Syscall dispatch
+│   ├── signal.c         # Signal delivery
+│   ├── time.c           # Clocks
+│   ├── resource.c       # rlimits
+│   ├── random.c         # Random numbers
+│   ├── sync.c           # Synchronization
+│   ├── init.c           # Initialization
+│   ├── libc_delegate.c  # LibC delegation
+│   └── net/
+│       └── network.c    # Network subsystem
+├── fs/                  # Filesystem - canonical syscall ownership
+│   ├── fdtable.c        # File descriptor table
+│   ├── open.c           # Open syscall
+│   ├── read_write.c     # Read/write syscalls
+│   ├── stat.c           # Stat syscalls
+│   ├── fcntl.c          # Fcntl syscall
+│   ├── ioctl.c          # Ioctl syscall
+│   ├── namei.c          # Path resolution
+│   ├── readdir.c        # Directory operations
+│   ├── select.c         # Select/poll
+│   ├── eventpoll.c      # Epoll
+│   ├── exec.c           # Exec implementation
+│   ├── path.c           # Path operations
+│   ├── mount.c          # Mount operations
+│   ├── inode.c          # Inode cache
+│   └── super.c          # Superblock operations
+├── include/             # Public headers
+├── Tests/               # Test suite
+└── docs/                # Documentation
 ```
 
 ## Testing Doctrine
@@ -171,19 +163,6 @@ A feature is **NOT** complete without:
 5. **iOS tests**: Simulator and device
 6. **Stress tests**: Concurrency
 7. **Performance tests**: Regression
-
-### Test Execution
-
-```bash
-# Simulator
-tools/test-simulator.sh
-
-# Device
-tools/test-device.sh
-
-# CTest (orchestrates xcodebuild)
-ctest --preset ios-simulator-test
-```
 
 ### Platform Testing Policy
 
@@ -214,7 +193,7 @@ ctest --preset ios-simulator-test
 ### Always Do
 
 1. Keep `deps/wamr/` pristine—no edits
-2. Implement Linux semantics in ixland, not passthrough
+2. Implement Linux semantics in IXLand, not passthrough
 3. Use `ixland_task` as single execution model
 4. Put FDs only under `task->files`
 5. Test every subsystem with automated tests
@@ -236,8 +215,6 @@ ctest --preset ios-simulator-test
 8. Do not rely on manual testing
 9. Do not weaken bash compatibility goal
 10. Do not leave high-risk code without stress tests
-11. Do not split repo yet
-12. Do not change build system before semantic unification
 
 ## Compatibility Target
 
@@ -249,60 +226,6 @@ Maximum practical Linux userland compatibility:
 
 Not "just POSIX"—Linux-oriented userland compatibility like Termux/Cygwin/MSYS2.
 
-## execve Image Types
-
-`execve` resolves exactly one of:
-
-1. **Native registered command**: `/bin/ls` → `ixland_native_main`
-2. **WASM/WASI module**: `*.wasm` → WAMR runtime
-3. **Script with shebang**: `#!/bin/sh` → interpreter dispatch
-
-No other execution paths allowed.
-
-## Fork Model
-
-Virtual process creation:
-
-1. Allocate new `ixland_task` with new PID
-2. Copy `files`, `fs`, `sighand` (refcounted)
-3. Create host thread for child
-4. Child runs in thread, returns 0
-5. Parent returns child PID
-
-Use `setjmp/longjmp` or equivalent for child continuation.
-
-## Testing Requirements
-
-### Per Subsystem
-
-Every subsystem needs:
-- Invariant tests
-- Positive scenarios
-- Negative scenarios
-- Concurrency tests
-- Compatibility tests
-- Simulator coverage
-- Device coverage
-
-### Reliability Gates
-
-All changes must pass:
-1. Unit tests
-2. Integration tests
-3. Compatibility tests
-4. WASI tests
-5. Regression tests
-6. Performance checks
-7. Simulator tests
-8. Device tests
-
-### Flakiness Policy
-
-- Flaky tests are release blockers
-- Fix race conditions, not with longer sleeps
-- Every timeout bounded and justified
-- Tests deterministic and parallel-safe
-
 ## Security Constraints
 
 - No real fork/exec
@@ -312,26 +235,16 @@ All changes must pass:
 - No executable writable memory
 - Validate all WASI crossings
 
-## Current Status
-
-**Phase**: Pre-implementation analysis complete
-
-**Next**: Phase 0 - Repository reorganization
-
-**See**: `docs/IXLAND_ARCHITECTURAL_ANALYSIS.md` for complete migration plan
-
 ## Documentation
 
 - `README.md`: User-facing overview
 - `docs/IXLAND_ARCHITECTURAL_ANALYSIS.md`: Architecture and migration
 - `docs/SYSCALLS.md`: Syscall reference
 - `docs/PORTING.md`: Porting guide
-- `tests/README.md`: Testing guide
+- `Tests/README.md`: Testing guide
 
 ## Last Updated
 
-2026-03-23
-
-**Status**: Architecture defined, ready for Phase 0 implementation
+2026-04-11
 
 **Primary Rule**: `deps/wamr/` is external, app customers access WAMR only through `ixland_wamr_*`, and every subsystem requires executable test evidence.
