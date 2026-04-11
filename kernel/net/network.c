@@ -9,6 +9,8 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
