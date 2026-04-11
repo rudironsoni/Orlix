@@ -1,6 +1,7 @@
-/* IXLand Linux-like epoll Internal Definitions
+/* IXLand Linux epoll Compatibility Header
  *
- * Linux epoll constants and structures for IXLandSystem
+ * Linux epoll structures and constants for Darwin (iOS/macOS)
+ * Used internally by IXLandSystem eventpoll implementation
  */
 
 #ifndef IXLAND_EPOLL_INTERNAL_H
@@ -16,10 +17,6 @@
 #define EPOLLHUP (1 << 4)
 #define EPOLLNVAL (1 << 5)
 
-/* Linux epoll flag options */
-#define EPOLLONESHOT (1 << 30)
-#define EPOLLET (1 << 31)
-
 /* Additional Linux event types */
 #define EPOLLRDNORM (1 << 6)
 #define EPOLLRDBAND (1 << 7)
@@ -27,6 +24,10 @@
 #define EPOLLWRBAND (1 << 9)
 #define EPOLLMSG (1 << 10)
 #define EPOLLRDHUP (1 << 13)
+
+/* Linux epoll flag options */
+#define EPOLLONESHOT (1 << 30)
+#define EPOLLET (1 << 31)
 
 /* Linux epoll_op values */
 enum {
@@ -38,13 +39,18 @@ enum {
 /* Additional epoll flags */
 #define EPOLL_CLOEXEC (1 << 31)
 
-/* Linux epoll_event structure (compatible) */
-struct linux_epoll_event {
-    uint32_t events;
-    uint64_t data;
-} __attribute__((packed));
+/* Linux epoll_data_t union (Linux-compatible) */
+union epoll_data {
+    void *ptr;
+    int fd;
+    uint32_t u32;
+    uint64_t u64;
+};
 
-/* Use the Linux-compatible structure in IXLand */
-typedef struct linux_epoll_event ixland_epoll_event_t;
+/* Linux epoll_event structure (Linux-compatible) */
+struct epoll_event {
+    uint32_t events;
+    union epoll_data data;
+};
 
 #endif /* IXLAND_EPOLL_INTERNAL_H */
