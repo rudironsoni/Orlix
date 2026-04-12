@@ -8,6 +8,11 @@
 #include <unistd.h>
 
 ixland_files_t *ixland_files_alloc(size_t max_fds) {
+    if (max_fds == 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     ixland_files_t *files = calloc(1, sizeof(ixland_files_t));
     if (!files) {
         errno = ENOMEM;
@@ -104,7 +109,6 @@ int ixland_fd_alloc(ixland_files_t *files, ixland_file_t *file) {
     for (size_t i = 0; i < files->max_fds; i++) {
         if (!files->fd[i]) {
             files->fd[i] = file;
-            atomic_fetch_add(&file->refs, 1);
             pthread_mutex_unlock(&files->lock);
             return (int)i;
         }
@@ -144,12 +148,128 @@ ixland_file_t *ixland_fd_lookup(ixland_files_t *files, int fd) {
 
     pthread_mutex_lock(&files->lock);
     ixland_file_t *file = files->fd[fd];
-    if (file) {
-        atomic_fetch_add(&file->refs, 1);
-    }
     pthread_mutex_unlock(&files->lock);
 
     return file;
+}
+
+int ixland_fd_dup(ixland_files_t *files, int oldfd) {
+    if (!files || oldfd < 0 || (size_t)oldfd >= files->max_fds) {
+        errno = EBADF;
+        return -1;
+    }
+
+    pthread_mutex_lock(&files->lock);
+    ixland_file_t *file = files->fd[oldfd];
+    if (!file) {
+        pthread_mutex_unlock(&files->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    for (size_t i = 0; i < files->max_fds; i++) {
+        if (!files->fd[i]) {
+            files->fd[i] = file;
+            atomic_fetch_add(&file->refs, 1);
+            pthread_mutex_unlock(&files->lock);
+            return (int)i;
+        }
+    }
+    pthread_mutex_unlock(&files->lock);
+
+    errno = EMFILE;
+    return -1;
+}
+
+int ixland_fd_dup2(ixland_files_t *files, int oldfd, int newfd) {
+    if (!files || oldfd < 0 || newfd < 0 || (size_t)oldfd >= files->max_fds ||
+        (size_t)newfd >= files->max_fds) {
+        errno = EBADF;
+        return -1;
+    }
+
+    // dup2 to same FD is a no-op
+    if (oldfd == newfd) {
+        return 0;
+    }
+
+    pthread_mutex_lock(&files->lock);
+    ixland_file_t *file = files->fd[oldfd];
+    if (!file) {
+        pthread_mutex_unlock(&files->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    if (files->fd[newfd]) {
+        ixland_file_free(files->fd[newfd]);
+    }
+
+    files->fd[newfd] = file;
+    atomic_fetch_add(&file->refs, 1);
+    pthread_mutex_unlock(&files->lock);
+
+    return 0;
+}
+
+int ixland_fd_set_cloexec(ixland_files_t *files, int fd, bool cloexec) {
+    if (!files || fd < 0 || (size_t)fd >= files->max_fds) {
+        errno = EBADF;
+        return -1;
+    }
+
+    pthread_mutex_lock(&files->lock);
+    ixland_file_t *file = files->fd[fd];
+    if (!file) {
+        pthread_mutex_unlock(&files->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    if (cloexec) {
+        file->flags |= O_CLOEXEC;
+    } else {
+        file->flags &= ~O_CLOEXEC;
+    }
+    pthread_mutex_unlock(&files->lock);
+
+    return 0;
+}
+
+bool ixland_fd_get_cloexec(ixland_files_t *files, int fd) {
+    if (!files || fd < 0 || (size_t)fd >= files->max_fds) {
+        return false;
+    }
+
+    pthread_mutex_lock(&files->lock);
+    ixland_file_t *file = files->fd[fd];
+    bool cloexec = false;
+    if (file) {
+        cloexec = (file->flags & O_CLOEXEC) != 0;
+    }
+    pthread_mutex_unlock(&files->lock);
+
+    return cloexec;
+}
+
+int ixland_fd_close_cloexec(ixland_files_t *files) {
+    if (!files) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    int closed = 0;
+    pthread_mutex_lock(&files->lock);
+    for (size_t i = 0; i < files->max_fds; i++) {
+        if (files->fd[i] && (files->fd[i]->flags & O_CLOEXEC)) {
+            ixland_file_free(files->fd[i]);
+            files->fd[i] = NULL;
+            closed++;
+        }
+    }
+    pthread_mutex_unlock(&files->lock);
+
+    return closed;
 }
 
 typedef struct {
