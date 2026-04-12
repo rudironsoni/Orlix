@@ -21,13 +21,13 @@ static int ixland_directory_validate_path(const char *path) {
     return 0;
 }
 
-int __ixland_chdir_impl(const char *path) {
+int chdir_impl(const char *path) {
     if (ixland_directory_validate_path(path) != 0) {
         return -1;
     }
 
-    char translated_path[IXLAND_MAX_PATH];
-    if (ixland_vfs_translate(path, translated_path, sizeof(translated_path)) != 0) {
+    char translated_path[MAX_PATH];
+    if (vfs_translate(path, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -53,8 +53,8 @@ int __ixland_chdir_impl(const char *path) {
     return 0;
 }
 
-int __ixland_fchdir_impl(int fd) {
-    if (fd < 0 || fd >= IXLAND_MAX_FD || fd <= STDERR_FILENO) {
+int fchdir_impl(int fd) {
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT || fd <= STDERR_FILENO) {
         errno = EBADF;
         return -1;
     }
@@ -62,7 +62,7 @@ int __ixland_fchdir_impl(int fd) {
     return fchdir(fd);
 }
 
-char *__ixland_getcwd_impl(char *buf, size_t size) {
+char *getcwd_impl(char *buf, size_t size) {
     if (size == 0) {
         errno = EINVAL;
         return NULL;
@@ -73,15 +73,15 @@ char *__ixland_getcwd_impl(char *buf, size_t size) {
         return NULL;
     }
 
-    char ios_cwd[IXLAND_MAX_PATH];
+    char ios_cwd[MAX_PATH];
     if (getcwd(ios_cwd, sizeof(ios_cwd)) == NULL) {
         return NULL;
     }
 
-    char virtual_path[IXLAND_MAX_PATH];
+    char virtual_path[MAX_PATH];
     const char *selected_path = ios_cwd;
 
-    if (ixland_vfs_reverse_translate(ios_cwd, virtual_path, sizeof(virtual_path)) == 0) {
+    if (vfs_reverse_translate(ios_cwd, virtual_path, sizeof(virtual_path)) == 0) {
         selected_path = virtual_path;
     }
 
@@ -95,26 +95,26 @@ char *__ixland_getcwd_impl(char *buf, size_t size) {
     return buf;
 }
 
-int __ixland_mkdir_impl(const char *pathname, mode_t mode) {
+int mkdir_impl(const char *pathname, mode_t mode) {
     if (ixland_directory_validate_path(pathname) != 0) {
         return -1;
     }
 
-    char translated_path[IXLAND_MAX_PATH];
-    if (ixland_vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    char translated_path[MAX_PATH];
+    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
     return mkdir(translated_path, mode);
 }
 
-int __ixland_rmdir_impl(const char *pathname) {
+int rmdir_impl(const char *pathname) {
     if (ixland_directory_validate_path(pathname) != 0) {
         return -1;
     }
 
-    char translated_path[IXLAND_MAX_PATH];
-    if (ixland_vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    char translated_path[MAX_PATH];
+    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -131,13 +131,13 @@ int __ixland_rmdir_impl(const char *pathname) {
     return rmdir(translated_path);
 }
 
-int __ixland_unlink_impl(const char *pathname) {
+int unlink_impl(const char *pathname) {
     if (ixland_directory_validate_path(pathname) != 0) {
         return -1;
     }
 
-    char translated_path[IXLAND_MAX_PATH];
-    if (ixland_vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    char translated_path[MAX_PATH];
+    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -150,7 +150,7 @@ int __ixland_unlink_impl(const char *pathname) {
     return unlink(translated_path);
 }
 
-int __ixland_link_impl(const char *oldpath, const char *newpath) {
+int link_impl(const char *oldpath, const char *newpath) {
     if (oldpath == NULL || newpath == NULL) {
         errno = EFAULT;
         return -1;
@@ -161,13 +161,13 @@ int __ixland_link_impl(const char *oldpath, const char *newpath) {
         return -1;
     }
 
-    char translated_old[IXLAND_MAX_PATH];
-    char translated_new[IXLAND_MAX_PATH];
-    if (ixland_vfs_translate(oldpath, translated_old, sizeof(translated_old)) != 0) {
+    char translated_old[MAX_PATH];
+    char translated_new[MAX_PATH];
+    if (vfs_translate(oldpath, translated_old, sizeof(translated_old)) != 0) {
         return -1;
     }
 
-    if (ixland_vfs_translate(newpath, translated_new, sizeof(translated_new)) != 0) {
+    if (vfs_translate(newpath, translated_new, sizeof(translated_new)) != 0) {
         return -1;
     }
 
@@ -189,7 +189,7 @@ int __ixland_link_impl(const char *oldpath, const char *newpath) {
     return link(translated_old, translated_new);
 }
 
-int __ixland_symlink_impl(const char *target, const char *linkpath) {
+int symlink_impl(const char *target, const char *linkpath) {
     if (target == NULL || linkpath == NULL) {
         errno = EFAULT;
         return -1;
@@ -200,8 +200,8 @@ int __ixland_symlink_impl(const char *target, const char *linkpath) {
         return -1;
     }
 
-    char translated_link[IXLAND_MAX_PATH];
-    if (ixland_vfs_translate(linkpath, translated_link, sizeof(translated_link)) != 0) {
+    char translated_link[MAX_PATH];
+    if (vfs_translate(linkpath, translated_link, sizeof(translated_link)) != 0) {
         return -1;
     }
 
@@ -214,7 +214,7 @@ int __ixland_symlink_impl(const char *target, const char *linkpath) {
     return symlink(target, translated_link);
 }
 
-ssize_t __ixland_readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
+ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
     if (pathname == NULL || buf == NULL) {
         errno = EFAULT;
         return -1;
@@ -230,8 +230,8 @@ ssize_t __ixland_readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
         return -1;
     }
 
-    char translated_path[IXLAND_MAX_PATH];
-    if (ixland_vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    char translated_path[MAX_PATH];
+    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -248,26 +248,26 @@ ssize_t __ixland_readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
     return readlink(translated_path, buf, bufsiz);
 }
 
-int __ixland_chroot_impl(const char *path) {
+int chroot_impl(const char *path) {
     (void)path;
     errno = EPERM;
     return -1;
 }
 
 int ixland_chdir(const char *path) {
-    return __ixland_chdir_impl(path);
+    return chdir_impl(path);
 }
 
 int ixland_fchdir(int fd) {
-    return __ixland_fchdir_impl(fd);
+    return fchdir_impl(fd);
 }
 
 char *ixland_getcwd(char *buf, size_t size) {
-    return __ixland_getcwd_impl(buf, size);
+    return getcwd_impl(buf, size);
 }
 
 int ixland_mkdir(const char *pathname, mode_t mode) {
-    return __ixland_mkdir_impl(pathname, mode);
+    return mkdir_impl(pathname, mode);
 }
 
 int ixland_mkdirat(int dirfd, const char *pathname, mode_t mode) {
@@ -287,11 +287,11 @@ int ixland_mkdirat(int dirfd, const char *pathname, mode_t mode) {
 }
 
 int ixland_rmdir(const char *pathname) {
-    return __ixland_rmdir_impl(pathname);
+    return rmdir_impl(pathname);
 }
 
 int ixland_unlink(const char *pathname) {
-    return __ixland_unlink_impl(pathname);
+    return unlink_impl(pathname);
 }
 
 int ixland_unlinkat(int dirfd, const char *pathname, int flags) {
@@ -314,7 +314,7 @@ int ixland_unlinkat(int dirfd, const char *pathname, int flags) {
 }
 
 int ixland_link(const char *oldpath, const char *newpath) {
-    return __ixland_link_impl(oldpath, newpath);
+    return link_impl(oldpath, newpath);
 }
 
 int ixland_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
@@ -335,7 +335,7 @@ int ixland_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *n
 }
 
 int ixland_symlink(const char *target, const char *linkpath) {
-    return __ixland_symlink_impl(target, linkpath);
+    return symlink_impl(target, linkpath);
 }
 
 int ixland_symlinkat(const char *target, int newdirfd, const char *linkpath) {
@@ -354,7 +354,7 @@ int ixland_symlinkat(const char *target, int newdirfd, const char *linkpath) {
 }
 
 ssize_t ixland_readlink(const char *pathname, char *buf, size_t bufsiz) {
-    return __ixland_readlink_impl(pathname, buf, bufsiz);
+    return readlink_impl(pathname, buf, bufsiz);
 }
 
 ssize_t ixland_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz) {
@@ -374,5 +374,5 @@ ssize_t ixland_readlinkat(int dirfd, const char *pathname, char *buf, size_t buf
 }
 
 int ixland_chroot(const char *path) {
-    return __ixland_chroot_impl(path);
+    return chroot_impl(path);
 }

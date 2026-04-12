@@ -183,7 +183,7 @@ int ixland_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_times
 
 int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
                   linux_fd_set_t *exceptfds, struct linux_timeval *timeout) {
-    if (nfds < 0 || nfds > IXLAND_FD_SETSIZE) {
+    if (nfds < 0 || nfds > FD_SETSIZE) {
         errno = EINVAL;
         return -1;
     }

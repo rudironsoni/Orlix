@@ -164,7 +164,7 @@ static int epoll_register_instance(epoll_instance_t *epi) {
         if (epoll_table[i] == NULL) {
             epoll_table[i] = epi;
             pthread_mutex_unlock(&epoll_table_lock);
-            return i + IXLAND_MAX_FD + 100;
+            return i + NR_OPEN_DEFAULT + 100;
         }
     }
     pthread_mutex_unlock(&epoll_table_lock);
@@ -172,7 +172,7 @@ static int epoll_register_instance(epoll_instance_t *epi) {
 }
 
 static epoll_instance_t *epoll_lookup_instance(int epfd) {
-    int idx = epfd - IXLAND_MAX_FD - 100;
+    int idx = epfd - NR_OPEN_DEFAULT - 100;
     if (idx < 0 || idx >= MAX_EPOLL_INSTANCES) {
         return NULL;
     }
@@ -180,7 +180,7 @@ static epoll_instance_t *epoll_lookup_instance(int epfd) {
 }
 
 static void epoll_unregister_instance(int epfd) {
-    int idx = epfd - IXLAND_MAX_FD - 100;
+    int idx = epfd - NR_OPEN_DEFAULT - 100;
     if (idx >= 0 && idx < MAX_EPOLL_INSTANCES) {
         pthread_mutex_lock(&epoll_table_lock);
         epoll_table[idx] = NULL;

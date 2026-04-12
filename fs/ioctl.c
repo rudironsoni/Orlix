@@ -5,7 +5,7 @@
 #include "fdtable.h"
 
 int __ixland_ioctl_impl(int fd, unsigned long request, ...) {
-    if (fd < 0 || fd >= IXLAND_MAX_FD) {
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
     }

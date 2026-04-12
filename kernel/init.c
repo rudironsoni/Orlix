@@ -39,7 +39,7 @@ void ixland_library_init(void) {
     }
 
     /* Initialize VFS first (safe initialization) */
-    int vfs_result = ixland_vfs_init();
+    int vfs_result = vfs_init();
     if (vfs_result != 0) {
         /* VFS init failed - continue anyway with defaults */
         /* This allows the library to work even if HOME is not set */

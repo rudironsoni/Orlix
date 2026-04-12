@@ -7,7 +7,7 @@
 #include "fdtable.h"
 
 int __ixland_dup_impl(int oldfd) {
-    if (oldfd < 0 || oldfd >= IXLAND_MAX_FD) {
+    if (oldfd < 0 || oldfd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
     }
@@ -22,7 +22,7 @@ int __ixland_dup_impl(int oldfd) {
 }
 
 int __ixland_dup2_impl(int oldfd, int newfd) {
-    if (oldfd < 0 || oldfd >= IXLAND_MAX_FD || newfd < 0 || newfd >= IXLAND_MAX_FD) {
+    if (oldfd < 0 || oldfd >= NR_OPEN_DEFAULT || newfd < 0 || newfd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
     }
@@ -54,7 +54,7 @@ int __ixland_dup3_impl(int oldfd, int newfd, int flags) {
 }
 
 int __ixland_fcntl_impl(int fd, int cmd, ...) {
-    if (fd < 0 || fd >= IXLAND_MAX_FD) {
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
     }

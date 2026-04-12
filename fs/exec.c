@@ -252,8 +252,8 @@ int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) 
         task->comm[IXLAND_MAX_NAME - 1] = '\0';
     }
 
-    strncpy(task->exe, pathname, IXLAND_MAX_PATH - 1);
-    task->exe[IXLAND_MAX_PATH - 1] = '\0';
+    strncpy(task->exe, pathname, MAX_PATH - 1);
+    task->exe[MAX_PATH - 1] = '\0';
 
     int argc = 0;
     if (argv_copy) {
@@ -311,7 +311,7 @@ int ixland_execvp(const char *file, char *const argv[]) {
     char *dir = strtok_r(path_copy, ":", &saveptr);
 
     while (dir != NULL) {
-        char fullpath[IXLAND_MAX_PATH];
+        char fullpath[MAX_PATH];
         int len = snprintf(fullpath, sizeof(fullpath), "%s/%s", dir, file);
 
         if (len > 0 && (size_t)len < sizeof(fullpath)) {

@@ -202,7 +202,7 @@ bool ixland_path_is_valid(const char *path) {
     }
 
     /* Reject paths that are too long */
-    if (strlen(path) >= IXLAND_MAX_PATH) {
+    if (strlen(path) >= MAX_PATH) {
         return false;
     }
 
@@ -266,7 +266,7 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
     /* If it's a virtual Linux path, translate through VFS */
     if (type == IXLAND_PATH_VIRTUAL_LINUX) {
         /* First normalize the virtual path */
-        char normalized[IXLAND_MAX_PATH];
+        char normalized[MAX_PATH];
         if (strlen(path) >= sizeof(normalized)) {
             errno = ENAMETOOLONG;
             return -1;
@@ -277,7 +277,7 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
 
         /* Now translate through VFS */
         /* The VFS translate function expects a virtual path and returns iOS path */
-        if (ixland_vfs_translate(normalized, resolved, resolved_len) != 0) {
+        if (vfs_translate(normalized, resolved, resolved_len) != 0) {
             /* Translation failed - return the normalized path anyway */
             /* This allows fallback to direct kernel access */
             if (strlen(normalized) >= resolved_len) {
@@ -291,7 +291,7 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
     }
 
     /* For relative paths or other cases, resolve against CWD */
-    char cwd[IXLAND_MAX_PATH];
+    char cwd[MAX_PATH];
     if (!getcwd(cwd, sizeof(cwd))) {
         return -1;
     }
@@ -309,8 +309,8 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
     type = __ixland_path_classify(resolved);
     if (type == IXLAND_PATH_VIRTUAL_LINUX) {
         /* It's a virtual path, translate it */
-        char translated[IXLAND_MAX_PATH];
-        if (ixland_vfs_translate(resolved, translated, sizeof(translated)) == 0) {
+        char translated[MAX_PATH];
+        if (vfs_translate(resolved, translated, sizeof(translated)) == 0) {
             if (strlen(translated) < resolved_len) {
                 strncpy(resolved, translated, resolved_len - 1);
                 resolved[resolved_len - 1] = '\0';

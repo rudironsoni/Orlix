@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 /* Native command entry point signature */
-typedef int (*ixland_native_entry_t)(ixland_task_t *task, int argc, char **argv, char **envp);
+typedef int (*ixland_native_entry_t)(struct task_struct *task, int argc, char **argv, char **envp);
 
 /* Registry entry */
 typedef struct ixland_native_cmd {

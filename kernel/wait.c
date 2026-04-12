@@ -5,7 +5,7 @@
 
 #include "task.h"
 
-static int task_to_status(ixland_task_t *task) {
+static int task_to_status(struct task_struct *task) {
     int status = 0;
 
     if (atomic_load(&task->signaled)) {
@@ -30,13 +30,13 @@ static int task_to_status(ixland_task_t *task) {
 #define W_CONTINUED(status) ((status) == 0xffff)
 
 pid_t ixland_waitpid(pid_t pid, int *wstatus, int options) {
-    ixland_task_t *parent = ixland_current_task();
+    struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
         return -1;
     }
 
-    ixland_task_t *child = NULL;
+    struct task_struct *child = NULL;
 
     pthread_mutex_lock(&parent->lock);
     parent->waiters++;
@@ -139,7 +139,7 @@ pid_t ixland_waitpid(pid_t pid, int *wstatus, int options) {
 
     /* Only unlink and free terminated children */
     if (should_reap) {
-        ixland_task_t **pp = &parent->children;
+        struct task_struct **pp = &parent->children;
         while (*pp && *pp != child) {
             pp = &(*pp)->next_sibling;
         }
@@ -160,7 +160,7 @@ pid_t ixland_waitpid(pid_t pid, int *wstatus, int options) {
 
     /* Only free terminated children */
     if (should_reap) {
-        ixland_task_free(child);
+        free_task(child);
     }
 
     return child_pid;

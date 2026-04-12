@@ -9,7 +9,7 @@
 
 #include "../include/ixland/ixland_signal.h"
 
-ixland_sighand_t *ixland_sighand_alloc(void) {
+ixland_sighand_t *alloc_sighand(void) {
     ixland_sighand_t *sighand = calloc(1, sizeof(ixland_sighand_t));
     if (!sighand)
         return NULL;
@@ -54,7 +54,7 @@ ixland_sighand_t *ixland_sighand_dup(ixland_sighand_t *parent) {
     if (!parent)
         return NULL;
 
-    ixland_sighand_t *child = ixland_sighand_alloc();
+    ixland_sighand_t *child = alloc_sighand();
     if (!child)
         return NULL;
 
@@ -81,7 +81,7 @@ int ixland_sigaction(int sig, const struct sigaction *act, struct sigaction *old
         return -1;
     }
 
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
         return -1;
@@ -101,7 +101,7 @@ int ixland_sigaction(int sig, const struct sigaction *act, struct sigaction *old
 /* Apply signal to a single task with state transitions and parent notification.
  * Must be called with task lock held. Does NOT release task reference.
  */
-static void __ixland_apply_signal_to_task(ixland_task_t *task, int sig) {
+static void __ixland_apply_signal_to_task(struct task_struct *task, int sig) {
     int terminating = (sig == SIGTERM || sig == SIGKILL || sig == SIGINT);
     /* Add signal to pending */
     sigaddset(&task->sighand->pending, sig);
@@ -115,7 +115,7 @@ static void __ixland_apply_signal_to_task(ixland_task_t *task, int sig) {
 
     /* Handle SIGCONT: transition back to RUNNING (not reaped) */
     if (sig == SIGCONT) {
-        atomic_store(&task->state, IXLAND_TASK_RUNNING);
+        atomic_store(&task->state, TASK_RUNNING);
         atomic_store(&task->stopped, false);
         atomic_store(&task->continued, true);
     }
@@ -161,7 +161,7 @@ int ixland_kill(pid_t pid, int sig) {
         /* Process group handling */
         if (pid == 0) {
             /* Current process group */
-            ixland_task_t *task = ixland_current_task();
+            struct task_struct *task = get_current();
             if (!task) {
                 errno = ESRCH;
                 return -1;
@@ -177,7 +177,7 @@ int ixland_kill(pid_t pid, int sig) {
         }
     }
 
-    ixland_task_t *task = ixland_task_lookup(pid);
+    struct task_struct *task = task_lookup(pid);
     if (!task) {
         errno = ESRCH;
         return -1;
@@ -185,7 +185,7 @@ int ixland_kill(pid_t pid, int sig) {
 
     if (sig == 0) {
         /* Just check if process exists */
-        ixland_task_free(task);
+        free_task(task);
         return 0;
     }
 
@@ -194,7 +194,7 @@ int ixland_kill(pid_t pid, int sig) {
     __ixland_apply_signal_to_task(task, sig);
     pthread_mutex_unlock(&task->lock);
 
-    ixland_task_free(task);
+    free_task(task);
     return 0;
 }
 
@@ -222,18 +222,18 @@ int ixland_killpg(pid_t pgrp, int sig) {
 
 /* Collect matching tasks under lock */
 #define IXLAND_KILLPG_MAX_MATCHES 256
-    ixland_task_t *matches[IXLAND_KILLPG_MAX_MATCHES];
+    struct task_struct *matches[IXLAND_KILLPG_MAX_MATCHES];
     int match_count = 0;
 
     extern pthread_mutex_t task_table_lock;
-    extern ixland_task_t *task_table[];
+    extern struct task_struct *task_table[];
     extern int task_hash(pid_t pid);
 
     pthread_mutex_lock(&task_table_lock);
 
     /* Iterate all buckets in task table */
-    for (int i = 0; i < IXLAND_MAX_TASKS; i++) {
-        ixland_task_t *task = task_table[i];
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
         while (task) {
             if (task->pgid == pgrp) {
                 if (match_count < IXLAND_KILLPG_MAX_MATCHES) {
@@ -257,27 +257,27 @@ int ixland_killpg(pid_t pgrp, int sig) {
     /* Signal 0: just checking existence, don't actually deliver */
     if (check_only) {
         for (int i = 0; i < match_count; i++) {
-            ixland_task_free(matches[i]);
+            free_task(matches[i]);
         }
         return 0;
     }
 
     /* Deliver signal to each matched task using shared helper */
     for (int i = 0; i < match_count; i++) {
-        ixland_task_t *task = matches[i];
+        struct task_struct *task = matches[i];
 
         pthread_mutex_lock(&task->lock);
         __ixland_apply_signal_to_task(task, sig);
         pthread_mutex_unlock(&task->lock);
 
-        ixland_task_free(matches[i]);
+        free_task(matches[i]);
     }
 
     return 0;
 }
 
 int ixland_sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
         return -1;
@@ -321,7 +321,7 @@ int ixland_sigpending(sigset_t *set) {
         return -1;
     }
 
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
         return -1;
@@ -346,7 +346,7 @@ ixland_sighandler_t ixland_signal(int signum, ixland_sighandler_t handler) {
         return SIG_ERR;
     }
 
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
         return SIG_ERR;
@@ -368,7 +368,7 @@ ixland_sighandler_t ixland_signal(int signum, ixland_sighandler_t handler) {
  * ============================================================================ */
 
 int ixland_raise(int sig) {
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
@@ -443,7 +443,7 @@ static int sigset_is_empty(const sigset_t *set) {
  * ============================================================================ */
 
 int ixland_pause(void) {
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
@@ -473,7 +473,7 @@ int ixland_pause(void) {
  * ============================================================================ */
 
 int ixland_sigsuspend(const sigset_t *mask) {
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
         return -1;

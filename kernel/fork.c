@@ -34,8 +34,8 @@
 
 /* Fork context shared between parent and child */
 typedef struct {
-    ixland_task_t *parent;
-    ixland_task_t *child;
+    struct task_struct *parent;
+    struct task_struct *child;
     jmp_buf jmpbuf;           /* Shared jump buffer */
     volatile pid_t result;    /* Result from child perspective */
     volatile int child_ready; /* Synchronization flag */
@@ -51,7 +51,7 @@ static void *fork_child_trampoline(void *arg) {
     fork_ctx_t *ctx = (fork_ctx_t *)arg;
 
     /* Set child as current task in thread-local storage */
-    ixland_set_current_task(ctx->child);
+    set_current(ctx->child);
     ctx->child->thread = pthread_self();
 
     /* Copy parent's state from task structure */
@@ -79,7 +79,7 @@ static void *fork_child_trampoline(void *arg) {
 }
 
 pid_t ixland_fork(void) {
-    ixland_task_t *parent = ixland_current_task();
+    struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
         return -1;
@@ -88,7 +88,7 @@ pid_t ixland_fork(void) {
     /* Check process limit */
     int child_count = 0;
     pthread_mutex_lock(&parent->lock);
-    ixland_task_t *c = parent->children;
+    struct task_struct *c = parent->children;
     while (c) {
         child_count++;
         c = c->next_sibling;
@@ -101,7 +101,7 @@ pid_t ixland_fork(void) {
     pthread_mutex_unlock(&parent->lock);
 
     /* Allocate child task */
-    ixland_task_t *child = ixland_task_alloc();
+    struct task_struct *child = alloc_task();
     if (!child) {
         errno = ENOMEM;
         return -1;
@@ -114,14 +114,14 @@ pid_t ixland_fork(void) {
 
     /* Copy parent's working directory */
     if (parent->fs && child->fs) {
-        strncpy(child->fs->cwd, parent->fs->cwd, IXLAND_MAX_PATH - 1);
-        child->fs->cwd[IXLAND_MAX_PATH - 1] = '\0';
+        strncpy(child->fs->pwd, parent->fs->pwd, IXLAND_MAX_PATH - 1);
+        child->fs->pwd[IXLAND_MAX_PATH - 1] = '\0';
     }
 
     /* Copy subsystems with proper semantics */
-    child->files = ixland_files_dup(parent->files);
+    child->files = dup_files(parent->files);
     if (!child->files) {
-        ixland_task_free(child);
+        free_task(child);
         errno = ENOMEM;
         return -1;
     }
@@ -179,7 +179,7 @@ pid_t ixland_fork(void) {
             pthread_mutex_lock(&parent->lock);
             parent->children = child->next_sibling;
             pthread_mutex_unlock(&parent->lock);
-            ixland_task_free(child);
+            free_task(child);
             active_fork_ctx = NULL;
             pthread_mutex_destroy(&ctx.lock);
             pthread_cond_destroy(&ctx.cond);
@@ -240,8 +240,8 @@ pid_t ixland_fork(void) {
 
 /* Vfork context */
 typedef struct {
-    ixland_task_t *parent;
-    ixland_task_t *child;
+    struct task_struct *parent;
+    struct task_struct *child;
     jmp_buf parent_jmp;        /* Parent's saved context */
     jmp_buf child_jmp;         /* Child's entry point */
     volatile int child_done;   /* Set when child execs or exits */
@@ -259,7 +259,7 @@ static void *vfork_child_trampoline(void *arg) {
     vfork_ctx_t *ctx = (vfork_ctx_t *)arg;
 
     /* Set child as current task */
-    ixland_set_current_task(ctx->child);
+    set_current(ctx->child);
     ctx->child->thread = pthread_self();
 
     /* Signal that child is ready */
@@ -275,7 +275,7 @@ static void *vfork_child_trampoline(void *arg) {
 }
 
 int ixland_vfork(void) {
-    ixland_task_t *parent = ixland_current_task();
+    struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
         return -1;
@@ -284,7 +284,7 @@ int ixland_vfork(void) {
     /* Check resource limits */
     pthread_mutex_lock(&parent->lock);
     int child_count = 0;
-    ixland_task_t *c = parent->children;
+    struct task_struct *c = parent->children;
     while (c) {
         child_count++;
         c = c->next_sibling;
@@ -297,7 +297,7 @@ int ixland_vfork(void) {
     pthread_mutex_unlock(&parent->lock);
 
     /* Allocate child task */
-    ixland_task_t *child = ixland_task_alloc();
+    struct task_struct *child = alloc_task();
     if (!child) {
         errno = ENOMEM;
         return -1;
@@ -311,8 +311,8 @@ int ixland_vfork(void) {
 
     /* Copy parent's resources */
     if (parent->fs && child->fs) {
-        strncpy(child->fs->cwd, parent->fs->cwd, IXLAND_MAX_PATH - 1);
-        child->fs->cwd[IXLAND_MAX_PATH - 1] = '\0';
+        strncpy(child->fs->pwd, parent->fs->pwd, IXLAND_MAX_PATH - 1);
+        child->fs->pwd[IXLAND_MAX_PATH - 1] = '\0';
     }
 
     /* Share file table (not copy - key vfork semantics) */
@@ -320,12 +320,12 @@ int ixland_vfork(void) {
     /* Note: For vfork, we duplicate the file table structure but share the underlying files */
     if (parent->files) {
         /* Duplicate the file table (shallow copy that shares file references) */
-        child->files = ixland_files_dup(parent->files);
+        child->files = dup_files(parent->files);
         if (!child->files) {
             pthread_mutex_lock(&parent->lock);
             parent->children = child->next_sibling;
             pthread_mutex_unlock(&parent->lock);
-            ixland_task_free(child);
+            free_task(child);
             errno = ENOMEM;
             return -1;
         }
@@ -387,8 +387,8 @@ int ixland_vfork(void) {
                 pthread_mutex_lock(&parent->lock);
                 parent->children = child->next_sibling;
                 pthread_mutex_unlock(&parent->lock);
-                atomic_store(&parent->state, IXLAND_TASK_RUNNING);
-                ixland_task_free(child);
+                atomic_store(&parent->state, TASK_RUNNING);
+                free_task(child);
                 active_vfork_ctx = NULL;
                 pthread_mutex_destroy(&ctx.lock);
                 pthread_cond_destroy(&ctx.cond);
@@ -404,7 +404,7 @@ int ixland_vfork(void) {
             pthread_mutex_unlock(&ctx.lock);
 
             /* Child has execed or exited - parent can resume */
-            atomic_store(&parent->state, IXLAND_TASK_RUNNING);
+            atomic_store(&parent->state, TASK_RUNNING);
 
             pthread_detach(child_thread);
 

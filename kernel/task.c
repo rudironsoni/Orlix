@@ -10,39 +10,39 @@
 #include "../fs/vfs.h"
 #include "signal.h"
 
-/* Note: IXLAND_MAX_TASKS defined in task.h for cross-module access */
+/* Note: TASK_MAX_TASKS defined in task.h for cross-module access */
 
-static __thread ixland_task_t *current_task = NULL;
-ixland_task_t *init_task = NULL;
+static __thread struct task_struct *current_task = NULL;
+struct task_struct *init_task = NULL;
 
 /* Task table - accessible to signal.c for ixland_killpg */
 pthread_mutex_t task_table_lock = PTHREAD_MUTEX_INITIALIZER;
-ixland_task_t *task_table[IXLAND_MAX_TASKS] = {NULL};
+struct task_struct *task_table[TASK_MAX_TASKS] = {NULL};
 
 int task_hash(pid_t pid) {
-    return (int)(pid % IXLAND_MAX_TASKS);
+    return (int)(pid % TASK_MAX_TASKS);
 }
 
-ixland_task_t *ixland_current_task(void) {
+struct task_struct *get_current(void) {
     return current_task;
 }
 
-void ixland_set_current_task(ixland_task_t *task) {
+void set_current(struct task_struct *task) {
     current_task = task;
 }
 
-ixland_task_t *ixland_task_alloc(void) {
-    ixland_task_t *task = calloc(1, sizeof(ixland_task_t));
+struct task_struct *alloc_task(void) {
+    struct task_struct *task = calloc(1, sizeof(struct task_struct));
     if (!task)
         return NULL;
 
-    task->pid = ixland_alloc_pid();
+    task->pid = alloc_pid();
     task->tgid = task->pid;
     task->pgid = task->pid;
     task->sid = task->pid;
     task->vfork_parent = NULL;
 
-    atomic_init(&task->state, IXLAND_TASK_RUNNING);
+    atomic_init(&task->state, TASK_RUNNING);
     atomic_init(&task->refs, 1);
     atomic_init(&task->exited, false);
     atomic_init(&task->signaled, false);
@@ -62,7 +62,7 @@ ixland_task_t *ixland_task_alloc(void) {
     return task;
 }
 
-void ixland_task_free(ixland_task_t *task) {
+void free_task(struct task_struct *task) {
     if (!task)
         return;
 
@@ -71,7 +71,7 @@ void ixland_task_free(ixland_task_t *task) {
 
     int idx = task_hash(task->pid);
     pthread_mutex_lock(&task_table_lock);
-    ixland_task_t **pp = &task_table[idx];
+    struct task_struct **pp = &task_table[idx];
     while (*pp && *pp != task) {
         pp = &(*pp)->hash_next;
     }
@@ -81,7 +81,7 @@ void ixland_task_free(ixland_task_t *task) {
     pthread_mutex_unlock(&task_table_lock);
 
     if (task->files)
-        ixland_files_free(task->files);
+        free_files(task->files);
     if (task->fs)
         free(task->fs);
     if (task->sighand)
@@ -97,14 +97,14 @@ void ixland_task_free(ixland_task_t *task) {
     pthread_mutex_destroy(&task->wait_lock);
     pthread_mutex_destroy(&task->lock);
 
-    ixland_free_pid(task->pid);
+    free_pid(task->pid);
     free(task);
 }
 
-ixland_task_t *ixland_task_lookup(pid_t pid) {
+struct task_struct *task_lookup(pid_t pid) {
     int idx = task_hash(pid);
     pthread_mutex_lock(&task_table_lock);
-    ixland_task_t *task = task_table[idx];
+    struct task_struct *task = task_table[idx];
     while (task && task->pid != pid) {
         task = task->hash_next;
     }
@@ -115,34 +115,34 @@ ixland_task_t *ixland_task_lookup(pid_t pid) {
     return task;
 }
 
-static void ixland_task_init_once(void) {
+static void task_init_once(void) {
     /* Initialize PID allocator first */
-    ixland_pid_init();
+    pid_init();
 
-    init_task = ixland_task_alloc();
+    init_task = alloc_task();
     if (!init_task)
         return;
 
     init_task->ppid = init_task->pid;
     strncpy(init_task->comm, "init", sizeof(init_task->comm));
 
-    init_task->files = ixland_files_alloc(IXLAND_MAX_FD);
+    init_task->files = alloc_files(NR_OPEN_DEFAULT);
     if (!init_task->files) {
-        ixland_task_free(init_task);
+        free_task(init_task);
         init_task = NULL;
         return;
     }
 
-    init_task->fs = ixland_fs_alloc();
+    init_task->fs = alloc_fs_struct();
     if (!init_task->fs) {
-        ixland_task_free(init_task);
+        free_task(init_task);
         init_task = NULL;
         return;
     }
 
-    init_task->sighand = ixland_sighand_alloc();
+    init_task->sighand = alloc_sighand();
     if (!init_task->sighand) {
-        ixland_task_free(init_task);
+        free_task(init_task);
         init_task = NULL;
         return;
     }
@@ -150,17 +150,17 @@ static void ixland_task_init_once(void) {
     current_task = init_task;
 }
 
-int ixland_task_init(void) {
+int task_init(void) {
     static pthread_once_t once = PTHREAD_ONCE_INIT;
 
-    pthread_once(&once, ixland_task_init_once);
+    pthread_once(&once, task_init_once);
 
     return init_task ? 0 : -1;
 }
 
-void ixland_task_deinit(void) {
+void task_deinit(void) {
     if (init_task) {
-        ixland_task_free(init_task);
+        free_task(init_task);
         init_task = NULL;
     }
 }
@@ -169,23 +169,23 @@ void ixland_task_deinit(void) {
  * PID/IDENTITY FUNCTIONS
  * ============================================================================ */
 
-pid_t ixland_getpid(void) {
-    ixland_task_t *task = ixland_current_task();
+pid_t do_getpid(void) {
+    struct task_struct *task = get_current();
     if (!task) {
         /* Try to initialize if not already done */
-        if (ixland_task_init() == 0) {
-            task = ixland_current_task();
+        if (task_init() == 0) {
+            task = get_current();
         }
     }
     return task ? task->pid : 0;
 }
 
-pid_t ixland_getppid(void) {
-    ixland_task_t *task = ixland_current_task();
+pid_t do_getppid(void) {
+    struct task_struct *task = get_current();
     if (!task) {
         /* Try to initialize if not already done */
-        if (ixland_task_init() == 0) {
-            task = ixland_current_task();
+        if (task_init() == 0) {
+            task = get_current();
         }
     }
     return task ? task->ppid : 0;
@@ -195,8 +195,8 @@ pid_t ixland_getppid(void) {
  * SESSION AND PROCESS GROUP FUNCTIONS
  * ============================================================================ */
 
-pid_t ixland_getpgrp(void) {
-    ixland_task_t *task = ixland_current_task();
+pid_t do_getpgrp(void) {
+    struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
@@ -204,24 +204,24 @@ pid_t ixland_getpgrp(void) {
     return task->pgid;
 }
 
-pid_t ixland_getpgid(pid_t pid) {
+pid_t do_getpgid(pid_t pid) {
     if (pid == 0) {
-        return ixland_getpgrp();
+        return do_getpgrp();
     }
 
-    ixland_task_t *task = ixland_task_lookup(pid);
+    struct task_struct *task = task_lookup(pid);
     if (!task) {
         errno = ESRCH;
         return -1;
     }
 
     pid_t pgid = task->pgid;
-    ixland_task_free(task);
+    free_task(task);
     return pgid;
 }
 
-int ixland_setpgid(pid_t pid, pid_t pgid) {
-    ixland_task_t *current = ixland_current_task();
+int do_setpgid(pid_t pid, pid_t pgid) {
+    struct task_struct *current = get_current();
     if (!current) {
         errno = ESRCH;
         return -1;
@@ -235,7 +235,7 @@ int ixland_setpgid(pid_t pid, pid_t pgid) {
         pgid = pid;
     }
 
-    ixland_task_t *target = ixland_task_lookup(pid);
+    struct task_struct *target = task_lookup(pid);
     if (!target) {
         errno = ESRCH;
         return -1;
@@ -243,7 +243,7 @@ int ixland_setpgid(pid_t pid, pid_t pgid) {
 
     /* Check permissions: caller must be target or target's parent */
     if (target->ppid != current->pid && target->pid != current->pid) {
-        ixland_task_free(target);
+        free_task(target);
         errno = EPERM;
         return -1;
     }
@@ -253,21 +253,21 @@ int ixland_setpgid(pid_t pid, pid_t pgid) {
     /* Check session match - can't move to different session */
     if (target->sid != current->sid) {
         pthread_mutex_unlock(&target->lock);
-        ixland_task_free(target);
+        free_task(target);
         errno = EPERM;
         return -1;
     }
 
     target->pgid = pgid;
     pthread_mutex_unlock(&target->lock);
-    ixland_task_free(target);
+    free_task(target);
 
     return 0;
 }
 
-pid_t ixland_getsid(pid_t pid) {
+pid_t do_getsid(pid_t pid) {
     if (pid == 0) {
-        ixland_task_t *task = ixland_current_task();
+        struct task_struct *task = get_current();
         if (!task) {
             errno = ESRCH;
             return -1;
@@ -275,19 +275,19 @@ pid_t ixland_getsid(pid_t pid) {
         return task->sid;
     }
 
-    ixland_task_t *task = ixland_task_lookup(pid);
+    struct task_struct *task = task_lookup(pid);
     if (!task) {
         errno = ESRCH;
         return -1;
     }
 
     pid_t sid = task->sid;
-    ixland_task_free(task);
+    free_task(task);
     return sid;
 }
 
-pid_t ixland_setsid(void) {
-    ixland_task_t *task = ixland_current_task();
+pid_t do_setsid(void) {
+    struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
