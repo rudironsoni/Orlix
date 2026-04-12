@@ -47,17 +47,20 @@ typedef struct {
 
 /* FD_SET macros */
 #define FD_ZERO(set) memset((set), 0, sizeof(*(set)))
-#define FD_SET(fd, set) ((set)->fds_bits[(fd) / NFDBITS] |= (1UL << ((fd) % NFDBITS)))
-#define FD_CLR(fd, set) ((set)->fds_bits[(fd) / NFDBITS] &= ~(1UL << ((fd) % NFDBITS)))
-#define FD_ISSET(fd, set) (((set)->fds_bits[(fd) / NFDBITS] & (1UL << ((fd) % NFDBITS))) != 0)
+#define FD_SET(fd_arg, set_arg) \
+    ((set_arg)->fds_bits[(fd_arg) / NFDBITS] |= (1UL << ((fd_arg) % NFDBITS)))
+#define FD_CLR(fd_arg, set_arg) \
+    ((set_arg)->fds_bits[(fd_arg) / NFDBITS] &= ~(1UL << ((fd_arg) % NFDBITS)))
+#define FD_ISSET(fd_arg, set_arg) \
+    (((set_arg)->fds_bits[(fd_arg) / NFDBITS] & (1UL << ((fd_arg) % NFDBITS))) != 0)
 
-/* select/poll API */
-int select(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
-           struct linux_timeval *timeout);
-int pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
-            const struct linux_timespec *timeout, const sigset_t *sigmask);
-int poll(struct pollfd *fds, unsigned int nfds, int timeout);
-int ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
-          const sigset_t *sigmask);
+/* select/poll API - Linux-style internal names */
+int do_select(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
+              struct linux_timeval *timeout);
+int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
+               const struct linux_timespec *timeout, const sigset_t *sigmask);
+int do_poll(struct pollfd *fds, unsigned int nfds, int timeout);
+int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
+             const sigset_t *sigmask);
 
 #endif /* SELECT_H */
