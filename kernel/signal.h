@@ -1,3 +1,8 @@
+/* IXLandSystem/kernel/signal.h
+ * Internal kernel signal owner header
+ * Linux-shaped internal declarations only
+ */
+
 #ifndef IXLAND_SYSTEM_KERNEL_SIGNAL_H
 #define IXLAND_SYSTEM_KERNEL_SIGNAL_H
 
@@ -49,34 +54,23 @@ struct sighand_struct *alloc_sighand(void);
 void free_sighand(struct sighand_struct *sighand);
 struct sighand_struct *dup_sighand(struct sighand_struct *parent);
 
-/* Signal actions */
+/* Signal actions - Linux internal naming */
 int do_sigaction(int sig, const struct sigaction *act, struct sigaction *oldact);
 
-/* Signal sending */
-int do_kill(pid_t pid, int sig);
-int do_killpg(pid_t pgrp, int sig);
+/* Signal sending - use Linux syscall-facing names */
+int kill(pid_t pid, int sig);
+int killpg(pid_t pgrp, int sig);
 
-/* Signal masking */
-int do_sigprocmask(struct sighand_struct *sighand, int how, const sigset_t *set, sigset_t *oldset);
-int do_sigpending(struct sighand_struct *sighand, sigset_t *set);
-int do_sigsuspend(const sigset_t *mask);
+/* Signal masking - Linux syscall-facing names */
+int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+int sigpending(sigset_t *set);
+int sigsuspend(const sigset_t *mask);
 
-/* Signal queuing and waiting */
-int do_sigqueue(pid_t pid, int sig, const union sigval value);
-int do_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout);
+/* Signal to current process - Linux syscall-facing name */
+int raise(int sig);
 
-/* Simplified handler installation */
-typedef void (*sighandler_t)(int);
-sighandler_t do_signal(int signum, sighandler_t handler);
-
-/* Signal to current process */
-int do_raise(int sig);
-
-/* Alarm timer */
-unsigned int do_alarm(unsigned int seconds);
-
-/* Wait for signal */
-int do_pause(void);
+/* Wait for signal - Linux syscall-facing name */
+int pause(void);
 
 /* Initialization (internal use) */
 void signal_init(void);
@@ -84,9 +78,6 @@ void signal_deinit(void);
 
 /* Internal signal delivery (called by task.c) */
 void force_sig(int sig, struct task_struct *task);
-
-/* Signal dispatch (internal) */
-void __apply_signal_to_task(struct task_struct *task, int sig);
 
 #ifdef __cplusplus
 }
