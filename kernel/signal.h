@@ -15,6 +15,22 @@
 extern "C" {
 #endif
 
+/* Linux-shaped signal-space constants for canonical core */
+#define KERNEL_NSIG 64
+#define KERNEL_NSIG_WORDS (KERNEL_NSIG / (sizeof(unsigned long) * 8))
+
+/* Canonical internal signal set type (Linux-shaped) */
+typedef struct {
+    unsigned long sig[KERNEL_NSIG_WORDS];
+} ksigset_t;
+
+/* Canonical internal signal action (Linux-shaped) */
+struct k_sigaction {
+    void (*handler)(int);
+    ksigset_t mask;
+    int flags;
+};
+
 /* Signal queue entry */
 typedef struct sigqueue_entry {
     int sig;
@@ -32,9 +48,9 @@ typedef struct sigqueue {
 
 /* Signal handling state (Linux-style sighand_struct) */
 struct sighand_struct {
-    struct sigaction action[NSIG];
-    sigset_t blocked;
-    sigset_t pending;
+    struct k_sigaction action[KERNEL_NSIG];
+    ksigset_t blocked;
+    ksigset_t pending;
     sigqueue_t queue;
     atomic_int refs;
 };
@@ -45,20 +61,21 @@ void free_sighand(struct sighand_struct *sighand);
 struct sighand_struct *dup_sighand(struct sighand_struct *parent);
 
 /* Signal actions */
-int do_sigaction(int sig, const struct sigaction *act, struct sigaction *oldact);
+int do_sigaction(int sig, const struct k_sigaction *act, struct k_sigaction *oldact);
 
 /* Signal sending */
 int do_kill(pid_t pid, int sig);
 int do_killpg(pid_t pgrp, int sig);
 
 /* Signal masking */
-int do_sigprocmask(struct sighand_struct *sighand, int how, const sigset_t *set, sigset_t *oldset);
-int do_sigpending(struct sighand_struct *sighand, sigset_t *set);
-int do_sigsuspend(const sigset_t *mask);
+int do_sigprocmask(struct sighand_struct *sighand, int how, const ksigset_t *set,
+                   ksigset_t *oldset);
+int do_sigpending(struct sighand_struct *sighand, ksigset_t *set);
+int do_sigsuspend(const ksigset_t *mask);
 
 /* Signal queuing and waiting */
 int do_sigqueue(pid_t pid, int sig, const union sigval value);
-int do_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout);
+int do_sigtimedwait(const ksigset_t *set, siginfo_t *info, const struct timespec *timeout);
 
 /* Simplified handler installation */
 typedef void (*sighandler_t)(int);
