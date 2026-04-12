@@ -3,6 +3,8 @@
  * Linux epoll API using kqueue as the underlying mechanism.
  */
 
+#include "eventpoll.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -15,8 +17,6 @@
 #include <sys/event.h>
 #include <time.h>
 #include <unistd.h>
-
-#include "epoll_internal.h"
 
 /* Forward declarations */
 int epoll_create1(int flags);

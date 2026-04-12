@@ -1,3 +1,5 @@
+#include "select.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -9,7 +11,6 @@
 #include <unistd.h>
 
 #include "../include/ixland/ixland_signal.h"
-#include "select_internal.h"
 
 typedef sigset_t ixland_native_sigset_t;
 
