@@ -5,70 +5,137 @@
 #include <stdlib.h>
 #include <string.h>
 
-ixland_fs_t *ixland_fs_alloc(void) {
-    ixland_fs_t *fs = calloc(1, sizeof(ixland_fs_t));
+struct fs_struct *alloc_fs_struct(void) {
+    struct fs_struct *fs = calloc(1, sizeof(struct fs_struct));
     if (!fs)
         return NULL;
 
-    atomic_init(&fs->refs, 1);
+    atomic_init(&fs->users, 1);
     pthread_mutex_init(&fs->lock, NULL);
     fs->umask = 022;
-    strncpy(fs->cwd, "/", sizeof(fs->cwd));
-    strncpy(fs->root, "/", sizeof(fs->root));
 
     return fs;
 }
 
-void ixland_fs_free(ixland_fs_t *fs) {
+void free_fs_struct(struct fs_struct *fs) {
     if (!fs)
         return;
-    if (atomic_fetch_sub(&fs->refs, 1) > 1)
+    if (atomic_fetch_sub(&fs->users, 1) > 1)
         return;
 
     pthread_mutex_destroy(&fs->lock);
     free(fs);
 }
 
-ixland_fs_t *ixland_fs_dup(ixland_fs_t *parent) {
-    if (!parent)
+struct fs_struct *dup_fs_struct(struct fs_struct *old) {
+    if (!old)
         return NULL;
 
-    ixland_fs_t *child = ixland_fs_alloc();
-    if (!child)
+    struct fs_struct *new = alloc_fs_struct();
+    if (!new)
         return NULL;
 
-    pthread_mutex_lock(&parent->lock);
-    strncpy(child->cwd, parent->cwd, sizeof(child->cwd));
-    strncpy(child->root, parent->root, sizeof(child->root));
-    child->umask = parent->umask;
-    child->root_mount = parent->root_mount;
-    pthread_mutex_unlock(&parent->lock);
+    pthread_mutex_lock(&old->lock);
+    if (old->root)
+        new->root = old->root;
+    if (old->pwd)
+        new->pwd = old->pwd;
+    new->umask = old->umask;
+    pthread_mutex_unlock(&old->lock);
 
-    return child;
+    return new;
 }
 
-/* VFS init/deinit/mount/umount are implemented in vfs/ixland_vfs.c */
-/* We declare them as external here to avoid duplicate definitions */
-extern int ixland_vfs_init(void);
-extern void ixland_vfs_deinit(void);
-extern int ixland_vfs_mount(const char *source, const char *target, ixland_vfs_ops_t *ops);
-extern int ixland_vfs_umount(const char *target);
+/* VFS operations - to be implemented in full */
+int vfs_init(void) {
+    return 0;
+}
 
-int ixland_vfs_path_walk(ixland_fs_t *fs, const char *path, ixland_vnode_t **vnode) {
-    if (!fs || !path) {
-        errno = EINVAL;
-        return -1;
+void vfs_deinit(void) {
+}
+
+int vfs_mount(const char *source, const char *target, const char *fstype, unsigned long flags,
+              const void *data) {
+    (void)source;
+    (void)target;
+    (void)fstype;
+    (void)flags;
+    (void)data;
+    return -ENOSYS;
+}
+
+int vfs_umount(const char *target) {
+    (void)target;
+    return -ENOSYS;
+}
+
+int vfs_open(const char *path, int flags, mode_t mode, int *target_fd) {
+    (void)path;
+    (void)flags;
+    (void)mode;
+    (void)target_fd;
+    return -ENOSYS;
+}
+
+int vfs_close(struct file *file) {
+    (void)file;
+    return -ENOSYS;
+}
+
+int vfs_lookup(const char *path, struct dentry **dentry) {
+    (void)path;
+    (void)dentry;
+    return -ENOSYS;
+}
+
+int vfs_path_walk(const char *path, struct dentry **dentry) {
+    (void)path;
+    (void)dentry;
+    return -ENOSYS;
+}
+
+int vfs_mkdir(const char *path, mode_t mode) {
+    (void)path;
+    (void)mode;
+    return -ENOSYS;
+}
+
+int vfs_unlink(const char *path) {
+    (void)path;
+    return -ENOSYS;
+}
+
+int vfs_rmdir(const char *path) {
+    (void)path;
+    return -ENOSYS;
+}
+
+int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len) {
+    if (!vpath || !host_path || host_path_len == 0) {
+        return -EINVAL;
     }
 
-    /* TODO: Implement full path resolution */
-    /* This is a simplified version */
-
-    if (!fs->root_mount) {
-        errno = ENOENT;
-        return -1;
+    /* Simple passthrough for now */
+    if (strlen(vpath) >= host_path_len) {
+        return -ENAMETOOLONG;
     }
 
-    *vnode = NULL;
-    errno = ENOENT;
-    return -1;
+    strncpy(host_path, vpath, host_path_len - 1);
+    host_path[host_path_len - 1] = '\0';
+    return 0;
+}
+
+int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) {
+    if (!host_path || !vpath || vpath_len == 0) {
+        return -EINVAL;
+    }
+
+    /* Simple passthrough for now */
+    if (strlen(host_path) >= vpath_len) {
+        return -ENAMETOOLONG;
+    }
+
+    strncpy(vpath, host_path, vpath_len - 1);
+    vpath[vpath_len - 1] = '\0';
+    return 0;
 }
