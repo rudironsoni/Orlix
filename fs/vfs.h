@@ -59,9 +59,9 @@ struct inode_operations {
 struct address_space_operations {
     int (*readpage)(struct file *file, struct page *page);
     int (*writepage)(struct page *page, struct writeback_control *wbc);
-    int (*write_begin)(struct file *file, struct address_space *mapping, loff_t pos, unsigned len,
+    int (*write_begin)(struct file *file, struct address_space *mapping, off_t pos, unsigned len,
                        unsigned flags, struct page **pagep, void **fsdata);
-    int (*write_end)(struct file *file, struct address_space *mapping, loff_t pos, unsigned len,
+    int (*write_end)(struct file *file, struct address_space *mapping, off_t pos, unsigned len,
                      unsigned copied, struct page *page, void *fsdata);
 };
 
