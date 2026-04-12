@@ -38,9 +38,9 @@ void free_sighand(struct sighand_struct *sighand) {
 
     /* Free queued signals */
     pthread_mutex_lock(&sighand->queue.lock);
-    ixland_sigqueue_entry_t *entry = sighand->queue.head;
+    sigqueue_entry_t *entry = sighand->queue.head;
     while (entry) {
-        ixland_sigqueue_entry_t *next = entry->next;
+        sigqueue_entry_t *next = entry->next;
         free(entry);
         entry = next;
     }
@@ -108,7 +108,7 @@ static void __ixland_apply_signal_to_task(struct task_struct *task, int sig) {
 
     /* Handle SIGSTOP: transition to STOPPED state (not reaped) */
     if (sig == SIGSTOP) {
-        atomic_store(&task->state, IXLAND_TASK_STOPPED);
+        atomic_store(&task->state, TASK_STOPPED);
         atomic_store(&task->stopped, true);
         atomic_store(&task->stopsig, SIGSTOP);
     }
@@ -125,7 +125,7 @@ static void __ixland_apply_signal_to_task(struct task_struct *task, int sig) {
         atomic_store(&task->signaled, true);
         atomic_store(&task->termsig, sig);
         atomic_store(&task->exited, true);
-        atomic_store(&task->state, IXLAND_TASK_ZOMBIE);
+        atomic_store(&task->state, TASK_ZOMBIE);
     }
 
     /* Notify parent if this child state is wait-visible */
