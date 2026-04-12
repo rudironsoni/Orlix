@@ -46,7 +46,7 @@ void ixland_library_init(void) {
     }
 
     /* Initialize task system - creates init task */
-    int task_result = ixland_task_init();
+    int task_result = task_init();
     if (task_result != 0) {
         pthread_mutex_unlock(&ixland_init_lock);
         return;
@@ -66,7 +66,7 @@ void ixland_library_deinit(void) {
         return;
     }
 
-    ixland_task_deinit();
+    task_deinit();
     ixland_vfs_deinit();
 
     atomic_store(&ixland_initialized, 0);

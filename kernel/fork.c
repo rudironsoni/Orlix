@@ -114,8 +114,8 @@ pid_t ixland_fork(void) {
 
     /* Copy parent's working directory */
     if (parent->fs && child->fs) {
-        strncpy(child->fs->pwd, parent->fs->pwd, IXLAND_MAX_PATH - 1);
-        child->fs->pwd[IXLAND_MAX_PATH - 1] = '\0';
+        strncpy(child->fs->pwd, parent->fs->pwd, MAX_PATH - 1);
+        child->fs->pwd[MAX_PATH - 1] = '\0';
     }
 
     /* Copy subsystems with proper semantics */
@@ -311,8 +311,8 @@ int ixland_vfork(void) {
 
     /* Copy parent's resources */
     if (parent->fs && child->fs) {
-        strncpy(child->fs->pwd, parent->fs->pwd, IXLAND_MAX_PATH - 1);
-        child->fs->pwd[IXLAND_MAX_PATH - 1] = '\0';
+        strncpy(child->fs->pwd, parent->fs->pwd, MAX_PATH - 1);
+        child->fs->pwd[MAX_PATH - 1] = '\0';
     }
 
     /* Share file table (not copy - key vfork semantics) */

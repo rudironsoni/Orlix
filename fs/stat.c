@@ -19,7 +19,7 @@ int stat_impl(const char *pathname, struct stat *statbuf) {
         return -1;
     }
 
-    return vfs_stat(pathname, statbuf);
+    return vfs_stat_path(pathname, statbuf);
 }
 
 int fstat_impl(int fd, struct stat *statbuf) {
@@ -41,7 +41,7 @@ int fstat_impl(int fd, struct stat *statbuf) {
         return fstat(fd, statbuf);
     }
 
-    void *entry = __ixland_get_fd_entry_impl(fd);
+    void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
         return -1;

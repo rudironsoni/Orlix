@@ -19,14 +19,14 @@ int __ixland_ioctl_impl(int fd, unsigned long request, ...) {
         return ioctl(fd, request, arg);
     }
 
-    void *entry = __ixland_get_fd_entry_impl(fd);
+    void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
         return -1;
     }
 
-    int result = ioctl(__ixland_get_real_fd_impl(entry), request, arg);
-    __ixland_put_fd_entry_impl(entry);
+    int result = ioctl(get_real_fd_impl(entry), request, arg);
+    put_fd_entry_impl(entry);
     return result;
 }
 

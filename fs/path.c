@@ -241,14 +241,14 @@ bool ixland_path_is_safe(const char *path) {
  * PATH RESOLUTION
  * ============================================================================ */
 
-int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len) {
+int path_resolve(const char *path, char *resolved, size_t resolved_len) {
     if (!path || !resolved || resolved_len == 0) {
         errno = EINVAL;
         return -1;
     }
 
     /* Classify the path */
-    ixland_path_type_t type = __ixland_path_classify(path);
+    ixland_path_type_t type = path_classify(path);
 
     /* If it's a real iOS path (own sandbox or external), use directly */
     if (type == IXLAND_PATH_OWN_SANDBOX || type == IXLAND_PATH_EXTERNAL) {
@@ -259,7 +259,7 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
         strncpy(resolved, path, resolved_len - 1);
         resolved[resolved_len - 1] = '\0';
         /* Normalize but don't translate */
-        __ixland_path_normalize(resolved);
+        path_normalize(resolved);
         return 0;
     }
 
@@ -273,7 +273,7 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
         }
         strncpy(normalized, path, sizeof(normalized) - 1);
         normalized[sizeof(normalized) - 1] = '\0';
-        __ixland_path_normalize(normalized);
+        path_normalize(normalized);
 
         /* Now translate through VFS */
         /* The VFS translate function expects a virtual path and returns iOS path */
@@ -303,10 +303,10 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
     }
 
     snprintf(resolved, resolved_len, "%s/%s", cwd, path);
-    __ixland_path_normalize(resolved);
+    path_normalize(resolved);
 
     /* Now classify the resolved path */
-    type = __ixland_path_classify(resolved);
+    type = path_classify(resolved);
     if (type == IXLAND_PATH_VIRTUAL_LINUX) {
         /* It's a virtual path, translate it */
         char translated[MAX_PATH];
@@ -322,7 +322,7 @@ int __ixland_path_resolve(const char *path, char *resolved, size_t resolved_len)
     return 0;
 }
 
-void __ixland_path_normalize(char *path) {
+void path_normalize(char *path) {
     if (!path || !*path)
         return;
 
@@ -393,7 +393,7 @@ void __ixland_path_normalize(char *path) {
     *dst = '\0';
 }
 
-void __ixland_path_join(const char *base, const char *rel, char *result, size_t result_len) {
+void path_join(const char *base, const char *rel, char *result, size_t result_len) {
     if (!base || !rel || !result || result_len == 0) {
         if (result && result_len > 0)
             *result = '\0';
@@ -429,7 +429,7 @@ void __ixland_path_join(const char *base, const char *rel, char *result, size_t 
     }
 }
 
-bool __ixland_path_in_sandbox(const char *path) {
+bool path_in_sandbox(const char *path) {
     /* For now, allow all paths - will implement sandbox checking later */
     /* TODO: Implement proper sandbox path validation */
     (void)path;
@@ -480,7 +480,7 @@ static void __ixland_path_init_regex(void) {
 }
 
 /* Check if path is a virtual Linux path (needs VFS translation) */
-bool __ixland_path_is_virtual_linux(const char *path) {
+bool path_is_virtual_linux(const char *path) {
     if (!path || !*path)
         return false;
 
@@ -530,7 +530,7 @@ bool __ixland_path_is_virtual_linux(const char *path) {
 }
 
 /* Check if path is within own app sandbox */
-bool __ixland_path_is_own_sandbox(const char *path) {
+bool path_is_own_sandbox(const char *path) {
     if (!path || !*path)
         return false;
 
@@ -562,7 +562,7 @@ bool __ixland_path_is_own_sandbox(const char *path) {
 }
 
 /* Check if path is external (requires security-scoped access) */
-bool __ixland_path_is_external(const char *path) {
+bool path_is_external(const char *path) {
     if (!path || !*path)
         return false;
 
@@ -584,7 +584,7 @@ bool __ixland_path_is_external(const char *path) {
     }
 
     /* If it's not virtual Linux and not own sandbox, treat as external */
-    if (!__ixland_path_is_virtual_linux(path) && !__ixland_path_is_own_sandbox(path)) {
+    if (!path_is_virtual_linux(path) && !path_is_own_sandbox(path)) {
         /* This is a catch-all for paths we can't categorize */
         /* The iOS kernel will ultimately enforce permissions */
         return true;
@@ -594,20 +594,20 @@ bool __ixland_path_is_external(const char *path) {
 }
 
 /* Classify a path and return the type */
-ixland_path_type_t __ixland_path_classify(const char *path) {
+ixland_path_type_t path_classify(const char *path) {
     if (!path || !*path) {
         return IXLAND_PATH_INVALID;
     }
 
-    if (__ixland_path_is_virtual_linux(path)) {
+    if (path_is_virtual_linux(path)) {
         return IXLAND_PATH_VIRTUAL_LINUX;
     }
 
-    if (__ixland_path_is_own_sandbox(path)) {
+    if (path_is_own_sandbox(path)) {
         return IXLAND_PATH_OWN_SANDBOX;
     }
 
-    if (__ixland_path_is_external(path)) {
+    if (path_is_external(path)) {
         return IXLAND_PATH_EXTERNAL;
     }
 
@@ -616,13 +616,13 @@ ixland_path_type_t __ixland_path_classify(const char *path) {
 }
 
 /* Convert virtual Linux path to iOS path using VFS */
-int __ixland_path_virtual_to_ios(const char *vpath, char *ios_path, size_t ios_path_len) {
+int path_virtual_to_ios(const char *vpath, char *ios_path, size_t ios_path_len) {
     if (!vpath || !ios_path || ios_path_len == 0) {
         return -1;
     }
 
     /* Check if it's actually a virtual path */
-    if (!__ixland_path_is_virtual_linux(vpath)) {
+    if (!path_is_virtual_linux(vpath)) {
         /* Not a virtual path, copy as-is */
         if (strlen(vpath) >= ios_path_len) {
             errno = ENAMETOOLONG;
@@ -647,10 +647,10 @@ int __ixland_path_virtual_to_ios(const char *vpath, char *ios_path, size_t ios_p
 }
 
 /* Check if path can be accessed directly (not virtual) */
-bool __ixland_path_is_direct(const char *path) {
+bool path_is_direct(const char *path) {
     if (!path || !*path)
         return false;
 
-    ixland_path_type_t type = __ixland_path_classify(path);
+    ixland_path_type_t type = path_classify(path);
     return (type == IXLAND_PATH_OWN_SANDBOX || type == IXLAND_PATH_EXTERNAL);
 }

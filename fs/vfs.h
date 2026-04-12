@@ -140,6 +140,10 @@ struct fs_struct *alloc_fs_struct(void);
 void free_fs_struct(struct fs_struct *fs);
 struct fs_struct *dup_fs_struct(struct fs_struct *old);
 
+/* VFS initialization */
+int vfs_init(void);
+void vfs_deinit(void);
+
 /* Mount operations */
 int vfs_kern_mount(struct file_system_type *type, int flags, const char *dev_name, void *data);
 int vfs_mount(const char *source, const char *target, const char *fstype, unsigned long flags,

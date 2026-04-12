@@ -27,7 +27,7 @@ int chdir_impl(const char *path) {
     }
 
     char translated_path[MAX_PATH];
-    if (vfs_translate(path, translated_path, sizeof(translated_path)) != 0) {
+    if (vfs_translate_path(path, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -101,7 +101,7 @@ int mkdir_impl(const char *pathname, mode_t mode) {
     }
 
     char translated_path[MAX_PATH];
-    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -114,7 +114,7 @@ int rmdir_impl(const char *pathname) {
     }
 
     char translated_path[MAX_PATH];
-    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -137,7 +137,7 @@ int unlink_impl(const char *pathname) {
     }
 
     char translated_path[MAX_PATH];
-    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 
@@ -163,11 +163,11 @@ int link_impl(const char *oldpath, const char *newpath) {
 
     char translated_old[MAX_PATH];
     char translated_new[MAX_PATH];
-    if (vfs_translate(oldpath, translated_old, sizeof(translated_old)) != 0) {
+    if (vfs_translate_path(oldpath, translated_old, sizeof(translated_old)) != 0) {
         return -1;
     }
 
-    if (vfs_translate(newpath, translated_new, sizeof(translated_new)) != 0) {
+    if (vfs_translate_path(newpath, translated_new, sizeof(translated_new)) != 0) {
         return -1;
     }
 
@@ -201,7 +201,7 @@ int symlink_impl(const char *target, const char *linkpath) {
     }
 
     char translated_link[MAX_PATH];
-    if (vfs_translate(linkpath, translated_link, sizeof(translated_link)) != 0) {
+    if (vfs_translate_path(linkpath, translated_link, sizeof(translated_link)) != 0) {
         return -1;
     }
 
@@ -231,7 +231,7 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
     }
 
     char translated_path[MAX_PATH];
-    if (vfs_translate(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
         return -1;
     }
 

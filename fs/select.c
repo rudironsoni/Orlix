@@ -12,9 +12,9 @@
 
 #include "../include/ixland/ixland_signal.h"
 
-typedef sigset_t ixland_native_sigset_t;
+typedef sigset_t sigset_t;
 
-static short ixland_kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
+static short kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
     short revents = 0;
 
     if (filter == EVFILT_READ) {
@@ -34,7 +34,7 @@ static short ixland_kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
     return revents;
 }
 
-static int ixland_poll_kqueue(struct pollfd *fds, unsigned int nfds, int timeout_ms) {
+static int do_poll_kqueue(struct pollfd *fds, unsigned int nfds, int timeout_ms) {
     if (!fds) {
         errno = EFAULT;
         return -1;
@@ -136,7 +136,7 @@ static int ixland_poll_kqueue(struct pollfd *fds, unsigned int nfds, int timeout
         unsigned int idx = (unsigned int)(uintptr_t)eventlist[i].udata;
         if (idx < nfds) {
             fds[idx].revents |=
-                ixland_kfilter_to_poll_revents(eventlist[i].filter, eventlist[i].flags);
+                kfilter_to_poll_revents(eventlist[i].filter, eventlist[i].flags);
             ready_count++;
         }
     }
@@ -148,31 +148,31 @@ static int ixland_poll_kqueue(struct pollfd *fds, unsigned int nfds, int timeout
     return ready_count;
 }
 
-int ixland_poll(struct pollfd *fds, unsigned int nfds, int timeout) {
+int do_poll(struct pollfd *fds, unsigned int nfds, int timeout) {
     if (!fds) {
         errno = EFAULT;
         return -1;
     }
 
-    return ixland_poll_kqueue(fds, nfds, timeout);
+    return do_poll_kqueue(fds, nfds, timeout);
 }
 
-int ixland_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
-                 const linux_sigset_t *sigmask) {
+int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
+                 const sigset_t *sigmask) {
     int timeout_ms = -1;
     if (timeout) {
         timeout_ms = (int)(timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000);
     }
 
-    ixland_native_sigset_t oldmask;
-    ixland_native_sigset_t newmask;
+    sigset_t oldmask;
+    sigset_t newmask;
     if (sigmask) {
         memset(&newmask, 0, sizeof(newmask));
         memcpy(&newmask, sigmask, sizeof(newmask) < 128 ? sizeof(newmask) : 128);
         pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
     }
 
-    int result = ixland_poll(fds, nfds, timeout_ms);
+    int result = do_poll(fds, nfds, timeout_ms);
 
     if (sigmask) {
         pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
@@ -181,8 +181,8 @@ int ixland_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_times
     return result;
 }
 
-int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
-                  linux_fd_set_t *exceptfds, struct linux_timeval *timeout) {
+int do_select(int nfds, fd_set_t *readfds, fd_set_t *writefds,
+                  fd_set_t *exceptfds, struct linux_timeval *timeout) {
     if (nfds < 0 || nfds > FD_SETSIZE) {
         errno = EINVAL;
         return -1;
@@ -201,13 +201,13 @@ int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
     for (int fd = 0; fd < nfds; fd++) {
         bool requested = false;
 
-        if (readfds && IXLAND_FD_ISSET(fd, readfds)) {
+        if (readfds && FD_ISSET(fd, readfds)) {
             requested = true;
         }
-        if (writefds && IXLAND_FD_ISSET(fd, writefds)) {
+        if (writefds && FD_ISSET(fd, writefds)) {
             requested = true;
         }
-        if (exceptfds && IXLAND_FD_ISSET(fd, exceptfds)) {
+        if (exceptfds && FD_ISSET(fd, exceptfds)) {
             requested = true;
         }
 
@@ -234,7 +234,7 @@ int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
     int nchanges = 0;
 
     for (int fd = 0; fd < nfds; fd++) {
-        if (readfds && IXLAND_FD_ISSET(fd, readfds)) {
+        if (readfds && FD_ISSET(fd, readfds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -246,7 +246,7 @@ int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
             nchanges++;
         }
 
-        if (writefds && IXLAND_FD_ISSET(fd, writefds)) {
+        if (writefds && FD_ISSET(fd, writefds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -258,7 +258,7 @@ int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
             nchanges++;
         }
 
-        if (exceptfds && IXLAND_FD_ISSET(fd, exceptfds)) {
+        if (exceptfds && FD_ISSET(fd, exceptfds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -300,11 +300,11 @@ int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
     }
 
     if (readfds)
-        IXLAND_FD_ZERO(readfds);
+        FD_ZERO(readfds);
     if (writefds)
-        IXLAND_FD_ZERO(writefds);
+        FD_ZERO(writefds);
     if (exceptfds)
-        IXLAND_FD_ZERO(exceptfds);
+        FD_ZERO(exceptfds);
 
     int nevents = kevent(kq, changelist, nchanges, eventlist, nchanges, tsp);
 
@@ -326,15 +326,15 @@ int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
         if (eventlist[i].filter == EVFILT_READ) {
             if (eventlist[i].flags & EV_OOBAND) {
                 if (exceptfds)
-                    IXLAND_FD_SET(fd, exceptfds);
+                    FD_SET(fd, exceptfds);
             } else {
                 if (readfds)
-                    IXLAND_FD_SET(fd, readfds);
+                    FD_SET(fd, readfds);
             }
             ready_count++;
         } else if (eventlist[i].filter == EVFILT_WRITE) {
             if (writefds)
-                IXLAND_FD_SET(fd, writefds);
+                FD_SET(fd, writefds);
             ready_count++;
         }
     }
@@ -346,9 +346,9 @@ int ixland_select(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
     return ready_count;
 }
 
-int ixland_pselect(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
-                   linux_fd_set_t *exceptfds, const struct linux_timespec *timeout,
-                   const linux_sigset_t *sigmask) {
+int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds,
+                   fd_set_t *exceptfds, const struct linux_timespec *timeout,
+                   const sigset_t *sigmask) {
     struct linux_timeval tv;
     struct linux_timeval *tvp = NULL;
     if (timeout) {
@@ -357,15 +357,15 @@ int ixland_pselect(int nfds, linux_fd_set_t *readfds, linux_fd_set_t *writefds,
         tvp = &tv;
     }
 
-    ixland_native_sigset_t oldmask;
-    ixland_native_sigset_t newmask;
+    sigset_t oldmask;
+    sigset_t newmask;
     if (sigmask) {
         memset(&newmask, 0, sizeof(newmask));
         memcpy(&newmask, sigmask, sizeof(newmask) < 128 ? sizeof(newmask) : 128);
         pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
     }
 
-    int result = ixland_select(nfds, readfds, writefds, exceptfds, tvp);
+    int result = do_select(nfds, readfds, writefds, exceptfds, tvp);
 
     if (sigmask) {
         pthread_sigmask(SIG_SETMASK, &oldmask, NULL);

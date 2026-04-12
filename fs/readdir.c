@@ -33,7 +33,7 @@ static unsigned char ixland_map_dtype(unsigned char dtype) {
     }
 }
 
-ssize_t __ixland_getdents64_impl(int fd, void *dirp, size_t count) {
+ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
     if (dirp == NULL) {
         errno = EFAULT;
         return -1;
@@ -44,18 +44,18 @@ ssize_t __ixland_getdents64_impl(int fd, void *dirp, size_t count) {
         return -1;
     }
 
-    void *entry = __ixland_get_fd_entry_impl(fd);
+    void *entry = get_fd_entry_impl(fd);
     if (entry == NULL) {
         errno = EBADF;
         return -1;
     }
 
-    int real_fd = __ixland_get_real_fd_impl(entry);
-    off_t saved_offset = __ixland_get_fd_offset_impl(entry);
+    int real_fd = get_real_fd_impl(entry);
+    off_t saved_offset = get_fd_offset_impl(entry);
 
     int dup_fd = dup(real_fd);
     if (dup_fd < 0) {
-        __ixland_put_fd_entry_impl(entry);
+        put_fd_entry_impl(entry);
         return -1;
     }
 
@@ -63,7 +63,7 @@ ssize_t __ixland_getdents64_impl(int fd, void *dirp, size_t count) {
     if (dp == NULL) {
         int saved_errno = errno;
         close(dup_fd);
-        __ixland_put_fd_entry_impl(entry);
+        put_fd_entry_impl(entry);
         errno = saved_errno;
         return -1;
     }
@@ -82,7 +82,7 @@ ssize_t __ixland_getdents64_impl(int fd, void *dirp, size_t count) {
             if (errno != 0 && written == 0) {
                 int saved_errno = errno;
                 closedir(dp);
-                __ixland_put_fd_entry_impl(entry);
+                put_fd_entry_impl(entry);
                 errno = saved_errno;
                 return -1;
             }
@@ -97,7 +97,7 @@ ssize_t __ixland_getdents64_impl(int fd, void *dirp, size_t count) {
         if (aligned_len > count - written) {
             if (written == 0) {
                 closedir(dp);
-                __ixland_put_fd_entry_impl(entry);
+                put_fd_entry_impl(entry);
                 errno = EINVAL;
                 return -1;
             }
@@ -119,20 +119,20 @@ ssize_t __ixland_getdents64_impl(int fd, void *dirp, size_t count) {
         written += aligned_len;
     }
 
-    __ixland_set_fd_offset_impl(entry, latest_offset);
+    set_fd_offset_impl(entry, latest_offset);
     closedir(dp);
-    __ixland_put_fd_entry_impl(entry);
+    put_fd_entry_impl(entry);
     return (ssize_t)written;
 }
 
-ssize_t __ixland_getdents_impl(int fd, void *dirp, size_t count) {
-    return __ixland_getdents64_impl(fd, dirp, count);
+ssize_t getdents_impl(int fd, void *dirp, size_t count) {
+    return getdents64_impl(fd, dirp, count);
 }
 
 ssize_t ixland_getdents64(int fd, void *dirp, size_t count) {
-    return __ixland_getdents64_impl(fd, dirp, count);
+    return getdents64_impl(fd, dirp, count);
 }
 
 ssize_t ixland_getdents(int fd, void *dirp, size_t count) {
-    return __ixland_getdents_impl(fd, dirp, count);
+    return getdents_impl(fd, dirp, count);
 }
