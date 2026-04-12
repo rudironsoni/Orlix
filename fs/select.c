@@ -34,7 +34,7 @@ static short ixland_kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
     return revents;
 }
 
-static int ixland_poll_kqueue(struct linux_pollfd *fds, unsigned int nfds, int timeout_ms) {
+static int ixland_poll_kqueue(struct pollfd *fds, unsigned int nfds, int timeout_ms) {
     if (!fds) {
         errno = EFAULT;
         return -1;
@@ -148,7 +148,7 @@ static int ixland_poll_kqueue(struct linux_pollfd *fds, unsigned int nfds, int t
     return ready_count;
 }
 
-int ixland_poll(struct linux_pollfd *fds, unsigned int nfds, int timeout) {
+int ixland_poll(struct pollfd *fds, unsigned int nfds, int timeout) {
     if (!fds) {
         errno = EFAULT;
         return -1;
@@ -157,7 +157,7 @@ int ixland_poll(struct linux_pollfd *fds, unsigned int nfds, int timeout) {
     return ixland_poll_kqueue(fds, nfds, timeout);
 }
 
-int ixland_ppoll(struct linux_pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
+int ixland_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
                  const linux_sigset_t *sigmask) {
     int timeout_ms = -1;
     if (timeout) {
