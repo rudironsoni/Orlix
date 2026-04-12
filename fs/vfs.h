@@ -18,25 +18,7 @@ extern "C" {
 #define MAX_MOUNTS 64
 
 /* Linux VFS inode types (file types)
- * No need to define - use standard stat.h values
-#ifndef S_IFCHR
-#define S_IFCHR 0020000 /* character special */
-#endif
-#ifndef S_IFDIR
-#define S_IFDIR 0040000 /* directory */
-#endif
-#ifndef S_IFBLK
-#define S_IFBLK 0060000 /* block special */
-#endif
-#ifndef S_IFREG
-#define S_IFREG 0100000 /* regular */
-#endif
-#ifndef S_IFLNK
-#define S_IFLNK 0120000 /* symbolic link */
-#endif
-#ifndef S_IFSOCK
-#define S_IFSOCK 0140000 /* socket */
-#endif
+ * These are defined in standard system headers, no need to redefine */
 
 /* Forward declarations */
 struct inode;
