@@ -24,7 +24,7 @@ int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout
                 const sigset_t *sigmask);
 
 /* FD table internal API */
-#include "../internal/ixland_internal.h"
+#include "fdtable.h"
 
 typedef struct epitem {
     int fd;

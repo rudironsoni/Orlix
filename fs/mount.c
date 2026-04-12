@@ -17,8 +17,6 @@
 #include <sys/ucred.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
-
 /* ============================================================================
  * MOUNT - Mount filesystem (restricted on iOS)
  * ============================================================================ */

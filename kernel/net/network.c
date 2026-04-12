@@ -17,8 +17,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
-
 /* iOS Network framework includes */
 #import <Network/Network.h>
 

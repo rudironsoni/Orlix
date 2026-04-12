@@ -7,8 +7,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
-
 ixland_files_t *ixland_files_alloc(size_t max_fds) {
     ixland_files_t *files = calloc(1, sizeof(ixland_files_t));
     if (!files) {

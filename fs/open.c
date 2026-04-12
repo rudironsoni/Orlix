@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
+#include "fdtable.h"
 #include "vfs.h"
 
 int __ixland_open_impl(const char *pathname, int flags, mode_t mode) {

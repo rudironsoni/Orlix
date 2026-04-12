@@ -13,8 +13,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
-
 /* ============================================================================
  * SYNC - Flush filesystem buffers
  * ============================================================================ */

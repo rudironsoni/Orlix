@@ -2,8 +2,9 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <string.h>
+#include <unistd.h>
 
-#include "../internal/ixland_internal.h"
+#include "fdtable.h"
 
 int __ixland_dup_impl(int oldfd) {
     if (oldfd < 0 || oldfd >= IXLAND_MAX_FD) {

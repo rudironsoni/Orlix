@@ -7,6 +7,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "../include/ixland/ixland_signal.h"
+
 ixland_sighand_t *ixland_sighand_alloc(void) {
     ixland_sighand_t *sighand = calloc(1, sizeof(ixland_sighand_t));
     if (!sighand)

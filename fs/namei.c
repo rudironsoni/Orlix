@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
 #include "vfs.h"
 
 static int ixland_directory_validate_path(const char *path) {

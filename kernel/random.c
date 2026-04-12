@@ -14,8 +14,6 @@
 /* iOS doesn't have sys/random.h, but getentropy is available */
 extern int getentropy(void *buf, size_t buflen);
 
-#include "../internal/ixland_internal.h"
-
 /* ============================================================================
  * GETRANDOM - Linux-compatible random bytes
  * ============================================================================ */

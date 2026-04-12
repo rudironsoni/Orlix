@@ -2,7 +2,7 @@
 #include <stdarg.h>
 #include <sys/ioctl.h>
 
-#include "../internal/ixland_internal.h"
+#include "fdtable.h"
 
 int __ixland_ioctl_impl(int fd, unsigned long request, ...) {
     if (fd < 0 || fd >= IXLAND_MAX_FD) {

@@ -1,5 +1,5 @@
-#ifndef IXLAND_SIGNAL_H
-#define IXLAND_SIGNAL_H
+#ifndef IXLAND_SIGNAL_INTERNAL_H
+#define IXLAND_SIGNAL_INTERNAL_H
 
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
@@ -10,6 +10,9 @@
 #include <time.h>
 
 #include "task.h"
+
+/* Include public signal types */
+#include "../include/ixland/ixland_signal.h"
 
 #ifdef __cplusplus
 extern "C" {

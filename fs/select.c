@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 #include "../include/ixland/ixland_signal.h"
-#include "../internal/ixland_internal.h"
 #include "select_internal.h"
 
 typedef sigset_t ixland_native_sigset_t;

@@ -2,7 +2,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
+#include "fdtable.h"
 #include "vfs.h"
 
 int __ixland_stat_impl(const char *pathname, struct stat *statbuf) {

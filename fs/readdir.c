@@ -1,12 +1,12 @@
 #include <dirent.h>
 #include <errno.h>
-#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../internal/ixland_internal.h"
+#include "dirent.h"
+#include "fdtable.h"
 
 static unsigned char ixland_map_dtype(unsigned char dtype) {
     switch (dtype) {

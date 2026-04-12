@@ -12,8 +12,6 @@
 #include <errno.h>
 #include <pthread.h>
 
-#include "../internal/ixland_internal.h"
-
 /* ============================================================================
  * FUTEX - Fast Userspace muTEX (simulated on iOS)
  * ============================================================================ */
