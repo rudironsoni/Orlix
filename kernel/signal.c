@@ -9,8 +9,8 @@
 
 #include "../include/ixland/ixland_signal.h"
 
-ixland_sighand_t *alloc_sighand(void) {
-    ixland_sighand_t *sighand = calloc(1, sizeof(ixland_sighand_t));
+struct sighand_struct *alloc_sighand(void) {
+    struct sighand_struct *sighand = calloc(1, sizeof(struct sighand_struct));
     if (!sighand)
         return NULL;
 
@@ -30,7 +30,7 @@ ixland_sighand_t *alloc_sighand(void) {
     return sighand;
 }
 
-void ixland_sighand_free(ixland_sighand_t *sighand) {
+void free_sighand(struct sighand_struct *sighand) {
     if (!sighand)
         return;
     if (atomic_fetch_sub(&sighand->refs, 1) > 1)
@@ -50,11 +50,11 @@ void ixland_sighand_free(ixland_sighand_t *sighand) {
     free(sighand);
 }
 
-ixland_sighand_t *ixland_sighand_dup(ixland_sighand_t *parent) {
+struct sighand_struct *dup_sighand(struct sighand_struct *parent) {
     if (!parent)
         return NULL;
 
-    ixland_sighand_t *child = alloc_sighand();
+    struct sighand_struct *child = alloc_sighand();
     if (!child)
         return NULL;
 
