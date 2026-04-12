@@ -18,17 +18,17 @@ static short ixland_kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
     short revents = 0;
 
     if (filter == EVFILT_READ) {
-        revents |= IXLAND_POLLIN;
+        revents |= POLLIN;
     } else if (filter == EVFILT_WRITE) {
-        revents |= IXLAND_POLLOUT;
+        revents |= POLLOUT;
     }
 
     if (flags & EV_ERROR) {
-        revents |= IXLAND_POLLERR;
+        revents |= POLLERR;
     }
 
     if (flags & EV_EOF) {
-        revents |= IXLAND_POLLHUP;
+        revents |= POLLHUP;
     }
 
     return revents;
@@ -69,23 +69,23 @@ static int ixland_poll_kqueue(struct linux_pollfd *fds, unsigned int nfds, int t
         fds[i].revents = 0;
 
         if (fds[i].fd < 0) {
-            fds[i].revents = IXLAND_POLLNVAL;
+            fds[i].revents = POLLNVAL;
             continue;
         }
 
         if (fcntl(fds[i].fd, F_GETFL) < 0) {
-            fds[i].revents = IXLAND_POLLNVAL;
+            fds[i].revents = POLLNVAL;
             continue;
         }
 
         if (fds[i].events &
-            (IXLAND_POLLIN | IXLAND_POLLRDNORM | IXLAND_POLLRDBAND | IXLAND_POLLPRI)) {
+            (POLLIN | POLLRDNORM | POLLRDBAND | POLLPRI)) {
             EV_SET(&changelist[nchanges], fds[i].fd, EVFILT_READ, EV_ADD, 0, 0,
                    (void *)(uintptr_t)i);
             nchanges++;
         }
 
-        if (fds[i].events & (IXLAND_POLLOUT | IXLAND_POLLWRNORM | IXLAND_POLLWRBAND)) {
+        if (fds[i].events & (POLLOUT | POLLWRNORM | POLLWRBAND)) {
             EV_SET(&changelist[nchanges], fds[i].fd, EVFILT_WRITE, EV_ADD, 0, 0,
                    (void *)(uintptr_t)i);
             nchanges++;
@@ -97,7 +97,7 @@ static int ixland_poll_kqueue(struct linux_pollfd *fds, unsigned int nfds, int t
         close(kq);
 
         for (unsigned int i = 0; i < nfds; i++) {
-            if (fds[i].revents & IXLAND_POLLNVAL) {
+            if (fds[i].revents & POLLNVAL) {
                 return 1;
             }
         }
