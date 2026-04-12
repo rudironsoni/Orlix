@@ -67,7 +67,7 @@ void ixland_library_deinit(void) {
     }
 
     task_deinit();
-    ixland_vfs_deinit();
+    vfs_deinit();
 
     atomic_store(&ixland_initialized, 0);
 
@@ -80,7 +80,7 @@ void ixland_library_deinit(void) {
  * PUBLIC INITIALIZATION API
  * ============================================================================ */
 
-int ixland_init(const ixland_config_t *config) {
+int ixland_init(const void *config) {
     /* Initialization happens automatically via constructor,
      * but this function allows explicit initialization if needed */
     (void)config; /* Config ignored for now */

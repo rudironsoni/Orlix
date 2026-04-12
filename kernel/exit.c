@@ -18,7 +18,7 @@ void ixland_exit(int status) {
     /* Set exit status */
     task->exit_status = status;
     atomic_store(&task->exited, true);
-    atomic_store(&task->state, IXLAND_TASK_ZOMBIE);
+    atomic_store(&task->state, TASK_ZOMBIE);
 
     /* Reparent children to init (orphan adoption) */
     if (task->children && init_task && init_task != task) {
