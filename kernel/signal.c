@@ -70,7 +70,7 @@ struct sighand_struct *dup_sighand(struct sighand_struct *parent) {
     return child;
 }
 
-int ixland_sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
+int do_sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
     if (sig < 1 || sig >= IXLAND_NSIG) {
         errno = EINVAL;
         return -1;
@@ -151,7 +151,7 @@ static void __ixland_apply_signal_to_task(struct task_struct *task, int sig) {
     pthread_kill(task->thread, SIGUSR1);
 }
 
-int ixland_kill(pid_t pid, int sig) {
+int do_kill(pid_t pid, int sig) {
     if (sig < 0 || sig >= IXLAND_NSIG) {
         errno = EINVAL;
         return -1;
@@ -166,14 +166,14 @@ int ixland_kill(pid_t pid, int sig) {
                 errno = ESRCH;
                 return -1;
             }
-            return ixland_killpg(task->pgid, sig);
+            return do_killpg(task->pgid, sig);
         } else if (pid == -1) {
             /* All processes (privileged) */
             errno = EPERM;
             return -1;
         } else {
             /* Process group |pid| */
-            return ixland_killpg(-pid, sig);
+            return do_killpg(-pid, sig);
         }
     }
 
@@ -198,7 +198,7 @@ int ixland_kill(pid_t pid, int sig) {
     return 0;
 }
 
-int ixland_killpg(pid_t pgrp, int sig) {
+int do_killpg(pid_t pgrp, int sig) {
     /* Contract:
      * - pgrp <= 0: return -1, errno = EINVAL
      * - no matching tasks: return -1, errno = ESRCH
@@ -276,35 +276,34 @@ int ixland_killpg(pid_t pgrp, int sig) {
     return 0;
 }
 
-int ixland_sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    struct task_struct *task = get_current();
-    if (!task || !task->sighand) {
-        errno = ESRCH;
+int do_sigprocmask(struct sighand_struct *sighand, int how, const sigset_t *set, sigset_t *oldset) {
+    if (!sighand) {
+        errno = EINVAL;
         return -1;
     }
 
     if (oldset) {
-        *oldset = task->sighand->blocked;
+        *oldset = sighand->blocked;
     }
 
     if (set) {
         switch (how) {
         case SIG_BLOCK:
-            for (int i = 1; i < IXLAND_NSIG; i++) {
+            for (int i = 1; i < NSIG; i++) {
                 if (sigismember(set, i)) {
-                    sigaddset(&task->sighand->blocked, i);
+                    sigaddset(&sighand->blocked, i);
                 }
             }
             break;
         case SIG_UNBLOCK:
-            for (int i = 1; i < IXLAND_NSIG; i++) {
+            for (int i = 1; i < NSIG; i++) {
                 if (sigismember(set, i)) {
-                    sigdelset(&task->sighand->blocked, i);
+                    sigdelset(&sighand->blocked, i);
                 }
             }
             break;
         case SIG_SETMASK:
-            task->sighand->blocked = *set;
+            sighand->blocked = *set;
             break;
         default:
             errno = EINVAL;
@@ -315,19 +314,18 @@ int ixland_sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
     return 0;
 }
 
-int ixland_sigpending(sigset_t *set) {
+int do_sigpending(struct sighand_struct *sighand, sigset_t *set) {
     if (!set) {
         errno = EFAULT;
         return -1;
     }
 
-    struct task_struct *task = get_current();
-    if (!task || !task->sighand) {
-        errno = ESRCH;
+    if (!sighand) {
+        errno = EINVAL;
         return -1;
     }
 
-    *set = task->sighand->pending;
+    *set = sighand->pending;
     return 0;
 }
 
@@ -335,7 +333,7 @@ int ixland_sigpending(sigset_t *set) {
  * SIGNAL - Simple signal handler installation
  * ============================================================================ */
 
-ixland_sighandler_t ixland_signal(int signum, ixland_sighandler_t handler) {
+sighandler_t ixland_signal(int signum, sighandler_t handler) {
     if (signum < 1 || signum >= IXLAND_NSIG) {
         errno = EINVAL;
         return SIG_ERR;
@@ -353,7 +351,7 @@ ixland_sighandler_t ixland_signal(int signum, ixland_sighandler_t handler) {
     }
 
     /* Get old handler */
-    ixland_sighandler_t old_handler = task->sighand->action[signum].sa_handler;
+    sighandler_t old_handler = task->sighand->action[signum].sa_handler;
 
     /* Install new handler */
     task->sighand->action[signum].sa_handler = handler;
@@ -367,13 +365,13 @@ ixland_sighandler_t ixland_signal(int signum, ixland_sighandler_t handler) {
  * RAISE - Send signal to current process
  * ============================================================================ */
 
-int ixland_raise(int sig) {
+int do_raise(int sig) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
     }
-    return ixland_kill(task->pid, sig);
+    return do_kill(task->pid, sig);
 }
 
 /* ============================================================================
@@ -442,7 +440,7 @@ static int sigset_is_empty(const sigset_t *set) {
  * PAUSE - Wait for signal
  * ============================================================================ */
 
-int ixland_pause(void) {
+int do_pause(void) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
@@ -472,7 +470,7 @@ int ixland_pause(void) {
  * SIGSUSPEND - Atomically replace mask and wait for signal
  * ============================================================================ */
 
-int ixland_sigsuspend(const sigset_t *mask) {
+int do_sigsuspend(const sigset_t *mask) {
     struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
