@@ -1,36 +1,59 @@
-/* IXLandSystem/kernel/sys.c
- * Internal kernel misc syscall owner
+/* iOS Subsystem for Linux - System Call Surface
  *
- * Canonical internal implementations for process-group and session
- * primitives that have no dedicated owner file yet.
- * The exported Linux-facing syscall surface lives in IXLandLibC.
+ * Minimal sys.c containing functions not in other canonical owners
  */
 
 #include <errno.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
+#include "../fs/exec.h"
 #include "task.h"
 
-int do_setpgid(pid_t pid, pid_t pgid) {
-    struct task_struct *task = get_current();
+/* extern declaration for environ (not available on all platforms) */
+extern char **environ;
 
-    if (!task) {
-        errno = ESRCH;
-        return -1;
+int ixland_setpgrp(void) {
+    /* setpgrp() is equivalent to setpgid(0, 0) */
+    return ixland_setpgid(0, 0);
+}
+
+int ixland_system(const char *command) {
+    pid_t pid;
+    int status;
+
+    if (command == NULL) {
+        return 1;
     }
 
-    if (pgid < 0) {
-        errno = EINVAL;
+    pid = ixland_fork();
+    if (pid < 0) {
         return -1;
     }
 
     if (pid == 0) {
-        pid = task->pid;
+        /* Child process */
+        const char *argv[] = {"sh", "-c", command, NULL};
+        ixland_execve("/bin/sh", (char *const *)argv, environ);
+        /* If exec fails, exit with error */
+        ixland_exit(127);
+        /* NOTREACHED */
     }
 
-    if (pgid == 0) {
-        pgid = task->pid;
+    /* Parent process - wait for child */
+    pid_t ret = ixland_waitpid(pid, &status, 0);
+    if (ret < 0) {
+        return -1;
     }
 
-    task->pgid = pgid;
-    return 0;
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+
+    return -1;
 }
