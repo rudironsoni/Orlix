@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include "fdtable.h"
@@ -165,6 +166,11 @@ int vfs_close(struct file *file);
 /* Translation between virtual and host paths */
 int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len);
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len);
+
+/* Stat operations */
+int vfs_stat_path(const char *pathname, struct stat *statbuf);
+int vfs_lstat(const char *pathname, struct stat *statbuf);
+int vfs_access(const char *pathname, int mode);
 
 #ifdef __cplusplus
 }

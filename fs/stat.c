@@ -47,8 +47,9 @@ int fstat_impl(int fd, struct stat *statbuf) {
         return -1;
     }
 
-    int result = fstat(__ixland_get_real_fd_impl(entry), statbuf);
-    __ixland_put_fd_entry_impl(entry);
+    int real_fd = get_real_fd_impl(entry);
+    int result = fstat(real_fd, statbuf);
+    put_fd_entry_impl(entry);
     return result;
 }
 

@@ -6,18 +6,23 @@
 #ifndef IXLAND_SYSTEM_KERNEL_SIGNAL_H
 #define IXLAND_SYSTEM_KERNEL_SIGNAL_H
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <time.h>
-
-#include "task.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Signal space definition - canonical, not from host */
-#define IX_NSIG 64
+/* Forward declarations - avoid circular include with task.h */
+struct task_struct;
+
+/* pid_t is needed for do_kill/do_killpg - forward declare to avoid
+ * pulling in host headers that define sa_handler macros */
+typedef int pid_t;
+
+/* Signal space definition - matches Linux UAPI _NSIG */
+#define _NSIG 64
 
 /* Signal queue entry - canonical internal type */
 typedef struct ix_sigqueue_entry {
@@ -38,19 +43,27 @@ typedef struct ix_sigqueue {
 
 /* Canonical signal set (internal representation) */
 typedef struct ix_sigset {
-    uint64_t sig[IX_NSIG / 64 + 1];
+    uint64_t sig[_NSIG / 64 + 1];
 } ix_sigset_t;
 
-/* Canonical sigaction (internal representation) */
-struct ix_sigaction {
-    void (*sa_handler)(int);
-    ix_sigset_t sa_mask;
-    int sa_flags;
+/* Kernel sigaction (internal representation)
+ *
+ * Field names are intentionally NOT Linux UAPI names (sa_handler, etc.)
+ * because those are macros in host signal.h. We use descriptive internal
+ * names: handler, mask, flags.
+ *
+ * The exported Linux-facing contract is in IXLandLibC/include/linux/signal.h
+ * with standard Linux UAPI names (struct sigaction, sa_handler, sa_mask, etc).
+ */
+struct k_sigaction {
+    void (*handler)(int);
+    ix_sigset_t mask;
+    int flags;
 };
 
 /* Signal handling state (Linux-style sighand_struct) */
 struct sighand_struct {
-    struct ix_sigaction action[IX_NSIG];
+    struct k_sigaction action[_NSIG];
     ix_sigset_t blocked;
     ix_sigset_t pending;
     ix_sigqueue_t queue;
@@ -63,7 +76,7 @@ void free_sighand(struct sighand_struct *sighand);
 struct sighand_struct *dup_sighand(struct sighand_struct *parent);
 
 /* Signal actions - internal kernel implementation */
-int do_sigaction(int sig, const struct ix_sigaction *act, struct ix_sigaction *oldact);
+int do_sigaction(int sig, const struct k_sigaction *act, struct k_sigaction *oldact);
 
 /* Signal sending - internal kernel implementation */
 int do_kill(pid_t pid, int sig);

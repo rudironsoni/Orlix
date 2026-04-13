@@ -1,5 +1,5 @@
-#ifndef IXLAND_NATIVE_REGISTRY_H
-#define IXLAND_NATIVE_REGISTRY_H
+#ifndef NATIVE_REGISTRY_H
+#define NATIVE_REGISTRY_H
 
 #include <stdbool.h>
 
@@ -9,21 +9,18 @@
 extern "C" {
 #endif
 
-/* Native command entry point signature */
-typedef int (*ixland_native_entry_t)(struct task_struct *task, int argc, char **argv, char **envp);
+typedef int (*native_entry_fn)(struct task_struct *task, int argc, char **argv, char **envp);
 
-/* Registry entry */
-typedef struct ixland_native_cmd {
-    const char *path;            /* Command path (e.g., "/bin/testcmd") */
-    ixland_native_entry_t entry; /* Entry point */
-    struct ixland_native_cmd *next;
-} ixland_native_cmd_t;
+typedef struct native_cmd {
+    const char *path;
+    native_entry_fn entry;
+    struct native_cmd *next;
+} native_cmd_t;
 
-/* Registry operations */
-int ixland_native_register(const char *path, ixland_native_entry_t entry);
-ixland_native_entry_t ixland_native_lookup(const char *path);
-void ixland_native_registry_init(void);
-void ixland_native_registry_clear(void);
+int native_register(const char *path, native_entry_fn entry);
+native_entry_fn native_lookup(const char *path);
+void native_registry_init(void);
+void native_registry_clear(void);
 
 #ifdef __cplusplus
 }

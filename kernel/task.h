@@ -2,7 +2,6 @@
 #define TASK_H
 
 #include <pthread.h>
-#include <signal.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <sys/resource.h>
@@ -11,7 +10,6 @@
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
-#include "signal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,6 +28,7 @@ struct task_struct;
 struct tty_struct;
 struct mm_struct;
 struct exec_image;
+struct sighand_struct;
 
 /* Task states - Linux-style */
 #define TASK_RUNNING 0
@@ -54,7 +53,7 @@ struct mm_struct {
 };
 
 /* Exec image types */
-enum {
+enum exec_image_type {
     EXEC_IMAGE_NONE = 0,
     EXEC_IMAGE_NATIVE,
     EXEC_IMAGE_WASI,
@@ -65,7 +64,7 @@ enum {
 typedef int (*native_entry_t)(struct task_struct *task, int argc, char **argv, char **envp);
 
 struct exec_image {
-    int type;
+    enum exec_image_type type;
     char path[MAX_PATH];
     char interpreter[MAX_PATH];
 

@@ -8,28 +8,28 @@
 #include "dirent.h"
 #include "fdtable.h"
 
-static unsigned char ixland_map_dtype(unsigned char dtype) {
+static unsigned char map_dtype(unsigned char dtype) {
     switch (dtype) {
     case DT_FIFO:
-        return IXLAND_DT_FIFO;
+        return DT_FIFO;
     case DT_CHR:
-        return IXLAND_DT_CHR;
+        return DT_CHR;
     case DT_DIR:
-        return IXLAND_DT_DIR;
+        return DT_DIR;
     case DT_BLK:
-        return IXLAND_DT_BLK;
+        return DT_BLK;
     case DT_REG:
-        return IXLAND_DT_REG;
+        return DT_REG;
     case DT_LNK:
-        return IXLAND_DT_LNK;
+        return DT_LNK;
     case DT_SOCK:
-        return IXLAND_DT_SOCK;
+        return DT_SOCK;
 #ifdef DT_WHT
     case DT_WHT:
-        return IXLAND_DT_WHT;
+        return DT_WHT;
 #endif
     default:
-        return IXLAND_DT_UNKNOWN;
+        return DT_UNKNOWN;
     }
 }
 
@@ -90,7 +90,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
         }
 
         size_t name_len = strlen(native->d_name);
-        size_t base_len = offsetof(struct ixland_dirent_64, d_name);
+        size_t base_len = offsetof(struct linux_dirent64, d_name);
         size_t record_len = base_len + name_len + 1;
         size_t aligned_len = (record_len + 7U) & ~7U;
 
@@ -104,12 +104,12 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
             break;
         }
 
-        struct ixland_dirent_64 *out = (struct ixland_dirent_64 *)((char *)dirp + written);
+        struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
         out->d_ino = native->d_ino;
         latest_offset = (off_t)telldir(dp);
         out->d_off = latest_offset;
         out->d_reclen = (unsigned short)aligned_len;
-        out->d_type = ixland_map_dtype(native->d_type);
+        out->d_type = map_dtype(native->d_type);
         memcpy(out->d_name, native->d_name, name_len + 1);
 
         if (aligned_len > record_len) {

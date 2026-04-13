@@ -1,8 +1,8 @@
 #include <errno.h>
-#include <signal.h>
 #include <stdlib.h>
 #include <sys/wait.h>
 
+#include "signal.h"
 #include "task.h"
 
 static int task_to_status(struct task_struct *task) {
@@ -169,13 +169,13 @@ pid_t ixland_waitpid(pid_t pid, int *wstatus, int options) {
 pid_t ixland_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage) {
     /* rusage not implemented yet - just call waitpid */
     (void)rusage;
-    return ixland_waitpid(pid, wstatus, options);
+    return waitpid(pid, wstatus, options);
 }
 
 pid_t ixland_wait(int *wstatus) {
-    return ixland_waitpid(-1, wstatus, 0);
+    return waitpid(-1, wstatus, 0);
 }
 
 pid_t ixland_wait3(int *wstatus, int options, struct rusage *rusage) {
-    return ixland_wait4(-1, wstatus, options, rusage);
+    return wait4(-1, wstatus, options, rusage);
 }

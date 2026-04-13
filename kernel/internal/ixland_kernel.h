@@ -1,15 +1,10 @@
 /*
- * ixland_kernel.h - iXland Kernel Internal Umbrella Header
+ * kernel.h - IXLand Kernel Internal Umbrella Header
  *
- * This header includes the internal kernel headers needed by kernel
- * implementation code. It is NOT a public API header - use <ixland/ixland.h>
- * for public APIs.
+ * Includes the internal kernel headers needed by kernel
+ * implementation code. NOT a public API header.
  *
- * This header provides:
- * - Kernel version information
- * - VFS layer headers
- * - Internal type definitions
- * - Kernel initialization functions
+ * For public APIs, use <ixland/ixland.h>.
  */
 
 #ifndef IXLAND_KERNEL_H
@@ -24,7 +19,6 @@ extern "C" {
  * ============================================================================ */
 
 #include <pthread.h>
-#include <signal.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -33,17 +27,13 @@ extern "C" {
 #include <time.h>
 
 /* ============================================================================
- * Public ixland types (required for kernel implementation)
+ * Internal kernel headers (NOT host signal.h)
  * ============================================================================ */
 
-#include "ixland/ixland_types.h"
-
-/* ============================================================================
- * VFS Layer
- * ============================================================================ */
-
-#include "fdtable.h"
-#include "vfs.h"
+#include "../../fs/fdtable.h"
+#include "../../fs/vfs.h"
+#include "../../include/ixland/ixland_types.h"
+#include "../signal.h"
 
 /* ============================================================================
  * Version Information
@@ -59,26 +49,8 @@ extern "C" {
  * Kernel Initialization
  * ============================================================================ */
 
-/**
- * @brief Initialize the iXland kernel
- *
- * @param prefix Path prefix for VFS path translation
- * @return int 0 on success, -1 on error
- */
 extern int ixland_kernel_init(const char *prefix);
-
-/**
- * @brief Get the kernel prefix path
- *
- * @return const char* The prefix path, or NULL if not initialized
- */
 extern const char *ixland_kernel_get_prefix(void);
-
-/**
- * @brief Check if the kernel is initialized
- *
- * @return int 1 if initialized, 0 otherwise
- */
 extern int ixland_kernel_is_initialized(void);
 
 #ifdef __cplusplus

@@ -2,7 +2,6 @@
  * Internal kernel signal owner implementation
  * Canonical signal types only, NO host signal.h
  */
-
 #include "signal.h"
 
 #include <errno.h>
@@ -10,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "task.h"
 
 struct sighand_struct *alloc_sighand(void) {
     struct sighand_struct *sighand = calloc(1, sizeof(struct sighand_struct));
@@ -20,10 +21,10 @@ struct sighand_struct *alloc_sighand(void) {
     pthread_mutex_init(&sighand->queue.lock, NULL);
 
     /* Initialize default handlers */
-    for (int i = 0; i < IX_NSIG; i++) {
-        sighand->action[i].sa_handler = NULL; /* SIG_DFL equivalent */
-        memset(&sighand->action[i].sa_mask, 0, sizeof(ix_sigset_t));
-        sighand->action[i].sa_flags = 0;
+    for (int i = 0; i < _NSIG; i++) {
+        sighand->action[i].handler = NULL; /* SIG_DFL equivalent */
+        memset(&sighand->action[i].mask, 0, sizeof(ix_sigset_t));
+        sighand->action[i].flags = 0;
     }
 
     memset(&sighand->blocked, 0, sizeof(ix_sigset_t));
@@ -72,8 +73,8 @@ struct sighand_struct *dup_sighand(struct sighand_struct *parent) {
     return child;
 }
 
-int do_sigaction(int sig, const struct ix_sigaction *act, struct ix_sigaction *oldact) {
-    if (sig < 1 || sig >= IX_NSIG) {
+int do_sigaction(int sig, const struct k_sigaction *act, struct k_sigaction *oldact) {
+    if (sig < 1 || sig >= _NSIG) {
         errno = EINVAL;
         return -1;
     }
@@ -140,7 +141,7 @@ static void apply_signal_to_task(struct task_struct *task, int sig) {
 }
 
 int do_kill(pid_t pid, int sig) {
-    if (sig < 0 || sig >= IX_NSIG) {
+    if (sig < 0 || sig >= _NSIG) {
         errno = EINVAL;
         return -1;
     }
@@ -187,7 +188,7 @@ int do_kill(pid_t pid, int sig) {
 }
 
 int do_killpg(pid_t pgrp, int sig) {
-    if (sig < 0 || sig >= IX_NSIG) {
+    if (sig < 0 || sig >= _NSIG) {
         errno = EINVAL;
         return -1;
     }
@@ -247,12 +248,12 @@ int do_sigprocmask(int how, const ix_sigset_t *set, ix_sigset_t *oldset) {
     if (set) {
         switch (how) {
         case 0: /* SIG_BLOCK */
-            for (int i = 0; i < IX_NSIG / 64 + 1; i++) {
+            for (int i = 0; i < _NSIG / 64 + 1; i++) {
                 sighand->blocked.sig[i] |= set->sig[i];
             }
             break;
         case 1: /* SIG_UNBLOCK */
-            for (int i = 0; i < IX_NSIG / 64 + 1; i++) {
+            for (int i = 0; i < _NSIG / 64 + 1; i++) {
                 sighand->blocked.sig[i] &= ~set->sig[i];
             }
             break;
@@ -285,7 +286,7 @@ int do_sigpending(ix_sigset_t *set) {
 }
 
 ix_sighandler_t do_signal(int signum, ix_sighandler_t handler) {
-    if (signum < 1 || signum >= IX_NSIG) {
+    if (signum < 1 || signum >= _NSIG) {
         errno = EINVAL;
         return NULL;
     }
@@ -301,10 +302,10 @@ ix_sighandler_t do_signal(int signum, ix_sighandler_t handler) {
         return NULL;
     }
 
-    ix_sighandler_t old_handler = task->sighand->action[signum].sa_handler;
-    task->sighand->action[signum].sa_handler = handler;
-    task->sighand->action[signum].sa_flags = 0;
-    memset(&task->sighand->action[signum].sa_mask, 0, sizeof(ix_sigset_t));
+    ix_sighandler_t old_handler = task->sighand->action[signum].handler;
+    task->sighand->action[signum].handler = handler;
+    task->sighand->action[signum].flags = 0;
+    memset(&task->sighand->action[signum].mask, 0, sizeof(ix_sigset_t));
 
     return old_handler;
 }
@@ -319,7 +320,7 @@ int do_raise(int sig) {
 }
 
 static int is_sigset_empty(const ix_sigset_t *set) {
-    for (int i = 0; i < IX_NSIG / 64 + 1; i++) {
+    for (int i = 0; i < _NSIG / 64 + 1; i++) {
         if (set->sig[i] != 0)
             return 0;
     }

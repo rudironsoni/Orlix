@@ -53,7 +53,7 @@ void ixland_library_init(void) {
     }
 
     /* Initialize native command registry */
-    ixland_native_registry_init();
+    native_registry_init();
 
     /* Set initialized flag */
     atomic_store(&ixland_initialized, 1);

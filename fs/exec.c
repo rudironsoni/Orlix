@@ -27,7 +27,7 @@
 #include "vfs.h"
 
 /* Deep copy argv array */
-static char **ixland_exec_copy_argv(char *const argv[]) {
+static char **exec_copy_argv(char *const argv[]) {
     if (!argv) {
         return NULL;
     }
@@ -57,7 +57,7 @@ static char **ixland_exec_copy_argv(char *const argv[]) {
 }
 
 /* Deep copy envp array */
-static char **ixland_exec_copy_envp(char *const envp[]) {
+static char **exec_copy_envp(char *const envp[]) {
     if (!envp) {
         return NULL;
     }
@@ -87,7 +87,7 @@ static char **ixland_exec_copy_envp(char *const envp[]) {
 }
 
 /* Free copied argv */
-static void ixland_exec_free_argv(char **argv) {
+static void exec_free_argv(char **argv) {
     if (!argv) {
         return;
     }
@@ -99,7 +99,7 @@ static void ixland_exec_free_argv(char **argv) {
 }
 
 /* Internal: Ensure task has an exec_image allocated */
-static int ixland_exec_image_ensure(ixland_task_t *task) {
+static int exec_image_ensure(struct task_struct *task) {
     if (!task) {
         errno = EINVAL;
         return -1;
@@ -109,7 +109,7 @@ static int ixland_exec_image_ensure(ixland_task_t *task) {
         return 0;
     }
 
-    task->exec_image = calloc(1, sizeof(ixland_exec_image_t));
+    task->exec_image = calloc(1, sizeof(struct exec_image));
     if (!task->exec_image) {
         errno = ENOMEM;
         return -1;
@@ -118,14 +118,14 @@ static int ixland_exec_image_ensure(ixland_task_t *task) {
     return 0;
 }
 
-ixland_image_type_t ixland_exec_classify(const char *path) {
-    if (ixland_native_lookup(path)) {
-        return IXLAND_IMAGE_NATIVE;
+enum exec_image_type exec_classify(const char *path) {
+    if (native_lookup(path)) {
+        return EXEC_IMAGE_NATIVE;
     }
 
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
-        return IXLAND_IMAGE_NONE;
+        return EXEC_IMAGE_NONE;
     }
 
     unsigned char magic[4];
@@ -133,21 +133,21 @@ ixland_image_type_t ixland_exec_classify(const char *path) {
     close(fd);
 
     if (n < 2) {
-        return IXLAND_IMAGE_NONE;
+        return EXEC_IMAGE_NONE;
     }
 
     if (n >= 4 && magic[0] == 0x00 && magic[1] == 0x61 && magic[2] == 0x73 && magic[3] == 0x6d) {
-        return IXLAND_IMAGE_WASI;
+        return EXEC_IMAGE_WASI;
     }
 
     if (magic[0] == '#' && magic[1] == '!') {
-        return IXLAND_IMAGE_SCRIPT;
+        return EXEC_IMAGE_SCRIPT;
     }
 
-    return IXLAND_IMAGE_NONE;
+    return EXEC_IMAGE_NONE;
 }
 
-int ixland_exec_close_cloexec(ixland_task_t *task) {
+int exec_close_cloexec(struct task_struct *task) {
     if (!task || !task->files) {
         errno = EINVAL;
         return -1;
@@ -156,9 +156,9 @@ int ixland_exec_close_cloexec(ixland_task_t *task) {
     pthread_mutex_lock(&task->files->lock);
     for (size_t i = 0; i < task->files->max_fds; i++) {
         if (task->files->fd[i] && (task->files->fd[i]->flags & FD_CLOEXEC)) {
-            ixland_file_t *file = task->files->fd[i];
+            struct file *file = task->files->fd[i];
             task->files->fd[i] = NULL;
-            ixland_file_free(file);
+            free_file(file);
         }
     }
     pthread_mutex_unlock(&task->files->lock);
@@ -166,19 +166,19 @@ int ixland_exec_close_cloexec(ixland_task_t *task) {
     return 0;
 }
 
-void ixland_exec_reset_signals(ixland_sighand_t *sighand) {
+void exec_reset_signals(struct sighand_struct *sighand) {
     if (!sighand) {
         return;
     }
 
-    for (int i = 0; i < IXLAND_NSIG; i++) {
-        if (sighand->action[i].sa_handler != SIG_IGN) {
-            sighand->action[i].sa_handler = SIG_DFL;
+    for (int i = 0; i < _NSIG; i++) {
+        if (sighand->action[i].handler != SIG_IGN) {
+            sighand->action[i].handler = SIG_DFL;
         }
     }
 
-    sigemptyset(&sighand->blocked);
-    sigemptyset(&sighand->pending);
+    memset(&sighand->blocked, 0, sizeof(sighand->blocked));
+    memset(&sighand->pending, 0, sizeof(sighand->pending));
 }
 
 int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) {
@@ -192,55 +192,55 @@ int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) 
         return -1;
     }
 
-    ixland_task_t *task = ixland_current_task();
+    struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
     }
 
-    ixland_image_type_t type;
-    if (ixland_native_lookup(pathname)) {
-        type = IXLAND_IMAGE_NATIVE;
+    int type;
+    if (native_lookup(pathname)) {
+        type = EXEC_IMAGE_NATIVE;
     } else {
         if (access(pathname, X_OK) < 0) {
             return -1;
         }
 
-        type = ixland_exec_classify(pathname);
-        if (type == IXLAND_IMAGE_NONE) {
+        type = exec_classify(pathname);
+        if (type == EXEC_IMAGE_NONE) {
             errno = ENOENT;
             return -1;
         }
     }
 
-    char **argv_copy = ixland_exec_copy_argv(argv);
-    char **envp_copy = ixland_exec_copy_envp(envp);
+    char **argv_copy = exec_copy_argv(argv);
+    char **envp_copy = exec_copy_envp(envp);
 
     if (argv && !argv_copy) {
         errno = ENOMEM;
         return -1;
     }
     if (envp && !envp_copy) {
-        ixland_exec_free_argv(argv_copy);
+        exec_free_argv(argv_copy);
         errno = ENOMEM;
         return -1;
     }
 
-    if (ixland_exec_image_ensure(task) < 0) {
-        ixland_exec_free_argv(argv_copy);
-        ixland_exec_free_argv(envp_copy);
+    if (exec_image_ensure(task) < 0) {
+        exec_free_argv(argv_copy);
+        exec_free_argv(envp_copy);
         return -1;
     }
 
-    ixland_exec_close_cloexec(task);
+    exec_close_cloexec(task);
 
     if (task->sighand) {
-        ixland_exec_reset_signals(task->sighand);
+        exec_reset_signals(task->sighand);
     }
 
     if (argv_copy && argv_copy[0]) {
-        strncpy(task->comm, argv_copy[0], IXLAND_MAX_NAME - 1);
-        task->comm[IXLAND_MAX_NAME - 1] = '\0';
+        strncpy(task->comm, argv_copy[0], TASK_COMM_LEN - 1);
+        task->comm[TASK_COMM_LEN - 1] = '\0';
     } else {
         const char *basename = strrchr(pathname, '/');
         if (basename) {
@@ -248,8 +248,8 @@ int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) 
         } else {
             basename = pathname;
         }
-        strncpy(task->comm, basename, IXLAND_MAX_NAME - 1);
-        task->comm[IXLAND_MAX_NAME - 1] = '\0';
+        strncpy(task->comm, basename, TASK_COMM_LEN - 1);
+        task->comm[TASK_COMM_LEN - 1] = '\0';
     }
 
     strncpy(task->exe, pathname, MAX_PATH - 1);
@@ -263,38 +263,38 @@ int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) 
     }
 
     if (task->vfork_parent) {
-        __ixland_vfork_exec_notify();
+        vfork_exec_notify();
     }
 
     int ret;
     switch (type) {
-    case IXLAND_IMAGE_NATIVE:
-        ret = ixland_exec_native(task, pathname, argc, argv_copy, envp_copy);
+    case EXEC_IMAGE_NATIVE:
+        ret = exec_native(task, pathname, argc, argv_copy, envp_copy);
         break;
-    case IXLAND_IMAGE_WASI:
-        ret = ixland_exec_wasi(task, pathname, argc, argv_copy, envp_copy);
+    case EXEC_IMAGE_WASI:
+        ret = exec_wasi(task, pathname, argc, argv_copy, envp_copy);
         break;
-    case IXLAND_IMAGE_SCRIPT:
-        ret = ixland_exec_script(task, pathname, argc, argv_copy, envp_copy);
+    case EXEC_IMAGE_SCRIPT:
+        ret = exec_script(task, pathname, argc, argv_copy, envp_copy);
         break;
     default:
         errno = ENOEXEC;
         ret = -1;
     }
 
-    ixland_exec_free_argv(argv_copy);
-    ixland_exec_free_argv(envp_copy);
+    exec_free_argv(argv_copy);
+    exec_free_argv(envp_copy);
 
     return ret;
 }
 
 int ixland_execv(const char *pathname, char *const argv[]) {
-    return ixland_execve(pathname, argv, environ);
+    return execve(pathname, argv, environ);
 }
 
 int ixland_execvp(const char *file, char *const argv[]) {
     if (strchr(file, '/') != NULL) {
-        return ixland_execv(file, argv);
+        return execv(file, argv);
     }
 
     const char *path_env = getenv("PATH");
@@ -317,7 +317,7 @@ int ixland_execvp(const char *file, char *const argv[]) {
         if (len > 0 && (size_t)len < sizeof(fullpath)) {
             struct stat st;
             if (stat(fullpath, &st) == 0 && S_ISREG(st.st_mode) && (access(fullpath, X_OK) == 0)) {
-                int result = ixland_execv(fullpath, argv);
+                int result = execv(fullpath, argv);
                 free(path_copy);
                 return result;
             }
@@ -339,8 +339,8 @@ int ixland_fexecve(int fd, char *const argv[], char *const envp[]) {
     return -1;
 }
 
-int ixland_exec_native(ixland_task_t *task, const char *path, int argc, char **argv, char **envp) {
-    ixland_native_entry_t entry = ixland_native_lookup(path);
+int exec_native(struct task_struct *task, const char *path, int argc, char **argv, char **envp) {
+    native_entry_fn entry = native_lookup(path);
     if (!entry) {
         errno = ENOENT;
         return -1;
@@ -348,12 +348,12 @@ int ixland_exec_native(ixland_task_t *task, const char *path, int argc, char **a
 
     strncpy(task->exec_image->path, path, sizeof(task->exec_image->path) - 1);
     task->exec_image->path[sizeof(task->exec_image->path) - 1] = '\0';
-    task->exec_image->type = IXLAND_IMAGE_NATIVE;
+    task->exec_image->type = EXEC_IMAGE_NATIVE;
 
     return entry(task, argc, argv, envp);
 }
 
-int ixland_exec_wasi(ixland_task_t *task, const char *path, int argc, char **argv, char **envp) {
+int exec_wasi(struct task_struct *task, const char *path, int argc, char **argv, char **envp) {
     (void)task;
     (void)path;
     (void)argc;
@@ -363,7 +363,7 @@ int ixland_exec_wasi(ixland_task_t *task, const char *path, int argc, char **arg
     return -1;
 }
 
-int ixland_exec_script(ixland_task_t *task, const char *path, int argc, char **argv, char **envp) {
+int exec_script(struct task_struct *task, const char *path, int argc, char **argv, char **envp) {
     (void)task;
     (void)path;
     (void)argc;

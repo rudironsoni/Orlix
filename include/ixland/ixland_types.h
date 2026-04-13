@@ -27,10 +27,9 @@ typedef struct ixland_sighand ixland_sighand_t;
 #define IXLAND_MAX_ARGS 256
 #define IXLAND_MAX_TASKS 1024
 #define IXLAND_MAX_NAME 256
-#define IXLAND_NSIG 64
 
 /* IXLand directory entry (Linux dirent64 compatible) */
-struct ixland_dirent_64 {
+struct linux_dirent64 {
     uint64_t d_ino;
     int64_t d_off;
     unsigned short d_reclen;

@@ -139,3 +139,21 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
     vpath[vpath_len - 1] = '\0';
     return 0;
 }
+
+int vfs_stat_path(const char *pathname, struct stat *statbuf) {
+    (void)pathname;
+    (void)statbuf;
+    return -ENOSYS;
+}
+
+int vfs_lstat(const char *pathname, struct stat *statbuf) {
+    (void)pathname;
+    (void)statbuf;
+    return -ENOSYS;
+}
+
+int vfs_access(const char *pathname, int mode) {
+    (void)pathname;
+    (void)mode;
+    return -ENOSYS;
+}

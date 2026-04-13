@@ -78,7 +78,7 @@ static void *fork_child_trampoline(void *arg) {
     return NULL;
 }
 
-pid_t ixland_fork(void) {
+pid_t do_fork(void) {
     struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
@@ -112,10 +112,14 @@ pid_t ixland_fork(void) {
     child->pgid = parent->pgid;
     child->sid = parent->sid;
 
-    /* Copy parent's working directory */
-    if (parent->fs && child->fs) {
-        strncpy(child->fs->pwd, parent->fs->pwd, MAX_PATH - 1);
-        child->fs->pwd[MAX_PATH - 1] = '\0';
+    /* Copy parent's filesystem context */
+    if (parent->fs) {
+        child->fs = dup_fs_struct(parent->fs);
+        if (!child->fs) {
+            free_task(child);
+            errno = ENOMEM;
+            return -1;
+        }
     }
 
     /* Copy subsystems with proper semantics */
@@ -274,7 +278,7 @@ static void *vfork_child_trampoline(void *arg) {
     return NULL;
 }
 
-int ixland_vfork(void) {
+int do_vfork(void) {
     struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
@@ -309,10 +313,17 @@ int ixland_vfork(void) {
     child->sid = parent->sid;
     child->vfork_parent = parent; /* Mark as vfork child */
 
-    /* Copy parent's resources */
-    if (parent->fs && child->fs) {
-        strncpy(child->fs->pwd, parent->fs->pwd, MAX_PATH - 1);
-        child->fs->pwd[MAX_PATH - 1] = '\0';
+    /* Copy parent's filesystem context */
+    if (parent->fs) {
+        child->fs = dup_fs_struct(parent->fs);
+        if (!child->fs) {
+            pthread_mutex_lock(&parent->lock);
+            parent->children = child->next_sibling;
+            pthread_mutex_unlock(&parent->lock);
+            free_task(child);
+            errno = ENOMEM;
+            return -1;
+        }
     }
 
     /* Share file table (not copy - key vfork semantics) */
@@ -351,7 +362,7 @@ int ixland_vfork(void) {
     pthread_mutex_unlock(&parent->lock);
 
     /* Mark parent as suspended (vfork semantics) */
-    atomic_store(&parent->state, IXLAND_TASK_UNINTERRUPTIBLE);
+    atomic_store(&parent->state, TASK_UNINTERRUPTIBLE);
 
     /* Set up vfork context */
     vfork_ctx_t ctx;
@@ -429,8 +440,8 @@ int ixland_vfork(void) {
     return 0;
 }
 
-/* Called from ixland_execve to notify vfork parent */
-void __ixland_vfork_exec_notify(void) {
+/* Called from execve to notify vfork parent */
+void vfork_exec_notify(void) {
     if (active_vfork_ctx) {
         pthread_mutex_lock(&active_vfork_ctx->lock);
         active_vfork_ctx->child_done = 1;
@@ -440,8 +451,8 @@ void __ixland_vfork_exec_notify(void) {
     }
 }
 
-/* Called from ixland_exit to notify vfork parent */
-void __ixland_vfork_exit_notify(void) {
+/* Called from exit to notify vfork parent */
+void vfork_exit_notify(void) {
     if (active_vfork_ctx) {
         pthread_mutex_lock(&active_vfork_ctx->lock);
         active_vfork_ctx->child_done = 1;

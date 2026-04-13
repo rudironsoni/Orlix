@@ -1,5 +1,4 @@
 #include <errno.h>
-#include <signal.h>
 #include <stdlib.h>
 
 #include "task.h"
@@ -78,7 +77,7 @@ void ixland_exit(int status) {
 
     /* Notify vfork parent if this is a vfork child */
     if (task->vfork_parent) {
-        __ixland_vfork_exit_notify();
+        vfork_exit_notify();
     }
 
     /* Notify parent via SIGCHLD */

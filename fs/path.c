@@ -5,6 +5,7 @@
 #include "path.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +13,8 @@
 
 #include "../include/ixland/ixland_path.h"
 #include "../include/ixland/ixland_types.h"
+#include "fdtable.h"
+#include "vfs.h"
 
 /* ============================================================================
  * PATH CLASSIFICATION
@@ -277,7 +280,7 @@ int path_resolve(const char *path, char *resolved, size_t resolved_len) {
 
         /* Now translate through VFS */
         /* The VFS translate function expects a virtual path and returns iOS path */
-        if (vfs_translate(normalized, resolved, resolved_len) != 0) {
+        if (vfs_translate_path(normalized, resolved, resolved_len) != 0) {
             /* Translation failed - return the normalized path anyway */
             /* This allows fallback to direct kernel access */
             if (strlen(normalized) >= resolved_len) {
@@ -310,7 +313,7 @@ int path_resolve(const char *path, char *resolved, size_t resolved_len) {
     if (type == IXLAND_PATH_VIRTUAL_LINUX) {
         /* It's a virtual path, translate it */
         char translated[MAX_PATH];
-        if (vfs_translate(resolved, translated, sizeof(translated)) == 0) {
+        if (vfs_translate_path(resolved, translated, sizeof(translated)) == 0) {
             if (strlen(translated) < resolved_len) {
                 strncpy(resolved, translated, resolved_len - 1);
                 resolved[resolved_len - 1] = '\0';
