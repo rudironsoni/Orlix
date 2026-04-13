@@ -17,8 +17,9 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    int real_fd = vfs_open(pathname, flags, mode, fd);
-    if (real_fd < 0) {
+    int real_fd;
+    int ret = vfs_open(pathname, flags, mode, &real_fd);
+    if (ret < 0) {
         free_fd_impl(fd);
         return -1;
     }

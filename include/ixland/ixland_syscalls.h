@@ -1,0 +1,88 @@
+/*
+ * IXLandSystem Public Syscall Interface
+ *
+ * Public package seam between IXLandSystem and IXLandLibC.
+ * These are the ONLY functions IXLandLibC SHALL call from IXLandSystem.
+ * All names are product-prefixed to avoid symbol collisions.
+ * These functions delegate to internal IXLandSystem owners.
+ */
+
+#ifndef IXLAND_SYSCALLS_H
+#define IXLAND_SYSCALLS_H
+
+#include <sys/types.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ============================================================================
+ * PROCESS CREATION
+ * ============================================================================ */
+
+pid_t ixland_fork(void);
+int ixland_vfork(void);
+
+/* ============================================================================
+ * PROCESS TERMINATION
+ * ============================================================================ */
+
+void ixland_exit(int status);
+void ixland__exit(int status) __attribute__((noreturn));
+
+/* ============================================================================
+ * PROCESS IDENTIFICATION
+ * ============================================================================ */
+
+pid_t ixland_getpid(void);
+pid_t ixland_getppid(void);
+
+/* ============================================================================
+ * PROCESS GROUPS
+ * ============================================================================ */
+
+pid_t ixland_getpgrp(void);
+pid_t ixland_getpgid(pid_t pid);
+int ixland_setpgid(pid_t pid, pid_t pgid);
+
+/* ============================================================================
+ * SESSIONS
+ * ============================================================================ */
+
+pid_t ixland_setsid(void);
+pid_t ixland_getsid(pid_t pid);
+
+/* ============================================================================
+ * WAIT
+ * ============================================================================ */
+
+pid_t ixland_wait(int *wstatus);
+pid_t ixland_waitpid(pid_t pid, int *wstatus, int options);
+pid_t ixland_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage);
+pid_t ixland_wait3(int *wstatus, int options, struct rusage *rusage);
+
+/* ============================================================================
+ * EXEC
+ * ============================================================================ */
+
+int ixland_execve(const char *pathname, char *const argv[], char *const envp[]);
+int ixland_execv(const char *pathname, char *const argv[]);
+int ixland_execvp(const char *file, char *const argv[]);
+int ixland_fexecve(int fd, char *const argv[], char *const envp[]);
+
+/* ============================================================================
+ * INITIALIZATION
+ * ============================================================================ */
+
+int ixland_init(const ixland_config_t *config);
+void ixland_cleanup(void);
+const char *ixland_version(void);
+int ixland_is_initialized(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* IXLAND_SYSCALLS_H */
