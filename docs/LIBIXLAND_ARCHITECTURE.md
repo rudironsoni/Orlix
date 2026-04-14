@@ -93,10 +93,10 @@ a-shell-kernel/
 Linux programs call standard syscalls (fork, exec, open) which are intercepted at link time:
 
 ```c
-// libixland.a provides these as strong symbols:
-pid_t fork(void) { return ixland_fork(); }
-int execve(...) { return ixland_execve(...); }
-int open(...) { return ixland_open(...); }
+// libixland.a provides these as strong symbols (Linux canonical names):
+pid_t fork(void) { return do_fork(); }
+int execve(...) { return do_execve(...); }
+int open(...) { return open_impl(...); }
 ```
 
 **Compile command:**
@@ -107,12 +107,12 @@ ixland-cc program.c -o program_ios
 
 ### Layer 2: Public API (ixland_*)
 
-Clean public interface, no macro pollution:
+Clean public interface, Linux canonical names with visibility(default):
 
 ```c
-pid_t ixland_fork(void);
-int ixland_execve(const char *pathname, char *const argv[], char *const envp[]);
-int ixland_open(const char *pathname, int flags, mode_t mode);
+pid_t fork(void);
+int execve(const char *pathname, char *const argv[], char *const envp[]);
+int open(const char *pathname, int flags, mode_t mode);
 ```
 
 ### Layer 3: Internal Implementation (__ixland_*_impl)
