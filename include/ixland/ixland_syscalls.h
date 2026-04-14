@@ -87,6 +87,13 @@ int unlink(const char *pathname);
 int unlinkat(int dirfd, const char *pathname, int flags);
 
 /* ============================================================================
+ * HARD LINKS
+ * ============================================================================ */
+
+int link(const char *oldpath, const char *newpath);
+int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
+
+/* ============================================================================
  * PROCESS CREATION
  * ============================================================================ */
 

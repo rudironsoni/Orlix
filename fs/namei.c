@@ -313,25 +313,25 @@ __attribute__((visibility("default"))) int unlinkat(int dirfd, const char *pathn
   return -1;
 }
 
-int ixland_link(const char *oldpath, const char *newpath) {
-    return link_impl(oldpath, newpath);
+__attribute__((visibility("default"))) int link(const char *oldpath, const char *newpath) {
+  return link_impl(oldpath, newpath);
 }
 
-int ixland_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
-    if (oldpath == NULL || newpath == NULL) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    if (olddirfd == AT_FDCWD && newdirfd == AT_FDCWD) {
-        return ixland_link(oldpath, newpath);
-    }
-
-    (void)olddirfd;
-    (void)newdirfd;
-    (void)flags;
-    errno = ENOSYS;
+__attribute__((visibility("default"))) int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
+  if (oldpath == NULL || newpath == NULL) {
+    errno = EFAULT;
     return -1;
+  }
+
+  if (olddirfd == AT_FDCWD && newdirfd == AT_FDCWD) {
+    return link(oldpath, newpath);
+  }
+
+  (void)olddirfd;
+  (void)newdirfd;
+  (void)flags;
+  errno = ENOSYS;
+  return -1;
 }
 
 int ixland_symlink(const char *target, const char *linkpath) {
