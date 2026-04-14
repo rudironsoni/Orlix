@@ -77,9 +77,11 @@ These are currently incomplete:
 
 ## Build Truth
 
-- `swift build` is the working build path
-- `Package.swift` is the authoritative build definition
-- `.github/workflows/build.yml` runs `swift build` as CI gate
+- **Authoritative build path**: `xcodegen generate --project .` then `xcodebuild` with iOS SDK
+- `project.yml` is the authoritative project spec for XcodeGen
+- `xcodebuild -project IXLandSystem.xcodeproj -target IXLandSystem -sdk iphonesimulator -arch arm64 -configuration Debug build` produces iOS Simulator static library
+- `.github/workflows/build.yml` runs XcodeGen + xcodebuild as CI gate
+- `swift build` is AUXILIARY ONLY - host-side macOS smoke build, NOT authoritative for iOS tranche completion
 - `swift test` fails because there is no real test target
 
 ## Mach-O Export Spike Status
