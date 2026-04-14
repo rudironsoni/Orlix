@@ -65,15 +65,15 @@ typedef struct {
  * 
  * NOTE: Public wrappers select(), pselect(), poll(), ppoll() are
  * BLOCKED BY HEADER DRIFT - see select.c for details.
- * The do_* helpers are fully implemented but public ABI surface
+ * The *_impl() helpers are fully implemented but public ABI surface
  * requires careful Darwin header isolation that's not yet complete.
  */
-int do_select(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
+int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
               struct linux_timeval *timeout);
-int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
+int pselect_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
                const struct linux_timespec *timeout, const sigset_t *sigmask);
-int do_poll(struct pollfd *fds, unsigned int nfds, int timeout);
-int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
+int poll_impl(struct pollfd *fds, unsigned int nfds, int timeout);
+int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
               const sigset_t *sigmask);
 
 #endif /* SELECT_H */

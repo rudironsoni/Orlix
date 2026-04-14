@@ -34,7 +34,7 @@ static short kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
     return revents;
 }
 
-static int do_poll_kqueue(struct pollfd *fds, unsigned int nfds, int timeout_ms) {
+static int poll_kqueue_impl(struct pollfd *fds, unsigned int nfds, int timeout_ms) {
     if (!fds) {
         errno = EFAULT;
         return -1;
@@ -148,16 +148,16 @@ static int do_poll_kqueue(struct pollfd *fds, unsigned int nfds, int timeout_ms)
     return ready_count;
 }
 
-int do_poll(struct pollfd *fds, unsigned int nfds, int timeout) {
+int poll_impl(struct pollfd *fds, unsigned int nfds, int timeout) {
     if (!fds) {
         errno = EFAULT;
         return -1;
     }
 
-    return do_poll_kqueue(fds, nfds, timeout);
+    return poll_kqueue_impl(fds, nfds, timeout);
 }
 
-int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
+int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
                  const sigset_t *sigmask) {
     int timeout_ms = -1;
     if (timeout) {
@@ -172,7 +172,7 @@ int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec 
         pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
     }
 
-    int result = do_poll(fds, nfds, timeout_ms);
+    int result = poll_impl(fds, nfds, timeout_ms);
 
     if (sigmask) {
         pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
@@ -181,7 +181,7 @@ int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec 
     return result;
 }
 
-int do_select(int nfds, fd_set_t *readfds, fd_set_t *writefds,
+int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
                   fd_set_t *exceptfds, struct linux_timeval *timeout) {
     if (nfds < 0 || nfds > FD_SETSIZE) {
         errno = EINVAL;
@@ -346,7 +346,7 @@ int do_select(int nfds, fd_set_t *readfds, fd_set_t *writefds,
     return ready_count;
 }
 
-int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds,
+int pselect_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
                    fd_set_t *exceptfds, const struct linux_timespec *timeout,
                    const sigset_t *sigmask) {
     struct linux_timeval tv;
@@ -365,7 +365,7 @@ int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds,
         pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
     }
 
-    int result = do_select(nfds, readfds, writefds, exceptfds, tvp);
+    int result = select_impl(nfds, readfds, writefds, exceptfds, tvp);
 
     if (sigmask) {
         pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
@@ -391,6 +391,6 @@ int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds,
  * 3. Ensuring Linux-shaped types are defined before ANY system headers
  * 
  * This is not a simple rename - it's an ABI contract isolation problem.
- * The do_select/do_pselect/do_poll/do_ppoll helpers are already implemented
+ * The select_impl/pselect_impl/poll_impl/ppoll_impl helpers are already implemented
  * and working. This surface needs header redesign, not just wrappers.
  */
