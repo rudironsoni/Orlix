@@ -67,10 +67,10 @@ pid_t wait3(int *wstatus, int options, struct rusage *rusage);
  * EXEC
  * ============================================================================ */
 
-int ixland_execve(const char *pathname, char *const argv[], char *const envp[]);
-int ixland_execv(const char *pathname, char *const argv[]);
-int ixland_execvp(const char *file, char *const argv[]);
-int ixland_fexecve(int fd, char *const argv[], char *const envp[]);
+int execve(const char *pathname, char *const argv[], char *const envp[]);
+int execv(const char *pathname, char *const argv[]);
+int execvp(const char *file, char *const argv[]);
+int fexecve(int fd, char *const argv[], char *const envp[]);
 
 /* ============================================================================
  * INITIALIZATION

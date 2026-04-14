@@ -29,11 +29,7 @@ extern pid_t do_wait(int *wstatus);
 extern pid_t do_waitpid(pid_t pid, int *wstatus, int options);
 extern pid_t do_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage);
 
-/* From fs/exec.c */
-extern int ixland_execve_internal(const char *pathname, char *const argv[], char *const envp[]);
-extern int ixland_execv_internal(const char *pathname, char *const argv[]);
-extern int ixland_execvp_internal(const char *file, char *const argv[]);
-extern int ixland_fexecve_internal(int fd, char *const argv[], char *const envp[]);
+/* From fs/exec.c - execve, execv, execvp, fexecve are canonical and exported directly */
 
 /* From kernel/init.c */
 extern int ixland_init_internal(const ixland_config_t *config);
@@ -123,26 +119,6 @@ __attribute__((visibility("default"))) pid_t wait4(pid_t pid, int *wstatus, int 
 
 __attribute__((visibility("default"))) pid_t wait3(int *wstatus, int options, struct rusage *rusage) {
     return do_wait4(-1, wstatus, options, rusage);
-}
-
-/* ============================================================================
- * EXEC
- * ============================================================================ */
-
-int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) {
-    return ixland_execve_internal(pathname, argv, envp);
-}
-
-int ixland_execv(const char *pathname, char *const argv[]) {
-    return ixland_execv_internal(pathname, argv);
-}
-
-int ixland_execvp(const char *file, char *const argv[]) {
-    return ixland_execvp_internal(file, argv);
-}
-
-int ixland_fexecve(int fd, char *const argv[], char *const envp[]) {
-    return ixland_fexecve_internal(fd, argv, envp);
 }
 
 /* ============================================================================

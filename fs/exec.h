@@ -20,11 +20,11 @@ extern "C" {
 /* Image type detection */
 enum exec_image_type exec_classify(const char *path);
 
-/* Exec implementations */
-int ixland_execve(const char *pathname, char *const argv[], char *const envp[]);
-int ixland_execv(const char *pathname, char *const argv[]);
-int ixland_execvp(const char *file, char *const argv[]);
-int ixland_fexecve(int fd, char *const argv[], char *const envp[]);
+/* Exec implementations - canonical Linux names */
+int execve(const char *pathname, char *const argv[], char *const envp[]);
+int execv(const char *pathname, char *const argv[]);
+int execvp(const char *file, char *const argv[]);
+int fexecve(int fd, char *const argv[], char *const envp[]);
 int exec_native(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
 int exec_wasi(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
 int exec_script(struct task_struct *task, const char *path, int argc, char **argv, char **envp);

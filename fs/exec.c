@@ -181,7 +181,7 @@ void exec_reset_signals(struct sighand_struct *sighand) {
     memset(&sighand->pending, 0, sizeof(sighand->pending));
 }
 
-int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) {
+int execve(const char *pathname, char *const argv[], char *const envp[]) {
     if (!pathname) {
         errno = EFAULT;
         return -1;
@@ -288,11 +288,11 @@ int ixland_execve(const char *pathname, char *const argv[], char *const envp[]) 
     return ret;
 }
 
-int ixland_execv(const char *pathname, char *const argv[]) {
+int execv(const char *pathname, char *const argv[]) {
     return execve(pathname, argv, environ);
 }
 
-int ixland_execvp(const char *file, char *const argv[]) {
+int execvp(const char *file, char *const argv[]) {
     if (strchr(file, '/') != NULL) {
         return execv(file, argv);
     }
@@ -331,7 +331,7 @@ int ixland_execvp(const char *file, char *const argv[]) {
     return -1;
 }
 
-int ixland_fexecve(int fd, char *const argv[], char *const envp[]) {
+int fexecve(int fd, char *const argv[], char *const envp[]) {
     (void)fd;
     (void)argv;
     (void)envp;

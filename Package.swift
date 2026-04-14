@@ -40,7 +40,7 @@ let package = Package(
                 "getopt.c",
                 "ssh_cmd",
                 "ssh_main.c",
-                "compat/interpose",
+
                 "Debug-iphonesimulator",
                 "libixlandTest",
             ],
