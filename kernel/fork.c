@@ -78,7 +78,7 @@ static void *fork_child_trampoline(void *arg) {
     return NULL;
 }
 
-pid_t do_fork(void) {
+pid_t fork_impl(void) {
     struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
@@ -278,7 +278,7 @@ static void *vfork_child_trampoline(void *arg) {
     return NULL;
 }
 
-int do_vfork(void) {
+int vfork_impl(void) {
     struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;

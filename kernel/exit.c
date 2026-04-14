@@ -6,7 +6,7 @@
 /* External declaration for init task */
 extern struct task_struct *init_task;
 
-__attribute__((visibility("default"))) void exit(int status) {
+void exit_impl(int status) {
     struct task_struct *task = get_current();
     if (!task) {
         _Exit(status);
@@ -91,6 +91,10 @@ __attribute__((visibility("default"))) void exit(int status) {
     }
 
     /* Terminate thread but keep task until parent waits */
+}
+
+__attribute__((visibility("default"))) void exit(int status) {
+    exit_impl(status);
     pthread_exit(NULL);
 }
 

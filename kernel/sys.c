@@ -10,27 +10,4 @@
 
 #include "task.h"
 
-int do_setpgid(pid_t pid, pid_t pgid) {
-    struct task_struct *task = get_current();
-
-    if (!task) {
-        errno = ESRCH;
-        return -1;
-    }
-
-    if (pgid < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (pid == 0) {
-        pid = task->pid;
-    }
-
-    if (pgid == 0) {
-        pgid = task->pid;
-    }
-
-    task->pgid = pgid;
-    return 0;
-}
+/* TODO: Add any misc syscalls that don't belong to a specific subsystem owner */

@@ -14,20 +14,20 @@
 /* ============================================================================
  * Internal owner declarations (from kernel/)
  * ============================================================================ */
-extern pid_t do_fork(void);
-extern int do_vfork(void);
-extern void do_exit(int status);
-extern void do_exit_group(int status);
-extern pid_t do_getpid(void);
-extern pid_t do_getppid(void);
-extern pid_t do_getpgrp(void);
-extern pid_t do_getpgid(pid_t pid);
-extern int do_setpgid(pid_t pid, pid_t pgid);
-extern pid_t do_setsid(void);
-extern pid_t do_getsid(pid_t pid);
-extern pid_t do_wait(int *wstatus);
-extern pid_t do_waitpid(pid_t pid, int *wstatus, int options);
-extern pid_t do_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage);
+extern pid_t fork_impl(void);
+extern int vfork_impl(void);
+extern void exit_impl(int status);
+extern void exit_group_impl(int status);
+extern pid_t getpid_impl(void);
+extern pid_t getppid_impl(void);
+extern pid_t getpgrp_impl(void);
+extern pid_t getpgid_impl(pid_t pid);
+extern int setpgid_impl(pid_t pid, pid_t pgid);
+extern pid_t setsid_impl(void);
+extern pid_t getsid_impl(pid_t pid);
+extern pid_t wait_impl(int *wstatus);
+extern pid_t waitpid_impl(pid_t pid, int *wstatus, int options);
+extern pid_t wait4_impl(pid_t pid, int *wstatus, int options, struct rusage *rusage);
 
 /* From fs/exec.c - execve, execv, execvp, fexecve are canonical and exported directly */
 
@@ -42,11 +42,11 @@ extern int ixland_is_initialized_internal(void);
  * ============================================================================ */
 
 __attribute__((visibility("default"))) pid_t fork(void) {
-    return do_fork();
+    return fork_impl();
 }
 
 __attribute__((visibility("default"))) int vfork(void) {
-    return do_vfork();
+    return vfork_impl();
 }
 
 /* ============================================================================
@@ -54,11 +54,11 @@ __attribute__((visibility("default"))) int vfork(void) {
  * ============================================================================ */
 
 __attribute__((visibility("default"))) void exit(int status) {
-    do_exit(status);
+    exit_impl(status);
 }
 
 __attribute__((visibility("default"))) void _exit(int status) {
-    do_exit_group(status);
+    exit_group_impl(status);
 }
 
 /* ============================================================================
@@ -66,11 +66,11 @@ __attribute__((visibility("default"))) void _exit(int status) {
  * ============================================================================ */
 
 __attribute__((visibility("default"))) pid_t getpid(void) {
-    return do_getpid();
+    return getpid_impl();
 }
 
 __attribute__((visibility("default"))) pid_t getppid(void) {
-    return do_getppid();
+    return getppid_impl();
 }
 
 /* ============================================================================
@@ -78,15 +78,15 @@ __attribute__((visibility("default"))) pid_t getppid(void) {
  * ============================================================================ */
 
 __attribute__((visibility("default"))) pid_t getpgrp(void) {
-    return do_getpgrp();
+    return getpgrp_impl();
 }
 
 __attribute__((visibility("default"))) pid_t getpgid(pid_t pid) {
-    return do_getpgid(pid);
+    return getpgid_impl(pid);
 }
 
 __attribute__((visibility("default"))) int setpgid(pid_t pid, pid_t pgid) {
-    return do_setpgid(pid, pgid);
+    return setpgid_impl(pid, pgid);
 }
 
 /* ============================================================================
@@ -94,11 +94,11 @@ __attribute__((visibility("default"))) int setpgid(pid_t pid, pid_t pgid) {
  * ============================================================================ */
 
 __attribute__((visibility("default"))) pid_t setsid(void) {
-    return do_setsid();
+    return setsid_impl();
 }
 
 __attribute__((visibility("default"))) pid_t getsid(pid_t pid) {
-    return do_getsid(pid);
+    return getsid_impl(pid);
 }
 
 /* ============================================================================
@@ -106,19 +106,19 @@ __attribute__((visibility("default"))) pid_t getsid(pid_t pid) {
  * ============================================================================ */
 
 __attribute__((visibility("default"))) pid_t wait(int *wstatus) {
-    return do_wait(wstatus);
+    return wait_impl(wstatus);
 }
 
 __attribute__((visibility("default"))) pid_t waitpid(pid_t pid, int *wstatus, int options) {
-    return do_waitpid(pid, wstatus, options);
+    return waitpid_impl(pid, wstatus, options);
 }
 
 __attribute__((visibility("default"))) pid_t wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage) {
-    return do_wait4(pid, wstatus, options, rusage);
+    return wait4_impl(pid, wstatus, options, rusage);
 }
 
 __attribute__((visibility("default"))) pid_t wait3(int *wstatus, int options, struct rusage *rusage) {
-    return do_wait4(-1, wstatus, options, rusage);
+    return wait4_impl(-1, wstatus, options, rusage);
 }
 
 /* ============================================================================

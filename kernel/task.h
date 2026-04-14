@@ -164,24 +164,24 @@ struct task_struct *task_lookup(pid_t pid);
 int task_hash(pid_t pid);
 
 /* Process identity */
-pid_t do_getpid(void);
-pid_t do_getppid(void);
-pid_t do_getpgrp(void);
-pid_t do_getpgid(pid_t pid);
-int do_setpgid(pid_t pid, pid_t pgid);
-pid_t do_getsid(pid_t pid);
-pid_t do_setsid(void);
+pid_t getpid_impl(void);
+pid_t getppid_impl(void);
+pid_t getpgrp_impl(void);
+pid_t getpgid_impl(pid_t pid);
+int setpgid_impl(pid_t pid, pid_t pgid);
+pid_t getsid_impl(pid_t pid);
+pid_t setsid_impl(void);
 
 /* Fork/exec */
-pid_t do_fork(void);
-int do_vfork(void);
+pid_t fork_impl(void);
+int vfork_impl(void);
 
 /* Exit/wait */
-void do_exit(int status);
-void do_exit_group(int status);
-pid_t do_wait(int *wstatus);
-pid_t do_waitpid(pid_t pid, int *wstatus, int options);
-pid_t do_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage);
+void exit_impl(int status);
+void exit_group_impl(int status);
+pid_t wait_impl(int *wstatus);
+pid_t waitpid_impl(pid_t pid, int *wstatus, int options);
+pid_t wait4_impl(pid_t pid, int *wstatus, int options, struct rusage *rusage);
 
 /* Vfork notifications */
 void vfork_exec_notify(void);

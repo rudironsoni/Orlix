@@ -169,7 +169,7 @@ void task_deinit(void) {
  * PID/IDENTITY FUNCTIONS
  * ============================================================================ */
 
-pid_t do_getpid(void) {
+pid_t getpid_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         /* Try to initialize if not already done */
@@ -180,7 +180,7 @@ pid_t do_getpid(void) {
     return task ? task->pid : 0;
 }
 
-pid_t do_getppid(void) {
+pid_t getppid_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         /* Try to initialize if not already done */
@@ -195,7 +195,7 @@ pid_t do_getppid(void) {
  * SESSION AND PROCESS GROUP FUNCTIONS
  * ============================================================================ */
 
-pid_t do_getpgrp(void) {
+pid_t getpgrp_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
@@ -204,9 +204,9 @@ pid_t do_getpgrp(void) {
     return task->pgid;
 }
 
-pid_t do_getpgid(pid_t pid) {
+pid_t getpgid_impl(pid_t pid) {
     if (pid == 0) {
-        return do_getpgrp();
+        return getpgrp_impl();
     }
 
     struct task_struct *task = task_lookup(pid);
@@ -220,7 +220,7 @@ pid_t do_getpgid(pid_t pid) {
     return pgid;
 }
 
-int do_setpgid(pid_t pid, pid_t pgid) {
+int setpgid_impl(pid_t pid, pid_t pgid) {
     struct task_struct *current = get_current();
     if (!current) {
         errno = ESRCH;
@@ -265,7 +265,7 @@ int do_setpgid(pid_t pid, pid_t pgid) {
     return 0;
 }
 
-pid_t do_getsid(pid_t pid) {
+pid_t getsid_impl(pid_t pid) {
     if (pid == 0) {
         struct task_struct *task = get_current();
         if (!task) {
@@ -286,7 +286,7 @@ pid_t do_getsid(pid_t pid) {
     return sid;
 }
 
-pid_t do_setsid(void) {
+pid_t setsid_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;

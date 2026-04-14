@@ -17,7 +17,7 @@ extern "C" {
 /* Forward declarations - avoid circular include with task.h */
 struct task_struct;
 
-/* pid_t is needed for do_kill/do_killpg - forward declare to avoid
+/* pid_t is needed for kill_impl/killpg_impl - forward declare to avoid
  * pulling in host headers that define sa_handler macros */
 typedef int pid_t;
 
@@ -76,26 +76,26 @@ void free_sighand(struct sighand_struct *sighand);
 struct sighand_struct *dup_sighand(struct sighand_struct *parent);
 
 /* Signal actions - internal kernel implementation */
-int do_sigaction(int sig, const struct k_sigaction *act, struct k_sigaction *oldact);
+int sigaction_impl(int sig, const struct k_sigaction *act, struct k_sigaction *oldact);
 
 /* Signal sending - internal kernel implementation */
-int do_kill(pid_t pid, int sig);
-int do_killpg(pid_t pgrp, int sig);
+int kill_impl(pid_t pid, int sig);
+int killpg_impl(pid_t pgrp, int sig);
 
 /* Signal masking - internal kernel implementation */
-int do_sigprocmask(int how, const ix_sigset_t *set, ix_sigset_t *oldset);
-int do_sigpending(ix_sigset_t *set);
-int do_sigsuspend(const ix_sigset_t *mask);
+int sigprocmask_impl(int how, const ix_sigset_t *set, ix_sigset_t *oldset);
+int sigpending_impl(ix_sigset_t *set);
+int sigsuspend_impl(const ix_sigset_t *mask);
 
 /* Signal to current process - internal implementation */
-int do_raise(int sig);
+int raise_impl(int sig);
 
 /* Wait for signal - internal implementation */
-int do_pause(void);
+int pause_impl(void);
 
 /* Signal handler installation - internal implementation */
 typedef void (*ix_sighandler_t)(int);
-ix_sighandler_t do_signal(int signum, ix_sighandler_t handler);
+ix_sighandler_t signal_impl(int signum, ix_sighandler_t handler);
 
 /* Initialization (internal use) */
 void signal_init(void);

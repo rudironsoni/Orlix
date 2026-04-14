@@ -29,7 +29,7 @@ static int task_to_status(struct task_struct *task) {
 #define W_STOPPED(status) (((status) & 0xff) == 0x7f)
 #define W_CONTINUED(status) ((status) == 0xffff)
 
-pid_t ixland_waitpid(pid_t pid, int *wstatus, int options) {
+pid_t waitpid_impl(pid_t pid, int *wstatus, int options) {
     struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
@@ -166,16 +166,28 @@ pid_t ixland_waitpid(pid_t pid, int *wstatus, int options) {
     return child_pid;
 }
 
-pid_t ixland_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage) {
-    /* rusage not implemented yet - just call waitpid */
+pid_t wait4_impl(pid_t pid, int *wstatus, int options, struct rusage *rusage) {
+    /* rusage not implemented yet - just call waitpid_impl */
     (void)rusage;
-    return waitpid(pid, wstatus, options);
+    return waitpid_impl(pid, wstatus, options);
 }
 
-pid_t ixland_wait(int *wstatus) {
-    return waitpid(-1, wstatus, 0);
+pid_t wait_impl(int *wstatus) {
+    return waitpid_impl(-1, wstatus, 0);
 }
 
-pid_t ixland_wait3(int *wstatus, int options, struct rusage *rusage) {
-    return wait4(-1, wstatus, options, rusage);
+__attribute__((visibility("default"))) pid_t waitpid(pid_t pid, int *wstatus, int options) {
+    return waitpid_impl(pid, wstatus, options);
+}
+
+__attribute__((visibility("default"))) pid_t wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage) {
+    return wait4_impl(pid, wstatus, options, rusage);
+}
+
+__attribute__((visibility("default"))) pid_t wait(int *wstatus) {
+    return wait_impl(wstatus);
+}
+
+__attribute__((visibility("default"))) pid_t wait3(int *wstatus, int options, struct rusage *rusage) {
+    return wait4_impl(-1, wstatus, options, rusage);
 }
