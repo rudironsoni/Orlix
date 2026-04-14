@@ -23,8 +23,14 @@ jobs:
         xcodebuild -version
         swift --version
 
-    - name: Build with Swift Package Manager
-      run: swift build
+    - name: Install XcodeGen
+      run: brew install xcodegen
+
+    - name: Generate Xcode project
+      run: xcodegen generate --project .
+
+    - name: Build with Xcode (iOS Simulator)
+      run: xcodebuild -project IXLandSystem.xcodeproj -target IXLandSystem -sdk iphonesimulator -arch arm64 -configuration Debug build
 
     - name: Report build status
       run: echo "Build completed successfully"
@@ -41,8 +47,14 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Build XCFrameworks
-      run: swift run --verbose --package-path xcfs build
+    - name: Install XcodeGen
+      run: brew install xcodegen
+
+    - name: Generate Xcode project
+      run: xcodegen generate --project .
+
+    - name: Build with Xcode (iOS Simulator)
+      run: xcodebuild -project IXLandSystem.xcodeproj -target IXLandSystem -sdk iphonesimulator -arch arm64 -configuration Debug build
 
     - name: Create Release
       id: create_release

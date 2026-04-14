@@ -1,72 +1,63 @@
-# Building libixland for iOS
+# Building IXLandSystem for iOS
 
 ## Overview
 
-**libixland** is designed exclusively for iOS. Building for macOS will result in runtime failures due to iOS-specific APIs and constraints.
+**IXLandSystem** is an iOS Subsystem for Linux (iOS → Linux syscall translation layer). Building for macOS will result in runtime failures due to iOS-specific APIs and constraints.
 
 ## Prerequisites
 
 - Xcode 14.0 or later
 - iOS 16.0+ SDK
 - iOS Simulator SDK
+- XcodeGen: `brew install xcodegen`
 - Command line tools: `xcode-select --install`
 
-## Build Targets
+## Build Process (Authoritative)
 
-### iOS Simulator (for development)
+IXLandSystem uses **XcodeGen** to generate the Xcode project from `project.yml`, then **xcodebuild** to compile for iOS.
+
+### Step 1: Generate Xcode Project
+
 ```bash
-make ios-sim
+xcodegen generate --project .
 ```
 
-Builds `libixland-sim.a` targeting iOS Simulator.
-- Architecture: arm64 (Apple Silicon Macs) or x86_64 (Intel Macs)
-- Target: `arm64-apple-ios16.0-simulator` or `x86_64-apple-ios16.0-simulator`
+This creates `IXLandSystem.xcodeproj` from the spec in `project.yml`.
 
-### iOS Device
+### Step 2: Build for iOS Simulator
+
 ```bash
-make ios-device
+xcodebuild -project IXLandSystem.xcodeproj \
+  -target IXLandSystem \
+  -sdk iphonesimulator \
+  -arch arm64 \
+  -configuration Debug \
+  build
 ```
 
-Builds `libixland-device.a` targeting physical iOS devices.
-- Architecture: arm64
-- Target: `arm64-apple-ios16.0`
+**Output:** `build/Debug-iphonesimulator/libIXLandSystem.a`
 
-### Clean Build Artifacts
-```bash
-make clean
-```
+### Step 3: Verify Build
 
-### Show Build Configuration
 ```bash
-make info
+# Check artifact type
+file build/Debug-iphonesimulator/libIXLandSystem.a
+
+# Expected output:
+# build/Debug-iphonesimulator/libIXLandSystem.a: current ar archive
+
+# Check exported symbols
+nm -g build/Debug-iphonesimulator/libIXLandSystem.a | grep "_open"
+
+# Expected output shows exported symbols like:
+# 000000000000021c T _open
 ```
 
 ## Build Output
 
 After successful build:
-- `libixland-sim.a` - iOS Simulator static library (~213KB)
-- `libixland-device.a` - iOS Device static library (~213KB)
-- `src/ixland/*/*.o` - Object files (cleaned by `make clean`)
-
-## iOS SDK Detection
-
-The Makefile automatically detects:
-- iOS Device SDK: `xcrun --sdk iphoneos --show-sdk-path`
-- iOS Simulator SDK: `xcrun --sdk iphonesimulator --show-sdk-path`
-
-If SDKs are not found, the build will fail with an error message.
-
-## Compiler Flags
-
-### iOS Simulator
-- `-target arm64-apple-ios16.0-simulator` (or x86_64)
-- `-isysroot <iPhoneSimulator.sdk>`
-- `-DIXLAND_IOS_BUILD -DIXLAND_SIMULATOR_BUILD`
-
-### iOS Device
-- `-target arm64-apple-ios16.0`
-- `-isysroot <iPhoneOS.sdk>`
-- `-DIXLAND_IOS_BUILD`
+- `build/Debug-iphonesimulator/libIXLandSystem.a` - iOS Simulator static library
+- `build/IXLandSystem.build/` - Build intermediates and object files
 
 ## Important Notes
 
@@ -74,11 +65,19 @@ If SDKs are not found, the build will fail with an error message.
 
 2. **No macOS Support**: Do not attempt to build or run on macOS. The library will crash at runtime.
 
-3. **Tests**: Tests must be run on iOS Simulator or Device, not macOS. Create an iOS test app target in Xcode to run tests.
+3. **swift build is NOT authoritative**: `swift build` compiles for the host (macOS) and does not produce iOS binaries. It may be used as a smoke test but NEVER as authoritative proof.
 
-4. **Deployment Target**: iOS 16.0+ is required.
+4. **Tests**: Tests must be run on iOS Simulator or Device, not macOS.
+
+5. **Deployment Target**: iOS 16.0+ is required.
 
 ## Troubleshooting
+
+### "xcodegen: command not found"
+Install XcodeGen:
+```bash
+brew install xcodegen
+```
 
 ### "iOS SDK not found"
 Install Xcode and ensure iOS SDK is available:
@@ -92,25 +91,11 @@ Ensure Xcode command line tools are installed:
 sudo xcode-select --reset
 ```
 
-### Build Warnings
-All warnings have been fixed. If you see new warnings, please report them.
-
 ## Integration with Xcode
 
-1. Build the library: `make ios-sim` or `make ios-device`
-2. Add `libixland-sim.a` or `libixland-device.a` to your Xcode project
-3. Add header search path: `$(PROJECT_DIR)/include`
-4. Link with `-lpthread`
-5. Ensure deployment target is iOS 16.0+
-
-## Test Suite
-
-Tests are located in `tests/` directory but **cannot run on macOS**.
-
-To run tests:
-1. Create an iOS test app target in Xcode
-2. Link against `libixland-sim.a` (Simulator) or `libixland-device.a` (Device)
-3. Include test files from `tests/`
-4. Build and run on iOS Simulator or Device
-
-See `tests/ixland_test.h` for the test framework API.
+1. Generate project: `xcodegen generate --project .`
+2. Open `IXLandSystem.xcodeproj`
+3. Add `libIXLandSystem.a` to your target
+4. Add header search path: `$(PROJECT_DIR)/include`
+5. Link with `-lpthread`
+6. Ensure deployment target is iOS 16.0+
