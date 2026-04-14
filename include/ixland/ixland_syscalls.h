@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
+#include <sys/param.h>
+#include <sys/statvfs.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -62,6 +64,7 @@ int dup3(int oldfd, int newfd, int flags);
  * ============================================================================ */
 
 int fcntl(int fd, int cmd, ...);
+int ioctl(int fd, unsigned long request, ...);
 
 /* ============================================================================
  * PATH / CWD
@@ -94,6 +97,107 @@ int link(const char *oldpath, const char *newpath);
 int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
 
 /* ============================================================================
+ * SYMBOLIC LINKS
+ * ============================================================================ */
+
+int symlink(const char *target, const char *linkpath);
+int symlinkat(const char *target, int newdirfd, const char *linkpath);
+ssize_t readlink(const char *pathname, char *buf, size_t bufsiz);
+ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz);
+
+/* ============================================================================
+ * CHROOT
+ * ============================================================================ */
+
+int chroot(const char *path);
+
+/* ============================================================================
+ * FILE METADATA - Stat
+ * ============================================================================ */
+
+int stat(const char *pathname, struct stat *statbuf);
+int fstat(int fd, struct stat *statbuf);
+int lstat(const char *pathname, struct stat *statbuf);
+
+/* ============================================================================
+ * FILE PERMISSIONS - Access
+ * ============================================================================ */
+
+int access(const char *pathname, int mode);
+int faccessat(int dirfd, const char *pathname, int mode, int flags);
+
+/* ============================================================================
+ * FILE PERMISSIONS - Chmod
+ * ============================================================================ */
+
+int chmod(const char *pathname, mode_t mode);
+int fchmod(int fd, mode_t mode);
+int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags);
+
+/* ============================================================================
+ * FILE OWNERSHIP - Chown
+ * ============================================================================ */
+
+int chown(const char *pathname, uid_t owner, gid_t group);
+int fchown(int fd, uid_t owner, gid_t group);
+int lchown(const char *pathname, uid_t owner, gid_t group);
+int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags);
+
+/* ============================================================================
+ * FILE CREATION MASK - Umask
+ * ============================================================================ */
+
+mode_t umask(mode_t mask);
+
+/* ============================================================================
+ * STAT/FSSTAT
+ * ============================================================================ */
+
+int statfs(const char *path, struct statfs *buf);
+int fstatfs(int fd, struct statfs *buf);
+int statvfs(const char *path, struct statvfs *buf);
+int fstatvfs(int fd, struct statvfs *buf);
+
+/* ============================================================================
+ * MOUNT OPERATIONS (restricted on iOS)
+ * ============================================================================ */
+
+int mount(const char *source, const char *target, const char *filesystemtype,
+          unsigned long mountflags, const void *data);
+int umount(const char *target);
+int umount2(const char *target, int flags);
+
+/* ============================================================================
+ * FILE TRUNCATION
+ * ============================================================================ */
+
+int truncate(const char *path, off_t length);
+int ftruncate(int fd, off_t length);
+
+/* ============================================================================
+ * SYNC - Flush filesystem buffers
+ * ============================================================================ */
+
+void sync(void);
+int fsync(int fd);
+int fdatasync(int fd);
+int syncfs(int fd);
+
+/* ============================================================================
+ * DIRECTORY READING
+ * ============================================================================ */
+
+ssize_t getdents(int fd, void *dirp, size_t count);
+ssize_t getdents64(int fd, void *dirp, size_t count);
+
+/* ============================================================================
+ * RANDOM
+ * ============================================================================ */
+
+ssize_t getrandom(void *buf, size_t buflen, unsigned int flags);
+int getentropy(void *buffer, size_t length);
+
+/* ============================================================================
  * PROCESS CREATION
  * ============================================================================ */
 
@@ -115,6 +219,17 @@ pid_t getpid(void);
 pid_t getppid(void);
 
 /* ============================================================================
+ * USER/GROUP IDENTITY
+ * ============================================================================ */
+
+uid_t getuid(void);
+uid_t geteuid(void);
+gid_t getgid(void);
+gid_t getegid(void);
+int setuid(uid_t uid);
+int setgid(gid_t gid);
+
+/* ============================================================================
  * PROCESS GROUPS
  * ============================================================================ */
 
@@ -128,6 +243,15 @@ int setpgid(pid_t pid, pid_t pgid);
 
 pid_t setsid(void);
 pid_t getsid(pid_t pid);
+
+/* ============================================================================
+ * RESOURCE LIMITS
+ * ============================================================================ */
+
+int getrlimit(int resource, struct rlimit *rlim);
+int setrlimit(int resource, const struct rlimit *rlim);
+int getrusage(int who, struct rusage *usage);
+int prlimit(pid_t pid, int resource, const struct rlimit *new_limit, struct rlimit *old_limit);
 
 /* ============================================================================
  * WAIT
