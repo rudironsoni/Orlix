@@ -22,46 +22,46 @@ extern "C" {
  * PROCESS CREATION
  * ============================================================================ */
 
-pid_t ixland_fork(void);
-int ixland_vfork(void);
+pid_t fork(void);
+int vfork(void);
 
 /* ============================================================================
  * PROCESS TERMINATION
  * ============================================================================ */
 
-void ixland_exit(int status);
-void ixland__exit(int status) __attribute__((noreturn));
+void exit(int status);
+void _exit(int status);
 
 /* ============================================================================
  * PROCESS IDENTIFICATION
  * ============================================================================ */
 
-pid_t ixland_getpid(void);
-pid_t ixland_getppid(void);
+pid_t getpid(void);
+pid_t getppid(void);
 
 /* ============================================================================
  * PROCESS GROUPS
  * ============================================================================ */
 
-pid_t ixland_getpgrp(void);
-pid_t ixland_getpgid(pid_t pid);
-int ixland_setpgid(pid_t pid, pid_t pgid);
+pid_t getpgrp(void);
+pid_t getpgid(pid_t pid);
+int setpgid(pid_t pid, pid_t pgid);
 
 /* ============================================================================
  * SESSIONS
  * ============================================================================ */
 
-pid_t ixland_setsid(void);
-pid_t ixland_getsid(pid_t pid);
+pid_t setsid(void);
+pid_t getsid(pid_t pid);
 
 /* ============================================================================
  * WAIT
  * ============================================================================ */
 
-pid_t ixland_wait(int *wstatus);
-pid_t ixland_waitpid(pid_t pid, int *wstatus, int options);
-pid_t ixland_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage);
-pid_t ixland_wait3(int *wstatus, int options, struct rusage *rusage);
+pid_t wait(int *wstatus);
+pid_t waitpid(pid_t pid, int *wstatus, int options);
+pid_t wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage);
+pid_t wait3(int *wstatus, int options, struct rusage *rusage);
 
 /* ============================================================================
  * EXEC

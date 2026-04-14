@@ -2,24 +2,59 @@ name: CI
 
 on:
   push:
+    branches: [main]
     tags:
     - 'v*'
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
-    name: Building release assets
-    runs-on: macOS-26
+    name: Build IXLandSystem
+    runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: xcode-version
-      run: xcodebuild -version
+    - name: Show toolchain version
+      run: |
+        xcodebuild -version
+        swift --version
 
-    - name: build-ios_system
+    - name: Build with Swift Package Manager
+      run: swift build
+
+    - name: Report build status
+      run: echo "Build completed successfully"
+
+  # Release job only runs on tags
+  release:
+    name: Build and Release XCFrameworks
+    runs-on: macos-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Build XCFrameworks
       run: swift run --verbose --package-path xcfs build
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body_path: .build/release.md
+        draft: false
+        prerelease: false
 
     - name: Create Release
       id: create_release

@@ -1,10 +1,8 @@
 /* iOS Subsystem for Linux - Symbol Interposition Layer
  *
  * Provides standard Linux syscall names as strong symbols
- * These wrap the ixland_* public API
+ * These wrap internal do_* helpers directly
  */
-
-#include <ixland/ixland_syscalls.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -19,16 +17,32 @@
 #include <termios.h>
 #include <unistd.h>
 
+/* Internal owner declarations (same as syscalls_adapter.c) */
+extern pid_t do_fork(void);
+extern int do_vfork(void);
+extern void do_exit(int status);
+extern void do_exit_group(int status);
+extern pid_t do_getpid(void);
+extern pid_t do_getppid(void);
+extern pid_t do_getpgrp(void);
+extern pid_t do_getpgid(pid_t pid);
+extern int do_setpgid(pid_t pid, pid_t pgid);
+extern pid_t do_setsid(void);
+extern pid_t do_getsid(pid_t pid);
+extern pid_t do_wait(int *wstatus);
+extern pid_t do_waitpid(pid_t pid, int *wstatus, int options);
+extern pid_t do_wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage);
+
 /* ============================================================================
  * PROCESS MANAGEMENT (16 syscalls)
  * ============================================================================ */
 
 __attribute__((visibility("default"))) pid_t fork(void) {
-    return ixland_fork();
+    return do_fork();
 }
 
 __attribute__((visibility("default"))) int vfork(void) {
-    return ixland_vfork();
+    return do_vfork();
 }
 
 __attribute__((visibility("default"))) int execve(const char *p, char *const a[], char *const e[]) {
@@ -40,25 +54,25 @@ __attribute__((visibility("default"))) int execv(const char *p, char *const a[])
 }
 
 __attribute__((visibility("default"))) void exit(int s) {
-    ixland_exit(s);
+    do_exit(s);
     __builtin_unreachable();
 }
 
 __attribute__((visibility("default"))) void _exit(int s) {
-    ixland__exit(s);
+    do_exit_group(s);
     __builtin_unreachable();
 }
 
 __attribute__((visibility("default"))) pid_t getpid(void) {
-    return ixland_getpid();
+    return do_getpid();
 }
 
 __attribute__((visibility("default"))) pid_t getppid(void) {
-    return ixland_getppid();
+    return do_getppid();
 }
 
 __attribute__((visibility("default"))) pid_t getpgrp(void) {
-    return ixland_getpgrp();
+    return do_getpgrp();
 }
 
 __attribute__((visibility("default"))) int setpgrp(void) {
@@ -66,27 +80,27 @@ __attribute__((visibility("default"))) int setpgrp(void) {
 }
 
 __attribute__((visibility("default"))) pid_t getpgid(pid_t p) {
-    return ixland_getpgid(p);
+    return do_getpgid(p);
 }
 
 __attribute__((visibility("default"))) int setpgid(pid_t p, pid_t g) {
-    return ixland_setpgid(p, g);
+    return do_setpgid(p, g);
 }
 
 __attribute__((visibility("default"))) pid_t wait(int *s) {
-    return ixland_wait(s);
+    return do_wait(s);
 }
 
 __attribute__((visibility("default"))) pid_t waitpid(pid_t p, int *s, int o) {
-    return ixland_waitpid(p, s, o);
+    return do_waitpid(p, s, o);
 }
 
 __attribute__((visibility("default"))) pid_t wait3(int *s, int o, struct rusage *r) {
-    return ixland_wait3(s, o, r);
+    return do_wait4(-1, s, o, r);
 }
 
 __attribute__((visibility("default"))) pid_t wait4(pid_t p, int *s, int o, struct rusage *r) {
-    return ixland_wait4(p, s, o, r);
+    return do_wait4(p, s, o, r);
 }
 
 __attribute__((visibility("default"))) int system(const char *c) {
