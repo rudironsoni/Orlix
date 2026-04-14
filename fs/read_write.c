@@ -123,22 +123,22 @@ ssize_t pwrite_impl(int fd, const void *buf, size_t count, off_t offset) {
     return bytes;
 }
 
-ssize_t ixland_read(int fd, void *buf, size_t count) {
+__attribute__((visibility("default"))) ssize_t read(int fd, void *buf, size_t count) {
     return read_impl(fd, buf, count);
 }
 
-ssize_t ixland_write(int fd, const void *buf, size_t count) {
+__attribute__((visibility("default"))) ssize_t write(int fd, const void *buf, size_t count) {
     return write_impl(fd, buf, count);
 }
 
-off_t ixland_lseek(int fd, off_t offset, int whence) {
+__attribute__((visibility("default"))) off_t lseek(int fd, off_t offset, int whence) {
     return lseek_impl(fd, offset, whence);
 }
 
-ssize_t ixland_pread(int fd, void *buf, size_t count, off_t offset) {
+__attribute__((visibility("default"))) ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
     return pread_impl(fd, buf, count, offset);
 }
 
-ssize_t ixland_pwrite(int fd, const void *buf, size_t count, off_t offset) {
+__attribute__((visibility("default"))) ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset) {
     return pwrite_impl(fd, buf, count, offset);
 }

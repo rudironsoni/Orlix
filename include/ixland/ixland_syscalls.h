@@ -3,7 +3,7 @@
  *
  * Public package seam between IXLandSystem and IXLandLibC.
  * These are the ONLY functions IXLandLibC SHALL call from IXLandSystem.
- * All names are product-prefixed to avoid symbol collisions.
+ * Canonical Linux-shaped names for syscalls.
  * These functions delegate to internal IXLandSystem owners.
  */
 
@@ -13,10 +13,55 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* ============================================================================
+ * FILE I/O - Open/Close
+ * ============================================================================ */
+
+int open(const char *pathname, int flags, ...);
+int openat(int dirfd, const char *pathname, int flags, ...);
+int creat(const char *pathname, mode_t mode);
+int close(int fd);
+
+/* ============================================================================
+ * FILE I/O - Read/Write
+ * ============================================================================ */
+
+ssize_t read(int fd, void *buf, size_t count);
+ssize_t write(int fd, const void *buf, size_t count);
+
+/* ============================================================================
+ * FILE I/O - Seeking
+ * ============================================================================ */
+
+off_t lseek(int fd, off_t offset, int whence);
+
+/* ============================================================================
+ * FILE I/O - Pread/Pwrite
+ * ============================================================================ */
+
+ssize_t pread(int fd, void *buf, size_t count, off_t offset);
+ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
+
+/* ============================================================================
+ * FILE I/O - Duplication
+ * ============================================================================ */
+
+int dup(int oldfd);
+int dup2(int oldfd, int newfd);
+int dup3(int oldfd, int newfd, int flags);
+
+/* ============================================================================
+ * FILE I/O - File Control
+ * ============================================================================ */
+
+int fcntl(int fd, int cmd, ...);
 
 /* ============================================================================
  * PROCESS CREATION

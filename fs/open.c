@@ -60,7 +60,7 @@ int close_impl(int fd) {
     return 0;
 }
 
-int ixland_open(const char *pathname, int flags, ...) {
+__attribute__((visibility("default"))) int open(const char *pathname, int flags, ...) {
     mode_t mode = 0;
     if (flags & O_CREAT) {
         va_list args;
@@ -71,10 +71,22 @@ int ixland_open(const char *pathname, int flags, ...) {
     return open_impl(pathname, flags, mode);
 }
 
-int ixland_creat(const char *pathname, mode_t mode) {
+__attribute__((visibility("default"))) int openat(int dirfd, const char *pathname, int flags, ...) {
+    mode_t mode = 0;
+    if (flags & O_CREAT) {
+        va_list args;
+        va_start(args, flags);
+        mode = va_arg(args, int);
+        va_end(args);
+    }
+    (void)dirfd;
+    return open_impl(pathname, flags, mode);
+}
+
+__attribute__((visibility("default"))) int creat(const char *pathname, mode_t mode) {
     return creat_impl(pathname, mode);
 }
 
-int ixland_close(int fd) {
+__attribute__((visibility("default"))) int close(int fd) {
     return close_impl(fd);
 }

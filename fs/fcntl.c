@@ -120,19 +120,19 @@ int fcntl_impl(int fd, int cmd, ...) {
     return result;
 }
 
-int ixland_dup(int oldfd) {
+__attribute__((visibility("default"))) int dup(int oldfd) {
     return dup_impl(oldfd);
 }
 
-int ixland_dup2(int oldfd, int newfd) {
+__attribute__((visibility("default"))) int dup2(int oldfd, int newfd) {
     return dup2_impl(oldfd, newfd);
 }
 
-int ixland_dup3(int oldfd, int newfd, int flags) {
+__attribute__((visibility("default"))) int dup3(int oldfd, int newfd, int flags) {
     return dup3_impl(oldfd, newfd, flags);
 }
 
-int ixland_fcntl(int fd, int cmd, ...) {
+__attribute__((visibility("default"))) int fcntl(int fd, int cmd, ...) {
     va_list args;
     va_start(args, cmd);
     int arg = va_arg(args, int);
