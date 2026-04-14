@@ -5,6 +5,8 @@
  * - connect(), shutdown()
  * - send(), sendto(), recv(), recvfrom()
  * - setsockopt(), getsockopt()
+ * - getsockname(), getpeername()
+ * - sendmsg(), recvmsg()
  *
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
@@ -564,6 +566,265 @@ static int shutdown_impl(int sockfd, int how) {
 }
 
 /* ============================================================================
+ * SOCKET NAME AND PEER
+ * ============================================================================ */
+
+static int getsockname_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    if (!sock) {
+        return -1;
+    }
+
+    if (!addr || !addrlen) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (sock->local_addr_len == 0) {
+        errno = ENOTSOCK;
+        return -1;
+    }
+
+    socklen_t len = sock->local_addr_len;
+    if (*addrlen < len) {
+        len = *addrlen;
+    }
+
+    memcpy(addr, &sock->local_addr, len);
+    *addrlen = sock->local_addr_len;
+
+    return 0;
+}
+
+static int getpeername_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    if (!sock) {
+        return -1;
+    }
+
+    if (!addr || !addrlen) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (!sock->connection) {
+        errno = ENOTCONN;
+        return -1;
+    }
+
+    if (sock->remote_addr_len == 0) {
+        errno = ENOTCONN;
+        return -1;
+    }
+
+    socklen_t len = sock->remote_addr_len;
+    if (*addrlen < len) {
+        len = *addrlen;
+    }
+
+    memcpy(addr, &sock->remote_addr, len);
+    *addrlen = sock->remote_addr_len;
+
+    return 0;
+}
+
+/* ============================================================================
+ * MESSAGE I/O
+ * ============================================================================ */
+
+static ssize_t sendmsg_impl(int sockfd, const struct msghdr *msg, int flags) {
+    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    if (!sock) {
+        return -1;
+    }
+
+    if (!msg) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (!sock->connection) {
+        errno = ENOTCONN;
+        return -1;
+    }
+
+    (void)flags;
+
+    /* Calculate total size from iovec array */
+    size_t total_len = 0;
+    for (int i = 0; i < msg->msg_iovlen; i++) {
+        if (msg->msg_iov[i].iov_len > 0 && msg->msg_iov[i].iov_base) {
+            total_len += msg->msg_iov[i].iov_len;
+        }
+    }
+
+    if (total_len == 0) {
+        return 0;
+    }
+
+    /* Flatten iovec into single buffer */
+    char *buf = (char *)malloc(total_len);
+    if (!buf) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    size_t offset = 0;
+    for (int i = 0; i < msg->msg_iovlen; i++) {
+        if (msg->msg_iov[i].iov_len > 0 && msg->msg_iov[i].iov_base) {
+            memcpy(buf + offset, msg->msg_iov[i].iov_base, msg->msg_iov[i].iov_len);
+            offset += msg->msg_iov[i].iov_len;
+        }
+    }
+
+    /* Create data and send */
+    dispatch_data_t data = dispatch_data_create(buf, total_len, NULL, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+    if (!data) {
+        free(buf);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    __block ssize_t bytes_sent = 0;
+
+    nw_connection_send(sock->connection, data, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, true,
+                       ^(nw_error_t error) {
+                           if (error) {
+                               bytes_sent = -1;
+                           } else {
+                               bytes_sent = offset;
+                           }
+                           dispatch_semaphore_signal(sem);
+                       });
+
+    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+    dispatch_release(sem);
+    dispatch_release(data);
+    free(buf);
+
+    if (bytes_sent < 0) {
+        errno = EPIPE;
+        return -1;
+    }
+
+    return bytes_sent;
+}
+
+static ssize_t recvmsg_impl(int sockfd, struct msghdr *msg, int flags) {
+    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    if (!sock) {
+        return -1;
+    }
+
+    if (!msg) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (!sock->connection) {
+        errno = ENOTCONN;
+        return -1;
+    }
+
+    (void)flags;
+
+    /* Calculate total available buffer size */
+    size_t total_len = 0;
+    for (int i = 0; i < msg->msg_iovlen; i++) {
+        if (msg->msg_iov[i].iov_len > 0 && msg->msg_iov[i].iov_base) {
+            total_len += msg->msg_iov[i].iov_len;
+        }
+    }
+
+    if (total_len == 0) {
+        return 0;
+    }
+
+    /* Receive into temporary buffer */
+    char *buf = (char *)malloc(total_len);
+    if (!buf) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    __block ssize_t bytes_received = 0;
+    __block dispatch_data_t received_data = NULL;
+
+    nw_connection_receive(sock->connection, 1, total_len,
+                          ^(dispatch_data_t content, nw_content_context_t context, bool is_complete, nw_error_t receive_error) {
+                              if (receive_error) {
+                                  bytes_received = -1;
+                              } else if (content) {
+                                  const void *bytes = NULL;
+                                  size_t len = 0;
+                                  dispatch_data_t map = dispatch_data_create_map(content, &bytes, &len);
+                                  if (bytes && len > 0) {
+                                      size_t to_copy = len;
+                                      if (to_copy > total_len) {
+                                          to_copy = total_len;
+                                      }
+                                      memcpy(buf, bytes, to_copy);
+                                      bytes_received = to_copy;
+                                  }
+                                  if (map) {
+                                      dispatch_release(map);
+                                  }
+                              }
+                              if (content) {
+                                  received_data = content;
+                                  dispatch_retain(received_data);
+                              }
+                              dispatch_semaphore_signal(sem);
+                          });
+
+    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+    dispatch_release(sem);
+    if (received_data) {
+        dispatch_release(received_data);
+    }
+
+    if (bytes_received < 0) {
+        free(buf);
+        errno = ECONNRESET;
+        return -1;
+    }
+
+    /* Distribute received data into iovec array */
+    size_t remaining = bytes_received;
+    size_t offset = 0;
+    for (int i = 0; i < msg->msg_iovlen && remaining > 0; i++) {
+        if (msg->msg_iov[i].iov_len > 0 && msg->msg_iov[i].iov_base) {
+            size_t to_copy = msg->msg_iov[i].iov_len;
+            if (to_copy > remaining) {
+                to_copy = remaining;
+            }
+            memcpy(msg->msg_iov[i].iov_base, buf + offset, to_copy);
+            offset += to_copy;
+            remaining -= to_copy;
+        }
+    }
+
+    free(buf);
+
+    /* Set address info if requested */
+    if (msg->msg_name && msg->msg_namelen) {
+        if (sock->remote_addr_len > 0 && sock->remote_addr_len <= msg->msg_namelen) {
+            memcpy(msg->msg_name, &sock->remote_addr, sock->remote_addr_len);
+            msg->msg_namelen = sock->remote_addr_len;
+        } else {
+            msg->msg_namelen = 0;
+        }
+    }
+
+    msg->msg_controllen = 0;
+    msg->msg_flags = 0;
+
+    return bytes_received;
+}
+
+/* ============================================================================
  * Public Canonical Socket Syscalls
  * ============================================================================ */
 
@@ -623,6 +884,22 @@ __attribute__((visibility("default"))) int getsockopt(int sockfd, int level, int
 
 __attribute__((visibility("default"))) int shutdown(int sockfd, int how) {
     return shutdown_impl(sockfd, how);
+}
+
+__attribute__((visibility("default"))) int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+    return getsockname_impl(sockfd, addr, addrlen);
+}
+
+__attribute__((visibility("default"))) int getpeername(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+    return getpeername_impl(sockfd, addr, addrlen);
+}
+
+__attribute__((visibility("default"))) ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
+    return sendmsg_impl(sockfd, msg, flags);
+}
+
+__attribute__((visibility("default"))) ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
+    return recvmsg_impl(sockfd, msg, flags);
 }
 
 /* Network initialization - internal IXLand use only */
