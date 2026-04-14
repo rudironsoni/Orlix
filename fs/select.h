@@ -1,6 +1,10 @@
 #ifndef SELECT_H
 #define SELECT_H
 
+/* Prevent Darwin select/pselect from conflicting */
+#define _DARWIN_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
 #include <signal.h>
 #include <stdint.h>
 #include <string.h>
@@ -40,6 +44,9 @@ struct linux_timeval {
 #define FD_SETSIZE 1024
 #define NFDBITS (8 * sizeof(unsigned long))
 
+/* Linux-compatible nfds_t for poll */
+typedef unsigned long nfds_t;
+
 /* Linux-compatible fd_set type */
 typedef struct {
     unsigned long fds_bits[(FD_SETSIZE + NFDBITS - 1) / NFDBITS];
@@ -54,13 +61,19 @@ typedef struct {
 #define FD_ISSET(fd_arg, set_arg) \
     (((set_arg)->fds_bits[(fd_arg) / NFDBITS] & (1UL << ((fd_arg) % NFDBITS))) != 0)
 
-/* select/poll API - Linux-style internal names */
+/* select/poll API - Linux-style internal names
+ * 
+ * NOTE: Public wrappers select(), pselect(), poll(), ppoll() are
+ * BLOCKED BY HEADER DRIFT - see select.c for details.
+ * The do_* helpers are fully implemented but public ABI surface
+ * requires careful Darwin header isolation that's not yet complete.
+ */
 int do_select(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
               struct linux_timeval *timeout);
 int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
                const struct linux_timespec *timeout, const sigset_t *sigmask);
 int do_poll(struct pollfd *fds, unsigned int nfds, int timeout);
 int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
-             const sigset_t *sigmask);
+              const sigset_t *sigmask);
 
 #endif /* SELECT_H */

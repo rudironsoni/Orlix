@@ -18,6 +18,7 @@
 #include <sys/statvfs.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <signal.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -296,6 +297,24 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 int getpeername(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags);
+
+/* ============================================================================
+ * READYNESS AND MULTIPLEXING
+ * ============================================================================ */
+
+/*
+ * NOTE: select(), pselect(), poll(), ppoll() are BLOCKED BY HEADER DRIFT
+ * Private helpers do_select/do_pselect/do_poll/do_ppoll are implemented
+ * but public ABI surface requires Darwin header isolation not yet complete.
+ */
+
+/* Epoll - fully implemented */
+int epoll_create(int size);
+int epoll_create1(int flags);
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
+int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout,
+                const sigset_t *sigmask);
 
 /* ============================================================================
  * INITIALIZATION

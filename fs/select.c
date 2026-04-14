@@ -373,3 +373,24 @@ int do_pselect(int nfds, fd_set_t *readfds, fd_set_t *writefds,
 
     return result;
 }
+
+/*
+ * BLOCKED BY HEADER DRIFT: select/pselect/poll/ppoll
+ * 
+ * The Linux-shaped public ABI for these functions requires custom types:
+ * - fd_set_t instead of fd_set
+ * - linux_timeval instead of timeval  
+ * - linux_timespec instead of timespec
+ * 
+ * Darwin headers bring in <sys/select.h> and <sys/poll.h> transitively
+ * through <signal.h>, defining conflicting signatures with standard types.
+ * 
+ * Proper isolation would require:
+ * 1. Complete header order restructuring
+ * 2. Careful module interface design  
+ * 3. Ensuring Linux-shaped types are defined before ANY system headers
+ * 
+ * This is not a simple rename - it's an ABI contract isolation problem.
+ * The do_select/do_pselect/do_poll/do_ppoll helpers are already implemented
+ * and working. This surface needs header redesign, not just wrappers.
+ */
