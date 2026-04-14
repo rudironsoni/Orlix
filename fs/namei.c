@@ -249,21 +249,21 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
 }
 
 int chroot_impl(const char *path) {
-    (void)path;
-    errno = EPERM;
-    return -1;
+  (void)path;
+  errno = EPERM;
+  return -1;
 }
 
-int ixland_chdir(const char *path) {
-    return chdir_impl(path);
+__attribute__((visibility("default"))) int chdir(const char *path) {
+  return chdir_impl(path);
 }
 
-int ixland_fchdir(int fd) {
-    return fchdir_impl(fd);
+__attribute__((visibility("default"))) int fchdir(int fd) {
+  return fchdir_impl(fd);
 }
 
-char *ixland_getcwd(char *buf, size_t size) {
-    return getcwd_impl(buf, size);
+__attribute__((visibility("default"))) char *getcwd(char *buf, size_t size) {
+  return getcwd_impl(buf, size);
 }
 
 int ixland_mkdir(const char *pathname, mode_t mode) {
