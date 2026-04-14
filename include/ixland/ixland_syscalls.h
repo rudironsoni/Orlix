@@ -11,6 +11,7 @@
 #define IXLAND_SYSCALLS_H
 
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
 #include <sys/param.h>
@@ -270,6 +271,27 @@ int execve(const char *pathname, char *const argv[], char *const envp[]);
 int execv(const char *pathname, char *const argv[]);
 int execvp(const char *file, char *const argv[]);
 int fexecve(int fd, char *const argv[], char *const envp[]);
+
+/* ============================================================================
+ * NETWORK / SOCKET
+ * ============================================================================ */
+
+int socket(int domain, int type, int protocol);
+int socketpair(int domain, int type, int protocol, int sv[2]);
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+int listen(int sockfd, int backlog);
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+int shutdown(int sockfd, int how);
+ssize_t send(int sockfd, const void *buf, size_t len, int flags);
+ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+               const struct sockaddr *dest_addr, socklen_t addrlen);
+ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
+                 struct sockaddr *src_addr, socklen_t *addrlen);
+int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
+int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
 
 /* ============================================================================
  * INITIALIZATION

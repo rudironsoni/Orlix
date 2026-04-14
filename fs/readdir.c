@@ -129,10 +129,10 @@ ssize_t getdents_impl(int fd, void *dirp, size_t count) {
     return getdents64_impl(fd, dirp, count);
 }
 
-ssize_t ixland_getdents64(int fd, void *dirp, size_t count) {
-    return getdents64_impl(fd, dirp, count);
+__attribute__((visibility("default"))) ssize_t getdents(int fd, void *dirp, size_t count) {
+    return getdents_impl(fd, dirp, count);
 }
 
-ssize_t ixland_getdents(int fd, void *dirp, size_t count) {
-    return getdents_impl(fd, dirp, count);
+__attribute__((visibility("default"))) ssize_t getdents64(int fd, void *dirp, size_t count) {
+    return getdents64_impl(fd, dirp, count);
 }

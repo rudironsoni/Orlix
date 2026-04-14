@@ -3,7 +3,6 @@
  * Canonical owner for inode-level operations:
  * - chmod(), fchmod(), fchmodat()
  * - chown(), fchown(), lchown(), fchownat()
- * - access(), faccessat()
  * - umask()
  * - truncate(), ftruncate()
  *
@@ -19,15 +18,15 @@
  * CHMOD - Change file mode
  * ============================================================================ */
 
-int ixland_chmod(const char *pathname, mode_t mode) {
+static int chmod_impl(const char *pathname, mode_t mode) {
     return chmod(pathname, mode);
 }
 
-int ixland_fchmod(int fd, mode_t mode) {
+static int fchmod_impl(int fd, mode_t mode) {
     return fchmod(fd, mode);
 }
 
-int ixland_fchmodat(int dirfd, const char *pathname, mode_t mode, int flags) {
+static int fchmodat_impl(int dirfd, const char *pathname, mode_t mode, int flags) {
     return fchmodat(dirfd, pathname, mode, flags);
 }
 
@@ -35,7 +34,7 @@ int ixland_fchmodat(int dirfd, const char *pathname, mode_t mode, int flags) {
  * CHOWN - Change file owner
  * ============================================================================ */
 
-int ixland_chown(const char *pathname, uid_t owner, gid_t group) {
+static int chown_impl(const char *pathname, uid_t owner, gid_t group) {
     /* iOS restriction: changing ownership not allowed */
     (void)pathname;
     (void)owner;
@@ -44,7 +43,7 @@ int ixland_chown(const char *pathname, uid_t owner, gid_t group) {
     return -1;
 }
 
-int ixland_fchown(int fd, uid_t owner, gid_t group) {
+static int fchown_impl(int fd, uid_t owner, gid_t group) {
     (void)fd;
     (void)owner;
     (void)group;
@@ -52,11 +51,11 @@ int ixland_fchown(int fd, uid_t owner, gid_t group) {
     return -1;
 }
 
-int ixland_lchown(const char *pathname, uid_t owner, gid_t group) {
-    return ixland_chown(pathname, owner, group);
+static int lchown_impl(const char *pathname, uid_t owner, gid_t group) {
+    return chown_impl(pathname, owner, group);
 }
 
-int ixland_fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) {
+static int fchownat_impl(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) {
     (void)dirfd;
     (void)pathname;
     (void)owner;
@@ -67,22 +66,10 @@ int ixland_fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, i
 }
 
 /* ============================================================================
- * ACCESS - Check file accessibility
- * ============================================================================ */
-
-int ixland_access(const char *pathname, int mode) {
-    return access(pathname, mode);
-}
-
-int ixland_faccessat(int dirfd, const char *pathname, int mode, int flags) {
-    return faccessat(dirfd, pathname, mode, flags);
-}
-
-/* ============================================================================
  * UMASK - Set file creation mask
  * ============================================================================ */
 
-mode_t ixland_umask(mode_t mask) {
+static mode_t umask_impl(mode_t mask) {
     return umask(mask);
 }
 
@@ -90,10 +77,54 @@ mode_t ixland_umask(mode_t mask) {
  * TRUNCATE - Change file size
  * ============================================================================ */
 
-int ixland_truncate(const char *path, off_t length) {
+static int truncate_impl(const char *path, off_t length) {
     return truncate(path, length);
 }
 
-int ixland_ftruncate(int fd, off_t length) {
+static int ftruncate_impl(int fd, off_t length) {
     return ftruncate(fd, length);
+}
+
+/* ============================================================================
+ * Public Canonical Syscalls
+ * ============================================================================ */
+
+__attribute__((visibility("default"))) int chmod(const char *pathname, mode_t mode) {
+    return chmod_impl(pathname, mode);
+}
+
+__attribute__((visibility("default"))) int fchmod(int fd, mode_t mode) {
+    return fchmod_impl(fd, mode);
+}
+
+__attribute__((visibility("default"))) int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags) {
+    return fchmodat_impl(dirfd, pathname, mode, flags);
+}
+
+__attribute__((visibility("default"))) int chown(const char *pathname, uid_t owner, gid_t group) {
+    return chown_impl(pathname, owner, group);
+}
+
+__attribute__((visibility("default"))) int fchown(int fd, uid_t owner, gid_t group) {
+    return fchown_impl(fd, owner, group);
+}
+
+__attribute__((visibility("default"))) int lchown(const char *pathname, uid_t owner, gid_t group) {
+    return lchown_impl(pathname, owner, group);
+}
+
+__attribute__((visibility("default"))) int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) {
+    return fchownat_impl(dirfd, pathname, owner, group, flags);
+}
+
+__attribute__((visibility("default"))) mode_t umask(mode_t mask) {
+    return umask_impl(mask);
+}
+
+__attribute__((visibility("default"))) int truncate(const char *path, off_t length) {
+    return truncate_impl(path, length);
+}
+
+__attribute__((visibility("default"))) int ftruncate(int fd, off_t length) {
+    return ftruncate_impl(fd, length);
 }

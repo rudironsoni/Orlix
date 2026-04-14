@@ -1,69 +1,118 @@
 /* iXland - Mount Operations
  *
  * Canonical owner for mount syscalls:
- * - mount(), umount(), umount2()
- * - statfs(), fstatfs()
- * - sysfs(), statmount() (Linux-specific)
+ * - mount(), umount(), umount2() - virtual mount operations
  *
  * Linux-shaped canonical owner - iOS mediation as implementation detail
- * Note: mount/umount are restricted on iOS sandbox
+ * Virtual mount behavior against IXLand's own VFS, NOT host mount(2).
+ *
+ * NOTE: This file MUST NOT include any headers that transitively pull in
+ * Darwin's sys/mount.h to avoid signature conflicts with BSD mount().
  */
 
 #include <errno.h>
-#include <fcntl.h>
-#include <sys/mount.h>
-#include <sys/param.h>
-#include <sys/statvfs.h>
-#include <sys/ucred.h>
+#include <string.h>
 #include <unistd.h>
 
+/* Forward declare VFS functions we need - avoid including vfs.h which pulls in
+ * Darwin headers that declare BSD mount() */
+extern int vfs_mount(const char *source, const char *target,
+                      const char *fstype, unsigned long flags,
+                      const void *data);
+extern int vfs_umount(const char *target);
+
 /* ============================================================================
- * MOUNT - Mount filesystem (restricted on iOS)
+ * MOUNT - Virtual mount in IXLand namespace
+ * ============================================================================
+ *
+ * This implements Linux mount semantics against IXLand's own VFS,
+ * NOT the iOS host mount() syscall.
+ *
+ * source: An app-container path or user-granted directory
+ * target: A path in IXLand's virtual namespace
+ * filesystemtype: Interpreted by IXLand VFS
+ * mountflags: Linux-style mount flags
+ * data: Filesystem-specific data
+ */
+
+static int mount_impl(const char *source, const char *target,
+                      const char *filesystemtype, unsigned long mountflags,
+                      const void *data) {
+    if (!source || !target || !filesystemtype) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    /* Validate inputs */
+    if (source[0] == '\0' || target[0] == '\0') {
+        errno = ENOENT;
+        return -1;
+    }
+
+    /* Validate filesystemtype exists */
+    if (strlen(filesystemtype) == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* Validate source is accessible */
+    if (access(source, F_OK) != 0) {
+        /* errno already set by access */
+        return -1;
+    }
+
+    /* Delegate to VFS layer for virtual mount */
+    return vfs_mount(source, target, filesystemtype, mountflags, data);
+}
+
+/* ============================================================================
+ * UMOUNT - Virtual unmount from IXLand namespace
  * ============================================================================ */
 
-int ixland_mount(const char *source, const char *target, const char *filesystemtype,
-                 unsigned long mountflags, const void *data) {
-    /* iOS restriction: mounting not allowed in sandbox */
-    (void)source;
-    (void)target;
-    (void)filesystemtype;
-    (void)mountflags;
-    (void)data;
-    errno = EPERM;
-    return -1;
+static int umount_impl(const char *target) {
+    if (!target) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (target[0] == '\0') {
+        errno = ENOENT;
+        return -1;
+    }
+
+    return vfs_umount(target);
 }
 
-int ixland_umount(const char *target) {
-    /* iOS restriction: unmounting not allowed */
-    (void)target;
-    errno = EPERM;
-    return -1;
-}
+/* ============================================================================
+ * UMOUNT2 - Virtual unmount with flags
+ * ============================================================================ */
 
-int ixland_umount2(const char *target, int flags) {
-    /* iOS restriction: unmounting not allowed */
-    (void)target;
+static int umount2_impl(const char *target, int flags) {
+    /* For now, flags are parsed but most are not implemented */
+    /* MNT_FORCE not supported by IXLand VFS yet */
+    /* MNT_DETACH - lazy unmount */
+    /* MNT_EXPIRE - mark for expiry */
     (void)flags;
-    errno = EPERM;
-    return -1;
+
+    return umount_impl(target);
 }
 
 /* ============================================================================
- * STATFS - Filesystem statistics
+ * Public Canonical Syscalls
  * ============================================================================ */
 
-int ixland_statfs(const char *path, struct statfs *buf) {
-    return statfs(path, buf);
+__attribute__((visibility("default"))) int mount(const char *source,
+                                                   const char *target,
+                                                   const char *filesystemtype,
+                                                   unsigned long mountflags,
+                                                   const void *data) {
+    return mount_impl(source, target, filesystemtype, mountflags, data);
 }
 
-int ixland_fstatfs(int fd, struct statfs *buf) {
-    return fstatfs(fd, buf);
+__attribute__((visibility("default"))) int umount(const char *target) {
+    return umount_impl(target);
 }
 
-int ixland_statvfs(const char *path, struct statvfs *buf) {
-    return statvfs(path, buf);
-}
-
-int ixland_fstatvfs(int fd, struct statvfs *buf) {
-    return fstatvfs(fd, buf);
+__attribute__((visibility("default"))) int umount2(const char *target, int flags) {
+    return umount2_impl(target, flags);
 }

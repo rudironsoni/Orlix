@@ -11,14 +11,14 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-/* iOS doesn't have sys/random.h, but getentropy is available */
-extern int getentropy(void *buf, size_t buflen);
+/* iOS system getentropy - private implementation detail */
+extern int _getentropy(void *buf, size_t buflen);
 
 /* ============================================================================
  * GETRANDOM - Linux-compatible random bytes
  * ============================================================================ */
 
-ssize_t ixland_getrandom(void *buf, size_t buflen, unsigned int flags) {
+static ssize_t getrandom_impl(void *buf, size_t buflen, unsigned int flags) {
     /* Use iOS arc4random_buf for secure random */
     (void)flags;
 
@@ -29,7 +29,7 @@ ssize_t ixland_getrandom(void *buf, size_t buflen, unsigned int flags) {
 
     /* Use getentropy for small requests */
     if (buflen <= 256) {
-        return getentropy(buf, buflen) == 0 ? (ssize_t)buflen : -1;
+        return _getentropy(buf, buflen) == 0 ? (ssize_t)buflen : -1;
     }
 
     /* For larger requests, use /dev/urandom */
@@ -61,6 +61,18 @@ ssize_t ixland_getrandom(void *buf, size_t buflen, unsigned int flags) {
  * GETENTROPY - BSD-compatible
  * ============================================================================ */
 
-int ixland_getentropy(void *buffer, size_t length) {
-    return getentropy(buffer, length);
+static int getentropy_impl(void *buffer, size_t length) {
+    return _getentropy(buffer, length);
+}
+
+/* ============================================================================
+ * Public Canonical Syscalls
+ * ============================================================================ */
+
+__attribute__((visibility("default"))) ssize_t getrandom(void *buf, size_t buflen, unsigned int flags) {
+    return getrandom_impl(buf, buflen, flags);
+}
+
+__attribute__((visibility("default"))) int getentropy(void *buffer, size_t length) {
+    return getentropy_impl(buffer, length);
 }

@@ -79,22 +79,22 @@ int faccessat_impl(int dirfd, const char *pathname, int mode, int flags) {
     return vfs_access(pathname, mode);
 }
 
-int ixland_stat(const char *pathname, struct stat *statbuf) {
+__attribute__((visibility("default"))) int stat(const char *pathname, struct stat *statbuf) {
     return stat_impl(pathname, statbuf);
 }
 
-int ixland_fstat(int fd, struct stat *statbuf) {
+__attribute__((visibility("default"))) int fstat(int fd, struct stat *statbuf) {
     return fstat_impl(fd, statbuf);
 }
 
-int ixland_lstat(const char *pathname, struct stat *statbuf) {
+__attribute__((visibility("default"))) int lstat(const char *pathname, struct stat *statbuf) {
     return lstat_impl(pathname, statbuf);
 }
 
-int ixland_access(const char *pathname, int mode) {
+__attribute__((visibility("default"))) int access(const char *pathname, int mode) {
     return access_impl(pathname, mode);
 }
 
-int ixland_faccessat(int dirfd, const char *pathname, int mode, int flags) {
+__attribute__((visibility("default"))) int faccessat(int dirfd, const char *pathname, int mode, int flags) {
     return faccessat_impl(dirfd, pathname, mode, flags);
 }

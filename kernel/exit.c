@@ -6,7 +6,7 @@
 /* External declaration for init task */
 extern struct task_struct *init_task;
 
-void ixland_exit(int status) {
+__attribute__((visibility("default"))) void exit(int status) {
     struct task_struct *task = get_current();
     if (!task) {
         _Exit(status);
@@ -94,7 +94,7 @@ void ixland_exit(int status) {
     pthread_exit(NULL);
 }
 
-void ixland__exit(int status) {
+__attribute__((visibility("default"))) void _exit(int status) {
     /* Immediate exit without cleanup */
     _Exit(status);
 }

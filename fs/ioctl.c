@@ -1,19 +1,22 @@
+/* iXland - IOCTL Operations
+ *
+ * Canonical owner for ioctl syscall:
+ * - ioctl()
+ *
+ * Linux-shaped canonical owner - iOS mediation as implementation detail
+ */
+
 #include <errno.h>
 #include <stdarg.h>
 #include <sys/ioctl.h>
 
 #include "fdtable.h"
 
-int __ixland_ioctl_impl(int fd, unsigned long request, ...) {
+static int ioctl_impl(int fd, unsigned long request, void *arg) {
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
     }
-
-    va_list args;
-    va_start(args, request);
-    void *arg = va_arg(args, void *);
-    va_end(args);
 
     if (fd <= 2) {
         return ioctl(fd, request, arg);
@@ -30,10 +33,10 @@ int __ixland_ioctl_impl(int fd, unsigned long request, ...) {
     return result;
 }
 
-int ixland_ioctl(int fd, unsigned long request, ...) {
+__attribute__((visibility("default"))) int ioctl(int fd, unsigned long request, ...) {
     va_list args;
     va_start(args, request);
     void *arg = va_arg(args, void *);
     va_end(args);
-    return __ixland_ioctl_impl(fd, request, arg);
+    return ioctl_impl(fd, request, arg);
 }

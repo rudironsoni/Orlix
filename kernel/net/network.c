@@ -1,7 +1,12 @@
-/* ixland_network.c - Network syscall implementation for iOS
+/* iXland - Network/Socket Syscalls
  *
- * Provides BSD socket API compatibility layer for iOS
- * Maps Linux socket calls to iOS Network.framework and BSD sockets
+ * Canonical owner for socket syscalls:
+ * - socket(), socketpair(), bind(), listen(), accept(), accept4()
+ * - connect(), shutdown()
+ * - send(), sendto(), recv(), recvfrom()
+ * - setsockopt(), getsockopt()
+ *
+ * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
 #include <arpa/inet.h>
@@ -27,11 +32,11 @@
 /* Socket table entry - maps virtual fds to real iOS sockets */
 typedef struct {
     int used;
-    int domain;                 /* AF_INET, AF_INET6, AF_UNIX */
-    int type;                   /* SOCK_STREAM, SOCK_DGRAM */
-    int protocol;               /* IPPROTO_TCP, IPPROTO_UDP */
-    nw_connection_t connection; /* iOS Network connection */
-    nw_listener_t listener;     /* iOS Network listener (for server) */
+    int domain;                    /* AF_INET, AF_INET6, AF_UNIX */
+    int type;                      /* SOCK_STREAM, SOCK_DGRAM */
+    int protocol;                  /* IPPROTO_TCP, IPPROTO_UDP */
+    nw_connection_t connection;    /* iOS Network connection */
+    nw_listener_t listener;        /* iOS Network listener (for server) */
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
     socklen_t local_addr_len;
@@ -139,7 +144,7 @@ int __ixland_network_deinit_impl(void) {
  * SOCKET CREATION
  * ============================================================================ */
 
-int __ixland_socket_impl(int domain, int type, int protocol) {
+static int socket_impl(int domain, int type, int protocol) {
     int fd = ixland_socket_alloc();
     if (fd < 0) {
         return -1;
@@ -152,28 +157,28 @@ int __ixland_socket_impl(int domain, int type, int protocol) {
 
     /* Map to iOS Network framework based on domain/type */
     switch (domain) {
-    case AF_INET:
-    case AF_INET6:
-        /* TCP/UDP sockets - use BSD sockets for now */
-        /* TODO: Implement using Network.framework for modern iOS */
-        break;
+        case AF_INET:
+        case AF_INET6:
+            /* TCP/UDP sockets - use BSD sockets for now */
+            /* TODO: Implement using Network.framework for modern iOS */
+            break;
 
-    case AF_UNIX:
-        /* Unix domain sockets - not supported on iOS */
-        errno = EAFNOSUPPORT;
-        ixland_socket_free(fd);
-        return -1;
+        case AF_UNIX:
+            /* Unix domain sockets - not supported on iOS */
+            errno = EAFNOSUPPORT;
+            ixland_socket_free(fd);
+            return -1;
 
-    default:
-        errno = EAFNOSUPPORT;
-        ixland_socket_free(fd);
-        return -1;
+        default:
+            errno = EAFNOSUPPORT;
+            ixland_socket_free(fd);
+            return -1;
     }
 
     return fd;
 }
 
-int __ixland_socketpair_impl(int domain, int type, int protocol, int sv[2]) {
+static int socketpair_impl(int domain, int type, int protocol, int sv[2]) {
     /* Socket pairs not supported on iOS (sandbox restriction) */
     (void)domain;
     (void)type;
@@ -187,7 +192,7 @@ int __ixland_socketpair_impl(int domain, int type, int protocol, int sv[2]) {
  * CONNECTION MANAGEMENT
  * ============================================================================ */
 
-int __ixland_connect_impl(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+static int connect_impl(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -254,14 +259,14 @@ int __ixland_connect_impl(int sockfd, const struct sockaddr *addr, socklen_t add
 
         nw_connection_set_state_changed_handler(
             sock->connection, ^(nw_connection_state_t state, nw_error_t error) {
-              (void)error;
-              if (state == nw_connection_state_ready) {
-                  connect_error = 0;
-              } else if (state == nw_connection_state_failed ||
-                         state == nw_connection_state_cancelled) {
-                  connect_error = -1;
-              }
-              dispatch_semaphore_signal(sem);
+                (void)error;
+                if (state == nw_connection_state_ready) {
+                    connect_error = 0;
+                } else if (state == nw_connection_state_failed ||
+                           state == nw_connection_state_cancelled) {
+                    connect_error = -1;
+                }
+                dispatch_semaphore_signal(sem);
             });
 
         nw_connection_start(sock->connection);
@@ -286,7 +291,7 @@ int __ixland_connect_impl(int sockfd, const struct sockaddr *addr, socklen_t add
     return 0;
 }
 
-int __ixland_bind_impl(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+static int bind_impl(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -308,7 +313,7 @@ int __ixland_bind_impl(int sockfd, const struct sockaddr *addr, socklen_t addrle
     return 0;
 }
 
-int __ixland_listen_impl(int sockfd, int backlog) {
+static int listen_impl(int sockfd, int backlog) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -324,7 +329,7 @@ int __ixland_listen_impl(int sockfd, int backlog) {
 
     /* Create parameters */
     nw_parameters_t params = nw_parameters_create_secure_tcp(NW_PARAMETERS_DEFAULT_CONFIGURATION,
-                                                             NW_PARAMETERS_DISABLE_PROTOCOL);
+                                                           NW_PARAMETERS_DISABLE_PROTOCOL);
 
     /* Create listener */
     sock->listener = nw_listener_create(params);
@@ -338,9 +343,9 @@ int __ixland_listen_impl(int sockfd, int backlog) {
     /* Configure listener */
     nw_listener_set_queue(sock->listener, dispatch_get_main_queue());
     nw_listener_set_new_connection_handler(sock->listener, ^(nw_connection_t connection) {
-      /* Handle new connection - store for accept */
-      /* TODO: Implement accept queue */
-      nw_release(connection);
+        /* Handle new connection - store for accept */
+        /* TODO: Implement accept queue */
+        nw_release(connection);
     });
 
     /* Start listener */
@@ -349,7 +354,7 @@ int __ixland_listen_impl(int sockfd, int backlog) {
     return 0;
 }
 
-int __ixland_accept_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+static int accept_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -368,16 +373,16 @@ int __ixland_accept_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) 
     return -1;
 }
 
-int __ixland_accept4_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
+static int accept4_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
     (void)flags;
-    return __ixland_accept_impl(sockfd, addr, addrlen);
+    return accept_impl(sockfd, addr, addrlen);
 }
 
 /* ============================================================================
  * DATA TRANSFER
  * ============================================================================ */
 
-ssize_t __ixland_send_impl(int sockfd, const void *buf, size_t len, int flags) {
+static ssize_t send_impl(int sockfd, const void *buf, size_t len, int flags) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -407,12 +412,12 @@ ssize_t __ixland_send_impl(int sockfd, const void *buf, size_t len, int flags) {
 
     nw_connection_send(sock->connection, data, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, true,
                        ^(nw_error_t error) {
-                         if (error) {
-                             bytes_sent = -1;
-                         } else {
-                             bytes_sent = len;
-                         }
-                         dispatch_semaphore_signal(sem);
+                           if (error) {
+                               bytes_sent = -1;
+                           } else {
+                               bytes_sent = len;
+                           }
+                           dispatch_semaphore_signal(sem);
                        });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
@@ -427,7 +432,7 @@ ssize_t __ixland_send_impl(int sockfd, const void *buf, size_t len, int flags) {
     return bytes_sent;
 }
 
-ssize_t __ixland_recv_impl(int sockfd, void *buf, size_t len, int flags) {
+static ssize_t recv_impl(int sockfd, void *buf, size_t len, int flags) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -451,27 +456,27 @@ ssize_t __ixland_recv_impl(int sockfd, void *buf, size_t len, int flags) {
     nw_connection_receive(sock->connection, 1, len,
                           ^(dispatch_data_t content, nw_content_context_t context, bool is_complete,
                             nw_error_t error) {
-                            (void)context;
-                            (void)is_complete;
-                            if (content) {
-                                const void *data_ptr = NULL;
-                                size_t data_len = 0;
+                              (void)context;
+                              (void)is_complete;
+                              if (content) {
+                                  const void *data_ptr = NULL;
+                                  size_t data_len = 0;
 
-                                dispatch_data_t mapped =
-                                    dispatch_data_create_map(content, &data_ptr, &data_len);
-                                if (mapped && data_ptr && data_len > 0) {
-                                    size_t copy_len = data_len < len ? data_len : len;
-                                    memcpy(buf, data_ptr, copy_len);
-                                    bytes_received = copy_len;
-                                    dispatch_release(mapped);
-                                }
-                            }
+                                  dispatch_data_t mapped =
+                                      dispatch_data_create_map(content, &data_ptr, &data_len);
+                                  if (mapped && data_ptr && data_len > 0) {
+                                      size_t copy_len = data_len < len ? data_len : len;
+                                      memcpy(buf, data_ptr, copy_len);
+                                      bytes_received = copy_len;
+                                      dispatch_release(mapped);
+                                  }
+                              }
 
-                            if (error) {
-                                bytes_received = -1;
-                            }
+                              if (error) {
+                                  bytes_received = -1;
+                              }
 
-                            dispatch_semaphore_signal(sem);
+                              dispatch_semaphore_signal(sem);
                           });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
@@ -485,28 +490,28 @@ ssize_t __ixland_recv_impl(int sockfd, void *buf, size_t len, int flags) {
     return bytes_received;
 }
 
-ssize_t __ixland_sendto_impl(int sockfd, const void *buf, size_t len, int flags,
-                             const struct sockaddr *dest_addr, socklen_t addrlen) {
+static ssize_t sendto_impl(int sockfd, const void *buf, size_t len, int flags,
+                           const struct sockaddr *dest_addr, socklen_t addrlen) {
     /* For connectionless sockets */
     (void)dest_addr;
     (void)addrlen;
-    return __ixland_send_impl(sockfd, buf, len, flags);
+    return send_impl(sockfd, buf, len, flags);
 }
 
-ssize_t __ixland_recvfrom_impl(int sockfd, void *buf, size_t len, int flags,
-                               struct sockaddr *src_addr, socklen_t *addrlen) {
+static ssize_t recvfrom_impl(int sockfd, void *buf, size_t len, int flags,
+                             struct sockaddr *src_addr, socklen_t *addrlen) {
     /* For connectionless sockets */
     (void)src_addr;
     (void)addrlen;
-    return __ixland_recv_impl(sockfd, buf, len, flags);
+    return recv_impl(sockfd, buf, len, flags);
 }
 
 /* ============================================================================
  * SOCKET OPTIONS
  * ============================================================================ */
 
-int __ixland_setsockopt_impl(int sockfd, int level, int optname, const void *optval,
-                             socklen_t optlen) {
+static int setsockopt_impl(int sockfd, int level, int optname, const void *optval,
+                           socklen_t optlen) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -521,7 +526,7 @@ int __ixland_setsockopt_impl(int sockfd, int level, int optname, const void *opt
     return 0;
 }
 
-int __ixland_getsockopt_impl(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
+static int getsockopt_impl(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -539,36 +544,10 @@ int __ixland_getsockopt_impl(int sockfd, int level, int optname, void *optval, s
 }
 
 /* ============================================================================
- * ADDRESS CONVERSION
- * ============================================================================ */
-
-int __ixland_inet_pton_impl(int af, const char *src, void *dst) {
-    if (af == AF_INET) {
-        return inet_pton(AF_INET, src, dst);
-    } else if (af == AF_INET6) {
-        return inet_pton(AF_INET6, src, dst);
-    } else {
-        errno = EAFNOSUPPORT;
-        return -1;
-    }
-}
-
-const char *__ixland_inet_ntop_impl(int af, const void *src, char *dst, socklen_t size) {
-    if (af == AF_INET) {
-        return inet_ntop(AF_INET, src, dst, size);
-    } else if (af == AF_INET6) {
-        return inet_ntop(AF_INET6, src, dst, size);
-    } else {
-        errno = EAFNOSUPPORT;
-        return NULL;
-    }
-}
-
-/* ============================================================================
  * SHUTDOWN
  * ============================================================================ */
 
-int __ixland_shutdown_impl(int sockfd, int how) {
+static int shutdown_impl(int sockfd, int how) {
     ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
     if (!sock) {
         return -1;
@@ -585,76 +564,68 @@ int __ixland_shutdown_impl(int sockfd, int how) {
 }
 
 /* ============================================================================
- * PUBLIC API WRAPPERS
+ * Public Canonical Socket Syscalls
  * ============================================================================ */
 
-int ixland_socket(int domain, int type, int protocol) {
-    return __ixland_socket_impl(domain, type, protocol);
+__attribute__((visibility("default"))) int socket(int domain, int type, int protocol) {
+    return socket_impl(domain, type, protocol);
 }
 
-int ixland_socketpair(int domain, int type, int protocol, int sv[2]) {
-    return __ixland_socketpair_impl(domain, type, protocol, sv);
+__attribute__((visibility("default"))) int socketpair(int domain, int type, int protocol, int sv[2]) {
+    return socketpair_impl(domain, type, protocol, sv);
 }
 
-int ixland_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-    return __ixland_connect_impl(sockfd, addr, addrlen);
+__attribute__((visibility("default"))) int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+    return connect_impl(sockfd, addr, addrlen);
 }
 
-int ixland_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-    return __ixland_bind_impl(sockfd, addr, addrlen);
+__attribute__((visibility("default"))) int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+    return bind_impl(sockfd, addr, addrlen);
 }
 
-int ixland_listen(int sockfd, int backlog) {
-    return __ixland_listen_impl(sockfd, backlog);
+__attribute__((visibility("default"))) int listen(int sockfd, int backlog) {
+    return listen_impl(sockfd, backlog);
 }
 
-int ixland_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
-    return __ixland_accept_impl(sockfd, addr, addrlen);
+__attribute__((visibility("default"))) int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+    return accept_impl(sockfd, addr, addrlen);
 }
 
-int ixland_accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
-    return __ixland_accept4_impl(sockfd, addr, addrlen, flags);
+__attribute__((visibility("default"))) int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
+    return accept4_impl(sockfd, addr, addrlen, flags);
 }
 
-ssize_t ixland_send(int sockfd, const void *buf, size_t len, int flags) {
-    return __ixland_send_impl(sockfd, buf, len, flags);
+__attribute__((visibility("default"))) ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
+    return send_impl(sockfd, buf, len, flags);
 }
 
-ssize_t ixland_recv(int sockfd, void *buf, size_t len, int flags) {
-    return __ixland_recv_impl(sockfd, buf, len, flags);
+__attribute__((visibility("default"))) ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
+    return recv_impl(sockfd, buf, len, flags);
 }
 
-ssize_t ixland_sendto(int sockfd, const void *buf, size_t len, int flags,
-                      const struct sockaddr *dest_addr, socklen_t addrlen) {
-    return __ixland_sendto_impl(sockfd, buf, len, flags, dest_addr, addrlen);
+__attribute__((visibility("default"))) ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+                                                        const struct sockaddr *dest_addr, socklen_t addrlen) {
+    return sendto_impl(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
-ssize_t ixland_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr,
-                        socklen_t *addrlen) {
-    return __ixland_recvfrom_impl(sockfd, buf, len, flags, src_addr, addrlen);
+__attribute__((visibility("default"))) ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
+                                                          struct sockaddr *src_addr, socklen_t *addrlen) {
+    return recvfrom_impl(sockfd, buf, len, flags, src_addr, addrlen);
 }
 
-int ixland_setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
-    return __ixland_setsockopt_impl(sockfd, level, optname, optval, optlen);
+__attribute__((visibility("default"))) int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
+    return setsockopt_impl(sockfd, level, optname, optval, optlen);
 }
 
-int ixland_getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
-    return __ixland_getsockopt_impl(sockfd, level, optname, optval, optlen);
+__attribute__((visibility("default"))) int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
+    return getsockopt_impl(sockfd, level, optname, optval, optlen);
 }
 
-int ixland_shutdown(int sockfd, int how) {
-    return __ixland_shutdown_impl(sockfd, how);
+__attribute__((visibility("default"))) int shutdown(int sockfd, int how) {
+    return shutdown_impl(sockfd, how);
 }
 
-int ixland_inet_pton(int af, const char *src, void *dst) {
-    return __ixland_inet_pton_impl(af, src, dst);
-}
-
-const char *ixland_inet_ntop(int af, const void *src, char *dst, socklen_t size) {
-    return __ixland_inet_ntop_impl(af, src, dst, size);
-}
-
-/* Network initialization - called from ixland_init */
+/* Network initialization - internal IXLand use only */
 int ixland_network_init(void) {
     return __ixland_network_init_impl();
 }

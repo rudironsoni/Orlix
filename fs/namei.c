@@ -334,18 +334,18 @@ __attribute__((visibility("default"))) int linkat(int olddirfd, const char *oldp
   return -1;
 }
 
-int ixland_symlink(const char *target, const char *linkpath) {
+__attribute__((visibility("default"))) int symlink(const char *target, const char *linkpath) {
     return symlink_impl(target, linkpath);
 }
 
-int ixland_symlinkat(const char *target, int newdirfd, const char *linkpath) {
+__attribute__((visibility("default"))) int symlinkat(const char *target, int newdirfd, const char *linkpath) {
     if (target == NULL || linkpath == NULL) {
         errno = EFAULT;
         return -1;
     }
 
     if (newdirfd == AT_FDCWD) {
-        return ixland_symlink(target, linkpath);
+        return symlink(target, linkpath);
     }
 
     (void)newdirfd;
@@ -353,18 +353,18 @@ int ixland_symlinkat(const char *target, int newdirfd, const char *linkpath) {
     return -1;
 }
 
-ssize_t ixland_readlink(const char *pathname, char *buf, size_t bufsiz) {
+__attribute__((visibility("default"))) ssize_t readlink(const char *pathname, char *buf, size_t bufsiz) {
     return readlink_impl(pathname, buf, bufsiz);
 }
 
-ssize_t ixland_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz) {
+__attribute__((visibility("default"))) ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz) {
     if (pathname == NULL || buf == NULL) {
         errno = EFAULT;
         return -1;
     }
 
     if (dirfd == AT_FDCWD) {
-        return ixland_readlink(pathname, buf, bufsiz);
+        return readlink(pathname, buf, bufsiz);
     }
 
     (void)dirfd;
@@ -373,6 +373,6 @@ ssize_t ixland_readlinkat(int dirfd, const char *pathname, char *buf, size_t buf
     return -1;
 }
 
-int ixland_chroot(const char *path) {
+__attribute__((visibility("default"))) int chroot(const char *path) {
     return chroot_impl(path);
 }

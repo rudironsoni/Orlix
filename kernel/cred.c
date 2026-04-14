@@ -1,7 +1,11 @@
-/* iOS Subsystem for Linux - Identity Syscalls
+/* iXland - Identity Syscalls
  *
- * Implementation of user/group identity syscalls.
- * On iOS, apps run as a single user (mobile/501) and cannot change identity.
+ * Canonical owner for user/group identity syscalls:
+ * - getuid(), geteuid(), getgid(), getegid()
+ * - setuid(), setgid()
+ *
+ * Linux-shaped canonical owner - iOS mediation as implementation detail
+ * iOS apps run as a single user (mobile/501) and cannot change identity.
  */
 
 #include <dlfcn.h>
@@ -10,7 +14,7 @@
 #include <unistd.h>
 
 /* ============================================================================
- * USER/GROUP IDENTITY
+ * USER/GROUP IDENTITY - Private Implementation
  * ============================================================================ */
 
 static uid_t (*libc_getuid)(void) = NULL;
@@ -18,15 +22,7 @@ static uid_t (*libc_geteuid)(void) = NULL;
 static gid_t (*libc_getgid)(void) = NULL;
 static gid_t (*libc_getegid)(void) = NULL;
 
-/**
- * @brief Get real user ID
- *
- * Returns the real user ID of the calling process.
- * On iOS, this is typically 501 (mobile user).
- *
- * @return uid_t User ID
- */
-uid_t ixland_getuid(void) {
+static uid_t getuid_impl(void) {
     static int initialized = 0;
     if (!initialized) {
         initialized = 1;
@@ -39,15 +35,7 @@ uid_t ixland_getuid(void) {
     return 501;
 }
 
-/**
- * @brief Get effective user ID
- *
- * Returns the effective user ID of the calling process.
- * On iOS, effective UID is the same as real UID.
- *
- * @return uid_t Effective user ID
- */
-uid_t ixland_geteuid(void) {
+static uid_t geteuid_impl(void) {
     static int initialized = 0;
     if (!initialized) {
         initialized = 1;
@@ -57,18 +45,10 @@ uid_t ixland_geteuid(void) {
         return libc_geteuid();
     }
     /* On iOS, effective UID is same as real UID */
-    return ixland_getuid();
+    return getuid_impl();
 }
 
-/**
- * @brief Get real group ID
- *
- * Returns the real group ID of the calling process.
- * On iOS, this is typically 501 (mobile group).
- *
- * @return gid_t Group ID
- */
-gid_t ixland_getgid(void) {
+static gid_t getgid_impl(void) {
     static int initialized = 0;
     if (!initialized) {
         initialized = 1;
@@ -81,15 +61,7 @@ gid_t ixland_getgid(void) {
     return 501;
 }
 
-/**
- * @brief Get effective group ID
- *
- * Returns the effective group ID of the calling process.
- * On iOS, effective GID is the same as real GID.
- *
- * @return gid_t Effective group ID
- */
-gid_t ixland_getegid(void) {
+static gid_t getegid_impl(void) {
     static int initialized = 0;
     if (!initialized) {
         initialized = 1;
@@ -99,37 +71,47 @@ gid_t ixland_getegid(void) {
         return libc_getegid();
     }
     /* On iOS, effective GID is same as real GID */
-    return ixland_getgid();
+    return getgid_impl();
 }
 
-/**
- * @brief Set real and effective user ID
- *
- * Attempts to set the real and effective user ID.
- * On iOS, apps cannot change UID - always returns EPERM.
- *
- * @param uid New user ID
- * @return int 0 on success, -1 on error with errno set
- */
-int ixland_setuid(uid_t uid) {
+static int setuid_impl(uid_t uid) {
     (void)uid;
     /* On iOS, apps cannot change UID - always return EPERM */
     errno = EPERM;
     return -1;
 }
 
-/**
- * @brief Set real and effective group ID
- *
- * Attempts to set the real and effective group ID.
- * On iOS, apps cannot change GID - always returns EPERM.
- *
- * @param gid New group ID
- * @return int 0 on success, -1 on error with errno set
- */
-int ixland_setgid(gid_t gid) {
+static int setgid_impl(gid_t gid) {
     (void)gid;
     /* On iOS, apps cannot change GID - always return EPERM */
     errno = EPERM;
     return -1;
+}
+
+/* ============================================================================
+ * Public Canonical Syscalls
+ * ============================================================================ */
+
+__attribute__((visibility("default"))) uid_t getuid(void) {
+    return getuid_impl();
+}
+
+__attribute__((visibility("default"))) uid_t geteuid(void) {
+    return geteuid_impl();
+}
+
+__attribute__((visibility("default"))) gid_t getgid(void) {
+    return getgid_impl();
+}
+
+__attribute__((visibility("default"))) gid_t getegid(void) {
+    return getegid_impl();
+}
+
+__attribute__((visibility("default"))) int setuid(uid_t uid) {
+    return setuid_impl(uid);
+}
+
+__attribute__((visibility("default"))) int setgid(gid_t gid) {
+    return setgid_impl(gid);
 }
