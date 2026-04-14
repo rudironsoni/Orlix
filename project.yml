@@ -1,0 +1,141 @@
+name: IXLandSystem
+targets:
+  IXLandSystem:
+    type: library.static
+    platform: iOS
+    deploymentTarget:
+      iOS: "16.0"
+    sources:
+      - path: compat/syscalls_adapter.c
+        group: compat
+      - path: fs/eventpoll.c
+        group: fs
+      - path: fs/exec.c
+        group: fs
+      - path: fs/fcntl.c
+        group: fs
+      - path: fs/fdtable.c
+        group: fs
+      - path: fs/inode.c
+        group: fs
+      - path: fs/ioctl.c
+        group: fs
+      - path: fs/mount.c
+        group: fs
+      - path: fs/namei.c
+        group: fs
+      - path: fs/open.c
+        group: fs
+      - path: fs/path.c
+        group: fs
+      - path: fs/read_write.c
+        group: fs
+      - path: fs/readdir.c
+        group: fs
+      - path: fs/select.c
+        group: fs
+      - path: fs/stat.c
+        group: fs
+      - path: fs/super.c
+        group: fs
+      - path: fs/vfs.c
+        group: fs
+      - path: kernel/cred.c
+        group: kernel
+      - path: kernel/exit.c
+        group: kernel
+      - path: kernel/fork.c
+        group: kernel
+      - path: kernel/init.c
+        group: kernel
+      - path: kernel/net/network.c
+        group: kernel/net
+      - path: kernel/pid.c
+        group: kernel
+      - path: kernel/random.c
+        group: kernel
+      - path: kernel/resource.c
+        group: kernel
+      - path: kernel/signal.c
+        group: kernel
+      - path: kernel/sync.c
+        group: kernel
+      - path: kernel/sys.c
+        group: kernel
+      - path: kernel/task.c
+        group: kernel
+      - path: kernel/time.c
+        group: kernel
+      - path: kernel/wait.c
+        group: kernel
+      - path: observability/ixland_observability.c
+        group: observability
+      - path: runtime/native/registry.c
+        group: runtime/native
+    headers:
+      - path: include/ixland/ixland_path.h
+        group: include/ixland
+        attributes:
+          - public
+      - path: include/ixland/ixland_signal.h
+        group: include/ixland
+        attributes:
+          - public
+      - path: include/ixland/ixland_syscalls.h
+        group: include/ixland
+        attributes:
+          - public
+      - path: include/ixland/ixland_types.h
+        group: include/ixland
+        attributes:
+          - public
+      - path: include/vfs.h
+        group: include
+        attributes:
+          - private
+    settings:
+      HEADER_SEARCH_PATHS:
+        - $(SRCROOT)/include
+        - $(SRCROOT)
+      GCC_PREPROCESSOR_DEFINITIONS:
+        - _XOPEN_SOURCE
+      CLANG_ENABLE_OBJC_ARC: YES
+      CLANG_WARN_DOCUMENTATION_COMMENTS: YES
+      OTHER_CFLAGS:
+        - -fvisibility=hidden
+  IXLandSystemTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget:
+      iOS: "16.0"
+    sources:
+      - Tests/unit
+    dependencies:
+      - target: IXLandSystem
+    settings:
+      HEADER_SEARCH_PATHS:
+        - $(SRCROOT)/include
+        - $(SRCROOT)
+      GCC_PREPROCESSOR_DEFINITIONS:
+        - _XOPEN_SOURCE
+schemes:
+  IXLandSystem:
+    build:
+      targets:
+        IXLandSystem: all
+    test:
+      gatherCoverageData: true
+      targets:
+        - name: IXLandSystemTests
+          parallelizable: true
+configurations:
+  Debug:
+    settings:
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      GCC_OPTIMIZATION_LEVEL: "0"
+      SWIFT_OPTIMIZATION_LEVEL: -Onone
+  Release:
+    settings:
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      GCC_OPTIMIZATION_LEVEL: s
+      SWIFT_OPTIMIZATION_LEVEL: -O
