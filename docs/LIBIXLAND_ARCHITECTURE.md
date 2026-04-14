@@ -46,9 +46,6 @@ a-shell-kernel/
 │   │   ├── ixland_network.c     # socket passthrough
 │   │   └── ixland_thread.c      # pthread utilities
 │   │
-│   ├── interpose/            # Symbol interposition layer
-│   │   └── ixland_interpose.c   # All 300+ syscall wrappers
-│   │
 │   ├── runtime/              # C runtime (from libc_replacement)
 │   │   ├── ixland_stdio.c       # printf, fprintf, etc.
 │   │   ├── ixland_stdlib.c      # malloc, free wrappers
@@ -231,7 +228,6 @@ static NativeSymbol ixland_wasi_symbols[] = {
 ```cmake
 add_library(ixland STATIC
     src/ixland/core/*.c
-    src/ixland/interpose/*.c
     src/ixland/runtime/*.c
     src/ixland/wamr/*.c
 )

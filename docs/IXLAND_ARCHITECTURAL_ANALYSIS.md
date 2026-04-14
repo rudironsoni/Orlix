@@ -105,7 +105,7 @@ Current WAMR integration (`ixland_wamr_simple.c`, 303 lines):
 | `ixland_minimal.c` | 201 | Minimal stubs | **Evaluate** |
 | `ixland_wamr_simple.c` | 303 | Simplified WAMR | **Replace** with full runtime/wasi/ |
 | `ixland_wamr.c` | 649 | Full WAMR | **Evaluate** for unification |
-| `ixland_interpose.c` | 341 | Interposition | **Keep** - move to compat/interpose/ |
+| `ixland_interpose.c` | 341 | Interposition | **DELETED** - duplicate symbols, excluded from build |
 | `ixland_path.c` | 385 | Path utilities | **Keep** - move to fs/ |
 | `ixland_internal.h` | 749 | Unified header | **Split** into subsystem headers |
 

@@ -37,7 +37,7 @@ The `ixland_` prefix is acceptable ONLY for:
 
 Current public headers:
 
-- `include/ixland/ixland_syscalls.h` — process/exec/init syscall seam (DEBT: ixland_ prefixed)
+- `include/ixland/ixland_syscalls.h` — process/exec/init syscall seam
 - `include/ixland/ixland_signal.h` — signal-mask type and operations (DEBT: ixland_ prefixed)
 - `include/ixland/ixland_path.h` — path classification/translation
 - `include/ixland/ixland_types.h` — shared public types
@@ -68,9 +68,9 @@ These are currently incomplete:
 - VFS stat/access (`vfs_stat_path`, `vfs_lstat`, `vfs_access`) — stubs returning `-ENOSYS`
 - Futex (`ixland_futex`) — returns `-ENOSYS`
 - TTY/PTY implementation file absent; `fs/tty/tty.h` declares API with no `.c`
-- `mmap`/`munmap`/`mprotect` — not implemented, called from interpose
-- `ixland_openat`, `ixland_pipe` — called from interpose, not implemented
-- 8 signal syscall public functions (`sigaction`, `kill`, `sigprocmask`, etc.) — called from interpose, no implementation
+- `mmap`/`munmap`/`mprotect` — not implemented
+- `openat`, `pipe` — not implemented
+- 8 signal syscall public functions (`sigaction`, `kill`, `sigprocmask`, etc.) — not implemented
 - 11 signal mask API functions declared in `ixland_signal.h` — no implementation
 - `include/vfs.h` diverges from owner `fs/vfs.h`
 - `kernel/pid.c` exports `ixland_alloc_pid`/`ixland_free_pid`/`ixland_pid_init` but `kernel/task.h` declares `alloc_pid`/`free_pid`/`pid_init` (symbol mismatch)
@@ -100,8 +100,7 @@ Before any mass rename:
 3. **Declaration drift:** Headers must match implementations
 4. **Link-time issues:** Export mechanism must be proven viable
 5. **ENOSYS stubs:** Incomplete implementations become more visible with standard names
-6. **Interpose layer:** Must be updated to call renamed functions
 
 ## Last Updated
 
-2026-04-13
+2026-04-14
