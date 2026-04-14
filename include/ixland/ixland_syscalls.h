@@ -72,6 +72,14 @@ int fchdir(int fd);
 char *getcwd(char *buf, size_t size);
 
 /* ============================================================================
+ * DIRECTORY CREATION / REMOVAL
+ * ============================================================================ */
+
+int mkdir(const char *pathname, mode_t mode);
+int mkdirat(int dirfd, const char *pathname, mode_t mode);
+int rmdir(const char *pathname);
+
+/* ============================================================================
  * PROCESS CREATION
  * ============================================================================ */
 

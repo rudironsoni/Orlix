@@ -266,28 +266,28 @@ __attribute__((visibility("default"))) char *getcwd(char *buf, size_t size) {
   return getcwd_impl(buf, size);
 }
 
-int ixland_mkdir(const char *pathname, mode_t mode) {
-    return mkdir_impl(pathname, mode);
+__attribute__((visibility("default"))) int mkdir(const char *pathname, mode_t mode) {
+  return mkdir_impl(pathname, mode);
 }
 
-int ixland_mkdirat(int dirfd, const char *pathname, mode_t mode) {
-    if (pathname == NULL) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    if (dirfd == AT_FDCWD) {
-        return ixland_mkdir(pathname, mode);
-    }
-
-    (void)dirfd;
-    (void)mode;
-    errno = ENOSYS;
+__attribute__((visibility("default"))) int mkdirat(int dirfd, const char *pathname, mode_t mode) {
+  if (pathname == NULL) {
+    errno = EFAULT;
     return -1;
+  }
+
+  if (dirfd == AT_FDCWD) {
+    return mkdir(pathname, mode);
+  }
+
+  (void)dirfd;
+  (void)mode;
+  errno = ENOSYS;
+  return -1;
 }
 
-int ixland_rmdir(const char *pathname) {
-    return rmdir_impl(pathname);
+__attribute__((visibility("default"))) int rmdir(const char *pathname) {
+  return rmdir_impl(pathname);
 }
 
 int ixland_unlink(const char *pathname) {
@@ -295,22 +295,22 @@ int ixland_unlink(const char *pathname) {
 }
 
 int ixland_unlinkat(int dirfd, const char *pathname, int flags) {
-    if (pathname == NULL) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    if (dirfd == AT_FDCWD) {
-        if ((flags & AT_REMOVEDIR) != 0) {
-            return ixland_rmdir(pathname);
-        }
-        return ixland_unlink(pathname);
-    }
-
-    (void)dirfd;
-    (void)flags;
-    errno = ENOSYS;
+  if (pathname == NULL) {
+    errno = EFAULT;
     return -1;
+  }
+
+  if (dirfd == AT_FDCWD) {
+    if ((flags & AT_REMOVEDIR) != 0) {
+      return rmdir(pathname);
+    }
+    return ixland_unlink(pathname);
+  }
+
+  (void)dirfd;
+  (void)flags;
+  errno = ENOSYS;
+  return -1;
 }
 
 int ixland_link(const char *oldpath, const char *newpath) {
