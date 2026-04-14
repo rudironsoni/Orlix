@@ -290,11 +290,11 @@ __attribute__((visibility("default"))) int rmdir(const char *pathname) {
   return rmdir_impl(pathname);
 }
 
-int ixland_unlink(const char *pathname) {
-    return unlink_impl(pathname);
+__attribute__((visibility("default"))) int unlink(const char *pathname) {
+  return unlink_impl(pathname);
 }
 
-int ixland_unlinkat(int dirfd, const char *pathname, int flags) {
+__attribute__((visibility("default"))) int unlinkat(int dirfd, const char *pathname, int flags) {
   if (pathname == NULL) {
     errno = EFAULT;
     return -1;
@@ -304,7 +304,7 @@ int ixland_unlinkat(int dirfd, const char *pathname, int flags) {
     if ((flags & AT_REMOVEDIR) != 0) {
       return rmdir(pathname);
     }
-    return ixland_unlink(pathname);
+    return unlink(pathname);
   }
 
   (void)dirfd;

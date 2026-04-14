@@ -80,6 +80,13 @@ int mkdirat(int dirfd, const char *pathname, mode_t mode);
 int rmdir(const char *pathname);
 
 /* ============================================================================
+ * FILE DELETION
+ * ============================================================================ */
+
+int unlink(const char *pathname);
+int unlinkat(int dirfd, const char *pathname, int flags);
+
+/* ============================================================================
  * PROCESS CREATION
  * ============================================================================ */
 
