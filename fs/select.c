@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -156,7 +157,7 @@ int poll_impl(struct pollfd *fds, unsigned int nfds, int timeout) {
     return poll_kqueue_impl(fds, nfds, timeout);
 }
 
-int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
+int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct timespec *timeout,
                const sigset_t *sigmask) {
     int timeout_ms = -1;
     if (timeout) {
@@ -180,9 +181,9 @@ int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct linux_timespe
     return result;
 }
 
-int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
-                ix_fd_set_t *exceptfds, struct linux_timeval *timeout) {
-    if (nfds < 0 || nfds > IX_FD_SETSIZE) {
+int select_impl(int nfds, fd_set *readfds, fd_set *writefds,
+                fd_set *exceptfds, struct timeval *timeout) {
+    if (nfds < 0 || nfds > FD_SETSIZE) {
         errno = EINVAL;
         return -1;
     }
@@ -200,13 +201,13 @@ int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
     for (int fd = 0; fd < nfds; fd++) {
         bool requested = false;
 
-        if (readfds && IX_FD_ISSET(fd, readfds)) {
+        if (readfds && FD_ISSET(fd, readfds)) {
             requested = true;
         }
-        if (writefds && IX_FD_ISSET(fd, writefds)) {
+        if (writefds && FD_ISSET(fd, writefds)) {
             requested = true;
         }
-        if (exceptfds && IX_FD_ISSET(fd, exceptfds)) {
+        if (exceptfds && FD_ISSET(fd, exceptfds)) {
             requested = true;
         }
 
@@ -233,7 +234,7 @@ int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
     int nchanges = 0;
 
     for (int fd = 0; fd < nfds; fd++) {
-        if (readfds && IX_FD_ISSET(fd, readfds)) {
+        if (readfds && FD_ISSET(fd, readfds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -245,7 +246,7 @@ int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
             nchanges++;
         }
 
-        if (writefds && IX_FD_ISSET(fd, writefds)) {
+        if (writefds && FD_ISSET(fd, writefds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -257,7 +258,7 @@ int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
             nchanges++;
         }
 
-        if (exceptfds && IX_FD_ISSET(fd, exceptfds)) {
+        if (exceptfds && FD_ISSET(fd, exceptfds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -299,11 +300,11 @@ int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
     }
 
     if (readfds)
-        IX_FD_ZERO(readfds);
+        FD_ZERO(readfds);
     if (writefds)
-        IX_FD_ZERO(writefds);
+        FD_ZERO(writefds);
     if (exceptfds)
-        IX_FD_ZERO(exceptfds);
+        FD_ZERO(exceptfds);
 
     int nevents = kevent(kq, changelist, nchanges, eventlist, nchanges, tsp);
 
@@ -325,15 +326,15 @@ int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
         if (eventlist[i].filter == EVFILT_READ) {
             if (eventlist[i].flags & EV_OOBAND) {
                 if (exceptfds)
-                    IX_FD_SET(fd, exceptfds);
+                    FD_SET(fd, exceptfds);
             } else {
                 if (readfds)
-                    IX_FD_SET(fd, readfds);
+                    FD_SET(fd, readfds);
             }
             ready_count++;
         } else if (eventlist[i].filter == EVFILT_WRITE) {
             if (writefds)
-                IX_FD_SET(fd, writefds);
+                FD_SET(fd, writefds);
             ready_count++;
         }
     }
@@ -345,14 +346,14 @@ int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
     return ready_count;
 }
 
-int pselect_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
-                 ix_fd_set_t *exceptfds, const struct linux_timespec *timeout,
+int pselect_impl(int nfds, fd_set *readfds, fd_set *writefds,
+                 fd_set *exceptfds, const struct timespec *timeout,
                  const sigset_t *sigmask) {
-    struct linux_timeval tv;
-    struct linux_timeval *tvp = NULL;
+    struct timeval tv;
+    struct timeval *tvp = NULL;
     if (timeout) {
         tv.tv_sec = timeout->tv_sec;
-        tv.tv_usec = timeout->tv_nsec / 1000;
+        tv.tv_usec = (__darwin_suseconds_t)(timeout->tv_nsec / 1000);
         tvp = &tv;
     }
 

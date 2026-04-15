@@ -1,13 +1,18 @@
 #ifndef SELECT_H
 #define SELECT_H
 
-/* 
- * IXLandSystem select internal header
+/*
+ * IXLandSystem poll/select internal header
  * 
- * This file includes Darwin headers for kqueue implementation.
- * For pure Linux-shaped types without Darwin contamination, use select_core.h
+ * Uses standard POSIX/Linux types for internal coherence.
+ * Darwin kqueue implementation details stay in .c file.
  */
 
-#include "select_core.h"
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/select.h>
+
+/* Forward declarations for internal readiness helpers */
+struct timespec;
 
 #endif /* SELECT_H */
