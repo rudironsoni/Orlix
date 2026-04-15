@@ -1,7 +1,7 @@
 #ifndef VFS_H
 #define VFS_H
 
-#define _DARWIN_NO_64_BIT_INODE 1
+#define _DARWIN_NO_64_BIT_INODE
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -28,6 +28,11 @@ struct file;
 struct super_block;
 struct file_system_type;
 struct mount;
+struct poll_table_struct;
+struct iattr;
+struct page;
+struct address_space;
+struct writeback_control;
 
 /* Linux-compatible VFS operations structure */
 struct file_operations {

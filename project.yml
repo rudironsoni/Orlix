@@ -1,4 +1,10 @@
 name: IXLandSystem
+
+settings:
+  base:
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+
 targets:
   IXLandSystem:
     type: library.static
@@ -103,6 +109,7 @@ targets:
       CLANG_WARN_DOCUMENTATION_COMMENTS: YES
       OTHER_CFLAGS:
         - -fvisibility=hidden
+
   IXLandSystemTests:
     type: bundle.unit-test
     platform: iOS
@@ -118,6 +125,7 @@ targets:
         - $(SRCROOT)
       GCC_PREPROCESSOR_DEFINITIONS:
         - _XOPEN_SOURCE
+
 schemes:
   IXLandSystem:
     build:
@@ -128,6 +136,7 @@ schemes:
       targets:
         - name: IXLandSystemTests
           parallelizable: true
+
 configurations:
   Debug:
     settings:

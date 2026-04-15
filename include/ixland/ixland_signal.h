@@ -1,49 +1,62 @@
-/* IXLand Signal Subsystem Header
- * Canonical signal mask representation and operations
+/* IXLand Signal Public Interface
+ * Canonical Linux/POSIX signal operations
  */
 
 #ifndef IXLAND_SIGNAL_H
 #define IXLAND_SIGNAL_H
 
 #include <signal.h>
-#include <stdbool.h>
-#include <stdint.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* IXLand-owned signal mask representation
- * Matches Linux kernel sigset_t semantics
- * Independent of host platform sigset_t layout
- */
-#define IXLAND_NSIG 64
-#define IXLAND_NSIG_WORDS (IXLAND_NSIG / (sizeof(unsigned long) * 8))
+/* ============================================================================
+ * SIGNAL HANDLER MANAGEMENT
+ * ============================================================================ */
 
-typedef struct {
-    unsigned long sig[IXLAND_NSIG_WORDS];
-} ixland_sigset_t;
+/* Signal handler type - canonical POSIX */
+typedef void (*sighandler_t)(int);
 
-/* Signal mask operations */
-void ixland_sigemptyset(ixland_sigset_t *set);
-void ixland_sigfillset(ixland_sigset_t *set);
-int ixland_sigaddset(ixland_sigset_t *set, int sig);
-int ixland_sigdelset(ixland_sigset_t *set, int sig);
-int ixland_sigismember(const ixland_sigset_t *set, int sig);
+/* Install signal handler - POSIX signal() */
+sighandler_t signal(int signum, sighandler_t handler);
 
-/* Signal mask operations */
-void ixland_sigandset(ixland_sigset_t *dest, const ixland_sigset_t *left,
-                      const ixland_sigset_t *right);
-void ixland_sigorset(ixland_sigset_t *dest, const ixland_sigset_t *left,
-                     const ixland_sigset_t *right);
-void ixland_signotset(ixland_sigset_t *dest, const ixland_sigset_t *src);
+/* Examine and change signal action - POSIX sigaction() */
+int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
 
-/* Darwin boundary conversion - only at host mediation edge */
-void ixland_sigset_to_host(const ixland_sigset_t *ixland_set, sigset_t *host_set);
-void ixland_sigset_from_host(const sigset_t *host_set, ixland_sigset_t *ixland_set);
+/* ============================================================================
+ * SIGNAL SIGNALING
+ * ============================================================================ */
 
-/* Thread-local signal mask storage */
-ixland_sigset_t *ixland_thread_sigmask(void);
+/* Send signal to process - POSIX kill() */
+int kill(pid_t pid, int sig);
+
+/* Send signal to process group - POSIX killpg() */
+int killpg(pid_t pgrp, int sig);
+
+/* Send signal to self - POSIX raise() */
+int raise(int sig);
+
+/* ============================================================================
+ * SIGNAL MASKING
+ * ============================================================================ */
+
+/* Examine and change blocked signals - POSIX sigprocmask() */
+int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+
+/* Get set of pending signals - POSIX sigpending() */
+int sigpending(sigset_t *set);
+
+/* Wait for signal with mask replacement - POSIX sigsuspend() */
+int sigsuspend(const sigset_t *mask);
+
+/* ============================================================================
+ * SIGNAL WAITING
+ * ============================================================================ */
+
+/* Wait for signal - POSIX pause() */
+int pause(void);
 
 #ifdef __cplusplus
 }
