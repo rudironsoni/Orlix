@@ -1,3 +1,6 @@
+/* IXLandSystem/fs/stat.c
+ * Virtual stat/fstat implementation
+ */
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>

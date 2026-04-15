@@ -1,12 +1,12 @@
 /* IXLandSystem/kernel/signal.h
- * Private internal owner header for virtual signal subsystem
- * 
+ * Private internal header for virtual signal subsystem
+ *
  * This is PRIVATE internal state for the virtual kernel's signal handling.
  * NOT a public Linux ABI header.
- * 
+ *
  * Virtual signal behavior emulated:
  * - standard and realtime signals
- * - per-thread signal masks
+ * - per-task signal masks
  * - pending signals
  * - process-directed vs thread-directed delivery
  * - fork inheriting signal mask
@@ -14,89 +14,98 @@
  * - sigprocmask, sigpending, sigsuspend, kill, killpg, raise
  */
 
-#ifndef IXLAND_KERNEL_SIGNAL_H
-#define IXLAND_KERNEL_SIGNAL_H
+#ifndef KERNEL_SIGNAL_H
+#define KERNEL_SIGNAL_H
 
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdatomic.h>
-#include <sys/types.h>
-#include <signal.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Forward declarations - avoid circular include with task.h */
+/* Forward declaration - avoid circular include with task.h */
 struct task_struct;
 
-/* Virtual signal namespace - Linux signal count */
-#define _NSIG 64
+/* Signal count - Linux uses 64 signals */
+#define SIGNAL_NSIG 64
 
-/* Virtual signal queue entry - internal representation */
-typedef struct ix_sigqueue_entry {
-    int sig;
+/* Signal handler type - private internal */
+typedef void (*sighandler_t)(int);
+
+/* Signal set representation - private internal */
+#define SIGNAL_NSIG_WORDS ((SIGNAL_NSIG + 63) / 64)
+
+struct signal_mask_bits {
+    uint64_t sig[SIGNAL_NSIG_WORDS];
+};
+
+/* Signal queue entry - private internal */
+struct signal_queue_entry {
+    int32_t sig;
     int32_t si_signo;
     int32_t si_errno;
     int32_t si_code;
-    struct ix_sigqueue_entry *next;
-} ix_sigqueue_entry_t;
+    struct signal_queue_entry *next;
+};
 
-/* Virtual signal queue - internal representation */
-typedef struct ix_sigqueue {
-    ix_sigqueue_entry_t *head;
-    ix_sigqueue_entry_t *tail;
+/* Signal queue - private internal */
+struct signal_queue {
+    struct signal_queue_entry *head;
+    struct signal_queue_entry *tail;
     int count;
-    pthread_mutex_t lock;
-} ix_sigqueue_t;
-
-/* Virtual signal set - internal representation (matches Linux sigset_t size)
- * Use Linux UAPI sigset_t in public contracts, this is for internal tracking */
-typedef struct ix_sigset {
-    uint64_t sig[(_NSIG / 64) + 1];
-} ix_sigset_t;
-
-/* Virtual kernel sigaction - internal representation
- * NOT the Linux UAPI struct sigaction - that's in asm/sigaction.h */
-typedef struct ix_k_sigaction {
-    void (*handler)(int);
-    uint64_t mask;
-    int flags;
-} ix_k_sigaction_t;
-
-/* Signal handler table - per-task signal configuration */
-struct sighand_struct {
-    atomic_int refs;
-    ix_k_sigaction_t action[_NSIG];
-    ix_sigset_t blocked;
-    ix_sigset_t pending;
-    ix_sigqueue_t queue;
     pthread_mutex_t lock;
 };
 
-/* Virtual signal stack state */
-struct ix_sigaltstack {
+/* Signal action slot - private internal
+ * Storage for one signal's handler configuration */
+struct signal_action_slot {
+    sighandler_t handler;
+    struct signal_mask_bits mask;
+    int32_t flags;
+};
+
+/* Signal handler table - per-task signal configuration
+ * This is the private internal state, NOT the public ABI struct sigaction */
+struct signal_struct {
+    atomic_int refs;
+    struct signal_action_slot actions[SIGNAL_NSIG];
+    struct signal_mask_bits blocked;
+    struct signal_mask_bits pending;
+    struct signal_queue queue;
+    pthread_mutex_t lock;
+};
+
+/* Signal stack state - private internal */
+struct signal_altstack {
     void *ss_sp;
     size_t ss_size;
-    int ss_flags;
+    int32_t ss_flags;
+};
+
+/* Signal pending state for a task */
+struct sigpending {
+    struct signal_mask_bits signal;
+    struct signal_queue queue;
 };
 
 /* Initialize signal state for a new task */
 int signal_init_task(struct task_struct *task);
 
 /* Inherit signal state on fork/clone */
-struct sighand_struct *alloc_sighand(void);
-void free_sighand(struct sighand_struct *sighand);
-struct sighand_struct *dup_sighand(struct task_struct *parent, struct task_struct *child);
+struct signal_struct *alloc_signal_struct(void);
+void free_signal_struct(struct signal_struct *sig);
+struct signal_struct *dup_signal_struct(struct signal_struct *parent);
 
 /* Reset signal state on exec */
 void signal_reset_on_exec(struct task_struct *task);
 
 /* Virtual signal enqueue helpers */
-int signal_enqueue_task(struct task_struct *task, int sig);
-int signal_enqueue_group(struct task_struct *task, int sig, bool group_wide);
-int signal_dequeue(struct task_struct *task, sigset_t *mask, int *sig);
+int signal_enqueue_task(struct task_struct *task, int32_t sig);
+int signal_enqueue_group(int32_t pgid, int32_t sig);
+int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int32_t *sig);
 
 /* Recompute pending state after mask changes */
 void signal_recompute_pending(struct task_struct *task);
@@ -104,22 +113,32 @@ void signal_recompute_pending(struct task_struct *task);
 /* Signal wakeup - wake the right task after signal generation */
 void signal_wake_task(struct task_struct *task, bool group_wide);
 
-/* Virtual signal syscalls (internal helpers) */
-int kill_impl(pid_t pid, int sig);
-int killpg_impl(pid_t pgrp, int sig);
-int raise_impl(int sig);
-int sigaction_impl(int sig, const struct sigaction *act, struct sigaction *oldact);
-int sigprocmask_impl(int how, const sigset_t *set, sigset_t *oldset);
-int sigpending_impl(sigset_t *set);
-int sigsuspend_impl(const sigset_t *mask);
-int sigaltstack_impl(const struct sigaction *ss, struct sigaction *oss);
+/* Internal signal generation */
+int signal_generate_task(struct task_struct *target, int32_t sig);
+int signal_generate_pgrp(int32_t pgid, int32_t sig);
 
-/* Translate between internal ix_sigset_t and POSIX sigset_t */
-void ix_sigset_to_sigset(const ix_sigset_t *ix, sigset_t *posix);
-void sigset_to_ix_sigset(const sigset_t *posix, ix_sigset_t *ix);
+/* Check if signal is blocked */
+bool signal_is_blocked(const struct task_struct *task, int32_t sig);
+
+/* ============================================================================
+ * INTERNAL SYSCALL IMPLEMENTATIONS (for host-bridge use)
+ * These are the internal implementations that the Darwin bridge calls.
+ * ============================================================================
+ */
+int do_sigaction(int32_t sig, const struct signal_action_slot *act,
+                 struct signal_action_slot *oldact);
+int do_sigprocmask(int how, const struct signal_mask_bits *set,
+                   struct signal_mask_bits *oldset);
+int do_sigpending(struct signal_mask_bits *set);
+sighandler_t do_signal(int32_t signum, sighandler_t handler);
+int do_raise(int32_t sig);
+int do_pause(void);
+int do_sigsuspend(const struct signal_mask_bits *mask);
+int do_kill(int32_t pid, int32_t sig);
+int do_killpg(int32_t pgrp, int32_t sig);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* IXLAND_KERNEL_SIGNAL_H */
+#endif /* KERNEL_SIGNAL_H */

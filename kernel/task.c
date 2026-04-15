@@ -1,3 +1,6 @@
+/* IXLandSystem/kernel/task.c
+ * Virtual task/process subsystem implementation
+ */
 #include "task.h"
 
 #include <errno.h>
@@ -5,12 +8,11 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
 #include "signal.h"
-
-/* Note: TASK_MAX_TASKS defined in task.h for cross-module access */
 
 static __thread struct task_struct *current_task = NULL;
 struct task_struct *init_task = NULL;
@@ -19,7 +21,7 @@ struct task_struct *init_task = NULL;
 pthread_mutex_t task_table_lock = PTHREAD_MUTEX_INITIALIZER;
 struct task_struct *task_table[TASK_MAX_TASKS] = {NULL};
 
-int task_hash(pid_t pid) {
+int task_hash(int32_t pid) {
     return (int)(pid % TASK_MAX_TASKS);
 }
 
@@ -51,7 +53,10 @@ struct task_struct *alloc_task(void) {
     pthread_cond_init(&task->wait_cond, NULL);
     pthread_mutex_init(&task->wait_lock, NULL);
 
-    clock_gettime(CLOCK_MONOTONIC, &task->start_time);
+    /* Store start time as nanoseconds instead of struct timespec */
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    task->start_time_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 
     int idx = task_hash(task->pid);
     pthread_mutex_lock(&task_table_lock);
@@ -84,8 +89,8 @@ void free_task(struct task_struct *task) {
         free_files(task->files);
     if (task->fs)
         free(task->fs);
-    if (task->sighand)
-        free(task->sighand);
+    if (task->signal)
+        free_signal_struct(task->signal);
     if (task->tty)
         atomic_fetch_sub(&task->tty->refs, 1);
     if (task->mm)
@@ -101,7 +106,7 @@ void free_task(struct task_struct *task) {
     free(task);
 }
 
-struct task_struct *task_lookup(pid_t pid) {
+struct task_struct *task_lookup(int32_t pid) {
     int idx = task_hash(pid);
     pthread_mutex_lock(&task_table_lock);
     struct task_struct *task = task_table[idx];
@@ -140,8 +145,8 @@ static void task_init_once(void) {
         return;
     }
 
-    init_task->sighand = alloc_sighand();
-    if (!init_task->sighand) {
+    init_task->signal = alloc_signal_struct();
+    if (!init_task->signal) {
         free_task(init_task);
         init_task = NULL;
         return;
@@ -169,7 +174,7 @@ void task_deinit(void) {
  * PID/IDENTITY FUNCTIONS
  * ============================================================================ */
 
-pid_t getpid_impl(void) {
+int32_t getpid_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         /* Try to initialize if not already done */
@@ -180,7 +185,7 @@ pid_t getpid_impl(void) {
     return task ? task->pid : 0;
 }
 
-pid_t getppid_impl(void) {
+int32_t getppid_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         /* Try to initialize if not already done */
@@ -195,7 +200,7 @@ pid_t getppid_impl(void) {
  * SESSION AND PROCESS GROUP FUNCTIONS
  * ============================================================================ */
 
-pid_t getpgrp_impl(void) {
+int32_t getpgrp_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
@@ -204,7 +209,7 @@ pid_t getpgrp_impl(void) {
     return task->pgid;
 }
 
-pid_t getpgid_impl(pid_t pid) {
+int32_t getpgid_impl(int32_t pid) {
     if (pid == 0) {
         return getpgrp_impl();
     }
@@ -215,12 +220,12 @@ pid_t getpgid_impl(pid_t pid) {
         return -1;
     }
 
-    pid_t pgid = task->pgid;
+    int32_t pgid = task->pgid;
     free_task(task);
     return pgid;
 }
 
-int setpgid_impl(pid_t pid, pid_t pgid) {
+int setpgid_impl(int32_t pid, int32_t pgid) {
     struct task_struct *current = get_current();
     if (!current) {
         errno = ESRCH;
@@ -265,7 +270,7 @@ int setpgid_impl(pid_t pid, pid_t pgid) {
     return 0;
 }
 
-pid_t getsid_impl(pid_t pid) {
+int32_t getsid_impl(int32_t pid) {
     if (pid == 0) {
         struct task_struct *task = get_current();
         if (!task) {
@@ -281,12 +286,12 @@ pid_t getsid_impl(pid_t pid) {
         return -1;
     }
 
-    pid_t sid = task->sid;
+    int32_t sid = task->sid;
     free_task(task);
     return sid;
 }
 
-pid_t setsid_impl(void) {
+int32_t setsid_impl(void) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
@@ -313,32 +318,37 @@ pid_t setsid_impl(void) {
 
 /* ============================================================================
  * PUBLIC CANONICAL WRAPPERS
- * ============================================================================ */
+ * ============================================================================
+ * These wrappers convert between POSIX/Linux public types and
+ * IXLandSystem's internal representation.
+ */
+
+#include <sys/types.h>
 
 __attribute__((visibility("default"))) pid_t getpid(void) {
-    return getpid_impl();
+    return (pid_t)getpid_impl();
 }
 
 __attribute__((visibility("default"))) pid_t getppid(void) {
-    return getppid_impl();
+    return (pid_t)getppid_impl();
 }
 
 __attribute__((visibility("default"))) pid_t getpgrp(void) {
-    return getpgrp_impl();
+    return (pid_t)getpgrp_impl();
 }
 
 __attribute__((visibility("default"))) pid_t getpgid(pid_t pid) {
-    return getpgid_impl(pid);
+    return (pid_t)getpgid_impl((int32_t)pid);
 }
 
 __attribute__((visibility("default"))) int setpgid(pid_t pid, pid_t pgid) {
-    return setpgid_impl(pid, pgid);
+    return setpgid_impl((int32_t)pid, (int32_t)pgid);
 }
 
 __attribute__((visibility("default"))) pid_t setsid(void) {
-    return setsid_impl();
+    return (pid_t)setsid_impl();
 }
 
 __attribute__((visibility("default"))) pid_t getsid(pid_t pid) {
-    return getsid_impl(pid);
+    return (pid_t)getsid_impl((int32_t)pid);
 }

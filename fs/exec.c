@@ -19,9 +19,15 @@
 #define environ (*_NSGetEnviron())
 
 #include "../kernel/task.h"
+#include "../kernel/signal.h"
 #include "../runtime/native/registry.h"
 #include "fdtable.h"
 #include "vfs.h"
+
+/* Forward declarations for exec variants */
+int exec_native(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
+int exec_wasi(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
+int exec_script(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
 
 /* Deep copy argv array */
 static char **exec_copy_argv(char *const argv[]) {
@@ -163,14 +169,14 @@ int exec_close_cloexec(struct task_struct *task) {
     return 0;
 }
 
-void exec_reset_signals(struct sighand_struct *sighand) {
+void exec_reset_signals(struct signal_struct *sighand) {
     if (!sighand) {
         return;
     }
 
-    for (int i = 0; i < _NSIG; i++) {
-        if (sighand->action[i].handler != SIG_IGN) {
-            sighand->action[i].handler = SIG_DFL;
+    for (int i = 0; i < SIGNAL_NSIG; i++) {
+        if (sighand->actions[i].handler != SIG_IGN) {
+            sighand->actions[i].handler = SIG_DFL;
         }
     }
 
@@ -231,8 +237,8 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
 
     exec_close_cloexec(task);
 
-    if (task->sighand) {
-        exec_reset_signals(task->sighand);
+    if (task->signal) {
+        exec_reset_signals(task->signal);
     }
 
     if (argv_copy && argv_copy[0]) {
@@ -347,7 +353,8 @@ int exec_native(struct task_struct *task, const char *path, int argc, char **arg
     task->exec_image->path[sizeof(task->exec_image->path) - 1] = '\0';
     task->exec_image->type = EXEC_IMAGE_NATIVE;
 
-    return entry(task, argc, argv, envp);
+    (void)task;  /* task is unused for native execution */
+    return entry(argc, argv, envp);
 }
 
 int exec_wasi(struct task_struct *task, const char *path, int argc, char **argv, char **envp) {

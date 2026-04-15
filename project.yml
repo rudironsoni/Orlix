@@ -67,6 +67,8 @@ targets:
         group: kernel
       - path: kernel/signal.c
         group: kernel
+      - path: arch/darwin/signal_bridge.c
+        group: arch/darwin
       - path: kernel/sync.c
         group: kernel
       - path: kernel/sys.c
@@ -83,12 +85,11 @@ targets:
         group: observability
       - path: runtime/native/registry.c
         group: runtime/native
-    headers: []
     settings:
       HEADER_SEARCH_PATHS:
+        - $(LINUX_UAPI_INCLUDE_ROOT)
         - $(SRCROOT)/include
         - $(SRCROOT)
-        - $(LINUX_UAPI_INCLUDE_ROOT)
       GCC_PREPROCESSOR_DEFINITIONS:
         - _XOPEN_SOURCE
       CLANG_ENABLE_OBJC_ARC: YES

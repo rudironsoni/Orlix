@@ -93,7 +93,7 @@ pid_t fork_impl(void) {
         child_count++;
         c = c->next_sibling;
     }
-    if (child_count >= (int)parent->rlimits[RLIMIT_NPROC].rlim_cur) {
+    if (child_count >= (int)parent->rlimits[RLIMIT_NPROC].cur) {
         pthread_mutex_unlock(&parent->lock);
         errno = EAGAIN;
         return -1;
@@ -131,9 +131,9 @@ pid_t fork_impl(void) {
     }
 
     /* Copy signal handlers */
-    if (parent->sighand && child->sighand) {
-        memcpy(child->sighand->action, parent->sighand->action, sizeof(parent->sighand->action));
-        child->sighand->blocked = parent->sighand->blocked;
+    if (parent->signal && child->signal) {
+        memcpy(child->signal->actions, parent->signal->actions, sizeof(parent->signal->actions));
+        child->signal->blocked = parent->signal->blocked;
     }
 
     /* Reference TTY (not copy) */
@@ -169,7 +169,7 @@ pid_t fork_impl(void) {
         pthread_attr_init(&attr);
 
         /* Set stack size from resource limits */
-        size_t stacksize = parent->rlimits[RLIMIT_STACK].rlim_cur;
+        size_t stacksize = parent->rlimits[RLIMIT_STACK].cur;
         if (stacksize < PTHREAD_STACK_MIN) {
             stacksize = PTHREAD_STACK_MIN;
         }
@@ -293,7 +293,7 @@ int vfork_impl(void) {
         child_count++;
         c = c->next_sibling;
     }
-    if (child_count >= (int)parent->rlimits[RLIMIT_NPROC].rlim_cur) {
+    if (child_count >= (int)parent->rlimits[RLIMIT_NPROC].cur) {
         pthread_mutex_unlock(&parent->lock);
         errno = EAGAIN;
         return -1;
@@ -343,9 +343,9 @@ int vfork_impl(void) {
     }
 
     /* Copy signal handlers */
-    if (parent->sighand && child->sighand) {
-        memcpy(child->sighand->action, parent->sighand->action, sizeof(parent->sighand->action));
-        child->sighand->blocked = parent->sighand->blocked;
+    if (parent->signal && child->signal) {
+        memcpy(child->signal->actions, parent->signal->actions, sizeof(parent->signal->actions));
+        child->signal->blocked = parent->signal->blocked;
     }
 
     /* Reference TTY */
@@ -383,10 +383,10 @@ int vfork_impl(void) {
             /* Parent continues here after creating thread */
             pthread_t child_thread;
             pthread_attr_t attr;
-            pthread_attr_init(&attr);
+    pthread_attr_init(&attr);
 
-            size_t stacksize = parent->rlimits[RLIMIT_STACK].rlim_cur;
-            if (stacksize < PTHREAD_STACK_MIN) {
+    size_t stacksize = parent->rlimits[RLIMIT_STACK].cur;
+    if (stacksize < PTHREAD_STACK_MIN) {
                 stacksize = PTHREAD_STACK_MIN;
             }
             pthread_attr_setstacksize(&attr, stacksize);

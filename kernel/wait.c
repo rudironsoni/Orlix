@@ -1,9 +1,15 @@
+/* IXLandSystem/kernel/wait.c
+ * Virtual wait/waitpid implementation
+ */
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 
-#include "signal.h"
 #include "task.h"
+
+/* SIGCONT value for wait status - from Linux signal.h */
+#define LINUX_SIGCONT 18
 
 static int task_to_status(struct task_struct *task) {
     int status = 0;
@@ -16,7 +22,7 @@ static int task_to_status(struct task_struct *task) {
         status = (task->stopsig << 8) | 0x7f;
     } else if (atomic_load(&task->continued)) {
         /* Child continued (reported via wait with WCONTINUED) */
-        status = (SIGCONT << 8) | 0x7f;
+        status = (LINUX_SIGCONT << 8) | 0x7f;
     } else {
         /* Normal exit */
         status = (task->exit_status & 0xFF) << 8;
@@ -29,7 +35,7 @@ static int task_to_status(struct task_struct *task) {
 #define W_STOPPED(status) (((status) & 0xff) == 0x7f)
 #define W_CONTINUED(status) ((status) == 0xffff)
 
-pid_t waitpid_impl(pid_t pid, int *wstatus, int options) {
+int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
     struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
@@ -74,7 +80,7 @@ pid_t waitpid_impl(pid_t pid, int *wstatus, int options) {
             }
         } else {
             /* pid < -1: Wait for any child in process group |pid| */
-            pid_t pgid = -pid;
+            int32_t pgid = -pid;
             child = parent->children;
             while (child) {
                 if (child->pgid == pgid &&
@@ -156,7 +162,7 @@ pid_t waitpid_impl(pid_t pid, int *wstatus, int options) {
         *wstatus = task_to_status(child);
     }
 
-    pid_t child_pid = child->pid;
+    int32_t child_pid = child->pid;
 
     /* Only free terminated children */
     if (should_reap) {
@@ -166,28 +172,37 @@ pid_t waitpid_impl(pid_t pid, int *wstatus, int options) {
     return child_pid;
 }
 
-pid_t wait4_impl(pid_t pid, int *wstatus, int options, struct rusage *rusage) {
+int32_t wait4_impl(int32_t pid, int *wstatus, int options, void *rusage) {
     /* rusage not implemented yet - just call waitpid_impl */
     (void)rusage;
     return waitpid_impl(pid, wstatus, options);
 }
 
-pid_t wait_impl(int *wstatus) {
+int32_t wait_impl(int *wstatus) {
     return waitpid_impl(-1, wstatus, 0);
 }
 
+/* ============================================================================
+ * PUBLIC CANONICAL WRAPPERS
+ * ============================================================================
+ * These wrappers convert between POSIX/Linux public types and
+ * IXLandSystem's internal representation.
+ */
+
+#include <sys/types.h>
+
 __attribute__((visibility("default"))) pid_t waitpid(pid_t pid, int *wstatus, int options) {
-    return waitpid_impl(pid, wstatus, options);
+    return (pid_t)waitpid_impl((int32_t)pid, wstatus, options);
 }
 
 __attribute__((visibility("default"))) pid_t wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage) {
-    return wait4_impl(pid, wstatus, options, rusage);
+    return (pid_t)wait4_impl((int32_t)pid, wstatus, options, (void *)rusage);
 }
 
 __attribute__((visibility("default"))) pid_t wait(int *wstatus) {
-    return wait_impl(wstatus);
+    return (pid_t)wait_impl(wstatus);
 }
 
 __attribute__((visibility("default"))) pid_t wait3(int *wstatus, int options, struct rusage *rusage) {
-    return wait4_impl(-1, wstatus, options, rusage);
+    return (pid_t)wait4_impl(-1, wstatus, options, (void *)rusage);
 }

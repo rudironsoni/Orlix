@@ -1,124 +1,102 @@
 /* IXLandSystem/kernel/signal.c
  * Internal kernel signal owner implementation
- * Canonical signal types only, NO host signal.h
+ *
+ * NO signal.h include here - uses only IXLand internal private types
  */
+
 #include "signal.h"
 
+#include <string.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
-#include <string.h>
-#include <time.h>
 
 #include "task.h"
 
-struct sighand_struct *alloc_sighand(void) {
-    struct sighand_struct *sighand = calloc(1, sizeof(struct sighand_struct));
-    if (!sighand)
+struct signal_struct *alloc_signal_struct(void) {
+    struct signal_struct *sig = calloc(1, sizeof(struct signal_struct));
+    if (!sig)
         return NULL;
 
-    atomic_init(&sighand->refs, 1);
-    pthread_mutex_init(&sighand->queue.lock, NULL);
+    atomic_init(&sig->refs, 1);
+    pthread_mutex_init(&sig->queue.lock, NULL);
 
-    /* Initialize default handlers */
-    for (int i = 0; i < _NSIG; i++) {
-        sighand->action[i].handler = NULL; /* SIG_DFL equivalent */
-        memset(&sighand->action[i].mask, 0, sizeof(ix_sigset_t));
-        sighand->action[i].flags = 0;
+    /* Initialize default handlers (SIG_DFL = NULL) */
+    for (int i = 0; i < SIGNAL_NSIG; i++) {
+        sig->actions[i].handler = NULL;
+        memset(&sig->actions[i].mask, 0, sizeof(struct signal_mask_bits));
+        sig->actions[i].flags = 0;
     }
 
-    memset(&sighand->blocked, 0, sizeof(ix_sigset_t));
-    memset(&sighand->pending, 0, sizeof(ix_sigset_t));
+    memset(&sig->blocked, 0, sizeof(struct signal_mask_bits));
+    memset(&sig->pending, 0, sizeof(struct signal_mask_bits));
 
-    return sighand;
+    return sig;
 }
 
-void free_sighand(struct sighand_struct *sighand) {
-    if (!sighand)
+void free_signal_struct(struct signal_struct *sig) {
+    if (!sig)
         return;
-    if (atomic_fetch_sub(&sighand->refs, 1) > 1)
+    if (atomic_fetch_sub(&sig->refs, 1) > 1)
         return;
 
     /* Free queued signals */
-    pthread_mutex_lock(&sighand->queue.lock);
-    ix_sigqueue_entry_t *entry = sighand->queue.head;
+    pthread_mutex_lock(&sig->queue.lock);
+    struct signal_queue_entry *entry = sig->queue.head;
     while (entry) {
-        ix_sigqueue_entry_t *next = entry->next;
+        struct signal_queue_entry *next = entry->next;
         free(entry);
         entry = next;
     }
-    pthread_mutex_unlock(&sighand->queue.lock);
+    pthread_mutex_unlock(&sig->queue.lock);
 
-    pthread_mutex_destroy(&sighand->queue.lock);
-    free(sighand);
+    pthread_mutex_destroy(&sig->queue.lock);
+    free(sig);
 }
 
-struct sighand_struct *dup_sighand(struct sighand_struct *parent) {
+struct signal_struct *dup_signal_struct(struct signal_struct *parent) {
     if (!parent)
         return NULL;
 
-    struct sighand_struct *child = alloc_sighand();
+    struct signal_struct *child = alloc_signal_struct();
     if (!child)
         return NULL;
 
     /* Copy signal handlers */
-    memcpy(child->action, parent->action, sizeof(child->action));
+    memcpy(child->actions, parent->actions, sizeof(child->actions));
 
     /* Child inherits parent's signal mask */
     child->blocked = parent->blocked;
 
     /* But pending signals are cleared */
-    memset(&child->pending, 0, sizeof(ix_sigset_t));
+    memset(&child->pending, 0, sizeof(struct signal_mask_bits));
 
     return child;
 }
 
-int do_sigaction(int sig, const struct k_sigaction *act, struct k_sigaction *oldact) {
-    if (sig < 1 || sig >= _NSIG) {
-        errno = EINVAL;
-        return -1;
-    }
+static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
+    if (!task || !task->signal)
+        return;
 
-    if (sig == 9 || sig == 19) { /* SIGKILL=9, SIGSTOP=19 */
-        errno = EINVAL;
-        return -1;
-    }
-
-    struct task_struct *task = get_current();
-    if (!task || !task->sighand) {
-        errno = ESRCH;
-        return -1;
-    }
-
-    if (oldact) {
-        *oldact = task->sighand->action[sig];
-    }
-
-    if (act) {
-        task->sighand->action[sig] = *act;
-    }
-
-    return 0;
-}
-
-static void apply_signal_to_task(struct task_struct *task, int sig) {
     /* Mark signal as pending */
     int idx = sig / 64;
     int bit = sig % 64;
-    task->sighand->pending.sig[idx] |= (1ULL << bit);
+    if (idx < SIGNAL_NSIG_WORDS) {
+        task->signal->pending.sig[idx] |= (1ULL << bit);
+    }
 
     /* Handle SIGSTOP: transition to STOPPED state */
-    if (sig == 19) { /* SIGSTOP */
+    if (sig == 19) {
         atomic_store(&task->state, TASK_STOPPED);
     }
 
     /* Handle SIGCONT: transition back to RUNNING */
-    if (sig == 18) { /* SIGCONT */
+    if (sig == 18) {
         atomic_store(&task->state, TASK_RUNNING);
     }
 
     /* Handle terminating signals */
-    if (sig == 15 || sig == 9 || sig == 2) { /* SIGTERM, SIGKILL, SIGINT */
+    if (sig == 15 || sig == 9 || sig == 2) {
         atomic_store(&task->signaled, true);
         atomic_store(&task->termsig, sig);
         atomic_store(&task->exited, true);
@@ -140,66 +118,29 @@ static void apply_signal_to_task(struct task_struct *task, int sig) {
     }
 }
 
-int do_kill(pid_t pid, int sig) {
-    if (sig < 0 || sig >= _NSIG) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (pid <= 0) {
-        /* Process group handling */
-        if (pid == 0) {
-            /* Current process group */
-            struct task_struct *task = get_current();
-            if (!task) {
-                errno = ESRCH;
-                return -1;
-            }
-            return do_killpg(task->pgid, sig);
-        } else if (pid == -1) {
-            /* All processes (privileged) */
-            errno = EPERM;
-            return -1;
-        } else {
-            /* Process group |pid| */
-            return do_killpg(-pid, sig);
-        }
-    }
-
-    struct task_struct *task = task_lookup(pid);
-    if (!task) {
-        errno = ESRCH;
-        return -1;
-    }
+int signal_generate_task(struct task_struct *target, int32_t sig) {
+    if (!target || sig < 0 || sig >= SIGNAL_NSIG)
+        return -EINVAL;
 
     if (sig == 0) {
         /* Just check if process exists */
-        free_task(task);
         return 0;
     }
 
-    /* Apply signal */
-    pthread_mutex_lock(&task->lock);
-    apply_signal_to_task(task, sig);
-    pthread_mutex_unlock(&task->lock);
+    pthread_mutex_lock(&target->lock);
+    apply_signal_to_task(target, sig);
+    pthread_mutex_unlock(&target->lock);
 
-    free_task(task);
     return 0;
 }
 
-int do_killpg(pid_t pgrp, int sig) {
-    if (sig < 0 || sig >= _NSIG) {
-        errno = EINVAL;
-        return -1;
-    }
+int signal_generate_pgrp(int32_t pgid, int32_t sig) {
+    if (sig < 0 || sig >= SIGNAL_NSIG)
+        return -EINVAL;
 
-    if (pgrp <= 0) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (pgid <= 0)
+        return -EINVAL;
 
-    int check_only = (sig == 0);
-    int match_count = 0;
     int found = 0;
 
     pthread_mutex_lock(&task_table_lock);
@@ -207,16 +148,13 @@ int do_killpg(pid_t pgrp, int sig) {
     for (int i = 0; i < TASK_MAX_TASKS; i++) {
         struct task_struct *task = task_table[i];
         while (task) {
-            if (task->pgid == pgrp) {
+            if (task->pgid == pgid) {
                 found = 1;
-                if (!check_only) {
-                    atomic_fetch_add(&task->refs, 1);
-                    pthread_mutex_lock(&task->lock);
-                    apply_signal_to_task(task, sig);
-                    pthread_mutex_unlock(&task->lock);
-                    free_task(task);
-                    match_count++;
-                }
+                atomic_fetch_add(&task->refs, 1);
+                pthread_mutex_lock(&task->lock);
+                apply_signal_to_task(task, sig);
+                pthread_mutex_unlock(&task->lock);
+                free_task(task);
             }
             task = task->hash_next;
         }
@@ -224,41 +162,169 @@ int do_killpg(pid_t pgrp, int sig) {
 
     pthread_mutex_unlock(&task_table_lock);
 
-    if (!found) {
+    if (!found)
+        return -ESRCH;
+
+    return 0;
+}
+
+int signal_enqueue_task(struct task_struct *task, int32_t sig) {
+    return signal_generate_task(task, sig);
+}
+
+int signal_enqueue_group(int32_t pgid, int32_t sig) {
+    return signal_generate_pgrp(pgid, sig);
+}
+
+int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int32_t *sig) {
+    if (!task || !task->signal || !sig)
+        return -EINVAL;
+
+    /* Find first pending signal that's not blocked */
+    for (int i = 1; i < SIGNAL_NSIG; i++) {
+        int idx = i / 64;
+        int bit = i % 64;
+
+        if (idx >= SIGNAL_NSIG_WORDS)
+            continue;
+
+        /* Check if pending and not blocked */
+        if ((task->signal->pending.sig[idx] & (1ULL << bit)) &&
+            !(task->signal->blocked.sig[idx] & (1ULL << bit))) {
+
+            /* Also check against provided mask if given */
+            if (mask && (mask->sig[idx] & (1ULL << bit)))
+                continue;
+
+            *sig = i;
+            /* Clear pending bit */
+            task->signal->pending.sig[idx] &= ~(1ULL << bit);
+            return 0;
+        }
+    }
+
+    return -EAGAIN;
+}
+
+void signal_recompute_pending(struct task_struct *task) {
+    /* Recompute whether task has any deliverable pending signals */
+    if (!task || !task->signal)
+        return;
+
+    /* This would update any cached "has_pending" flags */
+    /* For now, pending signals are checked on demand */
+}
+
+void signal_wake_task(struct task_struct *task, bool group_wide) {
+    (void)group_wide;
+
+    if (!task)
+        return;
+
+    /* Wake the task if it's waiting */
+    pthread_mutex_lock(&task->wait_lock);
+    if (task->waiters > 0) {
+        pthread_cond_broadcast(&task->wait_cond);
+    }
+    pthread_mutex_unlock(&task->wait_lock);
+}
+
+bool signal_is_blocked(const struct task_struct *task, int32_t sig) {
+    if (!task || !task->signal)
+        return false;
+
+    int idx = sig / 64;
+    int bit = sig % 64;
+
+    if (idx >= SIGNAL_NSIG_WORDS)
+        return false;
+
+    return (task->signal->blocked.sig[idx] & (1ULL << bit)) != 0;
+}
+
+void signal_reset_on_exec(struct task_struct *task) {
+    if (!task || !task->signal)
+        return;
+
+    /* Reset signal handlers that have SA_RESETHAND flag set */
+    /* For now, simplified: reset pending signals */
+    memset(&task->signal->pending, 0, sizeof(struct signal_mask_bits));
+}
+
+int signal_init_task(struct task_struct *task) {
+    if (!task)
+        return -EINVAL;
+
+    task->signal = alloc_signal_struct();
+    if (!task->signal)
+        return -ENOMEM;
+
+    return 0;
+}
+
+/* ============================================================================
+ * INTERNAL SIGNAL SYSCALL IMPLEMENTATIONS
+ * ============================================================================
+ * These use only private internal types from kernel/signal.h
+ */
+
+int do_sigaction(int32_t sig, const struct signal_action_slot *act,
+                 struct signal_action_slot *oldact) {
+    if (sig < 1 || sig >= SIGNAL_NSIG) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (sig == 9 || sig == 19) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct task_struct *task = get_current();
+    if (!task || !task->signal) {
         errno = ESRCH;
         return -1;
+    }
+
+    if (oldact) {
+        *oldact = task->signal->actions[sig];
+    }
+
+    if (act) {
+        task->signal->actions[sig] = *act;
     }
 
     return 0;
 }
 
-int do_sigprocmask(int how, const ix_sigset_t *set, ix_sigset_t *oldset) {
+int do_sigprocmask(int how, const struct signal_mask_bits *set,
+                          struct signal_mask_bits *oldset) {
     struct task_struct *task = get_current();
-    if (!task || !task->sighand) {
+    if (!task || !task->signal) {
         errno = ESRCH;
         return -1;
     }
 
-    struct sighand_struct *sighand = task->sighand;
+    struct signal_struct *sig = task->signal;
 
     if (oldset) {
-        *oldset = sighand->blocked;
+        *oldset = sig->blocked;
     }
 
     if (set) {
         switch (how) {
         case 0: /* SIG_BLOCK */
-            for (int i = 0; i < _NSIG / 64 + 1; i++) {
-                sighand->blocked.sig[i] |= set->sig[i];
+            for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+                sig->blocked.sig[i] |= set->sig[i];
             }
             break;
         case 1: /* SIG_UNBLOCK */
-            for (int i = 0; i < _NSIG / 64 + 1; i++) {
-                sighand->blocked.sig[i] &= ~set->sig[i];
+            for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+                sig->blocked.sig[i] &= ~set->sig[i];
             }
             break;
         case 2: /* SIG_SETMASK */
-            sighand->blocked = *set;
+            sig->blocked = *set;
             break;
         default:
             errno = EINVAL;
@@ -269,58 +335,58 @@ int do_sigprocmask(int how, const ix_sigset_t *set, ix_sigset_t *oldset) {
     return 0;
 }
 
-int do_sigpending(ix_sigset_t *set) {
+int do_sigpending(struct signal_mask_bits *set) {
     if (!set) {
         errno = EFAULT;
         return -1;
     }
 
     struct task_struct *task = get_current();
-    if (!task || !task->sighand) {
+    if (!task || !task->signal) {
         errno = ESRCH;
         return -1;
     }
 
-    *set = task->sighand->pending;
+    *set = task->signal->pending;
     return 0;
 }
 
-ix_sighandler_t do_signal(int signum, ix_sighandler_t handler) {
-    if (signum < 1 || signum >= _NSIG) {
+sighandler_t do_signal(int32_t signum, sighandler_t handler) {
+    if (signum < 1 || signum >= SIGNAL_NSIG) {
         errno = EINVAL;
         return NULL;
     }
 
-    if (signum == 9 || signum == 19) { /* SIGKILL, SIGSTOP */
+    if (signum == 9 || signum == 19) {
         errno = EINVAL;
         return NULL;
     }
 
     struct task_struct *task = get_current();
-    if (!task || !task->sighand) {
+    if (!task || !task->signal) {
         errno = ESRCH;
         return NULL;
     }
 
-    ix_sighandler_t old_handler = task->sighand->action[signum].handler;
-    task->sighand->action[signum].handler = handler;
-    task->sighand->action[signum].flags = 0;
-    memset(&task->sighand->action[signum].mask, 0, sizeof(ix_sigset_t));
+    sighandler_t old_handler = task->signal->actions[signum].handler;
+    task->signal->actions[signum].handler = handler;
+    task->signal->actions[signum].flags = 0;
+    memset(&task->signal->actions[signum].mask, 0, sizeof(struct signal_mask_bits));
 
     return old_handler;
 }
 
-int do_raise(int sig) {
+int do_raise(int32_t sig) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
     }
-    return do_kill(task->pid, sig);
+    return signal_generate_task(task, sig);
 }
 
-static int is_sigset_empty(const ix_sigset_t *set) {
-    for (int i = 0; i < _NSIG / 64 + 1; i++) {
+static int is_sigset_empty(const struct signal_mask_bits *set) {
+    for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
         if (set->sig[i] != 0)
             return 0;
     }
@@ -336,7 +402,7 @@ int do_pause(void) {
 
     pthread_mutex_lock(&task->wait_lock);
 
-    while (is_sigset_empty(&task->sighand->pending)) {
+    while (is_sigset_empty(&task->signal->pending)) {
         task->waiters++;
         pthread_cond_wait(&task->wait_cond, &task->wait_lock);
         task->waiters--;
@@ -348,9 +414,9 @@ int do_pause(void) {
     return -1;
 }
 
-int do_sigsuspend(const ix_sigset_t *mask) {
+int do_sigsuspend(const struct signal_mask_bits *mask) {
     struct task_struct *task = get_current();
-    if (!task || !task->sighand) {
+    if (!task || !task->signal) {
         errno = ESRCH;
         return -1;
     }
@@ -361,10 +427,10 @@ int do_sigsuspend(const ix_sigset_t *mask) {
     }
 
     /* Save old mask */
-    ix_sigset_t old_mask = task->sighand->blocked;
+    struct signal_mask_bits old_mask = task->signal->blocked;
 
     /* Install new mask */
-    task->sighand->blocked = *mask;
+    task->signal->blocked = *mask;
 
     /* Wait for signal */
     pthread_mutex_lock(&task->wait_lock);
@@ -374,235 +440,55 @@ int do_sigsuspend(const ix_sigset_t *mask) {
     pthread_mutex_unlock(&task->wait_lock);
 
     /* Restore old mask */
-    task->sighand->blocked = old_mask;
+    task->signal->blocked = old_mask;
 
     errno = EINTR;
     return -1;
 }
 
-void force_sig(int sig, struct task_struct *task) {
-    if (!task || !task->sighand)
-        return;
+int do_kill(int32_t pid, int32_t sig) {
+    if (sig < 0 || sig >= SIGNAL_NSIG) {
+        errno = EINVAL;
+        return -1;
+    }
 
-    pthread_mutex_lock(&task->lock);
-    apply_signal_to_task(task, sig);
-    pthread_mutex_unlock(&task->lock);
-}
-
-void signal_init(void) {
-    /* Signal subsystem initialization */
-}
-
-void signal_deinit(void) {
-    /* Signal subsystem cleanup */
-}
-
-/* ============================================================================
- * PUBLIC CANONICAL SIGNAL WRAPPERS
- * ============================================================================
- * These wrappers convert between POSIX/Linux public signal types and
- * IXLandSystem's internal representation. The internal owner functions
- * use ix_sigset_t and k_sigaction; the public ABI uses sigset_t and
- * struct sigaction from the host platform.
- */
-
-#include <signal.h>
-#include <string.h>
-
-/* sighandler_t may not be defined on all platforms */
-#ifndef sighandler_t
-typedef void (*sighandler_t)(int);
-#endif
-
-/* SIG_ERR may not be defined on all platforms */
-#ifndef SIG_ERR
-#define SIG_ERR ((sighandler_t)-1)
-#endif
-
-/* Convert Linux sigset_t to internal ix_sigset_t */
-static void sigset_to_ix(const sigset_t *linux_set, ix_sigset_t *ix_set) {
-    memset(ix_set, 0, sizeof(*ix_set));
-    if (!linux_set) return;
-
-    for (int sig = 1; sig < 64 && sig < _NSIG; sig++) {
-        if (sigismember(linux_set, sig)) {
-            int idx = sig / 64;
-            int bit = sig % 64;
-            if (idx < (_NSIG / 64 + 1)) {
-                ix_set->sig[idx] |= (1ULL << bit);
+    if (pid <= 0) {
+        /* Process group handling */
+        if (pid == 0) {
+            /* Current process group */
+            struct task_struct *task = get_current();
+            if (!task) {
+                errno = ESRCH;
+                return -1;
             }
+            return signal_generate_pgrp(task->pgid, sig);
+        } else if (pid == -1) {
+            /* All processes (privileged) */
+            errno = EPERM;
+            return -1;
+        } else {
+            /* Process group |pid| */
+            return signal_generate_pgrp(-pid, sig);
         }
     }
-}
 
-/* Convert internal ix_sigset_t to Linux sigset_t */
-static void ix_to_sigset(const ix_sigset_t *ix_set, sigset_t *linux_set) {
-    if (!linux_set) return;
-    sigemptyset(linux_set);
-    if (!ix_set) return;
-
-    for (int sig = 1; sig < 64 && sig < _NSIG; sig++) {
-        int idx = sig / 64;
-        int bit = sig % 64;
-        if (idx < (_NSIG / 64 + 1)) {
-            if (ix_set->sig[idx] & (1ULL << bit)) {
-                sigaddset(linux_set, sig);
-            }
-        }
-    }
-}
-
-/* Convert Linux struct sigaction fields to internal k_sigaction */
-static void sigaction_to_k(const struct sigaction *linux_act, struct k_sigaction *k_act) {
-    memset(k_act, 0, sizeof(*k_act));
-    if (!linux_act) return;
-
-    k_act->handler = linux_act->sa_handler;
-    sigset_to_ix(&linux_act->sa_mask, &k_act->mask);
-    k_act->flags = linux_act->sa_flags;
-}
-
-/* Convert internal k_sigaction to Linux struct sigaction */
-static void k_to_sigaction(const struct k_sigaction *k_act, struct sigaction *linux_act) {
-    memset(linux_act, 0, sizeof(*linux_act));
-    if (!k_act) return;
-
-    linux_act->sa_handler = k_act->handler;
-    ix_to_sigset(&k_act->mask, &linux_act->sa_mask);
-    linux_act->sa_flags = k_act->flags;
-}
-
-static int sigaction_impl(int signum, const struct sigaction *act, struct sigaction *oldact) {
-    struct k_sigaction k_act, k_oldact;
-    struct k_sigaction *k_act_ptr = NULL;
-    struct k_sigaction *k_oldact_ptr = NULL;
-
-    if (signum < 1 || signum >= _NSIG) {
-        errno = EINVAL;
+    struct task_struct *task = task_lookup(pid);
+    if (!task) {
+        errno = ESRCH;
         return -1;
     }
 
-    if (signum == 9 || signum == 19) {
-        errno = EINVAL;
-        return -1;
+    if (sig == 0) {
+        /* Just check if process exists */
+        free_task(task);
+        return 0;
     }
 
-    if (act) {
-        sigaction_to_k(act, &k_act);
-        k_act_ptr = &k_act;
-    }
-
-    if (oldact) {
-        k_oldact_ptr = &k_oldact;
-    }
-
-    int result = do_sigaction(signum, k_act_ptr, k_oldact_ptr);
-
-    if (oldact && result == 0) {
-        k_to_sigaction(&k_oldact, oldact);
-    }
-
+    int result = signal_generate_task(task, sig);
+    free_task(task);
     return result;
 }
 
-static sighandler_t signal_impl(int signum, sighandler_t handler) {
-    if (signum < 1 || signum >= _NSIG) {
-        errno = EINVAL;
-        return SIG_ERR;
-    }
-
-    if (signum == 9 || signum == 19) {
-        errno = EINVAL;
-        return SIG_ERR;
-    }
-
-    ix_sighandler_t old_ix_handler = do_signal(signum, handler);
-    return (sighandler_t)old_ix_handler;
-}
-
-static int sigprocmask_impl(int how, const sigset_t *set, sigset_t *oldset) {
-    ix_sigset_t ix_set, ix_oldset;
-    ix_sigset_t *ix_set_ptr = NULL;
-    ix_sigset_t *ix_oldset_ptr = NULL;
-
-    if (set) {
-        sigset_to_ix(set, &ix_set);
-        ix_set_ptr = &ix_set;
-    }
-
-    if (oldset) {
-        ix_oldset_ptr = &ix_oldset;
-    }
-
-    int result = do_sigprocmask(how, ix_set_ptr, ix_oldset_ptr);
-
-    if (oldset && result == 0) {
-        ix_to_sigset(&ix_oldset, oldset);
-    }
-
-    return result;
-}
-
-static int sigpending_impl(sigset_t *set) {
-    if (!set) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    ix_sigset_t ix_set;
-    int result = do_sigpending(&ix_set);
-
-    if (result == 0) {
-        ix_to_sigset(&ix_set, set);
-    }
-
-    return result;
-}
-
-static int sigsuspend_impl(const sigset_t *mask) {
-    if (!mask) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    ix_sigset_t ix_mask;
-    sigset_to_ix(mask, &ix_mask);
-
-    return do_sigsuspend(&ix_mask);
-}
-
-__attribute__((visibility("default"))) int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
-    return sigaction_impl(signum, act, oldact);
-}
-
-__attribute__((visibility("default"))) sighandler_t signal(int signum, sighandler_t handler) {
-    return signal_impl(signum, handler);
-}
-
-__attribute__((visibility("default"))) int kill(pid_t pid, int sig) {
-    return do_kill(pid, sig);
-}
-
-__attribute__((visibility("default"))) int killpg(pid_t pgrp, int sig) {
-    return do_killpg(pgrp, sig);
-}
-
-__attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    return sigprocmask_impl(how, set, oldset);
-}
-
-__attribute__((visibility("default"))) int sigpending(sigset_t *set) {
-    return sigpending_impl(set);
-}
-
-__attribute__((visibility("default"))) int sigsuspend(const sigset_t *mask) {
-    return sigsuspend_impl(mask);
-}
-
-__attribute__((visibility("default"))) int raise(int sig) {
-    return do_raise(sig);
-}
-
-__attribute__((visibility("default"))) int pause(void) {
-    return do_pause();
+int do_killpg(int32_t pgrp, int32_t sig) {
+    return signal_generate_pgrp(pgrp, sig);
 }

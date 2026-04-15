@@ -1,12 +1,25 @@
-#ifndef IXLAND_KERNEL_TASK_H
-#define IXLAND_KERNEL_TASK_H
+/* IXLandSystem/kernel/task.h
+ * Private internal header for virtual task/process subsystem
+ *
+ * This is PRIVATE internal state for the virtual kernel's process model.
+ * NOT a public Linux ABI header.
+ *
+ * Virtual task behavior emulated:
+ * - virtual PID/TGID/PPID/PGID/SID namespace
+ * - process groups and sessions
+ * - parent/child relationships
+ * - wait/reap semantics
+ * - zombie/dead transitions
+ * - clone/fork/vfork bookkeeping
+ */
+
+#ifndef KERNEL_TASK_H
+#define KERNEL_TASK_H
 
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
-#include <sys/resource.h>
-#include <sys/types.h>
-#include <time.h>
+#include <stdint.h>
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
@@ -19,29 +32,39 @@ extern "C" {
 #define TASK_MAX_ARGS 256
 #define TASK_MAX_TASKS 1024
 
-#ifndef RLIMIT_NLIMITS
-#define RLIMIT_NLIMITS 16
-#endif
-
-/* Forward declarations */
+/* Forward declarations for private subsystem state */
 struct task_struct;
+struct signal_struct;
 struct tty_struct;
 struct mm_struct;
 struct exec_image;
-struct sighand_struct;
+struct nsproxy;
+struct cgroup;
+struct seccomp;
+struct cred;
+struct task_rlimit;
 
-/* Task states - virtual kernel internal states */
-#define TASK_RUNNING 0
-#define TASK_INTERRUPTIBLE 1
-#define TASK_UNINTERRUPTIBLE 2
-#define TASK_STOPPED 4
-#define TASK_ZOMBIE 8
-#define TASK_DEAD 16
+/* Task lifecycle states - virtual kernel internal */
+enum task_state {
+    TASK_RUNNING = 0,
+    TASK_INTERRUPTIBLE = 1,
+    TASK_UNINTERRUPTIBLE = 2,
+    TASK_STOPPED = 4,
+    TASK_ZOMBIE = 8,
+    TASK_DEAD = 16,
+};
+
+/* Resource limits - private internal representation
+ * Do not use host struct rlimit */
+struct task_rlimit {
+    uint64_t cur;
+    uint64_t max;
+};
 
 /* TTY structure - virtual kernel internal */
 struct tty_struct {
     int index;
-    pid_t foreground_pgrp;
+    int32_t foreground_pgrp;
     atomic_int refs;
 };
 
@@ -84,14 +107,16 @@ struct exec_image {
 };
 
 /* Task structure - virtual kernel's internal representation of a Linux task
- * This is PRIVATE internal state, NOT Linux UAPI */
+ * This is PRIVATE internal state, NOT Linux UAPI.
+ * Uses int32_t for PIDs to avoid host type contamination. */
 struct task_struct {
-    /* Virtual PID/TGID/PGID/SID namespace identity */
-    pid_t pid;
-    pid_t ppid;
-    pid_t tgid;
-    pid_t pgid;
-    pid_t sid;
+    /* Virtual PID/TGID/PGID/SID namespace identity
+     * int32_t used instead of host pid_t */
+    int32_t pid;
+    int32_t tgid;
+    int32_t ppid;
+    int32_t pgid;
+    int32_t sid;
 
     /* Virtual task lifecycle state */
     atomic_int state;
@@ -111,7 +136,7 @@ struct task_struct {
     /* Resource ownership - pointers to virtual subsystem state */
     struct files_struct *files;
     struct fs_struct *fs;
-    struct sighand_struct *sighand;
+    struct signal_struct *signal;
     struct tty_struct *tty;
     struct mm_struct *mm;
     struct exec_image *exec_image;
@@ -130,11 +155,13 @@ struct task_struct {
     pthread_mutex_t wait_lock;
     int waiters;
 
-    /* Resource limits - virtual kernel tracked */
-    struct rlimit rlimits[RLIMIT_NLIMITS];
+    /* Resource limits - virtual kernel tracked
+     * Uses private struct task_rlimit, not host struct rlimit */
+    struct task_rlimit rlimits[16];
 
-    /* Start time - virtual kernel tracked */
-    struct timespec start_time;
+    /* Start time - virtual kernel tracked
+     * Stored as nanoseconds instead of host struct timespec */
+    uint64_t start_time_ns;
 
     /* Reference counting and locking */
     atomic_int refs;
@@ -154,34 +181,34 @@ struct task_struct *get_current(void);
 void set_current(struct task_struct *task);
 
 /* Virtual PID namespace management */
-pid_t alloc_pid(void);
-void free_pid(pid_t pid);
+int32_t alloc_pid(void);
+void free_pid(int32_t pid);
 void pid_init(void);
 
 /* Virtual task table management */
 int task_init(void);
 void task_deinit(void);
-struct task_struct *task_lookup(pid_t pid);
-int task_hash(pid_t pid);
+struct task_struct *task_lookup(int32_t pid);
+int task_hash(int32_t pid);
 
 /* Virtual process identity syscalls (internal helpers) */
-pid_t getpid_impl(void);
-pid_t getppid_impl(void);
-pid_t getpgrp_impl(void);
-pid_t getpgid_impl(pid_t pid);
-int setpgid_impl(pid_t pid, pid_t pgid);
-pid_t getsid_impl(pid_t pid);
-pid_t setsid_impl(void);
+int32_t getpid_impl(void);
+int32_t getppid_impl(void);
+int32_t getpgrp_impl(void);
+int32_t getpgid_impl(int32_t pid);
+int setpgid_impl(int32_t pid, int32_t pgid);
+int32_t getsid_impl(int32_t pid);
+int32_t setsid_impl(void);
 
 /* Virtual fork/exec - internal helpers */
-pid_t fork_impl(void);
-int vfork_impl(void);
+int32_t fork_impl(void);
+int32_t vfork_impl(void);
 
 /* Virtual exit/wait - internal helpers */
 void exit_impl(int status);
-pid_t wait_impl(int *wstatus);
-pid_t waitpid_impl(pid_t pid, int *wstatus, int options);
-pid_t wait4_impl(pid_t pid, int *wstatus, int options, struct rusage *rusage);
+int32_t wait_impl(int *wstatus);
+int32_t waitpid_impl(int32_t pid, int *wstatus, int options);
+int32_t wait4_impl(int32_t pid, int *wstatus, int options, void *rusage);
 
 /* Virtual vfork notifications */
 void vfork_exec_notify(void);
@@ -191,4 +218,4 @@ void vfork_exit_notify(void);
 }
 #endif
 
-#endif /* IXLAND_KERNEL_TASK_H */
+#endif /* KERNEL_TASK_H */

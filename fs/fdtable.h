@@ -43,10 +43,35 @@ struct file *dup_file(struct file *file);
 int alloc_fd(struct files_struct *files, struct file *file);
 int free_fd(struct files_struct *files, int fd);
 
-/* Internal helpers for fd entry access */
-void *get_fd_entry_impl(struct files_struct *files, int fd);
-int get_real_fd_impl(void *entry);
+/* ============================================================================
+ * STATIC FD TABLE API (for host-mediated FDs)
+ * These functions work with the internal static fd table, not files_struct
+ * ============================================================================ */
+
+/* Initialize the static fd table */
+void file_init_impl(void);
+
+/* Allocate/free slots in static fd table */
+int alloc_fd_impl(void);
+void free_fd_impl(int fd);
+
+/* FD entry access - returns locked entry, must call put_fd_entry_impl to unlock */
+void *get_fd_entry_impl(int fd);
 void put_fd_entry_impl(void *entry);
+
+/* Getters/setters for fd entry properties */
+int get_real_fd_impl(void *entry);
+int get_fd_flags_impl(void *entry);
+void set_fd_flags_impl(void *entry, int flags);
+off_t get_fd_offset_impl(void *entry);
+void set_fd_offset_impl(void *entry, off_t offset);
+
+/* Initialize/clone fd entries */
+void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path);
+void clone_fd_entry_impl(int newfd, int oldfd);
+
+/* Close implementation using static fd table */
+int close_impl(int fd);
 
 #ifdef __cplusplus
 }

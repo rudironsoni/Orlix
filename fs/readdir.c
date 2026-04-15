@@ -1,3 +1,6 @@
+/* IXLandSystem/fs/readdir.c
+ * Virtual getdents/getdents64 implementation
+ */
 #include <dirent.h>
 #include <errno.h>
 #include <stdint.h>
@@ -5,8 +8,17 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "dirent.h"
 #include "fdtable.h"
+#include "path.h"
+
+/* Linux dirent64 structure - matches Linux UAPI */
+struct linux_dirent64 {
+    uint64_t d_ino;
+    int64_t  d_off;
+    unsigned short d_reclen;
+    unsigned char  d_type;
+    char           d_name[];
+};
 
 static unsigned char map_dtype(unsigned char dtype) {
     switch (dtype) {
@@ -90,7 +102,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
         }
 
         size_t name_len = strlen(native->d_name);
-        size_t base_len = offsetof(struct linux_dirent64, d_name);
+        size_t base_len = sizeof(struct linux_dirent64);
         size_t record_len = base_len + name_len + 1;
         size_t aligned_len = (record_len + 7U) & ~7U;
 
