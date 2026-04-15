@@ -1,5 +1,4 @@
-/* iXland - Network/Socket Syscalls
- *
+/* IXLand - Network/Socket Syscalls
  * Canonical owner for socket syscalls:
  * - socket(), socketpair(), bind(), listen(), accept(), accept4()
  * - connect(), shutdown()
@@ -34,19 +33,19 @@
 /* Socket table entry - maps virtual fds to real iOS sockets */
 typedef struct {
     int used;
-    int domain;                    /* AF_INET, AF_INET6, AF_UNIX */
-    int type;                      /* SOCK_STREAM, SOCK_DGRAM */
-    int protocol;                  /* IPPROTO_TCP, IPPROTO_UDP */
-    nw_connection_t connection;    /* iOS Network connection */
-    nw_listener_t listener;        /* iOS Network listener (for server) */
+    int domain;
+    int type;
+    int protocol;
+    nw_connection_t connection;
+    nw_listener_t listener;
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
     socklen_t local_addr_len;
     socklen_t remote_addr_len;
-} ixland_socket_entry_t;
+} socket_entry_t;
 
-#define IXLAND_MAX_SOCKETS 256
-static ixland_socket_entry_t socket_table[IXLAND_MAX_SOCKETS];
+#define MAX_SOCKETS 256
+static socket_entry_t socket_table[MAX_SOCKETS];
 static pthread_mutex_t socket_table_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* Network initialization state */
@@ -56,9 +55,9 @@ static atomic_int network_initialized = 0;
  * SOCKET TABLE MANAGEMENT
  * ============================================================================ */
 
-static int ixland_socket_alloc(void) {
+static int socket_alloc(void) {
     pthread_mutex_lock(&socket_table_lock);
-    for (int i = 0; i < IXLAND_MAX_SOCKETS; i++) {
+    for (int i = 0; i < MAX_SOCKETS; i++) {
         if (!socket_table[i].used) {
             socket_table[i].used = 1;
             pthread_mutex_unlock(&socket_table_lock);
@@ -70,8 +69,8 @@ static int ixland_socket_alloc(void) {
     return -1;
 }
 
-static void ixland_socket_free(int fd) {
-    if (fd < 0 || fd >= IXLAND_MAX_SOCKETS)
+static void socket_free(int fd) {
+    if (fd < 0 || fd >= MAX_SOCKETS)
         return;
 
     pthread_mutex_lock(&socket_table_lock);
@@ -85,13 +84,13 @@ static void ixland_socket_free(int fd) {
             nw_listener_cancel(socket_table[fd].listener);
             socket_table[fd].listener = NULL;
         }
-        memset(&socket_table[fd], 0, sizeof(ixland_socket_entry_t));
+        memset(&socket_table[fd], 0, sizeof(socket_entry_t));
     }
     pthread_mutex_unlock(&socket_table_lock);
 }
 
-static ixland_socket_entry_t *ixland_socket_get(int fd) {
-    if (fd < 0 || fd >= IXLAND_MAX_SOCKETS) {
+static socket_entry_t *socket_get(int fd) {
+    if (fd < 0 || fd >= MAX_SOCKETS) {
         errno = EBADF;
         return NULL;
     }
@@ -106,7 +105,7 @@ static ixland_socket_entry_t *ixland_socket_get(int fd) {
  * NETWORK INITIALIZATION
  * ============================================================================ */
 
-int __ixland_network_init_impl(void) {
+static int network_init_impl(void) {
     if (atomic_load(&network_initialized)) {
         return 0;
     }
@@ -118,14 +117,14 @@ int __ixland_network_init_impl(void) {
     return 0;
 }
 
-int __ixland_network_deinit_impl(void) {
+static int network_deinit_impl(void) {
     if (!atomic_load(&network_initialized)) {
         return 0;
     }
 
     /* Close all sockets */
     pthread_mutex_lock(&socket_table_lock);
-    for (int i = 0; i < IXLAND_MAX_SOCKETS; i++) {
+    for (int i = 0; i < MAX_SOCKETS; i++) {
         if (socket_table[i].used) {
             if (socket_table[i].connection) {
                 nw_connection_cancel(socket_table[i].connection);
@@ -147,34 +146,34 @@ int __ixland_network_deinit_impl(void) {
  * ============================================================================ */
 
 static int socket_impl(int domain, int type, int protocol) {
-    int fd = ixland_socket_alloc();
+    int fd = socket_alloc();
     if (fd < 0) {
         return -1;
     }
 
-    ixland_socket_entry_t *sock = &socket_table[fd];
+    socket_entry_t *sock = &socket_table[fd];
     sock->domain = domain;
     sock->type = type;
     sock->protocol = protocol;
 
     /* Map to iOS Network framework based on domain/type */
     switch (domain) {
-        case AF_INET:
-        case AF_INET6:
-            /* TCP/UDP sockets - use BSD sockets for now */
-            /* TODO: Implement using Network.framework for modern iOS */
-            break;
+    case AF_INET:
+    case AF_INET6:
+        /* TCP/UDP sockets - use BSD sockets for now */
+        /* TODO: Implement using Network.framework for modern iOS */
+        break;
 
-        case AF_UNIX:
-            /* Unix domain sockets - not supported on iOS */
-            errno = EAFNOSUPPORT;
-            ixland_socket_free(fd);
-            return -1;
+    case AF_UNIX:
+        /* Unix domain sockets - not supported on iOS */
+        errno = EAFNOSUPPORT;
+        socket_free(fd);
+        return -1;
 
-        default:
-            errno = EAFNOSUPPORT;
-            ixland_socket_free(fd);
-            return -1;
+    default:
+        errno = EAFNOSUPPORT;
+        socket_free(fd);
+        return -1;
     }
 
     return fd;
@@ -195,7 +194,7 @@ static int socketpair_impl(int domain, int type, int protocol, int sv[2]) {
  * ============================================================================ */
 
 static int connect_impl(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -261,15 +260,15 @@ static int connect_impl(int sockfd, const struct sockaddr *addr, socklen_t addrl
 
         nw_connection_set_state_changed_handler(
             sock->connection, ^(nw_connection_state_t state, nw_error_t error) {
-                (void)error;
-                if (state == nw_connection_state_ready) {
-                    connect_error = 0;
-                } else if (state == nw_connection_state_failed ||
-                           state == nw_connection_state_cancelled) {
-                    connect_error = -1;
-                }
-                dispatch_semaphore_signal(sem);
-            });
+            (void)error;
+            if (state == nw_connection_state_ready) {
+                connect_error = 0;
+            } else if (state == nw_connection_state_failed ||
+                       state == nw_connection_state_cancelled) {
+                connect_error = -1;
+            }
+            dispatch_semaphore_signal(sem);
+        });
 
         nw_connection_start(sock->connection);
 
@@ -294,7 +293,7 @@ static int connect_impl(int sockfd, const struct sockaddr *addr, socklen_t addrl
 }
 
 static int bind_impl(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -316,7 +315,7 @@ static int bind_impl(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 }
 
 static int listen_impl(int sockfd, int backlog) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -331,7 +330,7 @@ static int listen_impl(int sockfd, int backlog) {
 
     /* Create parameters */
     nw_parameters_t params = nw_parameters_create_secure_tcp(NW_PARAMETERS_DEFAULT_CONFIGURATION,
-                                                           NW_PARAMETERS_DISABLE_PROTOCOL);
+        NW_PARAMETERS_DISABLE_PROTOCOL);
 
     /* Create listener */
     sock->listener = nw_listener_create(params);
@@ -357,7 +356,7 @@ static int listen_impl(int sockfd, int backlog) {
 }
 
 static int accept_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -385,7 +384,7 @@ static int accept4_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen, i
  * ============================================================================ */
 
 static ssize_t send_impl(int sockfd, const void *buf, size_t len, int flags) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -413,14 +412,14 @@ static ssize_t send_impl(int sockfd, const void *buf, size_t len, int flags) {
     __block ssize_t bytes_sent = 0;
 
     nw_connection_send(sock->connection, data, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, true,
-                       ^(nw_error_t error) {
-                           if (error) {
-                               bytes_sent = -1;
-                           } else {
-                               bytes_sent = len;
-                           }
-                           dispatch_semaphore_signal(sem);
-                       });
+        ^(nw_error_t error) {
+        if (error) {
+            bytes_sent = -1;
+        } else {
+            bytes_sent = len;
+        }
+        dispatch_semaphore_signal(sem);
+    });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
     dispatch_release(sem);
@@ -435,7 +434,7 @@ static ssize_t send_impl(int sockfd, const void *buf, size_t len, int flags) {
 }
 
 static ssize_t recv_impl(int sockfd, void *buf, size_t len, int flags) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -456,30 +455,30 @@ static ssize_t recv_impl(int sockfd, void *buf, size_t len, int flags) {
     __block ssize_t bytes_received = 0;
 
     nw_connection_receive(sock->connection, 1, (uint32_t)len,
-                          ^(dispatch_data_t content, nw_content_context_t context, bool is_complete,
-                            nw_error_t error) {
-                              (void)context;
-                              (void)is_complete;
-                              if (content) {
-                                  const void *data_ptr = NULL;
-                                  size_t data_len = 0;
+        ^(dispatch_data_t content, nw_content_context_t context, bool is_complete,
+          nw_error_t error) {
+        (void)context;
+        (void)is_complete;
+        if (content) {
+            const void *data_ptr = NULL;
+            size_t data_len = 0;
 
-                                  dispatch_data_t mapped =
-                                      dispatch_data_create_map(content, &data_ptr, &data_len);
-                                  if (mapped && data_ptr && data_len > 0) {
-                                      size_t copy_len = data_len < len ? data_len : len;
-                                      memcpy(buf, data_ptr, copy_len);
-                                      bytes_received = copy_len;
-                                      dispatch_release(mapped);
-                                  }
-                              }
+            dispatch_data_t mapped =
+                dispatch_data_create_map(content, &data_ptr, &data_len);
+            if (mapped && data_ptr && data_len > 0) {
+                size_t copy_len = data_len < len ? data_len : len;
+                memcpy(buf, data_ptr, copy_len);
+                bytes_received = copy_len;
+                dispatch_release(mapped);
+            }
+        }
 
-                              if (error) {
-                                  bytes_received = -1;
-                              }
+        if (error) {
+            bytes_received = -1;
+        }
 
-                              dispatch_semaphore_signal(sem);
-                          });
+        dispatch_semaphore_signal(sem);
+    });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
     dispatch_release(sem);
@@ -493,7 +492,7 @@ static ssize_t recv_impl(int sockfd, void *buf, size_t len, int flags) {
 }
 
 static ssize_t sendto_impl(int sockfd, const void *buf, size_t len, int flags,
-                           const struct sockaddr *dest_addr, socklen_t addrlen) {
+    const struct sockaddr *dest_addr, socklen_t addrlen) {
     /* For connectionless sockets */
     (void)dest_addr;
     (void)addrlen;
@@ -501,7 +500,7 @@ static ssize_t sendto_impl(int sockfd, const void *buf, size_t len, int flags,
 }
 
 static ssize_t recvfrom_impl(int sockfd, void *buf, size_t len, int flags,
-                             struct sockaddr *src_addr, socklen_t *addrlen) {
+    struct sockaddr *src_addr, socklen_t *addrlen) {
     /* For connectionless sockets */
     (void)src_addr;
     (void)addrlen;
@@ -513,8 +512,8 @@ static ssize_t recvfrom_impl(int sockfd, void *buf, size_t len, int flags,
  * ============================================================================ */
 
 static int setsockopt_impl(int sockfd, int level, int optname, const void *optval,
-                           socklen_t optlen) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socklen_t optlen) {
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -529,7 +528,7 @@ static int setsockopt_impl(int sockfd, int level, int optname, const void *optva
 }
 
 static int getsockopt_impl(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -550,7 +549,7 @@ static int getsockopt_impl(int sockfd, int level, int optname, void *optval, soc
  * ============================================================================ */
 
 static int shutdown_impl(int sockfd, int how) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -570,7 +569,7 @@ static int shutdown_impl(int sockfd, int how) {
  * ============================================================================ */
 
 static int getsockname_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -597,7 +596,7 @@ static int getsockname_impl(int sockfd, struct sockaddr *addr, socklen_t *addrle
 }
 
 static int getpeername_impl(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -633,7 +632,7 @@ static int getpeername_impl(int sockfd, struct sockaddr *addr, socklen_t *addrle
  * ============================================================================ */
 
 static ssize_t sendmsg_impl(int sockfd, const struct msghdr *msg, int flags) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -689,14 +688,14 @@ static ssize_t sendmsg_impl(int sockfd, const struct msghdr *msg, int flags) {
     __block ssize_t bytes_sent = 0;
 
     nw_connection_send(sock->connection, data, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, true,
-                       ^(nw_error_t error) {
-                           if (error) {
-                               bytes_sent = -1;
-                           } else {
-                               bytes_sent = offset;
-                           }
-                           dispatch_semaphore_signal(sem);
-                       });
+        ^(nw_error_t error) {
+        if (error) {
+            bytes_sent = -1;
+        } else {
+            bytes_sent = offset;
+        }
+        dispatch_semaphore_signal(sem);
+    });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
     dispatch_release(sem);
@@ -712,7 +711,7 @@ static ssize_t sendmsg_impl(int sockfd, const struct msghdr *msg, int flags) {
 }
 
 static ssize_t recvmsg_impl(int sockfd, struct msghdr *msg, int flags) {
-    ixland_socket_entry_t *sock = ixland_socket_get(sockfd);
+    socket_entry_t *sock = socket_get(sockfd);
     if (!sock) {
         return -1;
     }
@@ -753,31 +752,31 @@ static ssize_t recvmsg_impl(int sockfd, struct msghdr *msg, int flags) {
     __block dispatch_data_t received_data = NULL;
 
     nw_connection_receive(sock->connection, 1, (uint32_t)total_len,
-                          ^(dispatch_data_t content, nw_content_context_t context, bool is_complete, nw_error_t receive_error) {
-                              if (receive_error) {
-                                  bytes_received = -1;
-                              } else if (content) {
-                                  const void *bytes = NULL;
-                                  size_t len = 0;
-                                  dispatch_data_t map = dispatch_data_create_map(content, &bytes, &len);
-                                  if (bytes && len > 0) {
-                                      size_t to_copy = len;
-                                      if (to_copy > total_len) {
-                                          to_copy = total_len;
-                                      }
-                                      memcpy(buf, bytes, to_copy);
-                                      bytes_received = to_copy;
-                                  }
-                                  if (map) {
-                                      dispatch_release(map);
-                                  }
-                              }
-                              if (content) {
-                                  received_data = content;
-                                  dispatch_retain(received_data);
-                              }
-                              dispatch_semaphore_signal(sem);
-                          });
+        ^(dispatch_data_t content, nw_content_context_t context, bool is_complete, nw_error_t receive_error) {
+        if (receive_error) {
+            bytes_received = -1;
+        } else if (content) {
+            const void *bytes = NULL;
+            size_t len = 0;
+            dispatch_data_t map = dispatch_data_create_map(content, &bytes, &len);
+            if (bytes && len > 0) {
+                size_t to_copy = len;
+                if (to_copy > total_len) {
+                    to_copy = total_len;
+                }
+                memcpy(buf, bytes, to_copy);
+                bytes_received = to_copy;
+            }
+            if (map) {
+                dispatch_release(map);
+            }
+        }
+        if (content) {
+            received_data = content;
+            dispatch_retain(received_data);
+        }
+        dispatch_semaphore_signal(sem);
+    });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
     dispatch_release(sem);
@@ -865,12 +864,12 @@ __attribute__((visibility("default"))) ssize_t recv(int sockfd, void *buf, size_
 }
 
 __attribute__((visibility("default"))) ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
-                                                        const struct sockaddr *dest_addr, socklen_t addrlen) {
+    const struct sockaddr *dest_addr, socklen_t addrlen) {
     return sendto_impl(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
 __attribute__((visibility("default"))) ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
-                                                          struct sockaddr *src_addr, socklen_t *addrlen) {
+    struct sockaddr *src_addr, socklen_t *addrlen) {
     return recvfrom_impl(sockfd, buf, len, flags, src_addr, addrlen);
 }
 
@@ -902,11 +901,11 @@ __attribute__((visibility("default"))) ssize_t recvmsg(int sockfd, struct msghdr
     return recvmsg_impl(sockfd, msg, flags);
 }
 
-/* Network initialization - internal IXLand use only */
-int ixland_network_init(void) {
-    return __ixland_network_init_impl();
+/* Network initialization - internal use only */
+int network_init(void) {
+    return network_init_impl();
 }
 
-int ixland_network_deinit(void) {
-    return __ixland_network_deinit_impl();
+int network_deinit(void) {
+    return network_deinit_impl();
 }

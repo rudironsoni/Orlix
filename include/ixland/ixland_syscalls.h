@@ -316,13 +316,18 @@ int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout
                 const sigset_t *sigmask);
 
 /* ============================================================================
- * INITIALIZATION
+ * INITIALIZATION (Private Integration API - Not Public Syscall Surface)
  * ============================================================================ */
 
-int ixland_init(const ixland_config_t *config);
-void ixland_cleanup(void);
-const char *ixland_version(void);
-int ixland_is_initialized(void);
+/* Library lifecycle hooks - called via constructor/destructor automatically.
+ * These are NOT Linux syscalls and should NOT be called directly.
+ * Use canonical Linux syscalls for normal operation.
+ */
+struct library_config;
+int library_init(const struct library_config *config);
+void library_deinit(void);
+const char *library_version(void);
+int library_is_initialized(void);
 
 #ifdef __cplusplus
 }

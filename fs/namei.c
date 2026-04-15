@@ -7,7 +7,7 @@
 
 #include "vfs.h"
 
-static int ixland_directory_validate_path(const char *path) {
+static int directory_validate_path(const char *path) {
     if (path == NULL) {
         errno = EFAULT;
         return -1;
@@ -22,7 +22,7 @@ static int ixland_directory_validate_path(const char *path) {
 }
 
 int chdir_impl(const char *path) {
-    if (ixland_directory_validate_path(path) != 0) {
+    if (directory_validate_path(path) != 0) {
         return -1;
     }
 
@@ -96,7 +96,7 @@ char *getcwd_impl(char *buf, size_t size) {
 }
 
 int mkdir_impl(const char *pathname, mode_t mode) {
-    if (ixland_directory_validate_path(pathname) != 0) {
+    if (directory_validate_path(pathname) != 0) {
         return -1;
     }
 
@@ -109,7 +109,7 @@ int mkdir_impl(const char *pathname, mode_t mode) {
 }
 
 int rmdir_impl(const char *pathname) {
-    if (ixland_directory_validate_path(pathname) != 0) {
+    if (directory_validate_path(pathname) != 0) {
         return -1;
     }
 
@@ -132,7 +132,7 @@ int rmdir_impl(const char *pathname) {
 }
 
 int unlink_impl(const char *pathname) {
-    if (ixland_directory_validate_path(pathname) != 0) {
+    if (directory_validate_path(pathname) != 0) {
         return -1;
     }
 

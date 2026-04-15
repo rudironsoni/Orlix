@@ -1,4 +1,4 @@
-/* iXland - Time and Clock Subsystem
+/* Time and Clock Subsystem
  *
  * Canonical owner for time-related syscalls:
  * - time(), gettimeofday(), settimeofday()
@@ -18,7 +18,7 @@
  * TIME - High precision time
  * ============================================================================ */
 
-time_t ixland_time(time_t *tloc) {
+static time_t time_impl(time_t *tloc) {
     time_t t = time(NULL);
     if (tloc) {
         *tloc = t;
@@ -30,11 +30,11 @@ time_t ixland_time(time_t *tloc) {
  * GETTIMEOFDAY - BSD compatibility
  * ============================================================================ */
 
-int ixland_gettimeofday(struct timeval *tv, struct timezone *tz) {
+static int gettimeofday_impl(struct timeval *tv, struct timezone *tz) {
     return gettimeofday(tv, tz);
 }
 
-int ixland_settimeofday(const struct timeval *tv, const struct timezone *tz) {
+static int settimeofday_impl(const struct timeval *tv, const struct timezone *tz) {
     /* iOS restriction: setting system time not allowed */
     (void)tv;
     (void)tz;
@@ -46,15 +46,21 @@ int ixland_settimeofday(const struct timeval *tv, const struct timezone *tz) {
  * CLOCK_GETTIME - POSIX clocks
  * ============================================================================ */
 
-int ixland_clock_gettime(clockid_t clk_id, struct timespec *tp) {
-    return clock_gettime(clk_id, tp);
+static int clock_gettime_impl(clockid_t clk_id, struct timespec *tp) {
+    (void)clk_id;
+    (void)tp;
+    errno = ENOSYS;
+    return -1;
 }
 
-int ixland_clock_getres(clockid_t clk_id, struct timespec *res) {
-    return clock_getres(clk_id, res);
+static int clock_getres_impl(clockid_t clk_id, struct timespec *res) {
+    (void)clk_id;
+    (void)res;
+    errno = ENOSYS;
+    return -1;
 }
 
-int ixland_clock_settime(clockid_t clk_id, const struct timespec *tp) {
+static int clock_settime_impl(clockid_t clk_id, const struct timespec *tp) {
     /* iOS restriction: setting clocks not allowed */
     (void)clk_id;
     (void)tp;
@@ -66,15 +72,15 @@ int ixland_clock_settime(clockid_t clk_id, const struct timespec *tp) {
  * SLEEP FUNCTIONS
  * ============================================================================ */
 
-unsigned int ixland_sleep(unsigned int seconds) {
+static unsigned int sleep_impl(unsigned int seconds) {
     return sleep(seconds);
 }
 
-int ixland_usleep(useconds_t usec) {
+static int usleep_impl(useconds_t usec) {
     return usleep(usec);
 }
 
-int ixland_nanosleep(const struct timespec *req, struct timespec *rem) {
+static int nanosleep_impl(const struct timespec *req, struct timespec *rem) {
     return nanosleep(req, rem);
 }
 
@@ -82,7 +88,7 @@ int ixland_nanosleep(const struct timespec *req, struct timespec *rem) {
  * ITIMER - Interval timers (simulated)
  * ============================================================================ */
 
-int ixland_setitimer(int which, const struct itimerval *new_value, struct itimerval *old_value) {
+static int setitimer_impl(int which, const struct itimerval *new_value, struct itimerval *old_value) {
     /* iOS does not support itimer - simulate with timer */
     (void)which;
     (void)new_value;
@@ -91,15 +97,67 @@ int ixland_setitimer(int which, const struct itimerval *new_value, struct itimer
     return -1;
 }
 
-int ixland_getitimer(int which, struct itimerval *curr_value) {
+static int getitimer_impl(int which, struct itimerval *curr_value) {
     (void)which;
     (void)curr_value;
     errno = ENOSYS;
     return -1;
 }
 
-unsigned int ixland_alarm(unsigned int seconds) {
+static unsigned int alarm_impl(unsigned int seconds) {
     /* iOS does not support alarm - return remaining */
     (void)seconds;
     return 0;
+}
+
+/* ============================================================================
+ * PUBLIC SYSCALL WRAPPERS
+ * ============================================================================ */
+
+__attribute__((visibility("default"))) time_t time(time_t *tloc) {
+    return time_impl(tloc);
+}
+
+__attribute__((visibility("default"))) int gettimeofday(struct timeval *tv, struct timezone *tz) {
+    return gettimeofday_impl(tv, tz);
+}
+
+__attribute__((visibility("default"))) int settimeofday(const struct timeval *tv, const struct timezone *tz) {
+    return settimeofday_impl(tv, tz);
+}
+
+__attribute__((visibility("default"))) int clock_gettime(clockid_t clk_id, struct timespec *tp) {
+    return clock_gettime_impl(clk_id, tp);
+}
+
+__attribute__((visibility("default"))) int clock_getres(clockid_t clk_id, struct timespec *res) {
+    return clock_getres_impl(clk_id, res);
+}
+
+__attribute__((visibility("default"))) int clock_settime(clockid_t clk_id, const struct timespec *tp) {
+    return clock_settime_impl(clk_id, tp);
+}
+
+__attribute__((visibility("default"))) unsigned int sleep(unsigned int seconds) {
+    return sleep_impl(seconds);
+}
+
+__attribute__((visibility("default"))) int usleep(useconds_t usec) {
+    return usleep_impl(usec);
+}
+
+__attribute__((visibility("default"))) int nanosleep(const struct timespec *req, struct timespec *rem) {
+    return nanosleep_impl(req, rem);
+}
+
+__attribute__((visibility("default"))) int setitimer(int which, const struct itimerval *new_value, struct itimerval *old_value) {
+    return setitimer_impl(which, new_value, old_value);
+}
+
+__attribute__((visibility("default"))) int getitimer(int which, struct itimerval *curr_value) {
+    return getitimer_impl(which, curr_value);
+}
+
+__attribute__((visibility("default"))) unsigned int alarm(unsigned int seconds) {
+    return alarm_impl(seconds);
 }

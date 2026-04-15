@@ -49,9 +49,9 @@ extern "C" {
  * Kernel Initialization
  * ============================================================================ */
 
-extern int ixland_kernel_init(const char *prefix);
-extern const char *ixland_kernel_get_prefix(void);
-extern int ixland_kernel_is_initialized(void);
+extern int kernel_init(const char *prefix);
+extern const char *kernel_get_prefix(void);
+extern int kernel_is_initialized(void);
 
 #ifdef __cplusplus
 }

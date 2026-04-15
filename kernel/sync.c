@@ -29,22 +29,27 @@
 #define FUTEX_WAIT_BITSET 9
 #define FUTEX_WAKE_BITSET 10
 
-int ixland_futex(int *uaddr, int futex_op, int val, const struct timespec *timeout, int *uaddr2,
-                 int val3) {
-    (void)uaddr;
-    (void)futex_op;
-    (void)val;
-    (void)timeout;
-    (void)uaddr2;
-    (void)val3;
+static int futex_impl(int *uaddr, int futex_op, int val, const struct timespec *timeout,
+int *uaddr2, int val3) {
+(void)uaddr;
+(void)futex_op;
+(void)val;
+(void)timeout;
+(void)uaddr2;
+(void)val3;
 
-    /* futex not available on iOS - use pthread synchronization */
-    errno = ENOSYS;
-    return -1;
+/* futex not available on iOS - use pthread synchronization */
+errno = ENOSYS;
+return -1;
 }
 
-long ixland_syscall(long number, ...) {
-    (void)number;
-    errno = ENOSYS;
-    return -1;
+__attribute__((visibility("default"))) int futex(int *uaddr, int futex_op, int val,
+const struct timespec *timeout, int *uaddr2, int val3) {
+return futex_impl(uaddr, futex_op, val, timeout, uaddr2, val3);
 }
+
+/*
+* NOTE: syscall() was removed because it conflicts with system unistd.h headers.
+* The original ixland_syscall() has been dropped.
+* Use specific syscall wrappers (futex, set_robust_list, etc.) instead.
+*/

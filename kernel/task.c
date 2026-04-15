@@ -15,7 +15,7 @@
 static __thread struct task_struct *current_task = NULL;
 struct task_struct *init_task = NULL;
 
-/* Task table - accessible to signal.c for ixland_killpg */
+/* Task table - accessible to signal.c for killpg */
 pthread_mutex_t task_table_lock = PTHREAD_MUTEX_INITIALIZER;
 struct task_struct *task_table[TASK_MAX_TASKS] = {NULL};
 
