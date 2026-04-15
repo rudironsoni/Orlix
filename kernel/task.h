@@ -178,7 +178,6 @@ int vfork_impl(void);
 
 /* Exit/wait */
 void exit_impl(int status);
-void exit_group_impl(int status);
 pid_t wait_impl(int *wstatus);
 pid_t waitpid_impl(pid_t pid, int *wstatus, int options);
 pid_t wait4_impl(pid_t pid, int *wstatus, int options, struct rusage *rusage);

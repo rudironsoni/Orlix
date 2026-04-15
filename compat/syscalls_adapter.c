@@ -5,6 +5,7 @@
  * These functions are the ONLY entry points IXLandLibC may call.
  */
 
+#include <stdlib.h>
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -17,7 +18,7 @@
 extern pid_t fork_impl(void);
 extern int vfork_impl(void);
 extern void exit_impl(int status);
-extern void exit_group_impl(int status);
+/* exit_group not implemented yet - _exit calls _Exit directly */
 extern pid_t getpid_impl(void);
 extern pid_t getppid_impl(void);
 extern pid_t getpgrp_impl(void);
@@ -58,7 +59,8 @@ __attribute__((visibility("default"))) void exit(int status) {
 }
 
 __attribute__((visibility("default"))) void _exit(int status) {
-    exit_group_impl(status);
+    /* Immediate exit without cleanup - exit_group not implemented */
+    _Exit(status);
 }
 
 /* ============================================================================

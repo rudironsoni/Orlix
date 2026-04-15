@@ -73,7 +73,7 @@ struct sighand_struct *dup_sighand(struct sighand_struct *parent) {
     return child;
 }
 
-int sigaction_impl(int sig, const struct k_sigaction *act, struct k_sigaction *oldact) {
+int do_sigaction(int sig, const struct k_sigaction *act, struct k_sigaction *oldact) {
     if (sig < 1 || sig >= _NSIG) {
         errno = EINVAL;
         return -1;
@@ -140,7 +140,7 @@ static void apply_signal_to_task(struct task_struct *task, int sig) {
     }
 }
 
-int kill_impl(pid_t pid, int sig) {
+int do_kill(pid_t pid, int sig) {
     if (sig < 0 || sig >= _NSIG) {
         errno = EINVAL;
         return -1;
@@ -155,14 +155,14 @@ int kill_impl(pid_t pid, int sig) {
                 errno = ESRCH;
                 return -1;
             }
-            return killpg_impl(task->pgid, sig);
+            return do_killpg(task->pgid, sig);
         } else if (pid == -1) {
             /* All processes (privileged) */
             errno = EPERM;
             return -1;
         } else {
             /* Process group |pid| */
-            return killpg_impl(-pid, sig);
+            return do_killpg(-pid, sig);
         }
     }
 
@@ -187,7 +187,7 @@ int kill_impl(pid_t pid, int sig) {
     return 0;
 }
 
-int killpg_impl(pid_t pgrp, int sig) {
+int do_killpg(pid_t pgrp, int sig) {
     if (sig < 0 || sig >= _NSIG) {
         errno = EINVAL;
         return -1;
@@ -232,7 +232,7 @@ int killpg_impl(pid_t pgrp, int sig) {
     return 0;
 }
 
-int sigprocmask_impl(int how, const ix_sigset_t *set, ix_sigset_t *oldset) {
+int do_sigprocmask(int how, const ix_sigset_t *set, ix_sigset_t *oldset) {
     struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
@@ -269,7 +269,7 @@ int sigprocmask_impl(int how, const ix_sigset_t *set, ix_sigset_t *oldset) {
     return 0;
 }
 
-int sigpending_impl(ix_sigset_t *set) {
+int do_sigpending(ix_sigset_t *set) {
     if (!set) {
         errno = EFAULT;
         return -1;
@@ -285,7 +285,7 @@ int sigpending_impl(ix_sigset_t *set) {
     return 0;
 }
 
-ix_sighandler_t signal_impl(int signum, ix_sighandler_t handler) {
+ix_sighandler_t do_signal(int signum, ix_sighandler_t handler) {
     if (signum < 1 || signum >= _NSIG) {
         errno = EINVAL;
         return NULL;
@@ -310,13 +310,13 @@ ix_sighandler_t signal_impl(int signum, ix_sighandler_t handler) {
     return old_handler;
 }
 
-int raise_impl(int sig) {
+int do_raise(int sig) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
     }
-    return kill_impl(task->pid, sig);
+    return do_kill(task->pid, sig);
 }
 
 static int is_sigset_empty(const ix_sigset_t *set) {
@@ -327,7 +327,7 @@ static int is_sigset_empty(const ix_sigset_t *set) {
     return 1;
 }
 
-int pause_impl(void) {
+int do_pause(void) {
     struct task_struct *task = get_current();
     if (!task) {
         errno = ESRCH;
@@ -348,7 +348,7 @@ int pause_impl(void) {
     return -1;
 }
 
-int sigsuspend_impl(const ix_sigset_t *mask) {
+int do_sigsuspend(const ix_sigset_t *mask) {
     struct task_struct *task = get_current();
     if (!task || !task->sighand) {
         errno = ESRCH;
