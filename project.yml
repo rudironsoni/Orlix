@@ -70,6 +70,8 @@ targets:
         group: kernel
       - path: kernel/task.c
         group: kernel
+      - path: kernel/time.c
+        group: kernel
       - path: kernel/wait.c
         group: kernel
       - path: observability/ixland_observability.c

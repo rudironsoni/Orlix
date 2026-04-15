@@ -7,8 +7,6 @@
  * Darwin headers like <sys/event.h> and <sys/select.h>.
  */
 
-#include "readiness.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>

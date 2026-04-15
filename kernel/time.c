@@ -6,112 +6,19 @@
  * - nanosleep(), usleep(), sleep()
  * - alarm(), setitimer(), getitimer()
  *
- * Linux-shaped canonical owner - iOS mediation as implementation detail
+ * Linux-shaped canonical owner - iOS mediation via time_darwin.c
+ *
+ * This file does NOT include Darwin headers.
+ * It includes only the private time.h which uses Linux-shaped types.
  */
 
+#include "time.h"
+
 #include <errno.h>
-#include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
-
-/* ============================================================================
- * TIME - High precision time
- * ============================================================================ */
-
-static time_t time_impl(time_t *tloc) {
-    time_t t = time(NULL);
-    if (tloc) {
-        *tloc = t;
-    }
-    return t;
-}
-
-/* ============================================================================
- * GETTIMEOFDAY - BSD compatibility
- * ============================================================================ */
-
-static int gettimeofday_impl(struct timeval *tv, struct timezone *tz) {
-    return gettimeofday(tv, tz);
-}
-
-static int settimeofday_impl(const struct timeval *tv, const struct timezone *tz) {
-    /* iOS restriction: setting system time not allowed */
-    (void)tv;
-    (void)tz;
-    errno = EPERM;
-    return -1;
-}
-
-/* ============================================================================
- * CLOCK_GETTIME - POSIX clocks
- * ============================================================================ */
-
-static int clock_gettime_impl(clockid_t clk_id, struct timespec *tp) {
-    (void)clk_id;
-    (void)tp;
-    errno = ENOSYS;
-    return -1;
-}
-
-static int clock_getres_impl(clockid_t clk_id, struct timespec *res) {
-    (void)clk_id;
-    (void)res;
-    errno = ENOSYS;
-    return -1;
-}
-
-static int clock_settime_impl(clockid_t clk_id, const struct timespec *tp) {
-    /* iOS restriction: setting clocks not allowed */
-    (void)clk_id;
-    (void)tp;
-    errno = EPERM;
-    return -1;
-}
-
-/* ============================================================================
- * SLEEP FUNCTIONS
- * ============================================================================ */
-
-static unsigned int sleep_impl(unsigned int seconds) {
-    return sleep(seconds);
-}
-
-static int usleep_impl(useconds_t usec) {
-    return usleep(usec);
-}
-
-static int nanosleep_impl(const struct timespec *req, struct timespec *rem) {
-    return nanosleep(req, rem);
-}
-
-/* ============================================================================
- * ITIMER - Interval timers (simulated)
- * ============================================================================ */
-
-static int setitimer_impl(int which, const struct itimerval *new_value, struct itimerval *old_value) {
-    /* iOS does not support itimer - simulate with timer */
-    (void)which;
-    (void)new_value;
-    (void)old_value;
-    errno = ENOSYS;
-    return -1;
-}
-
-static int getitimer_impl(int which, struct itimerval *curr_value) {
-    (void)which;
-    (void)curr_value;
-    errno = ENOSYS;
-    return -1;
-}
-
-static unsigned int alarm_impl(unsigned int seconds) {
-    /* iOS does not support alarm - return remaining */
-    (void)seconds;
-    return 0;
-}
 
 /* ============================================================================
  * PUBLIC SYSCALL WRAPPERS
+ * These export the canonical Linux/POSIX interface
  * ============================================================================ */
 
 __attribute__((visibility("default"))) time_t time(time_t *tloc) {

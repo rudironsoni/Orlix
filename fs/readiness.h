@@ -5,14 +5,26 @@
  * IXLandSystem internal readiness layer
  *
  * Linux-shaped internal interface using private types.
- * NO Darwin headers included here - Darwin bridge is separate.
+ * NO Darwin headers included here.
  */
 
 #include <stddef.h>
 #include <stdint.h>
-#include <signal.h>
-#include <sys/poll.h>
-#include <sys/time.h>
+
+/* Internal pollfd structure - Linux-shaped */
+struct ixland_pollfd {
+    int fd;
+    short events;
+    short revents;
+};
+
+/* Poll event flags - Linux definitions */
+#define POLLIN      0x001
+#define POLLPRI     0x002
+#define POLLOUT     0x004
+#define POLLERR     0x008
+#define POLLHUP     0x010
+#define POLLNVAL    0x020
 
 /* Internal fd_set representation */
 #define NR_READINESS_FDS 1024
@@ -48,14 +60,32 @@ static inline int readiness_fd_isset(int fd, const readiness_fd_set_t *set) {
     return 0;
 }
 
+/* Internal timespec - Linux-shaped */
+struct ixland_timespec {
+    long tv_sec;
+    long tv_nsec;
+};
+
+/* Internal timeval - Linux-shaped */
+struct ixland_timeval {
+    long tv_sec;
+    long tv_usec;
+};
+
+/* Internal sigset - Linux-shaped, avoid Darwin sigset_t */
+#define NR_IXLAND_SIGNALS 64
+typedef struct {
+    uint64_t bits[NR_IXLAND_SIGNALS / 64];
+} ixland_sigset_t;
+
 /* Poll using internal fd_set representation */
-int do_poll(struct pollfd *fds, unsigned int nfds, int timeout);
-int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct timespec *timeout,
-             const sigset_t *sigmask);
+int do_poll(struct ixland_pollfd *fds, unsigned int nfds, int timeout);
+int do_ppoll(struct ixland_pollfd *fds, unsigned int nfds, const struct ixland_timespec *timeout,
+             const ixland_sigset_t *sigmask);
 int do_select(int nfds, readiness_fd_set_t *readfds, readiness_fd_set_t *writefds,
-              readiness_fd_set_t *exceptfds, struct timeval *timeout);
+              readiness_fd_set_t *exceptfds, struct ixland_timeval *timeout);
 int do_pselect(int nfds, readiness_fd_set_t *readfds, readiness_fd_set_t *writefds,
-               readiness_fd_set_t *exceptfds, const struct timespec *timeout,
-               const sigset_t *sigmask);
+               readiness_fd_set_t *exceptfds, const struct ixland_timespec *timeout,
+               const ixland_sigset_t *sigmask);
 
 #endif /* READINESS_H */

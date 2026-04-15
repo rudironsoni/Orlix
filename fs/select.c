@@ -4,16 +4,17 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 #include <unistd.h>
 
 #include "../include/ixland/ixland_types.h"
 
-/* ============================================================================
- * POLL - Internal implementation
- * ============================================================================ */
 
-int do_poll(struct pollfd *fds, unsigned int nfds, int timeout) {
+
+/*
+ * POLL - Internal implementation
+ */
+
+int do_poll(struct ixland_pollfd *fds, unsigned int nfds, int timeout) {
     (void)fds;
     (void)nfds;
     (void)timeout;
@@ -22,8 +23,8 @@ int do_poll(struct pollfd *fds, unsigned int nfds, int timeout) {
     return -1;
 }
 
-int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct timespec *timeout,
-             const sigset_t *sigmask) {
+int do_ppoll(struct ixland_pollfd *fds, unsigned int nfds,
+             const struct ixland_timespec *timeout, const ixland_sigset_t *sigmask) {
     (void)fds;
     (void)nfds;
     (void)timeout;
@@ -32,12 +33,12 @@ int do_ppoll(struct pollfd *fds, unsigned int nfds, const struct timespec *timeo
     return -1;
 }
 
-/* ============================================================================
+/*
  * SELECT - Internal implementation with Linux-shaped fd_set
- * ============================================================================ */
+ */
 
 int do_select(int nfds, readiness_fd_set_t *readfds, readiness_fd_set_t *writefds,
-              readiness_fd_set_t *exceptfds, struct timeval *timeout) {
+              readiness_fd_set_t *exceptfds, struct ixland_timeval *timeout) {
     /* Validate arguments */
     if (nfds < 0 || nfds > NR_READINESS_FDS) {
         errno = EINVAL;
@@ -47,10 +48,14 @@ int do_select(int nfds, readiness_fd_set_t *readfds, readiness_fd_set_t *writefd
     /* Empty fd sets + timeout = just sleep */
     if (nfds == 0 || (readfds == NULL && writefds == NULL && exceptfds == NULL)) {
         if (timeout) {
-            struct timespec ts;
-            ts.tv_sec = timeout->tv_sec;
-            ts.tv_nsec = timeout->tv_usec * 1000L;
-            nanosleep(&ts, NULL);
+            /* Simple timeout using usleep */
+            unsigned long total_usec = timeout->tv_sec * 1000000UL + (unsigned long)timeout->tv_usec;
+            if (total_usec == 0) {
+                return 0;
+            }
+            /* Convert to milliseconds for usleep compatibility */
+            unsigned int usec = (total_usec > 1000000) ? 1000000 : (unsigned int)total_usec;
+            usleep(usec);
         }
         return 0;
     }
@@ -79,14 +84,14 @@ int do_select(int nfds, readiness_fd_set_t *readfds, readiness_fd_set_t *writefd
 }
 
 int do_pselect(int nfds, readiness_fd_set_t *readfds, readiness_fd_set_t *writefds,
-               readiness_fd_set_t *exceptfds, const struct timespec *timeout,
-               const sigset_t *sigmask) {
-    struct timeval tv;
-    struct timeval *tvp = NULL;
+               readiness_fd_set_t *exceptfds, const struct ixland_timespec *timeout,
+               const ixland_sigset_t *sigmask) {
+    struct ixland_timeval tv;
+    struct ixland_timeval *tvp = NULL;
 
     if (timeout) {
         tv.tv_sec = timeout->tv_sec;
-        tv.tv_usec = (__darwin_suseconds_t)(timeout->tv_nsec / 1000);
+        tv.tv_usec = timeout->tv_nsec / 1000;
         tvp = &tv;
     }
 
