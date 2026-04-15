@@ -36,6 +36,8 @@ targets:
         group: fs
       - path: fs/readdir.c
         group: fs
+      - path: fs/select_darwin.c
+        group: fs
       - path: fs/select.c
         group: fs
       - path: fs/stat.c

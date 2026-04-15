@@ -18,6 +18,7 @@
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
 		25B7514ADFA7F88EFA74CB59 /* test_cross_integration_headers.c in Sources */ = {isa = PBXBuildFile; fileRef = 3464A7E3CEFE535A34052A1D /* test_cross_integration_headers.c */; };
 		26BCD8F9FE711EEC7EAFA378 /* test_process_lifecycle.c in Sources */ = {isa = PBXBuildFile; fileRef = B5FB4F6F97D4F2ED319D375D /* test_process_lifecycle.c */; };
+		26E0C643B3E753A0656DEBDD /* select_darwin.c in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
 		3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */ = {isa = PBXBuildFile; fileRef = F5240B1F3DC3BDF0ED535D3B /* time.c */; };
 		4236449CA09DEF99D7578C43 /* test_zombie_process.c in Sources */ = {isa = PBXBuildFile; fileRef = 042AC8872A4CF26AECFD0693 /* test_zombie_process.c */; };
@@ -112,6 +113,7 @@
 		5E96E95F0B83F5CC63E21913 /* libIXLandSystem.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = libIXLandSystem.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		666A5EE8B497170CF5C3223A /* ixland_observability.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ixland_observability.c; sourceTree = "<group>"; };
 		6B4BAC7DF63019526114D741 /* IXLandSystemTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IXLandSystemTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = select_darwin.c; sourceTree = "<group>"; };
 		8BE7B6DDA1A833FE4A6C9194 /* random.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = random.c; sourceTree = "<group>"; };
 		8C225B60B9543A92FFE7F7EC /* test_signal_process.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_signal_process.c; sourceTree = "<group>"; };
 		9935787E313CB1AD8A576244 /* signal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal.c; sourceTree = "<group>"; };
@@ -187,6 +189,7 @@
 				51D066274EE2D55E90787D9C /* path.c */,
 				D979F989EC0D2FF286D59733 /* read_write.c */,
 				FE42C3F5F46C53309E18B1A6 /* readdir.c */,
+				7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */,
 				202C15163042BB3901974368 /* select.c */,
 				DB47AFBCA86B478A6F48BAE6 /* stat.c */,
 				2117B106A13B76478FE5B3A1 /* super.c */,
@@ -385,6 +388,7 @@
 				5B16289DBA72694756559233 /* registry.c in Sources */,
 				AC68F6A9576024FA180169A3 /* resource.c in Sources */,
 				19C9236C14D3DD80B1FA553B /* select.c in Sources */,
+				26E0C643B3E753A0656DEBDD /* select_darwin.c in Sources */,
 				578C4CB3E1760634134B9781 /* signal.c in Sources */,
 				B703299D79C3E0410F45B651 /* stat.c in Sources */,
 				79618F2FA8335DFFB36D8EF5 /* super.c in Sources */,
