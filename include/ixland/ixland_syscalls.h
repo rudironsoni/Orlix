@@ -18,7 +18,6 @@
 #include <sys/statvfs.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <signal.h>
 
 #ifdef __cplusplus
 extern "C" {

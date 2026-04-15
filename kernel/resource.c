@@ -12,6 +12,11 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
+/* Forward declare struct rlimit64 for visibility on platforms where it may
+ * not be visible in the global scope (Darwin defines it inside the struct
+ * rlimit expansion but not as a standalone forward-declarable type) */
+struct rlimit64;
+
 /* ============================================================================
  * RLIMIT - Resource limits (private implementation)
  * ============================================================================ */
@@ -93,6 +98,6 @@ __attribute__((visibility("default"))) int getrusage(int who, struct rusage *usa
 }
 
 __attribute__((visibility("default"))) int prlimit(pid_t pid, int resource, const struct rlimit *new_limit,
-                                                     struct rlimit *old_limit) {
+                                                   struct rlimit *old_limit) {
     return prlimit_impl(pid, resource, new_limit, old_limit);
 }

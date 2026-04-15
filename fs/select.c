@@ -4,15 +4,14 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/event.h>
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../include/ixland/ixland_signal.h"
-
-typedef sigset_t sigset_t;
+#include "../include/ixland/ixland_types.h"
 
 static short kfilter_to_poll_revents(int16_t filter, uint16_t flags) {
     short revents = 0;
@@ -158,7 +157,7 @@ int poll_impl(struct pollfd *fds, unsigned int nfds, int timeout) {
 }
 
 int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
-                 const sigset_t *sigmask) {
+               const sigset_t *sigmask) {
     int timeout_ms = -1;
     if (timeout) {
         timeout_ms = (int)(timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000);
@@ -181,9 +180,9 @@ int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct linux_timespe
     return result;
 }
 
-int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
-                  fd_set_t *exceptfds, struct linux_timeval *timeout) {
-    if (nfds < 0 || nfds > FD_SETSIZE) {
+int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
+                ix_fd_set_t *exceptfds, struct linux_timeval *timeout) {
+    if (nfds < 0 || nfds > IX_FD_SETSIZE) {
         errno = EINVAL;
         return -1;
     }
@@ -201,13 +200,13 @@ int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
     for (int fd = 0; fd < nfds; fd++) {
         bool requested = false;
 
-        if (readfds && FD_ISSET(fd, readfds)) {
+        if (readfds && IX_FD_ISSET(fd, readfds)) {
             requested = true;
         }
-        if (writefds && FD_ISSET(fd, writefds)) {
+        if (writefds && IX_FD_ISSET(fd, writefds)) {
             requested = true;
         }
-        if (exceptfds && FD_ISSET(fd, exceptfds)) {
+        if (exceptfds && IX_FD_ISSET(fd, exceptfds)) {
             requested = true;
         }
 
@@ -234,7 +233,7 @@ int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
     int nchanges = 0;
 
     for (int fd = 0; fd < nfds; fd++) {
-        if (readfds && FD_ISSET(fd, readfds)) {
+        if (readfds && IX_FD_ISSET(fd, readfds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -246,7 +245,7 @@ int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
             nchanges++;
         }
 
-        if (writefds && FD_ISSET(fd, writefds)) {
+        if (writefds && IX_FD_ISSET(fd, writefds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -258,7 +257,7 @@ int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
             nchanges++;
         }
 
-        if (exceptfds && FD_ISSET(fd, exceptfds)) {
+        if (exceptfds && IX_FD_ISSET(fd, exceptfds)) {
             if (fcntl(fd, F_GETFL) < 0) {
                 free(changelist);
                 close(kq);
@@ -300,11 +299,11 @@ int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
     }
 
     if (readfds)
-        FD_ZERO(readfds);
+        IX_FD_ZERO(readfds);
     if (writefds)
-        FD_ZERO(writefds);
+        IX_FD_ZERO(writefds);
     if (exceptfds)
-        FD_ZERO(exceptfds);
+        IX_FD_ZERO(exceptfds);
 
     int nevents = kevent(kq, changelist, nchanges, eventlist, nchanges, tsp);
 
@@ -326,15 +325,15 @@ int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
         if (eventlist[i].filter == EVFILT_READ) {
             if (eventlist[i].flags & EV_OOBAND) {
                 if (exceptfds)
-                    FD_SET(fd, exceptfds);
+                    IX_FD_SET(fd, exceptfds);
             } else {
                 if (readfds)
-                    FD_SET(fd, readfds);
+                    IX_FD_SET(fd, readfds);
             }
             ready_count++;
         } else if (eventlist[i].filter == EVFILT_WRITE) {
             if (writefds)
-                FD_SET(fd, writefds);
+                IX_FD_SET(fd, writefds);
             ready_count++;
         }
     }
@@ -346,9 +345,9 @@ int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
     return ready_count;
 }
 
-int pselect_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
-                   fd_set_t *exceptfds, const struct linux_timespec *timeout,
-                   const sigset_t *sigmask) {
+int pselect_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
+                 ix_fd_set_t *exceptfds, const struct linux_timespec *timeout,
+                 const sigset_t *sigmask) {
     struct linux_timeval tv;
     struct linux_timeval *tvp = NULL;
     if (timeout) {
@@ -373,24 +372,3 @@ int pselect_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds,
 
     return result;
 }
-
-/*
- * BLOCKED BY HEADER DRIFT: select/pselect/poll/ppoll
- * 
- * The Linux-shaped public ABI for these functions requires custom types:
- * - fd_set_t instead of fd_set
- * - linux_timeval instead of timeval  
- * - linux_timespec instead of timespec
- * 
- * Darwin headers bring in <sys/select.h> and <sys/poll.h> transitively
- * through <signal.h>, defining conflicting signatures with standard types.
- * 
- * Proper isolation would require:
- * 1. Complete header order restructuring
- * 2. Careful module interface design  
- * 3. Ensuring Linux-shaped types are defined before ANY system headers
- * 
- * This is not a simple rename - it's an ABI contract isolation problem.
- * The select_impl/pselect_impl/poll_impl/ppoll_impl helpers are already implemented
- * and working. This surface needs header redesign, not just wrappers.
- */

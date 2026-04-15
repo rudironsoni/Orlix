@@ -455,7 +455,7 @@ static ssize_t recv_impl(int sockfd, void *buf, size_t len, int flags) {
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     __block ssize_t bytes_received = 0;
 
-    nw_connection_receive(sock->connection, 1, len,
+    nw_connection_receive(sock->connection, 1, (uint32_t)len,
                           ^(dispatch_data_t content, nw_content_context_t context, bool is_complete,
                             nw_error_t error) {
                               (void)context;
@@ -752,7 +752,7 @@ static ssize_t recvmsg_impl(int sockfd, struct msghdr *msg, int flags) {
     __block ssize_t bytes_received = 0;
     __block dispatch_data_t received_data = NULL;
 
-    nw_connection_receive(sock->connection, 1, total_len,
+    nw_connection_receive(sock->connection, 1, (uint32_t)total_len,
                           ^(dispatch_data_t content, nw_content_context_t context, bool is_complete, nw_error_t receive_error) {
                               if (receive_error) {
                                   bytes_received = -1;

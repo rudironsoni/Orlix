@@ -12,8 +12,6 @@ targets:
     deploymentTarget:
       iOS: "16.0"
     sources:
-      - path: compat/syscalls_adapter.c
-        group: compat
       - path: fs/eventpoll.c
         group: fs
       - path: fs/exec.c
@@ -80,10 +78,6 @@ targets:
         group: runtime/native
     headers:
       - path: include/ixland/ixland_path.h
-        group: include/ixland
-        attributes:
-          - public
-      - path: include/ixland/ixland_signal.h
         group: include/ixland
         attributes:
           - public

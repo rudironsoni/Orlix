@@ -97,3 +97,7 @@ int ixland_is_initialized(void) {
 const char *ixland_version(void) {
     return "1.0.0";
 }
+
+__attribute__((visibility("default"))) void ixland_cleanup(void) {
+    ixland_library_deinit();
+}

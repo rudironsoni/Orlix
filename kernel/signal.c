@@ -396,3 +396,213 @@ void signal_init(void) {
 void signal_deinit(void) {
     /* Signal subsystem cleanup */
 }
+
+/* ============================================================================
+ * PUBLIC CANONICAL SIGNAL WRAPPERS
+ * ============================================================================
+ * These wrappers convert between POSIX/Linux public signal types and
+ * IXLandSystem's internal representation. The internal owner functions
+ * use ix_sigset_t and k_sigaction; the public ABI uses sigset_t and
+ * struct sigaction from the host platform.
+ */
+
+#include <signal.h>
+#include <string.h>
+
+/* sighandler_t may not be defined on all platforms */
+#ifndef sighandler_t
+typedef void (*sighandler_t)(int);
+#endif
+
+/* SIG_ERR may not be defined on all platforms */
+#ifndef SIG_ERR
+#define SIG_ERR ((sighandler_t)-1)
+#endif
+
+/* Convert Linux sigset_t to internal ix_sigset_t */
+static void sigset_to_ix(const sigset_t *linux_set, ix_sigset_t *ix_set) {
+    memset(ix_set, 0, sizeof(*ix_set));
+    if (!linux_set) return;
+
+    for (int sig = 1; sig < 64 && sig < _NSIG; sig++) {
+        if (sigismember(linux_set, sig)) {
+            int idx = sig / 64;
+            int bit = sig % 64;
+            if (idx < (_NSIG / 64 + 1)) {
+                ix_set->sig[idx] |= (1ULL << bit);
+            }
+        }
+    }
+}
+
+/* Convert internal ix_sigset_t to Linux sigset_t */
+static void ix_to_sigset(const ix_sigset_t *ix_set, sigset_t *linux_set) {
+    if (!linux_set) return;
+    sigemptyset(linux_set);
+    if (!ix_set) return;
+
+    for (int sig = 1; sig < 64 && sig < _NSIG; sig++) {
+        int idx = sig / 64;
+        int bit = sig % 64;
+        if (idx < (_NSIG / 64 + 1)) {
+            if (ix_set->sig[idx] & (1ULL << bit)) {
+                sigaddset(linux_set, sig);
+            }
+        }
+    }
+}
+
+/* Convert Linux struct sigaction fields to internal k_sigaction */
+static void sigaction_to_k(const struct sigaction *linux_act, struct k_sigaction *k_act) {
+    memset(k_act, 0, sizeof(*k_act));
+    if (!linux_act) return;
+
+    k_act->handler = linux_act->sa_handler;
+    sigset_to_ix(&linux_act->sa_mask, &k_act->mask);
+    k_act->flags = linux_act->sa_flags;
+}
+
+/* Convert internal k_sigaction to Linux struct sigaction */
+static void k_to_sigaction(const struct k_sigaction *k_act, struct sigaction *linux_act) {
+    memset(linux_act, 0, sizeof(*linux_act));
+    if (!k_act) return;
+
+    linux_act->sa_handler = k_act->handler;
+    ix_to_sigset(&k_act->mask, &linux_act->sa_mask);
+    linux_act->sa_flags = k_act->flags;
+}
+
+static int sigaction_impl(int signum, const struct sigaction *act, struct sigaction *oldact) {
+    struct k_sigaction k_act, k_oldact;
+    struct k_sigaction *k_act_ptr = NULL;
+    struct k_sigaction *k_oldact_ptr = NULL;
+
+    if (signum < 1 || signum >= _NSIG) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (signum == 9 || signum == 19) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (act) {
+        sigaction_to_k(act, &k_act);
+        k_act_ptr = &k_act;
+    }
+
+    if (oldact) {
+        k_oldact_ptr = &k_oldact;
+    }
+
+    int result = do_sigaction(signum, k_act_ptr, k_oldact_ptr);
+
+    if (oldact && result == 0) {
+        k_to_sigaction(&k_oldact, oldact);
+    }
+
+    return result;
+}
+
+static sighandler_t signal_impl(int signum, sighandler_t handler) {
+    if (signum < 1 || signum >= _NSIG) {
+        errno = EINVAL;
+        return SIG_ERR;
+    }
+
+    if (signum == 9 || signum == 19) {
+        errno = EINVAL;
+        return SIG_ERR;
+    }
+
+    ix_sighandler_t old_ix_handler = do_signal(signum, handler);
+    return (sighandler_t)old_ix_handler;
+}
+
+static int sigprocmask_impl(int how, const sigset_t *set, sigset_t *oldset) {
+    ix_sigset_t ix_set, ix_oldset;
+    ix_sigset_t *ix_set_ptr = NULL;
+    ix_sigset_t *ix_oldset_ptr = NULL;
+
+    if (set) {
+        sigset_to_ix(set, &ix_set);
+        ix_set_ptr = &ix_set;
+    }
+
+    if (oldset) {
+        ix_oldset_ptr = &ix_oldset;
+    }
+
+    int result = do_sigprocmask(how, ix_set_ptr, ix_oldset_ptr);
+
+    if (oldset && result == 0) {
+        ix_to_sigset(&ix_oldset, oldset);
+    }
+
+    return result;
+}
+
+static int sigpending_impl(sigset_t *set) {
+    if (!set) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    ix_sigset_t ix_set;
+    int result = do_sigpending(&ix_set);
+
+    if (result == 0) {
+        ix_to_sigset(&ix_set, set);
+    }
+
+    return result;
+}
+
+static int sigsuspend_impl(const sigset_t *mask) {
+    if (!mask) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    ix_sigset_t ix_mask;
+    sigset_to_ix(mask, &ix_mask);
+
+    return do_sigsuspend(&ix_mask);
+}
+
+__attribute__((visibility("default"))) int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
+    return sigaction_impl(signum, act, oldact);
+}
+
+__attribute__((visibility("default"))) sighandler_t signal(int signum, sighandler_t handler) {
+    return signal_impl(signum, handler);
+}
+
+__attribute__((visibility("default"))) int kill(pid_t pid, int sig) {
+    return do_kill(pid, sig);
+}
+
+__attribute__((visibility("default"))) int killpg(pid_t pgrp, int sig) {
+    return do_killpg(pgrp, sig);
+}
+
+__attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
+    return sigprocmask_impl(how, set, oldset);
+}
+
+__attribute__((visibility("default"))) int sigpending(sigset_t *set) {
+    return sigpending_impl(set);
+}
+
+__attribute__((visibility("default"))) int sigsuspend(const sigset_t *mask) {
+    return sigsuspend_impl(mask);
+}
+
+__attribute__((visibility("default"))) int raise(int sig) {
+    return do_raise(sig);
+}
+
+__attribute__((visibility("default"))) int pause(void) {
+    return do_pause();
+}

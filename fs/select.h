@@ -1,12 +1,9 @@
 #ifndef SELECT_H
 #define SELECT_H
 
-/* Prevent Darwin select/pselect from conflicting */
-#define _DARWIN_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-
 #include <signal.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 
 /* Poll event constants */
@@ -40,40 +37,35 @@ struct linux_timeval {
     int64_t tv_usec;
 };
 
-/* Maximum FD set size for select */
-#define FD_SETSIZE 1024
-#define NFDBITS (8 * sizeof(unsigned long))
+/* Internal fd set size and ops - private names to avoid Darwin collisions */
+#define IX_FD_SETSIZE 1024
+#define IX_NFDBITS (8 * sizeof(unsigned long))
 
 /* Linux-compatible nfds_t for poll */
 typedef unsigned long nfds_t;
 
-/* Linux-compatible fd_set type */
+/* Linux-compatible fd_set type - private name to avoid Darwin collision */
 typedef struct {
-    unsigned long fds_bits[(FD_SETSIZE + NFDBITS - 1) / NFDBITS];
-} fd_set_t;
+    unsigned long fds_bits[(IX_FD_SETSIZE + IX_NFDBITS - 1) / IX_NFDBITS];
+} ix_fd_set_t;
 
-/* FD_SET macros */
-#define FD_ZERO(set) memset((set), 0, sizeof(*(set)))
-#define FD_SET(fd_arg, set_arg) \
-    ((set_arg)->fds_bits[(fd_arg) / NFDBITS] |= (1UL << ((fd_arg) % NFDBITS)))
-#define FD_CLR(fd_arg, set_arg) \
-    ((set_arg)->fds_bits[(fd_arg) / NFDBITS] &= ~(1UL << ((fd_arg) % NFDBITS)))
-#define FD_ISSET(fd_arg, set_arg) \
-    (((set_arg)->fds_bits[(fd_arg) / NFDBITS] & (1UL << ((fd_arg) % NFDBITS))) != 0)
+/* FD_SET macros - private names to avoid Darwin collisions */
+#define IX_FD_ZERO(set) memset((set), 0, sizeof(*(set)))
+#define IX_FD_SET(fd_arg, set_arg) \
+    ((set_arg)->fds_bits[(fd_arg) / IX_NFDBITS] |= (1UL << ((fd_arg) % IX_NFDBITS)))
+#define IX_FD_CLR(fd_arg, set_arg) \
+    ((set_arg)->fds_bits[(fd_arg) / IX_NFDBITS] &= ~(1UL << ((fd_arg) % IX_NFDBITS)))
+#define IX_FD_ISSET(fd_arg, set_arg) \
+    (((set_arg)->fds_bits[(fd_arg) / IX_NFDBITS] & (1UL << ((fd_arg) % IX_NFDBITS))) != 0)
 
-/* select/poll API - Linux-style internal names
- * 
- * NOTE: Public wrappers select(), pselect(), poll(), ppoll() are
- * BLOCKED BY HEADER DRIFT - see select.c for details.
- * The *_impl() helpers are fully implemented but public ABI surface
- * requires careful Darwin header isolation that's not yet complete.
- */
-int select_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
-              struct linux_timeval *timeout);
-int pselect_impl(int nfds, fd_set_t *readfds, fd_set_t *writefds, fd_set_t *exceptfds,
-               const struct linux_timespec *timeout, const sigset_t *sigmask);
+/* select/poll API - Linux-style internal names */
+int select_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
+                ix_fd_set_t *exceptfds, struct linux_timeval *timeout);
+int pselect_impl(int nfds, ix_fd_set_t *readfds, ix_fd_set_t *writefds,
+                 ix_fd_set_t *exceptfds, const struct linux_timespec *timeout,
+                 const sigset_t *sigmask);
 int poll_impl(struct pollfd *fds, unsigned int nfds, int timeout);
 int ppoll_impl(struct pollfd *fds, unsigned int nfds, const struct linux_timespec *timeout,
-              const sigset_t *sigmask);
+               const sigset_t *sigmask);
 
 #endif /* SELECT_H */

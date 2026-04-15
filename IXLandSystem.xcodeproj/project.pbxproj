@@ -34,7 +34,6 @@
 		7426F86259736C18FDAB7F0B /* test_pid.c in Sources */ = {isa = PBXBuildFile; fileRef = E1AFCB9AAD6CC977D9896792 /* test_pid.c */; };
 		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; };
 		8A81463107C3BC70B06B76A2 /* cred.c in Sources */ = {isa = PBXBuildFile; fileRef = 52402BAA17F7390A34354EB6 /* cred.c */; };
-		8EE185B4AA49F73A956166E3 /* syscalls_adapter.c in Sources */ = {isa = PBXBuildFile; fileRef = F8B66E92DB2ED2E4D1569223 /* syscalls_adapter.c */; };
 		92F197F28B8A006699CF4DF4 /* task.c in Sources */ = {isa = PBXBuildFile; fileRef = 1196E0E046C9D8486908FEF8 /* task.c */; };
 		9A2C21EED84E1377AE7C7C7B /* test_signal_process.c in Sources */ = {isa = PBXBuildFile; fileRef = 8C225B60B9543A92FFE7F7EC /* test_signal_process.c */; };
 		9F514956A3C3161C5CC61226 /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = 270F37A8D2223DAAD1C7A498 /* wait.c */; };
@@ -139,7 +138,6 @@
 		F4138650E69F9EDED3C567E4 /* test_vfs_path.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_vfs_path.c; sourceTree = "<group>"; };
 		F4E2215C61CCAEFB06DDB4FC /* registry.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = registry.c; sourceTree = "<group>"; };
 		F5240B1F3DC3BDF0ED535D3B /* time.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = time.c; sourceTree = "<group>"; };
-		F8B66E92DB2ED2E4D1569223 /* syscalls_adapter.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = syscalls_adapter.c; sourceTree = "<group>"; };
 		FCC6A89BF89000811B27B425 /* test_signal_pending.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_signal_pending.c; sourceTree = "<group>"; };
 		FE42C3F5F46C53309E18B1A6 /* readdir.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = readdir.c; sourceTree = "<group>"; };
 		FE946353D659F94C952EC745 /* test_basic.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_basic.c; sourceTree = "<group>"; };
@@ -248,18 +246,9 @@
 			path = Tests/unit;
 			sourceTree = "<group>";
 		};
-		E67C142F833FE1F3645AE13C /* compat */ = {
-			isa = PBXGroup;
-			children = (
-				F8B66E92DB2ED2E4D1569223 /* syscalls_adapter.c */,
-			);
-			path = compat;
-			sourceTree = "<group>";
-		};
 		F20B53E8B2675567C7E843BC = {
 			isa = PBXGroup;
 			children = (
-				E67C142F833FE1F3645AE13C /* compat */,
 				314EC764B9F768919129416A /* fs */,
 				F8CCC0A1730EF28F1B056A94 /* kernel */,
 				6A94CDCB0031F846B494F26D /* observability */,
@@ -401,7 +390,6 @@
 				79618F2FA8335DFFB36D8EF5 /* super.c in Sources */,
 				FFE759728F7B2EC121F2D215 /* sync.c in Sources */,
 				6B365831A4B17F03AE598CFF /* sys.c in Sources */,
-				8EE185B4AA49F73A956166E3 /* syscalls_adapter.c in Sources */,
 				92F197F28B8A006699CF4DF4 /* task.c in Sources */,
 				3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */,
 				6DCCC30A9E2767FEAA8316D2 /* vfs.c in Sources */,

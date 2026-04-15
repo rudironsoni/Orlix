@@ -113,6 +113,7 @@ int ixland_path_translate(const char *virtual_path, char *host_path, size_t host
         return 0;
 
     case IXLAND_PATH_VIRTUAL_LINUX:
+        ; /* empty statement required before declarations in switch case */
         /* Virtual Linux paths need translation through VFS mount */
         /* For now, map to sandbox's virtual root */
         const char *sandbox_root = getenv("IXLAND_ROOT");

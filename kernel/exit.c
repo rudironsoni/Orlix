@@ -93,7 +93,7 @@ void exit_impl(int status) {
     /* Terminate thread but keep task until parent waits */
 }
 
-__attribute__((visibility("default"))) void exit(int status) {
+__attribute__((visibility("default"), __noreturn__)) void exit(int status) {
     exit_impl(status);
     pthread_exit(NULL);
 }

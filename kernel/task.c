@@ -310,3 +310,35 @@ pid_t setsid_impl(void) {
 
     return task->pid;
 }
+
+/* ============================================================================
+ * PUBLIC CANONICAL WRAPPERS
+ * ============================================================================ */
+
+__attribute__((visibility("default"))) pid_t getpid(void) {
+    return getpid_impl();
+}
+
+__attribute__((visibility("default"))) pid_t getppid(void) {
+    return getppid_impl();
+}
+
+__attribute__((visibility("default"))) pid_t getpgrp(void) {
+    return getpgrp_impl();
+}
+
+__attribute__((visibility("default"))) pid_t getpgid(pid_t pid) {
+    return getpgid_impl(pid);
+}
+
+__attribute__((visibility("default"))) int setpgid(pid_t pid, pid_t pgid) {
+    return setpgid_impl(pid, pgid);
+}
+
+__attribute__((visibility("default"))) pid_t setsid(void) {
+    return setsid_impl();
+}
+
+__attribute__((visibility("default"))) pid_t getsid(pid_t pid) {
+    return getsid_impl(pid);
+}

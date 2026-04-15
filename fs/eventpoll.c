@@ -179,7 +179,7 @@ static epoll_instance_t *epoll_lookup_instance(int epfd) {
     return epoll_table[idx];
 }
 
-static void epoll_unregister_instance(int epfd) {
+__attribute__((unused)) static void epoll_unregister_instance(int epfd) {
     int idx = epfd - NR_OPEN_DEFAULT - 100;
     if (idx >= 0 && idx < MAX_EPOLL_INSTANCES) {
         pthread_mutex_lock(&epoll_table_lock);

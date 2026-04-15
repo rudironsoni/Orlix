@@ -460,3 +460,15 @@ void vfork_exit_notify(void) {
         pthread_mutex_unlock(&active_vfork_ctx->lock);
     }
 }
+
+/* ============================================================================
+ * PUBLIC CANONICAL WRAPPERS
+ * ============================================================================ */
+
+__attribute__((visibility("default"))) pid_t fork(void) {
+    return fork_impl();
+}
+
+__attribute__((visibility("default"))) int vfork(void) {
+    return vfork_impl();
+}
