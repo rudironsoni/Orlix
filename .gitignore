@@ -66,6 +66,9 @@ xcuserdata/
 # Build artifacts
 build/
 
+# Vendor source (regenerated from kernel)
+.vendor-src/
+
 # Backup files
 .old-backup/
 
