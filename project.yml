@@ -43,8 +43,6 @@ targets:
         group: fs
       - path: fs/select_darwin.c
         group: fs
-      - path: fs/select.c
-        group: fs
       - path: fs/stat.c
         group: fs
       - path: fs/super.c
@@ -77,29 +75,15 @@ targets:
         group: kernel
       - path: kernel/time.c
         group: kernel
+      - path: kernel/time_darwin.c
+        group: kernel
       - path: kernel/wait.c
         group: kernel
       - path: observability/ixland_observability.c
         group: observability
       - path: runtime/native/registry.c
         group: runtime/native
-    headers:
-      - path: include/ixland/ixland_path.h
-        group: include/ixland
-        attributes:
-          - public
-      - path: include/ixland/ixland_syscalls.h
-        group: include/ixland
-        attributes:
-          - public
-      - path: include/ixland/ixland_types.h
-        group: include/ixland
-        attributes:
-          - public
-      - path: include/vfs.h
-        group: include
-        attributes:
-          - private
+    headers: []
     settings:
       HEADER_SEARCH_PATHS:
         - $(SRCROOT)/include

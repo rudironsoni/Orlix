@@ -3,8 +3,6 @@
  * Linux epoll API using kqueue as the underlying mechanism.
  */
 
-#include "eventpoll.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -18,9 +16,57 @@
 #include <time.h>
 #include <unistd.h>
 
+/* Private epoll definitions - internal types not matching Linux UAPI */
+#ifndef EPOLL_EVENT_DEFINED
+#define EPOLL_EVENT_DEFINED
+
+/* epoll event types */
+#define EPOLLIN (1 << 0)
+#define EPOLLPRI (1 << 1)
+#define EPOLLOUT (1 << 2)
+#define EPOLLERR (1 << 3)
+#define EPOLLHUP (1 << 4)
+#define EPOLLNVAL (1 << 5)
+#define EPOLLRDNORM (1 << 6)
+#define EPOLLRDBAND (1 << 7)
+#define EPOLLWRNORM EPOLLOUT
+#define EPOLLWRBAND (1 << 9)
+#define EPOLLMSG (1 << 10)
+#define EPOLLRDHUP (1 << 13)
+
+/* epoll flag options */
+#define EPOLLONESHOT (1 << 30)
+#define EPOLLET (1 << 31)
+
+/* epoll_ctl operations */
+enum {
+    EPOLL_CTL_ADD = 1,
+    EPOLL_CTL_DEL = 2,
+    EPOLL_CTL_MOD = 3,
+};
+
+/* epoll_create flags */
+#define EPOLL_CLOEXEC O_CLOEXEC
+
+/* epoll_data_t union (internal representation) */
+typedef union epoll_data_internal {
+    void *ptr;
+    int fd;
+    uint32_t u32;
+    uint64_t u64;
+} epoll_data_internal_t;
+
+/* epoll_event structure (internal representation) */
+typedef struct epoll_event_internal {
+    uint32_t events;
+    epoll_data_internal_t data;
+} epoll_event_internal_t;
+
+#endif /* EPOLL_EVENT_DEFINED */
+
 /* Forward declarations */
 int epoll_create1(int flags);
-int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout,
+int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout,
                 const sigset_t *sigmask);
 
 /* FD table internal API */
@@ -28,7 +74,7 @@ int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout
 
 typedef struct epitem {
     int fd;
-    struct epoll_event event;
+    epoll_event_internal_t event;
     uint32_t registered_events;
     bool is_registered;
     bool edge_triggered;
@@ -250,7 +296,7 @@ int epoll_create1(int flags) {
     return epfd;
 }
 
-int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
+int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
     epoll_instance_t *epi = epoll_lookup_instance(epfd);
     if (!epi) {
         errno = EBADF;
@@ -293,7 +339,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
         }
 
         item->fd = fd;
-        memcpy(&item->event, event, sizeof(struct epoll_event));
+        memcpy(&item->event, event, sizeof(epoll_event_internal_t));
         item->is_registered = true;
         item->edge_triggered = (event->events & EPOLLET) != 0;
 
@@ -352,7 +398,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
             kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
         }
 
-        memcpy(&item->event, event, sizeof(struct epoll_event));
+        memcpy(&item->event, event, sizeof(epoll_event_internal_t));
         item->edge_triggered = (event->events & EPOLLET) != 0;
 
         nchanges = epoll_build_kevents(changes, 2, fd, event->events & ~EPOLLONESHOT, item, true);
@@ -377,11 +423,11 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
     return 0;
 }
 
-int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout) {
+int epoll_wait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout) {
     return epoll_pwait(epfd, events, maxevents, timeout, NULL);
 }
 
-int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout,
+int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout,
                 const sigset_t *sigmask) {
     if (!events || maxevents <= 0) {
         errno = EINVAL;
@@ -440,7 +486,7 @@ int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout
         events[ready_count].events =
             kqueue_to_epoll_events(kevents[i].filter, kevents[i].flags, (int)kevents[i].data);
 
-        memcpy(&events[ready_count].data, &item->event.data, sizeof(union epoll_data));
+        memcpy(&events[ready_count].data, &item->event.data, sizeof(epoll_data_internal_t));
 
         if (item->event.events & EPOLLONESHOT) {
             pthread_mutex_lock(&epi->lock);

@@ -66,6 +66,12 @@ xcuserdata/
 # Build artifacts
 build/
 
+# Clangd compilation database cache
+.clangd-cache/
+
+# Generated binary
+bin/ixland-cc
+
 # Vendor source (regenerated from kernel)
 .vendor-src/
 

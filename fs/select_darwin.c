@@ -19,8 +19,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../include/ixland/ixland_types.h"
-
 /* ============================================================================
  * POLL - Darwin kqueue implementation
  * ============================================================================ */

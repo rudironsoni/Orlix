@@ -7,14 +7,24 @@
  * - alarm(), setitimer(), getitimer()
  *
  * Linux-shaped canonical owner - iOS mediation via time_darwin.c
- *
- * This file does NOT include Darwin headers.
- * It includes only the private time.h which uses Linux-shaped types.
  */
 
-#include "time.h"
-
+#include "time_internal.h"
 #include <errno.h>
+
+/* Forward declarations for private implementation - defined in time_darwin.c */
+time_t time_impl(time_t *tloc);
+int gettimeofday_impl(struct timeval *tv, struct timezone *tz);
+int settimeofday_impl(const struct timeval *tv, const struct timezone *tz);
+int clock_gettime_impl(clockid_t clk_id, struct timespec *tp);
+int clock_getres_impl(clockid_t clk_id, struct timespec *res);
+int clock_settime_impl(clockid_t clk_id, const struct timespec *tp);
+unsigned int sleep_impl(unsigned int seconds);
+int usleep_impl(useconds_t usec);
+int nanosleep_impl(const struct timespec *req, struct timespec *rem);
+int setitimer_impl(int which, const struct itimerval *new_value, struct itimerval *old_value);
+int getitimer_impl(int which, struct itimerval *curr_value);
+unsigned int alarm_impl(unsigned int seconds);
 
 /* ============================================================================
  * PUBLIC SYSCALL WRAPPERS

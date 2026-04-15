@@ -8,8 +8,6 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
-#include "exec.h"
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +18,6 @@
 #include <crt_externs.h>
 #define environ (*_NSGetEnviron())
 
-#include "../kernel/signal.h"
 #include "../kernel/task.h"
 #include "../runtime/native/registry.h"
 #include "fdtable.h"

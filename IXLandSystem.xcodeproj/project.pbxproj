@@ -11,7 +11,6 @@
 		0BF178D86A3C666E8174EFB1 /* exit.c in Sources */ = {isa = PBXBuildFile; fileRef = 5885A2D3F39790AAC62634D5 /* exit.c */; };
 		10B126B95667913F860EF403 /* namei.c in Sources */ = {isa = PBXBuildFile; fileRef = C391F80635EE5296CE8C8466 /* namei.c */; };
 		17569519F7B7B56C5572BED6 /* path.c in Sources */ = {isa = PBXBuildFile; fileRef = 51D066274EE2D55E90787D9C /* path.c */; };
-		19C9236C14D3DD80B1FA553B /* select.c in Sources */ = {isa = PBXBuildFile; fileRef = 202C15163042BB3901974368 /* select.c */; };
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
 		26E0C643B3E753A0656DEBDD /* select_darwin.c in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
@@ -35,6 +34,7 @@
 		B703299D79C3E0410F45B651 /* stat.c in Sources */ = {isa = PBXBuildFile; fileRef = DB47AFBCA86B478A6F48BAE6 /* stat.c */; };
 		BEC5162482C2CB89CBFBAA61 /* fdtable.c in Sources */ = {isa = PBXBuildFile; fileRef = 32C8785EC40C73B387D6237A /* fdtable.c */; };
 		C4EB75804B7F62026355C226 /* eventpoll.c in Sources */ = {isa = PBXBuildFile; fileRef = D46E9099D1DEF53E9F6D3C41 /* eventpoll.c */; };
+		C53B18309DC6982D3E571C23 /* time_darwin.c in Sources */ = {isa = PBXBuildFile; fileRef = AEBF5249909B97EA8ABDC739 /* time_darwin.c */; };
 		CABBE0F9F7AB329F34E5E2AF /* open.c in Sources */ = {isa = PBXBuildFile; fileRef = 4E3BBA7476909DE92B9A8F8D /* open.c */; };
 		D01F8EE6B1FF4C363A19D2AF /* inode.c in Sources */ = {isa = PBXBuildFile; fileRef = C0A71140476601A06FC988D7 /* inode.c */; };
 		D9E9A4ADF886F41734FE3DF1 /* fcntl.c in Sources */ = {isa = PBXBuildFile; fileRef = 177E646BFF798AE08CBEE284 /* fcntl.c */; };
@@ -56,7 +56,6 @@
 /* Begin PBXFileReference section */
 		1196E0E046C9D8486908FEF8 /* task.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = task.c; sourceTree = "<group>"; };
 		177E646BFF798AE08CBEE284 /* fcntl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fcntl.c; sourceTree = "<group>"; };
-		202C15163042BB3901974368 /* select.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = select.c; sourceTree = "<group>"; };
 		2117B106A13B76478FE5B3A1 /* super.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = super.c; sourceTree = "<group>"; };
 		22ED4B4B7E8FD0A20DF3C3C5 /* resource.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = resource.c; sourceTree = "<group>"; };
 		270F37A8D2223DAAD1C7A498 /* wait.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = wait.c; sourceTree = "<group>"; };
@@ -75,6 +74,7 @@
 		7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = select_darwin.c; sourceTree = "<group>"; };
 		8BE7B6DDA1A833FE4A6C9194 /* random.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = random.c; sourceTree = "<group>"; };
 		9935787E313CB1AD8A576244 /* signal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal.c; sourceTree = "<group>"; };
+		AEBF5249909B97EA8ABDC739 /* time_darwin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = time_darwin.c; sourceTree = "<group>"; };
 		C0A71140476601A06FC988D7 /* inode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = inode.c; sourceTree = "<group>"; };
 		C391F80635EE5296CE8C8466 /* namei.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = namei.c; sourceTree = "<group>"; };
 		C741BE27F9BDB9CD9023EF4F /* mount.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mount.c; sourceTree = "<group>"; };
@@ -136,7 +136,6 @@
 				D979F989EC0D2FF286D59733 /* read_write.c */,
 				FE42C3F5F46C53309E18B1A6 /* readdir.c */,
 				7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */,
-				202C15163042BB3901974368 /* select.c */,
 				DB47AFBCA86B478A6F48BAE6 /* stat.c */,
 				2117B106A13B76478FE5B3A1 /* super.c */,
 				CC8A063128CC02CB6B938762 /* vfs.c */,
@@ -193,6 +192,7 @@
 				5D494D6F83176E636A70E6FF /* sync.c */,
 				CE4E5039272874EE6A5FFD11 /* sys.c */,
 				1196E0E046C9D8486908FEF8 /* task.c */,
+				AEBF5249909B97EA8ABDC739 /* time_darwin.c */,
 				F5240B1F3DC3BDF0ED535D3B /* time.c */,
 				270F37A8D2223DAAD1C7A498 /* wait.c */,
 				F8290E2DDE1DDF71715AD5D7 /* net */,
@@ -297,7 +297,6 @@
 				586F3641CE2CB13F63E94338 /* readdir.c in Sources */,
 				5B16289DBA72694756559233 /* registry.c in Sources */,
 				AC68F6A9576024FA180169A3 /* resource.c in Sources */,
-				19C9236C14D3DD80B1FA553B /* select.c in Sources */,
 				26E0C643B3E753A0656DEBDD /* select_darwin.c in Sources */,
 				578C4CB3E1760634134B9781 /* signal.c in Sources */,
 				B703299D79C3E0410F45B651 /* stat.c in Sources */,
@@ -306,6 +305,7 @@
 				6B365831A4B17F03AE598CFF /* sys.c in Sources */,
 				92F197F28B8A006699CF4DF4 /* task.c in Sources */,
 				3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */,
+				C53B18309DC6982D3E571C23 /* time_darwin.c in Sources */,
 				6DCCC30A9E2767FEAA8316D2 /* vfs.c in Sources */,
 				9F514956A3C3161C5CC61226 /* wait.c in Sources */,
 			);
