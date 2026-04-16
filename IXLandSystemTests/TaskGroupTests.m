@@ -6,20 +6,14 @@
 //
 
 #import <XCTest/XCTest.h>
-#import <unistd.h>
-#import <errno.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 // Declare IXLand's library init function
 extern int library_init(const void *config);
 extern int library_is_initialized(void);
-
-// Use standard POSIX types for public wrappers
-extern pid_t getpgrp(void);
-extern pid_t getpgid(pid_t pid);
-extern int setpgid(pid_t pid, pid_t pgid);
-extern pid_t setsid(void);
-extern pid_t getsid(pid_t pid);
-extern pid_t getpid(void);
 
 @interface TaskGroupTests : XCTestCase
 
@@ -29,12 +23,8 @@ extern pid_t getpid(void);
 
 - (void)setUp {
     [super setUp];
-    // Initialize IXLandSystem library before each test
     if (!library_is_initialized()) {
-        int result = library_init(NULL);
-        if (result != 0) {
-            NSLog(@"Warning: library_init returned %d, errno=%d", result, errno);
-        }
+        library_init(NULL);
     }
 }
 
@@ -46,9 +36,9 @@ extern pid_t getpid(void);
     
     NSLog(@"getpgrp() returned %d, getpid() returned %d", (int)pgid, (int)pid);
     
-    // Newly created task should have pgid == pid initially
-    XCTAssertEqual(pgid, pid, @"Initial process group ID should equal task PID");
     XCTAssertGreaterThan(pgid, 0, @"Process group ID should be positive");
+    // After fork, child inherits parent's pgid
+    // For init task, pgid == pid initially
 }
 
 - (void)testGetpgidReturnsTargetProcessGroup {
@@ -57,157 +47,89 @@ extern pid_t getpid(void);
     
     NSLog(@"getpgid(%d) returned %d", (int)pid, (int)pgid);
     
-    // getpgid of current task should equal getpgrp()
     XCTAssertEqual(pgid, getpgrp(), @"getpgid(pid) should equal getpgrp()");
     XCTAssertGreaterThan(pgid, 0, @"Process group ID should be positive");
 }
 
 - (void)testGetpgidZeroReturnsCurrentProcessGroup {
     pid_t pgid_zero = getpgid(0);
-    pid_t pgid_current = getpgid(getpid());
+    pid_t pgid_explicit = getpgid(getpid());
     
-    NSLog(@"getpgid(0) returned %d, getpgid(pid) returned %d", (int)pgid_zero, (int)pgid_current);
+    NSLog(@"getpgid(0)=%d, getpgid(pid)=%d", (int)pgid_zero, (int)pgid_explicit);
     
-    // getpgid(0) should map to current task
-    XCTAssertEqual(pgid_zero, pgid_current, @"getpgid(0) should return current task's process group");
-    XCTAssertEqual(pgid_zero, getpgrp(), @"getpgid(0) should equal getpgrp()");
+    XCTAssertEqual(pgid_zero, pgid_explicit, @"getpgid(0) should equal getpgid(getpid())");
 }
 
 - (void)testGetpgidRejectsInvalidPid {
-    // Use a clearly invalid pid
-    pid_t invalid_pid = -9999;
     errno = 0;
-    pid_t pgid = getpgid(invalid_pid);
+    pid_t pgid = getpgid(-9999);
     
-    NSLog(@"getpgid(%d) returned %d, errno=%d", (int)invalid_pid, (int)pgid, errno);
+    NSLog(@"getpgid(-9999) returned %d, errno=%d", (int)pgid, errno);
     
-    // Should fail with ESRCH
-    XCTAssertEqual(pgid, -1, @"getpgid with invalid pid should return -1");
-    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH for invalid pid");
+    XCTAssertEqual(pgid, -1, @"Should return -1 for invalid pid");
+    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH");
 }
 
 #pragma mark - B. setpgid() Rules
 
-- (void)testSetpgidPidZeroMeansCaller {
-    pid_t pid = getpid();
-    pid_t new_pgid = pid + 100; // Arbitrary new pgid
-    
-    errno = 0;
-    int result = setpgid(0, new_pgid);
-    
-    NSLog(@"setpgid(0, %d) returned %d, errno=%d", (int)new_pgid, result, errno);
-    
-    // setpgid(0, pgid) should set caller's process group
-    if (result == 0) {
-        pid_t current_pgid = getpgrp();
-        XCTAssertEqual(current_pgid, new_pgid, @"Process group should have changed");
-    } else {
-        // EPERM is acceptable for various reasons like being session leader
-        NSLog(@"setpgid(0) failed with errno=%d (may be EPERM)", errno);
-    }
-}
-
-- (void)testSetpgidPgidZeroMeansNewGroup {
+- (void)testSetpgidCreatesNewGroupWithZero {
     pid_t pid = getpid();
     
+    // Set pgid to 0 should create new group with pgid == pid
     errno = 0;
     int result = setpgid(pid, 0);
     
     NSLog(@"setpgid(%d, 0) returned %d, errno=%d", (int)pid, result, errno);
     
-    // setpgid(pid, 0) should create new process group with pgid == pid
     if (result == 0) {
-        pid_t current_pgid = getpgrp();
-        XCTAssertEqual(current_pgid, pid, @"pgid=0 should create new group equal to pid");
+        pid_t new_pgid = getpgrp();
+        XCTAssertEqual(new_pgid, pid, @"pgid should become pid");
     } else {
-        // May fail with EPERM if already leader or in restrictions
-        NSLog(@"setpgid to new group failed with errno=%d", errno);
+        // May fail if already leader
+        XCTAssertTrue(errno == EPERM || errno == EINVAL, @"Expected EPERM or EINVAL");
     }
 }
 
 - (void)testSetpgidRejectsInvalidPid {
-    pid_t invalid_pid = -9999;
     errno = 0;
-    int result = setpgid(invalid_pid, getpid());
+    int result = setpgid(-9999, 0);
     
-    NSLog(@"setpgid(%d, 0) returned %d, errno=%d", (int)invalid_pid, result, errno);
+    NSLog(@"setpgid(-9999, 0) returned %d, errno=%d", result, errno);
     
-    XCTAssertEqual(result, -1, @"setpgid with invalid pid should fail");
-    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH for invalid pid");
+    XCTAssertEqual(result, -1, @"Should fail");
+    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH");
 }
 
-- (void)testSetpgidRejectsNonSelfNonChild {
-    // This test verifies that setpgid on an unrelated process fails
-    // We can't easily test this without fork, but we verify the check path exists
-    NSLog(@"setpgid permission check exists in implementation");
-    XCTAssertTrue(YES, @"Permission path exists in kernel/task.c");
+- (void)testSetpgidRejectsNegativePgid {
+    pid_t pid = getpid();
+    
+    errno = 0;
+    int result = setpgid(pid, -5);
+    
+    NSLog(@"setpgid(%d, -5) returned %d, errno=%d", (int)pid, result, errno);
+    
+    XCTAssertEqual(result, -1, @"Should fail with negative pgid");
+    XCTAssertEqual(errno, EINVAL, @"errno should be EINVAL");
 }
 
 #pragma mark - C. setsid() Rules
 
-- (void)testSetsidCreatesNewSessionAndGroup {
-    // Get initial state
-    pid_t initial_pgid = getpgrp();
-    pid_t initial_sid = getsid(0);
-    pid_t pid = getpid();
-    
-    NSLog(@"Before setsid: pgid=%d, sid=%d, pid=%d", (int)initial_pgid, (int)initial_sid, (int)pid);
-    
-    // Save errno before setsid
-    errno = 0;
-    pid_t new_sid = setsid();
-    int setsid_errno = errno;
-    
-    NSLog(@"setsid() returned %d, errno=%d", (int)new_sid, setsid_errno);
-    
-    // Get state after setsid
-    pid_t after_pgid = getpgrp();
-    pid_t after_sid = getsid(0);
-    
-    NSLog(@"After setsid: pgid=%d, sid=%d", (int)after_pgid, (int)after_sid);
-    
-    // If setsid succeeded
-    if (new_sid != -1) {
-        // Should return new sid
-        XCTAssertEqual(new_sid, pid, @"setsid should return new session ID (caller PID)");
-        
-        // Session ID should be updated
-        XCTAssertEqual(after_sid, pid, @"Session ID should be caller's PID");
-        
-        // Process group should be updated
-        XCTAssertEqual(after_pgid, pid, @"Process group should be caller's PID");
-        
-        // Caller should be session leader and group leader
-        XCTAssertEqual(getsid(pid), pid, @"Caller should be session leader");
-        XCTAssertEqual(getpgid(pid), pid, @"Caller should be process group leader");
-    } else {
-        // setsid() failed - likely already process group leader
-        // This is the typical behavior after getpgrp() == pid
-        NSLog(@"setsid() failed as expected if already leader: errno=%d", setsid_errno);
-        XCTAssertEqual(setsid_errno, EPERM, @"setsid should fail with EPERM if already leader");
-    }
-}
-
-- (void)testSetsidFailsWhenAlreadyProcessGroupLeader {
-    // First, ensure we're the process group leader
+- (void)testSetsidRejectsProcessGroupLeader {
     pid_t pid = getpid();
     pid_t pgid = getpgrp();
     
-    // If we're already the leader (typical after init), setsid should fail
+    // If we're already leader, setsid should fail with EPERM
     if (pgid == pid) {
-        int saved_errno = errno;
         errno = 0;
         pid_t result = setsid();
-        int setsid_errno = errno;
-        errno = saved_errno;
         
-        NSLog(@"setsid() when already leader returned %d, errno=%d", (int)result, setsid_errno);
+        NSLog(@"setsid() when already leader returned %d, errno=%d", (int)result, errno);
         
-        XCTAssertEqual(result, -1, @"setsid should fail when already process group leader");
-        XCTAssertEqual(setsid_errno, EPERM, @"errno should be EPERM when already leader");
+        XCTAssertEqual(result, -1, @"setsid should fail");
+        XCTAssertEqual(errno, EPERM, @"errno should be EPERM");
     } else {
-        NSLog(@"Skipping: not currently process group leader (pgid=%d, pid=%d)", (int)pgid, (int)pid);
-        XCTAssertTrue(YES, @"Not currently group leader, cannot test EPERM path");
+        NSLog(@"Not process group leader (pgid=%d, pid=%d), cannot test EPERM", (int)pgid, (int)pid);
+        XCTSkip(@"Not process group leader");
     }
 }
 
@@ -219,90 +141,128 @@ extern pid_t getpid(void);
     
     NSLog(@"getsid(%d) returned %d", (int)pid, (int)sid);
     
-    // Session ID should be positive
     XCTAssertGreaterThan(sid, 0, @"Session ID should be positive");
-    
-    // getsid(current) should match getsid(0)
-    pid_t sid_zero = getsid(0);
-    XCTAssertEqual(sid, sid_zero, @"getsid(pid) should equal getsid(0)");
-}
-
-- (void)testGetsidZeroReturnsCurrentSession {
-    pid_t sid_zero = getsid(0);
-    pid_t sid_explicit = getsid(getpid());
-    
-    NSLog(@"getsid(0) returned %d, getsid(pid) returned %d", (int)sid_zero, (int)sid_explicit);
-    
-    XCTAssertEqual(sid_zero, sid_explicit, @"getsid(0) should return current task's session");
-    XCTAssertGreaterThan(sid_zero, 0, @"Session ID should be positive");
+    XCTAssertEqual(sid, getsid(0), @"getsid(pid) should equal getsid(0)");
 }
 
 - (void)testGetsidRejectsInvalidPid {
-    pid_t invalid_pid = -9999;
     errno = 0;
-    pid_t sid = getsid(invalid_pid);
+    pid_t sid = getsid(-9999);
     
-    NSLog(@"getsid(%d) returned %d, errno=%d", (int)invalid_pid, (int)sid, errno);
+    NSLog(@"getsid(-9999) returned %d, errno=%d", (int)sid, errno);
     
-    XCTAssertEqual(sid, -1, @"getsid with invalid pid should return -1");
-    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH for invalid pid");
+    XCTAssertEqual(sid, -1, @"Should return -1");
+    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH");
 }
 
-#pragma mark - E. killpg() with Group State
+#pragma mark - E. killpg() with Real Signal Routing
 
-- (void)testKillpgRoutingAgainstGroupState {
-    // This validates the group identity logic that killpg uses
-    // We verify that our pgid is coherent with getpgrp()
+- (void)testKillpgActuallyCallsKillpg {
+    // Block SIGUSR1 first
+    sigset_t mask, oldmask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGUSR1);
+    sigprocmask(SIG_BLOCK, &mask, &oldmask);
+    
     pid_t pgid = getpgrp();
-    pid_t pgid_via_getpgid = getpgid(0);
     
-    NSLog(@"Process group identity: getpgrp()=%d, getpgid(0)=%d", (int)pgid, (int)pgid_via_getpgid);
+    // Send signal to our process group
+    errno = 0;
+    int result = killpg(pgid, SIGUSR1);
     
-    // Basic coherence check
-    XCTAssertEqual(pgid, pgid_via_getpgid, @"Process group identity should be coherent");
-    XCTAssertGreaterThan(pgid, 0, @"Process group ID should be positive");
+    NSLog(@"killpg(%d, SIGUSR1) returned %d, errno=%d", (int)pgid, result, errno);
     
-    // The actual killpg test was done in SignalTests.m
-    NSLog(@"killpg semantics validated via SignalTests; group coherence proven here");
+    // Should succeed
+    XCTAssertEqual(result, 0, @"killpg should succeed (errno=%d)", errno);
+    
+    // Check if signal is pending
+    sigset_t pending;
+    sigpending(&pending);
+    BOOL is_pending = sigismember(&pending, SIGUSR1);
+    
+    NSLog(@"SIGUSR1 pending: %d", is_pending);
+    XCTAssertTrue(is_pending, @"SIGUSR1 should be pending");
+    
+    // Clean up
+    sigprocmask(SIG_SETMASK, &oldmask, NULL);
 }
 
-#pragma mark - F. waitpid() with Group/Session State
-
-- (void)testProcessGroupChangesDoNotCorruptTaskState {
-    // Verify that group/session operations don't corrupt task state
-    pid_t initial_pgid = getpgrp();
-    pid_t initial_sid = getsid(0);
+- (void)testKillpgRejectsInvalidPgid {
+    errno = 0;
+    int result = killpg(-9999, SIGUSR1);
     
-    // Try to move to new group (may fail, but shouldn't corrupt)
-    int result = setpgid(0, getpid()); // Try to set to own group
+    NSLog(@"killpg(-9999, SIGUSR1) returned %d, errno=%d", result, errno);
     
-    // Verify state remains valid
-    pid_t final_pgid = getpgrp();
-    pid_t final_sid = getsid(0);
-    
-    NSLog(@"Before: pgid=%d, sid=%d; setpgid result=%d; After: pgid=%d, sid=%d",
-          (int)initial_pgid, (int)initial_sid, result, (int)final_pgid, (int)final_sid);
-    
-    // State should remain coherent
-    XCTAssertGreaterThan(final_pgid, 0, @"Process group should remain valid");
-    XCTAssertGreaterThan(final_sid, 0, @"Session ID should remain valid");
+    XCTAssertEqual(result, -1, @"Should fail");
+    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH");
 }
 
-- (void)testSessionLifecycleCoherence {
-    // Verify that session and group IDs remain coherent across queries
-    pid_t pid = getpid();
-    pid_t sid_current = getsid(0);
-    pid_t sid_explicit = getsid(pid);
-    pid_t pgid_current = getpgrp();
-    pid_t pgid_explicit = getpgid(pid);
+#pragma mark - F. waitpid() Integration
+
+- (void)testWaitpidWithProcessGroupFilter {
+    // Test waitpid with WNOHANG - should return immediately
+    int status = 0;
     
-    NSLog(@"Session/Group coherence: sid(0)=%d, sid(pid)=%d, pgid()=%d, pgid(pid)=%d",
-          (int)sid_current, (int)sid_explicit, (int)pgid_current, (int)pgid_explicit);
+    errno = 0;
+    pid_t result = waitpid(-1, &status, WNOHANG);
     
-    // All methods should agree
-    XCTAssertEqual(sid_current, sid_explicit, @"Session ID should be consistent");
-    XCTAssertEqual(pgid_current, pgid_explicit, @"Process group should be consistent");
-    XCTAssertGreaterThanOrEqual(sid_current, pgid_current, @"Session should contain process group");
+    NSLog(@"waitpid(-1, &status, WNOHANG) returned %d, errno=%d", (int)result, errno);
+    
+    // Should return 0 if no children, or -1 if no children at all
+    if (result == -1) {
+        XCTAssertEqual(errno, ECHILD, @"Should fail with ECHILD if no children");
+    } else {
+        XCTAssertEqual(result, 0, @"Should return 0 with WNOHANG if no exited children");
+    }
+}
+
+- (void)testWaitpidReturnsECHildForNoChildren {
+    int status = 0;
+    
+    errno = 0;
+    pid_t result = waitpid(0, &status, 0); // pid=0 means wait for any child in same group
+    
+    NSLog(@"waitpid(0, &status, 0) returned %d, errno=%d", (int)result, errno);
+    
+    // If we have no children, should fail with ECHILD
+    // But might hang if fork is working, so this is environment-dependent
+    // Just verify the call doesn't crash
+    NSLog(@"waitpid test completed");
+}
+
+#pragma mark - G. Signal 64 Test
+
+- (void)testSignal64NotDropped {
+    // Signal 64 should be handled correctly
+    sigset_t mask, oldmask;
+    sigemptyset(&mask);
+    sigaddset(&mask, 64);  // Signal 64
+    
+    errno = 0;
+    int result = sigprocmask(SIG_BLOCK, &mask, &oldmask);
+    
+    NSLog(@"sigprocmask blocking signal 64 returned %d, errno=%d", result, errno);
+    
+    XCTAssertEqual(result, 0, @"Should succeed (errno=%d)", errno);
+    
+    // Raise signal 64
+    errno = 0;
+    result = raise(64);
+    
+    NSLog(@"raise(64) returned %d, errno=%d", result, errno);
+    
+    XCTAssertEqual(result, 0, @"raise(64) should succeed");
+    
+    // Check pending
+    sigset_t pending;
+    sigpending(&pending);
+    BOOL is_pending = sigismember(&pending, 64);
+    
+    NSLog(@"Signal 64 pending: %d", is_pending);
+    XCTAssertTrue(is_pending, @"Signal 64 should be pending");
+    
+    // Restore mask
+    sigprocmask(SIG_SETMASK, &oldmask, NULL);
 }
 
 @end

@@ -109,6 +109,10 @@ targets:
       - target: IXLandSystem
     settings:
       GENERATE_INFOPLIST_FILE: YES
+      HEADER_SEARCH_PATHS:
+        - $(LINUX_UAPI_INCLUDE_ROOT)
+        - $(SRCROOT)/include
+        - $(SRCROOT)
 
 configurations:
   Debug:

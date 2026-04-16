@@ -125,12 +125,15 @@ static void task_init_once(void) {
     /* Initialize PID allocator first */
     pid_init();
 
-    init_task = alloc_task();
-    if (!init_task)
-        return;
+  init_task = alloc_task();
+  if (!init_task)
+    return;
 
-    init_task->ppid = init_task->pid;
-    strncpy(init_task->comm, "init", sizeof(init_task->comm));
+  init_task->ppid = init_task->pid;
+  /* init_task is session and process group leader */
+  init_task->pgid = init_task->pid;
+  init_task->sid = init_task->pid;
+  strncpy(init_task->comm, "init", sizeof(init_task->comm));
 
     init_task->files = alloc_files(NR_OPEN_DEFAULT);
     if (!init_task->files) {
@@ -241,26 +244,72 @@ int setpgid_impl(int32_t pid, int32_t pgid) {
         pgid = pid;
     }
 
+    /* Linux: reject negative pgid */
+    if (pgid < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
     struct task_struct *target = task_lookup(pid);
     if (!target) {
         errno = ESRCH;
         return -1;
     }
 
-    /* Check permissions: caller must be target or target's parent */
+    pthread_mutex_lock(&target->lock);
+
+    /* Linux: check permissions: caller must be target or target's parent */
     if (target->ppid != current->pid && target->pid != current->pid) {
+        pthread_mutex_unlock(&target->lock);
         free_task(target);
         errno = EPERM;
         return -1;
     }
 
-    pthread_mutex_lock(&target->lock);
-
-    /* Check session match - can't move to different session */
+    /* Linux: session match - can't move to different session */
     if (target->sid != current->sid) {
         pthread_mutex_unlock(&target->lock);
         free_task(target);
         errno = EPERM;
+        return -1;
+    }
+
+    /* Linux: cannot change PGID of a session leader */
+    if (target->pid == target->sid) {
+        pthread_mutex_unlock(&target->lock);
+        free_task(target);
+        errno = EPERM;
+        return -1;
+    }
+
+    /* Linux: if joining existing group, group must exist in same session */
+    if (pgid != pid) {
+        /* Check if target group exists */
+        int found_group = 0;
+        for (int i = 0; i < TASK_MAX_TASKS; i++) {
+            struct task_struct *t = task_table[i];
+            while (t) {
+                if (t->pgid == pgid && t->sid == target->sid) {
+                    found_group = 1;
+                    break;
+                }
+                t = t->hash_next;
+            }
+            if (found_group) break;
+        }
+        if (!found_group) {
+            pthread_mutex_unlock(&target->lock);
+            free_task(target);
+            errno = EPERM;
+            return -1;
+        }
+    }
+
+    /* Linux: if child already execve'd, reject with EACCES */
+    if (target->pid != current->pid && atomic_load(&target->execed)) {
+        pthread_mutex_unlock(&target->lock);
+        free_task(target);
+        errno = EACCES;
         return -1;
     }
 

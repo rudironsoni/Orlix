@@ -127,6 +127,7 @@ struct task_struct {
     atomic_bool stopped;
     atomic_int stopsig;
     atomic_bool continued;
+    atomic_bool execed;     /* Set after execve() - blocks setpgid per Linux semantics */
 
     /* Host thread backing for this virtual task */
     pthread_t thread;
