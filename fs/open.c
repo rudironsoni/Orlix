@@ -37,29 +37,6 @@ int creat_impl(const char *pathname, mode_t mode) {
     return open_impl(pathname, O_WRONLY | O_CREAT | O_TRUNC, mode);
 }
 
-int close_impl(int fd) {
-    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
-        errno = EBADF;
-        return -1;
-    }
-
-    if (fd <= 2) {
-        return 0;
-    }
-
-    void *entry = get_fd_entry_impl(fd);
-    if (!entry) {
-        errno = EBADF;
-        return -1;
-    }
-
-    int real_fd = get_real_fd_impl(entry);
-    put_fd_entry_impl(entry);
-    close(real_fd);
-    free_fd_impl(fd);
-    return 0;
-}
-
 __attribute__((visibility("default"))) int open(const char *pathname, int flags, ...) {
     mode_t mode = 0;
     if (flags & O_CREAT) {
