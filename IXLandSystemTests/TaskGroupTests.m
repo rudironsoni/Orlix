@@ -5,11 +5,24 @@
 // INTERNAL RUNTIME SEMANTIC TEST
 // NOT public wrapper compatibility proof
 //
-// This file intentionally tests internal IXLandSystem owner semantics through
-// internal entry points (getpgrp_impl, setpgid_impl, etc.).
+// This file intentionally tests internal IXLandSystem owner semantics
+// through internal entry points (getpgrp_impl, setpgid_impl, etc.).
 //
 // Public drop-in compatibility is deferred to IXLandMLibC/sysroot integration.
-// These tests verify the runtime semantics, not the public ABI.
+// This file intentionally tests internal IXLandSystem owner semantics
+// through internal entry points.
+//
+// Allowed includes:
+//   - "kernel/task.h" (private owner header)
+//   - "kernel/signal.h" (private owner header)
+//   - <errno.h>, <stdint.h>, <stdbool.h>, <string.h> (neutral C headers)
+//
+// Forbidden includes:
+//   - <unistd.h>, <signal.h>, <sys/wait.h> (public POSIX)
+//   - <linux/...>, <asm/...>, <asm-generic/...> (Linux UAPI)
+//   - path traversal into third_party/linux-uapi
+//   - manual extern declarations for public POSIX names
+//   - calling public names like getpgid(), setpgid(), killpg(), waitpid()
 //
 
 #import <XCTest/XCTest.h>
@@ -21,6 +34,16 @@
 /* Internal headers - these are the OWNER entry points we test */
 #include "kernel/task.h"
 #include "kernel/signal.h"
+
+/* Local test constants for internal semantic invocation.
+ * These are NOT public ABI claims - they are local values matching
+ * Linux UAPI constants used to exercise internal _impl/do_ entry points.
+ * Public drop-in compatibility proof is a separate concern. */
+#define TEST_SIG_BLOCK   0
+#define TEST_SIG_UNBLOCK 1
+#define TEST_SIG_SETMASK 2
+#define TEST_WNOHANG     0x00000001
+#define TEST_SIGUSR1     10
 
 /* Declare library init function */
 extern int library_init(const void *config);
@@ -42,7 +65,7 @@ extern int library_is_initialized(void);
 
 - (void)testInitialTaskPgidAndSidCoherence {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     XCTAssertEqual(task->pgid, task->pid, @"Initial task should be its own process group leader");
     XCTAssertEqual(task->sid, task->pid, @"Initial task should be its own session leader");
@@ -52,7 +75,7 @@ extern int library_is_initialized(void);
 
 - (void)testGetpgrpImplReturnsCurrentTaskPgid {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     int32_t pgid = getpgrp_impl();
     
@@ -64,7 +87,7 @@ extern int library_is_initialized(void);
 
 - (void)testGetpgidImplReturnsTargetPgid {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     int32_t pgid = getpgid_impl(task->pid);
     
@@ -74,7 +97,7 @@ extern int library_is_initialized(void);
 
 - (void)testGetpgidImplZeroReturnsCurrentPgid {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     int32_t pgid_zero = getpgid_impl(0);
     int32_t pgid_explicit = getpgid_impl(task->pid);
@@ -94,7 +117,7 @@ extern int library_is_initialized(void);
 
 - (void)testSetpgidImplRejectsNegativePgid {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     errno = 0;
     int result = setpgid_impl(task->pid, -5);
@@ -113,7 +136,7 @@ extern int library_is_initialized(void);
 
 - (void)testSetpgidImplRejectsSessionLeader {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     // If task is session leader, setpgid to different group should fail
     if (task->sid == task->pid) {
@@ -129,13 +152,9 @@ extern int library_is_initialized(void);
 }
 
 - (void)testSetpgidImplCreatesNewGroupWithZero {
-    // Create a child task to test with (we can't change init task's group if it's session leader)
-    // For now, just verify that setpgid_impl with pgid=0 is accepted if valid
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
-    // If we set pgid to current pid (which means later setpgid(0) would use new group)
-    // This test validates the internal logic accepts valid transitions
     errno = 0;
     int result = setpgid_impl(task->pid, task->pid);
     
@@ -152,7 +171,7 @@ extern int library_is_initialized(void);
 
 - (void)testSetsidImplRejectsProcessGroupLeader {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     // If task is process group leader, setsid should fail with EPERM
     if (task->pgid == task->pid) {
@@ -167,9 +186,6 @@ extern int library_is_initialized(void);
 }
 
 - (void)testSetsidImplSucceedsForNonLeader {
-    // This would require creating a non-leader task
-    // Currently we test that the implementation is callable
-    // Real test requires fork/clone infrastructure
     XCTSkip(@"Requires fork/clone to create non-leader task");
 }
 
@@ -177,7 +193,7 @@ extern int library_is_initialized(void);
 
 - (void)testGetsidImplReturnsCurrentSession {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     int32_t sid = getsid_impl(task->pid);
     
@@ -187,7 +203,7 @@ extern int library_is_initialized(void);
 
 - (void)testGetsidImplZeroReturnsCurrentSession {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     int32_t sid_zero = getsid_impl(0);
     int32_t sid_explicit = getsid_impl(task->pid);
@@ -207,16 +223,16 @@ extern int library_is_initialized(void);
 
 - (void)testDoKillpgSignalDelivery {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
-    XCTAssertNotNull(task->signal, @"Task should have signal state");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
+    XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
     
-    // Block SIGUSR1 first using do_sigprocmask
+    // Block SIGUSR1 using do_sigprocmask with local test constant
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
-    mask.sig[SIGUSR1 >> 6] |= (1ULL << (SIGUSR1 & 63));
+    mask.sig[(TEST_SIGUSR1 - 1) >> 6] |= (1ULL << ((TEST_SIGUSR1 - 1) & 63));
     
     errno = 0;
-    int result = do_sigprocmask(SIG_BLOCK, &mask, &oldmask);
+    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
     XCTAssertEqual(result, 0, @"sigprocmask should succeed");
     
     // Clear pending first
@@ -225,7 +241,7 @@ extern int library_is_initialized(void);
     // Send signal to our process group using do_killpg
     int32_t pgid = task->pgid ? task->pgid : task->pid;
     errno = 0;
-    result = do_killpg(pgid, SIGUSR1);
+    result = do_killpg(pgid, TEST_SIGUSR1);
     
     XCTAssertEqual(result, 0, @"do_killpg should succeed");
     
@@ -234,16 +250,16 @@ extern int library_is_initialized(void);
     result = do_sigpending(&pending);
     XCTAssertEqual(result, 0, @"do_sigpending should succeed");
     
-    bool is_pending = (pending.sig[SIGUSR1 >> 6] & (1ULL << (SIGUSR1 & 63))) != 0;
+    bool is_pending = (pending.sig[(TEST_SIGUSR1 - 1) >> 6] & (1ULL << ((TEST_SIGUSR1 - 1) & 63))) != 0;
     XCTAssertTrue(is_pending, @"SIGUSR1 should be pending");
     
     // Restore mask
-    do_sigprocmask(SIG_SETMASK, &oldmask, NULL);
+    do_sigprocmask(TEST_SIG_SETMASK, &oldmask, NULL);
 }
 
 - (void)testDoKillpgRejectsInvalidPgid {
     errno = 0;
-    int result = do_killpg(-9999, SIGUSR1);
+    int result = do_killpg(-9999, TEST_SIGUSR1);
     
     XCTAssertEqual(result, -1, @"Should fail");
     XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH");
@@ -253,17 +269,14 @@ extern int library_is_initialized(void);
 
 - (void)testWaitpidImplNoChildReturnsEchild {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
     
     int status = 0;
     errno = 0;
-    int32_t result = waitpid_impl(-1, &status, WNOHANG);
+    int32_t result = waitpid_impl(-1, &status, TEST_WNOHANG);
     
-    // Should return 0 if no children (non-blocking)
-    // But if no task has a child relationship in our virtual table, it might return ECHILD
     NSLog(@"waitpid_impl returned %d, errno=%d", result, errno);
     
-    // The call should complete without crashing; exact behavior depends on task state
     XCTAssertTrue(result == 0 || result == -1, @"Should return 0 or -1");
     if (result == -1) {
         XCTAssertEqual(errno, ECHILD, @"Should return ECHILD if no children");
@@ -274,19 +287,16 @@ extern int library_is_initialized(void);
 
 - (void)testSignal64InternalHandling {
     struct task_struct *task = get_current();
-    XCTAssertNotNull(task, @"Should have a current task");
-    XCTAssertNotNull(task->signal, @"Task should have signal state");
+    XCTAssertTrue(task != NULL, @"Should have a current task");
+    XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
     
-    // Signal 64 is the last valid signal number in Linux
-    // This test catches the bridge indexing bug (signal >> 5 vs signal - 1)
-    
-    // Block signal 64
+    // Block signal 64 using do_sigprocmask with local test constant
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
     mask.sig[(64 - 1) >> 6] |= (1ULL << ((64 - 1) & 63));
     
     errno = 0;
-    int result = do_sigprocmask(SIG_BLOCK, &mask, &oldmask);
+    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
     XCTAssertEqual(result, 0, @"sigprocmask should succeed");
     
     // Clear pending
@@ -307,7 +317,7 @@ extern int library_is_initialized(void);
     XCTAssertTrue(is_pending, @"Signal 64 should be pending");
     
     // Restore mask
-    do_sigprocmask(SIG_SETMASK, &oldmask, NULL);
+    do_sigprocmask(TEST_SIG_SETMASK, &oldmask, NULL);
 }
 
 @end
