@@ -14,6 +14,23 @@
 
 #include "task.h"
 
+/* For internal implementation, use Linux UAPI constants.
+ * These match the Linux ABI (0, 1, 2) not Darwin host values (1, 2, 3).
+ * Internal do_* functions must use Linux values. */
+#ifndef IXLAND_SIGOPS_DEFINED
+#define IXLAND_SIGOPS_DEFINED
+/* Undefine Darwin values first if they exist */
+#ifdef SIG_BLOCK
+#undef SIG_BLOCK
+#undef SIG_UNBLOCK
+#undef SIG_SETMASK
+#endif
+/* Linux UAPI values */
+#define SIG_BLOCK   0
+#define SIG_UNBLOCK 1
+#define SIG_SETMASK 2
+#endif
+
 /* Include host signal.h ONLY for the public wrapper signatures.
  * This is acceptable because signal.c owns the public signal contract. */
 #include <signal.h>
@@ -83,10 +100,10 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
     if (!task || !task->signal)
         return;
 
-    /* Mark signal as pending */
-    int idx = sig / 64;
-    int bit = sig % 64;
-    if (idx < SIGNAL_NSIG_WORDS) {
+    /* Mark signal as pending - use 0-based indexing (sig - 1) */
+    int idx = (sig - 1) / 64;
+    int bit = (sig - 1) % 64;
+    if (idx < SIGNAL_NSIG_WORDS && sig >= 1 && sig <= SIGNAL_NSIG) {
         task->signal->pending.sig[idx] |= (1ULL << bit);
     }
 
@@ -124,7 +141,7 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
 }
 
 int signal_generate_task(struct task_struct *target, int32_t sig) {
-    if (!target || sig < 0 || sig >= SIGNAL_NSIG)
+    if (!target || sig < 1 || sig > SIGNAL_NSIG)
         return -EINVAL;
 
     if (sig == 0) {
@@ -140,11 +157,15 @@ int signal_generate_task(struct task_struct *target, int32_t sig) {
 }
 
 int signal_generate_pgrp(int32_t pgid, int32_t sig) {
-    if (sig < 0 || sig >= SIGNAL_NSIG)
+    if (sig < 0 || sig > SIGNAL_NSIG)
         return -EINVAL;
 
+    /* Convert negative pgid to positive (killpg semantics) */
+    if (pgid < 0)
+        pgid = -pgid;
+
     if (pgid <= 0)
-        return -EINVAL;
+        return -ESRCH;
 
     int found = 0;
 
@@ -186,9 +207,10 @@ int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int3
         return -EINVAL;
 
     /* Find first pending signal that's not blocked */
-    for (int i = 1; i < SIGNAL_NSIG; i++) {
-        int idx = i / 64;
-        int bit = i % 64;
+    for (int i = 1; i <= SIGNAL_NSIG; i++) {
+        /* Use 0-based indexing (sig - 1) */
+        int idx = (i - 1) / 64;
+        int bit = (i - 1) % 64;
 
         if (idx >= SIGNAL_NSIG_WORDS)
             continue;
@@ -204,7 +226,7 @@ int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int3
             *sig = i;
             /* Clear pending bit */
             task->signal->pending.sig[idx] &= ~(1ULL << bit);
-            return 0;
+            return 1; /* Return 1 to indicate signal found */
         }
     }
 
@@ -238,8 +260,9 @@ bool signal_is_blocked(const struct task_struct *task, int32_t sig) {
     if (!task || !task->signal)
         return false;
 
-    int idx = sig / 64;
-    int bit = sig % 64;
+    /* Use 0-based indexing (sig - 1) */
+    int idx = (sig - 1) / 64;
+    int bit = (sig - 1) % 64;
 
     if (idx >= SIGNAL_NSIG_WORDS)
         return false;
@@ -452,10 +475,12 @@ int do_sigsuspend(const struct signal_mask_bits *mask) {
 }
 
 int do_kill(int32_t pid, int32_t sig) {
-    if (sig < 0 || sig >= SIGNAL_NSIG) {
+    if (sig < 0 || sig > SIGNAL_NSIG) {
         errno = EINVAL;
         return -1;
     }
+
+    int result;
 
     if (pid <= 0) {
         /* Process group handling */
@@ -466,15 +491,21 @@ int do_kill(int32_t pid, int32_t sig) {
                 errno = ESRCH;
                 return -1;
             }
-            return signal_generate_pgrp(task->pgid, sig);
+            result = signal_generate_pgrp(task->pgid, sig);
         } else if (pid == -1) {
             /* All processes (privileged) */
             errno = EPERM;
             return -1;
         } else {
             /* Process group |pid| */
-            return signal_generate_pgrp(-pid, sig);
+            result = signal_generate_pgrp(-pid, sig);
         }
+        /* Convert internal error codes to errno + return -1 */
+        if (result < 0) {
+            errno = -result;
+            return -1;
+        }
+        return result;
     }
 
     struct task_struct *task = task_lookup(pid);
@@ -489,13 +520,24 @@ int do_kill(int32_t pid, int32_t sig) {
         return 0;
     }
 
-    int result = signal_generate_task(task, sig);
+    result = signal_generate_task(task, sig);
     free_task(task);
+    /* Convert internal error codes to errno + return -1 */
+    if (result < 0) {
+        errno = -result;
+        return -1;
+    }
     return result;
 }
 
 int do_killpg(int32_t pgrp, int32_t sig) {
-    return signal_generate_pgrp(pgrp, sig);
+    int result = signal_generate_pgrp(pgrp, sig);
+    /* Convert internal error codes to errno + return -1 */
+    if (result < 0) {
+        errno = -result;
+        return -1;
+    }
+    return result;
 }
 
 /* ============================================================================

@@ -108,6 +108,9 @@ void free_task(struct task_struct *task) {
 }
 
 struct task_struct *task_lookup(int32_t pid) {
+    if (pid <= 0)
+        return NULL;
+
     int idx = task_hash(pid);
     pthread_mutex_lock(&task_table_lock);
     struct task_struct *task = task_table[idx];
@@ -240,14 +243,14 @@ int setpgid_impl(int32_t pid, int32_t pgid) {
         pid = current->pid;
     }
 
-    if (pgid == 0) {
-        pgid = pid;
-    }
-
     /* Linux: reject negative pgid */
-    if (pgid < 0) {
+    if (pgid < 0 && pgid != 0) {
         errno = EINVAL;
         return -1;
+    }
+
+    if (pgid == 0) {
+        pgid = pid;
     }
 
     struct task_struct *target = task_lookup(pid);
