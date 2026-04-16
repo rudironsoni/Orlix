@@ -46,13 +46,27 @@ struct task_rlimit;
 
 /* Task lifecycle states - virtual kernel internal */
 enum task_state {
-    TASK_RUNNING = 0,
-    TASK_INTERRUPTIBLE = 1,
-    TASK_UNINTERRUPTIBLE = 2,
-    TASK_STOPPED = 4,
-    TASK_ZOMBIE = 8,
-    TASK_DEAD = 16,
+TASK_RUNNING = 0,
+TASK_INTERRUPTIBLE = 1,
+TASK_UNINTERRUPTIBLE = 2,
+TASK_STOPPED = 4,
+TASK_ZOMBIE = 8,
+TASK_DEAD = 16,
 };
+
+/* waitpid options - same as Linux UAPI */
+#define WNOHANG     0x00000001
+#define WUNTRACED   0x00000002
+#define WCONTINUED  0x00000008
+
+/* wait status macros */
+#define WEXITSTATUS(status) (((status) & 0xFF00) >> 8)
+#define WTERMSIG(status)   ((status) & 0x7F)
+#define WSTOPSIG(status)   WEXITSTATUS(status)
+#define WIFEXITED(status)  (WTERMSIG(status) == 0)
+#define WIFSIGNALED(status) (((status) & 0x7F) != 0 && ((status) & 0x7F) != 0x7F)
+#define WIFSTOPPED(status)  (((status) & 0xFF) == 0x7F)
+#define WIFCONTINUED(status)((status) == 0xFFFF)
 
 /* Resource limits - private internal representation
  * Do not use host struct rlimit */

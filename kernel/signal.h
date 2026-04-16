@@ -32,6 +32,11 @@ struct task_struct;
 /* Signal count - Linux uses 64 signals */
 #define SIGNAL_NSIG 64
 
+/* sigprocmask operations - same as Linux UAPI */
+#define SIG_BLOCK   0 /* for blocking signals */
+#define SIG_UNBLOCK 1 /* for unblocking signals */
+#define SIG_SETMASK 2 /* for setting the signal mask */
+
 /* Signal handler type - private internal */
 typedef void (*sighandler_t)(int);
 
