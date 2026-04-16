@@ -303,41 +303,41 @@ int do_sigaction(int32_t sig, const struct signal_action_slot *act,
 }
 
 int do_sigprocmask(int how, const struct signal_mask_bits *set,
-                          struct signal_mask_bits *oldset) {
-    struct task_struct *task = get_current();
-    if (!task || !task->signal) {
-        errno = ESRCH;
-        return -1;
-    }
+		   struct signal_mask_bits *oldset) {
+	struct task_struct *task = get_current();
+	if (!task || !task->signal) {
+		errno = ESRCH;
+		return -1;
+	}
 
-    struct signal_struct *sig = task->signal;
+	struct signal_struct *sig = task->signal;
 
-    if (oldset) {
-        *oldset = sig->blocked;
-    }
+	if (oldset) {
+		*oldset = sig->blocked;
+	}
 
-    if (set) {
-        switch (how) {
-        case 0: /* SIG_BLOCK */
-            for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
-                sig->blocked.sig[i] |= set->sig[i];
-            }
-            break;
-        case 1: /* SIG_UNBLOCK */
-            for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
-                sig->blocked.sig[i] &= ~set->sig[i];
-            }
-            break;
-        case 2: /* SIG_SETMASK */
-            sig->blocked = *set;
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
-        }
-    }
+	if (set) {
+		switch (how) {
+		case SIG_BLOCK: /* Block signals in set */
+			for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+				sig->blocked.sig[i] |= set->sig[i];
+			}
+			break;
+		case SIG_UNBLOCK: /* Unblock signals in set */
+			for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+				sig->blocked.sig[i] &= ~set->sig[i];
+			}
+			break;
+		case SIG_SETMASK: /* Replace blocked set with set */
+			sig->blocked = *set;
+			break;
+		default:
+			errno = EINVAL;
+			return -1;
+		}
+	}
 
-    return 0;
+	return 0;
 }
 
 int do_sigpending(struct signal_mask_bits *set) {
@@ -558,10 +558,10 @@ __attribute__((visibility("default"))) int killpg(int32_t pgrp, int sig) {
 }
 
 __attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    if (how < 0 || how > 2) {
-        errno = EINVAL;
-        return -1;
-    }
+	if (how < SIG_BLOCK || how > SIG_SETMASK) {
+		errno = EINVAL;
+		return -1;
+	}
 
     struct signal_mask_bits internal_set, internal_oldset;
     struct signal_mask_bits *internal_set_ptr = NULL;
