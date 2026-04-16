@@ -1,7 +1,8 @@
 /* IXLandSystem/kernel/signal.c
  * Internal kernel signal owner implementation
  *
- * NO signal.h include here - uses only IXLand internal private types
+ * Public wrappers use proper POSIX types.
+ * Internal logic uses private types only.
  */
 
 #include "signal.h"
@@ -12,6 +13,10 @@
 #include <stdlib.h>
 
 #include "task.h"
+
+/* Include host signal.h ONLY for the public wrapper signatures.
+ * This is acceptable because signal.c owns the public signal contract. */
+#include <signal.h>
 
 struct signal_struct *alloc_signal_struct(void) {
     struct signal_struct *sig = calloc(1, sizeof(struct signal_struct));
@@ -501,12 +506,12 @@ int do_killpg(int32_t pgrp, int32_t sig) {
  */
 
 /* Bridge helpers declared in arch/darwin/signal_bridge.c */
-extern void bridge_signal_from_host(const void *host_sigaction, struct signal_action_slot *out);
-extern void bridge_signal_to_host(const struct signal_action_slot *internal, void *host_sigaction);
-extern void bridge_sigset_from_host(const void *host_sigset, struct signal_mask_bits *out);
-extern void bridge_sigset_to_host(const struct signal_mask_bits *internal, void *host_sigset);
+extern void bridge_signal_from_host(const struct sigaction *host_act, struct signal_action_slot *out);
+extern void bridge_signal_to_host(const struct signal_action_slot *internal, struct sigaction *host_act);
+extern void bridge_sigset_from_host(const sigset_t *host_set, struct signal_mask_bits *out);
+extern void bridge_sigset_to_host(const struct signal_mask_bits *internal, sigset_t *host_set);
 
-__attribute__((visibility("default"))) int sigaction(int signum, const void *act, void *oldact) {
+__attribute__((visibility("default"))) int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
     struct signal_action_slot internal_act, internal_oldact;
     struct signal_action_slot *internal_act_ptr = NULL;
     struct signal_action_slot *internal_oldact_ptr = NULL;
@@ -552,7 +557,7 @@ __attribute__((visibility("default"))) int killpg(int32_t pgrp, int sig) {
     return do_killpg(pgrp, sig);
 }
 
-__attribute__((visibility("default"))) int sigprocmask(int how, const void *set, void *oldset) {
+__attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
     if (how < 0 || how > 2) {
         errno = EINVAL;
         return -1;
