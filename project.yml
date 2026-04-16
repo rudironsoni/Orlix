@@ -104,6 +104,7 @@ targets:
       iOS: "16.0"
     sources:
       - IXLandSystemTests/SignalTests.m
+      - IXLandSystemTests/TaskGroupTests.m
     dependencies:
       - target: IXLandSystem
     settings:
@@ -130,4 +131,3 @@ schemes:
     test:
       targets:
         - IXLandSystemTests
-
