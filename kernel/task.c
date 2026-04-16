@@ -40,8 +40,9 @@ struct task_struct *alloc_task(void) {
 
     task->pid = alloc_pid();
     task->tgid = task->pid;
-    task->pgid = task->pid;
-    task->sid = task->pid;
+    /* A new task starts without pgid/sid; fork_impl will inherit from parent */
+    task->pgid = 0;
+    task->sid = 0;
     task->vfork_parent = NULL;
 
     atomic_init(&task->state, TASK_RUNNING);

@@ -22,9 +22,9 @@ void bridge_sigset_from_host(const sigset_t *host_set, struct signal_mask_bits *
 
     for (int sig = 1; sig <= 64; sig++) {
         if (sigismember(host_set, sig)) {
-            int idx = sig / 64;
-            int bit = sig % 64;
-            if (idx < 1) {
+            int idx = (sig - 1) / 64;  // Fixed: signal 64 now maps to idx 0, bit 63
+            int bit = (sig - 1) % 64;
+            if (idx < SIGNAL_NSIG_WORDS && bit < 64) {
                 out_set->sig[idx] |= (1ULL << bit);
             }
         }
@@ -38,12 +38,10 @@ void bridge_sigset_to_host(const struct signal_mask_bits *internal_set, sigset_t
     if (!internal_set) return;
 
     for (int sig = 1; sig <= 64; sig++) {
-        int idx = sig / 64;
-        int bit = sig % 64;
-        if (idx < 1) {
-            if (internal_set->sig[idx] & (1ULL << bit)) {
-                sigaddset(host_set, sig);
-            }
+        int idx = (sig - 1) / 64;  // Fixed: signal 64 now maps to idx 0, bit 63
+        int bit = (sig - 1) % 64;
+        if (idx < SIGNAL_NSIG_WORDS && (internal_set->sig[idx] & (1ULL << bit))) {
+            sigaddset(host_set, sig);
         }
     }
 }
