@@ -28,12 +28,24 @@ This creates `IXLandSystem.xcodeproj` from the spec in `project.yml`.
 
 ```bash
 xcodebuild -project IXLandSystem.xcodeproj \
-  -target IXLandSystem \
+  -scheme IXLandSystem-6.12-arm64 \
   -sdk iphonesimulator \
   -arch arm64 \
   -configuration Debug \
   build
 ```
+
+### Step 3: Run Canonical Tests
+
+```bash
+xcodebuild test -project IXLandSystem.xcodeproj \
+  -scheme IXLandSystem-6.12-arm64 \
+  -sdk iphonesimulator \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17'
+```
+
+Do not add `-arch` to the test invocation when the simulator destination already defines the runtime/architecture.
 
 **Output:** `build/Debug-iphonesimulator/libIXLandSystem.a`
 

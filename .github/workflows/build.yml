@@ -30,7 +30,10 @@ jobs:
       run: xcodegen generate --project .
 
     - name: Build with Xcode (iOS Simulator)
-      run: xcodebuild -project IXLandSystem.xcodeproj -target IXLandSystem -sdk iphonesimulator -arch arm64 -configuration Debug build
+      run: xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build
+
+    - name: Test with Xcode (iOS Simulator)
+      run: xcodebuild test -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
 
     - name: Report build status
       run: echo "Build completed successfully"
@@ -54,7 +57,7 @@ jobs:
       run: xcodegen generate --project .
 
     - name: Build with Xcode (iOS Simulator)
-      run: xcodebuild -project IXLandSystem.xcodeproj -target IXLandSystem -sdk iphonesimulator -arch arm64 -configuration Debug build
+      run: xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build
 
     - name: Create Release
       id: create_release

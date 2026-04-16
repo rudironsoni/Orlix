@@ -79,10 +79,10 @@ These are currently incomplete:
 
 - **Authoritative build path**: `xcodegen generate --project .` then `xcodebuild` with iOS SDK
 - `project.yml` is the authoritative project spec for XcodeGen
-- `xcodebuild -project IXLandSystem.xcodeproj -target IXLandSystem -sdk iphonesimulator -arch arm64 -configuration Debug build` produces iOS Simulator static library
+- `xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build` produces the iOS Simulator build artifacts
+- `xcodebuild test -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'` is the canonical executable test invocation
 - `.github/workflows/build.yml` runs XcodeGen + xcodebuild as CI gate
-- `swift build` is AUXILIARY ONLY - host-side macOS smoke build, NOT authoritative for iOS tranche completion
-- `swift test` fails because there is no real test target
+- `swift build` is non-authoritative drift and must not be used as iOS build proof
 
 ## Mach-O Export Spike Status
 
