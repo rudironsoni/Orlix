@@ -492,3 +492,126 @@ int do_kill(int32_t pid, int32_t sig) {
 int do_killpg(int32_t pgrp, int32_t sig) {
     return signal_generate_pgrp(pgrp, sig);
 }
+
+/* ============================================================================
+ * PUBLIC CANONICAL SIGNAL WRAPPERS
+ * ============================================================================
+ * These export the Linux-facing signal ABI from the kernel signal owner.
+ * They use opaque void* to avoid depending on Darwin host types.
+ */
+
+/* Bridge helpers declared in arch/darwin/signal_bridge.c */
+extern void bridge_signal_from_host(const void *host_sigaction, struct signal_action_slot *out);
+extern void bridge_signal_to_host(const struct signal_action_slot *internal, void *host_sigaction);
+extern void bridge_sigset_from_host(const void *host_sigset, struct signal_mask_bits *out);
+extern void bridge_sigset_to_host(const struct signal_mask_bits *internal, void *host_sigset);
+
+__attribute__((visibility("default"))) int sigaction(int signum, const void *act, void *oldact) {
+    struct signal_action_slot internal_act, internal_oldact;
+    struct signal_action_slot *internal_act_ptr = NULL;
+    struct signal_action_slot *internal_oldact_ptr = NULL;
+
+    if (act) {
+        bridge_signal_from_host(act, &internal_act);
+        internal_act_ptr = &internal_act;
+    }
+
+    if (oldact) {
+        internal_oldact_ptr = &internal_oldact;
+    }
+
+    int result = do_sigaction(signum, internal_act_ptr, internal_oldact_ptr);
+
+    if (oldact && result == 0) {
+        bridge_signal_to_host(&internal_oldact, oldact);
+    }
+
+    return result;
+}
+
+__attribute__((visibility("default"))) sighandler_t signal(int signum, sighandler_t handler) {
+    if (signum < 1 || signum >= SIGNAL_NSIG) {
+        errno = EINVAL;
+        return (sighandler_t)-1;
+    }
+
+    if (signum == 9 || signum == 19) {
+        errno = EINVAL;
+        return (sighandler_t)-1;
+    }
+
+    sighandler_t old_handler = do_signal(signum, handler);
+    return old_handler ? old_handler : (sighandler_t)-1;
+}
+
+__attribute__((visibility("default"))) int kill(int32_t pid, int sig) {
+    return do_kill(pid, sig);
+}
+
+__attribute__((visibility("default"))) int killpg(int32_t pgrp, int sig) {
+    return do_killpg(pgrp, sig);
+}
+
+__attribute__((visibility("default"))) int sigprocmask(int how, const void *set, void *oldset) {
+    if (how < 0 || how > 2) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct signal_mask_bits internal_set, internal_oldset;
+    struct signal_mask_bits *internal_set_ptr = NULL;
+    struct signal_mask_bits *internal_oldset_ptr = NULL;
+
+    if (set) {
+        bridge_sigset_from_host(set, &internal_set);
+        internal_set_ptr = &internal_set;
+    }
+
+    if (oldset) {
+        internal_oldset_ptr = &internal_oldset;
+    }
+
+    int result = do_sigprocmask(how, internal_set_ptr, internal_oldset_ptr);
+
+    if (oldset && result == 0) {
+        bridge_sigset_to_host(&internal_oldset, oldset);
+    }
+
+    return result;
+}
+
+__attribute__((visibility("default"))) int sigpending(void *set) {
+    if (!set) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    struct signal_mask_bits internal_set;
+    int result = do_sigpending(&internal_set);
+
+    if (result == 0) {
+        bridge_sigset_to_host(&internal_set, set);
+    }
+
+    return result;
+}
+
+__attribute__((visibility("default"))) int sigsuspend(const void *mask) {
+    if (!mask) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    struct signal_mask_bits internal_mask;
+    bridge_sigset_from_host(mask, &internal_mask);
+
+    return do_sigsuspend(&internal_mask);
+}
+
+__attribute__((visibility("default"))) int raise(int sig) {
+    return do_raise(sig);
+}
+
+__attribute__((visibility("default"))) int pause(void) {
+    return do_pause();
+}
