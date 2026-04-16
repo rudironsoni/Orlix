@@ -15,6 +15,7 @@
 		26E0C643B3E753A0656DEBDD /* select_darwin.c in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
 		3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */ = {isa = PBXBuildFile; fileRef = F5240B1F3DC3BDF0ED535D3B /* time.c */; };
+		412EF8D788799D420EF84B74 /* SignalTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 667BE890D514BA87E4BDA1BF /* SignalTests.m */; };
 		5773870A2156F8B6827EB2D5 /* network.c in Sources */ = {isa = PBXBuildFile; fileRef = CEC04AD14B572B960464124B /* network.c */; };
 		578C4CB3E1760634134B9781 /* signal.c in Sources */ = {isa = PBXBuildFile; fileRef = 9935787E313CB1AD8A576244 /* signal.c */; };
 		586F3641CE2CB13F63E94338 /* readdir.c in Sources */ = {isa = PBXBuildFile; fileRef = FE42C3F5F46C53309E18B1A6 /* readdir.c */; };
@@ -72,6 +73,7 @@
 		5E96E95F0B83F5CC63E21913 /* libIXLandSystem.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = libIXLandSystem.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		622D8101A658CE968663C95E /* signal_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal_bridge.c; sourceTree = "<group>"; };
 		666A5EE8B497170CF5C3223A /* ixland_observability.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ixland_observability.c; sourceTree = "<group>"; };
+		667BE890D514BA87E4BDA1BF /* SignalTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SignalTests.m; sourceTree = "<group>"; };
 		6B4BAC7DF63019526114D741 /* IXLandSystemTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IXLandSystemTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = select_darwin.c; sourceTree = "<group>"; };
 		8BE7B6DDA1A833FE4A6C9194 /* random.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = random.c; sourceTree = "<group>"; };
@@ -130,6 +132,14 @@
 			path = native;
 			sourceTree = "<group>";
 		};
+		2B860379C764168836518D61 /* IXLandSystemTests */ = {
+			isa = PBXGroup;
+			children = (
+				667BE890D514BA87E4BDA1BF /* SignalTests.m */,
+			);
+			path = IXLandSystemTests;
+			sourceTree = "<group>";
+		};
 		314EC764B9F768919129416A /* fs */ = {
 			isa = PBXGroup;
 			children = (
@@ -182,6 +192,7 @@
 			children = (
 				07E912843116C794E88C94A1 /* arch */,
 				314EC764B9F768919129416A /* fs */,
+				2B860379C764168836518D61 /* IXLandSystemTests */,
 				F8CCC0A1730EF28F1B056A94 /* kernel */,
 				6A94CDCB0031F846B494F26D /* observability */,
 				4B14438707DE5241F1ED4125 /* runtime */,
@@ -335,6 +346,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				412EF8D788799D420EF84B74 /* SignalTests.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

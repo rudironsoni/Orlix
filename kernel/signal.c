@@ -585,7 +585,7 @@ __attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *
     return result;
 }
 
-__attribute__((visibility("default"))) int sigpending(void *set) {
+__attribute__((visibility("default"))) int sigpending(sigset_t *set) {
     if (!set) {
         errno = EFAULT;
         return -1;
@@ -601,7 +601,7 @@ __attribute__((visibility("default"))) int sigpending(void *set) {
     return result;
 }
 
-__attribute__((visibility("default"))) int sigsuspend(const void *mask) {
+__attribute__((visibility("default"))) int sigsuspend(const sigset_t *mask) {
     if (!mask) {
         errno = EFAULT;
         return -1;

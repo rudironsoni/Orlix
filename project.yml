@@ -102,7 +102,8 @@ targets:
     platform: iOS
     deploymentTarget:
       iOS: "16.0"
-    sources: []
+    sources:
+      - IXLandSystemTests/SignalTests.m
     dependencies:
       - target: IXLandSystem
     settings:
@@ -126,5 +127,7 @@ schemes:
       targets:
         IXLandSystem: all
         IXLandSystemTests: all
-    run:
-      config: Debug
+    test:
+      targets:
+        - IXLandSystemTests
+
