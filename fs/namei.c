@@ -3,10 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/stdio.h>
 #include <unistd.h>
 
 #include "vfs.h"
 #include "../kernel/task.h"
+
+/* Linux UAPI renameat2 flag values - vendored header conflicts with Darwin, use canonical values directly */
+#define RENAME_NOREPLACE 0x0001
+#define RENAME_EXCHANGE  0x0002
+#define RENAME_WHITEOUT  0x0004
 
 static int directory_validate_path(const char *path) {
     if (path == NULL) {
@@ -24,6 +30,94 @@ static int directory_validate_path(const char *path) {
 
 /* Get current task - forward declaration */
 struct task_struct *get_current(void);
+
+static int rename_translate_path_at(int dirfd, const char *path, char *translated_path,
+                                    size_t translated_path_len) {
+    int ret;
+
+    if (path == NULL) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (path[0] == '\0') {
+        errno = ENOENT;
+        return -1;
+    }
+
+    ret = vfs_translate_path_at(dirfd, path, translated_path, translated_path_len);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return 0;
+}
+
+static int rename_validate_same_backing_root(const char *old_host_path, const char *new_host_path) {
+    size_t root_len = strlen(vfs_host_backing_root());
+
+    if (strncmp(old_host_path, vfs_host_backing_root(), root_len) != 0 ||
+        strncmp(new_host_path, vfs_host_backing_root(), root_len) != 0) {
+        errno = EXDEV;
+        return -1;
+    }
+
+    return 0;
+}
+
+static int rename_apply_host_operation(const char *old_host_path, const char *new_host_path,
+                                       unsigned int host_flags) {
+    if (rename_validate_same_backing_root(old_host_path, new_host_path) != 0) {
+        return -1;
+    }
+
+    if (renameatx_np(AT_FDCWD, old_host_path, AT_FDCWD, new_host_path, host_flags) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
+                          unsigned int flags) {
+    char translated_old[MAX_PATH];
+    char translated_new[MAX_PATH];
+    unsigned int host_flags = 0;
+
+    if (rename_translate_path_at(olddirfd, oldpath, translated_old, sizeof(translated_old)) != 0) {
+        return -1;
+    }
+
+    if (rename_translate_path_at(newdirfd, newpath, translated_new, sizeof(translated_new)) != 0) {
+        return -1;
+    }
+
+    if (flags & ~(RENAME_NOREPLACE | RENAME_EXCHANGE | RENAME_WHITEOUT)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if ((flags & RENAME_WHITEOUT) != 0) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+
+    if ((flags & RENAME_NOREPLACE) != 0 && (flags & RENAME_EXCHANGE) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if ((flags & RENAME_NOREPLACE) != 0) {
+        host_flags |= RENAME_EXCL;
+    }
+
+    if ((flags & RENAME_EXCHANGE) != 0) {
+        host_flags |= RENAME_SWAP;
+    }
+
+    return rename_apply_host_operation(translated_old, translated_new, host_flags);
+}
 
 static int directory_translate_task_path(const char *path, char *translated_path,
                                          size_t translated_path_len,
@@ -444,6 +538,18 @@ __attribute__((visibility("default"))) ssize_t readlinkat(int dirfd, const char 
     }
 
     return readlink(translated_path, buf, bufsiz);
+}
+
+__attribute__((visibility("default"))) int rename(const char *oldpath, const char *newpath) {
+    return renameat2_impl(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
+}
+
+__attribute__((visibility("default"))) int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
+    return renameat2_impl(olddirfd, oldpath, newdirfd, newpath, 0);
+}
+
+__attribute__((visibility("default"))) int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags) {
+    return renameat2_impl(olddirfd, oldpath, newdirfd, newpath, flags);
 }
 
 __attribute__((visibility("default"))) int chroot(const char *path) {
