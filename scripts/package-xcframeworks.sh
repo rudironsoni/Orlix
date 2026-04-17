@@ -97,20 +97,6 @@ cat > "$DIST_DIR/README.md" << 'EOF'
    #include <ixland/ixland_wamr.h>
    ```
 
-### Swift Package Manager
-
-Add to `Package.swift`:
-```swift
-.binaryTarget(
-    name: "LibIXLAND",
-    path: "LibIXLAND.xcframework"
-),
-.binaryTarget(
-    name: "LibIWasm",
-    path: "LibIWasm.xcframework"
-)
-```
-
 ## API Usage
 
 ### Basic Syscalls

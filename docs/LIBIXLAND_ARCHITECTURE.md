@@ -21,7 +21,7 @@ a-shell-kernel/
 │   ├── ixland.h                 # Master umbrella header
 │   ├── ixland_syscalls.h        # Syscall prototypes (public)
 │   ├── ixland_types.h           # ixland-specific types
-│   ├── ixland_error.h           # Error codes
+│   ├── linux/errno.h            # Linux UAPI error codes
 │   ├── ixland_wamr.h            # WAMR integration API
 │   └── sys/                  # Linux-compatible system headers
 │       ├── unistd.h          # fork, exec, getpid...
