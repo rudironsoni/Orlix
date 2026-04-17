@@ -79,11 +79,14 @@ char *getcwd_impl(char *buf, size_t size) {
     }
 
     char virtual_path[MAX_PATH];
-    const char *selected_path = ios_cwd;
+    const char *selected_path;
 
-    if (vfs_reverse_translate(ios_cwd, virtual_path, sizeof(virtual_path)) == 0) {
-        selected_path = virtual_path;
+    if (vfs_reverse_translate(ios_cwd, virtual_path, sizeof(virtual_path)) != 0) {
+        errno = EXDEV;
+        return NULL;
     }
+
+    selected_path = virtual_path;
 
     const size_t selected_len = strlen(selected_path);
     if (selected_len >= size) {

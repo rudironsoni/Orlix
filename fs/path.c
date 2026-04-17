@@ -310,14 +310,7 @@ int path_resolve(const char *path, char *resolved, size_t resolved_len) {
         /* Now translate through VFS */
         /* The VFS translate function expects a virtual path and returns iOS path */
         if (vfs_translate_path(normalized, resolved, resolved_len) != 0) {
-            /* Translation failed - return the normalized path anyway */
-            /* This allows fallback to direct kernel access */
-            if (strlen(normalized) >= resolved_len) {
-                errno = ENAMETOOLONG;
-                return -1;
-            }
-            strncpy(resolved, normalized, resolved_len - 1);
-            resolved[resolved_len - 1] = '\0';
+            return -1;
         }
         return 0;
     }

@@ -171,6 +171,8 @@ int vfs_close(struct file *file);
 /* Translation between virtual and host paths */
 int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len);
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len);
+const char *vfs_host_backing_root(void);
+const char *vfs_virtual_root(void);
 
 /* Stat operations */
 int vfs_stat_path(const char *pathname, struct stat *statbuf);

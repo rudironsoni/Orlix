@@ -77,7 +77,7 @@ After successful build:
 
 2. **No macOS Support**: Do not attempt to build or run on macOS. The library will crash at runtime.
 
-3. **swift build is NOT authoritative**: `swift build` compiles for the host (macOS) and does not produce iOS binaries. It may be used as a smoke test but NEVER as authoritative proof.
+3. **swift build is forbidden as build proof**: `swift build` compiles for the host (macOS), does not produce iOS binaries, and must not be used for validation or proof in this repository.
 
 4. **Tests**: Tests must be run on iOS Simulator or Device, not macOS.
 
