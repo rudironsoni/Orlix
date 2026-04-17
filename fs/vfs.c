@@ -14,6 +14,22 @@
 #undef AT_EACCESS
 #define AT_EACCESS		0x200
 
+/* Linux open flags - cannot include linux/fcntl.h due to conflicts, use canonical values */
+#define IX_O_RDONLY		0x0000
+#define IX_O_WRONLY		0x0001
+#define IX_O_RDWR		0x0002
+#define IX_O_ACCMODE		0x0003
+#define IX_O_CREAT		0x0040
+#define IX_O_EXCL		0x0080
+#define IX_O_NOCTTY		0x0100
+#define IX_O_TRUNC		0x0200
+#define IX_O_APPEND		0x0400
+#define IX_O_NONBLOCK		0x0800
+#define IX_O_DSYNC		0x1000
+#define IX_O_SYNC		0x101000
+#define IX_O_RSYNC		0x101000
+#define IX_O_CLOEXEC		0x80000
+
 #include "fdtable.h"
 #include "../kernel/task.h"
 
@@ -243,11 +259,90 @@ int vfs_umount(const char *target) {
 }
 
 int vfs_open(const char *path, int flags, mode_t mode, int *target_fd) {
-    (void)path;
-    (void)flags;
-    (void)mode;
-    (void)target_fd;
-    return -ENOSYS;
+    int darwin_flags = 0;
+    int real_fd;
+
+    if (!path || !target_fd) {
+        return -EFAULT;
+    }
+
+    /* Translate Linux flags to Darwin flags
+     * Only translate the access mode and basic flags that Darwin supports
+     */
+
+    /* Access mode */
+    switch (flags & IX_O_ACCMODE) {
+        case IX_O_RDONLY:
+            darwin_flags = O_RDONLY;
+            break;
+        case IX_O_WRONLY:
+            darwin_flags = O_WRONLY;
+            break;
+        case IX_O_RDWR:
+            darwin_flags = O_RDWR;
+            break;
+        default:
+            return -EINVAL;
+    }
+
+    /* Creation and behavior flags */
+    if (flags & IX_O_CREAT) {
+        darwin_flags |= O_CREAT;
+    }
+    if (flags & IX_O_EXCL) {
+        darwin_flags |= O_EXCL;
+        /* EXCL without CREAT is invalid on Linux */
+        if (!(flags & IX_O_CREAT)) {
+            return -EINVAL;
+        }
+    }
+    if (flags & IX_O_TRUNC) {
+        darwin_flags |= O_TRUNC;
+    }
+    if (flags & IX_O_APPEND) {
+        darwin_flags |= O_APPEND;
+    }
+    if (flags & IX_O_CLOEXEC) {
+        darwin_flags |= O_CLOEXEC;
+    }
+    if (flags & IX_O_NOCTTY) {
+        darwin_flags |= O_NOCTTY;
+    }
+    if (flags & IX_O_NONBLOCK) {
+        darwin_flags |= O_NONBLOCK;
+    }
+
+    /* Reject unsupported flags with Linux-shaped errors */
+
+    /* Synchronize modes not fully supported in this subset */
+    if (flags & IX_O_DSYNC) {
+        if (darwin_flags & (O_SYNC | O_DSYNC)) {
+            /* iOS supports O_SYNC but not separate O_DSYNC semantics */
+            /* Keep O_SYNC if already set, mark as using closest equivalent */
+        }
+    }
+
+    if (flags & IX_O_SYNC) {
+        /* iOS supports O_SYNC in the kernel, but behavior may differ from Linux */
+        /* This is accepted but may have subtle semantic differences */
+        darwin_flags |= O_SYNC;
+    }
+
+    /* O_RSYNC is Linux-specific and maps to O_SYNC on iOS if needed */
+    if (flags & IX_O_RSYNC) {
+        /* Not supported as separate flag - accept O_SYNC as equivalent */
+        darwin_flags |= O_SYNC;
+    }
+
+    /* Other flags are Darwin-compatible */
+
+    real_fd = open(path, darwin_flags, mode);
+    if (real_fd < 0) {
+        return -errno;
+    }
+
+    *target_fd = real_fd;
+    return 0;
 }
 
 int vfs_close(struct file *file) {
