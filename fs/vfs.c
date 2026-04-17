@@ -32,7 +32,7 @@ static bool vfs_has_host_root_prefix(const char *path, size_t root_len) {
     return path[root_len] == '\0' || path[root_len] == '/';
 }
 
-static int vfs_normalize_linux_path(const char *input, char *output, size_t output_len) {
+int vfs_normalize_linux_path(const char *input, char *output, size_t output_len) {
     char scratch[MAX_PATH];
     size_t input_len;
     size_t normalized_len;
@@ -152,9 +152,59 @@ struct fs_struct *dup_fs_struct(struct fs_struct *old) {
     if (old->pwd)
         new->pwd = old->pwd;
     new->umask = old->umask;
+    memcpy(new->root_path, old->root_path, MAX_PATH);
+    memcpy(new->pwd_path, old->pwd_path, MAX_PATH);
     pthread_mutex_unlock(&old->lock);
 
     return new;
+}
+
+/* Initialize fs_struct with virtual root path */
+int fs_init_root(struct fs_struct *fs, const char *root_path) {
+    if (!fs || !root_path)
+        return -EINVAL;
+
+    char normalized[MAX_PATH];
+    if (vfs_normalize_linux_path(root_path, normalized, sizeof(normalized)) < 0)
+        return -EINVAL;
+
+    pthread_mutex_lock(&fs->lock);
+    memcpy(fs->root_path, normalized, MAX_PATH);
+    /* Also set pwd to root if not already set */
+    if (fs->pwd_path[0] == '\0')
+        memcpy(fs->pwd_path, normalized, MAX_PATH);
+    pthread_mutex_unlock(&fs->lock);
+
+    return 0;
+}
+
+/* Initialize fs_struct with virtual pwd path */
+int fs_init_pwd(struct fs_struct *fs, const char *pwd_path) {
+    if (!fs || !pwd_path)
+        return -EINVAL;
+
+    char normalized[MAX_PATH];
+    if (vfs_normalize_linux_path(pwd_path, normalized, sizeof(normalized)) < 0)
+        return -EINVAL;
+
+    pthread_mutex_lock(&fs->lock);
+    memcpy(fs->pwd_path, normalized, MAX_PATH);
+    /* Also set root to pwd if not already set */
+    if (fs->root_path[0] == '\0')
+        memcpy(fs->root_path, normalized, MAX_PATH);
+    pthread_mutex_unlock(&fs->lock);
+
+    return 0;
+}
+
+/* Set new pwd - task-aware path change */
+int fs_set_pwd(struct fs_struct *fs, const char *new_pwd) {
+    return fs_init_pwd(fs, new_pwd);
+}
+
+/* Set new root - task-aware root change */
+int fs_set_root(struct fs_struct *fs, const char *new_root) {
+    return fs_init_root(fs, new_root);
 }
 
 /* VFS operations - to be implemented in full */
@@ -221,20 +271,62 @@ int vfs_rmdir(const char *path) {
     return -ENOSYS;
 }
 
-int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len) {
-    char normalized_virtual[MAX_PATH];
+/* Get current task's fs_struct - forward declaration */
+struct task_struct *get_current(void);
+
+/* Internal: resolve path from task's root (absolute) or pwd (relative) */
+int vfs_translate_path_task(const char *vpath, char *host_path, size_t host_path_len,
+                            struct fs_struct *fs) {
+    char resolved_virtual[MAX_PATH];
+    char work_buffer[MAX_PATH];
     int ret;
 
-    if (!vpath || !host_path || host_path_len == 0) {
+    if (!vpath || !host_path || host_path_len == 0)
+        return -EINVAL;
+
+    /* Validate and reject parent escapes early */
+    if (strstr(vpath, "/../") != NULL || strncmp(vpath, "../", 3) == 0 ||
+        (strlen(vpath) >= 3 && strcmp(vpath + strlen(vpath) - 3, "/..") == 0)) {
         return -EINVAL;
     }
 
-    ret = vfs_normalize_linux_path(vpath, normalized_virtual, sizeof(normalized_virtual));
-    if (ret < 0) {
-        return ret;
+    /* Determine base for resolution and resolve into work_buffer */
+    if (vpath[0] == '/') {
+        /* Absolute path: resolve from task's virtual root */
+        const char *root_path = (fs && fs->root_path[0] != '\0') ? fs->root_path : vfs_virtual_root_path;
+        /* For absolute paths, prepend root and path */
+        size_t root_len = strlen(root_path);
+        size_t vpath_len = strlen(vpath);
+        if (root_len + vpath_len >= sizeof(work_buffer))
+            return -ENAMETOOLONG;
+        memcpy(work_buffer, root_path, root_len);
+        memcpy(work_buffer + root_len, vpath, vpath_len + 1);
+    } else {
+        /* Relative path: resolve from task's virtual pwd */
+        const char *pwd_path = (fs && fs->pwd_path[0] != '\0') ? fs->pwd_path : vfs_virtual_root_path;
+        size_t pwd_len = strlen(pwd_path);
+        size_t rel_len = strlen(vpath);
+        if (pwd_len + 1 + rel_len >= sizeof(work_buffer))
+            return -ENAMETOOLONG;
+        memcpy(work_buffer, pwd_path, pwd_len);
+        if (pwd_path[pwd_len - 1] != '/') {
+            work_buffer[pwd_len] = '/';
+            pwd_len++;
+        }
+        memcpy(work_buffer + pwd_len, vpath, rel_len + 1);
     }
 
-    return vfs_join_host_root(normalized_virtual, host_path, host_path_len);
+    /* Normalize the resolved virtual path */
+    ret = vfs_normalize_linux_path(work_buffer, resolved_virtual, sizeof(resolved_virtual));
+    if (ret < 0)
+        return ret;
+
+    return vfs_join_host_root(resolved_virtual, host_path, host_path_len);
+}
+
+/* Legacy API: translate path using hardcoded root (for backward compatibility) */
+int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len) {
+    return vfs_translate_path_task(vpath, host_path, host_path_len, NULL);
 }
 
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) {

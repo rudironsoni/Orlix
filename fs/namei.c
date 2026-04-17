@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "vfs.h"
+#include "../kernel/task.h"
 
 static int directory_validate_path(const char *path) {
     if (path == NULL) {
@@ -21,13 +22,26 @@ static int directory_validate_path(const char *path) {
     return 0;
 }
 
+/* Get current task - forward declaration */
+struct task_struct *get_current(void);
+
 int chdir_impl(const char *path) {
     if (directory_validate_path(path) != 0) {
         return -1;
     }
 
+    struct task_struct *task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    /* Task-aware path translation */
     char translated_path[MAX_PATH];
-    if (vfs_translate_path(path, translated_path, sizeof(translated_path)) != 0) {
+    int ret = vfs_translate_path_task(path, translated_path, sizeof(translated_path),
+                                        task->fs);
+    if (ret != 0) {
+        errno = -ret;
         return -1;
     }
 
@@ -48,6 +62,32 @@ int chdir_impl(const char *path) {
 
     if (chdir(translated_path) != 0) {
         return -1;
+    }
+
+    /* Update task's virtual pwd */
+    if (task->fs) {
+        /* Normalize the virtual path before storing */
+        char normalized[MAX_PATH];
+        if (path[0] == '/') {
+            /* Absolute - use as-is with normalization */
+            vfs_normalize_linux_path(path, normalized, sizeof(normalized));
+        } else {
+            /* Relative - resolve against current pwd */
+            char resolved[MAX_PATH];
+            size_t pwd_len = strlen(task->fs->pwd_path);
+            if (pwd_len + strlen(path) + 2 >= sizeof(resolved)) {
+                /* Path too long - don't update pwd, but operation succeeded */
+                return 0;
+            }
+            memcpy(resolved, task->fs->pwd_path, pwd_len);
+            if (resolved[pwd_len - 1] != '/') {
+                resolved[pwd_len] = '/';
+                pwd_len++;
+            }
+            memcpy(resolved + pwd_len, path, strlen(path) + 1);
+            vfs_normalize_linux_path(resolved, normalized, sizeof(normalized));
+        }
+        fs_set_pwd(task->fs, normalized);
     }
 
     return 0;

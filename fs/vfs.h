@@ -116,7 +116,7 @@ struct dentry {
 struct file_system_type {
     const char *name;
     int (*mount)(struct file_system_type *fs_type, int flags, const char *dev_name, void *data,
-                 struct dentry *mnt_root);
+                  struct dentry *mnt_root);
     void (*kill_sb)(struct super_block *sb);
     struct module *owner;
 };
@@ -132,19 +132,27 @@ struct mount {
     struct mount *mnt_parent;
 };
 
-/* Linux-compatible fs context (per-task filesystem context) */
+/* Linux-compatible fs context (per-task filesystem context)
+ * Stores virtual root and pwd as char arrays for task-aware path resolution */
 struct fs_struct {
     struct dentry *root;
     struct dentry *pwd;
     mode_t umask;
     atomic_int users;
     pthread_mutex_t lock;
+    /* Task-aware path resolution state */
+    char root_path[MAX_PATH];      /* Virtual root path (absolute, normalized) */
+    char pwd_path[MAX_PATH];       /* Virtual pwd path (absolute, normalized) */
 };
 
 /* VFS context API */
 struct fs_struct *alloc_fs_struct(void);
 void free_fs_struct(struct fs_struct *fs);
 struct fs_struct *dup_fs_struct(struct fs_struct *old);
+int fs_init_root(struct fs_struct *fs, const char *root_path);
+int fs_init_pwd(struct fs_struct *fs, const char *pwd_path);
+int fs_set_pwd(struct fs_struct *fs, const char *new_pwd);
+int fs_set_root(struct fs_struct *fs, const char *new_root);
 
 /* VFS initialization */
 int vfs_init(void);
@@ -168,8 +176,11 @@ int vfs_rmdir(const char *path);
 int vfs_open(const char *path, int flags, mode_t mode, int *target_fd);
 int vfs_close(struct file *file);
 
-/* Translation between virtual and host paths */
+/* Task-aware path translation between virtual and host paths */
 int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len);
+int vfs_translate_path_task(const char *vpath, char *host_path, size_t host_path_len,
+                            struct fs_struct *fs);
+int vfs_normalize_linux_path(const char *input, char *output, size_t output_len);
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len);
 const char *vfs_host_backing_root(void);
 const char *vfs_virtual_root(void);

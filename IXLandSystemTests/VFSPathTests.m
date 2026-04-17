@@ -84,4 +84,89 @@
     XCTAssertEqual(ret, -EINVAL, @"parent escapes should be rejected");
 }
 
+/* ============================================================================
+ * TASK-AWARE PATH RESOLUTION TESTS
+ * ============================================================================ */
+
+- (void)testTaskAwareAbsolutePathUsesVirtualRoot {
+    /* Create an fs_struct with custom root */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+    
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/etc");
+    
+    /* Absolute path should resolve from root - with root="/", "/bin/ls" -> "/bin/ls" */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task(@"/bin/ls".UTF8String, host_path, sizeof(host_path), fs);
+    
+    XCTAssertEqual(ret, 0, @"absolute path translation should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/bin/ls", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"absolute path should resolve from virtual root");
+    
+    free_fs_struct(fs);
+}
+
+- (void)testTaskAwareRelativePathUsesPwd {
+    /* Create an fs_struct with custom pwd */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+    
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/etc");
+    
+    /* Relative path should resolve from pwd */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task(@"passwd".UTF8String, host_path, sizeof(host_path), fs);
+    
+    XCTAssertEqual(ret, 0, @"relative path translation should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/etc/passwd", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"relative path should resolve from virtual pwd");
+    
+    free_fs_struct(fs);
+}
+
+- (void)testTaskAwareRelativePathWithSubdirectories {
+    /* Create an fs_struct with nested pwd */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+    
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/usr/local");
+    
+    /* Relative path with subdirectory */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task(@"bin/myapp".UTF8String, host_path, sizeof(host_path), fs);
+    
+    XCTAssertEqual(ret, 0, @"nested relative path translation should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/usr/local/bin/myapp", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"relative path should resolve correctly from nested pwd");
+    
+    free_fs_struct(fs);
+}
+
+- (void)testTaskAwareParentEscapeRejected {
+    /* Create an fs_struct */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+    
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/etc");
+    
+    /* Parent escape should be rejected even with task context */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task(@"../secret".UTF8String, host_path, sizeof(host_path), fs);
+    
+    XCTAssertEqual(ret, -EINVAL, @"parent escapes should be rejected with task context");
+    
+    free_fs_struct(fs);
+}
+
 @end

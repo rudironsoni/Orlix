@@ -151,6 +151,9 @@ static void task_init_once(void) {
         init_task = NULL;
         return;
     }
+    /* Initialize virtual root and pwd for init task */
+    fs_init_root(init_task->fs, "/");
+    fs_init_pwd(init_task->fs, "/");
 
     init_task->signal = alloc_signal_struct();
     if (!init_task->signal) {
