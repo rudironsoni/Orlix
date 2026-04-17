@@ -1,198 +1,120 @@
-# IXLandSystem: iOS Linux-Like Virtual Subsystem
+# IXLandSystem
 
-<p align="center">
-<img src="https://img.shields.io/badge/Platform-iOS%2016.0+-lightgrey.svg" alt="Platform: iOS">
-<img src="https://img.shields.io/badge/arch-arm64%20device%20%7C%20arm64%2Fx86__64%20sim-blue.svg" alt="Architecture: iOS only">
-</p>
-
-**IXLandSystem** is a Linux-like virtual kernel subsystem for iOS, designed for maximum practical Linux userland compatibility within App Store constraints. It provides:
-
-- Virtual `fork()`, `execve()`, and `waitpid()` without host process creation
-- Unified task model for native commands and WAMR WASI modules
-- PTY, job control, sessions, and process groups
-- `/proc` and `/dev` virtual filesystems
-- Complete file descriptor, signal, and VFS management
-- Deterministic, trustworthy, and reproducible behavior
+IXLandSystem is the Linux-shaped runtime substrate for IXLand on iOS.
+It is a virtual kernel/runtime inside one iOS app sandbox whose job is to present Linux-oriented source and runtime semantics while keeping iOS host mediation private.
 
 ## Status
 
-**Current Role**: This component (`IXLandSystem`) is the home of the main iXland implementation. Kernel, runtime, and syscall code lives here under canonical ownership:
-- Filesystem: `IXLandSystem/fs/*`
-- Kernel: `IXLandSystem/kernel/*`
+This repository is under active virtualization and proof work.
+It is not public drop-in compatibility proof for arbitrary Linux userspace yet.
+Current proof in this repo is limited to:
 
-## Platform Policy
+- internal runtime semantic tests for selected subsystems
+- Linux UAPI / ABI compile smoke tests for vendored headers
+- canonical iOS Simulator builds and XCTest execution through XcodeGen + Xcodebuild
 
-- **Platform**: iOS only (iOS 16.0+)
-- **Architectures**: arm64 device, arm64/x86_64 simulator
-- **Build Target**: iphonesimulator and iphoneos SDKs only
-- **Validation Authority**: iOS Simulator and Device tests only
-- **macOS builds**: Not authoritative for correctness
+## Build Truth
 
-## Architecture Overview
+XcodeGen and the generated Xcode project are the only build truth.
 
-IXLand implements Linux userland semantics through a virtual kernel substrate:
+Canonical flow:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     iOS App Container                       │
-├─────────────────────────────────────────────────────────────┤
-│                   Linux Userland Apps                       │
-│         (bash, coreutils, grep, sed, awk, etc.)            │
-├─────────────────────────────────────────────────────────────┤
-│                 POSIX Syscall Interface                     │
-│               fork, execve, open, signal, etc.            │
-├─────────────────────────────────────────────────────────────┤
-│                    IXLand Virtual Kernel                       │
-│  ┌─────────┬─────────┬─────────┬─────────┬─────────┐       │
-│  │  Task   │ Signal  │  Exec   │   VFS   │  TTY    │       │
-│  │Manager  │Handler  │Dispatch │ Filesys │Driver   │       │
-│  └─────────┴─────────┴─────────┴─────────┴─────────┘       │
-├─────────────────────────────────────────────────────────────┤
-│              Native | WASI | Script Runtimes                │
-│   ┌──────────┐   ┌──────────┐   ┌──────────┐              │
-│   │  Native  │   │   WASI   │   │  Script  │              │
-│   │ Commands │   │  (WAMR)  │   │ Shebang  │              │
-│   └──────────┘   └──────────┘   └──────────┘              │
-├─────────────────────────────────────────────────────────────┤
-│                    iOS Host APIs                            │
-└─────────────────────────────────────────────────────────────┘
+```bash
+xcodegen generate --project .
+xcodebuild -list -project IXLandSystem.xcodeproj
+xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build
+xcodebuild test -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-### Key Objects
+Canonical project surface:
 
-- **`ixland_task`**: Single canonical execution object with PID, PGID, SID
-- **`ixland_files`**: Per-task file descriptor table
-- **`ixland_fs`**: Per-task filesystem context (cwd, root, mounts)
-- **`ixland_sighand`**: Per-task signal handlers
-- **`ixland_tty`**: Controlling terminal and foreground pgrp
-- **`ixland_exec_image`**: Currently executing image (native/WASI/script)
+- Targets:
+  - `IXLandSystem`
+  - `IXLandSystemTests`
+- Scheme:
+  - `IXLandSystem-6.12-arm64`
 
-## Build System
-
-**Single Source of Truth**: Xcode projects only. No CMake, no Make, no CTest.
-
-The IXLand app project at `IXLand/IXLand.xcodeproj` includes IXLandSystem as a build dependency.
+`swift build`, CMake, Make, package manifests, and ad hoc build flows are not authoritative for this repo.
 
 ## Repository Layout
 
-```
-IXLandSystem/
-├── fs/                    # Filesystem - canonical syscall ownership
-│   ├── fdtable.c
-│   ├── open.c
-│   ├── read_write.c
-│   ├── stat.c
-│   ├── fcntl.c
-│   ├── ioctl.c
-│   ├── namei.c
-│   ├── readdir.c
-│   ├── select.c
-│   ├── eventpoll.c
-│   ├── exec.c
-│   ├── path.c
-│   ├── mount.c
-│   ├── inode.c
-│   └── super.c
-├── kernel/                # Kernel subsystems - canonical ownership
-│   ├── task.c
-│   ├── fork.c
-│   ├── exit.c
-│   ├── wait.c
-│   ├── pid.c
-│   ├── cred.c
-│   ├── sys.c
-│   ├── signal.c
-│   ├── time.c
-│   ├── resource.c
-│   ├── random.c
-│   ├── sync.c
-│   ├── init.c
-│   ├── libc_delegate.c
-│   └── net/
-│       └── network.c
-├── include/               # Public headers
-├── Tests/                 # Test suite
-│   ├── unit/              # Core unit tests
-│   ├── iOS/               # iOS-specific tests
-│   ├── harness/           # Test harness
-│   └── fixtures/          # Test fixtures
-└── docs/                  # Component documentation
-```
+Current top-level ownership is organized around the implemented subsystems in this tree:
 
-## Wasm Boundaries
+- `kernel/` — process/task, signal, pid, wait, cred, time, sync, init, resource, random, sys, network ownership
+- `fs/` — VFS, fdtable, open/read/write, stat, fcntl, ioctl, exec, path, mount, inode, readdir, eventpoll ownership
+- `runtime/native/` — native command registry surface
+- `arch/darwin/` — private host bridges only
+- `IXLandSystemTests/` — XCTest-based internal semantic tests and Linux UAPI compile smoke
+- `third_party/linux-uapi/6.12/arm64/include/` — vendored Linux UAPI truth
+- `project.yml` — authoritative XcodeGen project specification
 
-WAMR is the current WebAssembly runtime backend. Future abstraction:
+## Architecture Direction
 
-- `IXLandWasm/IXLandWasmEngine/` will hold the engine-neutral contract
-- `IXLandWasm/IXLandWasmHost/` will define host-service boundaries
-- `IXLandWasm/IXLandWasmWASI/` will define WASI guest policy
+IXLandSystem does not define its Linux-facing contract by delegating host semantics directly.
+Its direction is a Linux-shaped virtual runtime with private iOS mediation.
+That includes:
 
-For now, WAMR integration is handled within IXLandSystem.
+- virtual task/process identity
+- virtual process groups and sessions
+- virtual credentials
+- Linux-shaped signal ownership and semantics
+- Linux-shaped VFS, fdtable, and exec ownership
+- virtualization of unsupported host behavior where possible inside IXLand boundaries
 
-## Native Command Registry
+Darwin and iOS APIs are private implementation details and must not define the Linux-facing contract.
 
-Native commands are pre-registered, not dynamically loaded:
+## Linux ABI and Header Policy
 
-```c
-// Register a native command
-IXLAND_NATIVE_CMD("/bin/ls", ixland_ls_main);
-IXLAND_NATIVE_CMD("/bin/cat", ixland_cat_main);
+Vendored Linux 6.12 arm64 exported UAPI is the only Linux ABI truth in this repo.
 
-// Entry ABI
-int ixland_ls_main(ixland_task_t *task, int argc, char **argv, char **envp) {
-    // Implementation
-    return 0;
-}
-```
+Location:
 
-Registry is generated at build time from `runtime/native/commands/`.
+- `third_party/linux-uapi/6.12/arm64/include`
 
-## WASI/WAMR Integration
+Allowed include forms:
 
-WAMR is an execution backend, not a separate universe:
+- `#include <linux/...>`
+- `#include <asm/...>`
+- `#include <asm-generic/...>`
 
-- WASI operations use same `task->files` as native code
-- WASI paths resolve through same VFS
-- WASI stdio uses same descriptors
-- WASI clocks/random through IXLand kernel abstractions
+Forbidden include forms:
 
-```c
-// Load and run WASM module
-ixland_wamr_load_module(wasm_buffer, wasm_size);
-ixland_wamr_call_function("_start", argc, argv);
-```
+- path traversal into vendored headers
+- includes containing `third_party/linux-uapi`
+- includes containing `6.12`
+- includes containing `arm64`
 
-## Testing Doctrine
+## Test Layering
 
-Every subsystem requires automated tests:
+This XCTest tranche contains two kinds of proof only:
 
-1. **Unit tests**: Data structures, deterministic logic
-2. **Integration tests**: Cross-subsystem interactions
-3. **Compatibility tests**: Linux userland behavior
-4. **WASI tests**: WASI syscall compliance
-5. **Device tests**: iOS-specific behavior
+1. INTERNAL RUNTIME SEMANTIC TEST
+   - uses private internal headers and `_impl()`/owner entry points
+   - verifies IXLandSystem runtime behavior inside this repo
+   - does not prove public drop-in compatibility
 
-A feature is **not** complete without executable evidence.
+2. LINUX UAPI / ABI COMPILE TEST
+   - uses vendored Linux UAPI headers through canonical include paths
+   - proves header/constants/types resolution only
+   - does not prove runtime behavior
 
-## Constraints
+Current files:
 
-- No real `fork()` or `execve()` image replacement
-- No setuid
-- No sandbox bypass
-- No JIT or dynamic code generation
-- No executable writable memory
-- All WASI crossings validated
+- `IXLandSystemTests/SignalTests.m` — INTERNAL RUNTIME SEMANTIC TEST
+- `IXLandSystemTests/TaskGroupTests.m` — INTERNAL RUNTIME SEMANTIC TEST
+- `IXLandSystemTests/CredentialTests.m` — INTERNAL RUNTIME SEMANTIC TEST
+- `IXLandSystemTests/LinuxUAPICompileSmoke.c` — LINUX UAPI / ABI COMPILE TEST
 
-## Documentation
+True public drop-in Linux userspace compatibility proof is not part of this XCTest tranche.
 
-- `docs/IXLAND_ARCHITECTURAL_ANALYSIS.md` - Architecture details
-- `docs/ARCHITECTURE.md` - Monorepo-level architecture
-- `docs/BOUNDARIES.md` - Component boundary definitions
-- `AGENTS.md` - Developer guidelines
-- `docs/SYSCALLS.md` - Syscall reference
-- `docs/PORTING.md` - Porting guide
-- `Tests/README.md` - Testing guide
+## Current Constraints
 
-## License
+IXLandSystem runs inside one iOS app sandbox.
+Host limitations must be virtualized where possible rather than leaked into the Linux-facing contract.
+Some subsystems remain incomplete or partial; incomplete behavior should be treated as implementation work in progress, not as proof of finished Linux compatibility.
 
-[License information]
+## Primary References
+
+- `AGENTS.md` — development rules for syscall ownership, `_impl()` usage, build proof, and error handling
+- `BUILD.md` — canonical build and test commands
+- `docs/SUBSTRATE_CONTRACT.md` — current architecture and ownership contract

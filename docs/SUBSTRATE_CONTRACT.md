@@ -2,107 +2,145 @@
 
 ## Scope
 
-`IXLandSystem` is the Linux-shaped substrate for iOS host execution.
-This repository is not the app, not libc, not packaging, and not wasm planning.
+IXLandSystem is the Linux-shaped runtime substrate for IXLand on iOS.
+This repository owns virtual kernel/runtime behavior inside one iOS app sandbox.
+It is not public drop-in proof for arbitrary Linux userspace yet.
 
 ## Platform
 
-- Host platform: iOS only
-- Minimum deployment: iOS 16.0+
-- Supported SDKs: `iphonesimulator`, `iphoneos`
-- iOS Simulator and Device tests are the only validation authority
+- host platform: iOS only
+- minimum deployment target: iOS 16.0+
+- supported SDKs: `iphonesimulator`, `iphoneos`
+- authoritative validation: iOS Simulator or device build/test through XcodeGen + Xcodebuild
 
-## Canonical Contract
+## Architectural Contract
 
-- Canonical behavior is Linux-shaped
-- Names, constants, flags, structs, errno, fd semantics, signals, termios, ioctl, poll, path, process behavior MUST prefer Linux expectations unless impossible under iOS constraints
-- iOS mediation MUST stay private implementation detail
-- Host behavior MUST NOT redefine canonical subsystem truth
-- Minimize product-prefixed naming in exported ABI and UAPI when Linux-shaped naming is viable
+Priority order:
 
-## Naming Debt
+1. Linux-shaped exported contract
+2. Correct subsystem ownership
+3. Xcode project and XcodeGen as build truth
+4. Internalized iOS mediation
+5. Deterministic subsystem behavior
+6. Fewer downstream compatibility patches
+7. Local implementation convenience
 
-The current public surface uses `ixland_*` prefixes on Linux syscall names:
+Decision rule:
 
-- `ixland_fork`, `ixland_execve`, `ixland_waitpid`, `ixland_setpgid`, etc.
+If a change makes IXLandSystem less suitable as a Linux-oriented syscall, header, or runtime target, it is the wrong change.
 
-This violates the project contract. Linux syscall-facing names SHOULD be Linux-shaped (`fork`, `execve`, `waitpid`, `setpgid`) in the exported surface.
+## Linux ABI Truth
 
-The `ixland_` prefix is acceptable ONLY for:
-- Internal infrastructure with no Linux analog (`ixland_task_t`, `ixland_files_t`)
-- Private subsystem bookkeeping
-- IXLand-specific initialization/versioning (`ixland_init`, `ixland_version`)
+Vendored Linux 6.12 arm64 exported UAPI is the only Linux ABI truth in this repo.
 
-## Public Surface Boundaries
+Location:
 
-Current public headers:
+- `third_party/linux-uapi/6.12/arm64/include`
 
-- `include/ixland/ixland_syscalls.h` — process/exec/init syscall seam
-- `include/ixland/ixland_signal.h` — signal-mask type and operations (DEBT: ixland_ prefixed)
-- `include/ixland/ixland_path.h` — path classification/translation
-- `include/ixland/ixland_types.h` — shared public types
-- `include/vfs.h` — legacy VFS header (DIVERGES from owner `fs/vfs.h`)
+Allowed vendored include forms:
 
-Owner internal headers:
+- `#include <linux/...>`
+- `#include <asm/...>`
+- `#include <asm-generic/...>`
 
-- `kernel/task.h`, `kernel/signal.h`
-- `fs/fdtable.h`, `fs/vfs.h`, `fs/path.h`, `fs/tty/tty.h`
+Forbidden vendored include forms:
 
-## Canonical Ownership
+- includes containing `third_party/linux-uapi`
+- includes containing `6.12`
+- includes containing `arm64`
+- `../` traversal into vendored headers
 
-- Process lifecycle and identity: `kernel/*`
-- Signal ownership/delivery: `kernel/signal.c`, `kernel/signal.h`
-- File descriptor table: `fs/fdtable.c`, `fs/fdtable.h`
-- VFS/path/stat syscall ownership: `fs/*`
-- Time and sync syscall ownership: `kernel/time.c`, `kernel/sync.c`
-- Exec syscall ownership: `fs/exec.c`, `fs/exec.h`
-- Init/version: `kernel/init.c`
-
-No new branded public header namespace is introduced.
-
-## Explicit Gaps
-
-These are currently incomplete:
-
-- VFS core path walk and lookup (`vfs_lookup`, `vfs_path_walk`) — stubs returning `-ENOSYS`
-- VFS stat/access (`vfs_stat_path`, `vfs_lstat`, `vfs_access`) — stubs returning `-ENOSYS`
-- Futex (`ixland_futex`) — returns `-ENOSYS`
-- TTY/PTY implementation file absent; `fs/tty/tty.h` declares API with no `.c`
-- `mmap`/`munmap`/`mprotect` — not implemented
-- `openat`, `pipe` — not implemented
-- 8 signal syscall public functions (`sigaction`, `kill`, `sigprocmask`, etc.) — not implemented
-- 11 signal mask API functions declared in `ixland_signal.h` — no implementation
-- `include/vfs.h` diverges from owner `fs/vfs.h`
-- `kernel/pid.c` exports `ixland_alloc_pid`/`ixland_free_pid`/`ixland_pid_init` but `kernel/task.h` declares `alloc_pid`/`free_pid`/`pid_init` (symbol mismatch)
+Private internal headers are allowed only for private subsystem state, owner declarations, helper prototypes, and host-bridge declarations.
+They must not define Linux ABI by hand.
 
 ## Build Truth
 
-- **Authoritative build path**: `xcodegen generate --project .` then `xcodebuild` with iOS SDK
-- `project.yml` is the authoritative project spec for XcodeGen
-- `xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build` produces the iOS Simulator build artifacts
-- `xcodebuild test -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'` is the canonical executable test invocation
-- `.github/workflows/build.yml` runs XcodeGen + xcodebuild as CI gate
-- `swift build` is non-authoritative drift and must not be used as iOS build proof
+XcodeGen and the generated Xcode project are the only build truth.
 
-## Mach-O Export Spike Status
+Canonical project surface:
 
-**Status: INCONCLUSIVE**
+- Targets:
+  - `IXLandSystem`
+  - `IXLandSystemTests`
+- Scheme:
+  - `IXLandSystem-6.12-arm64`
 
-The `__attribute__((weak, alias("target")))` pattern was not tested in isolation.
-The claim that "Darwin does not support weak symbols/aliases" was overstated.
-Clang documents both `weak` and `alias` as supported attributes.
-Whether the specific combination works for iOS/Mach-O requires isolated testing.
+Canonical authoritative flow:
 
-## Rename Preconditions
+```bash
+xcodegen generate --project .
+xcodebuild -list -project IXLandSystem.xcodeproj
+xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build
+xcodebuild test -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+```
 
-Before any mass rename:
+`swift build`, CMake, Make, package manifests, and other build systems are non-authoritative drift for this repo.
 
-1. **Function name collision:** `stat()`, `open()` etc. conflict with standard library declarations
-2. **Recursion risk:** Internal implementations must not call themselves
-3. **Declaration drift:** Headers must match implementations
-4. **Link-time issues:** Export mechanism must be proven viable
-5. **ENOSYS stubs:** Incomplete implementations become more visible with standard names
+## Darwin Quarantine
 
-## Last Updated
+Darwin and iOS headers are private host implementation details.
 
-2026-04-14
+Rules:
+
+- Darwin host headers may appear only in private host-bridge files
+- Darwin host headers must not define the Linux-facing contract
+- public Linux-facing ownership must live in canonical owner files, not in Darwin bridge files
+
+## Canonical Ownership
+
+Current subsystem ownership in this repository:
+
+- process/task lifecycle: `kernel/task.c`, `kernel/fork.c`, `kernel/exit.c`, `kernel/wait.c`, `kernel/pid.c`
+- credentials: `kernel/cred.c`, `kernel/cred_internal.h`
+- signals: `kernel/signal.c`, `kernel/signal.h`
+- time and sync: `kernel/time.c`, `kernel/time_darwin.c`, `kernel/sync.c`
+- init/sys/resource/random: `kernel/init.c`, `kernel/sys.c`, `kernel/resource.c`, `kernel/random.c`
+- networking owner surface: `kernel/net/network.c`
+- VFS and fdtable: `fs/vfs.c`, `fs/vfs.h`, `fs/fdtable.c`, `fs/fdtable.h`
+- file operation owners: `fs/open.c`, `fs/read_write.c`, `fs/stat.c`, `fs/fcntl.c`, `fs/ioctl.c`, `fs/namei.c`, `fs/readdir.c`, `fs/eventpoll.c`, `fs/mount.c`, `fs/inode.c`, `fs/super.c`, `fs/path.c`, `fs/exec.c`
+- native runtime registry: `runtime/native/registry.c`, `runtime/native/registry.h`
+- private Darwin bridge surface: `arch/darwin/signal_bridge.c`
+
+## Test Layering
+
+This repo currently contains two valid proof layers in XCTest:
+
+1. INTERNAL RUNTIME SEMANTIC TEST
+   - may use private internal headers
+   - may use `_impl()` entry points
+   - may use direct internal owner APIs
+   - does not prove public drop-in compatibility
+
+2. LINUX UAPI / ABI COMPILE TEST
+   - may use only `<linux/...>`, `<asm/...>`, `<asm-generic/...>` includes
+   - proves vendored UAPI resolution only
+   - does not prove runtime behavior
+
+Current test files:
+
+- `IXLandSystemTests/SignalTests.m` — INTERNAL RUNTIME SEMANTIC TEST
+- `IXLandSystemTests/TaskGroupTests.m` — INTERNAL RUNTIME SEMANTIC TEST
+- `IXLandSystemTests/CredentialTests.m` — INTERNAL RUNTIME SEMANTIC TEST
+- `IXLandSystemTests/LinuxUAPICompileSmoke.c` — LINUX UAPI / ABI COMPILE TEST
+
+True public drop-in Linux userspace compatibility proof is outside this XCTest tranche.
+
+## Current Truth Boundaries
+
+What this repo can currently prove authoritatively:
+
+- canonical project generation through `xcodegen`
+- canonical iOS build/test execution through `xcodebuild`
+- Linux UAPI header resolution through canonical include paths
+- selected runtime semantics for task groups, signals, and credentials via internal tests
+
+What this repo does not currently prove:
+
+- arbitrary unmodified Linux userspace compiling and linking against a stable public surface
+- finished Linux compatibility across all subsystems
+- a production-ready, fully complete runtime
+
+## Documentation Rule
+
+Documents in normal repo paths must describe current repo truth.
+Historical migration plans and stale status documents should not remain as misleading authoritative documentation.
