@@ -67,6 +67,7 @@ int get_fd_path_impl(void *entry, char *path, size_t path_len);
 void set_fd_flags_impl(void *entry, int flags);
 off_t get_fd_offset_impl(void *entry);
 void set_fd_offset_impl(void *entry, off_t offset);
+bool get_fd_is_append_impl(void *entry);
 
 /* Initialize/clone fd entries */
 void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path);

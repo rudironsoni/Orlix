@@ -419,6 +419,10 @@ void set_fd_offset_impl(void *entry, off_t offset) {
     ((fd_entry_t *)entry)->offset = offset;
 }
 
+bool get_fd_is_append_impl(void *entry) {
+    return ((fd_entry_t *)entry)->flags & O_APPEND;
+}
+
 void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path) {
     fd_entry_t *entry = &fd_table[fd];
     pthread_mutex_lock(&entry->lock);
