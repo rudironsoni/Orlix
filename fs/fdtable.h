@@ -62,6 +62,8 @@ void put_fd_entry_impl(void *entry);
 /* Getters/setters for fd entry properties */
 int get_real_fd_impl(void *entry);
 int get_fd_flags_impl(void *entry);
+bool get_fd_is_dir_impl(void *entry);
+int get_fd_path_impl(void *entry, char *path, size_t path_len);
 void set_fd_flags_impl(void *entry, int flags);
 off_t get_fd_offset_impl(void *entry);
 void set_fd_offset_impl(void *entry, off_t offset);

@@ -4,6 +4,10 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#include "fdtable.h"
+#include "../kernel/task.h"
 
 static const char *const vfs_virtual_root_path = "/";
 static const char *const vfs_host_root_path = "/var/mobile/Containers/IXLand";
@@ -345,6 +349,59 @@ int vfs_getcwd_path_task(struct fs_struct *fs, char *vpath, size_t vpath_len) {
     return vfs_copy_string(pwd_path, vpath, vpath_len);
 }
 
+int vfs_resolve_virtual_path_at(int dirfd, const char *vpath, char *resolved_vpath,
+                                size_t resolved_vpath_len) {
+    struct task_struct *task;
+    struct fs_struct *fs;
+    char dir_host_path[MAX_PATH];
+    char dir_virtual_path[MAX_PATH];
+    char joined_virtual_path[MAX_PATH];
+    void *entry;
+    int ret;
+
+    if (!vpath || !resolved_vpath || resolved_vpath_len == 0) {
+        return -EINVAL;
+    }
+
+    task = get_current();
+    if (!task) {
+        return -ESRCH;
+    }
+
+    fs = task->fs;
+    if (vpath[0] == '/' || dirfd == AT_FDCWD) {
+        return vfs_resolve_virtual_path_task(vpath, resolved_vpath, resolved_vpath_len, fs);
+    }
+
+    entry = get_fd_entry_impl(dirfd);
+    if (!entry) {
+        return -EBADF;
+    }
+
+    if (!get_fd_is_dir_impl(entry)) {
+        put_fd_entry_impl(entry);
+        return -ENOTDIR;
+    }
+
+    ret = get_fd_path_impl(entry, dir_host_path, sizeof(dir_host_path));
+    put_fd_entry_impl(entry);
+    if (ret != 0) {
+        return -errno;
+    }
+
+    ret = vfs_reverse_translate(dir_host_path, dir_virtual_path, sizeof(dir_virtual_path));
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = vfs_join_virtual_path(dir_virtual_path, vpath, joined_virtual_path, sizeof(joined_virtual_path));
+    if (ret != 0) {
+        return ret;
+    }
+
+    return vfs_normalize_linux_path(joined_virtual_path, resolved_vpath, resolved_vpath_len);
+}
+
 int vfs_translate_path_task(const char *vpath, char *host_path, size_t host_path_len,
                             struct fs_struct *fs) {
     char resolved_virtual[MAX_PATH];
@@ -355,6 +412,22 @@ int vfs_translate_path_task(const char *vpath, char *host_path, size_t host_path
     }
 
     ret = vfs_resolve_virtual_path_task(vpath, resolved_virtual, sizeof(resolved_virtual), fs);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return vfs_join_host_root(resolved_virtual, host_path, host_path_len);
+}
+
+int vfs_translate_path_at(int dirfd, const char *vpath, char *host_path, size_t host_path_len) {
+    char resolved_virtual[MAX_PATH];
+    int ret;
+
+    if (!vpath || !host_path || host_path_len == 0) {
+        return -EINVAL;
+    }
+
+    ret = vfs_resolve_virtual_path_at(dirfd, vpath, resolved_virtual, sizeof(resolved_virtual));
     if (ret < 0) {
         return ret;
     }

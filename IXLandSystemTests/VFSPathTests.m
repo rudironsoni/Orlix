@@ -11,6 +11,7 @@
 #import <XCTest/XCTest.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
 
 #include "fs/vfs.h"
@@ -18,6 +19,7 @@
 #include "kernel/task.h"
 
 extern char *getcwd_impl(char *buf, size_t size);
+extern int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode);
 
 @interface VFSPathTests : XCTestCase
 @end
@@ -228,6 +230,37 @@ extern char *getcwd_impl(char *buf, size_t size);
 
     set_current(originalTask);
     free_task(task);
+}
+
+/* ============================================================================
+ * DIRFD-AWARE PATH RESOLUTION TESTS
+ * ============================================================================ */
+
+- (void)testVfsTranslatePathAtUsesAtFdcwd {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_at(AT_FDCWD, @"/etc/passwd".UTF8String, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"vfs_translate_path_at with AT_FDCWD should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/etc/passwd", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"AT_FDCWD should resolve from task cwd");
+}
+
+- (void)testVfsTranslatePathAtAbsolutePathIgnoresDirfd {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_at(-1, @"/bin/ls".UTF8String, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"absolute path should succeed regardless of invalid dirfd");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/bin/ls", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"absolute paths should resolve from task root");
+}
+
+- (void)testVfsTranslatePathAtInvalidDirfdReturnsBadf {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_at(9999, @"relative/path".UTF8String, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -EBADF, @"invalid dirfd should return -EBADF");
 }
 
 @end

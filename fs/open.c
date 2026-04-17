@@ -1,10 +1,13 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "fdtable.h"
 #include "vfs.h"
+
+#define MAX_PATH 4096
 
 int open_impl(const char *pathname, int flags, mode_t mode) {
     if (!pathname) {
@@ -29,8 +32,35 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
 }
 
 int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
-    (void)dirfd;
-    return open_impl(pathname, flags, mode);
+    char translated_path[MAX_PATH];
+    int ret;
+
+    if (!pathname) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    int fd = alloc_fd_impl();
+    if (fd < 0) {
+        return -1;
+    }
+
+    int real_fd;
+    ret = vfs_open(translated_path, flags, mode, &real_fd);
+    if (ret < 0) {
+        free_fd_impl(fd);
+        errno = -ret;
+        return -1;
+    }
+
+    init_fd_entry_impl(fd, real_fd, flags, mode, translated_path);
+    return fd;
 }
 
 int creat_impl(const char *pathname, mode_t mode) {
@@ -56,8 +86,7 @@ __attribute__((visibility("default"))) int openat(int dirfd, const char *pathnam
         mode = va_arg(args, int);
         va_end(args);
     }
-    (void)dirfd;
-    return open_impl(pathname, flags, mode);
+    return openat_impl(dirfd, pathname, flags, mode);
 }
 
 __attribute__((visibility("default"))) int creat(const char *pathname, mode_t mode) {

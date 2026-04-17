@@ -384,6 +384,29 @@ int get_fd_flags_impl(void *entry) {
     return ((fd_entry_t *)entry)->flags;
 }
 
+bool get_fd_is_dir_impl(void *entry) {
+    return ((fd_entry_t *)entry)->is_dir;
+}
+
+int get_fd_path_impl(void *entry, char *path, size_t path_len) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    size_t len;
+
+    if (!fd_entry || !path || path_len == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    len = strlen(fd_entry->path);
+    if (len >= path_len) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    memcpy(path, fd_entry->path, len + 1);
+    return 0;
+}
+
 void set_fd_flags_impl(void *entry, int flags) {
     ((fd_entry_t *)entry)->flags = flags;
 }

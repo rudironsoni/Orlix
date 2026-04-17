@@ -73,13 +73,23 @@ int access_impl(const char *pathname, int mode) {
 }
 
 int faccessat_impl(int dirfd, const char *pathname, int mode, int flags) {
-    (void)dirfd;
+    char translated_path[MAX_PATH];
+    int ret;
+
     (void)flags;
+
     if (!pathname) {
         errno = EFAULT;
         return -1;
     }
-    return vfs_access(pathname, mode);
+
+    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return vfs_access(translated_path, mode);
 }
 
 __attribute__((visibility("default"))) int stat(const char *pathname, struct stat *statbuf) {

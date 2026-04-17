@@ -318,19 +318,21 @@ __attribute__((visibility("default"))) int mkdir(const char *pathname, mode_t mo
 }
 
 __attribute__((visibility("default"))) int mkdirat(int dirfd, const char *pathname, mode_t mode) {
+  char translated_path[MAX_PATH];
+  int ret;
+
   if (pathname == NULL) {
     errno = EFAULT;
     return -1;
   }
 
-  if (dirfd == AT_FDCWD) {
-    return mkdir(pathname, mode);
+  ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+  if (ret != 0) {
+    errno = -ret;
+    return -1;
   }
 
-  (void)dirfd;
-  (void)mode;
-  errno = ENOSYS;
-  return -1;
+  return mkdir(translated_path, mode);
 }
 
 __attribute__((visibility("default"))) int rmdir(const char *pathname) {
@@ -342,22 +344,24 @@ __attribute__((visibility("default"))) int unlink(const char *pathname) {
 }
 
 __attribute__((visibility("default"))) int unlinkat(int dirfd, const char *pathname, int flags) {
+  char translated_path[MAX_PATH];
+  int ret;
+
   if (pathname == NULL) {
     errno = EFAULT;
     return -1;
   }
 
-  if (dirfd == AT_FDCWD) {
-    if ((flags & AT_REMOVEDIR) != 0) {
-      return rmdir(pathname);
-    }
-    return unlink(pathname);
+  ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+  if (ret != 0) {
+    errno = -ret;
+    return -1;
   }
 
-  (void)dirfd;
-  (void)flags;
-  errno = ENOSYS;
-  return -1;
+  if ((flags & AT_REMOVEDIR) != 0) {
+    return rmdir(translated_path);
+  }
+  return unlink(translated_path);
 }
 
 __attribute__((visibility("default"))) int link(const char *oldpath, const char *newpath) {
@@ -365,20 +369,30 @@ __attribute__((visibility("default"))) int link(const char *oldpath, const char 
 }
 
 __attribute__((visibility("default"))) int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
+  char translated_old[MAX_PATH];
+  char translated_new[MAX_PATH];
+  int ret;
+
+  (void)flags;
+
   if (oldpath == NULL || newpath == NULL) {
     errno = EFAULT;
     return -1;
   }
 
-  if (olddirfd == AT_FDCWD && newdirfd == AT_FDCWD) {
-    return link(oldpath, newpath);
+  ret = vfs_translate_path_at(olddirfd, oldpath, translated_old, sizeof(translated_old));
+  if (ret != 0) {
+    errno = -ret;
+    return -1;
   }
 
-  (void)olddirfd;
-  (void)newdirfd;
-  (void)flags;
-  errno = ENOSYS;
-  return -1;
+  ret = vfs_translate_path_at(newdirfd, newpath, translated_new, sizeof(translated_new));
+  if (ret != 0) {
+    errno = -ret;
+    return -1;
+  }
+
+  return link(translated_old, translated_new);
 }
 
 __attribute__((visibility("default"))) int symlink(const char *target, const char *linkpath) {
@@ -386,18 +400,21 @@ __attribute__((visibility("default"))) int symlink(const char *target, const cha
 }
 
 __attribute__((visibility("default"))) int symlinkat(const char *target, int newdirfd, const char *linkpath) {
+    char translated_link[MAX_PATH];
+    int ret;
+
     if (target == NULL || linkpath == NULL) {
         errno = EFAULT;
         return -1;
     }
 
-    if (newdirfd == AT_FDCWD) {
-        return symlink(target, linkpath);
+    ret = vfs_translate_path_at(newdirfd, linkpath, translated_link, sizeof(translated_link));
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
     }
 
-    (void)newdirfd;
-    errno = ENOSYS;
-    return -1;
+    return symlink(target, translated_link);
 }
 
 __attribute__((visibility("default"))) ssize_t readlink(const char *pathname, char *buf, size_t bufsiz) {
@@ -405,19 +422,21 @@ __attribute__((visibility("default"))) ssize_t readlink(const char *pathname, ch
 }
 
 __attribute__((visibility("default"))) ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz) {
+    char translated_path[MAX_PATH];
+    int ret;
+
     if (pathname == NULL || buf == NULL) {
         errno = EFAULT;
         return -1;
     }
 
-    if (dirfd == AT_FDCWD) {
-        return readlink(pathname, buf, bufsiz);
+    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
     }
 
-    (void)dirfd;
-    (void)bufsiz;
-    errno = ENOSYS;
-    return -1;
+    return readlink(translated_path, buf, bufsiz);
 }
 
 __attribute__((visibility("default"))) int chroot(const char *path) {

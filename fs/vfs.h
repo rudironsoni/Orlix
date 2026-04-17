@@ -180,8 +180,11 @@ int vfs_close(struct file *file);
 int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len);
 int vfs_translate_path_task(const char *vpath, char *host_path, size_t host_path_len,
                             struct fs_struct *fs);
+int vfs_translate_path_at(int dirfd, const char *vpath, char *host_path, size_t host_path_len);
 int vfs_resolve_virtual_path_task(const char *vpath, char *resolved_vpath, size_t resolved_vpath_len,
                                   struct fs_struct *fs);
+int vfs_resolve_virtual_path_at(int dirfd, const char *vpath, char *resolved_vpath,
+                                size_t resolved_vpath_len);
 int vfs_getcwd_path_task(struct fs_struct *fs, char *vpath, size_t vpath_len);
 int vfs_normalize_linux_path(const char *input, char *output, size_t output_len);
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len);
