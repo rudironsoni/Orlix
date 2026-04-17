@@ -2,11 +2,17 @@
  * Virtual stat/fstat implementation
  */
 #include <errno.h>
+#include <fcntl.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "fdtable.h"
 #include "vfs.h"
+
+#ifndef MAX_PATH
+#define MAX_PATH 4096
+#endif
 
 int stat_impl(const char *pathname, struct stat *statbuf) {
     if (!pathname || !statbuf) {
@@ -72,24 +78,36 @@ int access_impl(const char *pathname, int mode) {
     return vfs_access(pathname, mode);
 }
 
-int faccessat_impl(int dirfd, const char *pathname, int mode, int flags) {
-    char translated_path[MAX_PATH];
+int fstatat_impl(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
     int ret;
 
-    (void)flags;
+    if (!pathname || !statbuf) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    ret = vfs_fstatat(dirfd, pathname, statbuf, flags);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
+}
+
+int faccessat_impl(int dirfd, const char *pathname, int mode, int flags) {
+    int ret;
 
     if (!pathname) {
         errno = EFAULT;
         return -1;
     }
 
-    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    ret = vfs_faccessat(dirfd, pathname, mode, flags);
     if (ret != 0) {
         errno = -ret;
         return -1;
     }
-
-    return vfs_access(translated_path, mode);
+    return 0;
 }
 
 __attribute__((visibility("default"))) int stat(const char *pathname, struct stat *statbuf) {
@@ -110,4 +128,12 @@ __attribute__((visibility("default"))) int access(const char *pathname, int mode
 
 __attribute__((visibility("default"))) int faccessat(int dirfd, const char *pathname, int mode, int flags) {
     return faccessat_impl(dirfd, pathname, mode, flags);
+}
+
+__attribute__((visibility("default"))) int fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
+    return fstatat_impl(dirfd, pathname, statbuf, flags);
+}
+
+__attribute__((visibility("default"))) int newfstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
+    return fstatat_impl(dirfd, pathname, statbuf, flags);
 }

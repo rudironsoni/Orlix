@@ -373,11 +373,18 @@ __attribute__((visibility("default"))) int linkat(int olddirfd, const char *oldp
   char translated_new[MAX_PATH];
   int ret;
 
-  (void)flags;
-
   if (oldpath == NULL || newpath == NULL) {
     errno = EFAULT;
     return -1;
+  }
+
+  if (flags & ~AT_SYMLINK_FOLLOW) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  if (flags & AT_SYMLINK_FOLLOW) {
+    /* Following symlinks is the default behavior; no special handling needed */
   }
 
   ret = vfs_translate_path_at(olddirfd, oldpath, translated_old, sizeof(translated_old));

@@ -6,6 +6,14 @@
 #include <string.h>
 #include <unistd.h>
 
+/* Linux UAPI AT flag values - these are the public ABI contract */
+/* Darwin headers define these with different values; undef and redefine for Linux ABI */
+#undef AT_SYMLINK_NOFOLLOW
+#define AT_SYMLINK_NOFOLLOW	0x100
+
+#undef AT_EACCESS
+#define AT_EACCESS		0x200
+
 #include "fdtable.h"
 #include "../kernel/task.h"
 
@@ -462,19 +470,87 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
 }
 
 int vfs_stat_path(const char *pathname, struct stat *statbuf) {
-    (void)pathname;
-    (void)statbuf;
-    return -ENOSYS;
+    if (!pathname || !statbuf) {
+        return -EFAULT;
+    }
+    if (stat(pathname, statbuf) != 0) {
+        return -errno;
+    }
+    return 0;
 }
 
 int vfs_lstat(const char *pathname, struct stat *statbuf) {
-    (void)pathname;
-    (void)statbuf;
-    return -ENOSYS;
+    if (!pathname || !statbuf) {
+        return -EFAULT;
+    }
+    if (lstat(pathname, statbuf) != 0) {
+        return -errno;
+    }
+    return 0;
 }
 
 int vfs_access(const char *pathname, int mode) {
-    (void)pathname;
-    (void)mode;
-    return -ENOSYS;
+    if (!pathname) {
+        return -EFAULT;
+    }
+    if (access(pathname, mode) != 0) {
+        return -errno;
+    }
+    return 0;
+}
+
+int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
+    char translated_path[MAX_PATH];
+    int ret;
+    bool follow_symlink;
+    int supported_flags = AT_SYMLINK_NOFOLLOW;
+
+    if (!pathname || !statbuf) {
+        return -EFAULT;
+    }
+
+    if (flags & ~supported_flags) {
+        return -EINVAL;
+    }
+
+    follow_symlink = !(flags & AT_SYMLINK_NOFOLLOW);
+
+    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (follow_symlink) {
+        return vfs_stat_path(translated_path, statbuf);
+    } else {
+        return vfs_lstat(translated_path, statbuf);
+    }
+}
+
+int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
+    char translated_path[MAX_PATH];
+    int ret;
+
+    if (!pathname) {
+        return -EFAULT;
+    }
+
+    if (flags & ~(AT_EACCESS | AT_SYMLINK_NOFOLLOW)) {
+        return -EINVAL;
+    }
+
+    if (flags & AT_EACCESS) {
+        return -ENOTSUP;
+    }
+
+    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        return -ENOTSUP;
+    }
+
+    return vfs_access(translated_path, mode);
 }

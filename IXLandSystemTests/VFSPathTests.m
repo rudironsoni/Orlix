@@ -263,4 +263,61 @@ extern int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode);
     XCTAssertEqual(ret, -EBADF, @"invalid dirfd should return -EBADF");
 }
 
+/* ============================================================================
+ * STAT-FAMILY AND AT-FLAG SEMANTICS TESTS
+ * ============================================================================ */
+
+extern int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags);
+extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
+
+#define TEST_AT_SYMLINK_NOFOLLOW 0x100
+#define TEST_AT_EACCESS 0x200
+#define TEST_AT_EMPTY_PATH 0x1000
+#define TEST_AT_REMOVEDIR 0x200
+
+- (void)testVfsFstatatSupportsAtFdcwd {
+    struct stat st;
+    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, 0);
+
+    XCTAssertEqual(ret, 0, @"vfs_fstatat with AT_FDCWD should succeed");
+}
+
+- (void)testVfsFstatatSupportsSymlinkNoFollow {
+    struct stat st;
+    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, TEST_AT_SYMLINK_NOFOLLOW);
+
+    XCTAssertEqual(ret, 0, @"vfs_fstatat with AT_SYMLINK_NOFOLLOW should succeed");
+}
+
+- (void)testVfsFstatatRejectsInvalidFlags {
+    struct stat st;
+    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, 0x80000000);
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
+}
+
+- (void)testVfsFaccessatSupportsAtFdcwd {
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, 0);
+
+    XCTAssertEqual(ret, 0, @"vfs_faccessat with AT_FDCWD should succeed");
+}
+
+- (void)testVfsFaccessatRejectsInvalidFlags {
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, 0x80000000);
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_faccessat should reject invalid flags");
+}
+
+- (void)testVfsFaccessatReportsUnsupportedAtEaccess {
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, TEST_AT_EACCESS);
+
+    XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat AT_EACCESS should return ENOTSUP");
+}
+
+- (void)testVfsFaccessatReportsUnsupportedSymlinkNoFollow {
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, TEST_AT_SYMLINK_NOFOLLOW);
+
+    XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat AT_SYMLINK_NOFOLLOW should return ENOTSUP");
+}
+
 @end
