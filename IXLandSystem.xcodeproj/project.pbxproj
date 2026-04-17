@@ -11,6 +11,7 @@
 		0BF178D86A3C666E8174EFB1 /* exit.c in Sources */ = {isa = PBXBuildFile; fileRef = 5885A2D3F39790AAC62634D5 /* exit.c */; };
 		10B126B95667913F860EF403 /* namei.c in Sources */ = {isa = PBXBuildFile; fileRef = C391F80635EE5296CE8C8466 /* namei.c */; };
 		17569519F7B7B56C5572BED6 /* path.c in Sources */ = {isa = PBXBuildFile; fileRef = 51D066274EE2D55E90787D9C /* path.c */; };
+		1EFE002D356A2BC2DBE43F83 /* CredentialTests.m in Sources */ = {isa = PBXBuildFile; fileRef = EE40DEEE9D6E27C79FE49368 /* CredentialTests.m */; };
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
 		26E0C643B3E753A0656DEBDD /* select_darwin.c in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
@@ -92,6 +93,7 @@
 		D46E9099D1DEF53E9F6D3C41 /* eventpoll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = eventpoll.c; sourceTree = "<group>"; };
 		D979F989EC0D2FF286D59733 /* read_write.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = read_write.c; sourceTree = "<group>"; };
 		DB47AFBCA86B478A6F48BAE6 /* stat.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stat.c; sourceTree = "<group>"; };
+		EE40DEEE9D6E27C79FE49368 /* CredentialTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CredentialTests.m; sourceTree = "<group>"; };
 		F2D024F0973242458FE50E93 /* init.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = init.c; sourceTree = "<group>"; };
 		F2D8077FB1F274E58E85378C /* exec.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = exec.c; sourceTree = "<group>"; };
 		F4E2215C61CCAEFB06DDB4FC /* registry.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = registry.c; sourceTree = "<group>"; };
@@ -139,6 +141,7 @@
 		2B860379C764168836518D61 /* IXLandSystemTests */ = {
 			isa = PBXGroup;
 			children = (
+				EE40DEEE9D6E27C79FE49368 /* CredentialTests.m */,
 				84B7EE143A9CA194FD055CDA /* LinuxUAPICompileSmoke.c */,
 				667BE890D514BA87E4BDA1BF /* SignalTests.m */,
 				BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */,
@@ -352,6 +355,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1EFE002D356A2BC2DBE43F83 /* CredentialTests.m in Sources */,
 				398F68458C9177477A65A9EE /* LinuxUAPICompileSmoke.c in Sources */,
 				412EF8D788799D420EF84B74 /* SignalTests.m in Sources */,
 				87D87C4892661BFBEE659114 /* TaskGroupTests.m in Sources */,
