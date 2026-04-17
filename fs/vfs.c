@@ -271,55 +271,93 @@ int vfs_rmdir(const char *path) {
     return -ENOSYS;
 }
 
-/* Get current task's fs_struct - forward declaration */
-struct task_struct *get_current(void);
+static int vfs_join_virtual_path(const char *base_path, const char *suffix, char *joined_path,
+                                 size_t joined_path_len) {
+    size_t base_len;
+    size_t suffix_len;
+    size_t suffix_offset;
 
-/* Internal: resolve path from task's root (absolute) or pwd (relative) */
+    if (!base_path || !suffix || !joined_path || joined_path_len == 0) {
+        return -EINVAL;
+    }
+
+    base_len = strlen(base_path);
+    suffix_len = strlen(suffix);
+    suffix_offset = (suffix[0] == '/') ? 1 : 0;
+
+    if (base_len == 0) {
+        return -EINVAL;
+    }
+
+    if (strcmp(base_path, "/") == 0) {
+        if (suffix_len - suffix_offset + 1 >= joined_path_len) {
+            return -ENAMETOOLONG;
+        }
+        joined_path[0] = '/';
+        memcpy(joined_path + 1, suffix + suffix_offset, suffix_len - suffix_offset + 1);
+        return 0;
+    }
+
+    if (base_len + 1 + suffix_len - suffix_offset >= joined_path_len) {
+        return -ENAMETOOLONG;
+    }
+
+    memcpy(joined_path, base_path, base_len);
+    joined_path[base_len] = '/';
+    memcpy(joined_path + base_len + 1, suffix + suffix_offset, suffix_len - suffix_offset + 1);
+    return 0;
+}
+
+int vfs_resolve_virtual_path_task(const char *vpath, char *resolved_vpath, size_t resolved_vpath_len,
+                                  struct fs_struct *fs) {
+    char work_buffer[MAX_PATH];
+    const char *root_path;
+    const char *pwd_path;
+    int ret;
+
+    if (!vpath || !resolved_vpath || resolved_vpath_len == 0) {
+        return -EINVAL;
+    }
+
+    root_path = (fs && fs->root_path[0] != '\0') ? fs->root_path : vfs_virtual_root_path;
+    pwd_path = (fs && fs->pwd_path[0] != '\0') ? fs->pwd_path : root_path;
+
+    if (vpath[0] == '/') {
+        ret = vfs_join_virtual_path(root_path, vpath, work_buffer, sizeof(work_buffer));
+    } else {
+        ret = vfs_join_virtual_path(pwd_path, vpath, work_buffer, sizeof(work_buffer));
+    }
+    if (ret < 0) {
+        return ret;
+    }
+
+    return vfs_normalize_linux_path(work_buffer, resolved_vpath, resolved_vpath_len);
+}
+
+int vfs_getcwd_path_task(struct fs_struct *fs, char *vpath, size_t vpath_len) {
+    const char *pwd_path;
+
+    if (!vpath || vpath_len == 0) {
+        return -EINVAL;
+    }
+
+    pwd_path = (fs && fs->pwd_path[0] != '\0') ? fs->pwd_path : vfs_virtual_root_path;
+    return vfs_copy_string(pwd_path, vpath, vpath_len);
+}
+
 int vfs_translate_path_task(const char *vpath, char *host_path, size_t host_path_len,
                             struct fs_struct *fs) {
     char resolved_virtual[MAX_PATH];
-    char work_buffer[MAX_PATH];
     int ret;
 
-    if (!vpath || !host_path || host_path_len == 0)
-        return -EINVAL;
-
-    /* Validate and reject parent escapes early */
-    if (strstr(vpath, "/../") != NULL || strncmp(vpath, "../", 3) == 0 ||
-        (strlen(vpath) >= 3 && strcmp(vpath + strlen(vpath) - 3, "/..") == 0)) {
+    if (!vpath || !host_path || host_path_len == 0) {
         return -EINVAL;
     }
 
-    /* Determine base for resolution and resolve into work_buffer */
-    if (vpath[0] == '/') {
-        /* Absolute path: resolve from task's virtual root */
-        const char *root_path = (fs && fs->root_path[0] != '\0') ? fs->root_path : vfs_virtual_root_path;
-        /* For absolute paths, prepend root and path */
-        size_t root_len = strlen(root_path);
-        size_t vpath_len = strlen(vpath);
-        if (root_len + vpath_len >= sizeof(work_buffer))
-            return -ENAMETOOLONG;
-        memcpy(work_buffer, root_path, root_len);
-        memcpy(work_buffer + root_len, vpath, vpath_len + 1);
-    } else {
-        /* Relative path: resolve from task's virtual pwd */
-        const char *pwd_path = (fs && fs->pwd_path[0] != '\0') ? fs->pwd_path : vfs_virtual_root_path;
-        size_t pwd_len = strlen(pwd_path);
-        size_t rel_len = strlen(vpath);
-        if (pwd_len + 1 + rel_len >= sizeof(work_buffer))
-            return -ENAMETOOLONG;
-        memcpy(work_buffer, pwd_path, pwd_len);
-        if (pwd_path[pwd_len - 1] != '/') {
-            work_buffer[pwd_len] = '/';
-            pwd_len++;
-        }
-        memcpy(work_buffer + pwd_len, vpath, rel_len + 1);
-    }
-
-    /* Normalize the resolved virtual path */
-    ret = vfs_normalize_linux_path(work_buffer, resolved_virtual, sizeof(resolved_virtual));
-    if (ret < 0)
+    ret = vfs_resolve_virtual_path_task(vpath, resolved_virtual, sizeof(resolved_virtual), fs);
+    if (ret < 0) {
         return ret;
+    }
 
     return vfs_join_host_root(resolved_virtual, host_path, host_path_len);
 }

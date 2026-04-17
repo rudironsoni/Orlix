@@ -15,6 +15,7 @@
 
 #include "fdtable.h"
 #include "vfs.h"
+#include "../kernel/task.h"
 
 /* ============================================================================
  * PATH CLASSIFICATION
@@ -136,53 +137,30 @@ int path_normalize_with_len(char *path, size_t path_len) {
  * ============================================================================ */
 
 int path_translate(const char *virtual_path, char *host_path, size_t host_path_len) {
+    int ret;
+
     if (!virtual_path || !host_path || host_path_len == 0) {
         errno = EINVAL;
         return -1;
     }
 
-    path_type_t type = path_classify(virtual_path);
-
-    switch (type) {
+    switch (path_classify(virtual_path)) {
     case PATH_OWN_SANDBOX:
-        /* Already a host path in sandbox */
-        if (strlen(virtual_path) >= host_path_len) {
-            errno = ENAMETOOLONG;
-            return -1;
-        }
-        strncpy(host_path, virtual_path, host_path_len - 1);
-        host_path[host_path_len - 1] = '\0';
-        return 0;
-
-    case PATH_VIRTUAL_LINUX: {
-        /* Virtual Linux paths need translation through VFS mount */
-        /* For now, map to sandbox's virtual root */
-        const char *sandbox_root = getenv("IXLAND_ROOT");
-        if (!sandbox_root) {
-            sandbox_root = "/var/mobile/Containers/IXLand";
-        }
-
-        size_t root_len = strlen(sandbox_root);
-        size_t vpath_len = strlen(virtual_path);
-
-        if (root_len + vpath_len + 1 >= host_path_len) {
-            errno = ENAMETOOLONG;
-            return -1;
-        }
-
-        snprintf(host_path, host_path_len, "%s%s", sandbox_root, virtual_path);
-        path_normalize(host_path);
-        return 0;
-    }
-
     case PATH_ABSOLUTE_HOST:
-        /* Direct host path - use as-is with validation */
         if (strlen(virtual_path) >= host_path_len) {
             errno = ENAMETOOLONG;
             return -1;
         }
         strncpy(host_path, virtual_path, host_path_len - 1);
         host_path[host_path_len - 1] = '\0';
+        return 0;
+
+    case PATH_VIRTUAL_LINUX:
+        ret = vfs_translate_path(virtual_path, host_path, host_path_len);
+        if (ret != 0) {
+            errno = -ret;
+            return -1;
+        }
         return 0;
 
     default:
@@ -196,38 +174,19 @@ int path_translate(const char *virtual_path, char *host_path, size_t host_path_l
  * ============================================================================ */
 
 int path_reverse_translate(const char *host_path, char *virtual_path, size_t virtual_path_len) {
+    int ret;
+
     if (!host_path || !virtual_path || virtual_path_len == 0) {
         errno = EINVAL;
         return -1;
     }
 
-    const char *sandbox_root = getenv("IXLAND_ROOT");
-    if (!sandbox_root) {
-        sandbox_root = "/var/mobile/Containers/IXLand";
-    }
-
-    size_t root_len = strlen(sandbox_root);
-
-    /* Check if host_path is under sandbox root */
-    if (strncmp(host_path, sandbox_root, root_len) == 0) {
-        /* Strip sandbox root to get virtual path */
-        const char *relative = host_path + root_len;
-        if (strlen(relative) >= virtual_path_len) {
-            errno = ENAMETOOLONG;
-            return -1;
-        }
-        strncpy(virtual_path, relative, virtual_path_len - 1);
-        virtual_path[virtual_path_len - 1] = '\0';
-        return 0;
-    }
-
-    /* Not under sandbox - return as virtual Linux path */
-    if (strlen(host_path) >= virtual_path_len) {
-        errno = ENAMETOOLONG;
+    ret = vfs_reverse_translate(host_path, virtual_path, virtual_path_len);
+    if (ret != 0) {
+        errno = -ret;
         return -1;
     }
-    strncpy(virtual_path, host_path, virtual_path_len - 1);
-    virtual_path[virtual_path_len - 1] = '\0';
+
     return 0;
 }
 
@@ -274,77 +233,40 @@ bool path_is_safe(const char *path) {
  * ============================================================================ */
 
 int path_resolve(const char *path, char *resolved, size_t resolved_len) {
+    struct task_struct *task;
+    int ret;
+
     if (!path || !resolved || resolved_len == 0) {
         errno = EINVAL;
         return -1;
     }
 
-    /* Classify the path */
-    path_type_t type = path_classify(path);
-
-    /* If it's a real iOS path (own sandbox or external), use directly */
-    if (type == PATH_OWN_SANDBOX || type == PATH_EXTERNAL) {
+    switch (path_classify(path)) {
+    case PATH_OWN_SANDBOX:
+    case PATH_EXTERNAL:
+    case PATH_ABSOLUTE_HOST:
         if (strlen(path) >= resolved_len) {
             errno = ENAMETOOLONG;
             return -1;
         }
         strncpy(resolved, path, resolved_len - 1);
         resolved[resolved_len - 1] = '\0';
-        /* Normalize but don't translate */
         path_normalize(resolved);
         return 0;
-    }
 
-    /* If it's a virtual Linux path, translate through VFS */
-    if (type == PATH_VIRTUAL_LINUX) {
-        /* First normalize the virtual path */
-        char normalized[PATH_MAX];
-        if (strlen(path) >= sizeof(normalized)) {
-            errno = ENAMETOOLONG;
-            return -1;
-        }
-        strncpy(normalized, path, sizeof(normalized) - 1);
-        normalized[sizeof(normalized) - 1] = '\0';
-        path_normalize(normalized);
-
-        /* Now translate through VFS */
-        /* The VFS translate function expects a virtual path and returns iOS path */
-        if (vfs_translate_path(normalized, resolved, resolved_len) != 0) {
+    case PATH_VIRTUAL_LINUX:
+        task = get_current();
+        ret = vfs_translate_path_task(path, resolved, resolved_len, task ? task->fs : NULL);
+        if (ret != 0) {
+            errno = -ret;
             return -1;
         }
         return 0;
-    }
 
-    /* For relative paths or other cases, resolve against CWD */
-    char cwd[PATH_MAX];
-    if (!getcwd(cwd, sizeof(cwd))) {
+    default:
+        errno = ENOENT;
         return -1;
     }
-
-    /* Join paths */
-    if (strlen(cwd) + strlen(path) + 2 >= resolved_len) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-
-    snprintf(resolved, resolved_len, "%s/%s", cwd, path);
-    path_normalize(resolved);
-
-    /* Now classify the resolved path */
-    type = path_classify(resolved);
-    if (type == PATH_VIRTUAL_LINUX) {
-        /* It's a virtual path, translate it */
-        char translated[PATH_MAX];
-        if (vfs_translate_path(resolved, translated, sizeof(translated)) == 0) {
-            if (strlen(translated) < resolved_len) {
-                strncpy(resolved, translated, resolved_len - 1);
-                resolved[resolved_len - 1] = '\0';
-            }
-        }
-    }
-    /* Otherwise keep the resolved path as-is (real iOS path) */
-
-    return 0;
 }
 
 void path_join(const char *base, const char *rel, char *result, size_t result_len) {

@@ -25,23 +25,41 @@ static int directory_validate_path(const char *path) {
 /* Get current task - forward declaration */
 struct task_struct *get_current(void);
 
-int chdir_impl(const char *path) {
-    if (directory_validate_path(path) != 0) {
-        return -1;
-    }
+static int directory_translate_task_path(const char *path, char *translated_path,
+                                         size_t translated_path_len,
+                                         struct task_struct **task_out) {
+    struct task_struct *task;
+    int ret;
 
-    struct task_struct *task = get_current();
+    task = get_current();
     if (!task) {
         errno = ESRCH;
         return -1;
     }
 
-    /* Task-aware path translation */
-    char translated_path[MAX_PATH];
-    int ret = vfs_translate_path_task(path, translated_path, sizeof(translated_path),
-                                        task->fs);
+    ret = vfs_translate_path_task(path, translated_path, translated_path_len, task->fs);
     if (ret != 0) {
         errno = -ret;
+        return -1;
+    }
+
+    if (task_out) {
+        *task_out = task;
+    }
+
+    return 0;
+}
+
+int chdir_impl(const char *path) {
+    struct task_struct *task;
+    char translated_path[MAX_PATH];
+    char resolved_virtual[MAX_PATH];
+
+    if (directory_validate_path(path) != 0) {
+        return -1;
+    }
+
+    if (directory_translate_task_path(path, translated_path, sizeof(translated_path), &task) != 0) {
         return -1;
     }
 
@@ -60,34 +78,13 @@ int chdir_impl(const char *path) {
         return -1;
     }
 
-    if (chdir(translated_path) != 0) {
-        return -1;
-    }
-
-    /* Update task's virtual pwd */
     if (task->fs) {
-        /* Normalize the virtual path before storing */
-        char normalized[MAX_PATH];
-        if (path[0] == '/') {
-            /* Absolute - use as-is with normalization */
-            vfs_normalize_linux_path(path, normalized, sizeof(normalized));
-        } else {
-            /* Relative - resolve against current pwd */
-            char resolved[MAX_PATH];
-            size_t pwd_len = strlen(task->fs->pwd_path);
-            if (pwd_len + strlen(path) + 2 >= sizeof(resolved)) {
-                /* Path too long - don't update pwd, but operation succeeded */
-                return 0;
-            }
-            memcpy(resolved, task->fs->pwd_path, pwd_len);
-            if (resolved[pwd_len - 1] != '/') {
-                resolved[pwd_len] = '/';
-                pwd_len++;
-            }
-            memcpy(resolved + pwd_len, path, strlen(path) + 1);
-            vfs_normalize_linux_path(resolved, normalized, sizeof(normalized));
+        int ret = vfs_resolve_virtual_path_task(path, resolved_virtual, sizeof(resolved_virtual), task->fs);
+        if (ret != 0) {
+            errno = -ret;
+            return -1;
         }
-        fs_set_pwd(task->fs, normalized);
+        fs_set_pwd(task->fs, resolved_virtual);
     }
 
     return 0;
@@ -103,6 +100,10 @@ int fchdir_impl(int fd) {
 }
 
 char *getcwd_impl(char *buf, size_t size) {
+    struct task_struct *task;
+    char virtual_path[MAX_PATH];
+    int ret;
+
     if (size == 0) {
         errno = EINVAL;
         return NULL;
@@ -113,38 +114,36 @@ char *getcwd_impl(char *buf, size_t size) {
         return NULL;
     }
 
-    char ios_cwd[MAX_PATH];
-    if (getcwd(ios_cwd, sizeof(ios_cwd)) == NULL) {
+    task = get_current();
+    if (!task) {
+        errno = ESRCH;
         return NULL;
     }
 
-    char virtual_path[MAX_PATH];
-    const char *selected_path;
-
-    if (vfs_reverse_translate(ios_cwd, virtual_path, sizeof(virtual_path)) != 0) {
-        errno = EXDEV;
+    ret = vfs_getcwd_path_task(task->fs, virtual_path, sizeof(virtual_path));
+    if (ret != 0) {
+        errno = -ret;
         return NULL;
     }
 
-    selected_path = virtual_path;
-
-    const size_t selected_len = strlen(selected_path);
+    const size_t selected_len = strlen(virtual_path);
     if (selected_len >= size) {
         errno = ERANGE;
         return NULL;
     }
 
-    memcpy(buf, selected_path, selected_len + 1);
+    memcpy(buf, virtual_path, selected_len + 1);
     return buf;
 }
 
 int mkdir_impl(const char *pathname, mode_t mode) {
+    char translated_path[MAX_PATH];
+
     if (directory_validate_path(pathname) != 0) {
         return -1;
     }
 
-    char translated_path[MAX_PATH];
-    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {
         return -1;
     }
 
@@ -152,12 +151,13 @@ int mkdir_impl(const char *pathname, mode_t mode) {
 }
 
 int rmdir_impl(const char *pathname) {
+    char translated_path[MAX_PATH];
+
     if (directory_validate_path(pathname) != 0) {
         return -1;
     }
 
-    char translated_path[MAX_PATH];
-    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {
         return -1;
     }
 
@@ -175,12 +175,13 @@ int rmdir_impl(const char *pathname) {
 }
 
 int unlink_impl(const char *pathname) {
+    char translated_path[MAX_PATH];
+
     if (directory_validate_path(pathname) != 0) {
         return -1;
     }
 
-    char translated_path[MAX_PATH];
-    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {
         return -1;
     }
 
@@ -194,6 +195,9 @@ int unlink_impl(const char *pathname) {
 }
 
 int link_impl(const char *oldpath, const char *newpath) {
+    char translated_old[MAX_PATH];
+    char translated_new[MAX_PATH];
+
     if (oldpath == NULL || newpath == NULL) {
         errno = EFAULT;
         return -1;
@@ -204,13 +208,11 @@ int link_impl(const char *oldpath, const char *newpath) {
         return -1;
     }
 
-    char translated_old[MAX_PATH];
-    char translated_new[MAX_PATH];
-    if (vfs_translate_path(oldpath, translated_old, sizeof(translated_old)) != 0) {
+    if (directory_translate_task_path(oldpath, translated_old, sizeof(translated_old), NULL) != 0) {
         return -1;
     }
 
-    if (vfs_translate_path(newpath, translated_new, sizeof(translated_new)) != 0) {
+    if (directory_translate_task_path(newpath, translated_new, sizeof(translated_new), NULL) != 0) {
         return -1;
     }
 
@@ -233,6 +235,8 @@ int link_impl(const char *oldpath, const char *newpath) {
 }
 
 int symlink_impl(const char *target, const char *linkpath) {
+    char translated_link[MAX_PATH];
+
     if (target == NULL || linkpath == NULL) {
         errno = EFAULT;
         return -1;
@@ -243,8 +247,7 @@ int symlink_impl(const char *target, const char *linkpath) {
         return -1;
     }
 
-    char translated_link[MAX_PATH];
-    if (vfs_translate_path(linkpath, translated_link, sizeof(translated_link)) != 0) {
+    if (directory_translate_task_path(linkpath, translated_link, sizeof(translated_link), NULL) != 0) {
         return -1;
     }
 
@@ -258,6 +261,8 @@ int symlink_impl(const char *target, const char *linkpath) {
 }
 
 ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
+    char translated_path[MAX_PATH];
+
     if (pathname == NULL || buf == NULL) {
         errno = EFAULT;
         return -1;
@@ -273,8 +278,7 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
         return -1;
     }
 
-    char translated_path[MAX_PATH];
-    if (vfs_translate_path(pathname, translated_path, sizeof(translated_path)) != 0) {
+    if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {
         return -1;
     }
 

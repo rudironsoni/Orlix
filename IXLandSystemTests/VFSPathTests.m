@@ -14,6 +14,10 @@
 #include <string.h>
 
 #include "fs/vfs.h"
+#include "fs/path.h"
+#include "kernel/task.h"
+
+extern char *getcwd_impl(char *buf, size_t size);
 
 @interface VFSPathTests : XCTestCase
 @end
@@ -38,7 +42,7 @@
     XCTAssertEqual(ret, 0, @"absolute virtual path should translate");
     XCTAssertEqualObjects(actualPath, expectedPath, @"translated path should live under backing root");
     XCTAssertNotEqual(strcmp(host_path, "/tmp/demo"), 0,
-                      @"translation must not be identity passthrough");
+                      @"translation must not be identity mapping");
 }
 
 - (void)testRelativeVirtualPathMapsUnderBackingRoot {
@@ -167,6 +171,63 @@
     XCTAssertEqual(ret, -EINVAL, @"parent escapes should be rejected with task context");
     
     free_fs_struct(fs);
+}
+
+- (void)testTaskAwareAbsolutePathUsesTaskRootPrefix {
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+
+    fs_init_root(fs, @"/sandbox".UTF8String);
+    fs_init_pwd(fs, @"/sandbox/work".UTF8String);
+
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task(@"/bin/ls".UTF8String, host_path, sizeof(host_path), fs);
+
+    XCTAssertEqual(ret, 0, @"absolute path translation should succeed from non-root task root");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/sandbox/bin/ls", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"absolute paths should resolve from task root prefix");
+
+    free_fs_struct(fs);
+}
+
+- (void)testGetcwdMatchesTaskPwdAndRelativeResolution {
+    struct task_struct *originalTask = get_current();
+    struct task_struct *task = alloc_task();
+    XCTAssertTrue(task != NULL, @"task allocation should succeed");
+    if (!task) return;
+
+    task->fs = alloc_fs_struct();
+    XCTAssertTrue(task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!task->fs) {
+        free_task(task);
+        return;
+    }
+
+    fs_init_root(task->fs, @"/".UTF8String);
+    fs_init_pwd(task->fs, @"/usr/local".UTF8String);
+    set_current(task);
+
+    char cwd[MAX_PATH];
+    char resolved[MAX_PATH];
+    char expected[MAX_PATH];
+
+    char *cwd_result = getcwd_impl(cwd, sizeof(cwd));
+    XCTAssertTrue(cwd_result != NULL, @"getcwd_impl should return current task pwd");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:cwd], @"/usr/local",
+                          @"getcwd_impl should report task virtual pwd");
+
+    int resolve_ret = path_resolve(@"bin/tool".UTF8String, resolved, sizeof(resolved));
+    XCTAssertEqual(resolve_ret, 0, @"path_resolve should succeed for relative task path");
+
+    int expected_ret = vfs_translate_path_task(@"bin/tool".UTF8String, expected, sizeof(expected), task->fs);
+    XCTAssertEqual(expected_ret, 0, @"expected task-aware translation should succeed");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:resolved], [NSString stringWithUTF8String:expected],
+                          @"relative resolution should agree with task getcwd state");
+
+    set_current(originalTask);
+    free_task(task);
 }
 
 @end
