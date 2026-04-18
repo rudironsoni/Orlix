@@ -1,19 +1,20 @@
 # clangd configuration for IXLandSystem
 # This file uses portable relative paths - no machine-specific hardcoding
+#
+# IMPORTANT: This config works WITH compile_commands.json, not instead of it.
+# - compile_commands.json provides real per-file build context (include paths, language mode, target, macros)
+# - This .clangd file provides portable fallback flags and path-based policy
+# - clangd uses compile_commands.json when available, falls back to these flags
+#
+# To generate compile_commands.json locally:
+#   ./scripts/generate_compile_commands.sh
+# This is intentionally NOT checked in - it's machine-specific.
 
-CompileFlags:
-  # Base flags applied to all files
-  Add:
-    - -Ithird_party/linux-uapi/6.12/arm64/include
-    - -Iinclude
-    - -I.
-    - -D_XOPEN_SOURCE
-  Remove:
-    - -index-store-path
-    - -index-unit-output-path
+# By default, clangd searches upward from the file being edited for compile_commands.json
+# This is the recommended behavior - it finds the CDB at repo root when available
 
 ---
-# Linux-owner paths: C-only, no ObjC
+# Linux-owner paths: C-only, no Objective-C
 # These paths implement Linux semantics and must stay host-agnostic
 If:
   PathMatch:
@@ -30,6 +31,14 @@ If:
       - -DIXLAND_LINUX_OWNER_FILE=1
       - --include=include/ixland/clangd_owner_policy.h
       - -std=gnu11
+      # Portable fallback includes - compile_commands.json provides the real paths
+      - -Ithird_party/linux-uapi/6.12/arm64/include
+      - -Iinclude
+      - -I.
+      - -D_XOPEN_SOURCE
+    Remove:
+      - -index-store-path
+      - -index-unit-output-path
 
 ---
 # Private iOS bridge paths
@@ -54,7 +63,7 @@ If:
       - -fobjc-arc
 
 ---
-# Private iOS: Objective-C++ files  
+# Private iOS: Objective-C++ files
 If:
   PathMatch:
     - ^internal/ios/.*\.mm$
