@@ -3,3 +3,63 @@ CompileFlags:
   Remove:
     - -index-store-path
     - -index-unit-output-path
+
+---
+
+If:
+  PathMatch:
+    - ^kernel/.*\.(c|h)$
+    - ^fs/.*\.(c|h)$
+    - ^runtime/.*\.(c|h)$
+    - ^include/.*\.h$
+  PathExclude:
+    - ^arch/darwin/.*$
+    - ^fs/.*_darwin\.(c|h|m|mm)$
+    - ^fs/host_.*\.(c|h|m|mm)$
+  CompileFlags:
+    Add:
+      - -DIXLAND_LINUX_OWNER_FILE=1
+      - --include=include/ixland/clangd_owner_policy.h
+
+---
+
+If:
+  PathMatch:
+    - ^IXLandSystemTests/.*\.m$
+  CompileFlags:
+    Add:
+      - -x
+      - objective-c
+
+---
+
+If:
+  PathMatch:
+    - ^IXLandSystemTests/.*\.mm$
+    - ^arch/darwin/.*\.mm$
+    - ^fs/.*_darwin\.mm$
+    - ^fs/host_.*\.mm$
+  CompileFlags:
+    Add:
+      - -x
+      - objective-c++
+
+---
+
+If:
+  PathMatch:
+    - ^arch/darwin/.*\.(c|h|m|mm)$
+    - ^fs/.*_darwin\.(c|h|m|mm)$
+    - ^fs/host_.*\.(c|h|m|mm)$
+  CompileFlags:
+    Add:
+      - -DIXLAND_HOST_BRIDGE_FILE=1
+
+---
+
+If:
+  PathMatch:
+    - ^IXLandSystemTests/.*\.(c|h|m|mm)$
+  Diagnostics:
+    ClangTidy:
+      FastCheckFilter: Strict

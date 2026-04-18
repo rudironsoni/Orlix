@@ -8,5 +8,28 @@
     "read": {
       "*": "allow"
     }
+  },
+  "lsp": {
+    "clangd": {
+      "command": [
+        "clangd",
+        "--query-driver=/Applications/Xcode.app/**/clang,/usr/bin/clang"
+      ],
+      "extensions": [
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".h",
+        ".hh",
+        ".hpp",
+        ".hxx",
+        ".m",
+        ".mm"
+      ]
+    },
+    "sourcekit-lsp": {
+      "disabled": true
+    }
   }
 }

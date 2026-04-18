@@ -10,6 +10,7 @@
 extern "C" {
 #endif
 
+/* Host filesystem operations via direct syscalls */
 int host_open_impl(const char *path, int flags, mode_t mode);
 int host_close_impl(int fd);
 int host_dup_impl(int fd);

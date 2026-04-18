@@ -63,12 +63,31 @@ __attribute__((visibility("default"))) int mkdir(const char *path, mode_t mode) 
 - Never expose Darwin-specific signatures in public headers
 - When Darwin headers conflict with Linux ABI, isolate the conflict privately
 
-### 3. Build Proof Standard
+### 3. Objective-C/Objective-C++ Boundary
+**These paths MUST be C-only (No .m or .mm files):**
+- `kernel/` - Linux kernel syscall implementations
+- `fs/` - Filesystem operations (except `*_darwin.c/h/m/mm` and `host_*.c/h/m/mm`)
+- `runtime/` - Native runtime support
+- `include/` - Public headers (Linux-facing)
+
+**These locations allow Objective-C/Objective-C++:**
+- `IXLandSystemTests/**/*.(m|mm)` - Test code
+- `arch/darwin/**/*.(m|mm)` - iOS/Darwin bridge implementations
+- `fs/*_darwin.(m|mm)` - Filesystem Darwin-specific bridges
+- `fs/host_*.(m|mm)` - Host filesystem mediation
+
+**Forbidden in Linux-owner paths:**
+- Foundation/UIKit imports (`#import <Foundation/Foundation.h>`)
+- NS-prefixed types (`NSString`, `NSArray`, `NSDictionary`, `NSObject`, etc.)
+- App container APIs (`NSFileManager`, `NSURL` bookmarks, document-picker)
+- Run `scripts/lint_linux_surface.sh` before committing
+
+### 4. Build Proof Standard
 - Authoritative builds use `xcodegen` + `xcodebuild` ONLY
 - `swift build` is NOT valid proof for iOS-targeted code
 - Symbol verification via `nm -goU` on the static archive
 
-### 4. Error Handling
+### 5. Error Handling
 - Use `ENOSYS` for unimplemented functionality
 - Use `EINVAL` for invalid arguments
 - Use `EPERM`/`EACCES` only when access is genuinely denied

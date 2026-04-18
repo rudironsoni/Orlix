@@ -146,4 +146,113 @@ ssize_t host_writev_impl(int fd, const struct iovec *iov, int iovcnt) {
     return ret;
 }
 
+/* Storage class discovery - Darwin-specific host mediation
+ * These use Foundation APIs to query standard iOS container paths.
+ * This is the appropriate level for host container awareness.
+ * Returns 0 on success, -1 on error.
+ */
+#include <Foundation/Foundation.h>
+
+int host_get_application_support_path_impl(char *path, size_t path_len) {
+    @autoreleasepool {
+        NSURL *url = [[NSFileManager defaultManager] 
+                      URLForDirectory:NSApplicationSupportDirectory
+                      inDomain:NSUserDomainMask
+                      appropriateForURL:nil
+                      create:YES
+                      error:nil];
+        if (!url) {
+            errno = ENOENT;
+            return -1;
+        }
+        const char *cpath = [url fileSystemRepresentation];
+        if (!cpath || strlen(cpath) >= path_len) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        strncpy(path, cpath, path_len - 1);
+        path[path_len - 1] = '\0';
+        return 0;
+    }
+}
+
+int host_get_caches_path_impl(char *path, size_t path_len) {
+    @autoreleasepool {
+        NSURL *url = [[NSFileManager defaultManager] 
+                      URLForDirectory:NSCachesDirectory
+                      inDomain:NSUserDomainMask
+                      appropriateForURL:nil
+                      create:YES
+                      error:nil];
+        if (!url) {
+            errno = ENOENT;
+            return -1;
+        }
+        const char *cpath = [url fileSystemRepresentation];
+        if (!cpath || strlen(cpath) >= path_len) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        strncpy(path, cpath, path_len - 1);
+        path[path_len - 1] = '\0';
+        return 0;
+    }
+}
+
+int host_get_tmp_path_impl(char *path, size_t path_len) {
+    @autoreleasepool {
+        NSString *tmp = NSTemporaryDirectory();
+        if (!tmp) {
+            errno = ENOENT;
+            return -1;
+        }
+        const char *cpath = [tmp UTF8String];
+        if (!cpath || strlen(cpath) >= path_len) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        strncpy(path, cpath, path_len - 1);
+        path[path_len - 1] = '\0';
+        return 0;
+    }
+}
+
+int host_ensure_directory_impl(const char *path, mode_t mode) {
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            return 0;
+        }
+        errno = ENOTDIR;
+        return -1;
+    }
+    if (errno != ENOENT) {
+        return -1;
+    }
+    /* Create parent directories recursively */
+    char parent[MAX_PATH];
+    size_t len = strlen(path);
+    if (len >= sizeof(parent)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    memcpy(parent, path, len + 1);
+    
+    /* Find the last slash */
+    char *last_slash = strrchr(parent, '/');
+    if (last_slash && last_slash != parent) {
+        *last_slash = '\0';
+        if (host_ensure_directory_impl(parent, mode) < 0) {
+            return -1;
+        }
+    }
+    
+    /* Create this directory */
+    int ret = syscall(SYS_mkdir, path, mode);
+    if (ret < 0 && errno != EEXIST) {
+        return -1;
+    }
+    return 0;
+}
+
 #pragma clang diagnostic pop
