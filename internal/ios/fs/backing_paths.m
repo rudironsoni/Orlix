@@ -1,5 +1,5 @@
-/* IXLandSystem/fs/host_darwin_storage.m
- * Darwin-specific storage class discovery - quarantined in private bridge
+/* IXLandSystem/internal/ios/fs/backing_paths.m
+ * iOS container path resolution - quarantined in private bridge
  *
  * This file uses Foundation APIs to query iOS container paths.
  * It is the only file in the VFS subsystem that includes Darwin/Foundation headers.

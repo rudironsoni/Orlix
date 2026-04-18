@@ -55,4 +55,49 @@ fi
 echo "   ✓ No hand-defined ABI constants"
 
 echo ""
+echo "=== Check 6: Filename sludge in Linux-owner paths ==="
+echo "   Checking for host_*, *_darwin, *_storage in fs/, kernel/, runtime/, include..."
+SLUDGE_COUNT=0
+for dir in fs kernel runtime include; do
+    if [ -d "$dir" ]; then
+        while IFS= read -r file; do
+            case "$file" in
+                host_*|*_darwin.*|*_storage.*)
+                    echo "  Found: $dir/$file"
+                    SLUDGE_COUNT=$((SLUDGE_COUNT + 1))
+                    ;;
+            esac
+        done < <(ls -1 "$dir" 2>/dev/null || true)
+    fi
+done
+if [ "$SLUDGE_COUNT" -gt 0 ]; then
+    echo "FAIL: Filename sludge found in Linux-owner paths (count: $SLUDGE_COUNT)"
+    exit 1
+fi
+echo "   ✓ No filename sludge in Linux-owner paths"
+
+echo ""
+echo "=== Check 7: Filename sludge in internal/ios ==="
+echo "   Checking for new host_*, *_darwin, *_storage patterns in internal/ios..."
+SLUDGE_IOS=0
+for subdir in internal/ios/fs internal/ios/kernel; do
+    if [ -d "$subdir" ]; then
+        while IFS= read -r file; do
+            case "$file" in
+                host_*|*_darwin.*|*_storage.*)
+                    echo "  Found: $subdir/$file"
+                    SLUDGE_IOS=$((SLUDGE_IOS + 1))
+                    ;;
+            esac
+        done < <(ls -1 "$subdir" 2>/dev/null || true)
+    fi
+done
+if [ "$SLUDGE_IOS" -gt 0 ]; then
+    echo "FAIL: New filename sludge in internal/ios (count: $SLUDGE_IOS)"
+    echo "Rename to role-based names (e.g., backing_io.m, wait.c, clock.c)"
+    exit 1
+fi
+echo "   ✓ No filename sludge in internal/ios"
+
+echo ""
 echo "=== All checks passed ==="

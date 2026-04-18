@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "internal/ios/fs/host_darwin.h"
+#include "internal/ios/fs/backing_io.h"
 
 struct files_struct *alloc_files(size_t max_fds) {
     if (max_fds == 0) {

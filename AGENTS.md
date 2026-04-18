@@ -83,7 +83,7 @@ __attribute__((visibility("default"))) int mkdir(const char *path, mode_t mode) 
 - App container APIs (`NSFileManager`, `NSURL` bookmarks, document-picker)
 - Run `scripts/lint_linux_surface.sh` before committing
 
-**Note:** Bridge files under `fs/*_darwin` and `fs/host_*` are transitional debt being migrated to `internal/ios/**`.
+**Naming:** Private bridge files under `internal/ios/**` SHALL be named by role (e.g., `backing_io.m`, `wait.c`, `clock.c`), not by platform suffixes like `*_darwin` or `host_*`.
 
 ### 4. Build Proof Standard
 - Authoritative builds use `xcodegen` + `xcodebuild` ONLY

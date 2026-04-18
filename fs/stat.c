@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
-#include "internal/ios/fs/host_darwin.h"
+#include "internal/ios/fs/backing_io.h"
 #include "vfs.h"
 
 #ifndef MAX_PATH
