@@ -10,8 +10,17 @@
 #define MAX_PATH 4096
 
 int open_impl(const char *pathname, int flags, mode_t mode) {
+    char translated_path[MAX_PATH];
+    int ret;
+
     if (!pathname) {
         errno = EFAULT;
+        return -1;
+    }
+
+    ret = vfs_translate_path(pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        errno = -ret;
         return -1;
     }
 
@@ -21,7 +30,7 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
     }
 
     int real_fd;
-    int ret = vfs_open(pathname, flags, mode, &real_fd);
+    ret = vfs_open(translated_path, flags, mode, &real_fd);
     if (ret < 0) {
         free_fd_impl(fd);
         errno = -ret;

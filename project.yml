@@ -106,6 +106,7 @@ targets:
     - IXLandSystemTests/TaskGroupTests.m
     - IXLandSystemTests/CredentialTests.m
     - IXLandSystemTests/VFSPathTests.m
+    - IXLandSystemTests/RootfsBootstrapTests.m
     - IXLandSystemTests/LinuxUAPICompileSmoke.c
     dependencies:
     - target: IXLandSystem

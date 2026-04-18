@@ -15,6 +15,7 @@
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
 		26E0C643B3E753A0656DEBDD /* select_darwin.c in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D046C00C2D21EE9A3AEA6 /* select_darwin.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
+		2EDB0D8B37216282DABEC526 /* RootfsBootstrapTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4683BA0EA109D1320BC09ACF /* RootfsBootstrapTests.m */; };
 		3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */ = {isa = PBXBuildFile; fileRef = F5240B1F3DC3BDF0ED535D3B /* time.c */; };
 		398F68458C9177477A65A9EE /* LinuxUAPICompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 84B7EE143A9CA194FD055CDA /* LinuxUAPICompileSmoke.c */; };
 		412EF8D788799D420EF84B74 /* SignalTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 667BE890D514BA87E4BDA1BF /* SignalTests.m */; };
@@ -71,6 +72,7 @@
 		32C8785EC40C73B387D6237A /* fdtable.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fdtable.c; sourceTree = "<group>"; };
 		384371EDE185511D5F125C45 /* fork.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fork.c; sourceTree = "<group>"; };
 		43308FAA8FF808B4BF22777C /* ioctl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ioctl.c; sourceTree = "<group>"; };
+		4683BA0EA109D1320BC09ACF /* RootfsBootstrapTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RootfsBootstrapTests.m; sourceTree = "<group>"; };
 		4D57509F341C9895C6F7163B /* pid.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pid.c; sourceTree = "<group>"; };
 		4E3BBA7476909DE92B9A8F8D /* open.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = open.c; sourceTree = "<group>"; };
 		51D066274EE2D55E90787D9C /* path.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = path.c; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 			children = (
 				EE40DEEE9D6E27C79FE49368 /* CredentialTests.m */,
 				84B7EE143A9CA194FD055CDA /* LinuxUAPICompileSmoke.c */,
+				4683BA0EA109D1320BC09ACF /* RootfsBootstrapTests.m */,
 				667BE890D514BA87E4BDA1BF /* SignalTests.m */,
 				BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */,
 				073C80D4D34F19B293799FD4 /* VFSPathTests.m */,
@@ -364,6 +367,7 @@
 			files = (
 				1EFE002D356A2BC2DBE43F83 /* CredentialTests.m in Sources */,
 				398F68458C9177477A65A9EE /* LinuxUAPICompileSmoke.c in Sources */,
+				2EDB0D8B37216282DABEC526 /* RootfsBootstrapTests.m in Sources */,
 				412EF8D788799D420EF84B74 /* SignalTests.m in Sources */,
 				87D87C4892661BFBEE659114 /* TaskGroupTests.m in Sources */,
 				9543DF14BEC63791F071A8E3 /* VFSPathTests.m in Sources */,

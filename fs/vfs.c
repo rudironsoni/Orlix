@@ -3,8 +3,10 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 /* Linux UAPI AT flag values - these are the public ABI contract */
@@ -236,8 +238,92 @@ int fs_set_root(struct fs_struct *fs, const char *new_root) {
     return fs_init_root(fs, new_root);
 }
 
+/* Bootstrap Linux identity/config baseline in private rootfs */
+static int vfs_bootstrap_etc_files_impl(void) {
+    const char *passwd_content =
+        "root:x:0:0:root:/root:/bin/sh\n"
+        "ixland:x:1000:1000:IXLand User:/home/ixland:/bin/sh\n";
+    const char *group_content =
+        "root:x:0:\n"
+        "ixland:x:1000:\n";
+    const char *hosts_content =
+        "127.0.0.1\tlocalhost\n"
+        "::1\t\tlocalhost ip6-localhost ip6-loopback\n";
+    const char *resolv_content =
+        "nameserver 8.8.8.8\n"
+        "nameserver 8.8.4.4\n";
+
+    char etc_path[MAX_PATH];
+    char file_path[MAX_PATH];
+    int fd;
+    ssize_t written;
+    size_t len;
+
+/* Suppress deprecation warnings for intentional syscall usage in bootstrap */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+    /* Create /etc directory under backing root using host syscall */
+    snprintf(etc_path, sizeof(etc_path), "%s/etc", vfs_host_root_path);
+    syscall(SYS_mkdir, etc_path, 0755);
+
+#pragma clang diagnostic pop
+
+    /* Create /etc/passwd */
+    snprintf(file_path, sizeof(file_path), "%s/passwd", etc_path);
+    fd = host_open_impl(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd >= 0) {
+        len = strlen(passwd_content);
+        written = host_write_impl(fd, passwd_content, len);
+        host_close_impl(fd);
+        if (written != (ssize_t)len) {
+            /* Non-fatal: file creation may fail in constrained environments */
+        }
+    }
+
+    /* Create /etc/group */
+    snprintf(file_path, sizeof(file_path), "%s/group", etc_path);
+    fd = host_open_impl(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd >= 0) {
+        len = strlen(group_content);
+        written = host_write_impl(fd, group_content, len);
+        host_close_impl(fd);
+        if (written != (ssize_t)len) {
+            /* Non-fatal: file creation may fail in constrained environments */
+        }
+    }
+
+    /* Create /etc/hosts */
+    snprintf(file_path, sizeof(file_path), "%s/hosts", etc_path);
+    fd = host_open_impl(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd >= 0) {
+        len = strlen(hosts_content);
+        written = host_write_impl(fd, hosts_content, len);
+        host_close_impl(fd);
+        if (written != (ssize_t)len) {
+            /* Non-fatal: file creation may fail in constrained environments */
+        }
+    }
+
+    /* Create /etc/resolv.conf */
+    snprintf(file_path, sizeof(file_path), "%s/resolv.conf", etc_path);
+    fd = host_open_impl(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd >= 0) {
+        len = strlen(resolv_content);
+        written = host_write_impl(fd, resolv_content, len);
+        host_close_impl(fd);
+        if (written != (ssize_t)len) {
+            /* Non-fatal: file creation may fail in constrained environments */
+        }
+    }
+
+    return 0;
+}
+
 /* VFS operations - to be implemented in full */
 int vfs_init(void) {
+    /* Bootstrap Linux identity/config baseline */
+    vfs_bootstrap_etc_files_impl();
     return 0;
 }
 

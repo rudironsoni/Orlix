@@ -185,7 +185,7 @@ ssize_t readv_impl(int fd, const struct iovec *iov, int iovcnt) {
     }
     
     if (fd <= 2) {
-        return readv(fd, iov, iovcnt);
+        return host_readv_impl(fd, iov, iovcnt);
     }
     
     void *entry = get_fd_entry_impl(fd);
@@ -205,7 +205,7 @@ ssize_t readv_impl(int fd, const struct iovec *iov, int iovcnt) {
             return -1;
         }
         
-        ssize_t bytes = read(get_real_fd_impl(entry), iov[i].iov_base, iov[i].iov_len);
+        ssize_t bytes = host_read_impl(get_real_fd_impl(entry), iov[i].iov_base, iov[i].iov_len);
         if (bytes < 0) {
             put_fd_entry_impl(entry);
             return -1;
@@ -243,7 +243,7 @@ ssize_t writev_impl(int fd, const struct iovec *iov, int iovcnt) {
     }
     
     if (fd <= 2) {
-        return writev(fd, iov, iovcnt);
+        return host_writev_impl(fd, iov, iovcnt);
     }
     
     void *entry = get_fd_entry_impl(fd);
@@ -256,7 +256,7 @@ ssize_t writev_impl(int fd, const struct iovec *iov, int iovcnt) {
     
     /* Handle O_APPEND */
     if (get_fd_is_append_impl(entry)) {
-        if (lseek(real_fd, 0, SEEK_END) < 0) {
+        if (host_lseek_impl(real_fd, 0, SEEK_END) < 0) {
             put_fd_entry_impl(entry);
             return -1;
         }
@@ -273,7 +273,7 @@ ssize_t writev_impl(int fd, const struct iovec *iov, int iovcnt) {
             return -1;
         }
         
-        ssize_t bytes = write(real_fd, iov[i].iov_base, iov[i].iov_len);
+        ssize_t bytes = host_write_impl(real_fd, iov[i].iov_base, iov[i].iov_len);
         if (bytes < 0) {
             put_fd_entry_impl(entry);
             return -1;
