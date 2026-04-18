@@ -6,28 +6,18 @@
  * - restart_syscall()
  *
  * Linux-shaped canonical owner - iOS mediation as implementation detail
- * Note: futex is Linux-specific; on iOS we use condition variables
+ * Note: futex is Linux-specific; unsupported operations currently reject with ENOSYS
  */
 
 #include <errno.h>
-#include <pthread.h>
+#include <time.h>
+#include <linux/futex.h>
 
 /* ============================================================================
- * FUTEX - Fast Userspace muTEX (simulated on iOS)
+ * FUTEX - Fast Userspace muTEX
  * ============================================================================ */
 
-/* Futex operations */
-#define FUTEX_WAIT 0
-#define FUTEX_WAKE 1
-#define FUTEX_FD 2
-#define FUTEX_REQUEUE 3
-#define FUTEX_CMP_REQUEUE 4
-#define FUTEX_WAKE_OP 5
-#define FUTEX_LOCK_PI 6
-#define FUTEX_UNLOCK_PI 7
-#define FUTEX_TRYLOCK_PI 8
-#define FUTEX_WAIT_BITSET 9
-#define FUTEX_WAKE_BITSET 10
+/* ABI truth comes from vendored Linux UAPI: <linux/futex.h> */
 
 static int futex_impl(int *uaddr, int futex_op, int val, const struct timespec *timeout,
 int *uaddr2, int val3) {
@@ -38,7 +28,7 @@ int *uaddr2, int val3) {
 (void)uaddr2;
 (void)val3;
 
-/* futex not available on iOS - use pthread synchronization */
+/* Unsupported on current iOS substrate: Linux-facing rejection stays here */
 errno = ENOSYS;
 return -1;
 }

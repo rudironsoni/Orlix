@@ -111,7 +111,9 @@ targets:
     - IXLandSystemTests/CredentialTests.m
     - IXLandSystemTests/VFSPathTests.m
     - IXLandSystemTests/RootfsBootstrapTests.m
+    - IXLandSystemTests/FutexTests.m
     - IXLandSystemTests/LinuxUAPICompileSmoke.c
+    - IXLandSystemTests/FutexUAPICompileSmoke.c
     dependencies:
     - target: IXLandSystem
     settings:
