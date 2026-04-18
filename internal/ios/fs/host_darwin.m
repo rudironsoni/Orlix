@@ -151,6 +151,9 @@ ssize_t host_writev_impl(int fd, const struct iovec *iov, int iovcnt) {
  * This is the appropriate level for host container awareness.
  * Returns 0 on success, -1 on error.
  */
+#ifndef MAX_PATH
+#define MAX_PATH 4096
+#endif
 #include <Foundation/Foundation.h>
 
 int host_get_application_support_path_impl(char *path, size_t path_len) {

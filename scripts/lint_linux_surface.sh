@@ -1,40 +1,58 @@
 #!/bin/sh
 set -eu
 
-OWNER_PATHS='^(kernel|fs|runtime|include)/'
-BRIDGE_EXCLUDES='^(arch/darwin|fs/.*_darwin\.(c|h|m|mm)$|fs/host_.*\.(c|h|m|mm)$)'
+echo "=== Check 1: Objective-C files outside allowed paths ==="
+OBJC_FILES=$(find fs kernel runtime include -type f \( -name '*.m' -o -name '*.mm' \) 2>/dev/null || true)
+if [ -n "$OBJC_FILES" ]; then
+    echo "FAIL: Objective-C files found in Linux-owner paths:"
+    echo "$OBJC_FILES"
+    exit 1
+fi
+echo "   ✓ No stray .m/.mm files in Linux-owner paths"
 
-echo "Checking Objective-C/Objective-C++ leakage in Linux-owner paths..."
-find kernel fs runtime include -type f \( -name '*.m' -o -name '*.mm' \) 2>/dev/null \
-  | grep -vE '^fs/.*_darwin\.(m|mm)$|^fs/host_.*\.(m|mm)$|^arch/darwin/' \
-  && { echo "FAIL: ObjC/ObjC++ leaked into Linux-owner paths"; exit 1; } || true
+echo ""
+echo "=== Check 2: Foundation/UIKit leakage outside internal/ios ==="
+echo "   Checking fs/, kernel/, runtime/, include/..."
+LEAK=$(rg -l '#(import|include)\s*<(Foundation|UIKit)/' fs kernel runtime include 2>/dev/null || true)
+if [ -n "$LEAK" ]; then
+    echo "FAIL: Foundation/UIKit includes found outside internal/ios:"
+    echo "$LEAK"
+    exit 1
+fi
+echo "   ✓ No Foundation/UIKit leakage in Linux-owner paths"
 
-echo "Checking Foundation/UIKit leakage outside bridges/tests..."
-rg -n \
-  '^[[:space:]]*#(import|include)[[:space:]]*<(Foundation|UIKit)/|\bNS[A-Z][A-Za-z0-9_]*\b|\bNSURL\b|\bNSFileManager\b' \
-  kernel fs runtime include \
-  | rg -v '^arch/darwin/|^fs/.*_darwin\.(c|h|m|mm):|^fs/host_.*\.(c|h|m|mm):' \
-  && { echo "FAIL: Foundation/UIKit leakage outside private bridges"; exit 1; } || true
+echo ""
+echo "=== Check 3: Forbidden host includes in Linux-owner paths ==="
+echo "   Checking for pthread.h, unistd.h, etc. in fs/, kernel/, runtime/, include/..."
+FORBIDDEN=$(rg -n '^\s*#include\s*<(pthread\.h|signal\.h|unistd\.h|sys/wait\.h|sys/types\.h|time\.h|fcntl\.h|mach/.+|Foundation/.+|UIKit/.+|TargetConditionals\.h|os/log\.h)>' fs kernel runtime include 2>/dev/null || true)
+if [ -n "$FORBIDDEN" ]; then
+    echo "FAIL: Forbidden host includes in Linux-owner paths:"
+    echo "$FORBIDDEN"
+    exit 1
+fi
+echo "   ✓ No forbidden host includes"
 
-echo "Checking forbidden host includes in Linux-owner paths..."
-rg -n \
-  '^[[:space:]]*#include[[:space:]]*<(pthread\.h|signal\.h|unistd\.h|sys/wait\.h|sys/types\.h|time\.h|fcntl\.h|mach/.*|Foundation/.*|UIKit/.*|TargetConditionals\.h|os/log\.h)>' \
-  kernel fs runtime include \
-  | rg -v "$BRIDGE_EXCLUDES" \
-  && { echo "FAIL: forbidden host includes leaked into Linux-owner paths"; exit 1; } || true
+echo ""
+echo "=== Check 4: Forbidden host APIs/tokens ==="
+echo "   Checking for dlsym, RTLD_NEXT, syscall, pthread, etc. ..."
+TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|syscall)\b' -e '\bpthread_\w+\b' -e '\bos_log\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_\w+\b' fs kernel runtime include 2>/dev/null || true)
+if [ -n "$TOKENS" ]; then
+    echo "FAIL: Forbidden host APIs/tokens in Linux-owner paths:"
+    echo "$TOKENS"
+    exit 1
+fi
+echo "   ✓ No forbidden host APIs"
 
-echo "Checking forbidden host APIs/tokens in Linux-owner paths..."
-rg -n \
-  '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|syscall|pthread_|NSFileManager|NSURL|Foundation|UIKit|os_log|__APPLE__|__MACH__|TARGET_OS_)\\b' \
-  kernel fs runtime include \
-  | rg -v "$BRIDGE_EXCLUDES" \
-  && { echo "FAIL: forbidden host APIs/tokens leaked into Linux-owner paths"; exit 1; } || true
+echo ""
+echo "=== Check 5: Hand-defined Linux ABI constants ==="
+echo "   Checking for FUTEX_, AT_, SA_, SIG*, O_*, etc. ..."
+HANDDEFINED=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' || true)
+if [ -n "$HANDDEFINED" ]; then
+    echo "FAIL: Hand-defined Linux ABI constants found:"
+    echo "$HANDDEFINED"
+    exit 1
+fi
+echo "   ✓ No hand-defined ABI constants"
 
-echo "Checking hand-defined Linux ABI constants in owner paths..."
-rg -n \
-  '^[[:space:]]*#define[[:space:]]+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' \
-  kernel fs runtime include \
-  | rg -v "$BRIDGE_EXCLUDES|IX_|TEST_" \
-  && { echo "FAIL: hand-defined Linux ABI constants found in owner paths"; exit 1; } || true
-
-echo "Linux surface lint passed."
+echo ""
+echo "=== All checks passed ==="

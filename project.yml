@@ -23,8 +23,12 @@ targets:
       group: fs
     - path: fs/fdtable.c
       group: fs
-    - path: fs/host_darwin.c
-      group: fs
+    - path: internal/ios/fs/host_darwin.m
+      group: internal/ios/fs
+    - path: internal/ios/fs/host_darwin_storage.m
+      group: internal/ios/fs
+    - path: internal/ios/fs/host_darwin.h
+      group: internal/ios/fs
     - path: fs/inode.c
       group: fs
     - path: fs/ioctl.c
@@ -41,8 +45,8 @@ targets:
       group: fs
     - path: fs/readdir.c
       group: fs
-    - path: fs/select_darwin.c
-      group: fs
+    - path: internal/ios/fs/select_darwin.c
+      group: internal/ios/fs
     - path: fs/stat.c
       group: fs
     - path: fs/super.c
@@ -77,8 +81,8 @@ targets:
       group: kernel
     - path: kernel/time.c
       group: kernel
-    - path: kernel/time_darwin.c
-      group: kernel
+    - path: internal/ios/kernel/time_darwin.c
+      group: internal/ios/kernel
     - path: kernel/wait.c
       group: kernel
     - path: observability/ixland_observability.c

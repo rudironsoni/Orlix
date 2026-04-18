@@ -5,24 +5,53 @@ CompileFlags:
     - -index-unit-output-path
 
 ---
-
+# Linux-owner paths: C-only, no ObjC
 If:
   PathMatch:
-    - ^kernel/.*\.(c|h)$
     - ^fs/.*\.(c|h)$
+    - ^kernel/.*\.(c|h)$
     - ^runtime/.*\.(c|h)$
     - ^include/.*\.h$
+    - ^arch/darwin/.*\.(c|h)$
   PathExclude:
-    - ^arch/darwin/.*$
-    - ^fs/.*_darwin\.(c|h|m|mm)$
-    - ^fs/host_.*\.(c|h|m|mm)$
+    - ^internal/ios/.*$
+    - ^IXLandSystemTests/.*$
   CompileFlags:
     Add:
       - -DIXLAND_LINUX_OWNER_FILE=1
       - --include=include/ixland/clangd_owner_policy.h
 
 ---
+# Private iOS bridge paths
+If:
+  PathMatch:
+    - ^internal/ios/.*\.(c|h|m|mm)$
+  CompileFlags:
+    Add:
+      - -DIXLAND_HOST_BRIDGE_FILE=1
 
+---
+# Private iOS: Objective-C files
+If:
+  PathMatch:
+    - ^internal/ios/.*\.m$
+  CompileFlags:
+    Add:
+      - -x
+      - objective-c
+
+---
+# Private iOS: Objective-C++ files
+If:
+  PathMatch:
+    - ^internal/ios/.*\.mm$
+  CompileFlags:
+    Add:
+      - -x
+      - objective-c++
+
+---
+# Tests: Objective-C
 If:
   PathMatch:
     - ^IXLandSystemTests/.*\.m$
@@ -32,34 +61,20 @@ If:
       - objective-c
 
 ---
-
+# Tests: Objective-C++
 If:
   PathMatch:
     - ^IXLandSystemTests/.*\.mm$
-    - ^arch/darwin/.*\.mm$
-    - ^fs/.*_darwin\.mm$
-    - ^fs/host_.*\.mm$
   CompileFlags:
     Add:
       - -x
       - objective-c++
 
 ---
-
+# Tests: C with strict diagnostics
 If:
   PathMatch:
-    - ^arch/darwin/.*\.(c|h|m|mm)$
-    - ^fs/.*_darwin\.(c|h|m|mm)$
-    - ^fs/host_.*\.(c|h|m|mm)$
-  CompileFlags:
-    Add:
-      - -DIXLAND_HOST_BRIDGE_FILE=1
-
----
-
-If:
-  PathMatch:
-    - ^IXLandSystemTests/.*\.(c|h|m|mm)$
+    - ^IXLandSystemTests/.*\.(c|h)$
   Diagnostics:
     ClangTidy:
       FastCheckFilter: Strict
