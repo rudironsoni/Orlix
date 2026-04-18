@@ -128,3 +128,16 @@ static int ensure_dir_recursive(const char *path, mode_t mode) {
 int host_ensure_directory_impl(const char *path, mode_t mode) {
     return ensure_dir_recursive(path, mode);
 }
+
+/* VFS root discovery - thin wrappers around existing host path discovery */
+int vfs_discover_persistent_root(char *path, size_t path_len) {
+    return host_get_application_support_path_impl(path, path_len);
+}
+
+int vfs_discover_cache_root(char *path, size_t path_len) {
+    return host_get_caches_path_impl(path, path_len);
+}
+
+int vfs_discover_temp_root(char *path, size_t path_len) {
+    return host_get_tmp_path_impl(path, path_len);
+}

@@ -18,6 +18,17 @@ extern "C" {
 
 #define MAX_MOUNTS 64
 
+/* VFS backing storage classes */
+enum vfs_backing_class {
+    VFS_BACKING_PERSISTENT = 0,
+    VFS_BACKING_CACHE,
+    VFS_BACKING_TEMP,
+    VFS_BACKING_SYNTHETIC,
+    VFS_BACKING_EXTERNAL,
+
+    VFS_BACKING_CLASS_COUNT
+};
+
 /* Linux VFS inode types (file types)
  * These are defined in standard system headers, no need to redefine */
 
@@ -190,6 +201,15 @@ int vfs_normalize_linux_path(const char *input, char *output, size_t output_len)
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len);
 const char *vfs_host_backing_root(void);
 const char *vfs_virtual_root(void);
+
+/* Backing class determination for storage policy routing */
+enum vfs_backing_class vfs_backing_class_for_path(const char *vpath);
+const char *vfs_backing_root_for_class(enum vfs_backing_class cls);
+
+/* Backing root accessors for different storage classes */
+const char *vfs_persistent_backing_root(void);
+const char *vfs_cache_backing_root(void);
+const char *vfs_temp_backing_root(void);
 
 /* Stat operations */
 int vfs_stat_path(const char *pathname, struct stat *statbuf);

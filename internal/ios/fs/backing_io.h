@@ -10,6 +10,11 @@
 extern "C" {
 #endif
 
+/* Host container path discovery - quarantined in iOS bridge */
+int vfs_discover_persistent_root(char *path, size_t path_len);
+int vfs_discover_cache_root(char *path, size_t path_len);
+int vfs_discover_temp_root(char *path, size_t path_len);
+
 /* Host filesystem operations via direct syscalls */
 int host_open_impl(const char *path, int flags, mode_t mode);
 int host_close_impl(int fd);
