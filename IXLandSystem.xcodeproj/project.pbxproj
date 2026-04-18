@@ -13,6 +13,7 @@
 		17569519F7B7B56C5572BED6 /* path.c in Sources */ = {isa = PBXBuildFile; fileRef = 51D066274EE2D55E90787D9C /* path.c */; };
 		1EFE002D356A2BC2DBE43F83 /* CredentialTests.m in Sources */ = {isa = PBXBuildFile; fileRef = EE40DEEE9D6E27C79FE49368 /* CredentialTests.m */; };
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
+		2726CA6EE9A60532D7C0705F /* FutexUAPICompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = DA8F8F9EFFB5FCE3BD87FAC2 /* FutexUAPICompileSmoke.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
 		2EDB0D8B37216282DABEC526 /* RootfsBootstrapTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4683BA0EA109D1320BC09ACF /* RootfsBootstrapTests.m */; };
 		3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */ = {isa = PBXBuildFile; fileRef = F5240B1F3DC3BDF0ED535D3B /* time.c */; };
@@ -26,6 +27,7 @@
 		5B16289DBA72694756559233 /* registry.c in Sources */ = {isa = PBXBuildFile; fileRef = F4E2215C61CCAEFB06DDB4FC /* registry.c */; };
 		5C2D26EAA916B6D9060B278B /* exec.c in Sources */ = {isa = PBXBuildFile; fileRef = F2D8077FB1F274E58E85378C /* exec.c */; };
 		5D1AA08946E9CB8B3AFAE1C6 /* clock.c in Sources */ = {isa = PBXBuildFile; fileRef = FFC9C26D7F3E35F6398D0B73 /* clock.c */; };
+		6643C6662AEDE42A70EA8F8C /* FutexTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 5BA099AF8849390F2936F1B2 /* FutexTests.m */; };
 		6B365831A4B17F03AE598CFF /* sys.c in Sources */ = {isa = PBXBuildFile; fileRef = CE4E5039272874EE6A5FFD11 /* sys.c */; };
 		6DCCC30A9E2767FEAA8316D2 /* vfs.c in Sources */ = {isa = PBXBuildFile; fileRef = CC8A063128CC02CB6B938762 /* vfs.c */; };
 		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; };
@@ -92,6 +94,7 @@
 		51D066274EE2D55E90787D9C /* path.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = path.c; sourceTree = "<group>"; };
 		52402BAA17F7390A34354EB6 /* cred.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cred.c; sourceTree = "<group>"; };
 		5885A2D3F39790AAC62634D5 /* exit.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = exit.c; sourceTree = "<group>"; };
+		5BA099AF8849390F2936F1B2 /* FutexTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FutexTests.m; sourceTree = "<group>"; };
 		5D494D6F83176E636A70E6FF /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
 		5E96E95F0B83F5CC63E21913 /* libIXLandSystem.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = libIXLandSystem.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		5FD8D142EC818870892A041C /* backing_paths.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = backing_paths.m; sourceTree = "<group>"; };
@@ -113,6 +116,7 @@
 		CEC04AD14B572B960464124B /* network.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = network.c; sourceTree = "<group>"; };
 		D46E9099D1DEF53E9F6D3C41 /* eventpoll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = eventpoll.c; sourceTree = "<group>"; };
 		D979F989EC0D2FF286D59733 /* read_write.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = read_write.c; sourceTree = "<group>"; };
+		DA8F8F9EFFB5FCE3BD87FAC2 /* FutexUAPICompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FutexUAPICompileSmoke.c; sourceTree = "<group>"; };
 		DB47AFBCA86B478A6F48BAE6 /* stat.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stat.c; sourceTree = "<group>"; };
 		DC6020ECDA4585334611FE7D /* backing_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = backing_io.h; sourceTree = "<group>"; };
 		EE40DEEE9D6E27C79FE49368 /* CredentialTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CredentialTests.m; sourceTree = "<group>"; };
@@ -165,6 +169,8 @@
 			isa = PBXGroup;
 			children = (
 				EE40DEEE9D6E27C79FE49368 /* CredentialTests.m */,
+				5BA099AF8849390F2936F1B2 /* FutexTests.m */,
+				DA8F8F9EFFB5FCE3BD87FAC2 /* FutexUAPICompileSmoke.c */,
 				84B7EE143A9CA194FD055CDA /* LinuxUAPICompileSmoke.c */,
 				4683BA0EA109D1320BC09ACF /* RootfsBootstrapTests.m */,
 				667BE890D514BA87E4BDA1BF /* SignalTests.m */,
@@ -419,6 +425,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1EFE002D356A2BC2DBE43F83 /* CredentialTests.m in Sources */,
+				6643C6662AEDE42A70EA8F8C /* FutexTests.m in Sources */,
+				2726CA6EE9A60532D7C0705F /* FutexUAPICompileSmoke.c in Sources */,
 				398F68458C9177477A65A9EE /* LinuxUAPICompileSmoke.c in Sources */,
 				2EDB0D8B37216282DABEC526 /* RootfsBootstrapTests.m in Sources */,
 				412EF8D788799D420EF84B74 /* SignalTests.m in Sources */,

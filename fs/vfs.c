@@ -9,14 +9,6 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-/* Linux UAPI AT flag values - these are the public ABI contract */
-/* Darwin headers define these with different values; undef and redefine for Linux ABI */
-#undef AT_SYMLINK_NOFOLLOW
-#define AT_SYMLINK_NOFOLLOW	0x100
-
-#undef AT_EACCESS
-#define AT_EACCESS		0x200
-
 /* Linux open flags - cannot include linux/fcntl.h due to conflicts, use canonical values */
 #define IX_O_RDONLY		0x0000
 #define IX_O_WRONLY		0x0001
@@ -31,13 +23,26 @@
 #define IX_O_DSYNC		0x1000
 #define IX_O_SYNC		0x101000
 #define IX_O_RSYNC		0x101000
-#define IX_O_CLOEXEC		0x80000
+#define IX_O_CLOEXEC 0x80000
+
+/* Linux UAPI AT_* flags - use prefixed constants to avoid macro conflicts
+ * These match the canonical Linux UAPI ABI values
+ */
+#define IX_AT_SYMLINK_NOFOLLOW 0x100
+#define IX_AT_EACCESS 0x200
 
 #include "fdtable.h"
 #include "../kernel/task.h"
 
-static const char *const vfs_virtual_root_path = "/";
-static const char *const vfs_host_root_path = "/tmp";
+static const char *vfs_virtual_root_path = "/";
+
+static int vfs_ensure_backing_initialized(void);
+
+/* Backing storage class roots - discovered at runtime from host container */
+static char vfs_persistent_root[MAX_PATH] = {0};
+static char vfs_cache_root[MAX_PATH] = {0};
+static char vfs_temp_root[MAX_PATH] = {0};
+static int vfs_backing_initialized = 0;
 
 static int vfs_copy_string(const char *src, char *dst, size_t dst_len) {
     size_t len;
@@ -55,13 +60,7 @@ static int vfs_copy_string(const char *src, char *dst, size_t dst_len) {
     return 0;
 }
 
-static bool vfs_has_host_root_prefix(const char *path, size_t root_len) {
-    if (strncmp(path, vfs_host_root_path, root_len) != 0) {
-        return false;
-    }
 
-    return path[root_len] == '\0' || path[root_len] == '/';
-}
 
 int vfs_normalize_linux_path(const char *input, char *output, size_t output_len) {
     char scratch[MAX_PATH];
@@ -114,33 +113,160 @@ int vfs_normalize_linux_path(const char *input, char *output, size_t output_len)
     return vfs_copy_string(scratch, output, output_len);
 }
 
-static int vfs_join_host_root(const char *normalized_virtual_path, char *host_path,
-                              size_t host_path_len) {
-    size_t root_len = strlen(vfs_host_root_path);
-    size_t virtual_len;
+static bool vfs_path_matches_prefix(const char *vpath, const char *prefix) {
+    size_t prefix_len;
+
+    if (!vpath || !prefix) {
+        return false;
+    }
+
+    prefix_len = strlen(prefix);
+    if (strncmp(vpath, prefix, prefix_len) != 0) {
+        return false;
+    }
+
+    return vpath[prefix_len] == '\0' || vpath[prefix_len] == '/';
+}
+
+/* Determine backing class from virtual Linux path */
+enum vfs_backing_class vfs_backing_class_for_path(const char *vpath) {
+    if (!vpath || vpath[0] != '/') {
+        return VFS_BACKING_PERSISTENT;
+    }
+
+    if (vfs_path_matches_prefix(vpath, "/tmp") || vfs_path_matches_prefix(vpath, "/var/tmp") ||
+        vfs_path_matches_prefix(vpath, "/run")) {
+        return VFS_BACKING_TEMP;
+    }
+
+    if (vfs_path_matches_prefix(vpath, "/var/cache")) {
+        return VFS_BACKING_CACHE;
+    }
+
+    if (vfs_path_matches_prefix(vpath, "/proc") || vfs_path_matches_prefix(vpath, "/sys") ||
+        vfs_path_matches_prefix(vpath, "/dev")) {
+        return VFS_BACKING_SYNTHETIC;
+    }
+
+    /* Everything else: persistent state goes to Application Support */
+    /* Includes: /etc, /usr, /var/lib, /home, /root, /var/log, etc. */
+    return VFS_BACKING_PERSISTENT;
+}
+
+const char *vfs_backing_root_for_class(enum vfs_backing_class cls) {
+    switch (cls) {
+        case VFS_BACKING_PERSISTENT:
+            return vfs_persistent_root;
+        case VFS_BACKING_CACHE:
+            return vfs_cache_root;
+        case VFS_BACKING_TEMP:
+            return vfs_temp_root;
+        case VFS_BACKING_SYNTHETIC:
+            /* Synthetic filesystems don't have backing paths */
+            return NULL;
+        case VFS_BACKING_EXTERNAL:
+            /* External paths handled separately */
+            return NULL;
+        default:
+            return vfs_persistent_root;
+    }
+}
+
+const char *vfs_persistent_backing_root(void) {
+    if (vfs_ensure_backing_initialized() < 0) {
+        return NULL;
+    }
+    return vfs_persistent_root;
+}
+
+const char *vfs_cache_backing_root(void) {
+    if (vfs_ensure_backing_initialized() < 0) {
+        return NULL;
+    }
+    return vfs_cache_root;
+}
+
+const char *vfs_temp_backing_root(void) {
+    if (vfs_ensure_backing_initialized() < 0) {
+        return NULL;
+    }
+    return vfs_temp_root;
+}
+
+static const char *vfs_backing_relative_suffix(const char *normalized_virtual_path,
+                                              enum vfs_backing_class cls) {
+    if (cls == VFS_BACKING_CACHE && vfs_path_matches_prefix(normalized_virtual_path, "/var/cache")) {
+        return normalized_virtual_path + strlen("/var/cache");
+    }
+
+    if (cls == VFS_BACKING_TEMP) {
+        if (vfs_path_matches_prefix(normalized_virtual_path, "/tmp")) {
+            return normalized_virtual_path + strlen("/tmp");
+        }
+        if (vfs_path_matches_prefix(normalized_virtual_path, "/var/tmp")) {
+            return normalized_virtual_path + strlen("/var/tmp");
+        }
+        if (vfs_path_matches_prefix(normalized_virtual_path, "/run")) {
+            return normalized_virtual_path + strlen("/run");
+        }
+    }
+
+    return normalized_virtual_path;
+}
+
+static int vfs_join_backing_root_for_class(const char *normalized_virtual_path, char *host_path,
+                                           size_t host_path_len, enum vfs_backing_class cls) {
+    const char *backing_root;
+    const char *relative_suffix;
+    size_t root_len;
+    size_t suffix_len;
     size_t total_len;
 
     if (!normalized_virtual_path || !host_path || host_path_len == 0) {
         return -EINVAL;
     }
 
-    virtual_len = strlen(normalized_virtual_path);
-    if (strcmp(normalized_virtual_path, "/") == 0) {
-        return vfs_copy_string(vfs_host_root_path, host_path, host_path_len);
+    backing_root = vfs_backing_root_for_class(cls);
+    if (!backing_root) {
+        /* Synthetic/external: no backing, return virtual path as-is or error */
+        return -ENOTSUP;
     }
 
-    total_len = root_len + virtual_len;
+    relative_suffix = vfs_backing_relative_suffix(normalized_virtual_path, cls);
+    root_len = strlen(backing_root);
+    suffix_len = strlen(relative_suffix);
+
+    if (suffix_len == 0 || strcmp(relative_suffix, "/") == 0) {
+        return vfs_copy_string(backing_root, host_path, host_path_len);
+    }
+
+    total_len = root_len + suffix_len;
     if (total_len >= host_path_len) {
         return -ENAMETOOLONG;
     }
 
-    memcpy(host_path, vfs_host_root_path, root_len);
-    memcpy(host_path + root_len, normalized_virtual_path, virtual_len + 1);
+    memcpy(host_path, backing_root, root_len);
+    memcpy(host_path + root_len, relative_suffix, suffix_len + 1);
     return 0;
 }
 
+static int vfs_join_host_root(const char *normalized_virtual_path, char *host_path,
+                              size_t host_path_len) {
+    enum vfs_backing_class cls;
+
+    if (vfs_ensure_backing_initialized() < 0) {
+        return -ENOTSUP;
+    }
+
+    cls = vfs_backing_class_for_path(normalized_virtual_path);
+    return vfs_join_backing_root_for_class(normalized_virtual_path, host_path, host_path_len, cls);
+}
+
 const char *vfs_host_backing_root(void) {
-    return vfs_host_root_path;
+    if (vfs_ensure_backing_initialized() < 0) {
+        return NULL;
+    }
+    return vfs_persistent_root;
 }
 
 const char *vfs_virtual_root(void) {
@@ -263,9 +389,9 @@ static int vfs_bootstrap_etc_files_impl(void) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
-    /* Create /etc directory under backing root using host syscall */
-    snprintf(etc_path, sizeof(etc_path), "%s/etc", vfs_host_root_path);
-    syscall(SYS_mkdir, etc_path, 0755);
+  /* Create /etc directory under backing root using host syscall */
+  snprintf(etc_path, sizeof(etc_path), "%s/etc", vfs_persistent_backing_root());
+  syscall(SYS_mkdir, etc_path, 0755);
 
 #pragma clang diagnostic pop
 
@@ -568,25 +694,97 @@ int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len)
     return vfs_translate_path_task(vpath, host_path, host_path_len, NULL);
 }
 
+/* Backing initialization - must be called before path translation */
+static int vfs_ensure_backing_initialized(void) {
+    if (vfs_backing_initialized) {
+        return 0;
+    }
+
+    int ret;
+
+    /* Discover persistent (Application Support) root */
+    ret = vfs_discover_persistent_root(vfs_persistent_root, sizeof(vfs_persistent_root));
+    if (ret < 0) {
+        return -ENOTSUP;
+    }
+
+    /* Discover cache root */
+    ret = vfs_discover_cache_root(vfs_cache_root, sizeof(vfs_cache_root));
+    if (ret < 0) {
+        /* Fall back to persistent if caches not available */
+        strncpy(vfs_cache_root, vfs_persistent_root, sizeof(vfs_cache_root) - 1);
+        vfs_cache_root[sizeof(vfs_cache_root) - 1] = '\0';
+    }
+
+    /* Discover temp root */
+    ret = vfs_discover_temp_root(vfs_temp_root, sizeof(vfs_temp_root));
+    if (ret < 0) {
+        /* Fall back to temporary subdirectory of persistent */
+        snprintf(vfs_temp_root, sizeof(vfs_temp_root), "%s/.ixland.tmp", vfs_persistent_root);
+    }
+
+    vfs_backing_initialized = 1;
+    return 0;
+}
+
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) {
-    size_t root_len;
     const char *suffix;
+    size_t root_len;
+    size_t cache_len;
+    size_t temp_len;
 
     if (!host_path || !vpath || vpath_len == 0) {
         return -EINVAL;
     }
 
-    root_len = strlen(vfs_host_root_path);
-    if (!vfs_has_host_root_prefix(host_path, root_len)) {
-        return -EXDEV;
+    int ret = vfs_ensure_backing_initialized();
+    if (ret < 0) {
+        return ret;
     }
 
-    suffix = host_path + root_len;
-    if (*suffix == '\0') {
-        return vfs_copy_string(vfs_virtual_root_path, vpath, vpath_len);
+    /* Try persistent root */
+    root_len = strlen(vfs_persistent_root);
+    if (strncmp(host_path, vfs_persistent_root, root_len) == 0) {
+        suffix = host_path + root_len;
+        if (*suffix == '\0') {
+            return vfs_copy_string(vfs_virtual_root_path, vpath, vpath_len);
+        }
+        if (*suffix == '/') {
+            return vfs_normalize_linux_path(suffix, vpath, vpath_len);
+        }
     }
 
-    return vfs_normalize_linux_path(suffix, vpath, vpath_len);
+    /* Try cache root */
+    cache_len = strlen(vfs_cache_root);
+    if (strncmp(host_path, vfs_cache_root, cache_len) == 0) {
+        const char *cache_suffix = host_path + cache_len;
+        /* /var/cache is mapped to the cache root */
+        if (*cache_suffix == '\0') {
+            return vfs_copy_string("/var/cache", vpath, vpath_len);
+        }
+        if (*cache_suffix == '/') {
+            char work_buf[MAX_PATH];
+            snprintf(work_buf, sizeof(work_buf), "/var/cache%s", cache_suffix);
+            return vfs_normalize_linux_path(work_buf, vpath, vpath_len);
+        }
+    }
+
+    /* Try temp root */
+    temp_len = strlen(vfs_temp_root);
+    if (strncmp(host_path, vfs_temp_root, temp_len) == 0) {
+        const char *temp_suffix = host_path + temp_len;
+        /* /tmp is mapped to the temp root */
+        if (*temp_suffix == '\0') {
+            return vfs_copy_string("/tmp", vpath, vpath_len);
+        }
+        if (*temp_suffix == '/') {
+            char work_buf[MAX_PATH];
+            snprintf(work_buf, sizeof(work_buf), "/tmp%s", temp_suffix);
+            return vfs_normalize_linux_path(work_buf, vpath, vpath_len);
+        }
+    }
+
+    return -EXDEV;
 }
 
 int vfs_stat_path(const char *pathname, struct stat *statbuf) {
@@ -623,7 +821,7 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
     char translated_path[MAX_PATH];
     int ret;
     bool follow_symlink;
-    int supported_flags = AT_SYMLINK_NOFOLLOW;
+    int supported_flags = IX_AT_SYMLINK_NOFOLLOW;
 
     if (!pathname || !statbuf) {
         return -EFAULT;
@@ -633,7 +831,7 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
         return -EINVAL;
     }
 
-    follow_symlink = !(flags & AT_SYMLINK_NOFOLLOW);
+    follow_symlink = !(flags & IX_AT_SYMLINK_NOFOLLOW);
 
     ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
     if (ret != 0) {
@@ -655,11 +853,11 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
         return -EFAULT;
     }
 
-    if (flags & ~(AT_EACCESS | AT_SYMLINK_NOFOLLOW)) {
+    if (flags & ~(IX_AT_EACCESS | IX_AT_SYMLINK_NOFOLLOW)) {
         return -EINVAL;
     }
 
-    if (flags & AT_EACCESS) {
+    if (flags & IX_AT_EACCESS) {
         return -ENOTSUP;
     }
 
@@ -668,7 +866,7 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
         return ret;
     }
 
-    if (flags & AT_SYMLINK_NOFOLLOW) {
+    if (flags & IX_AT_SYMLINK_NOFOLLOW) {
         return -ENOTSUP;
     }
 

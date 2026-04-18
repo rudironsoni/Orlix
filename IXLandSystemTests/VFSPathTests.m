@@ -17,6 +17,7 @@
 #include "fs/vfs.h"
 #include "fs/path.h"
 #include "kernel/task.h"
+#include "internal/ios/fs/backing_io.h"
 
 extern char *getcwd_impl(char *buf, size_t size);
 extern int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode);
@@ -54,35 +55,35 @@ extern int close(int fd);
     [super tearDown];
 }
 
-- (void)testVirtualRootTranslatesToBackingRoot {
+- (void)testVirtualRootTranslatesToPersistentBackingRoot {
     char host_path[MAX_PATH];
     int ret = vfs_translate_path(@"/".UTF8String, host_path, sizeof(host_path));
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path should accept virtual root");
-    XCTAssertEqual(strcmp(host_path, vfs_host_backing_root()), 0,
-                   @"virtual root should map to deterministic backing root");
+    XCTAssertEqual(strcmp(host_path, vfs_persistent_backing_root()), 0,
+                   @"virtual root should map to persistent backing root");
 }
 
-- (void)testAbsoluteVirtualPathMapsUnderBackingRoot {
+- (void)testTempPathTranslatesToTempBackingRoot {
     char host_path[MAX_PATH];
     int ret = vfs_translate_path(@"/tmp/demo".UTF8String, host_path, sizeof(host_path));
     NSString *actualPath = [NSString stringWithUTF8String:host_path];
-    NSString *expectedPath = [NSString stringWithFormat:@"%s/tmp/demo", vfs_host_backing_root()];
+    NSString *expectedPath = [NSString stringWithFormat:@"%s/demo", vfs_temp_backing_root()];
 
-    XCTAssertEqual(ret, 0, @"absolute virtual path should translate");
-    XCTAssertEqualObjects(actualPath, expectedPath, @"translated path should live under backing root");
-    XCTAssertNotEqual(strcmp(host_path, "/tmp/demo"), 0,
+    XCTAssertEqual(ret, 0, @"temp virtual path should translate");
+    XCTAssertEqualObjects(actualPath, expectedPath, @"temp path should resolve under temp backing root");
+    XCTAssertNotEqual(strcmp(host_path, @"/tmp/demo".UTF8String), 0,
                       @"translation must not be identity mapping");
 }
 
-- (void)testRelativeVirtualPathMapsUnderBackingRoot {
+- (void)testRelativePersistentPathMapsUnderPersistentBackingRoot {
     char host_path[MAX_PATH];
     int ret = vfs_translate_path(@"etc/passwd".UTF8String, host_path, sizeof(host_path));
     NSString *actualPath = [NSString stringWithUTF8String:host_path];
-    NSString *expectedPath = [NSString stringWithFormat:@"%s/etc/passwd", vfs_host_backing_root()];
+    NSString *expectedPath = [NSString stringWithFormat:@"%s/etc/passwd", vfs_persistent_backing_root()];
 
     XCTAssertEqual(ret, 0, @"relative virtual path should translate");
-    XCTAssertEqualObjects(actualPath, expectedPath, @"relative path should resolve under virtual root baseline");
+    XCTAssertEqualObjects(actualPath, expectedPath, @"relative path should resolve under persistent backing root");
 }
 
 - (void)testUnmappableHostPathIsRejected {
@@ -92,26 +93,135 @@ extern int close(int fd);
     XCTAssertEqual(ret, -EXDEV, @"unmapped host path should be rejected");
 }
 
-- (void)testBackingRootReverseTranslatesToVirtualRoot {
+- (void)testPersistentBackingRootReverseTranslatesToVirtualRoot {
     char virtual_path[MAX_PATH];
-    int ret = vfs_reverse_translate(vfs_host_backing_root(), virtual_path, sizeof(virtual_path));
+    int ret = vfs_reverse_translate(vfs_persistent_backing_root(), virtual_path, sizeof(virtual_path));
 
-    XCTAssertEqual(ret, 0, @"backing root should reverse translate");
+    XCTAssertEqual(ret, 0, @"persistent backing root should reverse translate");
     XCTAssertEqual(strcmp(virtual_path, vfs_virtual_root()), 0,
-                   @"backing root should map back to virtual root");
+                   @"persistent backing root should map back to virtual root");
 }
 
-- (void)testMappedHostPathReverseTranslatesToVirtualPath {
+- (void)testMappedPersistentHostPathReverseTranslatesToVirtualPath {
     char virtual_path[MAX_PATH];
-    NSString *hostPath = [NSString stringWithFormat:@"%s/var/log", vfs_host_backing_root()];
+    NSString *hostPath = [NSString stringWithFormat:@"%s/var/log", vfs_persistent_backing_root()];
     int ret = vfs_reverse_translate(hostPath.UTF8String, virtual_path, sizeof(virtual_path));
 
-    XCTAssertEqual(ret, 0, @"mapped host path should reverse translate");
+    XCTAssertEqual(ret, 0, @"mapped persistent host path should reverse translate");
     XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/var/log",
                           @"reverse translation should return virtual path");
 }
 
+- (void)testPersistentRootDiscoveryResolves {
+    char path[MAX_PATH];
+    int ret = vfs_discover_persistent_root(path, sizeof(path));
+
+    XCTAssertEqual(ret, 0, @"persistent root discovery should succeed");
+    XCTAssertTrue(path[0] != '\0', @"persistent root should be non-empty");
+}
+
+- (void)testCacheRootDiscoveryResolves {
+    char path[MAX_PATH];
+    int ret = vfs_discover_cache_root(path, sizeof(path));
+
+    XCTAssertEqual(ret, 0, @"cache root discovery should succeed");
+    XCTAssertTrue(path[0] != '\0', @"cache root should be non-empty");
+}
+
+- (void)testTempRootDiscoveryResolves {
+    char path[MAX_PATH];
+    int ret = vfs_discover_temp_root(path, sizeof(path));
+
+    XCTAssertEqual(ret, 0, @"temp root discovery should succeed");
+    XCTAssertTrue(path[0] != '\0', @"temp root should be non-empty");
+}
+
+- (void)testDiscoveredBackingRootsAreDistinctByClass {
+    char persistent[MAX_PATH];
+    char cache[MAX_PATH];
+    char temp[MAX_PATH];
+
+    XCTAssertEqual(vfs_discover_persistent_root(persistent, sizeof(persistent)), 0,
+                   @"persistent root discovery should succeed");
+    XCTAssertEqual(vfs_discover_cache_root(cache, sizeof(cache)), 0,
+                   @"cache root discovery should succeed");
+    XCTAssertEqual(vfs_discover_temp_root(temp, sizeof(temp)), 0,
+                   @"temp root discovery should succeed");
+
+    XCTAssertNotEqual(strcmp(persistent, temp), 0,
+                      @"persistent root must not be temp-backed");
+    XCTAssertNotEqual(strcmp(cache, temp), 0,
+                      @"cache and temp roots should not collapse to one path");
+}
+
+- (void)testBackingClassRoutingForPersistentPaths {
+    XCTAssertEqual(vfs_backing_class_for_path(@"/etc/passwd".UTF8String), VFS_BACKING_PERSISTENT,
+                   @"/etc/passwd should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/usr/bin/sh".UTF8String), VFS_BACKING_PERSISTENT,
+                   @"/usr/bin/sh should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/var/lib/foo".UTF8String), VFS_BACKING_PERSISTENT,
+                   @"/var/lib/foo should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/home/user/.profile".UTF8String), VFS_BACKING_PERSISTENT,
+                   @"/home paths should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/root/.profile".UTF8String), VFS_BACKING_PERSISTENT,
+                   @"/root paths should route to persistent backing");
+}
+
+- (void)testBackingClassRoutingForCacheTempAndSyntheticPaths {
+    XCTAssertEqual(vfs_backing_class_for_path(@"/var/cache/x".UTF8String), VFS_BACKING_CACHE,
+                   @"/var/cache/x should route to cache backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/tmp/x".UTF8String), VFS_BACKING_TEMP,
+                   @"/tmp/x should route to temp backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/proc/meminfo".UTF8String), VFS_BACKING_SYNTHETIC,
+                   @"/proc/meminfo should route to synthetic backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/sys/kernel".UTF8String), VFS_BACKING_SYNTHETIC,
+                   @"/sys/kernel should route to synthetic backing");
+}
+
+- (void)testPersistentBackingRootReverseTranslation {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+
+    ret = vfs_translate_path(@"/etc/passwd".UTF8String, host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"persistent path translation should succeed");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"persistent host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/etc/passwd",
+                          @"persistent host path should map back to /etc/passwd");
+}
+
+- (void)testCacheBackingRootReverseTranslation {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+
+    ret = vfs_translate_path(@"/var/cache/x".UTF8String, host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"cache path translation should succeed");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"cache host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/var/cache/x",
+                          @"cache host path should map back to /var/cache/x");
+}
+
+- (void)testTempBackingRootReverseTranslation {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+
+    ret = vfs_translate_path(@"/tmp/x".UTF8String, host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"temp path translation should succeed");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"temp host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/tmp/x",
+                          @"temp host path should map back to /tmp/x");
+}
+
 - (void)testParentEscapeIsRejected {
+
     char host_path[MAX_PATH];
     int ret = vfs_translate_path(@"../secret".UTF8String, host_path, sizeof(host_path));
 
