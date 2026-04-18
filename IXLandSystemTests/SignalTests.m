@@ -60,6 +60,20 @@ extern int library_is_initialized(void);
     if (!library_is_initialized()) {
         library_init(NULL);
     }
+    /* Clean up any lingering file descriptors */
+    extern int close(int fd);
+    for (int fd = 3; fd < 256; fd++) {
+        close(fd);
+    }
+}
+
+- (void)tearDown {
+    /* Clean up any open file descriptors */
+    extern int close(int fd);
+    for (int fd = 3; fd < 256; fd++) {
+        close(fd);
+    }
+    [super tearDown];
 }
 
 #pragma mark - A. Library Initialization

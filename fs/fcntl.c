@@ -1,24 +1,42 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "fdtable.h"
 
-int dup_impl(int oldfd) {
-    if (oldfd < 0 || oldfd >= NR_OPEN_DEFAULT) {
+#define IX_FD_CLOEXEC 1
+#define IX_F_DUPFD 0
+#define IX_F_GETFD 1
+#define IX_F_SETFD 2
+#define IX_F_GETFL 3
+#define IX_F_SETFL 4
+#define IX_F_DUPFD_CLOEXEC 1030
+
+static int fcntl_get_entry_or_badf(int fd, void **entry_out) {
+    void *entry;
+
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
     }
 
-    void *entry = get_fd_entry_impl(oldfd);
+    entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
         return -1;
     }
-    put_fd_entry_impl(entry);
-    return oldfd;
+
+    *entry_out = entry;
+    return 0;
+}
+
+static int fcntl_mutable_status_mask(void) {
+    return O_APPEND | O_NONBLOCK | O_SYNC;
+}
+
+int dup_impl(int oldfd) {
+    return clone_fd_entry_impl(oldfd, 0, false);
 }
 
 int dup2_impl(int oldfd, int newfd) {
@@ -28,96 +46,85 @@ int dup2_impl(int oldfd, int newfd) {
     }
 
     if (oldfd == newfd) {
+        void *entry;
+        if (fcntl_get_entry_or_badf(oldfd, &entry) != 0) {
+            return -1;
+        }
+        put_fd_entry_impl(entry);
         return newfd;
     }
 
-    void *old_entry = get_fd_entry_impl(oldfd);
-    if (!old_entry) {
-        errno = EBADF;
-        return -1;
-    }
-
-    void *new_entry = get_fd_entry_impl(newfd);
-    if (new_entry) {
-        put_fd_entry_impl(new_entry);
-        close_impl(newfd);
-    }
-
-    clone_fd_entry_impl(newfd, oldfd);
-    put_fd_entry_impl(old_entry);
-    return newfd;
+    return replace_fd_entry_impl(newfd, oldfd, false);
 }
 
 int dup3_impl(int oldfd, int newfd, int flags) {
-    (void)flags;
-    return dup2_impl(oldfd, newfd);
-}
-
-int fcntl_impl(int fd, int cmd, ...) {
-    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
-        errno = EBADF;
+    if (oldfd == newfd) {
+        errno = EINVAL;
         return -1;
     }
 
+    if (flags & ~O_CLOEXEC) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return replace_fd_entry_impl(newfd, oldfd, (flags & O_CLOEXEC) != 0);
+}
+
+int fcntl_impl(int fd, int cmd, ...) {
     va_list args;
-    va_start(args, cmd);
+    int arg = 0;
+    void *entry;
     int result = -1;
 
-    switch (cmd) {
-    case F_DUPFD:
-    case F_DUPFD_CLOEXEC: {
-        int minfd = va_arg(args, int);
-        result = dup2_impl(fd, minfd);
-        break;
-    }
-    case F_GETFD:
-        result = 0;
-        break;
-    case F_SETFD:
-        (void)va_arg(args, int);
-        result = 0;
-        break;
-    case F_GETFL: {
-        void *entry = get_fd_entry_impl(fd);
-        if (entry) {
-            result = get_fd_flags_impl(entry);
-            put_fd_entry_impl(entry);
-        } else {
-            errno = EBADF;
-        }
-        break;
-    }
-    case F_SETFL: {
-        int flags = va_arg(args, int);
-        void *entry = get_fd_entry_impl(fd);
-        if (entry) {
-            set_fd_flags_impl(entry, flags);
-            put_fd_entry_impl(entry);
-            result = 0;
-        } else {
-            errno = EBADF;
-        }
-        break;
-    }
-    default: {
-        int arg = va_arg(args, int);
-        if (fd > 2) {
-            void *entry = get_fd_entry_impl(fd);
-            if (entry) {
-                result = fcntl(get_real_fd_impl(entry), cmd, arg);
-                put_fd_entry_impl(entry);
-            } else {
-                errno = EBADF;
-            }
-        } else {
-            result = fcntl(fd, cmd, arg);
-        }
-        break;
-    }
-    }
-
+    va_start(args, cmd);
+    arg = va_arg(args, int);
     va_end(args);
-    return result;
+
+    switch (cmd) {
+    case IX_F_DUPFD:
+        return clone_fd_entry_impl(fd, arg, false);
+    case IX_F_DUPFD_CLOEXEC:
+        return clone_fd_entry_impl(fd, arg, true);
+    case IX_F_GETFD:
+        if (fcntl_get_entry_or_badf(fd, &entry) != 0) {
+            return -1;
+        }
+        result = (get_fd_descriptor_flags_impl(entry) & FD_CLOEXEC) ? IX_FD_CLOEXEC : 0;
+        put_fd_entry_impl(entry);
+        return result;
+    case IX_F_SETFD:
+        if (fcntl_get_entry_or_badf(fd, &entry) != 0) {
+            return -1;
+        }
+        set_fd_descriptor_flags_impl(entry, (arg & IX_FD_CLOEXEC) ? FD_CLOEXEC : 0);
+        put_fd_entry_impl(entry);
+        return 0;
+    case IX_F_GETFL:
+        if (fcntl_get_entry_or_badf(fd, &entry) != 0) {
+            return -1;
+        }
+        result = get_fd_flags_impl(entry);
+        put_fd_entry_impl(entry);
+        return result;
+    case IX_F_SETFL: {
+        int mutable_mask = fcntl_mutable_status_mask();
+        int current_flags;
+        int new_flags;
+
+        if (fcntl_get_entry_or_badf(fd, &entry) != 0) {
+            return -1;
+        }
+        current_flags = get_fd_flags_impl(entry);
+        new_flags = (current_flags & ~mutable_mask) | (arg & mutable_mask);
+        set_fd_flags_impl(entry, new_flags);
+        put_fd_entry_impl(entry);
+        return 0;
+    }
+    default:
+        errno = EINVAL;
+        return -1;
+    }
 }
 
 __attribute__((visibility("default"))) int dup(int oldfd) {
@@ -134,8 +141,11 @@ __attribute__((visibility("default"))) int dup3(int oldfd, int newfd, int flags)
 
 __attribute__((visibility("default"))) int fcntl(int fd, int cmd, ...) {
     va_list args;
+    int arg = 0;
+
     va_start(args, cmd);
-    int arg = va_arg(args, int);
+    arg = va_arg(args, int);
     va_end(args);
+
     return fcntl_impl(fd, cmd, arg);
 }

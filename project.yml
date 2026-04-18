@@ -23,6 +23,8 @@ targets:
       group: fs
     - path: fs/fdtable.c
       group: fs
+    - path: fs/host_darwin.c
+      group: fs
     - path: fs/inode.c
       group: fs
     - path: fs/ioctl.c

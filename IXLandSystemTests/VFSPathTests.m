@@ -26,11 +26,33 @@ extern int rename(const char *oldpath, const char *newpath);
 extern int alloc_fd_impl(void);
 extern void free_fd_impl(int fd);
 extern void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path);
+extern off_t lseek(int fd, off_t offset, int whence);
+extern int fcntl(int fd, int cmd, ...);
+extern int dup(int oldfd);
+extern int dup2(int oldfd, int newfd);
+extern int dup3(int oldfd, int newfd, int flags);
+extern int close(int fd);
 
 @interface VFSPathTests : XCTestCase
 @end
 
 @implementation VFSPathTests
+
+- (void)setUp {
+    [super setUp];
+    // Clean up any lingering file descriptors before each test
+    for (int fd = 3; fd < 256; fd++) {
+        close(fd);
+    }
+}
+
+- (void)tearDown {
+    // Clean up any open file descriptors between tests
+    for (int fd = 3; fd < 256; fd++) {
+        close(fd);
+    }
+    [super tearDown];
+}
 
 - (void)testVirtualRootTranslatesToBackingRoot {
     char host_path[MAX_PATH];
@@ -283,6 +305,13 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 #define TEST_RENAME_NOREPLACE 0x0001
 #define TEST_RENAME_EXCHANGE 0x0002
 #define TEST_RENAME_WHITEOUT 0x0004
+#define TEST_F_DUPFD 0
+#define TEST_F_GETFD 1
+#define TEST_F_SETFD 2
+#define TEST_F_GETFL 3
+#define TEST_F_SETFL 4
+#define TEST_F_DUPFD_CLOEXEC 1030
+#define TEST_FD_CLOEXEC 1
 
 - (void)testVfsFstatatSupportsAtFdcwd {
     struct stat st;
@@ -376,6 +405,102 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     int ret = renameat2(AT_FDCWD, @"/tmp/a".UTF8String, AT_FDCWD, @"/tmp/b".UTF8String, 0x80000000u);
     XCTAssertEqual(ret, -1, @"renameat2 should reject invalid flags");
     XCTAssertEqual(errno, EINVAL, @"invalid rename flags should return EINVAL");
+}
+
+/* ============================================================================
+ * FD CONTROL SEMANTICS TESTS
+ * ============================================================================ */
+
+- (void)testFcntlFdFlagsTrackCloexecPerDescriptor {
+    int fd = open(@"/tmp/fcntl-fdflags.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    int save_errno = errno;
+    NSLog(@"DEBUG: open returned %d (errno=%d)", fd, save_errno);
+    XCTAssertTrue(fd >= 0, @"open should succeed, fd=%d errno=%d", fd, save_errno);
+    if (fd < 0) return;
+
+    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), 0, @"new descriptor should start without FD_CLOEXEC");
+    XCTAssertEqual(fcntl(fd, TEST_F_SETFD, TEST_FD_CLOEXEC), 0, @"F_SETFD should succeed");
+    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"F_GETFD should report FD_CLOEXEC");
+    XCTAssertEqual(fcntl(fd, TEST_F_SETFD, 0), 0, @"F_SETFD should clear FD_CLOEXEC");
+    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), 0, @"descriptor flag clear should persist");
+
+    close(fd);
+}
+
+- (void)testFcntlGetflSetflRoundTripMutableFlagsOnly {
+    int fd = open(@"/tmp/fcntl-statusflags.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    XCTAssertTrue(fd >= 0, @"open should succeed");
+    if (fd < 0) return;
+
+    int original = fcntl(fd, TEST_F_GETFL);
+    XCTAssertTrue(original >= 0, @"F_GETFL should succeed");
+    XCTAssertEqual(original & O_ACCMODE, O_RDWR, @"F_GETFL should preserve access mode");
+
+    XCTAssertEqual(fcntl(fd, TEST_F_SETFL, original | O_APPEND | O_NONBLOCK), 0, @"F_SETFL should update mutable flags");
+    int updated = fcntl(fd, TEST_F_GETFL);
+    XCTAssertEqual(updated & O_ACCMODE, O_RDWR, @"F_SETFL must not mutate access mode");
+    XCTAssertTrue((updated & O_APPEND) != 0, @"F_SETFL should set O_APPEND");
+    XCTAssertTrue((updated & O_NONBLOCK) != 0, @"F_SETFL should set O_NONBLOCK");
+
+    close(fd);
+}
+
+- (void)testDupSharesOffsetButNotDescriptorFlags {
+    int fd = open(@"/tmp/fcntl-dup.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    XCTAssertTrue(fd >= 0, @"open should succeed");
+    if (fd < 0) return;
+
+    XCTAssertEqual(write(fd, "abcdef", 6), 6, @"write should seed file contents");
+    XCTAssertEqual(lseek(fd, 2, SEEK_SET), 2, @"seek should position original fd");
+
+    int dupfd = dup(fd);
+    XCTAssertTrue(dupfd >= 0, @"dup should succeed");
+    if (dupfd < 0) {
+        close(fd);
+        return;
+    }
+
+    XCTAssertEqual(lseek(dupfd, 0, SEEK_CUR), 2, @"duplicated descriptor should share file offset");
+    XCTAssertEqual(fcntl(fd, TEST_F_SETFD, TEST_FD_CLOEXEC), 0, @"set cloexec on original should succeed");
+    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"original should have cloexec");
+    XCTAssertEqual(fcntl(dupfd, TEST_F_GETFD), 0, @"duplicate should not inherit descriptor flag mutations");
+
+    close(dupfd);
+    close(fd);
+}
+
+- (void)testDup3AndFdupfdCloexecSetCloseOnExecIntentionally {
+    int fd = open(@"/tmp/fcntl-dupcloexec.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    XCTAssertTrue(fd >= 0, @"open should succeed");
+    if (fd < 0) return;
+
+    int dup3fd = dup3(fd, fd + 10, O_CLOEXEC);
+    XCTAssertTrue(dup3fd >= 0, @"dup3 with O_CLOEXEC should succeed");
+    if (dup3fd >= 0) {
+        XCTAssertEqual(fcntl(dup3fd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"dup3 should set FD_CLOEXEC on new descriptor");
+        close(dup3fd);
+    }
+
+    int fdupfd = fcntl(fd, TEST_F_DUPFD_CLOEXEC, fd + 20);
+    XCTAssertTrue(fdupfd >= 0, @"F_DUPFD_CLOEXEC should succeed");
+    if (fdupfd >= 0) {
+        XCTAssertEqual(fcntl(fdupfd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"F_DUPFD_CLOEXEC should set FD_CLOEXEC");
+        close(fdupfd);
+    }
+
+    close(fd);
+}
+
+- (void)testFcntlRejectsUnsupportedCommandIntentionally {
+    int fd = open(@"/tmp/fcntl-invalid.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    XCTAssertTrue(fd >= 0, @"open should succeed");
+    if (fd < 0) return;
+
+    int ret = fcntl(fd, 999999, 0);
+    XCTAssertEqual(ret, -1, @"unsupported fcntl command should fail");
+    XCTAssertEqual(errno, EINVAL, @"unsupported fcntl command should return EINVAL");
+
+    close(fd);
 }
 
 @end

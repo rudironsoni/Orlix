@@ -33,6 +33,20 @@ extern void cred_reset_to_defaults(void);
     cred_init();
     /* Reset credentials to IXLand defaults before each test */
     cred_reset_to_defaults();
+    /* Clean up any lingering file descriptors */
+    extern int close(int fd);
+    for (int fd = 3; fd < 256; fd++) {
+        close(fd);
+    }
+}
+
+- (void)tearDown {
+    /* Clean up any open file descriptors */
+    extern int close(int fd);
+    for (int fd = 3; fd < 256; fd++) {
+        close(fd);
+    }
+    [super tearDown];
 }
 
 /* ============================================================================

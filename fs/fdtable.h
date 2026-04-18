@@ -21,6 +21,7 @@ struct file {
     int fd;
     int real_fd;
     unsigned int flags;
+    unsigned int fd_flags;
     off_t pos;
     void *private_data;
     atomic_int refs;
@@ -62,16 +63,19 @@ void put_fd_entry_impl(void *entry);
 /* Getters/setters for fd entry properties */
 int get_real_fd_impl(void *entry);
 int get_fd_flags_impl(void *entry);
+int get_fd_descriptor_flags_impl(void *entry);
 bool get_fd_is_dir_impl(void *entry);
 int get_fd_path_impl(void *entry, char *path, size_t path_len);
 void set_fd_flags_impl(void *entry, int flags);
+void set_fd_descriptor_flags_impl(void *entry, int flags);
 off_t get_fd_offset_impl(void *entry);
 void set_fd_offset_impl(void *entry, off_t offset);
 bool get_fd_is_append_impl(void *entry);
+int clone_fd_entry_impl(int oldfd, int minfd, bool cloexec);
+int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec);
 
 /* Initialize/clone fd entries */
 void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path);
-void clone_fd_entry_impl(int newfd, int oldfd);
 
 /* Close implementation using static fd table */
 int close_impl(int fd);

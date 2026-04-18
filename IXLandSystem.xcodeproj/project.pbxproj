@@ -23,6 +23,7 @@
 		586F3641CE2CB13F63E94338 /* readdir.c in Sources */ = {isa = PBXBuildFile; fileRef = FE42C3F5F46C53309E18B1A6 /* readdir.c */; };
 		58BB480674D62F4FEF77C217 /* random.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BE7B6DDA1A833FE4A6C9194 /* random.c */; };
 		59569118507BE08C500B612A /* libIXLandSystem.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E96E95F0B83F5CC63E21913 /* libIXLandSystem.a */; };
+		596A26D943DE13E063E6016A /* host_darwin.c in Sources */ = {isa = PBXBuildFile; fileRef = 02F209EF0318428402892CD1 /* host_darwin.c */; };
 		5B16289DBA72694756559233 /* registry.c in Sources */ = {isa = PBXBuildFile; fileRef = F4E2215C61CCAEFB06DDB4FC /* registry.c */; };
 		5C2D26EAA916B6D9060B278B /* exec.c in Sources */ = {isa = PBXBuildFile; fileRef = F2D8077FB1F274E58E85378C /* exec.c */; };
 		6B365831A4B17F03AE598CFF /* sys.c in Sources */ = {isa = PBXBuildFile; fileRef = CE4E5039272874EE6A5FFD11 /* sys.c */; };
@@ -60,6 +61,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		02F209EF0318428402892CD1 /* host_darwin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = host_darwin.c; sourceTree = "<group>"; };
 		073C80D4D34F19B293799FD4 /* VFSPathTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VFSPathTests.m; sourceTree = "<group>"; };
 		1196E0E046C9D8486908FEF8 /* task.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = task.c; sourceTree = "<group>"; };
 		177E646BFF798AE08CBEE284 /* fcntl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fcntl.c; sourceTree = "<group>"; };
@@ -159,6 +161,7 @@
 				F2D8077FB1F274E58E85378C /* exec.c */,
 				177E646BFF798AE08CBEE284 /* fcntl.c */,
 				32C8785EC40C73B387D6237A /* fdtable.c */,
+				02F209EF0318428402892CD1 /* host_darwin.c */,
 				C0A71140476601A06FC988D7 /* inode.c */,
 				43308FAA8FF808B4BF22777C /* ioctl.c */,
 				C741BE27F9BDB9CD9023EF4F /* mount.c */,
@@ -324,6 +327,7 @@
 				D9E9A4ADF886F41734FE3DF1 /* fcntl.c in Sources */,
 				BEC5162482C2CB89CBFBAA61 /* fdtable.c in Sources */,
 				9FB855340C8816E1983BB087 /* fork.c in Sources */,
+				596A26D943DE13E063E6016A /* host_darwin.c in Sources */,
 				AEAB38B6EC299D3B7151819C /* init.c in Sources */,
 				D01F8EE6B1FF4C363A19D2AF /* inode.c in Sources */,
 				23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */,

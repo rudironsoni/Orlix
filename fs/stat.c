@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
+#include "host_darwin.h"
 #include "vfs.h"
 
 #ifndef MAX_PATH
@@ -20,7 +21,7 @@ int stat_impl(const char *pathname, struct stat *statbuf) {
         return -1;
     }
 
-    if (stat(pathname, statbuf) == 0) {
+    if (host_stat_impl(pathname, statbuf) == 0) {
         return 0;
     }
 
@@ -37,7 +38,7 @@ int fstat_impl(int fd, struct stat *statbuf) {
         return -1;
     }
 
-    if (fstat(fd, statbuf) == 0) {
+    if (host_fstat_impl(fd, statbuf) == 0) {
         return 0;
     }
 
@@ -47,7 +48,7 @@ int fstat_impl(int fd, struct stat *statbuf) {
     }
 
     if (fd <= 2) {
-        return fstat(fd, statbuf);
+        return host_fstat_impl(fd, statbuf);
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -57,7 +58,7 @@ int fstat_impl(int fd, struct stat *statbuf) {
     }
 
     int real_fd = get_real_fd_impl(entry);
-    int result = fstat(real_fd, statbuf);
+    int result = host_fstat_impl(real_fd, statbuf);
     put_fd_entry_impl(entry);
     return result;
 }

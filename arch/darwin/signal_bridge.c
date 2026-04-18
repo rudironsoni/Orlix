@@ -11,7 +11,7 @@
 #include <signal.h>
 #include <string.h>
 
-#include "../kernel/signal.h"
+#include "kernel/signal.h"
 
 /* Private bridge helpers - used by kernel/signal.c public wrappers */
 

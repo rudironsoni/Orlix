@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
+#include "host_darwin.h"
 
 ssize_t read_impl(int fd, void *buf, size_t count) {
     if (!buf) {
@@ -19,7 +20,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
     }
 
     if (fd <= 2) {
-        return read(fd, buf, count);
+        return host_read_impl(fd, buf, count);
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -28,7 +29,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         return -1;
     }
 
-    ssize_t bytes = read(get_real_fd_impl(entry), buf, count);
+    ssize_t bytes = host_read_impl(get_real_fd_impl(entry), buf, count);
     if (bytes > 0) {
         set_fd_offset_impl(entry, get_fd_offset_impl(entry) + bytes);
     }
@@ -49,7 +50,7 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     }
 
     if (fd <= 2) {
-        return write(fd, buf, count);
+        return host_write_impl(fd, buf, count);
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -64,14 +65,14 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     bool is_append = get_fd_is_append_impl(entry);
     if (is_append) {
         /* Seek to end before writing */
-        off_t current_size = lseek(real_fd, 0, SEEK_END);
+        off_t current_size = host_lseek_impl(real_fd, 0, SEEK_END);
         if (current_size < 0) {
             put_fd_entry_impl(entry);
             return -1;
         }
     }
 
-    ssize_t bytes = write(real_fd, buf, count);
+    ssize_t bytes = host_write_impl(real_fd, buf, count);
     if (bytes > 0) {
         /* Only update local offset on append/regular write */
         off_t new_offset = get_fd_offset_impl(entry) + bytes;
@@ -99,7 +100,7 @@ off_t lseek_impl(int fd, off_t offset, int whence) {
         return -1;
     }
 
-    off_t result = lseek(get_real_fd_impl(entry), offset, whence);
+    off_t result = host_lseek_impl(get_real_fd_impl(entry), offset, whence);
     if (result >= 0) {
         set_fd_offset_impl(entry, result);
     }
@@ -120,7 +121,7 @@ ssize_t pread_impl(int fd, void *buf, size_t count, off_t offset) {
         return -1;
     }
 
-    ssize_t bytes = pread(get_real_fd_impl(entry), buf, count, offset);
+    ssize_t bytes = host_pread_impl(get_real_fd_impl(entry), buf, count, offset);
     put_fd_entry_impl(entry);
     return bytes;
 }
@@ -137,7 +138,7 @@ ssize_t pwrite_impl(int fd, const void *buf, size_t count, off_t offset) {
         return -1;
     }
 
-    ssize_t bytes = pwrite(get_real_fd_impl(entry), buf, count, offset);
+    ssize_t bytes = host_pwrite_impl(get_real_fd_impl(entry), buf, count, offset);
     put_fd_entry_impl(entry);
     return bytes;
 }

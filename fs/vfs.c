@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include "host_darwin.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -34,7 +35,7 @@
 #include "../kernel/task.h"
 
 static const char *const vfs_virtual_root_path = "/";
-static const char *const vfs_host_root_path = "/var/mobile/Containers/IXLand";
+static const char *const vfs_host_root_path = "/tmp";
 
 static int vfs_copy_string(const char *src, char *dst, size_t dst_len) {
     size_t len;
@@ -259,84 +260,22 @@ int vfs_umount(const char *target) {
 }
 
 int vfs_open(const char *path, int flags, mode_t mode, int *target_fd) {
-    int darwin_flags = 0;
     int real_fd;
 
     if (!path || !target_fd) {
         return -EFAULT;
     }
 
-    /* Translate Linux flags to Darwin flags
-     * Only translate the access mode and basic flags that Darwin supports
+    /* Current in-repo callers pass the host platform's open flags.
+     * Preserve the actual call surface used by IXLandSystem while the Linux-facing
+     * contract is modeled in higher layers. Validate only combinations we can
+     * represent coherently now.
      */
-
-    /* Access mode */
-    switch (flags & IX_O_ACCMODE) {
-        case IX_O_RDONLY:
-            darwin_flags = O_RDONLY;
-            break;
-        case IX_O_WRONLY:
-            darwin_flags = O_WRONLY;
-            break;
-        case IX_O_RDWR:
-            darwin_flags = O_RDWR;
-            break;
-        default:
-            return -EINVAL;
+    if ((flags & O_EXCL) && !(flags & O_CREAT)) {
+        return -EINVAL;
     }
 
-    /* Creation and behavior flags */
-    if (flags & IX_O_CREAT) {
-        darwin_flags |= O_CREAT;
-    }
-    if (flags & IX_O_EXCL) {
-        darwin_flags |= O_EXCL;
-        /* EXCL without CREAT is invalid on Linux */
-        if (!(flags & IX_O_CREAT)) {
-            return -EINVAL;
-        }
-    }
-    if (flags & IX_O_TRUNC) {
-        darwin_flags |= O_TRUNC;
-    }
-    if (flags & IX_O_APPEND) {
-        darwin_flags |= O_APPEND;
-    }
-    if (flags & IX_O_CLOEXEC) {
-        darwin_flags |= O_CLOEXEC;
-    }
-    if (flags & IX_O_NOCTTY) {
-        darwin_flags |= O_NOCTTY;
-    }
-    if (flags & IX_O_NONBLOCK) {
-        darwin_flags |= O_NONBLOCK;
-    }
-
-    /* Reject unsupported flags with Linux-shaped errors */
-
-    /* Synchronize modes not fully supported in this subset */
-    if (flags & IX_O_DSYNC) {
-        if (darwin_flags & (O_SYNC | O_DSYNC)) {
-            /* iOS supports O_SYNC but not separate O_DSYNC semantics */
-            /* Keep O_SYNC if already set, mark as using closest equivalent */
-        }
-    }
-
-    if (flags & IX_O_SYNC) {
-        /* iOS supports O_SYNC in the kernel, but behavior may differ from Linux */
-        /* This is accepted but may have subtle semantic differences */
-        darwin_flags |= O_SYNC;
-    }
-
-    /* O_RSYNC is Linux-specific and maps to O_SYNC on iOS if needed */
-    if (flags & IX_O_RSYNC) {
-        /* Not supported as separate flag - accept O_SYNC as equivalent */
-        darwin_flags |= O_SYNC;
-    }
-
-    /* Other flags are Darwin-compatible */
-
-    real_fd = open(path, darwin_flags, mode);
+    real_fd = host_open_impl(path, flags, mode);
     if (real_fd < 0) {
         return -errno;
     }
@@ -568,7 +507,7 @@ int vfs_stat_path(const char *pathname, struct stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
-    if (stat(pathname, statbuf) != 0) {
+    if (host_stat_impl(pathname, statbuf) != 0) {
         return -errno;
     }
     return 0;
@@ -578,7 +517,7 @@ int vfs_lstat(const char *pathname, struct stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
-    if (lstat(pathname, statbuf) != 0) {
+    if (host_lstat_impl(pathname, statbuf) != 0) {
         return -errno;
     }
     return 0;
@@ -588,7 +527,7 @@ int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
     }
-    if (access(pathname, mode) != 0) {
+    if (host_access_impl(pathname, mode) != 0) {
         return -errno;
     }
     return 0;

@@ -24,7 +24,7 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
     int ret = vfs_open(pathname, flags, mode, &real_fd);
     if (ret < 0) {
         free_fd_impl(fd);
-        errno = -ret;  /* Convert kernel error to errno */
+        errno = -ret;
         return -1;
     }
 
