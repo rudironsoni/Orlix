@@ -1,11 +1,20 @@
+# clangd configuration for IXLandSystem
+# This file uses portable relative paths - no machine-specific hardcoding
+
 CompileFlags:
-  CompilationDatabase: .
+  # Base flags applied to all files
+  Add:
+    - -Ithird_party/linux-uapi/6.12/arm64/include
+    - -Iinclude
+    - -I.
+    - -D_XOPEN_SOURCE
   Remove:
     - -index-store-path
     - -index-unit-output-path
 
 ---
 # Linux-owner paths: C-only, no ObjC
+# These paths implement Linux semantics and must stay host-agnostic
 If:
   PathMatch:
     - ^fs/.*\.(c|h)$
@@ -20,15 +29,18 @@ If:
     Add:
       - -DIXLAND_LINUX_OWNER_FILE=1
       - --include=include/ixland/clangd_owner_policy.h
+      - -std=gnu11
 
 ---
 # Private iOS bridge paths
+# Host-specific mediation quarantined under internal/ios
 If:
   PathMatch:
     - ^internal/ios/.*\.(c|h|m|mm)$
   CompileFlags:
     Add:
       - -DIXLAND_HOST_BRIDGE_FILE=1
+      - -std=gnu11
 
 ---
 # Private iOS: Objective-C files
@@ -39,9 +51,10 @@ If:
     Add:
       - -x
       - objective-c
+      - -fobjc-arc
 
 ---
-# Private iOS: Objective-C++ files
+# Private iOS: Objective-C++ files  
 If:
   PathMatch:
     - ^internal/ios/.*\.mm$
@@ -49,6 +62,7 @@ If:
     Add:
       - -x
       - objective-c++
+      - -fobjc-arc
 
 ---
 # Tests: Objective-C
@@ -59,6 +73,8 @@ If:
     Add:
       - -x
       - objective-c
+      - -fobjc-arc
+      - -fmodules
 
 ---
 # Tests: Objective-C++
@@ -69,6 +85,8 @@ If:
     Add:
       - -x
       - objective-c++
+      - -fobjc-arc
+      - -fmodules
 
 ---
 # Tests: C with strict diagnostics
