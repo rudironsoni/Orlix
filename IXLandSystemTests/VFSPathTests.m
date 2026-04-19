@@ -9,10 +9,30 @@
  */
 
 #import <XCTest/XCTest.h>
+#import <Foundation/Foundation.h>
+#import <XCTest/XCTest.h>
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+// Forward declare linux_dirent64 since it's not in standard headers
+struct linux_dirent64 {
+    uint64_t d_ino;
+    int64_t d_off;
+    unsigned short d_reclen;
+    unsigned char d_type;
+    char d_name[];
+};
 
 #include "fs/vfs.h"
 #include "fs/path.h"
@@ -716,36 +736,180 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     vfs_test_remove_linux_path(@"/tmp/synthetic-dirfd-anchor/file".UTF8String);
 }
 
-- (void)testSyntheticGetdentsUsesIntentionalUnsupportedPolicy {
-    char host_dir[MAX_PATH];
-    int real_fd;
-    int dirfd;
-    char buffer[256];
+- (void)testSyntheticRootOpenDirectorySucceeds {
+  errno = 0;
+  int proc_fd = open("/proc".UTF8String, O_RDONLY | O_DIRECTORY);
+  XCTAssertTrue(proc_fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+  XCTAssertEqual(errno, 0, @"errno should be 0 after open(/proc, O_DIRECTORY)");
 
-    XCTAssertEqual(vfs_translate_path(@"/tmp/getdents-anchor".UTF8String, host_dir, sizeof(host_dir)), 0,
-                   @"anchor directory should translate");
-    vfs_test_ensure_virtual_parent_directory(@"/tmp/getdents-anchor/file".UTF8String);
+  errno = 0;
+  int sys_fd = open("/sys".UTF8String, O_RDONLY | O_DIRECTORY);
+  XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
+  XCTAssertEqual(errno, 0, @"errno should be 0 after open(/sys, O_DIRECTORY)");
 
-    real_fd = vfs_test_open_host_directory_fd(host_dir);
-    XCTAssertTrue(real_fd >= 0, @"host anchor directory open should succeed");
-    if (real_fd < 0) return;
+  errno = 0;
+  int dev_fd = open("/dev".UTF8String, O_RDONLY | O_DIRECTORY);
+  XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
+  XCTAssertEqual(errno, 0, @"errno should be 0 after open(/dev, O_DIRECTORY)");
 
-    dirfd = alloc_fd_impl();
-    XCTAssertTrue(dirfd >= 0, @"synthetic dirfd allocation should succeed");
-    if (dirfd < 0) {
-        close(real_fd);
-        return;
+  if (proc_fd >= 0) close(proc_fd);
+  if (sys_fd >= 0) close(sys_fd);
+  if (dev_fd >= 0) close(dev_fd);
+}
+
+- (void)testSyntheticRootGetdents64ReturnsDotAndDotdot {
+  int fd = open("/proc".UTF8String, O_RDONLY | O_DIRECTORY);
+  XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+  if (fd < 0) return;
+
+  char buffer[1024];
+  memset(buffer, 0, sizeof(buffer));
+  
+  ssize_t nread = getdents64(fd, buffer, sizeof(buffer));
+  XCTAssertTrue(nread > 0, @"getdents64(/proc) should return > 0 bytes");
+
+  // Parse the entries to verify . and ..
+  bool found_dot = false;
+  bool found_dotdot = false;
+  size_t pos = 0;
+  
+  while (pos < (size_t)nread) {
+    struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+    NSString *name = [NSString stringWithUTF8String:entry->d_name];
+    
+    if ([name isEqualToString:@"."]) {
+      found_dot = true;
+      XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+    } else if ([name isEqualToString:@".."]) {
+      found_dotdot = true;
+      XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
     }
+    
+    pos += entry->d_reclen;
+  }
+  
+  XCTAssertTrue(found_dot, @"getdents64(/proc) should return '.' entry");
+  XCTAssertTrue(found_dotdot, @"getdents64(/proc) should return '..' entry");
 
-    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/proc".UTF8String);
+  // Second call should return 0 (EOF)
+  nread = getdents64(fd, buffer, sizeof(buffer));
+  XCTAssertEqual(nread, 0, @"Second getdents64(/proc) should return 0 (EOF)");
 
-    errno = 0;
-    XCTAssertEqual(getdents64(dirfd, buffer, sizeof(buffer)), -1,
-                   @"getdents64 should reject synthetic directories (not yet implemented)");
-    XCTAssertEqual(errno, ENOTSUP, @"getdents64 should set ENOTSUP for synthetic directories");
+  close(fd);
+}
 
-    free_fd_impl(dirfd);
-    vfs_test_remove_linux_path(@"/tmp/getdents-anchor/file".UTF8String);
+- (void)testSyntheticSysAndDevGetdents64ReturnsDotAndDotdot {
+  // Test /sys
+  int sys_fd = open("/sys".UTF8String, O_RDONLY | O_DIRECTORY);
+  XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
+  
+  if (sys_fd >= 0) {
+    char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
+    
+    ssize_t nread = getdents64(sys_fd, buffer, sizeof(buffer));
+    XCTAssertTrue(nread > 0, @"getdents64(/sys) should return > 0 bytes");
+
+    bool found_dot = false;
+    bool found_dotdot = false;
+    size_t pos = 0;
+    
+    while (pos < (size_t)nread) {
+      struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+      NSString *name = [NSString stringWithUTF8String:entry->d_name];
+      
+      if ([name isEqualToString:@"."]) {
+        found_dot = true;
+        XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+      } else if ([name isEqualToString:@".."]) {
+        found_dotdot = true;
+        XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+      }
+      
+      pos += entry->d_reclen;
+    }
+    
+    XCTAssertTrue(found_dot, @"getdents64(/sys) should return '.' entry");
+    XCTAssertTrue(found_dotdot, @"getdents64(/sys) should return '..' entry");
+    
+    // Second call should return 0 (EOF)
+    nread = getdents64(sys_fd, buffer, sizeof(buffer));
+    XCTAssertEqual(nread, 0, @"Second getdents64(/sys) should return 0 (EOF)");
+    
+    close(sys_fd);
+  }
+
+  // Test /dev
+  int dev_fd = open("/dev".UTF8String, O_RDONLY | O_DIRECTORY);
+  XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
+  
+  if (dev_fd >= 0) {
+    char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
+    
+    ssize_t nread = getdents64(dev_fd, buffer, sizeof(buffer));
+    XCTAssertTrue(nread > 0, @"getdents64(/dev) should return > 0 bytes");
+
+    bool found_dot = false;
+    bool found_dotdot = false;
+    size_t pos = 0;
+    
+    while (pos < (size_t)nread) {
+      struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+      NSString *name = [NSString stringWithUTF8String:entry->d_name];
+      
+      if ([name isEqualToString:@"."]) {
+        found_dot = true;
+        XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+      } else if ([name isEqualToString:@".."]) {
+        found_dotdot = true;
+        XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+      }
+      
+      pos += entry->d_reclen;
+    }
+    
+    XCTAssertTrue(found_dot, @"getdents64(/dev) should return '.' entry");
+    XCTAssertTrue(found_dotdot, @"getdents64(/dev) should return '..' entry");
+    
+    // Second call should return 0 (EOF)
+    nread = getdents64(dev_fd, buffer, sizeof(buffer));
+    XCTAssertEqual(nread, 0, @"Second getdents64(/dev) should return 0 (EOF)");
+    
+    close(dev_fd);
+  }
+}
+
+- (void)testSyntheticGetdentsUsesIntentionalUnsupportedPolicy {
+  char host_dir[MAX_PATH];
+  int real_fd;
+  int dirfd;
+  char buffer[256];
+
+  XCTAssertEqual(vfs_translate_path(@"/tmp/getdents-anchor".UTF8String, host_dir, sizeof(host_dir)), 0,
+                @"anchor directory should translate");
+  vfs_test_ensure_virtual_parent_directory(@"/tmp/getdents-anchor/file".UTF8String);
+
+  real_fd = vfs_test_open_host_directory_fd(host_dir);
+  XCTAssertTrue(real_fd >= 0, @"host anchor directory open should succeed");
+  if (real_fd < 0) return;
+
+  dirfd = alloc_fd_impl();
+  XCTAssertTrue(dirfd >= 0, @"synthetic dirfd allocation should succeed");
+  if (dirfd < 0) {
+    close(real_fd);
+    return;
+  }
+
+  init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/proc".UTF8String);
+
+  errno = 0;
+  XCTAssertEqual(getdents64(dirfd, buffer, sizeof(buffer)), -1,
+                @"getdents64 should reject synthetic directories (not yet implemented)");
+  XCTAssertEqual(errno, ENOTSUP, @"getdents64 should set ENOTSUP for synthetic directories");
+
+  free_fd_impl(dirfd);
+  vfs_test_remove_linux_path(@"/tmp/getdents-anchor/file".UTF8String);
 }
 
 

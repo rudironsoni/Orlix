@@ -64,6 +64,7 @@ void put_fd_entry_impl(void *entry);
 int get_real_fd_impl(void *entry);
 int get_fd_flags_impl(void *entry);
 int get_fd_descriptor_flags_impl(void *entry);
+bool get_fd_is_synthetic_dir_impl(void *entry);
 bool get_fd_is_dir_impl(void *entry);
 int get_fd_path_impl(void *entry, char *path, size_t path_len);
 void set_fd_flags_impl(void *entry, int flags);
@@ -76,6 +77,8 @@ int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec);
 
 /* Initialize/clone fd entries */
 void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path);
+
+void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *path);
 
 /* Close implementation using static fd table */
 int close_impl(int fd);

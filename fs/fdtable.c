@@ -279,13 +279,25 @@ int close_on_exec(struct files_struct *files) {
  * This is the internal implementation - external code should use the API above
  * ============================================================================ */
 
+enum fd_type {
+    FD_TYPE_HOST,           /* Normal host-backed fd */
+    FD_TYPE_SYNTHETIC_DIR   /* Synthetic directory (no host backing) */
+};
+
+typedef struct synthetic_dir_state {
+    off_t cursor;           /* Current readdir position */
+    bool entries_emitted;   /* Whether . and .. have been emitted */
+} synthetic_dir_state_t;
+
 typedef struct fd_description {
+    enum fd_type type;
     int fd;
     int flags;
     mode_t mode;
     off_t offset;
     char path[MAX_PATH];
     bool is_dir;
+    void *synthetic_state;
     atomic_int refs;
     pthread_mutex_t lock;
 } fd_description_t;
@@ -308,11 +320,13 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mod
         return NULL;
     }
 
+    desc->type = FD_TYPE_HOST;
     desc->fd = real_fd;
     desc->flags = flags;
     desc->mode = mode;
     desc->offset = 0;
     desc->is_dir = (flags & O_DIRECTORY) != 0;
+    desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     pthread_mutex_init(&desc->lock, NULL);
     if (path) {
@@ -323,6 +337,35 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mod
     struct stat file_stat;
     if ((flags & O_DIRECTORY) == 0 && host_fstat_impl(real_fd, &file_stat) == 0) {
         desc->is_dir = S_ISDIR(file_stat.st_mode);
+    }
+
+    return desc;
+}
+
+static fd_description_t *alloc_synthetic_fd_description(int flags, mode_t mode, const char *path) {
+    fd_description_t *desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    desc->type = FD_TYPE_SYNTHETIC_DIR;
+    desc->fd = -1;
+    desc->flags = flags;
+    desc->mode = mode;
+    desc->offset = 0;
+    desc->is_dir = true;
+    desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
+    if (!desc->synthetic_state) {
+        free(desc);
+        errno = ENOMEM;
+        return NULL;
+    }
+    atomic_init(&desc->refs, 1);
+    pthread_mutex_init(&desc->lock, NULL);
+    if (path) {
+        strncpy(desc->path, path, MAX_PATH - 1);
+        desc->path[MAX_PATH - 1] = '\0';
     }
 
     return desc;
@@ -339,7 +382,12 @@ static void release_fd_description(fd_description_t *desc) {
         return;
     }
     if (atomic_fetch_sub(&desc->refs, 1) == 1) {
-        host_close_impl(desc->fd);
+        if (desc->type == FD_TYPE_HOST) {
+            host_close_impl(desc->fd);
+        }
+        if (desc->synthetic_state) {
+            free(desc->synthetic_state);
+        }
         pthread_mutex_destroy(&desc->lock);
         free(desc);
     }
@@ -439,6 +487,11 @@ int get_fd_flags_impl(void *entry) {
 
 int get_fd_descriptor_flags_impl(void *entry) {
     return ((fd_entry_t *)entry)->fd_flags;
+}
+
+bool get_fd_is_synthetic_dir_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_DIR;
 }
 
 bool get_fd_is_dir_impl(void *entry) {
@@ -587,4 +640,13 @@ int close_impl(int fd) {
     }
     free_fd_impl(fd);
     return 0;
+}
+
+void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *path) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    pthread_mutex_lock(&entry->lock);
+    entry->desc = alloc_synthetic_fd_description(flags, mode, path);
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    pthread_mutex_unlock(&entry->lock);
 }

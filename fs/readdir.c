@@ -12,13 +12,46 @@
 #include "path.h"
 #include "vfs.h"
 
+/* Forward declarations from fdtable.c */
+typedef enum {
+    FD_TYPE_HOST,
+    FD_TYPE_SYNTHETIC_DIR,
+    FD_TYPE_PIPE
+} fd_type_t;
+
+typedef struct fd_description {
+    fd_type_t type;
+    int fd;
+    int flags;
+    mode_t mode;
+    off_t offset;
+    char path[MAX_PATH];
+    bool is_dir;
+    void *synthetic_state;
+    atomic_int refs;
+    pthread_mutex_t lock;
+} fd_description_t;
+
+typedef struct {
+    fd_description_t *desc;
+    int fd_flags;
+    bool used;
+    pthread_mutex_t lock;
+} fd_entry_t;
+
+/* Import synthetic directory state */
+typedef struct synthetic_dir_state {
+    off_t cursor;           /* Current readdir position */
+    bool entries_emitted;   /* Whether . and .. have been emitted */
+} synthetic_dir_state_t;
+
 /* Linux dirent64 structure - matches Linux UAPI */
 struct linux_dirent64 {
     uint64_t d_ino;
-    int64_t  d_off;
+    int64_t d_off;
     unsigned short d_reclen;
-    unsigned char  d_type;
-    char           d_name[];
+    unsigned char d_type;
+    char d_name[];
 };
 
 static unsigned char map_dtype(unsigned char dtype) {
@@ -75,11 +108,70 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
         return -1;
     }
 
-    int dup_fd = dup(real_fd);
-    if (dup_fd < 0) {
-        put_fd_entry_impl(entry);
-        return -1;
+/* If this is a synthetic directory fd, generate . and .. entries */
+  if (get_fd_is_synthetic_dir_impl(entry)) {
+    synthetic_dir_state_t *state = NULL;
+    fd_description_t *desc = ((fd_entry_t *)entry)->desc;
+    if (desc && desc->synthetic_state) {
+      state = (synthetic_dir_state_t *)desc->synthetic_state;
+    } else {
+      put_fd_entry_impl(entry);
+      errno = EBADF;
+      return -1;
     }
+
+    size_t written = 0;
+    off_t new_offset = get_fd_offset_impl(entry);
+
+    if (state->cursor == 0) {
+      /* Emit '.' entry */
+      if (count - written >= sizeof(struct linux_dirent64) + 2) {
+        struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
+        out->d_ino = 1;
+        out->d_off = 1;
+        out->d_reclen = sizeof(struct linux_dirent64) + 2;
+        out->d_type = DT_DIR;
+        memcpy(out->d_name, ".", 2);
+        written += sizeof(struct linux_dirent64) + 2;
+        new_offset = 1;
+        state->cursor = 1;
+      }
+    }
+
+    if (state->cursor == 1 && written == 0) {
+      new_offset = get_fd_offset_impl(entry);
+    }
+
+    if (state->cursor == 1) {
+      /* Emit '..' entry */
+      if (count - written >= sizeof(struct linux_dirent64) + 3) {
+        struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
+        out->d_ino = 1;
+        out->d_off = 2;
+        out->d_reclen = sizeof(struct linux_dirent64) + 3;
+        out->d_type = DT_DIR;
+        memcpy(out->d_name, "..", 3);
+        written += sizeof(struct linux_dirent64) + 3;
+        new_offset = 2;
+        state->cursor = 2;
+      }
+    }
+
+    if (state->cursor == 2 && written == 0) {
+      /* EOF: No more entries */
+      put_fd_entry_impl(entry);
+      return 0;
+    }
+
+    set_fd_offset_impl(entry, new_offset);
+    put_fd_entry_impl(entry);
+    return written;
+  }
+  int dup_fd = dup(real_fd);
+  if (dup_fd < 0) {
+    put_fd_entry_impl(entry);
+    return -1;
+  }
 
     DIR *dp = fdopendir(dup_fd);
     if (dp == NULL) {

@@ -25,6 +25,15 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
+    if (vfs_path_is_synthetic_root(resolved_path) && (flags & O_DIRECTORY)) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_fd_entry_impl(fd, flags, mode, resolved_path);
+        return fd;
+    }
+
     if (vfs_path_is_synthetic(resolved_path)) {
         errno = ENOTSUP;
         return -1;
@@ -67,6 +76,15 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
     if (ret != 0) {
         errno = -ret;
         return -1;
+    }
+
+    if (vfs_path_is_synthetic_root(resolved_path) && (flags & O_DIRECTORY)) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_fd_entry_impl(fd, flags, mode, resolved_path);
+        return fd;
     }
 
     if (vfs_path_is_synthetic(resolved_path)) {
