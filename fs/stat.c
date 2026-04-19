@@ -21,15 +21,15 @@ int stat_impl(const char *pathname, struct stat *statbuf) {
         return -1;
     }
 
-    if (host_stat_impl(pathname, statbuf) == 0) {
-        return 0;
+    if (vfs_path_is_linux_route(pathname)) {
+        if (vfs_path_is_synthetic(pathname)) {
+            errno = ENOENT;
+            return -1;
+        }
+        return vfs_fstatat(AT_FDCWD, pathname, statbuf, 0);
     }
 
-    if (errno != ENOENT) {
-        return -1;
-    }
-
-    return vfs_stat_path(pathname, statbuf);
+    return host_stat_impl(pathname, statbuf);
 }
 
 int fstat_impl(int fd, struct stat *statbuf) {
