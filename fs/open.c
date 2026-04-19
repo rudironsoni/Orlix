@@ -11,10 +11,17 @@
 
 int open_impl(const char *pathname, int flags, mode_t mode) {
     char translated_path[MAX_PATH];
+    char resolved_path[MAX_PATH];
     int ret;
 
     if (!pathname) {
         errno = EFAULT;
+        return -1;
+    }
+
+    ret = vfs_resolve_virtual_path_task(pathname, resolved_path, sizeof(resolved_path), NULL);
+    if (ret != 0) {
+        errno = -ret;
         return -1;
     }
 
@@ -37,16 +44,23 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    init_fd_entry_impl(fd, real_fd, flags, mode, pathname);
+    init_fd_entry_impl(fd, real_fd, flags, mode, resolved_path);
     return fd;
 }
 
 int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
     char translated_path[MAX_PATH];
+    char resolved_path[MAX_PATH];
     int ret;
 
     if (!pathname) {
         errno = EFAULT;
+        return -1;
+    }
+
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path));
+    if (ret != 0) {
+        errno = -ret;
         return -1;
     }
 
@@ -69,7 +83,7 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    init_fd_entry_impl(fd, real_fd, flags, mode, translated_path);
+    init_fd_entry_impl(fd, real_fd, flags, mode, resolved_path);
     return fd;
 }
 

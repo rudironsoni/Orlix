@@ -672,7 +672,6 @@ int vfs_resolve_virtual_path_at(int dirfd, const char *vpath, char *resolved_vpa
                                 size_t resolved_vpath_len) {
     struct task_struct *task;
     struct fs_struct *fs;
-    char dir_host_path[MAX_PATH];
     char dir_virtual_path[MAX_PATH];
     char joined_virtual_path[MAX_PATH];
     void *entry;
@@ -702,15 +701,10 @@ int vfs_resolve_virtual_path_at(int dirfd, const char *vpath, char *resolved_vpa
         return -ENOTDIR;
     }
 
-    ret = get_fd_path_impl(entry, dir_host_path, sizeof(dir_host_path));
+    ret = get_fd_path_impl(entry, dir_virtual_path, sizeof(dir_virtual_path));
     put_fd_entry_impl(entry);
     if (ret != 0) {
         return -errno;
-    }
-
-    ret = vfs_reverse_translate(dir_host_path, dir_virtual_path, sizeof(dir_virtual_path));
-    if (ret != 0) {
-        return ret;
     }
 
     ret = vfs_join_virtual_path(dir_virtual_path, vpath, joined_virtual_path, sizeof(joined_virtual_path));

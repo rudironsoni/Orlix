@@ -312,6 +312,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mod
     desc->flags = flags;
     desc->mode = mode;
     desc->offset = 0;
+    desc->is_dir = (flags & O_DIRECTORY) != 0;
     atomic_init(&desc->refs, 1);
     pthread_mutex_init(&desc->lock, NULL);
     if (path) {
@@ -320,7 +321,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mod
     }
 
     struct stat file_stat;
-    if (host_fstat_impl(real_fd, &file_stat) == 0) {
+    if ((flags & O_DIRECTORY) == 0 && host_fstat_impl(real_fd, &file_stat) == 0) {
         desc->is_dir = S_ISDIR(file_stat.st_mode);
     }
 

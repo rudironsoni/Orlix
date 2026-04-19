@@ -487,6 +487,40 @@ static int vfs_test_open_host_directory_fd(const char *host_path) {
     XCTAssertEqual(ret, -EBADF, @"invalid dirfd should return -EBADF");
 }
 
+- (void)testVfsTranslatePathAtRelativePathUsesDirfd {
+    int real_fd;
+    int dirfd;
+    char host_dir[MAX_PATH];
+    char host_path[MAX_PATH];
+    NSString *expected;
+
+    XCTAssertEqual(vfs_translate_path(@"/tmp/translate-dirfd".UTF8String, host_dir, sizeof(host_dir)), 0,
+                   @"dirfd directory should translate");
+    vfs_test_ensure_virtual_parent_directory(@"/tmp/translate-dirfd/file".UTF8String);
+
+    real_fd = vfs_test_open_host_directory_fd(host_dir);
+    XCTAssertTrue(real_fd >= 0, @"host directory open should succeed");
+    if (real_fd < 0) return;
+
+    dirfd = alloc_fd_impl();
+    XCTAssertTrue(dirfd >= 0, @"dirfd allocation should succeed");
+    if (dirfd < 0) {
+        host_close_impl(real_fd);
+        return;
+    }
+
+    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp/translate-dirfd".UTF8String);
+
+    XCTAssertEqual(vfs_translate_path_at(dirfd, @"file".UTF8String, host_path, sizeof(host_path)), 0,
+                   @"relative path should resolve from dirfd");
+    expected = [NSString stringWithFormat:@"%s/file", host_dir];
+    XCTAssertEqualObjects([NSString stringWithUTF8String:host_path], expected,
+                          @"relative path should translate from dirfd base directory");
+
+    free_fd_impl(dirfd);
+    vfs_test_remove_linux_path(@"/tmp/translate-dirfd/file".UTF8String);
+}
+
 /* ============================================================================
  * STAT-FAMILY AND AT-FLAG SEMANTICS TESTS
  * ============================================================================ */
@@ -751,7 +785,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
         return;
     }
 
-    init_fd_entry_impl(dirfd, real_fd, O_RDONLY, 0644, host_path);
+    init_fd_entry_impl(dirfd, real_fd, O_RDONLY, 0644, @"/tmp/not-a-dir".UTF8String);
 
     XCTAssertEqual(renameat(dirfd, @"child".UTF8String, AT_FDCWD, @"/tmp/unused".UTF8String), -1,
                    @"non-directory dirfd should fail");
@@ -760,6 +794,99 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     free_fd_impl(dirfd);
     vfs_test_remove_linux_path(@"/tmp/not-a-dir".UTF8String);
     vfs_test_remove_linux_path(@"/tmp/unused".UTF8String);
+}
+
+- (void)testRenameAtUsesNewdirfdForRelativeNewPath {
+    int old_real_fd;
+    int new_real_fd;
+    int old_dirfd;
+    int new_dirfd;
+    char old_host_dir[MAX_PATH];
+    char new_host_dir[MAX_PATH];
+
+    XCTAssertEqual(vfs_translate_path(@"/tmp/newdirfd-old".UTF8String, old_host_dir, sizeof(old_host_dir)), 0,
+                   @"old source directory should translate");
+    XCTAssertEqual(vfs_translate_path(@"/tmp/newdirfd-new".UTF8String, new_host_dir, sizeof(new_host_dir)), 0,
+                   @"new destination directory should translate");
+
+    vfs_test_ensure_virtual_parent_directory(@"/tmp/newdirfd-old/file".UTF8String);
+    vfs_test_ensure_virtual_parent_directory(@"/tmp/newdirfd-new/file".UTF8String);
+    vfs_test_seed_linux_file(@"/tmp/newdirfd-old/file".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/newdirfd-new/file".UTF8String);
+
+    old_real_fd = vfs_test_open_host_directory_fd(old_host_dir);
+    XCTAssertTrue(old_real_fd >= 0, @"old host directory open should succeed");
+    if (old_real_fd < 0) return;
+
+    new_real_fd = vfs_test_open_host_directory_fd(new_host_dir);
+    XCTAssertTrue(new_real_fd >= 0, @"new host directory open should succeed");
+    if (new_real_fd < 0) {
+        host_close_impl(old_real_fd);
+        return;
+    }
+
+    old_dirfd = alloc_fd_impl();
+    XCTAssertTrue(old_dirfd >= 0, @"old dirfd allocation should succeed");
+    if (old_dirfd < 0) {
+        host_close_impl(old_real_fd);
+        host_close_impl(new_real_fd);
+        return;
+    }
+
+    new_dirfd = alloc_fd_impl();
+    XCTAssertTrue(new_dirfd >= 0, @"new dirfd allocation should succeed");
+    if (new_dirfd < 0) {
+        free_fd_impl(old_dirfd);
+        host_close_impl(new_real_fd);
+        return;
+    }
+
+    init_fd_entry_impl(old_dirfd, old_real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp/newdirfd-old".UTF8String);
+    init_fd_entry_impl(new_dirfd, new_real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp/newdirfd-new".UTF8String);
+
+    XCTAssertEqual(renameat(old_dirfd, @"file".UTF8String, new_dirfd, @"file".UTF8String), 0,
+                   @"relative newpath should resolve from newdirfd");
+    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", old_host_dir] UTF8String], F_OK), -1,
+                   @"olddirfd source should be moved away");
+    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", new_host_dir] UTF8String], F_OK), 0,
+                   @"newdirfd destination should exist after rename");
+
+    vfs_test_remove_linux_path(@"/tmp/newdirfd-old/file".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/newdirfd-new/file".UTF8String);
+    free_fd_impl(old_dirfd);
+    free_fd_impl(new_dirfd);
+}
+
+- (void)testRenameAtAbsolutePathsIgnoreDirfds {
+    int real_fd;
+    int dirfd;
+    char dst[MAX_PATH];
+
+    vfs_test_seed_linux_file(@"/tmp/absolute-dirfd-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/absolute-dirfd-dst".UTF8String);
+    XCTAssertEqual(vfs_translate_path(@"/tmp/absolute-dirfd-dst".UTF8String, dst, sizeof(dst)), 0,
+                   @"absolute destination should translate");
+
+    real_fd = vfs_test_open_host_directory_fd(vfs_temp_backing_root());
+    XCTAssertTrue(real_fd >= 0, @"host temp directory open should succeed");
+    if (real_fd < 0) return;
+
+    dirfd = alloc_fd_impl();
+    XCTAssertTrue(dirfd >= 0, @"dirfd allocation should succeed");
+    if (dirfd < 0) {
+        host_close_impl(real_fd);
+        return;
+    }
+
+    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp".UTF8String);
+
+    XCTAssertEqual(renameat(dirfd, @"/tmp/absolute-dirfd-src".UTF8String, dirfd, @"/tmp/absolute-dirfd-dst".UTF8String), 0,
+                   @"absolute paths should ignore dirfds");
+    XCTAssertEqual(access(dst, F_OK), 0, @"absolute destination should exist after rename");
+
+    vfs_test_remove_linux_path(@"/tmp/absolute-dirfd-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/absolute-dirfd-dst".UTF8String);
+    free_fd_impl(dirfd);
 }
 
 - (void)testRenameAt2NoReplaceRejectsExistingTarget {
