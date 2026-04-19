@@ -10,6 +10,7 @@
 
 #include "fdtable.h"
 #include "path.h"
+#include "vfs.h"
 
 /* Linux dirent64 structure - matches Linux UAPI */
 struct linux_dirent64 {
@@ -64,6 +65,15 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
 
     int real_fd = get_real_fd_impl(entry);
     off_t saved_offset = get_fd_offset_impl(entry);
+    bool is_dir = get_fd_is_dir_impl(entry);
+    char fd_path[MAX_PATH];
+
+    if (is_dir && get_fd_path_impl(entry, fd_path, sizeof(fd_path)) == 0 &&
+        vfs_path_is_synthetic(fd_path)) {
+        put_fd_entry_impl(entry);
+        errno = ENOENT;
+        return -1;
+    }
 
     int dup_fd = dup(real_fd);
     if (dup_fd < 0) {

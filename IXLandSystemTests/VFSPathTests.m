@@ -33,6 +33,7 @@ extern int dup(int oldfd);
 extern int dup2(int oldfd, int newfd);
 extern int dup3(int oldfd, int newfd, int flags);
 extern int close(int fd);
+extern ssize_t getdents64(int fd, void *dirp, size_t count);
 
 static void vfs_test_translate_virtual_path(const char *path, char *host_path, size_t host_path_len) {
     int ret = vfs_translate_path(path, host_path, host_path_len);
@@ -588,6 +589,79 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, 0x80000000);
 
     XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
+}
+
+- (void)testSyntheticStatFamilyUsesTemporaryUnsupportedPolicy {
+    struct stat st;
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/proc/meminfo".UTF8String, &st, 0), -ENOENT,
+                   @"synthetic vfs_fstatat should reject through descriptor policy");
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys/kernel".UTF8String, &st, TEST_AT_SYMLINK_NOFOLLOW), -ENOENT,
+                   @"synthetic vfs_fstatat lstat path should reject through descriptor policy");
+
+    errno = 0;
+    XCTAssertEqual(stat(@"/proc/meminfo".UTF8String, &st), -1,
+                   @"public stat should surface temporary synthetic rejection");
+    XCTAssertEqual(errno, ENOENT, @"public stat should set ENOENT for unsupported synthetic paths");
+
+    errno = 0;
+    XCTAssertEqual(lstat(@"/sys/kernel".UTF8String, &st), -1,
+                   @"public lstat should surface temporary synthetic rejection");
+    XCTAssertEqual(errno, ENOENT, @"public lstat should set ENOENT for unsupported synthetic paths");
+}
+
+- (void)testSyntheticOpenUsesTemporaryUnsupportedPolicy {
+    errno = 0;
+    XCTAssertEqual(open(@"/dev/null".UTF8String, O_RDONLY), -1,
+                   @"public open should reject unsupported synthetic routes before host fallback");
+    XCTAssertEqual(errno, ENOENT, @"public open should set ENOENT for unsupported synthetic routes");
+
+    errno = 0;
+    XCTAssertEqual(openat(AT_FDCWD, @"/proc/meminfo".UTF8String, O_RDONLY), -1,
+                   @"public openat should reject unsupported synthetic routes before host fallback");
+    XCTAssertEqual(errno, ENOENT, @"public openat should set ENOENT for unsupported synthetic routes");
+}
+
+- (void)testSyntheticGetdentsUsesTemporaryUnsupportedPolicy {
+    char host_dir[MAX_PATH];
+    int real_fd;
+    int dirfd;
+    char buffer[256];
+
+    XCTAssertEqual(vfs_translate_path(@"/tmp/synthetic-dirfd-anchor".UTF8String, host_dir, sizeof(host_dir)), 0,
+                   @"anchor directory should translate");
+    vfs_test_ensure_virtual_parent_directory(@"/tmp/synthetic-dirfd-anchor/file".UTF8String);
+
+    real_fd = vfs_test_open_host_directory_fd(host_dir);
+    XCTAssertTrue(real_fd >= 0, @"host anchor directory open should succeed");
+    if (real_fd < 0) return;
+
+    dirfd = alloc_fd_impl();
+    XCTAssertTrue(dirfd >= 0, @"synthetic dirfd allocation should succeed");
+    if (dirfd < 0) {
+        close(real_fd);
+        return;
+    }
+
+    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/proc".UTF8String);
+
+    errno = 0;
+    XCTAssertEqual(getdents64(dirfd, buffer, sizeof(buffer)), -1,
+                   @"getdents64 should reject synthetic directories before host fallback");
+    XCTAssertEqual(errno, ENOENT, @"getdents64 should set ENOENT for unsupported synthetic directories");
+
+    free_fd_impl(dirfd);
+    vfs_test_remove_linux_path(@"/tmp/synthetic-dirfd-anchor/file".UTF8String);
+}
+
+- (void)testSyntheticFaccessatUsesTemporaryUnsupportedPolicy {
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, @"/dev/null".UTF8String, F_OK, 0), -ENOENT,
+                   @"synthetic vfs_faccessat should reject through descriptor policy");
+
+    errno = 0;
+    XCTAssertEqual(access(@"/dev/null".UTF8String, F_OK), -1,
+                   @"public access should reject unsupported synthetic routes");
+    XCTAssertEqual(errno, ENOENT, @"public access should set ENOENT for unsupported synthetic routes");
 }
 
 - (void)testVfsFaccessatSupportsAtFdcwd {

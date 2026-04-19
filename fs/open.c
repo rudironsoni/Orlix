@@ -25,6 +25,11 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
+    if (vfs_path_is_synthetic(resolved_path)) {
+        errno = ENOENT;
+        return -1;
+    }
+
     ret = vfs_translate_path(pathname, translated_path, sizeof(translated_path));
     if (ret != 0) {
         errno = -ret;
@@ -61,6 +66,11 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
     ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path));
     if (ret != 0) {
         errno = -ret;
+        return -1;
+    }
+
+    if (vfs_path_is_synthetic(resolved_path)) {
+        errno = ENOENT;
         return -1;
     }
 

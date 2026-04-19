@@ -553,6 +553,10 @@ int vfs_open(const char *path, int flags, mode_t mode, int *target_fd) {
         return -EFAULT;
     }
 
+    if (vfs_path_is_synthetic(path)) {
+        return -ENOTSUP;
+    }
+
     /* Current in-repo callers pass the host platform's open flags.
      * Preserve the actual call surface used by IXLandSystem while the Linux-facing
      * contract is modeled in higher layers. Validate only combinations we can
@@ -889,6 +893,9 @@ int vfs_stat_path(const char *pathname, struct stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
+    if (vfs_path_is_synthetic(pathname)) {
+        return -ENOENT;
+    }
     if (host_stat_impl(pathname, statbuf) != 0) {
         return -errno;
     }
@@ -898,6 +905,9 @@ int vfs_stat_path(const char *pathname, struct stat *statbuf) {
 int vfs_lstat(const char *pathname, struct stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
+    }
+    if (vfs_path_is_synthetic(pathname)) {
+        return -ENOENT;
     }
     if (host_lstat_impl(pathname, statbuf) != 0) {
         return -errno;
@@ -909,6 +919,9 @@ int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
     }
+    if (vfs_path_is_synthetic(pathname)) {
+        return -ENOENT;
+    }
     if (host_access_impl(pathname, mode) != 0) {
         return -errno;
     }
@@ -917,6 +930,7 @@ int vfs_access(const char *pathname, int mode) {
 
 int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
     char translated_path[MAX_PATH];
+    char resolved_virtual[MAX_PATH];
     int ret;
     bool follow_symlink;
     int supported_flags = IX_AT_SYMLINK_NOFOLLOW;
@@ -930,6 +944,15 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
     }
 
     follow_symlink = !(flags & IX_AT_SYMLINK_NOFOLLOW);
+
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_virtual, sizeof(resolved_virtual));
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (vfs_path_is_synthetic(resolved_virtual)) {
+        return -ENOENT;
+    }
 
     ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
     if (ret != 0) {
@@ -945,6 +968,7 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
 
 int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
     char translated_path[MAX_PATH];
+    char resolved_virtual[MAX_PATH];
     int ret;
 
     if (!pathname) {
@@ -957,6 +981,15 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
 
     if (flags & IX_AT_EACCESS) {
         return -ENOTSUP;
+    }
+
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_virtual, sizeof(resolved_virtual));
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (vfs_path_is_synthetic(resolved_virtual)) {
+        return -ENOENT;
     }
 
     ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));

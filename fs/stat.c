@@ -15,18 +15,23 @@
 #define MAX_PATH 4096
 #endif
 
+#define IX_AT_SYMLINK_NOFOLLOW 0x100
+
 int stat_impl(const char *pathname, struct stat *statbuf) {
+    int ret;
+
     if (!pathname || !statbuf) {
         errno = EFAULT;
         return -1;
     }
 
     if (vfs_path_is_linux_route(pathname)) {
-        if (vfs_path_is_synthetic(pathname)) {
-            errno = ENOENT;
+        ret = vfs_fstatat(AT_FDCWD, pathname, statbuf, 0);
+        if (ret != 0) {
+            errno = -ret;
             return -1;
         }
-        return vfs_fstatat(AT_FDCWD, pathname, statbuf, 0);
+        return 0;
     }
 
     return host_stat_impl(pathname, statbuf);
@@ -64,19 +69,44 @@ int fstat_impl(int fd, struct stat *statbuf) {
 }
 
 int lstat_impl(const char *pathname, struct stat *statbuf) {
+    int ret;
+
     if (!pathname || !statbuf) {
         errno = EFAULT;
         return -1;
     }
-    return vfs_lstat(pathname, statbuf);
+
+    if (vfs_path_is_linux_route(pathname)) {
+        ret = vfs_fstatat(AT_FDCWD, pathname, statbuf, IX_AT_SYMLINK_NOFOLLOW);
+        if (ret != 0) {
+            errno = -ret;
+            return -1;
+        }
+        return 0;
+    }
+
+    ret = vfs_lstat(pathname, statbuf);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int access_impl(const char *pathname, int mode) {
+    int ret;
+
     if (!pathname) {
         errno = EFAULT;
         return -1;
     }
-    return vfs_access(pathname, mode);
+
+    ret = vfs_access(pathname, mode);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int fstatat_impl(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
