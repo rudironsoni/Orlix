@@ -44,6 +44,32 @@ static char vfs_cache_root[MAX_PATH] = {0};
 static char vfs_temp_root[MAX_PATH] = {0};
 static int vfs_backing_initialized = 0;
 
+struct vfs_route_entry {
+    const char *linux_prefix;
+    enum vfs_backing_class backing_class;
+    bool synthetic;
+    bool strip_linux_prefix;
+    const char *reverse_linux_prefix;
+};
+
+static const struct vfs_route_entry vfs_route_table[] = {
+    {"/var/cache", VFS_BACKING_CACHE, false, true, "/var/cache"},
+    {"/tmp", VFS_BACKING_TEMP, false, true, "/tmp"},
+    {"/var/tmp", VFS_BACKING_TEMP, false, true, NULL},
+    {"/run", VFS_BACKING_TEMP, false, true, NULL},
+    {"/proc", VFS_BACKING_SYNTHETIC, true, false, NULL},
+    {"/sys", VFS_BACKING_SYNTHETIC, true, false, NULL},
+    {"/dev", VFS_BACKING_SYNTHETIC, true, false, NULL},
+    {"/etc", VFS_BACKING_PERSISTENT, false, false, NULL},
+    {"/usr", VFS_BACKING_PERSISTENT, false, false, NULL},
+    {"/var/lib", VFS_BACKING_PERSISTENT, false, false, NULL},
+    {"/home", VFS_BACKING_PERSISTENT, false, false, NULL},
+    {"/root", VFS_BACKING_PERSISTENT, false, false, NULL},
+    {"/", VFS_BACKING_PERSISTENT, false, false, "/"},
+};
+
+static const size_t vfs_route_table_count = sizeof(vfs_route_table) / sizeof(vfs_route_table[0]);
+
 static int vfs_copy_string(const char *src, char *dst, size_t dst_len) {
     size_t len;
 
@@ -120,6 +146,10 @@ static bool vfs_path_matches_prefix(const char *vpath, const char *prefix) {
         return false;
     }
 
+    if (strcmp(prefix, "/") == 0) {
+        return vpath[0] == '/';
+    }
+
     prefix_len = strlen(prefix);
     if (strncmp(vpath, prefix, prefix_len) != 0) {
         return false;
@@ -128,29 +158,54 @@ static bool vfs_path_matches_prefix(const char *vpath, const char *prefix) {
     return vpath[prefix_len] == '\0' || vpath[prefix_len] == '/';
 }
 
+static const struct vfs_route_entry *vfs_route_for_path(const char *vpath) {
+    const struct vfs_route_entry *best_match = NULL;
+    size_t best_len = 0;
+    size_t i;
+
+    if (!vpath || vpath[0] != '/') {
+        return NULL;
+    }
+
+    for (i = 0; i < vfs_route_table_count; i++) {
+        const struct vfs_route_entry *route = &vfs_route_table[i];
+        size_t prefix_len = strlen(route->linux_prefix);
+
+        if (!vfs_path_matches_prefix(vpath, route->linux_prefix)) {
+            continue;
+        }
+
+        if (prefix_len > best_len) {
+            best_match = route;
+            best_len = prefix_len;
+        }
+    }
+
+    return best_match;
+}
+
+static const char *vfs_relative_suffix_for_route(const struct vfs_route_entry *route,
+                                                 const char *normalized_virtual_path) {
+    if (!route || !normalized_virtual_path) {
+        return NULL;
+    }
+
+    if (!route->strip_linux_prefix) {
+        return normalized_virtual_path;
+    }
+
+    return normalized_virtual_path + strlen(route->linux_prefix);
+}
+
 /* Determine backing class from virtual Linux path */
 enum vfs_backing_class vfs_backing_class_for_path(const char *vpath) {
-    if (!vpath || vpath[0] != '/') {
+    const struct vfs_route_entry *route = vfs_route_for_path(vpath);
+
+    if (!route) {
         return VFS_BACKING_PERSISTENT;
     }
 
-    if (vfs_path_matches_prefix(vpath, "/tmp") || vfs_path_matches_prefix(vpath, "/var/tmp") ||
-        vfs_path_matches_prefix(vpath, "/run")) {
-        return VFS_BACKING_TEMP;
-    }
-
-    if (vfs_path_matches_prefix(vpath, "/var/cache")) {
-        return VFS_BACKING_CACHE;
-    }
-
-    if (vfs_path_matches_prefix(vpath, "/proc") || vfs_path_matches_prefix(vpath, "/sys") ||
-        vfs_path_matches_prefix(vpath, "/dev")) {
-        return VFS_BACKING_SYNTHETIC;
-    }
-
-    /* Everything else: persistent state goes to Application Support */
-    /* Includes: /etc, /usr, /var/lib, /home, /root, /var/log, etc. */
-    return VFS_BACKING_PERSISTENT;
+    return route->backing_class;
 }
 
 const char *vfs_backing_root_for_class(enum vfs_backing_class cls) {
@@ -193,46 +248,30 @@ const char *vfs_temp_backing_root(void) {
     return vfs_temp_root;
 }
 
-static const char *vfs_backing_relative_suffix(const char *normalized_virtual_path,
-                                              enum vfs_backing_class cls) {
-    if (cls == VFS_BACKING_CACHE && vfs_path_matches_prefix(normalized_virtual_path, "/var/cache")) {
-        return normalized_virtual_path + strlen("/var/cache");
-    }
-
-    if (cls == VFS_BACKING_TEMP) {
-        if (vfs_path_matches_prefix(normalized_virtual_path, "/tmp")) {
-            return normalized_virtual_path + strlen("/tmp");
-        }
-        if (vfs_path_matches_prefix(normalized_virtual_path, "/var/tmp")) {
-            return normalized_virtual_path + strlen("/var/tmp");
-        }
-        if (vfs_path_matches_prefix(normalized_virtual_path, "/run")) {
-            return normalized_virtual_path + strlen("/run");
-        }
-    }
-
-    return normalized_virtual_path;
-}
-
-static int vfs_join_backing_root_for_class(const char *normalized_virtual_path, char *host_path,
-                                           size_t host_path_len, enum vfs_backing_class cls) {
+static int vfs_join_backing_root_for_route(const struct vfs_route_entry *route,
+                                           const char *normalized_virtual_path, char *host_path,
+                                           size_t host_path_len) {
     const char *backing_root;
     const char *relative_suffix;
     size_t root_len;
     size_t suffix_len;
     size_t total_len;
 
-    if (!normalized_virtual_path || !host_path || host_path_len == 0) {
+    if (!route || !normalized_virtual_path || !host_path || host_path_len == 0) {
         return -EINVAL;
     }
 
-    backing_root = vfs_backing_root_for_class(cls);
+    backing_root = vfs_backing_root_for_class(route->backing_class);
     if (!backing_root) {
         /* Synthetic/external: no backing, return virtual path as-is or error */
         return -ENOTSUP;
     }
 
-    relative_suffix = vfs_backing_relative_suffix(normalized_virtual_path, cls);
+    relative_suffix = vfs_relative_suffix_for_route(route, normalized_virtual_path);
+    if (!relative_suffix) {
+        return -EINVAL;
+    }
+
     root_len = strlen(backing_root);
     suffix_len = strlen(relative_suffix);
 
@@ -252,14 +291,18 @@ static int vfs_join_backing_root_for_class(const char *normalized_virtual_path, 
 
 static int vfs_join_host_root(const char *normalized_virtual_path, char *host_path,
                               size_t host_path_len) {
-    enum vfs_backing_class cls;
+    const struct vfs_route_entry *route;
 
     if (vfs_ensure_backing_initialized() < 0) {
         return -ENOTSUP;
     }
 
-    cls = vfs_backing_class_for_path(normalized_virtual_path);
-    return vfs_join_backing_root_for_class(normalized_virtual_path, host_path, host_path_len, cls);
+    route = vfs_route_for_path(normalized_virtual_path);
+    if (!route) {
+        return -ENOENT;
+    }
+
+    return vfs_join_backing_root_for_route(route, normalized_virtual_path, host_path, host_path_len);
 }
 
 const char *vfs_host_backing_root(void) {
@@ -728,58 +771,60 @@ static int vfs_ensure_backing_initialized(void) {
 }
 
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) {
-    const char *suffix;
-    size_t root_len;
-    size_t cache_len;
-    size_t temp_len;
+    size_t i;
+    int ret;
 
     if (!host_path || !vpath || vpath_len == 0) {
         return -EINVAL;
     }
 
-    int ret = vfs_ensure_backing_initialized();
+    ret = vfs_ensure_backing_initialized();
     if (ret < 0) {
         return ret;
     }
 
-    /* Try persistent root */
-    root_len = strlen(vfs_persistent_root);
-    if (strncmp(host_path, vfs_persistent_root, root_len) == 0) {
-        suffix = host_path + root_len;
-        if (*suffix == '\0') {
-            return vfs_copy_string(vfs_virtual_root_path, vpath, vpath_len);
-        }
-        if (*suffix == '/') {
-            return vfs_normalize_linux_path(suffix, vpath, vpath_len);
-        }
-    }
+    for (i = 0; i < vfs_route_table_count; i++) {
+        const struct vfs_route_entry *route = &vfs_route_table[i];
+        const char *backing_root;
+        const char *host_suffix;
+        size_t root_len;
 
-    /* Try cache root */
-    cache_len = strlen(vfs_cache_root);
-    if (strncmp(host_path, vfs_cache_root, cache_len) == 0) {
-        const char *cache_suffix = host_path + cache_len;
-        /* /var/cache is mapped to the cache root */
-        if (*cache_suffix == '\0') {
-            return vfs_copy_string("/var/cache", vpath, vpath_len);
+        if (!route->reverse_linux_prefix) {
+            continue;
         }
-        if (*cache_suffix == '/') {
-            char work_buf[MAX_PATH];
-            snprintf(work_buf, sizeof(work_buf), "/var/cache%s", cache_suffix);
-            return vfs_normalize_linux_path(work_buf, vpath, vpath_len);
-        }
-    }
 
-    /* Try temp root */
-    temp_len = strlen(vfs_temp_root);
-    if (strncmp(host_path, vfs_temp_root, temp_len) == 0) {
-        const char *temp_suffix = host_path + temp_len;
-        /* /tmp is mapped to the temp root */
-        if (*temp_suffix == '\0') {
-            return vfs_copy_string("/tmp", vpath, vpath_len);
+        backing_root = vfs_backing_root_for_class(route->backing_class);
+        if (!backing_root) {
+            continue;
         }
-        if (*temp_suffix == '/') {
+
+        root_len = strlen(backing_root);
+        if (strncmp(host_path, backing_root, root_len) != 0) {
+            continue;
+        }
+
+        host_suffix = host_path + root_len;
+        if (*host_suffix != '\0' && *host_suffix != '/') {
+            continue;
+        }
+
+        if (strcmp(route->reverse_linux_prefix, "/") == 0) {
+            if (*host_suffix == '\0') {
+                return vfs_copy_string(vfs_virtual_root_path, vpath, vpath_len);
+            }
+            return vfs_normalize_linux_path(host_suffix, vpath, vpath_len);
+        }
+
+        if (*host_suffix == '\0') {
+            return vfs_copy_string(route->reverse_linux_prefix, vpath, vpath_len);
+        }
+
+        {
             char work_buf[MAX_PATH];
-            snprintf(work_buf, sizeof(work_buf), "/tmp%s", temp_suffix);
+            ret = snprintf(work_buf, sizeof(work_buf), "%s%s", route->reverse_linux_prefix, host_suffix);
+            if (ret < 0 || (size_t)ret >= sizeof(work_buf)) {
+                return -ENAMETOOLONG;
+            }
             return vfs_normalize_linux_path(work_buf, vpath, vpath_len);
         }
     }

@@ -176,6 +176,43 @@ extern int close(int fd);
                    @"/proc/meminfo should route to synthetic backing");
     XCTAssertEqual(vfs_backing_class_for_path(@"/sys/kernel".UTF8String), VFS_BACKING_SYNTHETIC,
                    @"/sys/kernel should route to synthetic backing");
+    XCTAssertEqual(vfs_backing_class_for_path(@"/dev/null".UTF8String), VFS_BACKING_SYNTHETIC,
+                   @"/dev/null should route to synthetic backing");
+}
+
+- (void)testPersistentFallbackRouteTranslatesAndReverseTranslates {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+    NSString *actualPath;
+    NSString *expectedPath;
+
+    ret = vfs_translate_path(@"/var/log/messages".UTF8String, host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"fallback persistent path should translate");
+
+    actualPath = [NSString stringWithUTF8String:host_path];
+    expectedPath = [NSString stringWithFormat:@"%s/var/log/messages", vfs_persistent_backing_root()];
+    XCTAssertEqualObjects(actualPath, expectedPath,
+                          @"fallback persistent route should join under persistent backing root");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"fallback persistent host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/var/log/messages",
+                          @"fallback persistent host path should map back through the route table");
+}
+
+- (void)testSyntheticRouteRejectsHostJoin {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path(@"/dev/null".UTF8String, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -ENOTSUP, @"synthetic route should not join to a host backing root");
+}
+
+- (void)testPersistentRootIsNotDocumentsTruth {
+    NSString *persistentRoot = [NSString stringWithUTF8String:vfs_persistent_backing_root()];
+
+    XCTAssertFalse([persistentRoot containsString:@"/Documents"],
+                   @"persistent backing root must not treat Documents as Linux root truth");
 }
 
 - (void)testPersistentBackingRootReverseTranslation {
