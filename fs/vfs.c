@@ -229,6 +229,16 @@ bool vfs_path_is_synthetic(const char *vpath) {
     return route != NULL && route->synthetic;
 }
 
+bool vfs_path_is_synthetic_root(const char *vpath) {
+    if (!vpath) {
+        return false;
+    }
+
+    return strcmp(vpath, "/proc") == 0 ||
+           strcmp(vpath, "/sys") == 0 ||
+           strcmp(vpath, "/dev") == 0;
+}
+
 /* Determine backing class from virtual Linux path */
 enum vfs_backing_class vfs_backing_class_for_path(const char *vpath) {
     const struct vfs_route_entry *route = vfs_route_for_path(vpath);
@@ -919,6 +929,9 @@ int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
     }
+    if (vfs_path_is_synthetic_root(pathname)) {
+        return 0;
+    }
     if (vfs_path_is_synthetic(pathname)) {
         return -ENOENT;
     }
@@ -948,6 +961,18 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
     ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_virtual, sizeof(resolved_virtual));
     if (ret != 0) {
         return ret;
+    }
+
+    if (vfs_path_is_synthetic_root(resolved_virtual)) {
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFDIR | 0555;
+        statbuf->st_nlink = 2;
+        statbuf->st_uid = 0;
+        statbuf->st_gid = 0;
+        statbuf->st_size = 0;
+        statbuf->st_blksize = 4096;
+        statbuf->st_blocks = 0;
+        return 0;
     }
 
     if (vfs_path_is_synthetic(resolved_virtual)) {
@@ -986,6 +1011,10 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
     ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_virtual, sizeof(resolved_virtual));
     if (ret != 0) {
         return ret;
+    }
+
+    if (vfs_path_is_synthetic_root(resolved_virtual)) {
+        return 0;
     }
 
     if (vfs_path_is_synthetic(resolved_virtual)) {

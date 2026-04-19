@@ -26,7 +26,7 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
     }
 
     if (vfs_path_is_synthetic(resolved_path)) {
-        errno = ENOENT;
+        errno = ENOTSUP;
         return -1;
     }
 
@@ -70,7 +70,7 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
     }
 
     if (vfs_path_is_synthetic(resolved_path)) {
-        errno = ENOENT;
+        errno = ENOTSUP;
         return -1;
     }
 

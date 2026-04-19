@@ -71,7 +71,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
     if (is_dir && get_fd_path_impl(entry, fd_path, sizeof(fd_path)) == 0 &&
         vfs_path_is_synthetic(fd_path)) {
         put_fd_entry_impl(entry);
-        errno = ENOENT;
+        errno = ENOTSUP;
         return -1;
     }
 

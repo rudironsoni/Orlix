@@ -591,35 +591,97 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
 }
 
-- (void)testSyntheticStatFamilyUsesTemporaryUnsupportedPolicy {
+- (void)testSyntheticRootStatSucceeds {
+    struct stat st;
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/proc".UTF8String, &st, 0), 0,
+                   @"synthetic root vfs_fstatat should succeed");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc root should be a directory");
+    XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc root should have 0555 permissions");
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys".UTF8String, &st, 0), 0,
+                   @"synthetic root vfs_fstatat should succeed for /sys");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/sys root should be a directory");
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/dev".UTF8String, &st, 0), 0,
+                   @"synthetic root vfs_fstatat should succeed for /dev");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/dev root should be a directory");
+
+    errno = 0;
+    XCTAssertEqual(stat(@"/proc".UTF8String, &st), 0,
+                   @"public stat should succeed for synthetic root");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"public stat should return directory for /proc");
+
+    errno = 0;
+    XCTAssertEqual(lstat(@"/sys".UTF8String, &st), 0,
+                   @"public lstat should succeed for synthetic root");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"public lstat should return directory for /sys");
+}
+
+- (void)testSyntheticChildStatFails {
     struct stat st;
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/proc/meminfo".UTF8String, &st, 0), -ENOENT,
-                   @"synthetic vfs_fstatat should reject through descriptor policy");
+                   @"synthetic child vfs_fstatat should reject through descriptor policy");
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys/kernel".UTF8String, &st, TEST_AT_SYMLINK_NOFOLLOW), -ENOENT,
-                   @"synthetic vfs_fstatat lstat path should reject through descriptor policy");
+                   @"synthetic child vfs_fstatat lstat path should reject through descriptor policy");
 
     errno = 0;
     XCTAssertEqual(stat(@"/proc/meminfo".UTF8String, &st), -1,
-                   @"public stat should surface temporary synthetic rejection");
-    XCTAssertEqual(errno, ENOENT, @"public stat should set ENOENT for unsupported synthetic paths");
+                   @"public stat should reject unsupported synthetic child paths");
+    XCTAssertEqual(errno, ENOENT, @"public stat should set ENOENT for unsupported synthetic child paths");
 
     errno = 0;
     XCTAssertEqual(lstat(@"/sys/kernel".UTF8String, &st), -1,
-                   @"public lstat should surface temporary synthetic rejection");
-    XCTAssertEqual(errno, ENOENT, @"public lstat should set ENOENT for unsupported synthetic paths");
+                   @"public lstat should reject unsupported synthetic child paths");
+    XCTAssertEqual(errno, ENOENT, @"public lstat should set ENOENT for unsupported synthetic child paths");
 }
 
-- (void)testSyntheticOpenUsesTemporaryUnsupportedPolicy {
+- (void)testSyntheticRootAccessSucceeds {
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, @"/proc".UTF8String, F_OK, 0), 0,
+                   @"synthetic root vfs_faccessat should succeed");
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, @"/sys".UTF8String, F_OK, 0), 0,
+                   @"synthetic root vfs_faccessat should succeed for /sys");
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, @"/dev".UTF8String, F_OK, 0), 0,
+                   @"synthetic root vfs_faccessat should succeed for /dev");
+
+    errno = 0;
+    XCTAssertEqual(access(@"/proc".UTF8String, F_OK), 0,
+                   @"public access should succeed for synthetic root");
+}
+
+- (void)testSyntheticChildAccessFails {
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, @"/proc/meminfo".UTF8String, F_OK, 0), -ENOENT,
+                   @"synthetic child vfs_faccessat should reject through descriptor policy");
+
+    errno = 0;
+    XCTAssertEqual(access(@"/dev/null".UTF8String, F_OK), -1,
+                   @"public access should reject unsupported synthetic child routes");
+    XCTAssertEqual(errno, ENOENT, @"public access should set ENOENT for unsupported synthetic child routes");
+}
+
+- (void)testSyntheticRootOpenFails {
+    errno = 0;
+    XCTAssertEqual(open(@"/proc".UTF8String, O_RDONLY | O_DIRECTORY), -1,
+                   @"public open should reject synthetic root (not yet implemented)");
+    XCTAssertEqual(errno, ENOTSUP, @"public open should set ENOTSUP for synthetic root");
+
+    errno = 0;
+    XCTAssertEqual(open(@"/sys".UTF8String, O_RDONLY | O_DIRECTORY), -1,
+                   @"public open should reject synthetic root /sys");
+    XCTAssertEqual(errno, ENOTSUP, @"public open should set ENOTSUP for synthetic root /sys");
+}
+
+- (void)testSyntheticChildOpenFails {
     errno = 0;
     XCTAssertEqual(open(@"/dev/null".UTF8String, O_RDONLY), -1,
-                   @"public open should reject unsupported synthetic routes before host fallback");
-    XCTAssertEqual(errno, ENOENT, @"public open should set ENOENT for unsupported synthetic routes");
+                   @"public open should reject unsupported synthetic child routes");
+    XCTAssertEqual(errno, ENOTSUP, @"public open should set ENOTSUP for unsupported synthetic child routes");
 
     errno = 0;
     XCTAssertEqual(openat(AT_FDCWD, @"/proc/meminfo".UTF8String, O_RDONLY), -1,
                    @"public openat should reject unsupported synthetic routes before host fallback");
-    XCTAssertEqual(errno, ENOENT, @"public openat should set ENOENT for unsupported synthetic routes");
+    XCTAssertEqual(errno, ENOTSUP, @"public openat should set ENOTSUP for unsupported synthetic routes");
 }
 
 - (void)testSyntheticGetdentsUsesTemporaryUnsupportedPolicy {
@@ -647,22 +709,45 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
     errno = 0;
     XCTAssertEqual(getdents64(dirfd, buffer, sizeof(buffer)), -1,
-                   @"getdents64 should reject synthetic directories before host fallback");
-    XCTAssertEqual(errno, ENOENT, @"getdents64 should set ENOENT for unsupported synthetic directories");
+                   @"getdents64 should reject synthetic directories (not yet implemented)");
+    XCTAssertEqual(errno, ENOTSUP, @"getdents64 should set ENOTSUP for synthetic directories");
 
     free_fd_impl(dirfd);
     vfs_test_remove_linux_path(@"/tmp/synthetic-dirfd-anchor/file".UTF8String);
 }
 
-- (void)testSyntheticFaccessatUsesTemporaryUnsupportedPolicy {
-    XCTAssertEqual(vfs_faccessat(AT_FDCWD, @"/dev/null".UTF8String, F_OK, 0), -ENOENT,
-                   @"synthetic vfs_faccessat should reject through descriptor policy");
+- (void)testSyntheticGetdentsUsesIntentionalUnsupportedPolicy {
+    char host_dir[MAX_PATH];
+    int real_fd;
+    int dirfd;
+    char buffer[256];
+
+    XCTAssertEqual(vfs_translate_path(@"/tmp/getdents-anchor".UTF8String, host_dir, sizeof(host_dir)), 0,
+                   @"anchor directory should translate");
+    vfs_test_ensure_virtual_parent_directory(@"/tmp/getdents-anchor/file".UTF8String);
+
+    real_fd = vfs_test_open_host_directory_fd(host_dir);
+    XCTAssertTrue(real_fd >= 0, @"host anchor directory open should succeed");
+    if (real_fd < 0) return;
+
+    dirfd = alloc_fd_impl();
+    XCTAssertTrue(dirfd >= 0, @"synthetic dirfd allocation should succeed");
+    if (dirfd < 0) {
+        close(real_fd);
+        return;
+    }
+
+    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/proc".UTF8String);
 
     errno = 0;
-    XCTAssertEqual(access(@"/dev/null".UTF8String, F_OK), -1,
-                   @"public access should reject unsupported synthetic routes");
-    XCTAssertEqual(errno, ENOENT, @"public access should set ENOENT for unsupported synthetic routes");
+    XCTAssertEqual(getdents64(dirfd, buffer, sizeof(buffer)), -1,
+                   @"getdents64 should reject synthetic directories (not yet implemented)");
+    XCTAssertEqual(errno, ENOTSUP, @"getdents64 should set ENOTSUP for synthetic directories");
+
+    free_fd_impl(dirfd);
+    vfs_test_remove_linux_path(@"/tmp/getdents-anchor/file".UTF8String);
 }
+
 
 - (void)testVfsFaccessatSupportsAtFdcwd {
     int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, 0);
