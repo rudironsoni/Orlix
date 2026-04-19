@@ -257,11 +257,37 @@ static int vfs_test_open_host_directory_fd(const char *host_path) {
     XCTAssertEqual(ret, -ENOTSUP, @"synthetic route should not join to a host backing root");
 }
 
+- (void)testDescriptorDrivenPathClassification {
+    XCTAssertEqual(path_classify(@"/proc/meminfo".UTF8String), PATH_VIRTUAL_LINUX,
+                   @"synthetic routes should classify through descriptor lookup");
+    XCTAssertEqual(path_classify(@"/sys/kernel".UTF8String), PATH_VIRTUAL_LINUX,
+                   @"sys routes should classify through descriptor lookup");
+    XCTAssertEqual(path_classify(@"/dev/null".UTF8String), PATH_VIRTUAL_LINUX,
+                   @"dev routes should classify through descriptor lookup");
+    XCTAssertEqual(path_classify(@"/private/var/mobile/file".UTF8String), PATH_ABSOLUTE_HOST,
+                   @"non-route absolute paths should remain host paths");
+}
+
+- (void)testDescriptorDrivenVirtualLinuxDetection {
+    XCTAssertTrue(path_is_virtual_linux(@"/tmp/demo".UTF8String),
+                  @"tmp route should be recognized as Linux-visible");
+    XCTAssertTrue(path_is_virtual_linux(@"/var/tmp/demo".UTF8String),
+                  @"var/tmp route should remain a distinct Linux-visible route");
+    XCTAssertTrue(path_is_virtual_linux(@"/run/demo".UTF8String),
+                  @"run route should remain a distinct Linux-visible route");
+    XCTAssertTrue(path_is_virtual_linux(@"relative/demo".UTF8String),
+                  @"relative paths should stay Linux-visible by context");
+    XCTAssertFalse(path_is_virtual_linux(@"/private/var/mobile/file".UTF8String),
+                   @"absolute host paths outside route descriptors should not classify as Linux-visible");
+}
+
 - (void)testPersistentRootIsNotDocumentsTruth {
     NSString *persistentRoot = [NSString stringWithUTF8String:vfs_persistent_backing_root()];
 
     XCTAssertFalse([persistentRoot containsString:@"/Documents"],
                    @"persistent backing root must not treat Documents as Linux root truth");
+    XCTAssertFalse(path_is_own_sandbox(@"/Documents/example.txt".UTF8String),
+                   @"Documents path fragments must not become Linux root truth through sandbox heuristics");
 }
 
 - (void)testPersistentBackingRootReverseTranslation {

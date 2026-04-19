@@ -219,6 +219,16 @@ int vfs_describe_route_for_path(const char *vpath, enum vfs_route_identity *rout
     return 0;
 }
 
+bool vfs_path_is_linux_route(const char *vpath) {
+    return vfs_route_for_path(vpath) != NULL;
+}
+
+bool vfs_path_is_synthetic(const char *vpath) {
+    const struct vfs_route_entry *route = vfs_route_for_path(vpath);
+
+    return route != NULL && route->synthetic;
+}
+
 /* Determine backing class from virtual Linux path */
 enum vfs_backing_class vfs_backing_class_for_path(const char *vpath) {
     const struct vfs_route_entry *route = vfs_route_for_path(vpath);

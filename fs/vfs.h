@@ -225,6 +225,8 @@ const char *vfs_virtual_root(void);
 enum vfs_backing_class vfs_backing_class_for_path(const char *vpath);
 int vfs_describe_route_for_path(const char *vpath, enum vfs_route_identity *route_id,
                                 enum vfs_backing_class *backing_class, bool *reversible);
+bool vfs_path_is_linux_route(const char *vpath);
+bool vfs_path_is_synthetic(const char *vpath);
 const char *vfs_backing_root_for_class(enum vfs_backing_class cls);
 
 /* Backing root accessors for different storage classes */

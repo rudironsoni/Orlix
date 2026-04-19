@@ -21,30 +21,53 @@
  * PATH CLASSIFICATION
  * ============================================================================ */
 
+static bool path_is_known_host_absolute_impl(const char *path) {
+    if (!path || path[0] != '/') {
+        return false;
+    }
+
+    if (strncmp(path, "/private/", 9) == 0) {
+        return true;
+    }
+    if (strncmp(path, "/var/mobile/", 12) == 0) {
+        return true;
+    }
+    if (strncmp(path, "/Users/", 7) == 0) {
+        return true;
+    }
+    if (strncmp(path, "/Volumes/", 9) == 0) {
+        return true;
+    }
+
+    return false;
+}
+
 path_type_t path_classify(const char *path) {
     if (!path || path[0] == '\0') {
         return PATH_INVALID;
     }
 
-    /* Virtual Linux paths start with / but map to virtual filesystem */
-    if (path[0] == '/') {
-        /* Check if it's a known virtual Linux path prefix */
-        if (strcmp(path, "/") == 0 || strncmp(path, "/bin/", 5) == 0 ||
-            strncmp(path, "/sbin/", 6) == 0 || strncmp(path, "/usr/", 5) == 0 ||
-            strncmp(path, "/lib/", 5) == 0 || strncmp(path, "/lib64/", 7) == 0 ||
-            strncmp(path, "/etc/", 5) == 0 || strncmp(path, "/var/", 5) == 0 ||
-            strncmp(path, "/home/", 6) == 0 || strncmp(path, "/root/", 6) == 0 ||
-            strncmp(path, "/tmp/", 5) == 0 || strncmp(path, "/dev/", 5) == 0 ||
-            strncmp(path, "/proc/", 6) == 0 || strncmp(path, "/sys/", 5) == 0) {
-            return PATH_VIRTUAL_LINUX;
-        }
+    if (path[0] != '/') {
+        return PATH_VIRTUAL_LINUX;
+    }
 
-        /* Otherwise it's an absolute host path */
+    if (path_is_known_host_absolute_impl(path)) {
         return PATH_ABSOLUTE_HOST;
     }
 
-    /* Relative paths are classified based on context - default to virtual */
-    return PATH_VIRTUAL_LINUX;
+    if (path_is_external(path)) {
+        return PATH_EXTERNAL;
+    }
+
+    if (path_is_own_sandbox(path)) {
+        return PATH_OWN_SANDBOX;
+    }
+
+    if (vfs_path_is_linux_route(path)) {
+        return PATH_VIRTUAL_LINUX;
+    }
+
+    return PATH_ABSOLUTE_HOST;
 }
 
 /* ============================================================================
@@ -362,49 +385,7 @@ bool path_is_virtual_linux(const char *path) {
     if (!path || !*path)
         return false;
 
-    /* Virtual Linux path prefixes */
-    if (strncmp(path, "/home/", 6) == 0)
-        return true;
-    if (strcmp(path, "/home") == 0)
-        return true;
-    if (strncmp(path, "/tmp/", 5) == 0)
-        return true;
-    if (strcmp(path, "/tmp") == 0)
-        return true;
-    if (strncmp(path, "/etc/", 5) == 0)
-        return true;
-    if (strcmp(path, "/etc") == 0)
-        return true;
-    if (strncmp(path, "/var/", 5) == 0)
-        return true;
-    if (strcmp(path, "/var") == 0)
-        return true;
-    if (strncmp(path, "/usr/", 5) == 0)
-        return true;
-    if (strcmp(path, "/usr") == 0)
-        return true;
-    if (strncmp(path, "/bin/", 5) == 0)
-        return true;
-    if (strcmp(path, "/bin") == 0)
-        return true;
-    if (strncmp(path, "/sbin/", 6) == 0)
-        return true;
-    if (strcmp(path, "/sbin") == 0)
-        return true;
-    if (strncmp(path, "/lib/", 5) == 0)
-        return true;
-    if (strcmp(path, "/lib") == 0)
-        return true;
-    if (strncmp(path, "/root/", 6) == 0)
-        return true;
-    if (strcmp(path, "/root") == 0)
-        return true;
-    if (strncmp(path, "/dev/", 5) == 0)
-        return true;
-    if (strcmp(path, "/dev") == 0)
-        return true;
-
-    return false;
+    return path_classify(path) == PATH_VIRTUAL_LINUX;
 }
 
 /* Check if path is within own app sandbox */
@@ -426,13 +407,7 @@ bool path_is_own_sandbox(const char *path) {
 
     /* Also check common writable locations that are always accessible */
     /* These are subdirectories that might be passed without full sandbox path */
-    if (strstr(path, "/Documents/") || strstr(path, "/Documents")) {
-        return true;
-    }
     if (strstr(path, "/Library/") || strstr(path, "/Library")) {
-        return true;
-    }
-    if (strstr(path, "/tmp/") || strstr(path, "/tmp")) {
         return true;
     }
 
@@ -461,8 +436,8 @@ bool path_is_external(const char *path) {
         return true;
     }
 
-    /* If it's not virtual Linux and not own sandbox, treat as external */
-    if (!path_is_virtual_linux(path) && !path_is_own_sandbox(path)) {
+    /* If it's not a Linux-visible route and not own sandbox, treat as external */
+    if (!vfs_path_is_linux_route(path) && !path_is_own_sandbox(path)) {
         /* This is a catch-all for paths we can't categorize */
         /* The iOS kernel will ultimately enforce permissions */
         return true;
