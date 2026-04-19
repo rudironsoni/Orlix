@@ -34,6 +34,55 @@ extern int dup2(int oldfd, int newfd);
 extern int dup3(int oldfd, int newfd, int flags);
 extern int close(int fd);
 
+static void vfs_test_translate_virtual_path(const char *path, char *host_path, size_t host_path_len) {
+    int ret = vfs_translate_path(path, host_path, host_path_len);
+    XCTAssertEqual(ret, 0, @"path should translate for %s", path);
+}
+
+static void vfs_test_ensure_virtual_parent_directory(const char *path) {
+    char host_path[MAX_PATH];
+    NSString *parentPath;
+    NSError *error = nil;
+
+    vfs_test_translate_virtual_path(path, host_path, sizeof(host_path));
+    parentPath = [[NSString stringWithUTF8String:host_path] stringByDeletingLastPathComponent];
+    XCTAssertTrue([[NSFileManager defaultManager] createDirectoryAtPath:parentPath
+                                           withIntermediateDirectories:YES
+                                                            attributes:nil
+                                                                 error:&error],
+                  @"parent directory setup should succeed for %s: %@", path, error);
+}
+
+static void vfs_test_seed_linux_file(const char *path) {
+    char host_path[MAX_PATH];
+    int fd;
+
+    vfs_test_ensure_virtual_parent_directory(path);
+    vfs_test_translate_virtual_path(path, host_path, sizeof(host_path));
+    fd = host_open_impl(host_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    XCTAssertTrue(fd >= 0, @"file setup should succeed for %s", path);
+    if (fd >= 0) {
+        host_close_impl(fd);
+    }
+}
+
+static void vfs_test_remove_linux_path(const char *path) {
+    char host_path[MAX_PATH];
+    NSString *hostPath;
+    NSError *error = nil;
+
+    vfs_test_translate_virtual_path(path, host_path, sizeof(host_path));
+    hostPath = [NSString stringWithUTF8String:host_path];
+    if (![[NSFileManager defaultManager] removeItemAtPath:hostPath error:&error]) {
+        XCTAssertTrue(error == nil || error.code == NSFileNoSuchFileError,
+                      @"cleanup should tolerate missing path for %s: %@", path, error);
+    }
+}
+
+static int vfs_test_open_host_directory_fd(const char *host_path) {
+    return host_open_impl(host_path, O_RDONLY | O_DIRECTORY, 0);
+}
+
 @interface VFSPathTests : XCTestCase
 @end
 
@@ -509,30 +558,208 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
  * RENAME-FAMILY SEMANTICS TESTS
  * ============================================================================ */
 
+- (void)testRenameAllowsSameRoutePersistentMove {
+    int ret;
+    char src[MAX_PATH];
+    char dst[MAX_PATH];
+
+    ret = vfs_translate_path(@"/etc/rename-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"persistent source should translate");
+    ret = vfs_translate_path(@"/etc/rename-dst".UTF8String, dst, sizeof(dst));
+    XCTAssertEqual(ret, 0, @"persistent destination should translate");
+
+    vfs_test_seed_linux_file(@"/etc/rename-src".UTF8String);
+    vfs_test_remove_linux_path(@"/etc/rename-dst".UTF8String);
+
+    ret = rename(@"/etc/rename-src".UTF8String, @"/etc/rename-dst".UTF8String);
+    XCTAssertEqual(ret, 0, @"same-route persistent rename should succeed");
+    XCTAssertEqual(access(src, F_OK), -1, @"source should be moved away");
+    XCTAssertEqual(access(dst, F_OK), 0, @"destination should exist after rename");
+
+    vfs_test_remove_linux_path(@"/etc/rename-src".UTF8String);
+    vfs_test_remove_linux_path(@"/etc/rename-dst".UTF8String);
+}
+
+- (void)testRenameAllowsSameRouteCacheMove {
+    int ret;
+    char src[MAX_PATH];
+    char dst[MAX_PATH];
+
+    ret = vfs_translate_path(@"/var/cache/rename-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"cache source should translate");
+    ret = vfs_translate_path(@"/var/cache/rename-dst".UTF8String, dst, sizeof(dst));
+    XCTAssertEqual(ret, 0, @"cache destination should translate");
+
+    vfs_test_seed_linux_file(@"/var/cache/rename-src".UTF8String);
+    vfs_test_remove_linux_path(@"/var/cache/rename-dst".UTF8String);
+
+    ret = rename(@"/var/cache/rename-src".UTF8String, @"/var/cache/rename-dst".UTF8String);
+    XCTAssertEqual(ret, 0, @"same-route cache rename should succeed");
+    XCTAssertEqual(access(src, F_OK), -1, @"cache source should be moved away");
+    XCTAssertEqual(access(dst, F_OK), 0, @"cache destination should exist after rename");
+
+    vfs_test_remove_linux_path(@"/var/cache/rename-src".UTF8String);
+    vfs_test_remove_linux_path(@"/var/cache/rename-dst".UTF8String);
+}
+
+- (void)testRenameAllowsSameRouteTmpMove {
+    int ret;
+    char src[MAX_PATH];
+    char dst[MAX_PATH];
+
+    ret = vfs_translate_path(@"/tmp/rename-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"tmp source should translate");
+    ret = vfs_translate_path(@"/tmp/rename-dst".UTF8String, dst, sizeof(dst));
+    XCTAssertEqual(ret, 0, @"tmp destination should translate");
+
+    vfs_test_seed_linux_file(@"/tmp/rename-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/rename-dst".UTF8String);
+
+    ret = rename(@"/tmp/rename-src".UTF8String, @"/tmp/rename-dst".UTF8String);
+    XCTAssertEqual(ret, 0, @"same-route tmp rename should succeed");
+    XCTAssertEqual(access(src, F_OK), -1, @"tmp source should be moved away");
+    XCTAssertEqual(access(dst, F_OK), 0, @"tmp destination should exist after rename");
+
+    vfs_test_remove_linux_path(@"/tmp/rename-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/rename-dst".UTF8String);
+}
+
+- (void)testRenameRejectsPersistentToTempCrossRoute {
+    vfs_test_seed_linux_file(@"/etc/cross-route-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/cross-route-dst".UTF8String);
+
+    int ret = rename(@"/etc/cross-route-src".UTF8String, @"/tmp/cross-route-dst".UTF8String);
+    XCTAssertEqual(ret, -1, @"persistent to temp rename should fail");
+    XCTAssertEqual(errno, EXDEV, @"persistent to temp rename should return EXDEV");
+
+    vfs_test_remove_linux_path(@"/etc/cross-route-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/cross-route-dst".UTF8String);
+}
+
+- (void)testRenameRejectsCacheToPersistentCrossRoute {
+    vfs_test_seed_linux_file(@"/var/cache/cross-route-src".UTF8String);
+    vfs_test_remove_linux_path(@"/etc/cross-route-dst".UTF8String);
+
+    int ret = rename(@"/var/cache/cross-route-src".UTF8String, @"/etc/cross-route-dst".UTF8String);
+    XCTAssertEqual(ret, -1, @"cache to persistent rename should fail");
+    XCTAssertEqual(errno, EXDEV, @"cache to persistent rename should return EXDEV");
+
+    vfs_test_remove_linux_path(@"/var/cache/cross-route-src".UTF8String);
+    vfs_test_remove_linux_path(@"/etc/cross-route-dst".UTF8String);
+}
+
+- (void)testRenameRejectsTmpToVarTmpCrossRoute {
+    vfs_test_seed_linux_file(@"/tmp/cross-route-src".UTF8String);
+    vfs_test_remove_linux_path(@"/var/tmp/cross-route-dst".UTF8String);
+
+    int ret = rename(@"/tmp/cross-route-src".UTF8String, @"/var/tmp/cross-route-dst".UTF8String);
+    XCTAssertEqual(ret, -1, @"tmp to var/tmp rename should fail");
+    XCTAssertEqual(errno, EXDEV, @"tmp to var/tmp rename should return EXDEV");
+
+    vfs_test_remove_linux_path(@"/tmp/cross-route-src".UTF8String);
+    vfs_test_remove_linux_path(@"/var/tmp/cross-route-dst".UTF8String);
+}
+
+- (void)testRenameRejectsTmpToRunCrossRoute {
+    vfs_test_seed_linux_file(@"/tmp/cross-route-run-src".UTF8String);
+    vfs_test_remove_linux_path(@"/run/cross-route-run-dst".UTF8String);
+
+    int ret = rename(@"/tmp/cross-route-run-src".UTF8String, @"/run/cross-route-run-dst".UTF8String);
+    XCTAssertEqual(ret, -1, @"tmp to run rename should fail");
+    XCTAssertEqual(errno, EXDEV, @"tmp to run rename should return EXDEV");
+
+    vfs_test_remove_linux_path(@"/tmp/cross-route-run-src".UTF8String);
+    vfs_test_remove_linux_path(@"/run/cross-route-run-dst".UTF8String);
+}
+
 - (void)testRenameAtUsesDirfdForOldAndNewRelativePaths {
-    // IXLand's open() now uses vfs_open which correctly translates flags and calls host open()
-    // This test verifies dirfd-relative path resolution works end-to-end
-    // Skip if host open() fails (sandbox constraints in test environment)
-    NSLog(@"SKIP: testRenameAtUsesDirfdForOldAndNewRelativePaths - full end-to-end test requires host directory access from test");
+    int real_fd;
+    int dirfd;
+    char host_dir[MAX_PATH];
+    char host_dst[MAX_PATH];
+
+    XCTAssertEqual(vfs_translate_path(@"/tmp/dirfd-old".UTF8String, host_dir, sizeof(host_dir)), 0,
+                   @"dirfd source directory should translate");
+    XCTAssertEqual(vfs_translate_path(@"/tmp/dirfd-new".UTF8String, host_dst, sizeof(host_dst)), 0,
+                   @"dirfd destination directory should translate");
+
+    vfs_test_ensure_virtual_parent_directory(@"/tmp/dirfd-old/file".UTF8String);
+    vfs_test_ensure_virtual_parent_directory(@"/tmp/dirfd-new/file".UTF8String);
+    vfs_test_seed_linux_file(@"/tmp/dirfd-old/file".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/dirfd-new/file".UTF8String);
+
+    real_fd = vfs_test_open_host_directory_fd(host_dir);
+    XCTAssertTrue(real_fd >= 0, @"host directory open should succeed");
+    if (real_fd < 0) return;
+
+    dirfd = alloc_fd_impl();
+    XCTAssertTrue(dirfd >= 0, @"dirfd allocation should succeed");
+    if (dirfd < 0) {
+        close(real_fd);
+        return;
+    }
+
+    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp/dirfd-old".UTF8String);
+
+    XCTAssertEqual(renameat(dirfd, @"file".UTF8String, AT_FDCWD, @"/tmp/dirfd-new/file".UTF8String), 0,
+                   @"dirfd relative rename within same route should succeed");
+    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", host_dir] UTF8String], F_OK), -1,
+                   @"dirfd source should be moved away");
+    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", host_dst] UTF8String], F_OK), 0,
+                   @"dirfd destination should exist after rename");
+
+    vfs_test_remove_linux_path(@"/tmp/dirfd-old/file".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/dirfd-new/file".UTF8String);
+    free_fd_impl(dirfd);
 }
 
 - (void)testRenameAtSupportsAtFdcwd {
-    /* Test requires vfs_open implementation - currently a stub returning ENOSYS */
-    /* Skipping because openat() returns -ENOSYS which cannot resolve AT_FDCWD paths */
-    NSLog(@"SKIP: testRenameAtSupportsAtFdcwd - requires vfs_open implementation");
+    vfs_test_seed_linux_file(@"/tmp/at-fdcwd-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/at-fdcwd-dst".UTF8String);
+
+    XCTAssertEqual(renameat(AT_FDCWD, @"/tmp/at-fdcwd-src".UTF8String, AT_FDCWD, @"/tmp/at-fdcwd-dst".UTF8String), 0,
+                   @"AT_FDCWD rename within same route should succeed");
+    vfs_test_remove_linux_path(@"/tmp/at-fdcwd-src".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/at-fdcwd-dst".UTF8String);
 }
 
 - (void)testRenameAtInvalidDirfdReturnsEbadf {
+
     int ret = renameat(9999, @"old".UTF8String, AT_FDCWD, @"new".UTF8String);
     XCTAssertEqual(ret, -1, @"renameat should fail for invalid old dirfd");
     XCTAssertEqual(errno, EBADF, @"invalid old dirfd should return EBADF");
 }
 
 - (void)testRenameAtNonDirectoryDirfdReturnsEnotdir {
-    /* Test requires open() working which relies on vfs_open - currently ENOSYS */
-    /* Skipping because we cannot set up file-based dirfd without open support */
-    /* The implementation logic exists and is tested via code inspection */
-    NSLog(@"SKIP: testRenameAtNonDirectoryDirfdReturnsEnotdir - requires vfs_open implementation");
+    int real_fd;
+    int dirfd;
+    char host_path[MAX_PATH];
+
+    XCTAssertEqual(vfs_translate_path(@"/tmp/not-a-dir".UTF8String, host_path, sizeof(host_path)), 0,
+                   @"non-directory path should translate");
+    vfs_test_seed_linux_file(@"/tmp/not-a-dir".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/unused".UTF8String);
+
+    real_fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(real_fd >= 0, @"host file open should succeed");
+    if (real_fd < 0) return;
+
+    dirfd = alloc_fd_impl();
+    XCTAssertTrue(dirfd >= 0, @"dirfd allocation should succeed");
+    if (dirfd < 0) {
+        close(real_fd);
+        return;
+    }
+
+    init_fd_entry_impl(dirfd, real_fd, O_RDONLY, 0644, host_path);
+
+    XCTAssertEqual(renameat(dirfd, @"child".UTF8String, AT_FDCWD, @"/tmp/unused".UTF8String), -1,
+                   @"non-directory dirfd should fail");
+    XCTAssertEqual(errno, ENOTDIR, @"non-directory dirfd should return ENOTDIR");
+
+    free_fd_impl(dirfd);
+    vfs_test_remove_linux_path(@"/tmp/not-a-dir".UTF8String);
+    vfs_test_remove_linux_path(@"/tmp/unused".UTF8String);
 }
 
 - (void)testRenameAt2NoReplaceRejectsExistingTarget {

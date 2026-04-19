@@ -30,6 +30,7 @@ ssize_t host_pread_impl(int fd, void *buf, size_t count, off_t offset);
 ssize_t host_pwrite_impl(int fd, const void *buf, size_t count, off_t offset);
 ssize_t host_readv_impl(int fd, const struct iovec *iov, int iovcnt);
 ssize_t host_writev_impl(int fd, const struct iovec *iov, int iovcnt);
+int host_ensure_directory_impl(const char *path, mode_t mode);
 
 #ifdef __cplusplus
 }

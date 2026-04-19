@@ -45,6 +45,7 @@ static char vfs_temp_root[MAX_PATH] = {0};
 static int vfs_backing_initialized = 0;
 
 struct vfs_route_entry {
+    enum vfs_route_identity route_id;
     const char *linux_prefix;
     enum vfs_backing_class backing_class;
     bool synthetic;
@@ -53,19 +54,19 @@ struct vfs_route_entry {
 };
 
 static const struct vfs_route_entry vfs_route_table[] = {
-    {"/var/cache", VFS_BACKING_CACHE, false, true, "/var/cache"},
-    {"/tmp", VFS_BACKING_TEMP, false, true, "/tmp"},
-    {"/var/tmp", VFS_BACKING_TEMP, false, true, NULL},
-    {"/run", VFS_BACKING_TEMP, false, true, NULL},
-    {"/proc", VFS_BACKING_SYNTHETIC, true, false, NULL},
-    {"/sys", VFS_BACKING_SYNTHETIC, true, false, NULL},
-    {"/dev", VFS_BACKING_SYNTHETIC, true, false, NULL},
-    {"/etc", VFS_BACKING_PERSISTENT, false, false, NULL},
-    {"/usr", VFS_BACKING_PERSISTENT, false, false, NULL},
-    {"/var/lib", VFS_BACKING_PERSISTENT, false, false, NULL},
-    {"/home", VFS_BACKING_PERSISTENT, false, false, NULL},
-    {"/root", VFS_BACKING_PERSISTENT, false, false, NULL},
-    {"/", VFS_BACKING_PERSISTENT, false, false, "/"},
+    {VFS_ROUTE_VAR_CACHE, "/var/cache", VFS_BACKING_CACHE, false, true, "/var/cache"},
+    {VFS_ROUTE_TMP, "/tmp", VFS_BACKING_TEMP, false, true, "/tmp"},
+    {VFS_ROUTE_VAR_TMP, "/var/tmp", VFS_BACKING_TEMP, false, true, NULL},
+    {VFS_ROUTE_RUN, "/run", VFS_BACKING_TEMP, false, true, NULL},
+    {VFS_ROUTE_PROC, "/proc", VFS_BACKING_SYNTHETIC, true, false, NULL},
+    {VFS_ROUTE_SYS, "/sys", VFS_BACKING_SYNTHETIC, true, false, NULL},
+    {VFS_ROUTE_DEV, "/dev", VFS_BACKING_SYNTHETIC, true, false, NULL},
+    {VFS_ROUTE_ETC, "/etc", VFS_BACKING_PERSISTENT, false, false, "/etc"},
+    {VFS_ROUTE_USR, "/usr", VFS_BACKING_PERSISTENT, false, false, "/usr"},
+    {VFS_ROUTE_VAR_LIB, "/var/lib", VFS_BACKING_PERSISTENT, false, false, "/var/lib"},
+    {VFS_ROUTE_HOME, "/home", VFS_BACKING_PERSISTENT, false, false, "/home"},
+    {VFS_ROUTE_ROOT_HOME, "/root", VFS_BACKING_PERSISTENT, false, false, "/root"},
+    {VFS_ROUTE_PERSISTENT_ROOT, "/", VFS_BACKING_PERSISTENT, false, false, "/"},
 };
 
 static const size_t vfs_route_table_count = sizeof(vfs_route_table) / sizeof(vfs_route_table[0]);
@@ -195,6 +196,27 @@ static const char *vfs_relative_suffix_for_route(const struct vfs_route_entry *r
     }
 
     return normalized_virtual_path + strlen(route->linux_prefix);
+}
+
+int vfs_describe_route_for_path(const char *vpath, enum vfs_route_identity *route_id,
+                                enum vfs_backing_class *backing_class, bool *reversible) {
+    const struct vfs_route_entry *route = vfs_route_for_path(vpath);
+
+    if (!route) {
+        return -ENOENT;
+    }
+
+    if (route_id) {
+        *route_id = route->route_id;
+    }
+    if (backing_class) {
+        *backing_class = route->backing_class;
+    }
+    if (reversible) {
+        *reversible = route->reverse_linux_prefix != NULL;
+    }
+
+    return 0;
 }
 
 /* Determine backing class from virtual Linux path */
@@ -771,6 +793,9 @@ static int vfs_ensure_backing_initialized(void) {
 }
 
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) {
+    const struct vfs_route_entry *best_route = NULL;
+    const char *best_host_suffix = NULL;
+    size_t best_prefix_len = 0;
     size_t i;
     int ret;
 
@@ -788,6 +813,8 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
         const char *backing_root;
         const char *host_suffix;
         size_t root_len;
+        size_t prefix_len;
+        char route_host_prefix[MAX_PATH];
 
         if (!route->reverse_linux_prefix) {
             continue;
@@ -799,37 +826,59 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
         }
 
         root_len = strlen(backing_root);
-        if (strncmp(host_path, backing_root, root_len) != 0) {
+        if (route->strip_linux_prefix || strcmp(route->reverse_linux_prefix, "/") == 0) {
+            if (vfs_copy_string(backing_root, route_host_prefix, sizeof(route_host_prefix)) != 0) {
+                continue;
+            }
+        } else {
+            ret = snprintf(route_host_prefix, sizeof(route_host_prefix), "%s%s", backing_root,
+                           route->reverse_linux_prefix);
+            if (ret < 0 || (size_t)ret >= sizeof(route_host_prefix)) {
+                continue;
+            }
+        }
+
+        prefix_len = strlen(route_host_prefix);
+        if (strncmp(host_path, route_host_prefix, prefix_len) != 0) {
             continue;
         }
 
-        host_suffix = host_path + root_len;
+        host_suffix = host_path + prefix_len;
         if (*host_suffix != '\0' && *host_suffix != '/') {
             continue;
         }
 
-        if (strcmp(route->reverse_linux_prefix, "/") == 0) {
-            if (*host_suffix == '\0') {
-                return vfs_copy_string(vfs_virtual_root_path, vpath, vpath_len);
-            }
-            return vfs_normalize_linux_path(host_suffix, vpath, vpath_len);
-        }
-
-        if (*host_suffix == '\0') {
-            return vfs_copy_string(route->reverse_linux_prefix, vpath, vpath_len);
-        }
-
-        {
-            char work_buf[MAX_PATH];
-            ret = snprintf(work_buf, sizeof(work_buf), "%s%s", route->reverse_linux_prefix, host_suffix);
-            if (ret < 0 || (size_t)ret >= sizeof(work_buf)) {
-                return -ENAMETOOLONG;
-            }
-            return vfs_normalize_linux_path(work_buf, vpath, vpath_len);
+        if (prefix_len > best_prefix_len) {
+            best_route = route;
+            best_host_suffix = host_suffix;
+            best_prefix_len = prefix_len;
         }
     }
 
-    return -EXDEV;
+    if (!best_route || !best_host_suffix) {
+        return -EXDEV;
+    }
+
+    if (strcmp(best_route->reverse_linux_prefix, "/") == 0) {
+        if (*best_host_suffix == '\0') {
+            return vfs_copy_string(vfs_virtual_root_path, vpath, vpath_len);
+        }
+        return vfs_normalize_linux_path(best_host_suffix, vpath, vpath_len);
+    }
+
+    if (*best_host_suffix == '\0') {
+        return vfs_copy_string(best_route->reverse_linux_prefix, vpath, vpath_len);
+    }
+
+    {
+        char work_buf[MAX_PATH];
+        ret = snprintf(work_buf, sizeof(work_buf), "%s%s", best_route->reverse_linux_prefix,
+                       best_host_suffix);
+        if (ret < 0 || (size_t)ret >= sizeof(work_buf)) {
+            return -ENAMETOOLONG;
+        }
+        return vfs_normalize_linux_path(work_buf, vpath, vpath_len);
+    }
 }
 
 int vfs_stat_path(const char *pathname, struct stat *statbuf) {

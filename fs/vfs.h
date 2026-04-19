@@ -29,6 +29,25 @@ enum vfs_backing_class {
     VFS_BACKING_CLASS_COUNT
 };
 
+/* Linux-visible route identities for VFS policy decisions */
+enum vfs_route_identity {
+    VFS_ROUTE_PERSISTENT_ROOT = 0,
+    VFS_ROUTE_ETC,
+    VFS_ROUTE_USR,
+    VFS_ROUTE_VAR_LIB,
+    VFS_ROUTE_HOME,
+    VFS_ROUTE_ROOT_HOME,
+    VFS_ROUTE_VAR_CACHE,
+    VFS_ROUTE_TMP,
+    VFS_ROUTE_VAR_TMP,
+    VFS_ROUTE_RUN,
+    VFS_ROUTE_PROC,
+    VFS_ROUTE_SYS,
+    VFS_ROUTE_DEV,
+
+    VFS_ROUTE_IDENTITY_COUNT
+};
+
 /* Linux VFS inode types (file types)
  * These are defined in standard system headers, no need to redefine */
 
@@ -204,6 +223,8 @@ const char *vfs_virtual_root(void);
 
 /* Backing class determination for storage policy routing */
 enum vfs_backing_class vfs_backing_class_for_path(const char *vpath);
+int vfs_describe_route_for_path(const char *vpath, enum vfs_route_identity *route_id,
+                                enum vfs_backing_class *backing_class, bool *reversible);
 const char *vfs_backing_root_for_class(enum vfs_backing_class cls);
 
 /* Backing root accessors for different storage classes */

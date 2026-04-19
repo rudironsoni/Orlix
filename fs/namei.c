@@ -54,11 +54,55 @@ static int rename_translate_path_at(int dirfd, const char *path, char *translate
     return 0;
 }
 
-static int rename_validate_same_backing_root(const char *old_host_path, const char *new_host_path) {
-    size_t root_len = strlen(vfs_host_backing_root());
+static int rename_resolve_virtual_path_at(int dirfd, const char *path, char *resolved_path,
+                                          size_t resolved_path_len) {
+    int ret;
 
-    if (strncmp(old_host_path, vfs_host_backing_root(), root_len) != 0 ||
-        strncmp(new_host_path, vfs_host_backing_root(), root_len) != 0) {
+    if (path == NULL) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (path[0] == '\0') {
+        errno = ENOENT;
+        return -1;
+    }
+
+    ret = vfs_resolve_virtual_path_at(dirfd, path, resolved_path, resolved_path_len);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return 0;
+}
+
+static int rename_validate_same_route(const char *old_virtual_path, const char *new_virtual_path) {
+    enum vfs_route_identity old_route;
+    enum vfs_route_identity new_route;
+    enum vfs_backing_class old_class;
+    enum vfs_backing_class new_class;
+    bool old_reversible;
+    bool new_reversible;
+
+    if (vfs_describe_route_for_path(old_virtual_path, &old_route, &old_class, &old_reversible) != 0 ||
+        vfs_describe_route_for_path(new_virtual_path, &new_route, &new_class, &new_reversible) != 0) {
+        errno = EXDEV;
+        return -1;
+    }
+
+    if (old_class == VFS_BACKING_SYNTHETIC || old_class == VFS_BACKING_EXTERNAL ||
+        new_class == VFS_BACKING_SYNTHETIC || new_class == VFS_BACKING_EXTERNAL) {
+        errno = EXDEV;
+        return -1;
+    }
+
+    if (!old_reversible || !new_reversible) {
+        errno = EXDEV;
+        return -1;
+    }
+
+    if (old_route != new_route) {
         errno = EXDEV;
         return -1;
     }
@@ -66,9 +110,10 @@ static int rename_validate_same_backing_root(const char *old_host_path, const ch
     return 0;
 }
 
-static int rename_apply_host_operation(const char *old_host_path, const char *new_host_path,
+static int rename_apply_host_operation(const char *old_virtual_path, const char *new_virtual_path,
+                                       const char *old_host_path, const char *new_host_path,
                                        unsigned int host_flags) {
-    if (rename_validate_same_backing_root(old_host_path, new_host_path) != 0) {
+    if (rename_validate_same_route(old_virtual_path, new_virtual_path) != 0) {
         return -1;
     }
 
@@ -81,9 +126,19 @@ static int rename_apply_host_operation(const char *old_host_path, const char *ne
 
 static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
                           unsigned int flags) {
+    char resolved_old[MAX_PATH];
+    char resolved_new[MAX_PATH];
     char translated_old[MAX_PATH];
     char translated_new[MAX_PATH];
     unsigned int host_flags = 0;
+
+    if (rename_resolve_virtual_path_at(olddirfd, oldpath, resolved_old, sizeof(resolved_old)) != 0) {
+        return -1;
+    }
+
+    if (rename_resolve_virtual_path_at(newdirfd, newpath, resolved_new, sizeof(resolved_new)) != 0) {
+        return -1;
+    }
 
     if (rename_translate_path_at(olddirfd, oldpath, translated_old, sizeof(translated_old)) != 0) {
         return -1;
@@ -116,7 +171,7 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
         host_flags |= RENAME_SWAP;
     }
 
-    return rename_apply_host_operation(translated_old, translated_new, host_flags);
+    return rename_apply_host_operation(resolved_old, resolved_new, translated_old, translated_new, host_flags);
 }
 
 static int directory_translate_task_path(const char *path, char *translated_path,
