@@ -32,12 +32,7 @@ typedef struct fd_description {
     pthread_mutex_t lock;
 } fd_description_t;
 
-typedef struct {
-    fd_description_t *desc;
-    int fd_flags;
-    bool used;
-    pthread_mutex_t lock;
-} fd_entry_t;
+
 
 /* Import synthetic directory state */
 typedef struct synthetic_dir_state {
@@ -102,71 +97,98 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
     char fd_path[MAX_PATH];
 
     if (is_dir && get_fd_path_impl(entry, fd_path, sizeof(fd_path)) == 0 &&
-        vfs_path_is_synthetic(fd_path)) {
+        vfs_path_is_synthetic(fd_path) && !get_fd_is_synthetic_dir_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = ENOTSUP;
         return -1;
     }
 
-/* If this is a synthetic directory fd, generate . and .. entries */
-  if (get_fd_is_synthetic_dir_impl(entry)) {
-    synthetic_dir_state_t *state = NULL;
-    fd_description_t *desc = ((fd_entry_t *)entry)->desc;
-    if (desc && desc->synthetic_state) {
-      state = (synthetic_dir_state_t *)desc->synthetic_state;
-    } else {
-      put_fd_entry_impl(entry);
-      errno = EBADF;
-      return -1;
+    if (get_fd_is_synthetic_dir_impl(entry)) {
+        synthetic_dir_state_t *state = NULL;
+        fd_description_t *desc = ((fd_entry_t *)entry)->desc;
+        size_t written = 0;
+        size_t dot_record_len = sizeof(struct linux_dirent64) + 2;
+        size_t dotdot_record_len = sizeof(struct linux_dirent64) + 3;
+        size_t dot_len = (dot_record_len + 7U) & ~7U;
+        size_t dotdot_len = (dotdot_record_len + 7U) & ~7U;
+
+        if (desc && desc->synthetic_state) {
+            state = (synthetic_dir_state_t *)desc->synthetic_state;
+        } else {
+            put_fd_entry_impl(entry);
+            errno = EBADF;
+            return -1;
+        }
+
+        if (state->cursor == 0) {
+            if (count >= dot_len + dotdot_len) {
+                struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
+                out->d_ino = 1;
+                out->d_off = 1;
+                out->d_reclen = (unsigned short)dot_len;
+                out->d_type = DT_DIR;
+                memcpy(out->d_name, ".", 2);
+                if (dot_len > dot_record_len) {
+                    memset(((char *)out) + dot_record_len, 0, dot_len - dot_record_len);
+                }
+                written += dot_len;
+
+                out = (struct linux_dirent64 *)((char *)dirp + written);
+                out->d_ino = 1;
+                out->d_off = 2;
+                out->d_reclen = (unsigned short)dotdot_len;
+                out->d_type = DT_DIR;
+                memcpy(out->d_name, "..", 3);
+                if (dotdot_len > dotdot_record_len) {
+                    memset(((char *)out) + dotdot_record_len, 0, dotdot_len - dotdot_record_len);
+                }
+                written += dotdot_len;
+                state->cursor = 2;
+
+                put_fd_entry_impl(entry);
+                return (ssize_t)written;
+            } else if (count >= dot_len) {
+                struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
+                out->d_ino = 1;
+                out->d_off = 1;
+                out->d_reclen = (unsigned short)dot_len;
+                out->d_type = DT_DIR;
+                memcpy(out->d_name, ".", 2);
+                if (dot_len > dot_record_len) {
+                    memset(((char *)out) + dot_record_len, 0, dot_len - dot_record_len);
+                }
+                written += dot_len;
+                state->cursor = 1;
+
+                put_fd_entry_impl(entry);
+                return (ssize_t)written;
+            }
+        } else if (state->cursor == 1) {
+            if (count >= dotdot_len) {
+                struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
+                out->d_ino = 1;
+                out->d_off = 2;
+                out->d_reclen = (unsigned short)dotdot_len;
+                out->d_type = DT_DIR;
+                memcpy(out->d_name, "..", 3);
+                if (dotdot_len > dotdot_record_len) {
+                    memset(((char *)out) + dotdot_record_len, 0, dotdot_len - dotdot_record_len);
+                }
+                written += dotdot_len;
+                state->cursor = 2;
+
+                put_fd_entry_impl(entry);
+                return (ssize_t)written;
+            }
+        } else if (state->cursor >= 2) {
+            put_fd_entry_impl(entry);
+            return 0;
+        }
+
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
     }
-
-    size_t written = 0;
-    off_t new_offset = get_fd_offset_impl(entry);
-
-    if (state->cursor == 0) {
-      /* Emit '.' entry */
-      if (count - written >= sizeof(struct linux_dirent64) + 2) {
-        struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
-        out->d_ino = 1;
-        out->d_off = 1;
-        out->d_reclen = sizeof(struct linux_dirent64) + 2;
-        out->d_type = DT_DIR;
-        memcpy(out->d_name, ".", 2);
-        written += sizeof(struct linux_dirent64) + 2;
-        new_offset = 1;
-        state->cursor = 1;
-      }
-    }
-
-    if (state->cursor == 1 && written == 0) {
-      new_offset = get_fd_offset_impl(entry);
-    }
-
-    if (state->cursor == 1) {
-      /* Emit '..' entry */
-      if (count - written >= sizeof(struct linux_dirent64) + 3) {
-        struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
-        out->d_ino = 1;
-        out->d_off = 2;
-        out->d_reclen = sizeof(struct linux_dirent64) + 3;
-        out->d_type = DT_DIR;
-        memcpy(out->d_name, "..", 3);
-        written += sizeof(struct linux_dirent64) + 3;
-        new_offset = 2;
-        state->cursor = 2;
-      }
-    }
-
-    if (state->cursor == 2 && written == 0) {
-      /* EOF: No more entries */
-      put_fd_entry_impl(entry);
-      return 0;
-    }
-
-    set_fd_offset_impl(entry, new_offset);
-    put_fd_entry_impl(entry);
-    return written;
-  }
   int dup_fd = dup(real_fd);
   if (dup_fd < 0) {
     put_fd_entry_impl(entry);

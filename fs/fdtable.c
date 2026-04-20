@@ -302,12 +302,7 @@ typedef struct fd_description {
     pthread_mutex_t lock;
 } fd_description_t;
 
-typedef struct {
-    fd_description_t *desc;
-    int fd_flags;
-    bool used;
-    pthread_mutex_t lock;
-} fd_entry_t;
+
 
 static fd_entry_t fd_table[NR_OPEN_DEFAULT];
 static pthread_mutex_t fd_table_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -454,24 +449,52 @@ void free_fd_impl(int fd) {
     pthread_mutex_unlock(&fd_table_lock);
 }
 
-void *get_fd_entry_impl(int fd) {
-    file_init_impl();
+fd_entry_t *get_fd_entry_impl(int fd) {
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
+        errno = EBADF;
         return NULL;
     }
 
-    pthread_mutex_lock(&fd_table_lock);
-    fd_entry_t *entry = fd_table[fd].used ? &fd_table[fd] : NULL;
-    if (entry) {
-        pthread_mutex_lock(&entry->lock);
+    file_init_impl();
+
+    int ret = pthread_mutex_lock(&fd_table_lock);
+    if (ret != 0) {
+        errno = ret;
+        return NULL;
     }
+
+    if (!fd_table[fd].used) {
+        pthread_mutex_unlock(&fd_table_lock);
+        errno = EBADF;
+        return NULL;
+    }
+
+    fd_entry_t *entry = &fd_table[fd];
+    ret = pthread_mutex_lock(&entry->lock);
+    if (ret != 0) {
+        pthread_mutex_unlock(&fd_table_lock);
+        errno = ret;
+        return NULL;
+    }
+
+    if (!entry->used) {
+        pthread_mutex_unlock(&entry->lock);
+        pthread_mutex_unlock(&fd_table_lock);
+        errno = EBADF;
+        return NULL;
+    }
+
+    retain_fd_description(entry->desc);
     pthread_mutex_unlock(&fd_table_lock);
     return entry;
 }
 
 void put_fd_entry_impl(void *entry) {
     if (entry) {
-        pthread_mutex_unlock(&((fd_entry_t *)entry)->lock);
+        fd_entry_t *fd_entry = (fd_entry_t *)entry;
+        fd_description_t *desc = fd_entry->desc;
+        pthread_mutex_unlock(&fd_entry->lock);
+        release_fd_description(desc);
     }
 }
 
@@ -499,51 +522,48 @@ bool get_fd_is_dir_impl(void *entry) {
     return fd_entry->desc ? fd_entry->desc->is_dir : false;
 }
 
-int get_fd_path_impl(void *entry, char *path, size_t path_len) {
-    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+int get_fd_path_impl(fd_entry_t *entry, char *path, size_t path_len) {
     size_t len;
 
-    if (!fd_entry || !fd_entry->desc || !path || path_len == 0) {
+    if (!entry || !entry->desc || !path || path_len == 0) {
         errno = EINVAL;
         return -1;
     }
 
-    len = strlen(fd_entry->desc->path);
+    len = strlen(entry->desc->path);
     if (len >= path_len) {
         errno = ENAMETOOLONG;
         return -1;
     }
 
-    memcpy(path, fd_entry->desc->path, len + 1);
+    memcpy(path, entry->desc->path, len + 1);
     return 0;
 }
 
-void set_fd_flags_impl(void *entry, int flags) {
-    fd_entry_t *fd_entry = (fd_entry_t *)entry;
-    if (fd_entry->desc) {
-        fd_entry->desc->flags = flags;
+void set_fd_flags_impl(fd_entry_t *entry, int flags) {
+    if (entry && entry->desc) {
+        entry->desc->flags = flags;
     }
 }
 
-void set_fd_descriptor_flags_impl(void *entry, int flags) {
-    ((fd_entry_t *)entry)->fd_flags = flags;
-}
-
-off_t get_fd_offset_impl(void *entry) {
-    fd_entry_t *fd_entry = (fd_entry_t *)entry;
-    return fd_entry->desc ? fd_entry->desc->offset : -1;
-}
-
-void set_fd_offset_impl(void *entry, off_t offset) {
-    fd_entry_t *fd_entry = (fd_entry_t *)entry;
-    if (fd_entry->desc) {
-        fd_entry->desc->offset = offset;
+void set_fd_descriptor_flags_impl(fd_entry_t *entry, int flags) {
+    if (entry) {
+        entry->fd_flags = flags;
     }
 }
 
-bool get_fd_is_append_impl(void *entry) {
-    fd_entry_t *fd_entry = (fd_entry_t *)entry;
-    return fd_entry->desc && (fd_entry->desc->flags & O_APPEND);
+off_t get_fd_offset_impl(fd_entry_t *entry) {
+    return (entry && entry->desc) ? entry->desc->offset : -1;
+}
+
+void set_fd_offset_impl(fd_entry_t *entry, off_t offset) {
+    if (entry && entry->desc) {
+        entry->desc->offset = offset;
+    }
+}
+
+bool get_fd_is_append_impl(fd_entry_t *entry) {
+    return entry && entry->desc && (entry->desc->flags & O_APPEND);
 }
 
 void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path) {

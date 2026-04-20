@@ -56,8 +56,18 @@ void file_init_impl(void);
 int alloc_fd_impl(void);
 void free_fd_impl(int fd);
 
+struct fd_description;
+typedef struct fd_description fd_description_t;
+
+struct fd_entry {
+ fd_description_t *desc;
+ int fd_flags;
+ bool used;
+ pthread_mutex_t lock;
+};
+typedef struct fd_entry fd_entry_t;
 /* FD entry access - returns locked entry, must call put_fd_entry_impl to unlock */
-void *get_fd_entry_impl(int fd);
+fd_entry_t *get_fd_entry_impl(int fd);
 void put_fd_entry_impl(void *entry);
 
 /* Getters/setters for fd entry properties */
@@ -66,12 +76,12 @@ int get_fd_flags_impl(void *entry);
 int get_fd_descriptor_flags_impl(void *entry);
 bool get_fd_is_synthetic_dir_impl(void *entry);
 bool get_fd_is_dir_impl(void *entry);
-int get_fd_path_impl(void *entry, char *path, size_t path_len);
-void set_fd_flags_impl(void *entry, int flags);
-void set_fd_descriptor_flags_impl(void *entry, int flags);
-off_t get_fd_offset_impl(void *entry);
-void set_fd_offset_impl(void *entry, off_t offset);
-bool get_fd_is_append_impl(void *entry);
+int get_fd_path_impl(fd_entry_t *entry, char *path, size_t path_len);
+void set_fd_flags_impl(fd_entry_t *entry, int flags);
+void set_fd_descriptor_flags_impl(fd_entry_t *entry, int flags);
+off_t get_fd_offset_impl(fd_entry_t *entry);
+void set_fd_offset_impl(fd_entry_t *entry, off_t offset);
+bool get_fd_is_append_impl(fd_entry_t *entry);
 int clone_fd_entry_impl(int oldfd, int minfd, bool cloexec);
 int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec);
 

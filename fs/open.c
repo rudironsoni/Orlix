@@ -25,7 +25,10 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    if (vfs_path_is_synthetic_root(resolved_path) && (flags & O_DIRECTORY)) {
+    /* Always create synthetic fds for /proc, /sys, /dev */
+    if ((strcmp(resolved_path, "/proc") == 0 || 
+         strcmp(resolved_path, "/sys") == 0 ||
+         strcmp(resolved_path, "/dev") == 0) && (flags & O_DIRECTORY)) {
         int fd = alloc_fd_impl();
         if (fd < 0) {
             return -1;

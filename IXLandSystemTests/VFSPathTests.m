@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdint.h>
 
 // Forward declare linux_dirent64 since it's not in standard headers
 struct linux_dirent64 {
@@ -680,16 +681,16 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertEqual(errno, ENOENT, @"public access should set ENOENT for unsupported synthetic child routes");
 }
 
-- (void)testSyntheticRootOpenFails {
+- (void)testSyntheticRootOpenDirectorySucceedsAndChildOpenFails {
     errno = 0;
-    XCTAssertEqual(open(@"/proc".UTF8String, O_RDONLY | O_DIRECTORY), -1,
-                   @"public open should reject synthetic root (not yet implemented)");
-    XCTAssertEqual(errno, ENOTSUP, @"public open should set ENOTSUP for synthetic root");
+    int proc_fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(proc_fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (proc_fd >= 0) close(proc_fd);
 
     errno = 0;
-    XCTAssertEqual(open(@"/sys".UTF8String, O_RDONLY | O_DIRECTORY), -1,
-                   @"public open should reject synthetic root /sys");
-    XCTAssertEqual(errno, ENOTSUP, @"public open should set ENOTSUP for synthetic root /sys");
+    int sys_fd = open("/sys", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
+    if (sys_fd >= 0) close(sys_fd);
 }
 
 - (void)testSyntheticChildOpenFails {
@@ -737,147 +738,166 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 }
 
 - (void)testSyntheticRootOpenDirectorySucceeds {
-  errno = 0;
-  int proc_fd = open("/proc".UTF8String, O_RDONLY | O_DIRECTORY);
-  XCTAssertTrue(proc_fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
-  XCTAssertEqual(errno, 0, @"errno should be 0 after open(/proc, O_DIRECTORY)");
+    errno = 0;
+    int proc_fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(proc_fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    XCTAssertEqual(errno, 0, @"errno should be 0 after open(/proc, O_DIRECTORY)");
 
-  errno = 0;
-  int sys_fd = open("/sys".UTF8String, O_RDONLY | O_DIRECTORY);
-  XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
-  XCTAssertEqual(errno, 0, @"errno should be 0 after open(/sys, O_DIRECTORY)");
+    errno = 0;
+    int sys_fd = open("/sys", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
+    XCTAssertEqual(errno, 0, @"errno should be 0 after open(/sys, O_DIRECTORY)");
 
-  errno = 0;
-  int dev_fd = open("/dev".UTF8String, O_RDONLY | O_DIRECTORY);
-  XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
-  XCTAssertEqual(errno, 0, @"errno should be 0 after open(/dev, O_DIRECTORY)");
+    errno = 0;
+    int dev_fd = open("/dev", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
+    XCTAssertEqual(errno, 0, @"errno should be 0 after open(/dev, O_DIRECTORY)");
 
-  if (proc_fd >= 0) close(proc_fd);
-  if (sys_fd >= 0) close(sys_fd);
-  if (dev_fd >= 0) close(dev_fd);
+    if (proc_fd >= 0) close(proc_fd);
+    if (sys_fd >= 0) close(sys_fd);
+    if (dev_fd >= 0) close(dev_fd);
 }
 
 - (void)testSyntheticRootGetdents64ReturnsDotAndDotdot {
-  int fd = open("/proc".UTF8String, O_RDONLY | O_DIRECTORY);
-  XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
-  if (fd < 0) return;
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
 
-  char buffer[1024];
-  memset(buffer, 0, sizeof(buffer));
-  
-  ssize_t nread = getdents64(fd, buffer, sizeof(buffer));
-  XCTAssertTrue(nread > 0, @"getdents64(/proc) should return > 0 bytes");
+    /* Ensure buffer is 8-byte aligned for struct linux_dirent64 */
+    union { char storage[1024]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
 
-  // Parse the entries to verify . and ..
-  bool found_dot = false;
-  bool found_dotdot = false;
-  size_t pos = 0;
-  
-  while (pos < (size_t)nread) {
-    struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-    NSString *name = [NSString stringWithUTF8String:entry->d_name];
-    
-    if ([name isEqualToString:@"."]) {
-      found_dot = true;
-      XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
-    } else if ([name isEqualToString:@".."]) {
-      found_dotdot = true;
-      XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+    ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+    XCTAssertTrue(nread > 0, @"getdents64(/proc) should return > 0 bytes, got %zd errno %d", nread, errno);
+
+    // Parse the entries to verify . and ..
+    bool found_dot = false;
+    bool found_dotdot = false;
+    size_t pos = 0;
+
+    while (pos < (size_t)nread) {
+        struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+        NSString *name = [NSString stringWithUTF8String:entry->d_name];
+
+        if ([name isEqualToString:@"."]) {
+            found_dot = true;
+            XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+        } else if ([name isEqualToString:@".."]) {
+            found_dotdot = true;
+            XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+        }
+
+        XCTAssertTrue(entry->d_reclen > 0, @"d_reclen must be non-zero");
+        XCTAssertTrue(entry->d_reclen <= (unsigned short)((size_t)nread - pos), @"d_reclen must fit remaining buffer");
+        if (entry->d_reclen == 0 || entry->d_reclen > (unsigned short)((size_t)nread - pos)) {
+            break;
+        }
+        pos += entry->d_reclen;
     }
-    
-    pos += entry->d_reclen;
-  }
-  
-  XCTAssertTrue(found_dot, @"getdents64(/proc) should return '.' entry");
-  XCTAssertTrue(found_dotdot, @"getdents64(/proc) should return '..' entry");
 
-  // Second call should return 0 (EOF)
-  nread = getdents64(fd, buffer, sizeof(buffer));
-  XCTAssertEqual(nread, 0, @"Second getdents64(/proc) should return 0 (EOF)");
+    XCTAssertTrue(found_dot, @"getdents64(/proc) should return '.' entry");
+    XCTAssertTrue(found_dotdot, @"getdents64(/proc) should return '..' entry");
 
-  close(fd);
+    // Second call should return 0 (EOF)
+    nread = getdents64(fd, buffer, sizeof(buffer));
+    XCTAssertEqual(nread, 0, @"Second getdents64(/proc) should return 0 (EOF)");
+
+    close(fd);
 }
 
 - (void)testSyntheticSysAndDevGetdents64ReturnsDotAndDotdot {
-  // Test /sys
-  int sys_fd = open("/sys".UTF8String, O_RDONLY | O_DIRECTORY);
-  XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
-  
-  if (sys_fd >= 0) {
-    char buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    
-    ssize_t nread = getdents64(sys_fd, buffer, sizeof(buffer));
-    XCTAssertTrue(nread > 0, @"getdents64(/sys) should return > 0 bytes");
+    // Test /sys
+    int sys_fd = open("/sys", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
 
-    bool found_dot = false;
-    bool found_dotdot = false;
-    size_t pos = 0;
-    
-    while (pos < (size_t)nread) {
-      struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-      NSString *name = [NSString stringWithUTF8String:entry->d_name];
-      
-      if ([name isEqualToString:@"."]) {
-        found_dot = true;
-        XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
-      } else if ([name isEqualToString:@".."]) {
-        found_dotdot = true;
-        XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
-      }
-      
-      pos += entry->d_reclen;
+    if (sys_fd >= 0) {
+        union { char storage[1024]; uint64_t align; } aligned;
+        char *buffer = aligned.storage;
+        memset(buffer, 0, sizeof(aligned));
+
+        ssize_t nread = getdents64(sys_fd, buffer, sizeof(aligned.storage));
+        XCTAssertTrue(nread > 0, @"getdents64(/sys) should return > 0 bytes");
+
+        bool found_dot = false;
+        bool found_dotdot = false;
+        size_t pos = 0;
+
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+
+            if ([name isEqualToString:@"."]) {
+                found_dot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+            } else if ([name isEqualToString:@".."]) {
+                found_dotdot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+            }
+
+            XCTAssertTrue(entry->d_reclen > 0, @"d_reclen must be non-zero");
+        XCTAssertTrue(entry->d_reclen <= (unsigned short)((size_t)nread - pos), @"d_reclen must fit remaining buffer");
+        if (entry->d_reclen == 0 || entry->d_reclen > (unsigned short)((size_t)nread - pos)) {
+            break;
+        }
+        pos += entry->d_reclen;
+        }
+
+        XCTAssertTrue(found_dot, @"getdents64(/sys) should return '.' entry");
+        XCTAssertTrue(found_dotdot, @"getdents64(/sys) should return '..' entry");
+
+        // Second call should return 0 (EOF)
+        nread = getdents64(sys_fd, buffer, sizeof(aligned.storage));
+        XCTAssertEqual(nread, 0, @"Second getdents64(/sys) should return 0 (EOF)");
+
+        close(sys_fd);
     }
-    
-    XCTAssertTrue(found_dot, @"getdents64(/sys) should return '.' entry");
-    XCTAssertTrue(found_dotdot, @"getdents64(/sys) should return '..' entry");
-    
-    // Second call should return 0 (EOF)
-    nread = getdents64(sys_fd, buffer, sizeof(buffer));
-    XCTAssertEqual(nread, 0, @"Second getdents64(/sys) should return 0 (EOF)");
-    
-    close(sys_fd);
-  }
 
-  // Test /dev
-  int dev_fd = open("/dev".UTF8String, O_RDONLY | O_DIRECTORY);
-  XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
-  
-  if (dev_fd >= 0) {
-    char buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    
-    ssize_t nread = getdents64(dev_fd, buffer, sizeof(buffer));
-    XCTAssertTrue(nread > 0, @"getdents64(/dev) should return > 0 bytes");
+    // Test /dev
+    int dev_fd = open("/dev", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
 
-    bool found_dot = false;
-    bool found_dotdot = false;
-    size_t pos = 0;
-    
-    while (pos < (size_t)nread) {
-      struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-      NSString *name = [NSString stringWithUTF8String:entry->d_name];
-      
-      if ([name isEqualToString:@"."]) {
-        found_dot = true;
-        XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
-      } else if ([name isEqualToString:@".."]) {
-        found_dotdot = true;
-        XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
-      }
-      
-      pos += entry->d_reclen;
+    if (dev_fd >= 0) {
+        union { char storage[1024]; uint64_t align; } aligned;
+        char *buffer = aligned.storage;
+        memset(buffer, 0, sizeof(aligned));
+
+        ssize_t nread = getdents64(dev_fd, buffer, sizeof(aligned.storage));
+        XCTAssertTrue(nread > 0, @"getdents64(/dev) should return > 0 bytes");
+
+        bool found_dot = false;
+        bool found_dotdot = false;
+        size_t pos = 0;
+
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+
+            if ([name isEqualToString:@"."]) {
+                found_dot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+            } else if ([name isEqualToString:@".."]) {
+                found_dotdot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+            }
+
+            XCTAssertTrue(entry->d_reclen > 0, @"d_reclen must be non-zero");
+        XCTAssertTrue(entry->d_reclen <= (unsigned short)((size_t)nread - pos), @"d_reclen must fit remaining buffer");
+        if (entry->d_reclen == 0 || entry->d_reclen > (unsigned short)((size_t)nread - pos)) {
+            break;
+        }
+        pos += entry->d_reclen;
+        }
+
+        XCTAssertTrue(found_dot, @"getdents64(/dev) should return '.' entry");
+        XCTAssertTrue(found_dotdot, @"getdents64(/dev) should return '..' entry");
+
+        // Second call should return 0 (EOF)
+        nread = getdents64(dev_fd, buffer, sizeof(aligned.storage));
+        XCTAssertEqual(nread, 0, @"Second getdents64(/dev) should return 0 (EOF)");
+
+        close(dev_fd);
     }
-    
-    XCTAssertTrue(found_dot, @"getdents64(/dev) should return '.' entry");
-    XCTAssertTrue(found_dotdot, @"getdents64(/dev) should return '..' entry");
-    
-    // Second call should return 0 (EOF)
-    nread = getdents64(dev_fd, buffer, sizeof(buffer));
-    XCTAssertEqual(nread, 0, @"Second getdents64(/dev) should return 0 (EOF)");
-    
-    close(dev_fd);
-  }
 }
 
 - (void)testSyntheticGetdentsUsesIntentionalUnsupportedPolicy {
