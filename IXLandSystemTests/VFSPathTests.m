@@ -800,7 +800,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertTrue(found_dotdot, @"getdents64(/proc) should return '..' entry");
 
     // Second call should return 0 (EOF)
-    nread = getdents64(fd, buffer, sizeof(buffer));
+    nread = getdents64(fd, buffer, sizeof(aligned.storage));
     XCTAssertEqual(nread, 0, @"Second getdents64(/proc) should return 0 (EOF)");
 
     close(fd);
