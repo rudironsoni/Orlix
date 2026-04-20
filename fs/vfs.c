@@ -233,10 +233,23 @@ bool vfs_path_is_synthetic_root(const char *vpath) {
     if (!vpath) {
         return false;
     }
+    return strcmp(vpath, "/proc") == 0 || strcmp(vpath, "/sys") == 0 || strcmp(vpath, "/dev") == 0;
+}
 
-    return strcmp(vpath, "/proc") == 0 ||
-           strcmp(vpath, "/sys") == 0 ||
-           strcmp(vpath, "/dev") == 0;
+synthetic_dev_node_t vfs_path_is_synthetic_dev_node(const char *vpath) {
+    if (!vpath) {
+        return SYNTHETIC_DEV_NONE;
+    }
+    if (strcmp(vpath, "/dev/null") == 0) {
+        return SYNTHETIC_DEV_NULL;
+    }
+    if (strcmp(vpath, "/dev/zero") == 0) {
+        return SYNTHETIC_DEV_ZERO;
+    }
+    if (strcmp(vpath, "/dev/urandom") == 0) {
+        return SYNTHETIC_DEV_URANDOM;
+    }
+    return SYNTHETIC_DEV_NONE;
 }
 
 /* Determine backing class from virtual Linux path */
@@ -932,6 +945,9 @@ int vfs_access(const char *pathname, int mode) {
     if (vfs_path_is_synthetic_root(pathname)) {
         return 0;
     }
+    if (vfs_path_is_synthetic_dev_node(pathname) != SYNTHETIC_DEV_NONE) {
+        return 0;
+    }
     if (vfs_path_is_synthetic(pathname)) {
         return -ENOENT;
     }
@@ -975,6 +991,23 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
         return 0;
     }
 
+    {
+        synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_virtual);
+        if (dev_node != SYNTHETIC_DEV_NONE) {
+            memset(statbuf, 0, sizeof(*statbuf));
+            statbuf->st_mode = S_IFCHR | 0666;
+            statbuf->st_nlink = 1;
+            statbuf->st_uid = 0;
+            statbuf->st_gid = 0;
+            statbuf->st_rdev = (dev_node == SYNTHETIC_DEV_NULL) ? makedev(1, 3) :
+                               (dev_node == SYNTHETIC_DEV_ZERO) ? makedev(1, 5) :
+                               makedev(1, 9);
+            statbuf->st_blksize = 4096;
+            statbuf->st_blocks = 0;
+            return 0;
+        }
+    }
+
     if (vfs_path_is_synthetic(resolved_virtual)) {
         return -ENOENT;
     }
@@ -1014,6 +1047,10 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
     }
 
     if (vfs_path_is_synthetic_root(resolved_virtual)) {
+        return 0;
+    }
+
+    if (vfs_path_is_synthetic_dev_node(resolved_virtual) != SYNTHETIC_DEV_NONE) {
         return 0;
     }
 

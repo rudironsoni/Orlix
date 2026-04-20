@@ -37,6 +37,18 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return fd;
     }
 
+    {
+        synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
+        if (dev_node != SYNTHETIC_DEV_NONE) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            init_synthetic_dev_fd_entry_impl(fd, flags, mode, resolved_path, dev_node);
+            return fd;
+        }
+    }
+
     if (vfs_path_is_synthetic(resolved_path)) {
         errno = ENOTSUP;
         return -1;
@@ -88,6 +100,18 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
         }
         init_synthetic_fd_entry_impl(fd, flags, mode, resolved_path);
         return fd;
+    }
+
+    {
+        synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
+        if (dev_node != SYNTHETIC_DEV_NONE) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            init_synthetic_dev_fd_entry_impl(fd, flags, mode, resolved_path, dev_node);
+            return fd;
+        }
     }
 
     if (vfs_path_is_synthetic(resolved_path)) {

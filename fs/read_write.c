@@ -3,6 +3,8 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "fdtable.h"
@@ -26,6 +28,23 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
     void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
+        return -1;
+    }
+
+    if (get_fd_is_synthetic_dev_impl(entry)) {
+        synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
+        put_fd_entry_impl(entry);
+        
+        if (dev_node == SYNTHETIC_DEV_NULL) {
+            return 0;
+        } else if (dev_node == SYNTHETIC_DEV_ZERO) {
+            memset(buf, 0, count);
+            return (ssize_t)count;
+        } else if (dev_node == SYNTHETIC_DEV_URANDOM) {
+            arc4random_buf(buf, count);
+            return (ssize_t)count;
+        }
+        errno = EINVAL;
         return -1;
     }
 
@@ -56,6 +75,17 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
+        return -1;
+    }
+
+    if (get_fd_is_synthetic_dev_impl(entry)) {
+        synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
+        put_fd_entry_impl(entry);
+        
+        if (dev_node == SYNTHETIC_DEV_NULL || dev_node == SYNTHETIC_DEV_ZERO || dev_node == SYNTHETIC_DEV_URANDOM) {
+            return (ssize_t)count;
+        }
+        errno = EINVAL;
         return -1;
     }
 

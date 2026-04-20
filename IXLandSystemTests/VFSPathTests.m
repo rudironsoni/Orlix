@@ -676,7 +676,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
                    @"synthetic child vfs_faccessat should reject through descriptor policy");
 
     errno = 0;
-    XCTAssertEqual(access(@"/dev/null".UTF8String, F_OK), -1,
+    XCTAssertEqual(access(@"/proc/meminfo".UTF8String, F_OK), -1,
                    @"public access should reject unsupported synthetic child routes");
     XCTAssertEqual(errno, ENOENT, @"public access should set ENOENT for unsupported synthetic child routes");
 }
@@ -695,12 +695,12 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
 - (void)testSyntheticChildOpenFails {
     errno = 0;
-    XCTAssertEqual(open(@"/dev/null".UTF8String, O_RDONLY), -1,
+    XCTAssertEqual(open(@"/proc/meminfo".UTF8String, O_RDONLY), -1,
                    @"public open should reject unsupported synthetic child routes");
     XCTAssertEqual(errno, ENOTSUP, @"public open should set ENOTSUP for unsupported synthetic child routes");
 
     errno = 0;
-    XCTAssertEqual(openat(AT_FDCWD, @"/proc/meminfo".UTF8String, O_RDONLY), -1,
+    XCTAssertEqual(openat(AT_FDCWD, @"/sys/kernel".UTF8String, O_RDONLY), -1,
                    @"public openat should reject unsupported synthetic routes before host fallback");
     XCTAssertEqual(errno, ENOTSUP, @"public openat should set ENOTSUP for unsupported synthetic routes");
 }
@@ -898,6 +898,177 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
         close(dev_fd);
     }
+}
+
+/* ============================================================================
+ * SYNTHETIC /dev NODE TESTS
+ * ============================================================================ */
+
+- (void)testDevNullStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/dev/null", &st), 0, @"stat(/dev/null) should succeed");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/null should be a character device");
+    XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/null should have 0666 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat("/dev/null", &st), 0, @"lstat(/dev/null) should succeed");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"lstat(/dev/null) should return character device");
+}
+
+- (void)testDevZeroStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/dev/zero", &st), 0, @"stat(/dev/zero) should succeed");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/zero should be a character device");
+    XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/zero should have 0666 permissions");
+}
+
+- (void)testDevUrandomStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/dev/urandom", &st), 0, @"stat(/dev/urandom) should succeed");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/urandom should be a character device");
+    XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/urandom should have 0666 permissions");
+}
+
+- (void)testDevNullAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/dev/null", F_OK), 0, @"access(/dev/null, F_OK) should succeed");
+    XCTAssertEqual(access("/dev/null", R_OK), 0, @"access(/dev/null, R_OK) should succeed");
+    XCTAssertEqual(access("/dev/null", W_OK), 0, @"access(/dev/null, W_OK) should succeed");
+}
+
+- (void)testDevZeroAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/dev/zero", F_OK), 0, @"access(/dev/zero, F_OK) should succeed");
+}
+
+- (void)testDevUrandomAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/dev/urandom", F_OK), 0, @"access(/dev/urandom, F_OK) should succeed");
+}
+
+- (void)testDevNullOpenSucceeds {
+    errno = 0;
+    int fd = open("/dev/null", O_RDWR);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_RDWR) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testDevZeroOpenSucceeds {
+    errno = 0;
+    int fd = open("/dev/zero", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero, O_RDONLY) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testDevUrandomOpenSucceeds {
+    errno = 0;
+    int fd = open("/dev/urandom", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom, O_RDONLY) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testDevNullReadReturnsEOF {
+    int fd = open("/dev/null", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    memset(buf, 0xAA, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(nread, 0, @"read(/dev/null) should return 0 (EOF)");
+    close(fd);
+}
+
+- (void)testDevNullWriteSucceedsAndDiscards {
+    int fd = open("/dev/null", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t written = write(fd, "hello", 5);
+    XCTAssertEqual(written, 5, @"write(/dev/null) should succeed and report all bytes written");
+    close(fd);
+}
+
+- (void)testDevZeroReadFillsZeroBytes {
+    int fd = open("/dev/zero", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero) should succeed");
+    if (fd < 0) return;
+
+    char buf[128];
+    memset(buf, 0xFF, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(nread, (ssize_t)sizeof(buf), @"read(/dev/zero) should return requested byte count");
+
+    bool all_zero = true;
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        if (buf[i] != 0) {
+            all_zero = false;
+            break;
+        }
+    }
+    XCTAssertTrue(all_zero, @"/dev/zero read should fill buffer with zero bytes");
+    close(fd);
+}
+
+- (void)testDevUrandomReadReturnsNontrivialData {
+    int fd = open("/dev/urandom", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom) should succeed");
+    if (fd < 0) return;
+
+    char buf[256];
+    memset(buf, 0, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(nread, (ssize_t)sizeof(buf), @"read(/dev/urandom) should return requested byte count");
+
+    bool all_zero = true;
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        if (buf[i] != 0) {
+            all_zero = false;
+            break;
+        }
+    }
+    XCTAssertFalse(all_zero, @"/dev/urandom read should return nontrivial data (not all zeros)");
+    close(fd);
+}
+
+- (void)testDevZeroWriteSucceedsAndDiscards {
+    int fd = open("/dev/zero", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t written = write(fd, "data", 4);
+    XCTAssertEqual(written, 4, @"write(/dev/zero) should succeed and discard");
+    close(fd);
+}
+
+- (void)testDevUrandomWriteSucceedsAndDiscards {
+    int fd = open("/dev/urandom", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t written = write(fd, "data", 4);
+    XCTAssertEqual(written, 4, @"write(/dev/urandom) should succeed and discard");
+    close(fd);
+}
+
+- (void)testUnsupportedDevNodeStillFails {
+    errno = 0;
+    struct stat st;
+    XCTAssertEqual(stat("/dev/sda", &st), -1, @"stat(/dev/sda) should fail for unsupported dev node");
+    XCTAssertEqual(errno, ENOENT, @"stat(/dev/sda) should set ENOENT");
+
+    errno = 0;
+    XCTAssertEqual(open("/dev/tty", O_RDONLY), -1, @"open(/dev/tty) should fail for unsupported dev node");
+    XCTAssertEqual(errno, ENOTSUP, @"open(/dev/tty) should set ENOTSUP");
 }
 
 - (void)testSyntheticGetdentsUsesIntentionalUnsupportedPolicy {

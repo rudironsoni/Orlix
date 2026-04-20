@@ -90,6 +90,20 @@ void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char 
 
 void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *path);
 
+enum synthetic_dev_node {
+    SYNTHETIC_DEV_NONE = 0,
+    SYNTHETIC_DEV_NULL,
+    SYNTHETIC_DEV_ZERO,
+    SYNTHETIC_DEV_URANDOM
+};
+
+typedef enum synthetic_dev_node synthetic_dev_node_t;
+
+void init_synthetic_dev_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dev_node_t dev_node);
+
+bool get_fd_is_synthetic_dev_impl(void *entry);
+synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry);
+
 /* Close implementation using static fd table */
 int close_impl(int fd);
 
