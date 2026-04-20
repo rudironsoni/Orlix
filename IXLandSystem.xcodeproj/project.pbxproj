@@ -537,7 +537,7 @@
 		871FC3A2F0E252AA74B0FF39 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
+				BUNDLE_LOADER = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(LINUX_UAPI_INCLUDE_ROOT)",
@@ -656,7 +656,7 @@
 		E0504F751EA3D2AED9988C4A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
+				BUNDLE_LOADER = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(LINUX_UAPI_INCLUDE_ROOT)",

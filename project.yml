@@ -122,6 +122,7 @@ targets:
       - $(LINUX_UAPI_INCLUDE_ROOT)
       - $(SRCROOT)/include
       - $(SRCROOT)
+      BUNDLE_LOADER: ''
 configurations:
   Debug:
     settings:
