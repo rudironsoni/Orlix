@@ -62,6 +62,7 @@ dkms.conf
 xcuserdata/
 .build
 .DS_Store
+IXLand.xcodeproj/
 
 # Build artifacts
 build/
