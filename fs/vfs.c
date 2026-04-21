@@ -951,6 +951,12 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strncmp(vpath, "/proc/self/fd/", 14) == 0 && vpath[14] != '\0') {
         return PROC_SELF_FD_LINK;
     }
+    if (strcmp(vpath, "/proc/self/cwd") == 0) {
+        return PROC_SELF_CWD_LINK;
+    }
+    if (strcmp(vpath, "/proc/self/exe") == 0) {
+        return PROC_SELF_EXE_LINK;
+    }
     return PROC_SELF_NONE;
 }
 
@@ -991,6 +997,47 @@ int vfs_proc_self_fd_link_target(const char *vpath, char *target, size_t target_
         return -ENOENT;
     }
 
+    return 0;
+}
+
+int vfs_proc_self_cwd_target(char *target, size_t target_len) {
+    struct task_struct *task;
+
+    if (!target || target_len == 0) {
+        return -EINVAL;
+    }
+
+    task = get_current();
+    if (!task || !task->fs) {
+        return -ESRCH;
+    }
+
+    return vfs_getcwd_path_task(task->fs, target, target_len);
+}
+
+int vfs_proc_self_exe_target(char *target, size_t target_len) {
+    struct task_struct *task;
+    size_t exe_len;
+
+    if (!target || target_len == 0) {
+        return -EINVAL;
+    }
+
+    task = get_current();
+    if (!task) {
+        return -ESRCH;
+    }
+
+    if (task->exe[0] == '\0') {
+        return -ENOENT;
+    }
+
+    exe_len = strlen(task->exe);
+    if (exe_len >= target_len) {
+        return -ENAMETOOLONG;
+    }
+
+    memcpy(target, task->exe, exe_len + 1);
     return 0;
 }
 
@@ -1082,6 +1129,36 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
         } else if (proc_class == PROC_SELF_FD_LINK) {
             char link_target[MAX_PATH];
             ret = vfs_proc_self_fd_link_target(resolved_virtual, link_target, sizeof(link_target));
+            if (ret != 0) {
+                return ret;
+            }
+            memset(statbuf, 0, sizeof(*statbuf));
+            statbuf->st_mode = S_IFLNK | 0777;
+            statbuf->st_nlink = 1;
+            statbuf->st_uid = 0;
+            statbuf->st_gid = 0;
+            statbuf->st_size = strlen(link_target);
+            statbuf->st_blksize = 4096;
+            statbuf->st_blocks = 0;
+            return 0;
+        } else if (proc_class == PROC_SELF_CWD_LINK) {
+            char link_target[MAX_PATH];
+            ret = vfs_proc_self_cwd_target(link_target, sizeof(link_target));
+            if (ret != 0) {
+                return ret;
+            }
+            memset(statbuf, 0, sizeof(*statbuf));
+            statbuf->st_mode = S_IFLNK | 0777;
+            statbuf->st_nlink = 1;
+            statbuf->st_uid = 0;
+            statbuf->st_gid = 0;
+            statbuf->st_size = strlen(link_target);
+            statbuf->st_blksize = 4096;
+            statbuf->st_blocks = 0;
+            return 0;
+        } else if (proc_class == PROC_SELF_EXE_LINK) {
+            char link_target[MAX_PATH];
+            ret = vfs_proc_self_exe_target(link_target, sizeof(link_target));
             if (ret != 0) {
                 return ret;
             }

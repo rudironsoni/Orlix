@@ -205,6 +205,46 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
                     put_fd_entry_impl(entry);
                     errno = EINVAL;
                     return -1;
+                } else if (state->cursor == 3) {
+                    size_t cwd_record_len = sizeof(struct linux_dirent64) + 4;
+                    size_t cwd_aligned_len = (cwd_record_len + 7U) & ~7U;
+                    if (count >= cwd_aligned_len) {
+                        struct linux_dirent64 *out = (struct linux_dirent64 *)dirp;
+                        out->d_ino = 1;
+                        out->d_off = 4;
+                        out->d_reclen = (unsigned short)cwd_aligned_len;
+                        out->d_type = DT_LNK;
+                        memcpy(out->d_name, "cwd", 4);
+                        if (cwd_aligned_len > cwd_record_len) {
+                            memset(((char *)out) + cwd_record_len, 0, cwd_aligned_len - cwd_record_len);
+                        }
+                        state->cursor = 4;
+                        put_fd_entry_impl(entry);
+                        return (ssize_t)cwd_aligned_len;
+                    }
+                    put_fd_entry_impl(entry);
+                    errno = EINVAL;
+                    return -1;
+                } else if (state->cursor == 4) {
+                    size_t exe_record_len = sizeof(struct linux_dirent64) + 4;
+                    size_t exe_aligned_len = (exe_record_len + 7U) & ~7U;
+                    if (count >= exe_aligned_len) {
+                        struct linux_dirent64 *out = (struct linux_dirent64 *)dirp;
+                        out->d_ino = 1;
+                        out->d_off = 5;
+                        out->d_reclen = (unsigned short)exe_aligned_len;
+                        out->d_type = DT_LNK;
+                        memcpy(out->d_name, "exe", 4);
+                        if (exe_aligned_len > exe_record_len) {
+                            memset(((char *)out) + exe_record_len, 0, exe_aligned_len - exe_record_len);
+                        }
+                        state->cursor = 5;
+                        put_fd_entry_impl(entry);
+                        return (ssize_t)exe_aligned_len;
+                    }
+                    put_fd_entry_impl(entry);
+                    errno = EINVAL;
+                    return -1;
                 }
                 put_fd_entry_impl(entry);
                 return 0;

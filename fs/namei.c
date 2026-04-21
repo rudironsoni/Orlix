@@ -435,19 +435,48 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
         return -1;
     }
 
-    if (vfs_path_is_linux_route(resolved_virtual) && vfs_classify_proc_self_path(resolved_virtual) == PROC_SELF_FD_LINK) {
-        char link_target[MAX_PATH];
-        ret = vfs_proc_self_fd_link_target(resolved_virtual, link_target, sizeof(link_target));
-        if (ret != 0) {
-            errno = -ret;
-            return -1;
+    if (vfs_path_is_linux_route(resolved_virtual)) {
+        proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_virtual);
+        if (proc_class == PROC_SELF_FD_LINK) {
+            char link_target[MAX_PATH];
+            ret = vfs_proc_self_fd_link_target(resolved_virtual, link_target, sizeof(link_target));
+            if (ret != 0) {
+                errno = -ret;
+                return -1;
+            }
+            size_t target_len = strlen(link_target);
+            if (target_len > bufsiz) {
+                target_len = bufsiz;
+            }
+            memcpy(buf, link_target, target_len);
+            return (ssize_t)target_len;
+        } else if (proc_class == PROC_SELF_CWD_LINK) {
+            char link_target[MAX_PATH];
+            ret = vfs_proc_self_cwd_target(link_target, sizeof(link_target));
+            if (ret != 0) {
+                errno = -ret;
+                return -1;
+            }
+            size_t target_len = strlen(link_target);
+            if (target_len > bufsiz) {
+                target_len = bufsiz;
+            }
+            memcpy(buf, link_target, target_len);
+            return (ssize_t)target_len;
+        } else if (proc_class == PROC_SELF_EXE_LINK) {
+            char link_target[MAX_PATH];
+            ret = vfs_proc_self_exe_target(link_target, sizeof(link_target));
+            if (ret != 0) {
+                errno = -ret;
+                return -1;
+            }
+            size_t target_len = strlen(link_target);
+            if (target_len > bufsiz) {
+                target_len = bufsiz;
+            }
+            memcpy(buf, link_target, target_len);
+            return (ssize_t)target_len;
         }
-        size_t target_len = strlen(link_target);
-        if (target_len > bufsiz) {
-            target_len = bufsiz;
-        }
-        memcpy(buf, link_target, target_len);
-        return (ssize_t)target_len;
     }
 
     if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {

@@ -1736,4 +1736,131 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     close(test_fd);
 }
 
+- (void)testProcSelfCwdStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/proc/self/cwd", &st), 0, @"stat(/proc/self/cwd) should succeed");
+    XCTAssertTrue(S_ISLNK(st.st_mode), @"/proc/self/cwd should be a symlink");
+    XCTAssertEqual(st.st_mode & 0777, 0777, @"/proc/self/cwd should have 0777 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat("/proc/self/cwd", &st), 0, @"lstat(/proc/self/cwd) should succeed");
+    XCTAssertTrue(S_ISLNK(st.st_mode), @"lstat(/proc/self/cwd) should return symlink");
+}
+
+- (void)testProcSelfExeStatSucceeds {
+    struct stat st;
+    errno = 0;
+    int ret = lstat("/proc/self/exe", &st);
+    if (ret == 0) {
+        XCTAssertTrue(S_ISLNK(st.st_mode), @"/proc/self/exe should be a symlink");
+        XCTAssertEqual(st.st_mode & 0777, 0777, @"/proc/self/exe should have 0777 permissions");
+    } else {
+        XCTAssertEqual(errno, ENOENT, @"lstat(/proc/self/exe) should return ENOENT if exe path not set");
+    }
+}
+
+- (void)testProcSelfCwdAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/proc/self/cwd", F_OK), 0, @"access(/proc/self/cwd, F_OK) should succeed");
+}
+
+- (void)testProcSelfExeAccessSucceeds {
+    errno = 0;
+    int ret = access("/proc/self/exe", F_OK);
+    if (ret != 0) {
+        XCTAssertEqual(errno, ENOENT, @"access(/proc/self/exe) should return ENOENT if exe path not set");
+    }
+}
+
+- (void)testProcSelfCwdReadlinkReturnsCurrentDirectory {
+    errno = 0;
+    char link_target[MAX_PATH];
+    ssize_t link_len = readlink("/proc/self/cwd", link_target, sizeof(link_target) - 1);
+    XCTAssertTrue(link_len > 0, @"readlink(/proc/self/cwd) should succeed, got %zd errno %d", link_len, errno);
+    if (link_len > 0) {
+        link_target[link_len] = '\0';
+        
+        char expected_cwd[MAX_PATH];
+        char *cwd_result = getcwd(expected_cwd, sizeof(expected_cwd));
+        XCTAssertTrue(cwd_result != NULL, @"getcwd should succeed");
+        
+        if (cwd_result) {
+            NSString *target = [NSString stringWithUTF8String:link_target];
+            NSString *expected = [NSString stringWithUTF8String:expected_cwd];
+            XCTAssertEqualObjects(target, expected, @"readlink(/proc/self/cwd) should return current working directory");
+        }
+    }
+}
+
+- (void)testProcSelfExeReadlinkReturnsExecutablePath {
+    errno = 0;
+    char link_target[MAX_PATH];
+    ssize_t link_len = readlink("/proc/self/exe", link_target, sizeof(link_target) - 1);
+    if (link_len > 0) {
+        link_target[link_len] = '\0';
+        NSString *target = [NSString stringWithUTF8String:link_target];
+        XCTAssertTrue([target length] > 0, @"readlink(/proc/self/exe) should return non-empty path");
+    } else {
+        XCTAssertEqual(errno, ENOENT, @"readlink(/proc/self/exe) should return ENOENT if exe path not set, got errno %d", errno);
+    }
+}
+
+- (void)testProcSelfGetdentsIncludesCwdAndExe {
+    errno = 0;
+    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    union { char storage[1024]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    bool found_dot = false;
+    bool found_dotdot = false;
+    bool found_fd = false;
+    bool found_cwd = false;
+    bool found_exe = false;
+    bool done = false;
+    while (!done) {
+        errno = 0;
+        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+        if (nread <= 0) {
+            done = true;
+            continue;
+        }
+        size_t pos = 0;
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+            if ([name isEqualToString:@"."]) {
+                found_dot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+            } else if ([name isEqualToString:@".."]) {
+                found_dotdot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+            } else if ([name isEqualToString:@"fd"]) {
+                found_fd = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @"fd should be DT_DIR");
+            } else if ([name isEqualToString:@"cwd"]) {
+                found_cwd = true;
+                XCTAssertEqual(entry->d_type, DT_LNK, @"cwd should be DT_LNK");
+            } else if ([name isEqualToString:@"exe"]) {
+                found_exe = true;
+                XCTAssertEqual(entry->d_type, DT_LNK, @"exe should be DT_LNK");
+            }
+            if (entry->d_reclen == 0) break;
+            pos += entry->d_reclen;
+        }
+    }
+
+    XCTAssertTrue(found_dot, @"getdents64(/proc/self) should return '.' entry");
+    XCTAssertTrue(found_dotdot, @"getdents64(/proc/self) should return '..' entry");
+    XCTAssertTrue(found_fd, @"getdents64(/proc/self) should return 'fd' entry");
+    XCTAssertTrue(found_cwd, @"getdents64(/proc/self) should return 'cwd' entry");
+    XCTAssertTrue(found_exe, @"getdents64(/proc/self) should return 'exe' entry");
+
+    close(fd);
+}
+
 @end
