@@ -63,6 +63,8 @@ content_len = vfs_proc_self_comm_content(content_buf, sizeof(content_buf));
 content_len = vfs_proc_self_stat_content(content_buf, sizeof(content_buf));
 } else if (proc_file == SYNTHETIC_PROC_FILE_STATM) {
 content_len = vfs_proc_self_statm_content(content_buf, sizeof(content_buf));
+} else if (proc_file == SYNTHETIC_PROC_FILE_STATUS) {
+content_len = vfs_proc_self_status_content(content_buf, sizeof(content_buf));
 } else if (proc_file == SYNTHETIC_PROC_FILE_FDINFO) {
 int fd_num = get_fd_proc_file_fd_num_impl(entry);
 content_len = vfs_proc_self_fdinfo_content(fd_num, content_buf, sizeof(content_buf));

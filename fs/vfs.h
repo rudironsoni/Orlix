@@ -242,7 +242,8 @@ enum proc_self_path_class {
     PROC_SELF_COMM_FILE,
     PROC_SELF_STAT_FILE,
     PROC_SELF_STATM_FILE,
-    PROC_SELF_FDINFO_FILE
+    PROC_SELF_FDINFO_FILE,
+    PROC_SELF_STATUS_FILE
 };
 
 typedef enum proc_self_path_class proc_self_path_class_t;
@@ -256,6 +257,7 @@ int vfs_proc_self_comm_content(char *buf, size_t buf_len);
 int vfs_proc_self_stat_content(char *buf, size_t buf_len);
 int vfs_proc_self_statm_content(char *buf, size_t buf_len);
 int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len);
+int vfs_proc_self_status_content(char *buf, size_t buf_len);
 
 const char *vfs_backing_root_for_class(enum vfs_backing_class cls);
 

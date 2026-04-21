@@ -33,6 +33,7 @@
 
 #include "fdtable.h"
 #include "../kernel/task.h"
+#include "../kernel/cred_internal.h"
 
 static const char *vfs_virtual_root_path = "/";
 
@@ -975,6 +976,9 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strcmp(vpath, "/proc/self/statm") == 0) {
         return PROC_SELF_STATM_FILE;
     }
+    if (strcmp(vpath, "/proc/self/status") == 0) {
+        return PROC_SELF_STATUS_FILE;
+    }
     return PROC_SELF_NONE;
 }
 
@@ -1265,6 +1269,74 @@ int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len) {
     return ret;
 }
 
+int vfs_proc_self_status_content(char *buf, size_t buf_len) {
+    struct task_struct *task;
+    struct cred *cred;
+    int ret;
+    char state_char;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    task = get_current();
+    if (!task) {
+        return -ESRCH;
+    }
+
+    cred = get_current_cred();
+    if (!cred) {
+        return -ESRCH;
+    }
+
+    switch (atomic_load(&task->state)) {
+        case TASK_RUNNING:
+            state_char = 'R';
+            break;
+        case TASK_INTERRUPTIBLE:
+            state_char = 'S';
+            break;
+        case TASK_UNINTERRUPTIBLE:
+            state_char = 'D';
+            break;
+        case TASK_STOPPED:
+            state_char = 'T';
+            break;
+        case TASK_ZOMBIE:
+            state_char = 'Z';
+            break;
+        default:
+            state_char = 'R';
+            break;
+    }
+
+    ret = snprintf(buf, buf_len,
+        "Name:\t%s\n"
+        "State:\t%c (running)\n"
+        "Tgid:\t%d\n"
+        "Pid:\t%d\n"
+        "PPid:\t%d\n"
+        "TracerPid:\t0\n"
+        "Uid:\t%u\t%u\t%u\t%u\n"
+        "Gid:\t%u\t%u\t%u\t%u\n",
+        task->comm,
+        state_char,
+        task->tgid,
+        task->pid,
+        task->ppid,
+        cred->uid, cred->euid, cred->suid, cred->suid,
+        cred->gid, cred->egid, cred->sgid, cred->sgid
+    );
+
+    if (ret < 0) {
+        return -EINVAL;
+    }
+    if ((size_t)ret >= buf_len) {
+        return (int)(buf_len - 1);
+    }
+    return ret;
+}
+
 int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
@@ -1396,7 +1468,7 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
             statbuf->st_blocks = 0;
             return 0;
         } else if (proc_class == PROC_SELF_CMDLINE_FILE || proc_class == PROC_SELF_COMM_FILE ||
-                   proc_class == PROC_SELF_STAT_FILE || proc_class == PROC_SELF_STATM_FILE) {
+                   proc_class == PROC_SELF_STAT_FILE || proc_class == PROC_SELF_STATM_FILE || proc_class == PROC_SELF_STATUS_FILE) {
             memset(statbuf, 0, sizeof(*statbuf));
             statbuf->st_mode = S_IFREG | 0444;
             statbuf->st_nlink = 1;

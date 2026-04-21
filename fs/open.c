@@ -86,7 +86,15 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
             init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
             return fd;
         }
-        if (proc_class == PROC_SELF_FDINFO_FILE) {
+        if (proc_class == PROC_SELF_STATUS_FILE) {
+int fd = alloc_fd_impl();
+if (fd < 0) {
+return -1;
+}
+init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATUS);
+return fd;
+}
+if (proc_class == PROC_SELF_FDINFO_FILE) {
             const char *fd_str = resolved_path + 18;
             char *endptr;
             long fd_num = strtol(fd_str, &endptr, 10);
