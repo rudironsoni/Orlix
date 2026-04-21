@@ -229,6 +229,19 @@ bool vfs_path_is_linux_route(const char *vpath);
 bool vfs_path_is_synthetic(const char *vpath);
 bool vfs_path_is_synthetic_root(const char *vpath);
 synthetic_dev_node_t vfs_path_is_synthetic_dev_node(const char *vpath);
+
+enum proc_self_path_class {
+    PROC_SELF_NONE = 0,
+    PROC_SELF_DIR,
+    PROC_SELF_FD_DIR,
+    PROC_SELF_FD_LINK
+};
+
+typedef enum proc_self_path_class proc_self_path_class_t;
+
+proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath);
+int vfs_proc_self_fd_link_target(const char *vpath, char *target, size_t target_len);
+
 const char *vfs_backing_root_for_class(enum vfs_backing_class cls);
 
 /* Backing root accessors for different storage classes */

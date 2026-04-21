@@ -1544,4 +1544,196 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     close(fd);
 }
 
+/* ============================================================================
+ * SYNTHETIC /proc/self AND /proc/self/fd TESTS
+ * ============================================================================
+ */
+
+- (void)testProcSelfStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/proc/self", &st), 0, @"stat(/proc/self) should succeed");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc/self should be a directory");
+    XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc/self should have 0555 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat("/proc/self", &st), 0, @"lstat(/proc/self) should succeed");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"lstat(/proc/self) should return directory");
+}
+
+- (void)testProcSelfFdStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/proc/self/fd", &st), 0, @"stat(/proc/self/fd) should succeed");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc/self/fd should be a directory");
+    XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc/self/fd should have 0555 permissions");
+}
+
+- (void)testProcSelfAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/proc/self", F_OK), 0, @"access(/proc/self, F_OK) should succeed");
+    XCTAssertEqual(access("/proc/self", R_OK), 0, @"access(/proc/self, R_OK) should succeed");
+    XCTAssertEqual(access("/proc/self", X_OK), 0, @"access(/proc/self, X_OK) should succeed");
+}
+
+- (void)testProcSelfFdAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/proc/self/fd", F_OK), 0, @"access(/proc/self/fd, F_OK) should succeed");
+}
+
+- (void)testProcSelfOpenSucceeds {
+    errno = 0;
+    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testProcSelfFdOpenSucceeds {
+    errno = 0;
+    int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testProcSelfGetdentsReturnsDotDotdotFd {
+    errno = 0;
+    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    union { char storage[1024]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    bool found_dot = false;
+    bool found_dotdot = false;
+    bool found_fd = false;
+    bool done = false;
+    while (!done) {
+        errno = 0;
+        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+        if (nread <= 0) {
+            done = true;
+            continue;
+        }
+        size_t pos = 0;
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+            if ([name isEqualToString:@"."]) {
+                found_dot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+            } else if ([name isEqualToString:@".."]) {
+                found_dotdot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+            } else if ([name isEqualToString:@"fd"]) {
+                found_fd = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @"fd should be DT_DIR");
+            }
+            if (entry->d_reclen == 0) break;
+            pos += entry->d_reclen;
+        }
+    }
+
+    XCTAssertTrue(found_dot, @"getdents64(/proc/self) should return '.' entry");
+    XCTAssertTrue(found_dotdot, @"getdents64(/proc/self) should return '..' entry");
+    XCTAssertTrue(found_fd, @"getdents64(/proc/self) should return 'fd' entry");
+
+    close(fd);
+}
+
+- (void)testProcSelfFdGetdentsReturnsDotDotdotAndFdNumbers {
+    errno = 0;
+    int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    union { char storage[2048]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    bool found_dot = false;
+    bool found_dotdot = false;
+    int fd_link_count = 0;
+    bool done = false;
+    while (!done) {
+        errno = 0;
+        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+        if (nread <= 0) {
+            done = true;
+            continue;
+        }
+        size_t pos = 0;
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+            if ([name isEqualToString:@"."]) {
+                found_dot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+            } else if ([name isEqualToString:@".."]) {
+                found_dotdot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+            } else {
+                XCTAssertEqual(entry->d_type, DT_LNK, @"fd entries should be DT_LNK");
+                fd_link_count++;
+            }
+            if (entry->d_reclen == 0) break;
+            pos += entry->d_reclen;
+        }
+    }
+
+    XCTAssertTrue(found_dot, @"getdents64(/proc/self/fd) should return '.' entry");
+    XCTAssertTrue(found_dotdot, @"getdents64(/proc/self/fd) should return '..' entry");
+    XCTAssertTrue(fd_link_count > 0, @"getdents64(/proc/self/fd) should return at least one fd number link");
+
+    close(fd);
+}
+
+- (void)testProcSelfFdLinkReadlink {
+    errno = 0;
+    int test_fd = open("/dev/null", O_RDWR);
+    XCTAssertTrue(test_fd >= 0, @"open(/dev/null) should succeed for readlink test");
+    if (test_fd < 0) return;
+
+    char fd_path[64];
+    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", test_fd);
+
+    errno = 0;
+    char link_target[MAX_PATH];
+    ssize_t link_len = readlink(fd_path, link_target, sizeof(link_target) - 1);
+    XCTAssertTrue(link_len > 0, @"readlink(%s) should succeed, got %zd errno %d", fd_path, link_len, errno);
+    if (link_len > 0) {
+        link_target[link_len] = '\0';
+        NSString *target = [NSString stringWithUTF8String:link_target];
+        XCTAssertTrue([target isEqualToString:@"/dev/null"], @"readlink should return /dev/null, got %@", target);
+    }
+
+    close(test_fd);
+}
+
+- (void)testProcSelfFdInvalidLinkFails {
+    errno = 0;
+    char link_target[MAX_PATH];
+    ssize_t link_len = readlink("/proc/self/fd/9999", link_target, sizeof(link_target));
+    XCTAssertEqual(link_len, -1, @"readlink(/proc/self/fd/9999) should fail");
+    XCTAssertEqual(errno, ENOENT, @"readlink(/proc/self/fd/9999) should set ENOENT");
+}
+
+- (void)testProcSelfFdLinkLstatReturnsSymlink {
+    errno = 0;
+    int test_fd = open("/dev/null", O_RDWR);
+    XCTAssertTrue(test_fd >= 0, @"open(/dev/null) should succeed for lstat test");
+    if (test_fd < 0) return;
+
+    char fd_path[64];
+    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", test_fd);
+
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(lstat(fd_path, &st), 0, @"lstat(%s) should succeed", fd_path);
+    XCTAssertTrue(S_ISLNK(st.st_mode), @"lstat(/proc/self/fd/<n>) should return S_IFLNK");
+
+    close(test_fd);
+}
+
 @end

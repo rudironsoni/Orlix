@@ -411,6 +411,8 @@ int symlink_impl(const char *target, const char *linkpath) {
 
 ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
     char translated_path[MAX_PATH];
+    char resolved_virtual[MAX_PATH];
+    int ret;
 
     if (pathname == NULL || buf == NULL) {
         errno = EFAULT;
@@ -425,6 +427,27 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
     if (bufsiz == 0) {
         errno = EINVAL;
         return -1;
+    }
+
+    ret = vfs_resolve_virtual_path_task(pathname, resolved_virtual, sizeof(resolved_virtual), NULL);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    if (vfs_path_is_linux_route(resolved_virtual) && vfs_classify_proc_self_path(resolved_virtual) == PROC_SELF_FD_LINK) {
+        char link_target[MAX_PATH];
+        ret = vfs_proc_self_fd_link_target(resolved_virtual, link_target, sizeof(link_target));
+        if (ret != 0) {
+            errno = -ret;
+            return -1;
+        }
+        size_t target_len = strlen(link_target);
+        if (target_len > bufsiz) {
+            target_len = bufsiz;
+        }
+        memcpy(buf, link_target, target_len);
+        return (ssize_t)target_len;
     }
 
     if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {

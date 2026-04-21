@@ -286,8 +286,9 @@ enum fd_type {
 };
 
 typedef struct synthetic_dir_state {
-    off_t cursor;           /* Current readdir position */
-    bool entries_emitted;   /* Whether . and .. have been emitted */
+    off_t cursor;
+    bool entries_emitted;
+    synthetic_dir_class_t dir_class;
 } synthetic_dir_state_t;
 
 typedef struct fd_description {
@@ -353,6 +354,36 @@ static fd_description_t *alloc_synthetic_fd_description(int flags, mode_t mode, 
         errno = ENOMEM;
         return NULL;
     }
+    ((synthetic_dir_state_t *)desc->synthetic_state)->dir_class = SYNTHETIC_DIR_GENERIC;
+    atomic_init(&desc->refs, 1);
+    pthread_mutex_init(&desc->lock, NULL);
+    if (path) {
+        strncpy(desc->path, path, MAX_PATH - 1);
+        desc->path[MAX_PATH - 1] = '\0';
+    }
+    return desc;
+}
+
+static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class) {
+    fd_description_t *desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    desc->type = FD_TYPE_SYNTHETIC_DIR;
+    desc->fd = -1;
+    desc->flags = flags;
+    desc->mode = mode;
+    desc->offset = 0;
+    desc->is_dir = true;
+    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
+    if (!desc->synthetic_state) {
+        free(desc);
+        errno = ENOMEM;
+        return NULL;
+    }
+    ((synthetic_dir_state_t *)desc->synthetic_state)->dir_class = dir_class;
     atomic_init(&desc->refs, 1);
     pthread_mutex_init(&desc->lock, NULL);
     if (path) {
@@ -707,4 +738,32 @@ bool get_fd_is_synthetic_dev_impl(void *entry) {
 synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->dev_node : SYNTHETIC_DEV_NONE;
+}
+
+void init_synthetic_subdir_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    pthread_mutex_lock(&entry->lock);
+    entry->desc = alloc_synthetic_subdir_fd_description(flags, mode, path, dir_class);
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    pthread_mutex_unlock(&entry->lock);
+}
+
+synthetic_dir_class_t get_fd_synthetic_dir_class_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    if (!fd_entry->desc || fd_entry->desc->type != FD_TYPE_SYNTHETIC_DIR || !fd_entry->desc->synthetic_state) {
+        return SYNTHETIC_DIR_GENERIC;
+    }
+    return ((synthetic_dir_state_t *)fd_entry->desc->synthetic_state)->dir_class;
+}
+
+bool fdtable_is_used_impl(int fd) {
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
+        return false;
+    }
+    file_init_impl();
+    pthread_mutex_lock(&fd_table_lock);
+    bool used = fd_table[fd].used;
+    pthread_mutex_unlock(&fd_table_lock);
+    return used;
 }

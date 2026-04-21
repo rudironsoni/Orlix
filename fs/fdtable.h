@@ -88,7 +88,18 @@ int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec);
 /* Initialize/clone fd entries */
 void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path);
 
+enum synthetic_dir_class {
+    SYNTHETIC_DIR_GENERIC = 0,
+    SYNTHETIC_DIR_PROC_SELF,
+    SYNTHETIC_DIR_PROC_SELF_FD
+};
+
+typedef enum synthetic_dir_class synthetic_dir_class_t;
+
 void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *path);
+void init_synthetic_subdir_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class);
+
+synthetic_dir_class_t get_fd_synthetic_dir_class_impl(void *entry);
 
 enum synthetic_dev_node {
     SYNTHETIC_DEV_NONE = 0,
@@ -103,6 +114,8 @@ void init_synthetic_dev_fd_entry_impl(int fd, int flags, mode_t mode, const char
 
 bool get_fd_is_synthetic_dev_impl(void *entry);
 synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry);
+
+bool fdtable_is_used_impl(int fd);
 
 /* Close implementation using static fd table */
 int close_impl(int fd);

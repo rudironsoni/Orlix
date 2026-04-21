@@ -938,6 +938,62 @@ int vfs_lstat(const char *pathname, struct stat *statbuf) {
     return 0;
 }
 
+proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
+    if (!vpath) {
+        return PROC_SELF_NONE;
+    }
+    if (strcmp(vpath, "/proc/self") == 0) {
+        return PROC_SELF_DIR;
+    }
+    if (strcmp(vpath, "/proc/self/fd") == 0) {
+        return PROC_SELF_FD_DIR;
+    }
+    if (strncmp(vpath, "/proc/self/fd/", 14) == 0 && vpath[14] != '\0') {
+        return PROC_SELF_FD_LINK;
+    }
+    return PROC_SELF_NONE;
+}
+
+int vfs_proc_self_fd_link_target(const char *vpath, char *target, size_t target_len) {
+    const char *fd_str;
+    char *endptr;
+    long fd_num;
+    void *entry;
+    int ret;
+
+    if (!vpath || !target || target_len == 0) {
+        return -EINVAL;
+    }
+
+    if (strncmp(vpath, "/proc/self/fd/", 14) != 0) {
+        return -EINVAL;
+    }
+
+    fd_str = vpath + 14;
+    fd_num = strtol(fd_str, &endptr, 10);
+    if (*endptr != '\0' || fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
+        return -ENOENT;
+    }
+
+    if (!fdtable_is_used_impl((int)fd_num)) {
+        return -ENOENT;
+    }
+
+    entry = get_fd_entry_impl((int)fd_num);
+    if (!entry) {
+        return -ENOENT;
+    }
+
+    ret = get_fd_path_impl(entry, target, target_len);
+    put_fd_entry_impl(entry);
+
+    if (ret != 0) {
+        return -ENOENT;
+    }
+
+    return 0;
+}
+
 int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
@@ -946,6 +1002,9 @@ int vfs_access(const char *pathname, int mode) {
         return 0;
     }
     if (vfs_path_is_synthetic_dev_node(pathname) != SYNTHETIC_DEV_NONE) {
+        return 0;
+    }
+    if (vfs_classify_proc_self_path(pathname) != PROC_SELF_NONE) {
         return 0;
     }
     if (vfs_path_is_synthetic(pathname)) {
@@ -1008,6 +1067,36 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
         }
     }
 
+    {
+        proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_virtual);
+        if (proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR) {
+            memset(statbuf, 0, sizeof(*statbuf));
+            statbuf->st_mode = S_IFDIR | 0555;
+            statbuf->st_nlink = 2;
+            statbuf->st_uid = 0;
+            statbuf->st_gid = 0;
+            statbuf->st_size = 0;
+            statbuf->st_blksize = 4096;
+            statbuf->st_blocks = 0;
+            return 0;
+        } else if (proc_class == PROC_SELF_FD_LINK) {
+            char link_target[MAX_PATH];
+            ret = vfs_proc_self_fd_link_target(resolved_virtual, link_target, sizeof(link_target));
+            if (ret != 0) {
+                return ret;
+            }
+            memset(statbuf, 0, sizeof(*statbuf));
+            statbuf->st_mode = S_IFLNK | 0777;
+            statbuf->st_nlink = 1;
+            statbuf->st_uid = 0;
+            statbuf->st_gid = 0;
+            statbuf->st_size = strlen(link_target);
+            statbuf->st_blksize = 4096;
+            statbuf->st_blocks = 0;
+            return 0;
+        }
+    }
+
     if (vfs_path_is_synthetic(resolved_virtual)) {
         return -ENOENT;
     }
@@ -1051,6 +1140,10 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
     }
 
     if (vfs_path_is_synthetic_dev_node(resolved_virtual) != SYNTHETIC_DEV_NONE) {
+        return 0;
+    }
+
+    if (vfs_classify_proc_self_path(resolved_virtual) != PROC_SELF_NONE) {
         return 0;
     }
 

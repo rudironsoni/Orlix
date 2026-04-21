@@ -38,6 +38,19 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
     }
 
     {
+        proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_path);
+        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR) && (flags & O_DIRECTORY)) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            synthetic_dir_class_t dir_class = (proc_class == PROC_SELF_DIR) ? SYNTHETIC_DIR_PROC_SELF : SYNTHETIC_DIR_PROC_SELF_FD;
+            init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
+            return fd;
+        }
+    }
+
+    {
         synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
         if (dev_node != SYNTHETIC_DEV_NONE) {
             int fd = alloc_fd_impl();
@@ -100,6 +113,19 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
         }
         init_synthetic_fd_entry_impl(fd, flags, mode, resolved_path);
         return fd;
+    }
+
+    {
+        proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_path);
+        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR) && (flags & O_DIRECTORY)) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            synthetic_dir_class_t dir_class = (proc_class == PROC_SELF_DIR) ? SYNTHETIC_DIR_PROC_SELF : SYNTHETIC_DIR_PROC_SELF_FD;
+            init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
+            return fd;
+        }
     }
 
     {
