@@ -963,6 +963,12 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strcmp(vpath, "/proc/self/comm") == 0) {
         return PROC_SELF_COMM_FILE;
     }
+    if (strcmp(vpath, "/proc/self/stat") == 0) {
+        return PROC_SELF_STAT_FILE;
+    }
+    if (strcmp(vpath, "/proc/self/statm") == 0) {
+        return PROC_SELF_STATM_FILE;
+    }
     return PROC_SELF_NONE;
 }
 
@@ -1140,6 +1146,79 @@ int vfs_proc_self_comm_content(char *buf, size_t buf_len) {
     return (int)(comm_len + 1);
 }
 
+int vfs_proc_self_stat_content(char *buf, size_t buf_len) {
+    struct task_struct *task;
+    int ret;
+    char state_char;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    task = get_current();
+    if (!task) {
+        return -ESRCH;
+    }
+
+    switch (atomic_load(&task->state)) {
+        case TASK_RUNNING:
+            state_char = 'R';
+            break;
+        case TASK_INTERRUPTIBLE:
+            state_char = 'S';
+            break;
+        case TASK_UNINTERRUPTIBLE:
+            state_char = 'D';
+            break;
+        case TASK_STOPPED:
+            state_char = 'T';
+            break;
+        case TASK_ZOMBIE:
+            state_char = 'Z';
+            break;
+        default:
+            state_char = 'R';
+            break;
+    }
+
+    ret = snprintf(buf, buf_len,
+        "%d (%s) %c %d %d %d 0 -1 0 0 0 0 0 0 0 0 0 0 1 0 %llu 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+        task->pid,
+        task->comm,
+        state_char,
+        task->ppid,
+        task->pgid,
+        task->sid,
+        (unsigned long long)(task->start_time_ns / 1000000000ULL)
+    );
+
+    if (ret < 0) {
+        return -EINVAL;
+    }
+    if ((size_t)ret >= buf_len) {
+        return (int)(buf_len - 1);
+    }
+    return ret;
+}
+
+int vfs_proc_self_statm_content(char *buf, size_t buf_len) {
+    int ret;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    ret = snprintf(buf, buf_len, "0 0 0 0 0 0 0\n");
+
+    if (ret < 0) {
+        return -EINVAL;
+    }
+    if ((size_t)ret >= buf_len) {
+        return (int)(buf_len - 1);
+    }
+    return ret;
+}
+
 int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
@@ -1270,7 +1349,8 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
             statbuf->st_blksize = 4096;
             statbuf->st_blocks = 0;
             return 0;
-        } else if (proc_class == PROC_SELF_CMDLINE_FILE || proc_class == PROC_SELF_COMM_FILE) {
+        } else if (proc_class == PROC_SELF_CMDLINE_FILE || proc_class == PROC_SELF_COMM_FILE ||
+                   proc_class == PROC_SELF_STAT_FILE || proc_class == PROC_SELF_STATM_FILE) {
             memset(statbuf, 0, sizeof(*statbuf));
             statbuf->st_mode = S_IFREG | 0444;
             statbuf->st_nlink = 1;

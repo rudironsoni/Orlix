@@ -118,7 +118,9 @@ synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry);
 enum synthetic_proc_file {
     SYNTHETIC_PROC_FILE_NONE = 0,
     SYNTHETIC_PROC_FILE_CMDLINE,
-    SYNTHETIC_PROC_FILE_COMM
+    SYNTHETIC_PROC_FILE_COMM,
+    SYNTHETIC_PROC_FILE_STAT,
+    SYNTHETIC_PROC_FILE_STATM
 };
 
 typedef enum synthetic_proc_file synthetic_proc_file_t;

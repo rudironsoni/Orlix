@@ -265,27 +265,67 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
                     put_fd_entry_impl(entry);
                     errno = EINVAL;
                     return -1;
-                } else if (state->cursor == 6) {
-                    size_t comm_record_len = sizeof(struct linux_dirent64) + 5;
-                    size_t comm_aligned_len = (comm_record_len + 7U) & ~7U;
-                    if (count >= comm_aligned_len) {
-                        struct linux_dirent64 *out = (struct linux_dirent64 *)dirp;
-                        out->d_ino = 1;
-                        out->d_off = 7;
-                        out->d_reclen = (unsigned short)comm_aligned_len;
-                        out->d_type = DT_REG;
-                        memcpy(out->d_name, "comm", 5);
-                        if (comm_aligned_len > comm_record_len) {
-                            memset(((char *)out) + comm_record_len, 0, comm_aligned_len - comm_record_len);
-                        }
-                        state->cursor = 7;
-                        put_fd_entry_impl(entry);
-                        return (ssize_t)comm_aligned_len;
-                    }
-                    put_fd_entry_impl(entry);
-                    errno = EINVAL;
-                    return -1;
-                }
+    } else if (state->cursor == 6) {
+        size_t comm_record_len = sizeof(struct linux_dirent64) + 5;
+        size_t comm_aligned_len = (comm_record_len + 7U) & ~7U;
+        if (count >= comm_aligned_len) {
+            struct linux_dirent64 *out = (struct linux_dirent64 *)dirp;
+            out->d_ino = 1;
+            out->d_off = 7;
+            out->d_reclen = (unsigned short)comm_aligned_len;
+            out->d_type = DT_REG;
+            memcpy(out->d_name, "comm", 5);
+            if (comm_aligned_len > comm_record_len) {
+                memset(((char *)out) + comm_record_len, 0, comm_aligned_len - comm_record_len);
+            }
+            state->cursor = 7;
+            put_fd_entry_impl(entry);
+            return (ssize_t)comm_aligned_len;
+        }
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    } else if (state->cursor == 7) {
+        size_t stat_record_len = sizeof(struct linux_dirent64) + 5;
+        size_t stat_aligned_len = (stat_record_len + 7U) & ~7U;
+        if (count >= stat_aligned_len) {
+            struct linux_dirent64 *out = (struct linux_dirent64 *)dirp;
+            out->d_ino = 1;
+            out->d_off = 8;
+            out->d_reclen = (unsigned short)stat_aligned_len;
+            out->d_type = DT_REG;
+            memcpy(out->d_name, "stat", 5);
+            if (stat_aligned_len > stat_record_len) {
+                memset(((char *)out) + stat_record_len, 0, stat_aligned_len - stat_record_len);
+            }
+            state->cursor = 8;
+            put_fd_entry_impl(entry);
+            return (ssize_t)stat_aligned_len;
+        }
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    } else if (state->cursor == 8) {
+        size_t statm_record_len = sizeof(struct linux_dirent64) + 6;
+        size_t statm_aligned_len = (statm_record_len + 7U) & ~7U;
+        if (count >= statm_aligned_len) {
+            struct linux_dirent64 *out = (struct linux_dirent64 *)dirp;
+            out->d_ino = 1;
+            out->d_off = 9;
+            out->d_reclen = (unsigned short)statm_aligned_len;
+            out->d_type = DT_REG;
+            memcpy(out->d_name, "statm", 6);
+            if (statm_aligned_len > statm_record_len) {
+                memset(((char *)out) + statm_record_len, 0, statm_aligned_len - statm_record_len);
+            }
+            state->cursor = 9;
+            put_fd_entry_impl(entry);
+            return (ssize_t)statm_aligned_len;
+        }
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    }
                 put_fd_entry_impl(entry);
                 return 0;
             } else if (dir_class == SYNTHETIC_DIR_PROC_SELF_FD) {

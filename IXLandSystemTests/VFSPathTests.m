@@ -1980,4 +1980,128 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     close(fd);
 }
 
+- (void)testProcSelfStatStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/proc/self/stat", &st), 0, @"stat(/proc/self/stat) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/stat should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/stat should have 0444 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat("/proc/self/stat", &st), 0, @"lstat(/proc/self/stat) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/stat) should return regular file");
+}
+
+- (void)testProcSelfStatmStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/proc/self/statm", &st), 0, @"stat(/proc/self/statm) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/statm should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/statm should have 0444 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat("/proc/self/statm", &st), 0, @"lstat(/proc/self/statm) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/statm) should return regular file");
+}
+
+- (void)testProcSelfStatAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/proc/self/stat", F_OK), 0, @"access(/proc/self/stat, F_OK) should succeed");
+    XCTAssertEqual(access("/proc/self/stat", R_OK), 0, @"access(/proc/self/stat, R_OK) should succeed");
+}
+
+- (void)testProcSelfStatmAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/proc/self/statm", F_OK), 0, @"access(/proc/self/statm, F_OK) should succeed");
+    XCTAssertEqual(access("/proc/self/statm", R_OK), 0, @"access(/proc/self/statm, R_OK) should succeed");
+}
+
+- (void)testProcSelfStatOpenAndReadSucceeds {
+    errno = 0;
+    int fd = open("/proc/self/stat", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/stat, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    char buf[2048];
+    memset(buf, 0, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertTrue(nread > 0, @"read(/proc/self/stat) should return > 0 bytes, got %zd errno %d", nread, errno);
+    
+    if (nread > 0) {
+        buf[nread] = '\0';
+        NSString *content = [NSString stringWithUTF8String:buf];
+        XCTAssertTrue([content containsString:@"("], @"stat content should contain opening paren around comm");
+        XCTAssertTrue([content containsString:@")"], @"stat content should contain closing paren around comm");
+        XCTAssertTrue([content containsString:@"R"] || [content containsString:@"S"] || [content containsString:@"D"] || [content containsString:@"T"] || [content containsString:@"Z"], 
+                     @"stat content should contain valid state char");
+    }
+
+    close(fd);
+}
+
+- (void)testProcSelfStatmOpenAndReadSucceeds {
+    errno = 0;
+    int fd = open("/proc/self/statm", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/statm, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    char buf[256];
+    memset(buf, 0, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertTrue(nread > 0, @"read(/proc/self/statm) should return > 0 bytes, got %zd errno %d", nread, errno);
+    
+    if (nread > 0) {
+        buf[nread] = '\0';
+        NSString *content = [NSString stringWithUTF8String:buf];
+        XCTAssertTrue([content containsString:@" "], @"statm content should contain space-separated values");
+        XCTAssertTrue([content containsString:@"\n"], @"statm content should end with newline");
+    }
+
+    close(fd);
+}
+
+- (void)testProcSelfGetdentsIncludesStatAndStatm {
+    errno = 0;
+    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    union { char storage[2048]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    bool found_stat = false;
+    bool found_statm = false;
+    bool done = false;
+    while (!done) {
+        errno = 0;
+        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+        if (nread <= 0) {
+            done = true;
+            continue;
+        }
+        size_t pos = 0;
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+            if ([name isEqualToString:@"stat"]) {
+                found_stat = true;
+                XCTAssertEqual(entry->d_type, DT_REG, @"stat should be DT_REG");
+            } else if ([name isEqualToString:@"statm"]) {
+                found_statm = true;
+                XCTAssertEqual(entry->d_type, DT_REG, @"statm should be DT_REG");
+            }
+            if (entry->d_reclen == 0) break;
+            pos += entry->d_reclen;
+        }
+    }
+
+    XCTAssertTrue(found_stat, @"getdents64(/proc/self) should return 'stat' entry");
+    XCTAssertTrue(found_statm, @"getdents64(/proc/self) should return 'statm' entry");
+
+    close(fd);
+}
+
 @end

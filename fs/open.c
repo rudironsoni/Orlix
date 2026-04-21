@@ -48,23 +48,39 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
             init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
             return fd;
         }
-        if (proc_class == PROC_SELF_CMDLINE_FILE) {
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
-            }
-            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_CMDLINE);
-            return fd;
+    if (proc_class == PROC_SELF_CMDLINE_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
         }
-        if (proc_class == PROC_SELF_COMM_FILE) {
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
-            }
-            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_COMM);
-            return fd;
-        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_CMDLINE);
+        return fd;
     }
+    if (proc_class == PROC_SELF_COMM_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_COMM);
+        return fd;
+    }
+    if (proc_class == PROC_SELF_STAT_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STAT);
+        return fd;
+    }
+    if (proc_class == PROC_SELF_STATM_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
+        return fd;
+    }
+}
 
     {
         synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
@@ -142,23 +158,39 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
             init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
             return fd;
         }
-        if (proc_class == PROC_SELF_CMDLINE_FILE) {
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
-            }
-            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_CMDLINE);
-            return fd;
+    if (proc_class == PROC_SELF_CMDLINE_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
         }
-        if (proc_class == PROC_SELF_COMM_FILE) {
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
-            }
-            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_COMM);
-            return fd;
-        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_CMDLINE);
+        return fd;
     }
+    if (proc_class == PROC_SELF_COMM_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_COMM);
+        return fd;
+    }
+    if (proc_class == PROC_SELF_STAT_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STAT);
+        return fd;
+    }
+    if (proc_class == PROC_SELF_STATM_FILE) {
+        int fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
+        return fd;
+    }
+}
 
     {
         synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
