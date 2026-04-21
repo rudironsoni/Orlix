@@ -40,12 +40,17 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
 
     {
         proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_path);
-        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR) && (flags & O_DIRECTORY)) {
+        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) && (flags & O_DIRECTORY)) {
             int fd = alloc_fd_impl();
             if (fd < 0) {
                 return -1;
             }
-            synthetic_dir_class_t dir_class = (proc_class == PROC_SELF_DIR) ? SYNTHETIC_DIR_PROC_SELF : SYNTHETIC_DIR_PROC_SELF_FD;
+            synthetic_dir_class_t dir_class = SYNTHETIC_DIR_PROC_SELF;
+            if (proc_class == PROC_SELF_FD_DIR) {
+                dir_class = SYNTHETIC_DIR_PROC_SELF_FD;
+            } else if (proc_class == PROC_SELF_FDINFO_DIR) {
+                dir_class = SYNTHETIC_DIR_PROC_SELF_FDINFO;
+            }
             init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
             return fd;
         }
@@ -169,12 +174,17 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
 
     {
         proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_path);
-        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR) && (flags & O_DIRECTORY)) {
+        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) && (flags & O_DIRECTORY)) {
             int fd = alloc_fd_impl();
             if (fd < 0) {
                 return -1;
             }
-            synthetic_dir_class_t dir_class = (proc_class == PROC_SELF_DIR) ? SYNTHETIC_DIR_PROC_SELF : SYNTHETIC_DIR_PROC_SELF_FD;
+            synthetic_dir_class_t dir_class = SYNTHETIC_DIR_PROC_SELF;
+            if (proc_class == PROC_SELF_FD_DIR) {
+                dir_class = SYNTHETIC_DIR_PROC_SELF_FD;
+            } else if (proc_class == PROC_SELF_FDINFO_DIR) {
+                dir_class = SYNTHETIC_DIR_PROC_SELF_FDINFO;
+            }
             init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
             return fd;
         }

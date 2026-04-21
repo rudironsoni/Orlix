@@ -948,6 +948,9 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strcmp(vpath, "/proc/self/fd") == 0) {
         return PROC_SELF_FD_DIR;
     }
+    if (strcmp(vpath, "/proc/self/fdinfo") == 0) {
+        return PROC_SELF_FDINFO_DIR;
+    }
     if (strncmp(vpath, "/proc/self/fd/", 14) == 0 && vpath[14] != '\0') {
         return PROC_SELF_FD_LINK;
     }
@@ -1226,6 +1229,7 @@ int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len) {
     void *entry;
     off_t offset;
     int flags;
+    int fd_flags;
     int ret;
 
     if (!buf || buf_len == 0) {
@@ -1243,7 +1247,12 @@ int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len) {
 
     offset = get_fd_offset_impl(entry);
     flags = get_fd_flags_impl(entry);
+    fd_flags = get_fd_descriptor_flags_impl(entry);
     put_fd_entry_impl(entry);
+
+    if (fd_flags & FD_CLOEXEC) {
+        flags |= IX_O_CLOEXEC;
+    }
 
     ret = snprintf(buf, buf_len, "pos:\t%lld\nflags:\t0%o\n", (long long)offset, flags);
 
@@ -1331,7 +1340,7 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
 
     {
         proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_virtual);
-        if (proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR) {
+        if (proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) {
             memset(statbuf, 0, sizeof(*statbuf));
             statbuf->st_mode = S_IFDIR | 0555;
             statbuf->st_nlink = 2;

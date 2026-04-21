@@ -91,7 +91,8 @@ void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char 
 enum synthetic_dir_class {
     SYNTHETIC_DIR_GENERIC = 0,
     SYNTHETIC_DIR_PROC_SELF,
-    SYNTHETIC_DIR_PROC_SELF_FD
+    SYNTHETIC_DIR_PROC_SELF_FD,
+    SYNTHETIC_DIR_PROC_SELF_FDINFO
 };
 
 typedef enum synthetic_dir_class synthetic_dir_class_t;

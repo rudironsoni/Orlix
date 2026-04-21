@@ -325,6 +325,26 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
         put_fd_entry_impl(entry);
         errno = EINVAL;
         return -1;
+    } else if (state->cursor == 9) {
+        size_t fdinfo_record_len = sizeof(struct linux_dirent64) + 7;
+        size_t fdinfo_aligned_len = (fdinfo_record_len + 7U) & ~7U;
+        if (count >= fdinfo_aligned_len) {
+            struct linux_dirent64 *out = (struct linux_dirent64 *)dirp;
+            out->d_ino = 1;
+            out->d_off = 10;
+            out->d_reclen = (unsigned short)fdinfo_aligned_len;
+            out->d_type = DT_DIR;
+            memcpy(out->d_name, "fdinfo", 7);
+            if (fdinfo_aligned_len > fdinfo_record_len) {
+                memset(((char *)out) + fdinfo_record_len, 0, fdinfo_aligned_len - fdinfo_record_len);
+            }
+            state->cursor = 10;
+            put_fd_entry_impl(entry);
+            return (ssize_t)fdinfo_aligned_len;
+        }
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
     }
                 put_fd_entry_impl(entry);
                 return 0;
@@ -357,6 +377,47 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
                     out->d_off = (int64_t)(scan_fd + 1);
                     out->d_reclen = (unsigned short)aligned_len;
                     out->d_type = DT_LNK;
+                    memcpy(out->d_name, fd_name, fd_name_len + 1);
+                    if (aligned_len > record_len) {
+                        memset(((char *)out) + record_len, 0, aligned_len - record_len);
+                    }
+                    written += aligned_len;
+                    state->cursor = (off_t)(scan_fd - 3 + 2 + 1);
+                }
+                if (scan_fd >= NR_OPEN_DEFAULT) {
+                    state->cursor = (off_t)(NR_OPEN_DEFAULT - 3 + 2 + 1);
+                }
+                put_fd_entry_impl(entry);
+                return (ssize_t)written;
+            } else if (dir_class == SYNTHETIC_DIR_PROC_SELF_FDINFO) {
+                size_t written = 0;
+                int scan_fd;
+                for (scan_fd = (int)state->cursor - 2 + 3; scan_fd < NR_OPEN_DEFAULT; scan_fd++) {
+                    if (!fdtable_is_used_impl(scan_fd)) {
+                        continue;
+                    }
+                    char fd_name[12];
+                    int fd_name_len = 0;
+                    {
+                        int n = scan_fd;
+                        char tmp[12];
+                        int pos = 0;
+                        if (n == 0) { tmp[pos++] = '0'; }
+                        else { while (n > 0) { tmp[pos++] = '0' + (n % 10); n /= 10; } }
+                        for (int j = 0; j < pos; j++) { fd_name[j] = tmp[pos - 1 - j]; }
+                        fd_name_len = pos;
+                        fd_name[fd_name_len] = '\0';
+                    }
+                    size_t record_len = sizeof(struct linux_dirent64) + fd_name_len + 1;
+                    size_t aligned_len = (record_len + 7U) & ~7U;
+                    if (aligned_len > count - written) {
+                        break;
+                    }
+                    struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
+                    out->d_ino = 1;
+                    out->d_off = (int64_t)(scan_fd + 1);
+                    out->d_reclen = (unsigned short)aligned_len;
+                    out->d_type = DT_REG;
                     memcpy(out->d_name, fd_name, fd_name_len + 1);
                     if (aligned_len > record_len) {
                         memset(((char *)out) + record_len, 0, aligned_len - record_len);

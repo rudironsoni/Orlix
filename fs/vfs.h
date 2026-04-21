@@ -234,6 +234,7 @@ enum proc_self_path_class {
     PROC_SELF_NONE = 0,
     PROC_SELF_DIR,
     PROC_SELF_FD_DIR,
+    PROC_SELF_FDINFO_DIR,
     PROC_SELF_FD_LINK,
     PROC_SELF_CWD_LINK,
     PROC_SELF_EXE_LINK,
