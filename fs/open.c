@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -72,15 +73,34 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STAT);
         return fd;
     }
-    if (proc_class == PROC_SELF_STATM_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
+        if (proc_class == PROC_SELF_STATM_FILE) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
+            return fd;
         }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
-        return fd;
+        if (proc_class == PROC_SELF_FDINFO_FILE) {
+            const char *fd_str = resolved_path + 18;
+            char *endptr;
+            long fd_num = strtol(fd_str, &endptr, 10);
+            if (*endptr != '\0' || fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
+                errno = ENOENT;
+                return -1;
+            }
+            if (!fdtable_is_used_impl((int)fd_num)) {
+                errno = ENOENT;
+                return -1;
+            }
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            init_synthetic_proc_file_fd_entry_with_fdnum_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_FDINFO, (int)fd_num);
+            return fd;
+        }
     }
-}
 
     {
         synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
@@ -182,15 +202,34 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
         init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STAT);
         return fd;
     }
-    if (proc_class == PROC_SELF_STATM_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
+        if (proc_class == PROC_SELF_STATM_FILE) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
+            return fd;
         }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
-        return fd;
+        if (proc_class == PROC_SELF_FDINFO_FILE) {
+            const char *fd_str = resolved_path + 18;
+            char *endptr;
+            long fd_num = strtol(fd_str, &endptr, 10);
+            if (*endptr != '\0' || fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
+                errno = ENOENT;
+                return -1;
+            }
+            if (!fdtable_is_used_impl((int)fd_num)) {
+                errno = ENOENT;
+                return -1;
+            }
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            init_synthetic_proc_file_fd_entry_with_fdnum_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_FDINFO, (int)fd_num);
+            return fd;
+        }
     }
-}
 
     {
         synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);

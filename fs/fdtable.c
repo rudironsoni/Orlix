@@ -303,6 +303,7 @@ typedef struct fd_description {
     void *synthetic_state;
     synthetic_dev_node_t dev_node;
     synthetic_proc_file_t proc_file;
+    int proc_file_fd_num;
     atomic_int refs;
     pthread_mutex_t lock;
 } fd_description_t;
@@ -433,6 +434,7 @@ static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, mod
     desc->is_dir = false;
     desc->dev_node = SYNTHETIC_DEV_NONE;
     desc->proc_file = proc_file;
+    desc->proc_file_fd_num = -1;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     pthread_mutex_init(&desc->lock, NULL);
@@ -776,6 +778,18 @@ void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, mode_t mode, cons
     pthread_mutex_unlock(&entry->lock);
 }
 
+void init_synthetic_proc_file_fd_entry_with_fdnum_impl(int fd, int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file, int fd_num) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    pthread_mutex_lock(&entry->lock);
+    entry->desc = alloc_synthetic_proc_file_fd_description(flags, mode, path, proc_file);
+    if (entry->desc) {
+        entry->desc->proc_file_fd_num = fd_num;
+    }
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    pthread_mutex_unlock(&entry->lock);
+}
+
 bool get_fd_is_synthetic_proc_file_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_PROC_FILE;
@@ -784,6 +798,11 @@ bool get_fd_is_synthetic_proc_file_impl(void *entry) {
 synthetic_proc_file_t get_fd_synthetic_proc_file_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->proc_file : SYNTHETIC_PROC_FILE_NONE;
+}
+
+int get_fd_proc_file_fd_num_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc ? fd_entry->desc->proc_file_fd_num : -1;
 }
 
 void init_synthetic_subdir_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class) {

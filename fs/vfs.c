@@ -951,6 +951,9 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strncmp(vpath, "/proc/self/fd/", 14) == 0 && vpath[14] != '\0') {
         return PROC_SELF_FD_LINK;
     }
+    if (strncmp(vpath, "/proc/self/fdinfo/", 18) == 0 && vpath[18] != '\0') {
+        return PROC_SELF_FDINFO_FILE;
+    }
     if (strcmp(vpath, "/proc/self/cwd") == 0) {
         return PROC_SELF_CWD_LINK;
     }
@@ -1219,6 +1222,40 @@ int vfs_proc_self_statm_content(char *buf, size_t buf_len) {
     return ret;
 }
 
+int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len) {
+    void *entry;
+    off_t offset;
+    int flags;
+    int ret;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    if (fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
+        return -ENOENT;
+    }
+
+    entry = get_fd_entry_impl(fd_num);
+    if (!entry) {
+        return -ENOENT;
+    }
+
+    offset = get_fd_offset_impl(entry);
+    flags = get_fd_flags_impl(entry);
+    put_fd_entry_impl(entry);
+
+    ret = snprintf(buf, buf_len, "pos:\t%lld\nflags:\t0%o\n", (long long)offset, flags);
+
+    if (ret < 0) {
+        return -EINVAL;
+    }
+    if ((size_t)ret >= buf_len) {
+        return (int)(buf_len - 1);
+    }
+    return ret;
+}
+
 int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
@@ -1351,6 +1388,25 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
             return 0;
         } else if (proc_class == PROC_SELF_CMDLINE_FILE || proc_class == PROC_SELF_COMM_FILE ||
                    proc_class == PROC_SELF_STAT_FILE || proc_class == PROC_SELF_STATM_FILE) {
+            memset(statbuf, 0, sizeof(*statbuf));
+            statbuf->st_mode = S_IFREG | 0444;
+            statbuf->st_nlink = 1;
+            statbuf->st_uid = 0;
+            statbuf->st_gid = 0;
+            statbuf->st_size = 0;
+            statbuf->st_blksize = 4096;
+            statbuf->st_blocks = 0;
+            return 0;
+        } else if (proc_class == PROC_SELF_FDINFO_FILE) {
+            const char *fd_str = resolved_virtual + 18;
+            char *endptr;
+            long fd_num = strtol(fd_str, &endptr, 10);
+            if (*endptr != '\0' || fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
+                return -ENOENT;
+            }
+            if (!fdtable_is_used_impl((int)fd_num)) {
+                return -ENOENT;
+            }
             memset(statbuf, 0, sizeof(*statbuf));
             statbuf->st_mode = S_IFREG | 0444;
             statbuf->st_nlink = 1;

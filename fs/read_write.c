@@ -49,25 +49,28 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         return -1;
     }
 
-    if (get_fd_is_synthetic_proc_file_impl(entry)) {
-        synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
-        off_t offset = get_fd_offset_impl(entry);
-        char content_buf[4096];
-        int content_len;
+if (get_fd_is_synthetic_proc_file_impl(entry)) {
+synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
+off_t offset = get_fd_offset_impl(entry);
+char content_buf[4096];
+int content_len;
 
-        if (proc_file == SYNTHETIC_PROC_FILE_CMDLINE) {
-            content_len = vfs_proc_self_cmdline_content(content_buf, sizeof(content_buf));
-        } else if (proc_file == SYNTHETIC_PROC_FILE_COMM) {
-            content_len = vfs_proc_self_comm_content(content_buf, sizeof(content_buf));
-        } else if (proc_file == SYNTHETIC_PROC_FILE_STAT) {
-            content_len = vfs_proc_self_stat_content(content_buf, sizeof(content_buf));
-        } else if (proc_file == SYNTHETIC_PROC_FILE_STATM) {
-            content_len = vfs_proc_self_statm_content(content_buf, sizeof(content_buf));
-        } else {
-            put_fd_entry_impl(entry);
-            errno = EINVAL;
-            return -1;
-        }
+if (proc_file == SYNTHETIC_PROC_FILE_CMDLINE) {
+content_len = vfs_proc_self_cmdline_content(content_buf, sizeof(content_buf));
+} else if (proc_file == SYNTHETIC_PROC_FILE_COMM) {
+content_len = vfs_proc_self_comm_content(content_buf, sizeof(content_buf));
+} else if (proc_file == SYNTHETIC_PROC_FILE_STAT) {
+content_len = vfs_proc_self_stat_content(content_buf, sizeof(content_buf));
+} else if (proc_file == SYNTHETIC_PROC_FILE_STATM) {
+content_len = vfs_proc_self_statm_content(content_buf, sizeof(content_buf));
+} else if (proc_file == SYNTHETIC_PROC_FILE_FDINFO) {
+int fd_num = get_fd_proc_file_fd_num_impl(entry);
+content_len = vfs_proc_self_fdinfo_content(fd_num, content_buf, sizeof(content_buf));
+} else {
+put_fd_entry_impl(entry);
+errno = EINVAL;
+return -1;
+}
 
         if (content_len < 0) {
             put_fd_entry_impl(entry);
