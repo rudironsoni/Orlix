@@ -957,6 +957,12 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strcmp(vpath, "/proc/self/exe") == 0) {
         return PROC_SELF_EXE_LINK;
     }
+    if (strcmp(vpath, "/proc/self/cmdline") == 0) {
+        return PROC_SELF_CMDLINE_FILE;
+    }
+    if (strcmp(vpath, "/proc/self/comm") == 0) {
+        return PROC_SELF_COMM_FILE;
+    }
     return PROC_SELF_NONE;
 }
 
@@ -1039,6 +1045,99 @@ int vfs_proc_self_exe_target(char *target, size_t target_len) {
 
     memcpy(target, task->exe, exe_len + 1);
     return 0;
+}
+
+int vfs_proc_self_cmdline_content(char *buf, size_t buf_len) {
+    struct task_struct *task;
+    size_t pos = 0;
+    int i;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    task = get_current();
+    if (!task) {
+        return -ESRCH;
+    }
+
+    if (task->argc > 0 && task->argv[0] != NULL) {
+        for (i = 0; i < task->argc && pos < buf_len; i++) {
+            if (task->argv[i] == NULL) {
+                break;
+            }
+            size_t arg_len = strlen(task->argv[i]);
+            size_t copy_len = arg_len;
+            if (pos + copy_len >= buf_len) {
+                copy_len = buf_len - pos - 1;
+            }
+            if (copy_len > 0) {
+                memcpy(buf + pos, task->argv[i], copy_len);
+                pos += copy_len;
+            }
+            if (pos < buf_len) {
+                buf[pos++] = '\0';
+            }
+        }
+    } else if (task->exe[0] != '\0') {
+        size_t exe_len = strlen(task->exe);
+        size_t copy_len = exe_len;
+        if (pos + copy_len >= buf_len) {
+            copy_len = buf_len - pos - 1;
+        }
+        if (copy_len > 0) {
+            memcpy(buf + pos, task->exe, copy_len);
+            pos += copy_len;
+        }
+        if (pos < buf_len) {
+            buf[pos++] = '\0';
+        }
+    } else {
+        const char *fallback = "xctest";
+        size_t fallback_len = strlen(fallback);
+        size_t copy_len = fallback_len;
+        if (pos + copy_len >= buf_len) {
+            copy_len = buf_len - pos - 1;
+        }
+        if (copy_len > 0) {
+            memcpy(buf + pos, fallback, copy_len);
+            pos += copy_len;
+        }
+        if (pos < buf_len) {
+            buf[pos++] = '\0';
+        }
+    }
+
+    return (int)pos;
+}
+
+int vfs_proc_self_comm_content(char *buf, size_t buf_len) {
+    struct task_struct *task;
+    size_t comm_len;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    task = get_current();
+    if (!task) {
+        return -ESRCH;
+    }
+
+    comm_len = strnlen(task->comm, TASK_COMM_LEN);
+    if (comm_len + 1 >= buf_len) {
+        if (buf_len > 1) {
+            memcpy(buf, task->comm, buf_len - 2);
+            buf[buf_len - 2] = '\n';
+            buf[buf_len - 1] = '\0';
+        }
+        return (int)(buf_len - 1);
+    }
+
+    memcpy(buf, task->comm, comm_len);
+    buf[comm_len] = '\n';
+    buf[comm_len + 1] = '\0';
+    return (int)(comm_len + 1);
 }
 
 int vfs_access(const char *pathname, int mode) {
@@ -1168,6 +1267,16 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
             statbuf->st_uid = 0;
             statbuf->st_gid = 0;
             statbuf->st_size = strlen(link_target);
+            statbuf->st_blksize = 4096;
+            statbuf->st_blocks = 0;
+            return 0;
+        } else if (proc_class == PROC_SELF_CMDLINE_FILE || proc_class == PROC_SELF_COMM_FILE) {
+            memset(statbuf, 0, sizeof(*statbuf));
+            statbuf->st_mode = S_IFREG | 0444;
+            statbuf->st_nlink = 1;
+            statbuf->st_uid = 0;
+            statbuf->st_gid = 0;
+            statbuf->st_size = 0;
             statbuf->st_blksize = 4096;
             statbuf->st_blocks = 0;
             return 0;

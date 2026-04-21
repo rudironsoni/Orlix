@@ -282,7 +282,8 @@ int close_on_exec(struct files_struct *files) {
 enum fd_type {
     FD_TYPE_HOST, /* Normal host-backed fd */
     FD_TYPE_SYNTHETIC_DIR, /* Synthetic directory (no host backing) */
-    FD_TYPE_SYNTHETIC_DEV /* Synthetic char device (no host backing) */
+    FD_TYPE_SYNTHETIC_DEV, /* Synthetic char device (no host backing) */
+    FD_TYPE_SYNTHETIC_PROC_FILE /* Synthetic proc file (no host backing) */
 };
 
 typedef struct synthetic_dir_state {
@@ -301,6 +302,7 @@ typedef struct fd_description {
     bool is_dir;
     void *synthetic_state;
     synthetic_dev_node_t dev_node;
+    synthetic_proc_file_t proc_file;
     atomic_int refs;
     pthread_mutex_t lock;
 } fd_description_t;
@@ -406,6 +408,31 @@ static fd_description_t *alloc_synthetic_dev_fd_description(int flags, mode_t mo
     desc->offset = 0;
     desc->is_dir = false;
     desc->dev_node = dev_node;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->synthetic_state = NULL;
+    atomic_init(&desc->refs, 1);
+    pthread_mutex_init(&desc->lock, NULL);
+    if (path) {
+        strncpy(desc->path, path, MAX_PATH - 1);
+        desc->path[MAX_PATH - 1] = '\0';
+    }
+    return desc;
+}
+
+static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file) {
+    fd_description_t *desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    desc->type = FD_TYPE_SYNTHETIC_PROC_FILE;
+    desc->fd = -1;
+    desc->flags = flags;
+    desc->mode = mode;
+    desc->offset = 0;
+    desc->is_dir = false;
+    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = proc_file;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     pthread_mutex_init(&desc->lock, NULL);
@@ -738,6 +765,25 @@ bool get_fd_is_synthetic_dev_impl(void *entry) {
 synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->dev_node : SYNTHETIC_DEV_NONE;
+}
+
+void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    pthread_mutex_lock(&entry->lock);
+    entry->desc = alloc_synthetic_proc_file_fd_description(flags, mode, path, proc_file);
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    pthread_mutex_unlock(&entry->lock);
+}
+
+bool get_fd_is_synthetic_proc_file_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_PROC_FILE;
+}
+
+synthetic_proc_file_t get_fd_synthetic_proc_file_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc ? fd_entry->desc->proc_file : SYNTHETIC_PROC_FILE_NONE;
 }
 
 void init_synthetic_subdir_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class) {

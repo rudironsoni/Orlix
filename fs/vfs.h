@@ -236,7 +236,9 @@ enum proc_self_path_class {
     PROC_SELF_FD_DIR,
     PROC_SELF_FD_LINK,
     PROC_SELF_CWD_LINK,
-    PROC_SELF_EXE_LINK
+    PROC_SELF_EXE_LINK,
+    PROC_SELF_CMDLINE_FILE,
+    PROC_SELF_COMM_FILE
 };
 
 typedef enum proc_self_path_class proc_self_path_class_t;
@@ -245,6 +247,8 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath);
 int vfs_proc_self_fd_link_target(const char *vpath, char *target, size_t target_len);
 int vfs_proc_self_cwd_target(char *target, size_t target_len);
 int vfs_proc_self_exe_target(char *target, size_t target_len);
+int vfs_proc_self_cmdline_content(char *buf, size_t buf_len);
+int vfs_proc_self_comm_content(char *buf, size_t buf_len);
 
 const char *vfs_backing_root_for_class(enum vfs_backing_class cls);
 

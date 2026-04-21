@@ -133,6 +133,8 @@ struct task_struct {
     pthread_t thread;
     char comm[TASK_COMM_LEN];
     char exe[MAX_PATH];
+    int argc;
+    char *argv[TASK_MAX_ARGS];
 
     /* Resource ownership - pointers to virtual subsystem state */
     struct files_struct *files;

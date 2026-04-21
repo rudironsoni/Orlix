@@ -1863,4 +1863,121 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     close(fd);
 }
 
+- (void)testProcSelfCmdlineStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/proc/self/cmdline", &st), 0, @"stat(/proc/self/cmdline) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/cmdline should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/cmdline should have 0444 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat("/proc/self/cmdline", &st), 0, @"lstat(/proc/self/cmdline) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/cmdline) should return regular file");
+}
+
+- (void)testProcSelfCommStatSucceeds {
+    struct stat st;
+    errno = 0;
+    XCTAssertEqual(stat("/proc/self/comm", &st), 0, @"stat(/proc/self/comm) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/comm should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/comm should have 0444 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat("/proc/self/comm", &st), 0, @"lstat(/proc/self/comm) should succeed");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/comm) should return regular file");
+}
+
+- (void)testProcSelfCmdlineAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/proc/self/cmdline", F_OK), 0, @"access(/proc/self/cmdline, F_OK) should succeed");
+    XCTAssertEqual(access("/proc/self/cmdline", R_OK), 0, @"access(/proc/self/cmdline, R_OK) should succeed");
+}
+
+- (void)testProcSelfCommAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/proc/self/comm", F_OK), 0, @"access(/proc/self/comm, F_OK) should succeed");
+    XCTAssertEqual(access("/proc/self/comm", R_OK), 0, @"access(/proc/self/comm, R_OK) should succeed");
+}
+
+- (void)testProcSelfCmdlineOpenAndReadSucceeds {
+    errno = 0;
+    int fd = open("/proc/self/cmdline", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/cmdline, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertTrue(nread > 0, @"read(/proc/self/cmdline) should return > 0 bytes, got %zd errno %d", nread, errno);
+    
+    if (nread > 0) {
+        XCTAssertTrue(buf[nread - 1] == '\0', @"/proc/self/cmdline should end with NUL byte");
+    }
+
+    close(fd);
+}
+
+- (void)testProcSelfCommOpenAndReadSucceeds {
+    errno = 0;
+    int fd = open("/proc/self/comm", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/comm, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    char buf[256];
+    memset(buf, 0, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertTrue(nread > 0, @"read(/proc/self/comm) should return > 0 bytes, got %zd errno %d", nread, errno);
+    
+    if (nread > 0) {
+        XCTAssertTrue(buf[nread - 1] == '\n', @"/proc/self/comm should end with newline");
+        XCTAssertTrue(nread <= 17, @"/proc/self/comm should be at most 16 chars + newline, got %zd", nread);
+    }
+
+    close(fd);
+}
+
+- (void)testProcSelfGetdentsIncludesCmdlineAndComm {
+    errno = 0;
+    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    union { char storage[2048]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    bool found_cmdline = false;
+    bool found_comm = false;
+    bool done = false;
+    while (!done) {
+        errno = 0;
+        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+        if (nread <= 0) {
+            done = true;
+            continue;
+        }
+        size_t pos = 0;
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+            if ([name isEqualToString:@"cmdline"]) {
+                found_cmdline = true;
+                XCTAssertEqual(entry->d_type, DT_REG, @"cmdline should be DT_REG");
+            } else if ([name isEqualToString:@"comm"]) {
+                found_comm = true;
+                XCTAssertEqual(entry->d_type, DT_REG, @"comm should be DT_REG");
+            }
+            if (entry->d_reclen == 0) break;
+            pos += entry->d_reclen;
+        }
+    }
+
+    XCTAssertTrue(found_cmdline, @"getdents64(/proc/self) should return 'cmdline' entry");
+    XCTAssertTrue(found_comm, @"getdents64(/proc/self) should return 'comm' entry");
+
+    close(fd);
+}
+
 @end

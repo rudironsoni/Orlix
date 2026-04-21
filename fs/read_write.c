@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
+#include "vfs.h"
 #include "internal/ios/fs/backing_io.h"
 
 ssize_t read_impl(int fd, void *buf, size_t count) {
@@ -46,6 +47,41 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         }
         errno = EINVAL;
         return -1;
+    }
+
+    if (get_fd_is_synthetic_proc_file_impl(entry)) {
+        synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
+        off_t offset = get_fd_offset_impl(entry);
+        char content_buf[4096];
+        int content_len;
+        
+        if (proc_file == SYNTHETIC_PROC_FILE_CMDLINE) {
+            content_len = vfs_proc_self_cmdline_content(content_buf, sizeof(content_buf));
+        } else if (proc_file == SYNTHETIC_PROC_FILE_COMM) {
+            content_len = vfs_proc_self_comm_content(content_buf, sizeof(content_buf));
+        } else {
+            put_fd_entry_impl(entry);
+            errno = EINVAL;
+            return -1;
+        }
+        
+        if (content_len < 0) {
+            put_fd_entry_impl(entry);
+            errno = -content_len;
+            return -1;
+        }
+        
+        if (offset >= content_len) {
+            put_fd_entry_impl(entry);
+            return 0;
+        }
+        
+        size_t available = (size_t)(content_len - offset);
+        size_t to_read = (count < available) ? count : available;
+        memcpy(buf, content_buf + offset, to_read);
+        set_fd_offset_impl(entry, offset + (off_t)to_read);
+        put_fd_entry_impl(entry);
+        return (ssize_t)to_read;
     }
 
     ssize_t bytes = host_read_impl(get_real_fd_impl(entry), buf, count);
