@@ -2252,6 +2252,25 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
     close(fd);
 }
 
+- (void)testPollSyntheticProcSelfFdDirectoryReturnsReadReadyOnly {
+    int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+
+    errno = 0;
+    int ret = poll(&pfd, 1, 0);
+    XCTAssertEqual(ret, 1, @"poll() on /proc/self/fd should return 1 ready fd");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/proc/self/fd should be read-ready for enumeration");
+    XCTAssertTrue((pfd.revents & POLLOUT) == 0, @"/proc/self/fd should NOT be write-ready");
+
+    close(fd);
+}
+
 - (void)testPollDevNullReturnsImmediateReadWrite {
     int fd = open("/dev/null", O_RDWR);
     XCTAssertTrue(fd >= 0, @"open(/dev/null) should succeed");
