@@ -32,6 +32,7 @@
 #define IX_AT_EACCESS 0x200
 
 #include "fdtable.h"
+#include "pty.h"
 #include "../kernel/task.h"
 #include "../kernel/cred_internal.h"
 
@@ -249,6 +250,9 @@ synthetic_dev_node_t vfs_path_is_synthetic_dev_node(const char *vpath) {
     }
     if (strcmp(vpath, "/dev/urandom") == 0) {
         return SYNTHETIC_DEV_URANDOM;
+    }
+    if (strcmp(vpath, "/dev/ptmx") == 0) {
+        return SYNTHETIC_DEV_PTMX;
     }
     return SYNTHETIC_DEV_NONE;
 }
@@ -1403,7 +1407,8 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
             statbuf->st_gid = 0;
             statbuf->st_rdev = (dev_node == SYNTHETIC_DEV_NULL) ? makedev(1, 3) :
                                (dev_node == SYNTHETIC_DEV_ZERO) ? makedev(1, 5) :
-                               makedev(1, 9);
+                               (dev_node == SYNTHETIC_DEV_URANDOM) ? makedev(1, 9) :
+                               makedev(5, 2);
             statbuf->st_blksize = 4096;
             statbuf->st_blocks = 0;
             return 0;

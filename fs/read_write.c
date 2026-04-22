@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
+#include "pty.h"
 #include "vfs.h"
 #include "internal/ios/fs/backing_io.h"
 
@@ -35,7 +36,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
     if (get_fd_is_synthetic_dev_impl(entry)) {
         synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
-        
+
         if (dev_node == SYNTHETIC_DEV_NULL) {
             return 0;
         } else if (dev_node == SYNTHETIC_DEV_ZERO) {
@@ -49,7 +50,19 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         return -1;
     }
 
-if (get_fd_is_synthetic_proc_file_impl(entry)) {
+    if (get_fd_is_synthetic_pty_impl(entry)) {
+        unsigned int pty_index = get_fd_synthetic_pty_index_impl(entry);
+        bool is_master = get_fd_is_synthetic_pty_master_impl(entry);
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
+        put_fd_entry_impl(entry);
+
+        if (is_master) {
+            return pty_read_master_impl(pty_index, buf, count, nonblock);
+        }
+        return pty_read_slave_impl(pty_index, buf, count, nonblock);
+    }
+
+    if (get_fd_is_synthetic_proc_file_impl(entry)) {
 synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
 off_t offset = get_fd_offset_impl(entry);
 char content_buf[4096];
@@ -126,12 +139,24 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     if (get_fd_is_synthetic_dev_impl(entry)) {
         synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
-        
+
         if (dev_node == SYNTHETIC_DEV_NULL || dev_node == SYNTHETIC_DEV_ZERO || dev_node == SYNTHETIC_DEV_URANDOM) {
             return (ssize_t)count;
         }
         errno = EINVAL;
         return -1;
+    }
+
+    if (get_fd_is_synthetic_pty_impl(entry)) {
+        unsigned int pty_index = get_fd_synthetic_pty_index_impl(entry);
+        bool is_master = get_fd_is_synthetic_pty_master_impl(entry);
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
+        put_fd_entry_impl(entry);
+
+        if (is_master) {
+            return pty_write_master_impl(pty_index, buf, count, nonblock);
+        }
+        return pty_write_slave_impl(pty_index, buf, count, nonblock);
     }
 
     int real_fd = get_real_fd_impl(entry);
@@ -172,6 +197,12 @@ off_t lseek_impl(int fd, off_t offset, int whence) {
     void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
+        return -1;
+    }
+
+    if (get_fd_is_synthetic_pty_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = ESPIPE;
         return -1;
     }
 

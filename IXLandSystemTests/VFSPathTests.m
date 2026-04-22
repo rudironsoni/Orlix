@@ -22,11 +22,38 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdint.h>
+
+#define IX_TCGETS 0x5401
+#define IX_TCSETS 0x5402
+#define IX_TIOCGPGRP 0x540F
+#define IX_TIOCSPGRP 0x5410
+#define IX_TIOCGWINSZ 0x5413
+#define IX_TIOCSWINSZ 0x5414
+#define IX_FIONREAD 0x541B
+#define IX_TIOCGPTN 0x80045430UL
+#define IX_TIOCSPTLCK 0x40045431UL
+
+struct ix_termios {
+    uint32_t c_iflag;
+    uint32_t c_oflag;
+    uint32_t c_cflag;
+    uint32_t c_lflag;
+    unsigned char c_line;
+    unsigned char c_cc[19];
+};
+
+struct ix_winsize {
+    unsigned short ws_row;
+    unsigned short ws_col;
+    unsigned short ws_xpixel;
+    unsigned short ws_ypixel;
+};
 
 // Forward declare linux_dirent64 since it's not in standard headers
 struct linux_dirent64 {
@@ -2313,19 +2340,127 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
     int fd = open("/dev/urandom", O_RDWR);
     XCTAssertTrue(fd >= 0, @"open(/dev/urandom) should succeed");
     if (fd < 0) return;
-    
+
     struct pollfd pfd;
     pfd.fd = fd;
     pfd.events = POLLIN | POLLOUT;
     pfd.revents = 0;
-    
+
     errno = 0;
     int ret = poll(&pfd, 1, 0);
     XCTAssertEqual(ret, 1, @"poll() on /dev/urandom should return 1 ready fd");
     XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/dev/urandom should be read-ready");
     XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"/dev/urandom should be write-ready (writes succeed immediately)");
-    
+
     close(fd);
+}
+
+- (void)testPtyMasterSlaveOpenAndIoctlBaseline {
+    int master_fd = open("/dev/ptmx", O_RDWR);
+    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
+    if (master_fd < 0) return;
+
+    unsigned int pty_number = 0;
+    errno = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed on PTY master");
+
+    char slave_path[64];
+    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
+
+    errno = 0;
+    XCTAssertEqual(open(slave_path, O_RDWR), -1, @"opening locked slave should fail");
+    XCTAssertEqual(errno, EIO, @"locked slave open should set EIO");
+
+    int unlock = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
+
+    int slave_fd = open(slave_path, O_RDWR);
+    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed after unlock");
+    if (slave_fd < 0) {
+        close(master_fd);
+        return;
+    }
+
+    struct ix_termios tio;
+    memset(&tio, 0, sizeof(tio));
+    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
+    tio.c_lflag ^= 0x00000008U;
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
+
+    struct ix_winsize ws;
+    memset(&ws, 0, sizeof(ws));
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGWINSZ, &ws), 0, @"TIOCGWINSZ should succeed");
+    ws.ws_row = 40;
+    ws.ws_col = 120;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSWINSZ, &ws), 0, @"TIOCSWINSZ should succeed");
+
+    int32_t pgrp = 321;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &pgrp), 0, @"TIOCSPGRP should succeed");
+    int32_t got_pgrp = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed");
+    XCTAssertEqual(got_pgrp, pgrp, @"foreground pgrp should round-trip");
+
+    close(slave_fd);
+    close(master_fd);
+}
+
+- (void)testPtyDataFlowAndPollReadiness {
+    int master_fd = open("/dev/ptmx", O_RDWR);
+    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
+    if (master_fd < 0) return;
+
+    unsigned int pty_number = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
+
+    int unlock = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
+
+    char slave_path[64];
+    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
+    int slave_fd = open(slave_path, O_RDWR);
+    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
+    if (slave_fd < 0) {
+        close(master_fd);
+        return;
+    }
+
+    struct pollfd pfd;
+    pfd.fd = slave_fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    XCTAssertEqual(poll(&pfd, 1, 0), 0, @"slave should not be read-ready before data");
+
+    const char *msg1 = "hello-pty";
+    XCTAssertEqual(write(master_fd, msg1, strlen(msg1)), (ssize_t)strlen(msg1), @"master write should succeed");
+
+    pfd.revents = 0;
+    XCTAssertEqual(poll(&pfd, 1, 0), 1, @"slave should become read-ready after master write");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"slave POLLIN should be set");
+
+    int pending = 0;
+    XCTAssertEqual(ioctl(slave_fd, IX_FIONREAD, &pending), 0, @"FIONREAD should succeed on slave");
+    XCTAssertTrue(pending > 0, @"FIONREAD should report queued bytes");
+
+    char buf[32];
+    memset(buf, 0, sizeof(buf));
+    XCTAssertEqual(read(slave_fd, buf, sizeof(buf)), (ssize_t)strlen(msg1), @"slave read should consume master payload");
+    XCTAssertEqual(strcmp(buf, msg1), 0, @"slave read payload should match");
+
+    const char *msg2 = "from-slave";
+    XCTAssertEqual(write(slave_fd, msg2, strlen(msg2)), (ssize_t)strlen(msg2), @"slave write should succeed");
+
+    pfd.fd = master_fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    XCTAssertEqual(poll(&pfd, 1, 0), 1, @"master should become read-ready after slave write");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"master POLLIN should be set");
+
+    memset(buf, 0, sizeof(buf));
+    XCTAssertEqual(read(master_fd, buf, sizeof(buf)), (ssize_t)strlen(msg2), @"master read should consume slave payload");
+    XCTAssertEqual(strcmp(buf, msg2), 0, @"master read payload should match");
+
+    close(slave_fd);
+    close(master_fd);
 }
 
 - (void)testPollMixedSyntheticAndHostBackedFds {

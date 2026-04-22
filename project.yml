@@ -41,6 +41,8 @@ targets:
       group: fs
     - path: fs/poll.c
       group: fs
+    - path: fs/pty.c
+      group: fs
     - path: fs/path.c
       group: fs
     - path: fs/read_write.c

@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -155,81 +156,8 @@ int host_poll_impl(struct pollfd *fds, nfds_t nfds, int timeout) {
     return ret;
 }
 
-/* Storage class discovery - Darwin-specific host mediation
- * These use Foundation APIs to query standard iOS container paths.
- * This is the appropriate level for host container awareness.
- * Returns 0 on success, -1 on error.
- */
-#ifndef MAX_PATH
-#define MAX_PATH 4096
-#endif
-#include <Foundation/Foundation.h>
-
-int host_get_application_support_path_impl(char *path, size_t path_len) {
-    @autoreleasepool {
-        NSURL *url = [[NSFileManager defaultManager] 
-                      URLForDirectory:NSApplicationSupportDirectory
-                      inDomain:NSUserDomainMask
-                      appropriateForURL:nil
-                      create:YES
-                      error:nil];
-        if (!url) {
-            errno = ENOENT;
-            return -1;
-        }
-        const char *cpath = [url fileSystemRepresentation];
-        if (!cpath || strlen(cpath) >= path_len) {
-            errno = ENAMETOOLONG;
-            return -1;
-        }
-        strncpy(path, cpath, path_len - 1);
-        path[path_len - 1] = '\0';
-        return 0;
-    }
-}
-
-int host_get_caches_path_impl(char *path, size_t path_len) {
-    @autoreleasepool {
-        NSURL *url = [[NSFileManager defaultManager] 
-                      URLForDirectory:NSCachesDirectory
-                      inDomain:NSUserDomainMask
-                      appropriateForURL:nil
-                      create:YES
-                      error:nil];
-        if (!url) {
-            errno = ENOENT;
-            return -1;
-        }
-        const char *cpath = [url fileSystemRepresentation];
-        if (!cpath || strlen(cpath) >= path_len) {
-            errno = ENAMETOOLONG;
-            return -1;
-        }
-        strncpy(path, cpath, path_len - 1);
-        path[path_len - 1] = '\0';
-        return 0;
-    }
-}
-
-int host_get_tmp_path_impl(char *path, size_t path_len) {
-    @autoreleasepool {
-        NSString *tmp = NSTemporaryDirectory();
-        if (!tmp) {
-            errno = ENOENT;
-            return -1;
-        }
-        const char *cpath = [tmp UTF8String];
-        if (!cpath || strlen(cpath) >= path_len) {
-            errno = ENAMETOOLONG;
-            return -1;
-        }
-        strncpy(path, cpath, path_len - 1);
-        path[path_len - 1] = '\0';
-        return 0;
-    }
-}
-
 int host_ensure_directory_impl(const char *path, mode_t mode) {
+
     struct stat st;
     if (stat(path, &st) == 0) {
         if (S_ISDIR(st.st_mode)) {
@@ -242,7 +170,7 @@ int host_ensure_directory_impl(const char *path, mode_t mode) {
         return -1;
     }
     /* Create parent directories recursively */
-    char parent[MAX_PATH];
+    char parent[4096];
     size_t len = strlen(path);
     if (len >= sizeof(parent)) {
         errno = ENAMETOOLONG;

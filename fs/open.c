@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
+#include "pty.h"
 #include "vfs.h"
 
 #define MAX_PATH 4096
@@ -117,6 +118,19 @@ if (proc_class == PROC_SELF_FDINFO_FILE) {
 
     {
         synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
+        if (dev_node == SYNTHETIC_DEV_PTMX) {
+            unsigned int pty_index;
+            if (pty_allocate_pair_impl(&pty_index) != 0) {
+                return -1;
+            }
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                pty_close_end_impl(pty_index, true);
+                return -1;
+            }
+            init_synthetic_pty_fd_entry_impl(fd, flags, mode, resolved_path, pty_index, true);
+            return fd;
+        }
         if (dev_node != SYNTHETIC_DEV_NONE) {
             int fd = alloc_fd_impl();
             if (fd < 0) {
@@ -124,6 +138,22 @@ if (proc_class == PROC_SELF_FDINFO_FILE) {
             }
             init_synthetic_dev_fd_entry_impl(fd, flags, mode, resolved_path, dev_node);
             return fd;
+        }
+    }
+
+    {
+        unsigned int pty_index;
+        if (pty_open_slave_by_path_impl(resolved_path, &pty_index) == 0) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                pty_close_end_impl(pty_index, false);
+                return -1;
+            }
+            init_synthetic_pty_fd_entry_impl(fd, flags, mode, resolved_path, pty_index, false);
+            return fd;
+        }
+        if (errno != ENOENT) {
+            return -1;
         }
     }
 
@@ -251,6 +281,19 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
 
     {
         synthetic_dev_node_t dev_node = vfs_path_is_synthetic_dev_node(resolved_path);
+        if (dev_node == SYNTHETIC_DEV_PTMX) {
+            unsigned int pty_index;
+            if (pty_allocate_pair_impl(&pty_index) != 0) {
+                return -1;
+            }
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                pty_close_end_impl(pty_index, true);
+                return -1;
+            }
+            init_synthetic_pty_fd_entry_impl(fd, flags, mode, resolved_path, pty_index, true);
+            return fd;
+        }
         if (dev_node != SYNTHETIC_DEV_NONE) {
             int fd = alloc_fd_impl();
             if (fd < 0) {
@@ -258,6 +301,22 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
             }
             init_synthetic_dev_fd_entry_impl(fd, flags, mode, resolved_path, dev_node);
             return fd;
+        }
+    }
+
+    {
+        unsigned int pty_index;
+        if (pty_open_slave_by_path_impl(resolved_path, &pty_index) == 0) {
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                pty_close_end_impl(pty_index, false);
+                return -1;
+            }
+            init_synthetic_pty_fd_entry_impl(fd, flags, mode, resolved_path, pty_index, false);
+            return fd;
+        }
+        if (errno != ENOENT) {
+            return -1;
         }
     }
 

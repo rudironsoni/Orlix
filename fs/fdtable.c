@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "internal/ios/fs/backing_io.h"
+#include "pty.h"
 
 struct files_struct *alloc_files(size_t max_fds) {
     if (max_fds == 0) {
@@ -283,7 +284,8 @@ enum fd_type {
     FD_TYPE_HOST, /* Normal host-backed fd */
     FD_TYPE_SYNTHETIC_DIR, /* Synthetic directory (no host backing) */
     FD_TYPE_SYNTHETIC_DEV, /* Synthetic char device (no host backing) */
-    FD_TYPE_SYNTHETIC_PROC_FILE /* Synthetic proc file (no host backing) */
+    FD_TYPE_SYNTHETIC_PROC_FILE, /* Synthetic proc file (no host backing) */
+    FD_TYPE_SYNTHETIC_PTY /* Synthetic PTY endpoint */
 };
 
 typedef struct synthetic_dir_state {
@@ -304,6 +306,8 @@ typedef struct fd_description {
     synthetic_dev_node_t dev_node;
     synthetic_proc_file_t proc_file;
     int proc_file_fd_num;
+    unsigned int pty_index;
+    bool pty_is_master;
     atomic_int refs;
     pthread_mutex_t lock;
 } fd_description_t;
@@ -329,29 +333,12 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mod
     desc->is_dir = (flags & O_DIRECTORY) != 0;
     desc->synthetic_state = NULL;
     desc->dev_node = SYNTHETIC_DEV_NONE;
-    atomic_init(&desc->refs, 1);
-    pthread_mutex_init(&desc->lock, NULL);
-    if (path) {
-        strncpy(desc->path, path, MAX_PATH - 1);
-        desc->path[MAX_PATH - 1] = '\0';
-    }
-    return desc;
-}
-
-static fd_description_t *alloc_synthetic_fd_description(int flags, mode_t mode, const char *path) {
-    fd_description_t *desc = calloc(1, sizeof(fd_description_t));
-    if (!desc) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    desc->type = FD_TYPE_SYNTHETIC_DIR;
-    desc->fd = -1;
-    desc->flags = flags;
-    desc->mode = mode;
-    desc->offset = 0;
-    desc->is_dir = true;
-    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
     desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
+
     if (!desc->synthetic_state) {
         free(desc);
         errno = ENOMEM;
@@ -380,6 +367,10 @@ static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, mode_t
     desc->offset = 0;
     desc->is_dir = true;
     desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
     desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
     if (!desc->synthetic_state) {
         free(desc);
@@ -410,6 +401,9 @@ static fd_description_t *alloc_synthetic_dev_fd_description(int flags, mode_t mo
     desc->is_dir = false;
     desc->dev_node = dev_node;
     desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     pthread_mutex_init(&desc->lock, NULL);
@@ -435,6 +429,36 @@ static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, mod
     desc->dev_node = SYNTHETIC_DEV_NONE;
     desc->proc_file = proc_file;
     desc->proc_file_fd_num = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
+    desc->synthetic_state = NULL;
+    atomic_init(&desc->refs, 1);
+    pthread_mutex_init(&desc->lock, NULL);
+    if (path) {
+        strncpy(desc->path, path, MAX_PATH - 1);
+        desc->path[MAX_PATH - 1] = '\0';
+    }
+    return desc;
+}
+
+static fd_description_t *alloc_synthetic_pty_fd_description(int flags, mode_t mode, const char *path,
+                                                             unsigned int pty_index, bool is_master) {
+    fd_description_t *desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    desc->type = FD_TYPE_SYNTHETIC_PTY;
+    desc->fd = -1;
+    desc->flags = flags;
+    desc->mode = mode;
+    desc->offset = 0;
+    desc->is_dir = false;
+    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->pty_index = pty_index;
+    desc->pty_is_master = is_master;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     pthread_mutex_init(&desc->lock, NULL);
@@ -458,6 +482,8 @@ static void release_fd_description(fd_description_t *desc) {
     if (atomic_fetch_sub(&desc->refs, 1) == 1) {
         if (desc->type == FD_TYPE_HOST) {
             host_close_impl(desc->fd);
+        } else if (desc->type == FD_TYPE_SYNTHETIC_PTY) {
+            pty_close_end_impl(desc->pty_index, desc->pty_is_master);
         }
         if (desc->synthetic_state) {
             free(desc->synthetic_state);
@@ -745,7 +771,7 @@ void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *pa
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     pthread_mutex_lock(&entry->lock);
-    entry->desc = alloc_synthetic_fd_description(flags, mode, path);
+    entry->desc = alloc_synthetic_subdir_fd_description(flags, mode, path, SYNTHETIC_DIR_GENERIC);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
     pthread_mutex_unlock(&entry->lock);
 }
@@ -759,6 +785,16 @@ void init_synthetic_dev_fd_entry_impl(int fd, int flags, mode_t mode, const char
     pthread_mutex_unlock(&entry->lock);
 }
 
+void init_synthetic_pty_fd_entry_impl(int fd, int flags, mode_t mode, const char *path,
+                                      unsigned int pty_index, bool is_master) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    pthread_mutex_lock(&entry->lock);
+    entry->desc = alloc_synthetic_pty_fd_description(flags, mode, path, pty_index, is_master);
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    pthread_mutex_unlock(&entry->lock);
+}
+
 bool get_fd_is_synthetic_dev_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_DEV;
@@ -767,6 +803,21 @@ bool get_fd_is_synthetic_dev_impl(void *entry) {
 synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->dev_node : SYNTHETIC_DEV_NONE;
+}
+
+bool get_fd_is_synthetic_pty_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_PTY;
+}
+
+bool get_fd_is_synthetic_pty_master_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_PTY && fd_entry->desc->pty_is_master;
+}
+
+unsigned int get_fd_synthetic_pty_index_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc ? fd_entry->desc->pty_index : 0;
 }
 
 void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file) {

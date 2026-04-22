@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
+#include "pty.h"
 #include "internal/ios/fs/backing_io.h"
 
 static int host_poll_wait(struct pollfd *fds, nfds_t nfds, int timeout) {
@@ -96,10 +97,26 @@ int poll_impl(struct pollfd *fds, nfds_t nfds, int timeout) {
             continue;
         }
 
+        bool is_pty = get_fd_is_synthetic_pty_impl(entry);
         bool is_synthetic = get_fd_is_synthetic_proc_file_impl(entry) ||
                             get_fd_is_synthetic_dir_impl(entry) ||
                             get_fd_is_synthetic_dev_impl(entry);
+        unsigned int pty_index = 0;
+        bool pty_is_master = false;
+        if (is_pty) {
+            pty_index = get_fd_synthetic_pty_index_impl(entry);
+            pty_is_master = get_fd_is_synthetic_pty_master_impl(entry);
+        }
         put_fd_entry_impl(entry);
+
+        if (is_pty) {
+            revents = pty_poll_revents_impl(pty_index, pty_is_master, events);
+            fds[i].revents = revents;
+            if (revents != 0) {
+                ready_count++;
+            }
+            continue;
+        }
 
         if (is_synthetic) {
             if (events & (POLLIN | POLLRDNORM)) {
