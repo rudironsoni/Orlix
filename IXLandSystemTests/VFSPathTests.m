@@ -15,12 +15,14 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -55,6 +57,8 @@ extern int dup2(int oldfd, int newfd);
 extern int dup3(int oldfd, int newfd, int flags);
 extern int close(int fd);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
+extern int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+extern int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);
 
 static void vfs_test_translate_virtual_path(const char *path, char *host_path, size_t host_path_len) {
     int ret = vfs_translate_path(path, host_path, host_path_len);
@@ -2182,7 +2186,188 @@ XCTAssertEqual(errno, ENOENT, @"open(/proc/self/fdinfo/999) should set ENOENT");
 
 errno = 0;
 XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/abc) should fail for non-numeric");
-XCTAssertEqual(errno, ENOENT, @"stat(/proc/self/fdinfo/abc) should set ENOENT");
+    XCTAssertEqual(errno, ENOENT, @"stat(/proc/self/fdinfo/abc) should set ENOENT");
+}
+
+/* ============================================================================
+ * POLL/SELECT READINESS TESTS
+ * ============================================================================ */
+
+- (void)testPollSyntheticProcfsRegularFileReturnsImmediateReadWrite {
+    int fd = open("/proc/self/cmdline", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/cmdline) should succeed");
+    if (fd < 0) return;
+    
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+    
+    errno = 0;
+    int ret = poll(&pfd, 1, 0);
+    XCTAssertEqual(ret, 1, @"poll() on synthetic procfs regular file should return 1 ready fd");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"synthetic procfs regular file should be read-ready");
+    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"synthetic procfs regular file should be write-ready (Linux semantics)");
+    
+    close(fd);
+}
+
+- (void)testSelectSyntheticProcfsRegularFileReturnsImmediateReadWrite {
+    int fd = open("/proc/self/comm", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/comm) should succeed");
+    if (fd < 0) return;
+    
+    fd_set readfds, writefds;
+    FD_ZERO(&readfds);
+    FD_ZERO(&writefds);
+    FD_SET(fd, &readfds);
+    FD_SET(fd, &writefds);
+    
+    struct timeval tv = {0, 0};
+    errno = 0;
+    int ret = select_impl(fd + 1, &readfds, &writefds, NULL, &tv);
+    XCTAssertTrue(ret > 0, @"select_impl() on synthetic procfs regular file should return > 0");
+    XCTAssertTrue(FD_ISSET(fd, &readfds), @"synthetic procfs regular file should be read-ready");
+    XCTAssertTrue(FD_ISSET(fd, &writefds), @"synthetic procfs regular file should be write-ready (Linux semantics)");
+    
+    close(fd);
+}
+
+- (void)testPollSyntheticDirectoryReturnsReadReadyOnly {
+    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+    
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+    
+    errno = 0;
+    int ret = poll(&pfd, 1, 0);
+    XCTAssertEqual(ret, 1, @"poll() on synthetic directory should return 1 ready fd");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"synthetic directory should be read-ready");
+    XCTAssertTrue((pfd.revents & POLLOUT) == 0, @"synthetic directory should NOT be write-ready");
+    
+    close(fd);
+}
+
+- (void)testPollDevNullReturnsImmediateReadWrite {
+    int fd = open("/dev/null", O_RDWR);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null) should succeed");
+    if (fd < 0) return;
+    
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+    
+    errno = 0;
+    int ret = poll(&pfd, 1, 0);
+    XCTAssertEqual(ret, 1, @"poll() on /dev/null should return 1 ready fd");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/dev/null should be read-ready");
+    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"/dev/null should be write-ready");
+    
+    close(fd);
+}
+
+- (void)testPollDevZeroReturnsImmediateReadWrite {
+    int fd = open("/dev/zero", O_RDWR);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero) should succeed");
+    if (fd < 0) return;
+    
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+    
+    errno = 0;
+    int ret = poll(&pfd, 1, 0);
+    XCTAssertEqual(ret, 1, @"poll() on /dev/zero should return 1 ready fd");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/dev/zero should be read-ready");
+    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"/dev/zero should be write-ready (writes succeed immediately)");
+    
+    close(fd);
+}
+
+- (void)testPollDevUrandomReturnsImmediateReadWrite {
+    int fd = open("/dev/urandom", O_RDWR);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom) should succeed");
+    if (fd < 0) return;
+    
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+    
+    errno = 0;
+    int ret = poll(&pfd, 1, 0);
+    XCTAssertEqual(ret, 1, @"poll() on /dev/urandom should return 1 ready fd");
+    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/dev/urandom should be read-ready");
+    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"/dev/urandom should be write-ready (writes succeed immediately)");
+    
+    close(fd);
+}
+
+- (void)testPollMixedSyntheticAndHostBackedFds {
+    vfs_test_seed_linux_file("/tmp/poll-test-host-file");
+    
+    int host_fd = open("/tmp/poll-test-host-file", O_RDWR);
+    XCTAssertTrue(host_fd >= 0, @"open host-backed file should succeed");
+    if (host_fd < 0) return;
+    
+    int synthetic_fd = open("/dev/null", O_RDWR);
+    XCTAssertTrue(synthetic_fd >= 0, @"open /dev/null should succeed");
+    if (synthetic_fd < 0) {
+        close(host_fd);
+        return;
+    }
+    
+    struct pollfd pfds[2];
+    pfds[0].fd = host_fd;
+    pfds[0].events = POLLIN | POLLOUT;
+    pfds[0].revents = 0;
+    
+    pfds[1].fd = synthetic_fd;
+    pfds[1].events = POLLIN | POLLOUT;
+    pfds[1].revents = 0;
+    
+    errno = 0;
+    int ret = poll(pfds, 2, 0);
+    XCTAssertTrue(ret >= 2, @"poll() on mixed set should report both host-backed and synthetic readiness");
+    XCTAssertTrue((pfds[0].revents & POLLOUT) != 0, @"host-backed regular file should be write-ready");
+    XCTAssertTrue((pfds[1].revents & POLLIN) != 0, @"synthetic /dev/null should be read-ready");
+    XCTAssertTrue((pfds[1].revents & POLLOUT) != 0, @"synthetic /dev/null should be write-ready");
+    
+    close(synthetic_fd);
+    close(host_fd);
+    vfs_test_remove_linux_path("/tmp/poll-test-host-file");
+}
+
+- (void)testPollInvalidFdReturnsPollnval {
+    struct pollfd pfd;
+    pfd.fd = 999;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+
+    errno = 0;
+    int ret = poll(&pfd, 1, 0);
+    XCTAssertEqual(ret, 1, @"poll() on invalid fd should report one ready error fd");
+    XCTAssertTrue((pfd.revents & POLLNVAL) != 0, @"invalid fd should set POLLNVAL");
+}
+
+- (void)testSelectInvalidFdFailsWithEbadf {
+    fd_set readfds, writefds;
+    FD_ZERO(&readfds);
+    FD_ZERO(&writefds);
+    FD_SET(999, &readfds);
+    FD_SET(999, &writefds);
+
+    struct timeval tv = {0, 0};
+    errno = 0;
+    int ret = select_impl(1000, &readfds, &writefds, NULL, &tv);
+    XCTAssertEqual(ret, -1, @"select_impl() with invalid fd should fail");
+    XCTAssertEqual(errno, EBADF, @"select_impl() with invalid fd should set EBADF");
 }
 
 @end

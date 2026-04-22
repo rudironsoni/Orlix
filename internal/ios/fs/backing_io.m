@@ -146,6 +146,15 @@ ssize_t host_writev_impl(int fd, const struct iovec *iov, int iovcnt) {
     return ret;
 }
 
+int host_poll_impl(struct pollfd *fds, nfds_t nfds, int timeout) {
+    int ret = syscall(SYS_poll, fds, nfds, timeout);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
 /* Storage class discovery - Darwin-specific host mediation
  * These use Foundation APIs to query standard iOS container paths.
  * This is the appropriate level for host container awareness.

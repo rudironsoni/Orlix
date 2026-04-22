@@ -1,6 +1,7 @@
 #ifndef IXLAND_INTERNAL_IOS_FS_BACKING_IO_H
 #define IXLAND_INTERNAL_IOS_FS_BACKING_IO_H
 
+#include <poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -30,6 +31,7 @@ ssize_t host_pread_impl(int fd, void *buf, size_t count, off_t offset);
 ssize_t host_pwrite_impl(int fd, const void *buf, size_t count, off_t offset);
 ssize_t host_readv_impl(int fd, const struct iovec *iov, int iovcnt);
 ssize_t host_writev_impl(int fd, const struct iovec *iov, int iovcnt);
+int host_poll_impl(struct pollfd *fds, nfds_t nfds, int timeout);
 int host_ensure_directory_impl(const char *path, mode_t mode);
 
 #ifdef __cplusplus

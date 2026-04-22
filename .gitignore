@@ -66,6 +66,8 @@ IXLand.xcodeproj/
 
 # Build artifacts
 build/
+.deriveddata/
+
 
 # Clangd compilation database cache
 .clangd-cache/

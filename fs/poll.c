@@ -1,349 +1,311 @@
-/* IXLandSystem/fs/poll.c
- * Linux-shaped poll() and select() for synthetic fds
- */
 #include <errno.h>
-#include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
+#include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <unistd.h>
 
 #include "fdtable.h"
-#include "vfs.h"
+#include "internal/ios/fs/backing_io.h"
 
-#define MAX_POLL_FDS 256
-
-/* Synthetic fd readiness classification */
-static bool is_synthetic_fd_class(int fd) {
-    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
-        return false;
-    }
-    
-    void *entry = get_fd_entry_impl(fd);
-    if (!entry) {
-        return false;
-    }
-    
-    bool is_synthetic = get_fd_is_synthetic_proc_file_impl(entry) ||
-                        get_fd_is_synthetic_dir_impl(entry) ||
-                        get_fd_is_synthetic_dev_impl(entry);
-    
-    put_fd_entry_impl(entry);
-    return is_synthetic;
+static int host_poll_wait(struct pollfd *fds, nfds_t nfds, int timeout) {
+    return host_poll_impl(fds, nfds, timeout);
 }
 
-/* Check if synthetic fd is immediately ready for read */
 static bool synthetic_fd_read_ready(int fd) {
-    void *entry = get_fd_entry_impl(fd);
+    fd_entry_t *entry = get_fd_entry_impl(fd);
     if (!entry) {
         return false;
     }
-    
-    /* All synthetic procfs files, directories, and dev nodes are immediately readable */
+
     bool ready = get_fd_is_synthetic_proc_file_impl(entry) ||
                  get_fd_is_synthetic_dir_impl(entry) ||
                  get_fd_is_synthetic_dev_impl(entry);
-    
+
     put_fd_entry_impl(entry);
     return ready;
 }
 
-/* Check if synthetic fd is immediately ready for write */
 static bool synthetic_fd_write_ready(int fd) {
-    void *entry = get_fd_entry_impl(fd);
+    fd_entry_t *entry = get_fd_entry_impl(fd);
     if (!entry) {
         return false;
     }
-    
-    /* Linux semantics: regular files are always ready for read and write */
+
+    bool ready = false;
     if (get_fd_is_synthetic_proc_file_impl(entry)) {
-        put_fd_entry_impl(entry);
-        return true;
+        ready = true;
+    } else if (get_fd_is_synthetic_dev_impl(entry)) {
+        ready = true;
     }
-    
-    /* Directories are not writable */
-    if (get_fd_is_synthetic_dir_impl(entry)) {
-        put_fd_entry_impl(entry);
-        return false;
-    }
-    
-    /* All synthetic dev nodes accept writes (immediate success with discard) */
-    if (get_fd_is_synthetic_dev_impl(entry)) {
-        put_fd_entry_impl(entry);
-        return true;
-    }
-    
+
     put_fd_entry_impl(entry);
-    return false;
+    return ready;
 }
 
 int poll_impl(struct pollfd *fds, nfds_t nfds, int timeout) {
-    if (!fds) {
+    if (!fds && nfds > 0) {
         errno = EFAULT;
         return -1;
     }
-    
+
     if (nfds == 0) {
-        if (timeout == 0) {
+        if (timeout <= 0) {
             return 0;
         }
-        /* For non-zero timeout, we'd need a wait mechanism */
-        errno = EINVAL;
-        return -1;
-    }
-    
-    int ready_count = 0;
-    int host_fds_count = 0;
-    struct pollfd *host_fds = NULL;
-    int *fd_map = NULL; /* Map host_fds index to original fds index */
-    
-    if (nfds > 0) {
-        host_fds = calloc(nfds, sizeof(struct pollfd));
-        fd_map = calloc(nfds, sizeof(int));
-        if (!host_fds || !fd_map) {
-            free(host_fds);
-            free(fd_map);
-            errno = ENOMEM;
+        int ret = host_poll_wait(NULL, 0, timeout);
+        if (ret < 0) {
             return -1;
         }
+        return 0;
     }
-    
-    /* First pass: handle synthetic fds, collect host fds */
+
+    int ready_count = 0;
+    int host_fds_count = 0;
+    struct pollfd *host_fds = calloc(nfds, sizeof(struct pollfd));
+    int *fd_map = calloc(nfds, sizeof(int));
+    if (!host_fds || !fd_map) {
+        free(host_fds);
+        free(fd_map);
+        errno = ENOMEM;
+        return -1;
+    }
+
     for (nfds_t i = 0; i < nfds; i++) {
         int fd = fds[i].fd;
         short events = fds[i].events;
         short revents = 0;
-        
-        if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
+
+        if (fd < 0) {
             fds[i].revents = 0;
             continue;
         }
-        
-        void *entry = get_fd_entry_impl(fd);
+
+        if (fd >= NR_OPEN_DEFAULT) {
+            fds[i].revents = POLLNVAL;
+            ready_count++;
+            continue;
+        }
+
+        fd_entry_t *entry = get_fd_entry_impl(fd);
         if (!entry) {
-            fds[i].revents = 0;
+            fds[i].revents = POLLNVAL;
+            ready_count++;
             continue;
         }
-        
+
         bool is_synthetic = get_fd_is_synthetic_proc_file_impl(entry) ||
-                           get_fd_is_synthetic_dir_impl(entry) ||
-                           get_fd_is_synthetic_dev_impl(entry);
+                            get_fd_is_synthetic_dir_impl(entry) ||
+                            get_fd_is_synthetic_dev_impl(entry);
         put_fd_entry_impl(entry);
-        
+
         if (is_synthetic) {
-            /* Handle synthetic fd immediately */
-            if (events & POLLIN) {
+            if (events & (POLLIN | POLLRDNORM)) {
                 if (synthetic_fd_read_ready(fd)) {
-                    revents |= POLLIN;
+                    revents |= (events & (POLLIN | POLLRDNORM));
                 }
             }
-            if (events & POLLOUT) {
+            if (events & (POLLOUT | POLLWRNORM)) {
                 if (synthetic_fd_write_ready(fd)) {
-                    revents |= POLLOUT;
+                    revents |= (events & (POLLOUT | POLLWRNORM));
                 }
             }
-            /* Synthetic fds always report POLLHUP if not readable/writable */
-            if (revents == 0) {
-                revents |= POLLHUP;
-            }
-            
             fds[i].revents = revents;
             if (revents != 0) {
                 ready_count++;
             }
-        } else {
-            /* Collect host fd for polling */
-            host_fds[host_fds_count].fd = fd;
-            host_fds[host_fds_count].events = events;
-            host_fds[host_fds_count].revents = 0;
-            fd_map[host_fds_count] = (int)i;
-            host_fds_count++;
+            continue;
         }
+
+        host_fds[host_fds_count].fd = fd;
+        host_fds[host_fds_count].events = events;
+        host_fds[host_fds_count].revents = 0;
+        fd_map[host_fds_count] = (int)i;
+        host_fds_count++;
     }
-    
-    /* If we have host fds and no synthetic fds ready, poll host fds */
-    if (host_fds_count > 0 && ready_count == 0) {
-        int host_ready = poll(host_fds, (nfds_t)host_fds_count, timeout);
+
+    if (host_fds_count > 0) {
+        int host_timeout = (ready_count > 0) ? 0 : timeout;
+        int host_ready = host_poll_wait(host_fds, (nfds_t)host_fds_count, host_timeout);
         if (host_ready < 0) {
             free(host_fds);
             free(fd_map);
             return -1;
         }
-        
-        /* Copy host fd results back to original fds */
-        for (int i = 0; i < host_ready; i++) {
+
+        for (int i = 0; i < host_fds_count; i++) {
             int orig_idx = fd_map[i];
             if (orig_idx >= 0 && orig_idx < (int)nfds) {
                 fds[orig_idx].revents = host_fds[i].revents;
-                ready_count++;
-            }
-        }
-    } else if (host_fds_count > 0 && ready_count > 0) {
-        /* Non-blocking poll on host fds */
-        struct timeval tv;
-        tv.tv_sec = 0;
-        tv.tv_usec = 0;
-        
-        fd_set read_fds;
-        fd_set write_fds;
-        fd_set error_fds;
-        FD_ZERO(&read_fds);
-        FD_ZERO(&write_fds);
-        FD_ZERO(&error_fds);
-        
-        int max_fd = -1;
-        for (int i = 0; i < host_fds_count; i++) {
-            FD_SET(host_fds[i].fd, &read_fds);
-            FD_SET(host_fds[i].fd, &write_fds);
-            FD_SET(host_fds[i].fd, &error_fds);
-            if (host_fds[i].fd > max_fd) {
-                max_fd = host_fds[i].fd;
-            }
-        }
-        
-        select(max_fd + 1, &read_fds, &write_fds, &error_fds, &tv);
-        
-        for (int i = 0; i < host_fds_count; i++) {
-            int fd = host_fds[i].fd;
-            short revents = 0;
-            if (FD_ISSET(fd, &read_fds)) {
-                revents |= POLLIN;
-            }
-            if (FD_ISSET(fd, &write_fds)) {
-                revents |= POLLOUT;
-            }
-            if (FD_ISSET(fd, &error_fds)) {
-                revents |= POLLERR;
-            }
-            
-            int orig_idx = fd_map[i];
-            if (orig_idx >= 0 && orig_idx < (int)nfds) {
-                fds[orig_idx].revents = revents;
-                if (revents != 0) {
+                if (host_fds[i].revents != 0) {
                     ready_count++;
                 }
             }
         }
     }
-    
+
     free(host_fds);
     free(fd_map);
-    
     return ready_count;
 }
 
+static int timeval_to_timeout_ms(const struct timeval *timeout) {
+    if (!timeout) {
+        return -1;
+    }
+    if (timeout->tv_sec < 0 || timeout->tv_usec < 0) {
+        errno = EINVAL;
+        return -2;
+    }
+
+    uint64_t sec_ms = (uint64_t)timeout->tv_sec * 1000ULL;
+    uint64_t usec_ms = (uint64_t)timeout->tv_usec / 1000ULL;
+    uint64_t total = sec_ms + usec_ms;
+    if (total > (uint64_t)INT32_MAX) {
+        total = (uint64_t)INT32_MAX;
+    }
+    return (int)total;
+}
+
 int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
-    if (nfds <= 0) {
+    if (nfds < 0) {
         errno = EINVAL;
         return -1;
     }
-    
-    fd_set host_readfds;
-    fd_set host_writefds;
-    fd_set host_errorfds;
-    FD_ZERO(&host_readfds);
-    FD_ZERO(&host_writefds);
-    FD_ZERO(&host_errorfds);
-    
-    int host_max_fd = -1;
-    int synthetic_ready = 0;
-    
-    /* Process each fd */
+
+    fd_set requested_read;
+    fd_set requested_write;
+    fd_set requested_error;
+    fd_set *requested_read_ptr = NULL;
+    fd_set *requested_write_ptr = NULL;
+    fd_set *requested_error_ptr = NULL;
+
+    if (readfds) {
+        requested_read = *readfds;
+        requested_read_ptr = &requested_read;
+    }
+    if (writefds) {
+        requested_write = *writefds;
+        requested_write_ptr = &requested_write;
+    }
+    if (errorfds) {
+        requested_error = *errorfds;
+        requested_error_ptr = &requested_error;
+    }
+
+    int requested = 0;
     for (int fd = 0; fd < nfds; fd++) {
-        bool in_read = readfds && FD_ISSET(fd, readfds);
-        bool in_write = writefds && FD_ISSET(fd, writefds);
-        bool in_error = errorfds && FD_ISSET(fd, errorfds);
-        
+        bool in_read = requested_read_ptr && FD_ISSET(fd, requested_read_ptr);
+        bool in_write = requested_write_ptr && FD_ISSET(fd, requested_write_ptr);
+        bool in_error = requested_error_ptr && FD_ISSET(fd, requested_error_ptr);
         if (!in_read && !in_write && !in_error) {
             continue;
         }
-        
-        if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
-            if (readfds) FD_CLR(fd, readfds);
-            if (writefds) FD_CLR(fd, writefds);
-            if (errorfds) FD_CLR(fd, errorfds);
-            continue;
-        }
-        
-        void *entry = get_fd_entry_impl(fd);
-        if (!entry) {
-            if (readfds) FD_CLR(fd, readfds);
-            if (writefds) FD_CLR(fd, writefds);
-            if (errorfds) FD_CLR(fd, errorfds);
-            continue;
-        }
-        
-        bool is_synthetic = get_fd_is_synthetic_proc_file_impl(entry) ||
-                           get_fd_is_synthetic_dir_impl(entry) ||
-                           get_fd_is_synthetic_dev_impl(entry);
-        put_fd_entry_impl(entry);
-        
-        if (is_synthetic) {
-            /* Handle synthetic fd immediately */
-            bool read_ready = in_read && synthetic_fd_read_ready(fd);
-            bool write_ready = in_write && synthetic_fd_write_ready(fd);
-            
-            if (readfds && !read_ready) FD_CLR(fd, readfds);
-            if (writefds && !write_ready) FD_CLR(fd, writefds);
-            if (errorfds) FD_CLR(fd, errorfds);
-            
-            if (read_ready || write_ready) {
-                synthetic_ready++;
-            }
-        } else {
-            /* Add to host fd sets */
-            if (in_read) FD_SET(fd, &host_readfds);
-            if (in_write) FD_SET(fd, &host_writefds);
-            if (in_error) FD_SET(fd, &host_errorfds);
-            if (fd > host_max_fd) {
-                host_max_fd = fd;
-            }
-        }
-    }
-    
-    /* If we have host fds, poll them */
-    int host_ready = 0;
-    if (host_max_fd >= 0) {
-        struct timeval tv;
-        struct timeval *tv_ptr = NULL;
-        if (timeout) {
-            tv = *timeout;
-            tv_ptr = &tv;
-        }
-        
-        host_ready = select(host_max_fd + 1, &host_readfds, &host_writefds, &host_errorfds, tv_ptr);
-        if (host_ready < 0) {
+
+        if (fd >= NR_OPEN_DEFAULT) {
+            errno = EBADF;
             return -1;
         }
-    }
-    
-    /* Copy host fd results back */
-    if (readfds) *readfds = host_readfds;
-    if (writefds) *writefds = host_writefds;
-    if (errorfds) *errorfds = host_errorfds;
-    
-    /* Clear synthetic fds that aren't ready */
-    for (int fd = 0; fd < nfds; fd++) {
-        void *entry = get_fd_entry_impl(fd);
-        if (!entry) continue;
-        bool is_synthetic = get_fd_is_synthetic_proc_file_impl(entry) ||
-                           get_fd_is_synthetic_dir_impl(entry) ||
-                           get_fd_is_synthetic_dev_impl(entry);
+
+        fd_entry_t *entry = get_fd_entry_impl(fd);
+        if (!entry) {
+            errno = EBADF;
+            return -1;
+        }
         put_fd_entry_impl(entry);
-        
-        if (is_synthetic) {
-            bool read_ready = synthetic_fd_read_ready(fd);
-            bool write_ready = synthetic_fd_write_ready(fd);
-            
-            if (readfds && !read_ready) FD_CLR(fd, readfds);
-            if (writefds && !write_ready) FD_CLR(fd, writefds);
-            if (errorfds) FD_CLR(fd, errorfds);
+        requested++;
+    }
+
+    if (readfds) {
+        FD_ZERO(readfds);
+    }
+    if (writefds) {
+        FD_ZERO(writefds);
+    }
+    if (errorfds) {
+        FD_ZERO(errorfds);
+    }
+
+    if (requested == 0) {
+        int timeout_ms = timeval_to_timeout_ms(timeout);
+        if (timeout_ms == -2) {
+            return -1;
+        }
+        return poll_impl(NULL, 0, timeout_ms);
+    }
+
+    struct pollfd *pfds = calloc((size_t)requested, sizeof(struct pollfd));
+    if (!pfds) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    int idx = 0;
+    for (int fd = 0; fd < nfds; fd++) {
+        bool in_read = requested_read_ptr && FD_ISSET(fd, requested_read_ptr);
+        bool in_write = requested_write_ptr && FD_ISSET(fd, requested_write_ptr);
+        bool in_error = requested_error_ptr && FD_ISSET(fd, requested_error_ptr);
+        if (!in_read && !in_write && !in_error) {
+            continue;
+        }
+
+        short events = 0;
+        if (in_read) {
+            events |= (POLLIN | POLLRDNORM);
+        }
+        if (in_write) {
+            events |= (POLLOUT | POLLWRNORM);
+        }
+        if (in_error) {
+            events |= POLLPRI;
+        }
+
+        pfds[idx].fd = fd;
+        pfds[idx].events = events;
+        pfds[idx].revents = 0;
+        idx++;
+    }
+
+    int timeout_ms = timeval_to_timeout_ms(timeout);
+    if (timeout_ms == -2) {
+        free(pfds);
+        return -1;
+    }
+
+    int ret = poll_impl(pfds, (nfds_t)requested, timeout_ms);
+    if (ret < 0) {
+        free(pfds);
+        return -1;
+    }
+
+    int ready_fds = 0;
+    for (int i = 0; i < requested; i++) {
+        short revents = pfds[i].revents;
+        int fd = pfds[i].fd;
+        bool marked = false;
+
+        if (readfds && (revents & (POLLIN | POLLRDNORM))) {
+            FD_SET(fd, readfds);
+            marked = true;
+        }
+        if (writefds && (revents & (POLLOUT | POLLWRNORM))) {
+            FD_SET(fd, writefds);
+            marked = true;
+        }
+        if (errorfds && (revents & (POLLERR | POLLPRI))) {
+            FD_SET(fd, errorfds);
+            marked = true;
+        }
+
+        if (marked) {
+            ready_fds++;
         }
     }
-    
-    return host_ready + (synthetic_ready > 0 ? 1 : 0);
+
+    free(pfds);
+    return ready_fds;
 }
 
 __attribute__((visibility("default"))) int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
