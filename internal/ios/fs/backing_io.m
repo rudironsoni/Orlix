@@ -156,6 +156,15 @@ int host_poll_impl(struct pollfd *fds, nfds_t nfds, int timeout) {
     return ret;
 }
 
+int host_ioctl_impl(int fd, unsigned long request, void *arg) {
+    int ret = syscall(SYS_ioctl, fd, request, arg);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
 int host_ensure_directory_impl(const char *path, mode_t mode) {
 
     struct stat st;

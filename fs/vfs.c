@@ -2,12 +2,10 @@
 #include "internal/ios/fs/backing_io.h"
 
 #include <errno.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/syscall.h>
-#include <unistd.h>
+
 
 /* Linux open flags - cannot include linux/fcntl.h due to conflicts, use canonical values */
 #define IX_O_RDONLY		0x0000
@@ -382,7 +380,7 @@ struct fs_struct *alloc_fs_struct(void) {
         return NULL;
 
     atomic_init(&fs->users, 1);
-    pthread_mutex_init(&fs->lock, NULL);
+    ix_mutex_init_impl(&fs->lock);
     fs->umask = 022;
 
     return fs;
@@ -394,7 +392,7 @@ void free_fs_struct(struct fs_struct *fs) {
     if (atomic_fetch_sub(&fs->users, 1) > 1)
         return;
 
-    pthread_mutex_destroy(&fs->lock);
+    ix_mutex_destroy_impl(&fs->lock);
     free(fs);
 }
 
@@ -406,7 +404,7 @@ struct fs_struct *dup_fs_struct(struct fs_struct *old) {
     if (!new)
         return NULL;
 
-    pthread_mutex_lock(&old->lock);
+    ix_mutex_lock_impl(&old->lock);
     if (old->root)
         new->root = old->root;
     if (old->pwd)
@@ -414,7 +412,7 @@ struct fs_struct *dup_fs_struct(struct fs_struct *old) {
     new->umask = old->umask;
     memcpy(new->root_path, old->root_path, MAX_PATH);
     memcpy(new->pwd_path, old->pwd_path, MAX_PATH);
-    pthread_mutex_unlock(&old->lock);
+    ix_mutex_unlock_impl(&old->lock);
 
     return new;
 }
@@ -428,12 +426,12 @@ int fs_init_root(struct fs_struct *fs, const char *root_path) {
     if (vfs_normalize_linux_path(root_path, normalized, sizeof(normalized)) < 0)
         return -EINVAL;
 
-    pthread_mutex_lock(&fs->lock);
+    ix_mutex_lock_impl(&fs->lock);
     memcpy(fs->root_path, normalized, MAX_PATH);
     /* Also set pwd to root if not already set */
     if (fs->pwd_path[0] == '\0')
         memcpy(fs->pwd_path, normalized, MAX_PATH);
-    pthread_mutex_unlock(&fs->lock);
+    ix_mutex_unlock_impl(&fs->lock);
 
     return 0;
 }
@@ -447,12 +445,12 @@ int fs_init_pwd(struct fs_struct *fs, const char *pwd_path) {
     if (vfs_normalize_linux_path(pwd_path, normalized, sizeof(normalized)) < 0)
         return -EINVAL;
 
-    pthread_mutex_lock(&fs->lock);
+    ix_mutex_lock_impl(&fs->lock);
     memcpy(fs->pwd_path, normalized, MAX_PATH);
     /* Also set root to pwd if not already set */
     if (fs->root_path[0] == '\0')
         memcpy(fs->root_path, normalized, MAX_PATH);
-    pthread_mutex_unlock(&fs->lock);
+    ix_mutex_unlock_impl(&fs->lock);
 
     return 0;
 }
@@ -488,15 +486,8 @@ static int vfs_bootstrap_etc_files_impl(void) {
     ssize_t written;
     size_t len;
 
-/* Suppress deprecation warnings for intentional syscall usage in bootstrap */
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-
-  /* Create /etc directory under backing root using host syscall */
-  snprintf(etc_path, sizeof(etc_path), "%s/etc", vfs_persistent_backing_root());
-  syscall(SYS_mkdir, etc_path, 0755);
-
-#pragma clang diagnostic pop
+    snprintf(etc_path, sizeof(etc_path), "%s/etc", vfs_persistent_backing_root());
+    host_ensure_directory_impl(etc_path, 0755);
 
     /* Create /etc/passwd */
     snprintf(file_path, sizeof(file_path), "%s/passwd", etc_path);

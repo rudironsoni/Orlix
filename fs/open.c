@@ -1,11 +1,10 @@
 #include <errno.h>
-#include <fcntl.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "fdtable.h"
+#include "internal/ios/fs/backing_io.h"
 #include "pty.h"
 #include "vfs.h"
 

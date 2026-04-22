@@ -9,11 +9,10 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <sys/ioctl.h>
-#include <sys/syscall.h>
-#include <unistd.h>
 
 #include "fdtable.h"
 #include "pty.h"
+#include "internal/ios/fs/backing_io.h"
 
 #define IX_TCGETS 0x5401
 #define IX_TCSETS 0x5402
@@ -28,12 +27,7 @@
 #define IX_TIOCSPTLCK 0x40045431UL
 
 static int host_ioctl_call_impl(int fd, unsigned long request, void *arg) {
-    int ret = syscall(SYS_ioctl, fd, request, arg);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return ret;
+    return host_ioctl_impl(fd, request, arg);
 }
 
 static int ioctl_impl(int fd, unsigned long request, void *arg) {

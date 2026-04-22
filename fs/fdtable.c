@@ -1,11 +1,9 @@
 #include "fdtable.h"
 
 #include <errno.h>
-#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include "internal/ios/fs/backing_io.h"
 #include "pty.h"
@@ -30,7 +28,7 @@ struct files_struct *alloc_files(size_t max_fds) {
     }
 
     files->max_fds = max_fds;
-    pthread_mutex_init(&files->lock, NULL);
+    ix_mutex_init_impl(&files->lock);
 
     return files;
 }
@@ -39,16 +37,16 @@ void free_files(struct files_struct *files) {
     if (!files)
         return;
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     for (size_t i = 0; i < files->max_fds; i++) {
         if (files->fd[i]) {
             free_file(files->fd[i]);
         }
     }
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     free(files->fd);
-    pthread_mutex_destroy(&files->lock);
+    ix_mutex_destroy_impl(&files->lock);
     free(files);
 }
 
@@ -62,19 +60,19 @@ struct files_struct *dup_files(struct files_struct *parent) {
     if (!child)
         return NULL;
 
-    pthread_mutex_lock(&parent->lock);
+    ix_mutex_lock_impl(&parent->lock);
     for (size_t i = 0; i < parent->max_fds; i++) {
         if (parent->fd[i]) {
             child->fd[i] = dup_file(parent->fd[i]);
             if (!child->fd[i]) {
-                pthread_mutex_unlock(&parent->lock);
+                ix_mutex_unlock_impl(&parent->lock);
                 free_files(child);
                 errno = ENOMEM;
                 return NULL;
             }
         }
     }
-    pthread_mutex_unlock(&parent->lock);
+    ix_mutex_unlock_impl(&parent->lock);
 
     return child;
 }
@@ -108,15 +106,15 @@ int alloc_fd(struct files_struct *files, struct file *file) {
         return -1;
     }
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     for (size_t i = 0; i < files->max_fds; i++) {
         if (!files->fd[i]) {
             files->fd[i] = file;
-            pthread_mutex_unlock(&files->lock);
+            ix_mutex_unlock_impl(&files->lock);
             return (int)i;
         }
     }
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     errno = EMFILE;
     return -1;
@@ -128,17 +126,17 @@ int free_fd(struct files_struct *files, int fd) {
         return -1;
     }
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     struct file *file = files->fd[fd];
     if (!file) {
-        pthread_mutex_unlock(&files->lock);
+        ix_mutex_unlock_impl(&files->lock);
         errno = EBADF;
         return -1;
     }
 
     files->fd[fd] = NULL;
     free_file(file);
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     return 0;
 }
@@ -149,9 +147,9 @@ struct file *fget(struct files_struct *files, int fd) {
         return NULL;
     }
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     struct file *file = files->fd[fd];
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     return file;
 }
@@ -162,10 +160,10 @@ int dup_fd(struct files_struct *files, int oldfd) {
         return -1;
     }
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     struct file *file = files->fd[oldfd];
     if (!file) {
-        pthread_mutex_unlock(&files->lock);
+        ix_mutex_unlock_impl(&files->lock);
         errno = EBADF;
         return -1;
     }
@@ -174,11 +172,11 @@ int dup_fd(struct files_struct *files, int oldfd) {
         if (!files->fd[i]) {
             files->fd[i] = file;
             atomic_fetch_add(&file->refs, 1);
-            pthread_mutex_unlock(&files->lock);
+            ix_mutex_unlock_impl(&files->lock);
             return (int)i;
         }
     }
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     errno = EMFILE;
     return -1;
@@ -196,10 +194,10 @@ int do_dup2(struct files_struct *files, int oldfd, int newfd) {
         return 0;
     }
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     struct file *file = files->fd[oldfd];
     if (!file) {
-        pthread_mutex_unlock(&files->lock);
+        ix_mutex_unlock_impl(&files->lock);
         errno = EBADF;
         return -1;
     }
@@ -210,7 +208,7 @@ int do_dup2(struct files_struct *files, int oldfd, int newfd) {
 
     files->fd[newfd] = file;
     atomic_fetch_add(&file->refs, 1);
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     return 0;
 }
@@ -221,10 +219,10 @@ int set_cloexec(struct files_struct *files, int fd, bool cloexec) {
         return -1;
     }
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     struct file *file = files->fd[fd];
     if (!file) {
-        pthread_mutex_unlock(&files->lock);
+        ix_mutex_unlock_impl(&files->lock);
         errno = EBADF;
         return -1;
     }
@@ -234,7 +232,7 @@ int set_cloexec(struct files_struct *files, int fd, bool cloexec) {
     } else {
         file->fd_flags &= ~FD_CLOEXEC;
     }
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     return 0;
 }
@@ -244,13 +242,13 @@ bool get_cloexec(struct files_struct *files, int fd) {
         return false;
     }
 
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     struct file *file = files->fd[fd];
     bool cloexec = false;
     if (file) {
         cloexec = (file->fd_flags & FD_CLOEXEC) != 0;
     }
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     return cloexec;
 }
@@ -262,7 +260,7 @@ int close_on_exec(struct files_struct *files) {
     }
 
     int closed = 0;
-    pthread_mutex_lock(&files->lock);
+    ix_mutex_lock_impl(&files->lock);
     for (size_t i = 0; i < files->max_fds; i++) {
         if (files->fd[i] && (files->fd[i]->fd_flags & FD_CLOEXEC)) {
             free_file(files->fd[i]);
@@ -270,7 +268,7 @@ int close_on_exec(struct files_struct *files) {
             closed++;
         }
     }
-    pthread_mutex_unlock(&files->lock);
+    ix_mutex_unlock_impl(&files->lock);
 
     return closed;
 }
@@ -309,13 +307,13 @@ typedef struct fd_description {
     unsigned int pty_index;
     bool pty_is_master;
     atomic_int refs;
-    pthread_mutex_t lock;
+    ix_mutex_t lock;
 } fd_description_t;
 
 
 
 static fd_entry_t fd_table[NR_OPEN_DEFAULT];
-static pthread_mutex_t fd_table_lock = PTHREAD_MUTEX_INITIALIZER;
+static ix_mutex_t fd_table_lock = PTHREAD_MUTEX_INITIALIZER;
 static atomic_int fd_table_initialized = 0;
 
 static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mode, const char *path) {
@@ -346,7 +344,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mod
     }
     ((synthetic_dir_state_t *)desc->synthetic_state)->dir_class = SYNTHETIC_DIR_GENERIC;
     atomic_init(&desc->refs, 1);
-    pthread_mutex_init(&desc->lock, NULL);
+    ix_mutex_init_impl(&desc->lock);
     if (path) {
         strncpy(desc->path, path, MAX_PATH - 1);
         desc->path[MAX_PATH - 1] = '\0';
@@ -379,7 +377,7 @@ static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, mode_t
     }
     ((synthetic_dir_state_t *)desc->synthetic_state)->dir_class = dir_class;
     atomic_init(&desc->refs, 1);
-    pthread_mutex_init(&desc->lock, NULL);
+    ix_mutex_init_impl(&desc->lock);
     if (path) {
         strncpy(desc->path, path, MAX_PATH - 1);
         desc->path[MAX_PATH - 1] = '\0';
@@ -406,7 +404,7 @@ static fd_description_t *alloc_synthetic_dev_fd_description(int flags, mode_t mo
     desc->pty_is_master = false;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
-    pthread_mutex_init(&desc->lock, NULL);
+    ix_mutex_init_impl(&desc->lock);
     if (path) {
         strncpy(desc->path, path, MAX_PATH - 1);
         desc->path[MAX_PATH - 1] = '\0';
@@ -433,7 +431,7 @@ static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, mod
     desc->pty_is_master = false;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
-    pthread_mutex_init(&desc->lock, NULL);
+    ix_mutex_init_impl(&desc->lock);
     if (path) {
         strncpy(desc->path, path, MAX_PATH - 1);
         desc->path[MAX_PATH - 1] = '\0';
@@ -461,7 +459,7 @@ static fd_description_t *alloc_synthetic_pty_fd_description(int flags, mode_t mo
     desc->pty_is_master = is_master;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
-    pthread_mutex_init(&desc->lock, NULL);
+    ix_mutex_init_impl(&desc->lock);
     if (path) {
         strncpy(desc->path, path, MAX_PATH - 1);
         desc->path[MAX_PATH - 1] = '\0';
@@ -488,7 +486,7 @@ static void release_fd_description(fd_description_t *desc) {
         if (desc->synthetic_state) {
             free(desc->synthetic_state);
         }
-        pthread_mutex_destroy(&desc->lock);
+        ix_mutex_destroy_impl(&desc->lock);
         free(desc);
     }
 }
@@ -498,10 +496,10 @@ void file_init_impl(void) {
         return;
     }
 
-    pthread_mutex_lock(&fd_table_lock);
+    ix_mutex_lock_impl(&fd_table_lock);
     memset(fd_table, 0, sizeof(fd_table));
     for (int i = 0; i < NR_OPEN_DEFAULT; i++) {
-        pthread_mutex_init(&fd_table[i].lock, NULL);
+        ix_mutex_init_impl(&fd_table[i].lock);
     }
 
     fd_table[STDIN_FILENO].used = true;
@@ -513,24 +511,24 @@ void file_init_impl(void) {
     fd_table[STDERR_FILENO].used = true;
     fd_table[STDERR_FILENO].desc = alloc_fd_description(STDERR_FILENO, O_WRONLY, 0, "/dev/stderr");
 
-    pthread_mutex_unlock(&fd_table_lock);
+    ix_mutex_unlock_impl(&fd_table_lock);
 }
 
 int alloc_fd_impl(void) {
     file_init_impl();
-    pthread_mutex_lock(&fd_table_lock);
+    ix_mutex_lock_impl(&fd_table_lock);
 
     for (int i = 3; i < NR_OPEN_DEFAULT; i++) {
         if (!fd_table[i].used) {
             fd_table[i].used = true;
             fd_table[i].desc = NULL;
             fd_table[i].fd_flags = 0;
-            pthread_mutex_unlock(&fd_table_lock);
+            ix_mutex_unlock_impl(&fd_table_lock);
             return i;
         }
     }
 
-    pthread_mutex_unlock(&fd_table_lock);
+    ix_mutex_unlock_impl(&fd_table_lock);
     errno = EMFILE;
     return -1;
 }
@@ -541,17 +539,17 @@ void free_fd_impl(int fd) {
         return;
     }
 
-    pthread_mutex_lock(&fd_table_lock);
+    ix_mutex_lock_impl(&fd_table_lock);
     if (fd_table[fd].used) {
         fd_description_t *desc = fd_table[fd].desc;
         fd_table[fd].desc = NULL;
         fd_table[fd].fd_flags = 0;
         fd_table[fd].used = false;
-        pthread_mutex_unlock(&fd_table_lock);
+        ix_mutex_unlock_impl(&fd_table_lock);
         release_fd_description(desc);
         return;
     }
-    pthread_mutex_unlock(&fd_table_lock);
+    ix_mutex_unlock_impl(&fd_table_lock);
 }
 
 fd_entry_t *get_fd_entry_impl(int fd) {
@@ -562,35 +560,35 @@ fd_entry_t *get_fd_entry_impl(int fd) {
 
     file_init_impl();
 
-    int ret = pthread_mutex_lock(&fd_table_lock);
+    int ret = ix_mutex_lock_impl(&fd_table_lock);
     if (ret != 0) {
         errno = ret;
         return NULL;
     }
 
     if (!fd_table[fd].used) {
-        pthread_mutex_unlock(&fd_table_lock);
+        ix_mutex_unlock_impl(&fd_table_lock);
         errno = EBADF;
         return NULL;
     }
 
     fd_entry_t *entry = &fd_table[fd];
-    ret = pthread_mutex_lock(&entry->lock);
+    ret = ix_mutex_lock_impl(&entry->lock);
     if (ret != 0) {
-        pthread_mutex_unlock(&fd_table_lock);
+        ix_mutex_unlock_impl(&fd_table_lock);
         errno = ret;
         return NULL;
     }
 
     if (!entry->used) {
-        pthread_mutex_unlock(&entry->lock);
-        pthread_mutex_unlock(&fd_table_lock);
+        ix_mutex_unlock_impl(&entry->lock);
+        ix_mutex_unlock_impl(&fd_table_lock);
         errno = EBADF;
         return NULL;
     }
 
     retain_fd_description(entry->desc);
-    pthread_mutex_unlock(&fd_table_lock);
+    ix_mutex_unlock_impl(&fd_table_lock);
     return entry;
 }
 
@@ -598,7 +596,7 @@ void put_fd_entry_impl(void *entry) {
     if (entry) {
         fd_entry_t *fd_entry = (fd_entry_t *)entry;
         fd_description_t *desc = fd_entry->desc;
-        pthread_mutex_unlock(&fd_entry->lock);
+        ix_mutex_unlock_impl(&fd_entry->lock);
         release_fd_description(desc);
     }
 }
@@ -674,10 +672,10 @@ bool get_fd_is_append_impl(fd_entry_t *entry) {
 void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
-    pthread_mutex_lock(&entry->lock);
+    ix_mutex_lock_impl(&entry->lock);
     entry->desc = alloc_fd_description(real_fd, flags, mode, path);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&entry->lock);
+    ix_mutex_unlock_impl(&entry->lock);
 }
 
 int clone_fd_entry_impl(int oldfd, int minfd, bool cloexec) {
@@ -691,9 +689,9 @@ int clone_fd_entry_impl(int oldfd, int minfd, bool cloexec) {
         return -1;
     }
 
-    pthread_mutex_lock(&fd_table_lock);
+    ix_mutex_lock_impl(&fd_table_lock);
     if (!fd_table[oldfd].used || !fd_table[oldfd].desc) {
-        pthread_mutex_unlock(&fd_table_lock);
+        ix_mutex_unlock_impl(&fd_table_lock);
         errno = EBADF;
         return -1;
     }
@@ -712,7 +710,7 @@ int clone_fd_entry_impl(int oldfd, int minfd, bool cloexec) {
             break;
         }
     }
-    pthread_mutex_unlock(&fd_table_lock);
+    ix_mutex_unlock_impl(&fd_table_lock);
 
     if (newfd < 0) {
         release_fd_description(desc);
@@ -733,9 +731,9 @@ int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec) {
         return -1;
     }
 
-    pthread_mutex_lock(&fd_table_lock);
+    ix_mutex_lock_impl(&fd_table_lock);
     if (!fd_table[oldfd].used || !fd_table[oldfd].desc) {
-        pthread_mutex_unlock(&fd_table_lock);
+        ix_mutex_unlock_impl(&fd_table_lock);
         errno = EBADF;
         return -1;
     }
@@ -747,7 +745,7 @@ int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec) {
     fd_table[newfd].used = true;
     fd_table[newfd].desc = old_desc;
     fd_table[newfd].fd_flags = cloexec ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&fd_table_lock);
+    ix_mutex_unlock_impl(&fd_table_lock);
 
     release_fd_description(new_desc);
     return newfd;
@@ -770,29 +768,29 @@ int close_impl(int fd) {
 void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *path) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
-    pthread_mutex_lock(&entry->lock);
+    ix_mutex_lock_impl(&entry->lock);
     entry->desc = alloc_synthetic_subdir_fd_description(flags, mode, path, SYNTHETIC_DIR_GENERIC);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&entry->lock);
+    ix_mutex_unlock_impl(&entry->lock);
 }
 
 void init_synthetic_dev_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dev_node_t dev_node) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
-    pthread_mutex_lock(&entry->lock);
+    ix_mutex_lock_impl(&entry->lock);
     entry->desc = alloc_synthetic_dev_fd_description(flags, mode, path, dev_node);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&entry->lock);
+    ix_mutex_unlock_impl(&entry->lock);
 }
 
 void init_synthetic_pty_fd_entry_impl(int fd, int flags, mode_t mode, const char *path,
                                       unsigned int pty_index, bool is_master) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
-    pthread_mutex_lock(&entry->lock);
+    ix_mutex_lock_impl(&entry->lock);
     entry->desc = alloc_synthetic_pty_fd_description(flags, mode, path, pty_index, is_master);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&entry->lock);
+    ix_mutex_unlock_impl(&entry->lock);
 }
 
 bool get_fd_is_synthetic_dev_impl(void *entry) {
@@ -823,22 +821,22 @@ unsigned int get_fd_synthetic_pty_index_impl(void *entry) {
 void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
-    pthread_mutex_lock(&entry->lock);
+    ix_mutex_lock_impl(&entry->lock);
     entry->desc = alloc_synthetic_proc_file_fd_description(flags, mode, path, proc_file);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&entry->lock);
+    ix_mutex_unlock_impl(&entry->lock);
 }
 
 void init_synthetic_proc_file_fd_entry_with_fdnum_impl(int fd, int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file, int fd_num) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
-    pthread_mutex_lock(&entry->lock);
+    ix_mutex_lock_impl(&entry->lock);
     entry->desc = alloc_synthetic_proc_file_fd_description(flags, mode, path, proc_file);
     if (entry->desc) {
         entry->desc->proc_file_fd_num = fd_num;
     }
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&entry->lock);
+    ix_mutex_unlock_impl(&entry->lock);
 }
 
 bool get_fd_is_synthetic_proc_file_impl(void *entry) {
@@ -859,10 +857,10 @@ int get_fd_proc_file_fd_num_impl(void *entry) {
 void init_synthetic_subdir_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
-    pthread_mutex_lock(&entry->lock);
+    ix_mutex_lock_impl(&entry->lock);
     entry->desc = alloc_synthetic_subdir_fd_description(flags, mode, path, dir_class);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
-    pthread_mutex_unlock(&entry->lock);
+    ix_mutex_unlock_impl(&entry->lock);
 }
 
 synthetic_dir_class_t get_fd_synthetic_dir_class_impl(void *entry) {
@@ -878,8 +876,8 @@ bool fdtable_is_used_impl(int fd) {
         return false;
     }
     file_init_impl();
-    pthread_mutex_lock(&fd_table_lock);
+    ix_mutex_lock_impl(&fd_table_lock);
     bool used = fd_table[fd].used;
-    pthread_mutex_unlock(&fd_table_lock);
+    ix_mutex_unlock_impl(&fd_table_lock);
     return used;
 }

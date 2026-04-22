@@ -5,7 +5,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <unistd.h>
+
+#include "internal/ios/fs/backing_io.h"
 
 #ifdef __cplusplus
 extern "C" {

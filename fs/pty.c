@@ -1,12 +1,13 @@
 #include "pty.h"
 
 #include <errno.h>
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "internal/ios/fs/backing_io.h"
 
 #define PTY_MAX 128
 #define PTY_BUFFER_CAPACITY 4096
@@ -31,7 +32,7 @@ typedef struct pty_pair {
 } pty_pair_t;
 
 static pty_pair_t pty_table[PTY_MAX];
-static pthread_mutex_t pty_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t pty_lock = IX_MUTEX_INITIALIZER;
 static atomic_uint pty_next_hint = 0;
 
 static void pty_ring_init(pty_ring_buffer_t *ring) {

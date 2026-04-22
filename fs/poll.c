@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/time.h>
-#include <unistd.h>
 
 #include "fdtable.h"
+#include "internal/ios/fs/backing_io.h"
 #include "pty.h"
 #include "internal/ios/fs/backing_io.h"
 
