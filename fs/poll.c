@@ -57,26 +57,22 @@ static bool synthetic_fd_write_ready(int fd) {
         return false;
     }
     
-    /* Synthetic procfs files are not writable (read-only) */
-    /* Synthetic directories are not writable */
-    /* /dev/null is always writable (discard writes) */
-    /* /dev/zero and /dev/urandom are not writable */
-    
+    /* Linux semantics: regular files are always ready for read and write */
     if (get_fd_is_synthetic_proc_file_impl(entry)) {
         put_fd_entry_impl(entry);
-        return false;
+        return true;
     }
     
+    /* Directories are not writable */
     if (get_fd_is_synthetic_dir_impl(entry)) {
         put_fd_entry_impl(entry);
         return false;
     }
     
+    /* All synthetic dev nodes accept writes (immediate success with discard) */
     if (get_fd_is_synthetic_dev_impl(entry)) {
-        synthetic_dev_node_t dev = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
-        /* Only /dev/null accepts writes (they're discarded) */
-        return dev == SYNTHETIC_DEV_NULL;
+        return true;
     }
     
     put_fd_entry_impl(entry);
