@@ -31,6 +31,7 @@
 
 #define IX_TCGETS 0x5401
 #define IX_TCSETS 0x5402
+#define IX_TIOCSCTTY 0x540E
 #define IX_TIOCGPGRP 0x540F
 #define IX_TIOCSPGRP 0x5410
 #define IX_TIOCGWINSZ 0x5413
@@ -38,6 +39,9 @@
 #define IX_FIONREAD 0x541B
 #define IX_TIOCGPTN 0x80045430UL
 #define IX_TIOCSPTLCK 0x40045431UL
+#define IX_SIG_BLOCK 0
+#define IX_SIG_SETMASK 2
+#define IX_SIGWINCH 28
 
 struct ix_termios {
     uint32_t c_iflag;
@@ -67,6 +71,7 @@ struct linux_dirent64 {
 #include "fs/vfs.h"
 #include "fs/path.h"
 #include "kernel/task.h"
+#include "kernel/signal.h"
 #include "internal/ios/fs/backing_io.h"
 
 extern char *getcwd_impl(char *buf, size_t size);
@@ -2389,16 +2394,18 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
 
     struct ix_winsize ws;
     memset(&ws, 0, sizeof(ws));
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGWINSZ, &ws), 0, @"TIOCGWINSZ should succeed");
     ws.ws_row = 40;
     ws.ws_col = 120;
     XCTAssertEqual(ioctl(master_fd, IX_TIOCSWINSZ, &ws), 0, @"TIOCSWINSZ should succeed");
 
-    int32_t pgrp = 321;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed before pgrp ioctls");
+
+    int32_t pgrp = (int32_t)getpgrp();
     XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &pgrp), 0, @"TIOCSPGRP should succeed");
     int32_t got_pgrp = 0;
     XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed");
     XCTAssertEqual(got_pgrp, pgrp, @"foreground pgrp should round-trip");
+
 
     close(slave_fd);
     close(master_fd);
@@ -2496,6 +2503,112 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
     close(synthetic_fd);
     close(host_fd);
     vfs_test_remove_linux_path("/tmp/poll-test-host-file");
+}
+
+- (void)testPtyTtyControlPlaneSemantics {
+    struct task_struct *original_task = get_current();
+    struct task_struct *session_task = alloc_task();
+    XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
+    if (!session_task) return;
+
+    session_task->fs = alloc_fs_struct();
+    XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!session_task->fs) {
+        free_task(session_task);
+        return;
+    }
+
+    session_task->signal = alloc_signal_struct();
+    XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
+    if (!session_task->signal) {
+        free_task(session_task);
+        return;
+    }
+
+    fs_init_root(session_task->fs, @"/".UTF8String);
+    fs_init_pwd(session_task->fs, @"/".UTF8String);
+    session_task->sid = session_task->pid;
+    session_task->pgid = session_task->pid;
+    set_current(session_task);
+
+    int master_fd = open("/dev/ptmx", O_RDWR);
+    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
+    if (master_fd < 0) {
+        set_current(original_task);
+        free_task(session_task);
+        return;
+    }
+
+    unsigned int pty_number = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
+
+    int unlock = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
+
+    char slave_path[64];
+    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
+    int slave_fd = open(slave_path, O_RDWR);
+    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
+    if (slave_fd < 0) {
+        close(master_fd);
+        set_current(original_task);
+        free_task(session_task);
+        return;
+    }
+
+    errno = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &(int32_t){0}), -1, @"TIOCGPGRP should fail before controlling tty set");
+    XCTAssertEqual(errno, ENOTTY, @"TIOCGPGRP before TIOCSCTTY should set ENOTTY");
+
+    errno = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &(int32_t){getpgrp()}), -1, @"TIOCSPGRP should fail before controlling tty set");
+    XCTAssertEqual(errno, ENOTTY, @"TIOCSPGRP before TIOCSCTTY should set ENOTTY");
+
+    errno = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 1), -1, @"TIOCSCTTY with force arg should fail");
+    XCTAssertEqual(errno, EPERM, @"TIOCSCTTY force should set EPERM");
+
+    errno = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed for session leader");
+
+    int32_t current_pgrp = (int32_t)getpgrp();
+    int32_t got_pgrp = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed after controlling tty set");
+    XCTAssertEqual(got_pgrp, current_pgrp, @"foreground pgrp should default to current pgrp");
+
+    errno = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &(int32_t){0}), -1, @"TIOCSPGRP should reject non-positive pgrp");
+    XCTAssertEqual(errno, EINVAL, @"non-positive pgrp should set EINVAL");
+
+    errno = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &(int32_t){999999}), -1, @"TIOCSPGRP should reject unknown session pgrp");
+    XCTAssertEqual(errno, EPERM, @"unknown pgrp should set EPERM");
+
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &current_pgrp), 0, @"TIOCSPGRP current pgrp should succeed");
+
+    struct signal_mask_bits block_set = {0};
+    struct signal_mask_bits old_set = {0};
+    struct signal_mask_bits pending = {0};
+    block_set.sig[(IX_SIGWINCH - 1) >> 6] |= (1ULL << ((IX_SIGWINCH - 1) & 63));
+
+    XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"do_sigprocmask block SIGWINCH should succeed");
+
+    struct ix_winsize ws;
+    memset(&ws, 0, sizeof(ws));
+    ws.ws_row = 51;
+    ws.ws_col = 132;
+
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSWINSZ, &ws), 0, @"TIOCSWINSZ should succeed");
+    XCTAssertEqual(do_sigpending(&pending), 0, @"do_sigpending should succeed");
+    XCTAssertTrue((pending.sig[(IX_SIGWINCH - 1) >> 6] & (1ULL << ((IX_SIGWINCH - 1) & 63))) != 0,
+                  @"SIGWINCH should be pending after winsize change");
+
+    XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore old mask should succeed");
+
+    close(slave_fd);
+    close(master_fd);
+    set_current(original_task);
+    free_task(session_task);
 }
 
 - (void)testPollInvalidFdReturnsPollnval {

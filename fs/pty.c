@@ -7,10 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../kernel/signal.h"
+#include "../kernel/task.h"
 #include "internal/ios/fs/backing_io.h"
 
 #define PTY_MAX 128
 #define PTY_BUFFER_CAPACITY 4096
+#define PTY_SIGWINCH 28
 
 typedef struct pty_ring_buffer {
     unsigned char data[PTY_BUFFER_CAPACITY];
@@ -24,6 +27,8 @@ typedef struct pty_pair {
     bool master_open;
     bool slave_open;
     bool slave_locked;
+    bool has_controlling_session;
+    int32_t controlling_sid;
     pty_linux_termios_t termios;
     pty_linux_winsize_t winsize;
     int32_t foreground_pgrp;
@@ -514,6 +519,9 @@ int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *wins
         return -1;
     }
 
+    int32_t foreground_pgrp = 0;
+    int changed = 0;
+
     pthread_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
@@ -521,8 +529,93 @@ int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *wins
         errno = EINVAL;
         return -1;
     }
+
+    if (memcmp(&pair->winsize, winsize, sizeof(*winsize)) != 0) {
+        changed = 1;
+    }
     pair->winsize = *winsize;
+    foreground_pgrp = pair->foreground_pgrp;
     pthread_mutex_unlock(&pty_lock);
+
+    if (changed && foreground_pgrp > 0) {
+        signal_generate_pgrp(foreground_pgrp, PTY_SIGWINCH);
+    }
+
+    return 0;
+}
+
+int pty_set_controlling_tty_impl(unsigned int pty_index, int arg) {
+    if (!pty_valid_index(pty_index)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct task_struct *task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    if (arg != 0) {
+        errno = EPERM;
+        return -1;
+    }
+
+    pthread_mutex_lock(&task->lock);
+
+    if (task->sid <= 0 || task->pid != task->sid) {
+        pthread_mutex_unlock(&task->lock);
+        errno = EPERM;
+        return -1;
+    }
+
+    if (task->tty && task->tty->index == (int)pty_index) {
+        pthread_mutex_unlock(&task->lock);
+        return 0;
+    }
+
+    if (task->tty) {
+        pthread_mutex_unlock(&task->lock);
+        errno = EPERM;
+        return -1;
+    }
+
+    struct tty_struct *tty = calloc(1, sizeof(*tty));
+    if (!tty) {
+        pthread_mutex_unlock(&task->lock);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    pthread_mutex_lock(&pty_lock);
+    pty_pair_t *pair = &pty_table[pty_index];
+    if (!pair->allocated) {
+        pthread_mutex_unlock(&pty_lock);
+        pthread_mutex_unlock(&task->lock);
+        free(tty);
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (pair->has_controlling_session && pair->controlling_sid != task->sid) {
+        pthread_mutex_unlock(&pty_lock);
+        pthread_mutex_unlock(&task->lock);
+        free(tty);
+        errno = EPERM;
+        return -1;
+    }
+
+    pair->has_controlling_session = true;
+    pair->controlling_sid = task->sid;
+    pair->foreground_pgrp = task->pgid;
+    pthread_mutex_unlock(&pty_lock);
+
+    tty->index = (int)pty_index;
+    tty->foreground_pgrp = task->pgid;
+    atomic_init(&tty->refs, 1);
+    task->tty = tty;
+
+    pthread_mutex_unlock(&task->lock);
     return 0;
 }
 
@@ -532,6 +625,12 @@ int pty_get_foreground_pgrp_impl(unsigned int pty_index, int32_t *pgrp) {
         return -1;
     }
 
+    struct task_struct *task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
     pthread_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
@@ -539,14 +638,32 @@ int pty_get_foreground_pgrp_impl(unsigned int pty_index, int32_t *pgrp) {
         errno = EINVAL;
         return -1;
     }
+
+    if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
+        pthread_mutex_unlock(&pty_lock);
+        errno = ENOTTY;
+        return -1;
+    }
+
     *pgrp = pair->foreground_pgrp;
     pthread_mutex_unlock(&pty_lock);
     return 0;
 }
 
 int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp) {
-    if (!pty_valid_index(pty_index)) {
+    if (!pty_valid_index(pty_index) || pgrp <= 0) {
         errno = EINVAL;
+        return -1;
+    }
+
+    struct task_struct *task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    if (!task_session_has_pgrp_impl(task->sid, pgrp)) {
+        errno = EPERM;
         return -1;
     }
 
@@ -557,6 +674,13 @@ int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp) {
         errno = EINVAL;
         return -1;
     }
+
+    if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
+        pthread_mutex_unlock(&pty_lock);
+        errno = ENOTTY;
+        return -1;
+    }
+
     pair->foreground_pgrp = pgrp;
     pthread_mutex_unlock(&pty_lock);
     return 0;

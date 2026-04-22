@@ -59,6 +59,7 @@ int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *wins
 
 int pty_get_foreground_pgrp_impl(unsigned int pty_index, int32_t *pgrp);
 int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp);
+int pty_set_controlling_tty_impl(unsigned int pty_index, int arg);
 
 int pty_format_slave_path_impl(unsigned int pty_index, char *buf, size_t buf_len);
 

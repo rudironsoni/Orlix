@@ -363,6 +363,11 @@ int32_t setsid_impl(void) {
         return -1;
     }
 
+    if (task->tty) {
+        atomic_fetch_sub(&task->tty->refs, 1);
+        task->tty = NULL;
+    }
+
     /* Create new session and process group */
     task->sid = task->pid;
     task->pgid = task->pid;
@@ -370,6 +375,32 @@ int32_t setsid_impl(void) {
     pthread_mutex_unlock(&task->lock);
 
     return task->pid;
+}
+
+int task_session_has_pgrp_impl(int32_t sid, int32_t pgid) {
+    if (sid <= 0 || pgid <= 0) {
+        return 0;
+    }
+
+    int found = 0;
+
+    pthread_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
+        while (task) {
+            if (task->sid == sid && task->pgid == pgid) {
+                found = 1;
+                break;
+            }
+            task = task->hash_next;
+        }
+        if (found) {
+            break;
+        }
+    }
+    pthread_mutex_unlock(&task_table_lock);
+
+    return found;
 }
 
 /* ============================================================================
