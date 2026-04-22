@@ -31,6 +31,8 @@
 
 #define IX_TCGETS 0x5401
 #define IX_TCSETS 0x5402
+#define IX_TCSETSW 0x5403
+#define IX_TCSETSF 0x5404
 #define IX_TIOCSCTTY 0x540E
 #define IX_TIOCGPGRP 0x540F
 #define IX_TIOCSPGRP 0x5410
@@ -41,7 +43,23 @@
 #define IX_TIOCSPTLCK 0x40045431UL
 #define IX_SIG_BLOCK 0
 #define IX_SIG_SETMASK 2
+#define IX_SIGINT 2
+#define IX_SIGQUIT 3
+#define IX_SIGTSTP 20
 #define IX_SIGWINCH 28
+
+#define IX_LFLAG_ISIG 0x00000001U
+#define IX_LFLAG_ICANON 0x00000002U
+#define IX_LFLAG_ECHO 0x00000008U
+
+#define IX_CC_VINTR 0
+#define IX_CC_VQUIT 1
+#define IX_CC_VERASE 2
+#define IX_CC_VKILL 3
+#define IX_CC_VEOF 4
+#define IX_CC_VTIME 5
+#define IX_CC_VMIN 6
+#define IX_CC_VSUSP 10
 
 struct ix_termios {
     uint32_t c_iflag;
@@ -139,6 +157,41 @@ static void vfs_test_remove_linux_path(const char *path) {
 
 static int vfs_test_open_host_directory_fd(const char *host_path) {
     return host_open_impl(host_path, O_RDONLY | O_DIRECTORY, 0);
+}
+
+static bool vfs_test_open_pty_pair(int *master_fd, int *slave_fd) {
+    if (!master_fd || !slave_fd) {
+        return false;
+    }
+
+    int master = open("/dev/ptmx", O_RDWR);
+    if (master < 0) {
+        return false;
+    }
+
+    unsigned int pty_number = 0;
+    if (ioctl(master, IX_TIOCGPTN, &pty_number) != 0) {
+        close(master);
+        return false;
+    }
+
+    int unlock = 0;
+    if (ioctl(master, IX_TIOCSPTLCK, &unlock) != 0) {
+        close(master);
+        return false;
+    }
+
+    char slave_path[64];
+    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
+    int slave = open(slave_path, O_RDWR);
+    if (slave < 0) {
+        close(master);
+        return false;
+    }
+
+    *master_fd = master;
+    *slave_fd = slave;
+    return true;
 }
 
 @interface VFSPathTests : XCTestCase
@@ -2431,6 +2484,14 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
         return;
     }
 
+    struct ix_termios tio;
+    memset(&tio, 0, sizeof(tio));
+    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
+    tio.c_lflag &= ~(IX_LFLAG_ICANON | IX_LFLAG_ECHO);
+    tio.c_cc[IX_CC_VMIN] = 1;
+    tio.c_cc[IX_CC_VTIME] = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
+
     struct pollfd pfd;
     pfd.fd = slave_fd;
     pfd.events = POLLIN;
@@ -2468,6 +2529,184 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
 
     close(slave_fd);
     close(master_fd);
+}
+
+- (void)testPtyLineDisciplineCanonicalEchoAndEditing {
+    int master_fd = -1;
+    int slave_fd = -1;
+    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
+    if (master_fd < 0 || slave_fd < 0) return;
+
+    struct ix_termios tio;
+    memset(&tio, 0, sizeof(tio));
+    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
+    tio.c_lflag |= (IX_LFLAG_ICANON | IX_LFLAG_ECHO);
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
+
+    XCTAssertEqual(write(master_fd, "ab", 2), 2, @"master write should succeed");
+
+    char echo_buf[16] = {0};
+    XCTAssertEqual(read(master_fd, echo_buf, sizeof(echo_buf)), 2, @"echo should be visible on master read");
+    XCTAssertEqual(strcmp(echo_buf, "ab"), 0, @"echo payload should match typed bytes");
+
+    char slave_buf[32] = {0};
+    errno = 0;
+    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"canonical read should wait before newline");
+    XCTAssertEqual(errno, EAGAIN, @"canonical read before newline should set EAGAIN");
+
+    XCTAssertEqual(write(master_fd, "\x7f", 1), 1, @"VERASE write should succeed");
+    XCTAssertEqual(write(master_fd, "c", 1), 1, @"master write should succeed");
+    XCTAssertEqual(write(master_fd, "\n", 1), 1, @"newline write should succeed");
+
+    memset(slave_buf, 0, sizeof(slave_buf));
+    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), 3, @"canonical line should flush on newline");
+    XCTAssertEqual(strcmp(slave_buf, "ac\n"), 0, @"VERASE should edit pending line");
+
+    close(slave_fd);
+    close(master_fd);
+}
+
+- (void)testPtyLineDisciplineNoncanonicalVminVtime {
+    int master_fd = -1;
+    int slave_fd = -1;
+    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
+    if (master_fd < 0 || slave_fd < 0) return;
+
+    struct ix_termios tio;
+    memset(&tio, 0, sizeof(tio));
+    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
+    tio.c_lflag &= ~(IX_LFLAG_ICANON | IX_LFLAG_ECHO);
+    tio.c_cc[IX_CC_VMIN] = 3;
+    tio.c_cc[IX_CC_VTIME] = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETSW, &tio), 0, @"TCSETSW should succeed");
+
+    XCTAssertEqual(write(master_fd, "ab", 2), 2, @"master write should succeed");
+
+    char slave_buf[16] = {0};
+    errno = 0;
+    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"read should block-equivalent until VMIN bytes");
+    XCTAssertEqual(errno, EAGAIN, @"insufficient bytes should set EAGAIN");
+
+    XCTAssertEqual(write(master_fd, "c", 1), 1, @"master write should succeed");
+    memset(slave_buf, 0, sizeof(slave_buf));
+    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), 3, @"read should return after VMIN bytes");
+    XCTAssertEqual(strcmp(slave_buf, "abc"), 0, @"noncanonical payload should match");
+
+    tio.c_cc[IX_CC_VMIN] = 0;
+    tio.c_cc[IX_CC_VTIME] = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETSW, &tio), 0, @"TCSETSW should succeed");
+
+    memset(slave_buf, 0, sizeof(slave_buf));
+    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), 0, @"VMIN=0 VTIME=0 empty read should return zero");
+
+    close(slave_fd);
+    close(master_fd);
+}
+
+- (void)testPtyLineDisciplineTcsetsfFlushesUnreadInput {
+    int master_fd = -1;
+    int slave_fd = -1;
+    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
+    if (master_fd < 0 || slave_fd < 0) return;
+
+    struct ix_termios tio;
+    memset(&tio, 0, sizeof(tio));
+    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
+    tio.c_lflag &= ~(IX_LFLAG_ICANON | IX_LFLAG_ECHO);
+    tio.c_cc[IX_CC_VMIN] = 1;
+    tio.c_cc[IX_CC_VTIME] = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
+
+    XCTAssertEqual(write(master_fd, "flush-me", 8), 8, @"master write should succeed");
+
+    struct ix_termios updated = tio;
+    updated.c_lflag |= IX_LFLAG_ECHO;
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETSF, &updated), 0, @"TCSETSF should succeed");
+
+    char slave_buf[16] = {0};
+    errno = 0;
+    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"TCSETSF should flush unread input");
+    XCTAssertEqual(errno, EAGAIN, @"flushed unread input should set EAGAIN on read");
+
+    close(slave_fd);
+    close(master_fd);
+}
+
+- (void)testPtyLineDisciplineIsigGeneratesForegroundSignals {
+    struct task_struct *original_task = get_current();
+    struct task_struct *session_task = alloc_task();
+    XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
+    if (!session_task) return;
+
+    session_task->fs = alloc_fs_struct();
+    XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!session_task->fs) {
+        free_task(session_task);
+        return;
+    }
+
+    session_task->signal = alloc_signal_struct();
+    XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
+    if (!session_task->signal) {
+        free_task(session_task);
+        return;
+    }
+
+    fs_init_root(session_task->fs, @"/".UTF8String);
+    fs_init_pwd(session_task->fs, @"/".UTF8String);
+    session_task->sid = session_task->pid;
+    session_task->pgid = session_task->pid;
+    set_current(session_task);
+
+    int master_fd = -1;
+    int slave_fd = -1;
+    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
+    if (master_fd < 0 || slave_fd < 0) {
+        set_current(original_task);
+        free_task(session_task);
+        return;
+    }
+
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed");
+    int32_t current_pgrp = (int32_t)getpgrp();
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &current_pgrp), 0, @"TIOCSPGRP should succeed");
+
+    struct ix_termios tio;
+    memset(&tio, 0, sizeof(tio));
+    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
+    tio.c_lflag |= (IX_LFLAG_ISIG | IX_LFLAG_ICANON);
+    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
+
+    struct signal_mask_bits block_set = {0};
+    struct signal_mask_bits old_set = {0};
+    struct signal_mask_bits pending = {0};
+    block_set.sig[(IX_SIGINT - 1) >> 6] |= (1ULL << ((IX_SIGINT - 1) & 63));
+    block_set.sig[(IX_SIGQUIT - 1) >> 6] |= (1ULL << ((IX_SIGQUIT - 1) & 63));
+    block_set.sig[(IX_SIGTSTP - 1) >> 6] |= (1ULL << ((IX_SIGTSTP - 1) & 63));
+    XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"do_sigprocmask should succeed");
+
+    unsigned char isig_seq[3] = {tio.c_cc[IX_CC_VINTR], tio.c_cc[IX_CC_VQUIT], tio.c_cc[IX_CC_VSUSP]};
+    XCTAssertEqual(write(master_fd, isig_seq, sizeof(isig_seq)), (ssize_t)sizeof(isig_seq), @"ISIG bytes write should succeed");
+
+    XCTAssertEqual(do_sigpending(&pending), 0, @"do_sigpending should succeed");
+    XCTAssertTrue((pending.sig[(IX_SIGINT - 1) >> 6] & (1ULL << ((IX_SIGINT - 1) & 63))) != 0,
+                  @"VINTR should enqueue SIGINT");
+    XCTAssertTrue((pending.sig[(IX_SIGQUIT - 1) >> 6] & (1ULL << ((IX_SIGQUIT - 1) & 63))) != 0,
+                  @"VQUIT should enqueue SIGQUIT");
+    XCTAssertTrue((pending.sig[(IX_SIGTSTP - 1) >> 6] & (1ULL << ((IX_SIGTSTP - 1) & 63))) != 0,
+                  @"VSUSP should enqueue SIGTSTP");
+
+    char slave_buf[8] = {0};
+    errno = 0;
+    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"signal bytes should not become input payload");
+    XCTAssertEqual(errno, EAGAIN, @"no payload after ISIG bytes should set EAGAIN");
+
+    XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore old mask should succeed");
+
+    close(slave_fd);
+    close(master_fd);
+    set_current(original_task);
+    free_task(session_task);
 }
 
 - (void)testPollMixedSyntheticAndHostBackedFds {

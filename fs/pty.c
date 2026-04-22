@@ -14,6 +14,22 @@
 #define PTY_MAX 128
 #define PTY_BUFFER_CAPACITY 4096
 #define PTY_SIGWINCH 28
+#define PTY_SIGINT 2
+#define PTY_SIGQUIT 3
+#define PTY_SIGTSTP 20
+
+#define PTY_LFLAG_ISIG 0x00000001U
+#define PTY_LFLAG_ICANON 0x00000002U
+#define PTY_LFLAG_ECHO 0x00000008U
+
+#define PTY_CC_VINTR 0
+#define PTY_CC_VQUIT 1
+#define PTY_CC_VERASE 2
+#define PTY_CC_VKILL 3
+#define PTY_CC_VEOF 4
+#define PTY_CC_VTIME 5
+#define PTY_CC_VMIN 6
+#define PTY_CC_VSUSP 10
 
 typedef struct pty_ring_buffer {
     unsigned char data[PTY_BUFFER_CAPACITY];
@@ -34,6 +50,8 @@ typedef struct pty_pair {
     int32_t foreground_pgrp;
     pty_ring_buffer_t master_to_slave;
     pty_ring_buffer_t slave_to_master;
+    unsigned char canonical_pending[PTY_BUFFER_CAPACITY];
+    size_t canonical_pending_len;
 } pty_pair_t;
 
 static pty_pair_t pty_table[PTY_MAX];
@@ -66,6 +84,144 @@ static size_t pty_ring_read(pty_ring_buffer_t *ring, unsigned char *dst, size_t 
         read_count++;
     }
     return read_count;
+}
+
+static void pty_ring_clear(pty_ring_buffer_t *ring) {
+    ring->head = 0;
+    ring->tail = 0;
+    ring->len = 0;
+}
+
+static bool pty_termios_has_flag(const pty_linux_termios_t *termios, uint32_t flag) {
+    return (termios->c_lflag & flag) != 0;
+}
+
+static void pty_emit_echo_byte_impl(pty_pair_t *pair, unsigned char byte) {
+    if (!pty_termios_has_flag(&pair->termios, PTY_LFLAG_ECHO)) {
+        return;
+    }
+    (void)pty_ring_write(&pair->slave_to_master, &byte, 1);
+}
+
+static void pty_emit_echo_erase_impl(pty_pair_t *pair) {
+    if (!pty_termios_has_flag(&pair->termios, PTY_LFLAG_ECHO)) {
+        return;
+    }
+    static const unsigned char seq[3] = {'\b', ' ', '\b'};
+    (void)pty_ring_write(&pair->slave_to_master, seq, sizeof(seq));
+}
+
+static bool pty_flush_canonical_pending_impl(pty_pair_t *pair) {
+    if (pair->canonical_pending_len == 0) {
+        return true;
+    }
+    size_t written = pty_ring_write(&pair->master_to_slave, pair->canonical_pending, pair->canonical_pending_len);
+    if (written != pair->canonical_pending_len) {
+        if (written > 0) {
+            memmove(pair->canonical_pending, pair->canonical_pending + written, pair->canonical_pending_len - written);
+            pair->canonical_pending_len -= written;
+        }
+        return false;
+    }
+    pair->canonical_pending_len = 0;
+    return true;
+}
+
+static bool pty_deliver_signal_char_impl(pty_pair_t *pair, unsigned char byte) {
+    if (!pty_termios_has_flag(&pair->termios, PTY_LFLAG_ISIG)) {
+        return false;
+    }
+
+    int signal_number = 0;
+    if (byte == pair->termios.c_cc[PTY_CC_VINTR]) {
+        signal_number = PTY_SIGINT;
+    } else if (byte == pair->termios.c_cc[PTY_CC_VQUIT]) {
+        signal_number = PTY_SIGQUIT;
+    } else if (byte == pair->termios.c_cc[PTY_CC_VSUSP]) {
+        signal_number = PTY_SIGTSTP;
+    }
+
+    if (signal_number == 0) {
+        return false;
+    }
+
+    if (pair->foreground_pgrp > 0) {
+        signal_generate_pgrp(pair->foreground_pgrp, signal_number);
+    }
+    return true;
+}
+
+static bool pty_accept_canonical_byte_impl(pty_pair_t *pair, unsigned char byte) {
+    if (pty_deliver_signal_char_impl(pair, byte)) {
+        return true;
+    }
+
+    if (byte == pair->termios.c_cc[PTY_CC_VERASE]) {
+        if (pair->canonical_pending_len > 0) {
+            pair->canonical_pending_len--;
+            pty_emit_echo_erase_impl(pair);
+        }
+        return true;
+    }
+
+    if (byte == pair->termios.c_cc[PTY_CC_VKILL]) {
+        if (pair->canonical_pending_len > 0) {
+            pair->canonical_pending_len = 0;
+            pty_emit_echo_byte_impl(pair, '\n');
+        }
+        return true;
+    }
+
+    if (byte == pair->termios.c_cc[PTY_CC_VEOF]) {
+        return pty_flush_canonical_pending_impl(pair);
+    }
+
+    if (pair->canonical_pending_len >= PTY_BUFFER_CAPACITY) {
+        return false;
+    }
+
+    pair->canonical_pending[pair->canonical_pending_len++] = byte;
+    pty_emit_echo_byte_impl(pair, byte);
+
+    if (byte == '\n') {
+        return pty_flush_canonical_pending_impl(pair);
+    }
+
+    return true;
+}
+
+static bool pty_accept_noncanonical_byte_impl(pty_pair_t *pair, unsigned char byte) {
+    if (pty_deliver_signal_char_impl(pair, byte)) {
+        return true;
+    }
+
+    pty_emit_echo_byte_impl(pair, byte);
+    return pty_ring_write(&pair->master_to_slave, &byte, 1) == 1;
+}
+
+static ssize_t pty_write_master_linedisc_impl(pty_pair_t *pair, const void *buf, size_t count) {
+    const unsigned char *src = (const unsigned char *)buf;
+    size_t accepted = 0;
+
+    for (size_t i = 0; i < count; i++) {
+        bool ok;
+        if (pty_termios_has_flag(&pair->termios, PTY_LFLAG_ICANON)) {
+            ok = pty_accept_canonical_byte_impl(pair, src[i]);
+        } else {
+            ok = pty_accept_noncanonical_byte_impl(pair, src[i]);
+        }
+
+        if (!ok) {
+            break;
+        }
+        accepted++;
+    }
+
+    if (accepted == 0) {
+        errno = EAGAIN;
+        return -1;
+    }
+    return (ssize_t)accepted;
 }
 
 static bool pty_valid_index(unsigned int pty_index) {
@@ -316,7 +472,16 @@ ssize_t pty_write_master_impl(unsigned int pty_index, const void *buf, size_t co
         return -1;
     }
 
-    ssize_t ret = pty_write_to_ring(&pair->master_to_slave, pair->slave_open, buf, count, nonblock);
+    if (!pair->slave_open) {
+        pthread_mutex_unlock(&pty_lock);
+        errno = EIO;
+        return -1;
+    }
+
+    ssize_t ret = pty_write_master_linedisc_impl(pair, buf, count);
+    if (ret < 0 && !nonblock && errno == EAGAIN) {
+        errno = EAGAIN;
+    }
     pthread_mutex_unlock(&pty_lock);
     return ret;
 }
@@ -333,6 +498,28 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
         pthread_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
+    }
+
+    if (!pty_termios_has_flag(&pair->termios, PTY_LFLAG_ICANON)) {
+        unsigned char vmin = pair->termios.c_cc[PTY_CC_VMIN];
+        unsigned char vtime = pair->termios.c_cc[PTY_CC_VTIME];
+        size_t available = pair->master_to_slave.len;
+
+        if (vmin == 0) {
+            if (available == 0) {
+                if (vtime == 0) {
+                    pthread_mutex_unlock(&pty_lock);
+                    return 0;
+                }
+                pthread_mutex_unlock(&pty_lock);
+                errno = EAGAIN;
+                return -1;
+            }
+        } else if (available < vmin) {
+            pthread_mutex_unlock(&pty_lock);
+            errno = EAGAIN;
+            return -1;
+        }
     }
 
     ssize_t ret = pty_read_from_ring(&pair->master_to_slave, pair->master_open, buf, count, nonblock);
@@ -477,8 +664,12 @@ int pty_get_termios_impl(unsigned int pty_index, pty_linux_termios_t *termios) {
     return 0;
 }
 
-int pty_set_termios_impl(unsigned int pty_index, const pty_linux_termios_t *termios) {
+int pty_set_termios_with_action_impl(unsigned int pty_index, const pty_linux_termios_t *termios, int action) {
     if (!termios || !pty_valid_index(pty_index)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (action != PTY_TCSET_ACTION_NOW && action != PTY_TCSET_ACTION_FLUSH) {
         errno = EINVAL;
         return -1;
     }
@@ -490,9 +681,19 @@ int pty_set_termios_impl(unsigned int pty_index, const pty_linux_termios_t *term
         errno = EINVAL;
         return -1;
     }
+
+    if (action == PTY_TCSET_ACTION_FLUSH) {
+        pty_ring_clear(&pair->master_to_slave);
+        pair->canonical_pending_len = 0;
+    }
+
     pair->termios = *termios;
     pthread_mutex_unlock(&pty_lock);
     return 0;
+}
+
+int pty_set_termios_impl(unsigned int pty_index, const pty_linux_termios_t *termios) {
+    return pty_set_termios_with_action_impl(pty_index, termios, PTY_TCSET_ACTION_NOW);
 }
 
 int pty_get_winsize_impl(unsigned int pty_index, pty_linux_winsize_t *winsize) {

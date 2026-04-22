@@ -13,6 +13,8 @@ extern "C" {
 #endif
 
 #define PTY_LINUX_NCCS 19
+#define PTY_TCSET_ACTION_NOW 0
+#define PTY_TCSET_ACTION_FLUSH 1
 
 struct pty_linux_termios {
     uint32_t c_iflag;
@@ -53,6 +55,7 @@ int pty_get_lock_impl(unsigned int pty_index, int *locked);
 
 int pty_get_termios_impl(unsigned int pty_index, pty_linux_termios_t *termios);
 int pty_set_termios_impl(unsigned int pty_index, const pty_linux_termios_t *termios);
+int pty_set_termios_with_action_impl(unsigned int pty_index, const pty_linux_termios_t *termios, int action);
 
 int pty_get_winsize_impl(unsigned int pty_index, pty_linux_winsize_t *winsize);
 int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *winsize);

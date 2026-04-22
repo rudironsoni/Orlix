@@ -78,12 +78,19 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
             break;
         case IX_TCSETS:
         case IX_TCSETSW:
-        case IX_TCSETSF:
             if (!arg) {
                 errno = EFAULT;
                 break;
             }
             result = pty_set_termios_impl(pty_index, (const pty_linux_termios_t *)arg);
+            break;
+        case IX_TCSETSF:
+            if (!arg) {
+                errno = EFAULT;
+                break;
+            }
+            result = pty_set_termios_with_action_impl(pty_index, (const pty_linux_termios_t *)arg,
+                                                      PTY_TCSET_ACTION_FLUSH);
             break;
         case IX_TIOCGWINSZ:
             if (!arg) {
