@@ -17,6 +17,8 @@ extern "C" {
 #define PTY_TCSET_ACTION_DRAIN 1
 #define PTY_TCSET_ACTION_FLUSH 2
 
+#define PTY_LFLAG_TOSTOP 0x00100000U
+
 struct pty_linux_termios {
     uint32_t c_iflag;
     uint32_t c_oflag;

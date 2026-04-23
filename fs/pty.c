@@ -17,6 +17,8 @@
 #define PTY_SIGINT 2
 #define PTY_SIGQUIT 3
 #define PTY_SIGTSTP 20
+#define PTY_SIGTTIN 21
+#define PTY_SIGTTOU 22
 
 #define PTY_LFLAG_ISIG 0x00000001U
 #define PTY_LFLAG_ICANON 0x00000002U
@@ -226,6 +228,100 @@ static ssize_t pty_write_master_linedisc_impl(pty_pair_t *pair, const void *buf,
 
 static bool pty_valid_index(unsigned int pty_index) {
     return pty_index < PTY_MAX;
+}
+
+static bool pty_signal_is_ignored(const struct task_struct *task, int signal_number) {
+    if (!task || !task->signal || signal_number <= 0 || signal_number >= IX_SIGNAL_NSIG) {
+        return false;
+    }
+    return task->signal->actions[signal_number].handler == (sighandler_t)1;
+}
+
+static bool pty_is_orphaned_pgrp(int32_t sid, int32_t pgid) {
+    bool has_member = false;
+    bool orphaned = true;
+
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *candidate = task_table[i];
+        while (candidate) {
+            if (candidate->sid == sid && candidate->pgid == pgid) {
+                has_member = true;
+                struct task_struct *parent = candidate->parent;
+                if (parent && parent->sid == sid && parent->pgid != pgid) {
+                    orphaned = false;
+                    break;
+                }
+            }
+            candidate = candidate->hash_next;
+        }
+        if (!orphaned) {
+            break;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+
+    return has_member && orphaned;
+}
+
+static int pty_check_background_read_access(pty_pair_t *pair) {
+    struct task_struct *task = get_current();
+    if (!task || !task->signal || !pair->has_controlling_session || pair->controlling_sid != task->sid) {
+        return 0;
+    }
+
+    int32_t fg_pgrp = pair->foreground_pgrp;
+    if (fg_pgrp <= 0 || fg_pgrp == task->pgid) {
+        return 0;
+    }
+
+    if (pty_is_orphaned_pgrp(task->sid, task->pgid)) {
+        errno = EIO;
+        return -1;
+    }
+
+    if (signal_is_blocked(task, PTY_SIGTTIN) || pty_signal_is_ignored(task, PTY_SIGTTIN)) {
+        errno = EIO;
+        return -1;
+    }
+
+    (void)signal_generate_pgrp(task->pgid, PTY_SIGTTIN);
+    errno = EINTR;
+    return -1;
+}
+
+static int pty_check_background_write_access(pty_pair_t *pair, bool enforce_background_stop, bool blocked_or_ignored_is_error) {
+    struct task_struct *task = get_current();
+    if (!task || !task->signal || !pair->has_controlling_session || pair->controlling_sid != task->sid) {
+        return 0;
+    }
+
+    int32_t fg_pgrp = pair->foreground_pgrp;
+    if (fg_pgrp <= 0 || fg_pgrp == task->pgid) {
+        return 0;
+    }
+
+    if (!enforce_background_stop) {
+        return 0;
+    }
+
+    if (pty_is_orphaned_pgrp(task->sid, task->pgid)) {
+        errno = EIO;
+        return -1;
+    }
+
+    bool blocked_or_ignored = signal_is_blocked(task, PTY_SIGTTOU) || pty_signal_is_ignored(task, PTY_SIGTTOU);
+    if (blocked_or_ignored) {
+        if (blocked_or_ignored_is_error) {
+            errno = EIO;
+            return -1;
+        }
+        return 0;
+    }
+
+    (void)signal_generate_pgrp(task->pgid, PTY_SIGTTOU);
+    errno = EINTR;
+    return -1;
 }
 
 static void pty_init_defaults(pty_pair_t *pair) {
@@ -500,6 +596,12 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
         return -1;
     }
 
+    int access_result = pty_check_background_read_access(pair);
+    if (access_result != 0) {
+        fs_mutex_unlock(&pty_lock);
+        return -1;
+    }
+
     if (!pty_termios_has_flag(&pair->termios, PTY_LFLAG_ICANON)) {
         unsigned char vmin = pair->termios.c_cc[PTY_CC_VMIN];
         unsigned char vtime = pair->termios.c_cc[PTY_CC_VTIME];
@@ -538,6 +640,13 @@ ssize_t pty_write_slave_impl(unsigned int pty_index, const void *buf, size_t cou
     if (!pair->allocated || !pair->slave_open) {
         fs_mutex_unlock(&pty_lock);
         errno = EIO;
+        return -1;
+    }
+
+    bool tostop = (pair->termios.c_lflag & PTY_LFLAG_TOSTOP) != 0;
+    int access_result = pty_check_background_write_access(pair, tostop, false);
+    if (access_result != 0) {
+        fs_mutex_unlock(&pty_lock);
         return -1;
     }
 
@@ -679,6 +788,12 @@ int pty_set_termios_with_action_impl(unsigned int pty_index, const pty_linux_ter
     if (!pair->allocated) {
         fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
+        return -1;
+    }
+
+    int access_result = pty_check_background_write_access(pair, true, false);
+    if (access_result != 0) {
+        fs_mutex_unlock(&pty_lock);
         return -1;
     }
 

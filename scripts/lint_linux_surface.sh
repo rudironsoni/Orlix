@@ -73,14 +73,16 @@ echo "   Checking for host_*, *_darwin, *_storage in fs/, kernel/, runtime/, inc
 SLUDGE_COUNT=0
 for dir in fs kernel runtime include; do
     if [ -d "$dir" ]; then
-        while IFS= read -r file; do
+        for path in "$dir"/*; do
+            [ -e "$path" ] || continue
+            file=$(basename "$path")
             case "$file" in
                 host_*|*_darwin.*|*_storage.*)
                     echo "  Found: $dir/$file"
                     SLUDGE_COUNT=$((SLUDGE_COUNT + 1))
                     ;;
             esac
-        done < <(ls -1 "$dir" 2>/dev/null || true)
+        done
     fi
 done
 if [ "$SLUDGE_COUNT" -gt 0 ]; then
@@ -95,14 +97,16 @@ echo "   Checking for new host_*, *_darwin, *_storage patterns in internal/ios..
 SLUDGE_IOS=0
 for subdir in internal/ios/fs internal/ios/kernel; do
     if [ -d "$subdir" ]; then
-        while IFS= read -r file; do
+        for path in "$subdir"/*; do
+            [ -e "$path" ] || continue
+            file=$(basename "$path")
             case "$file" in
                 host_*|*_darwin.*|*_storage.*)
                     echo "  Found: $subdir/$file"
                     SLUDGE_IOS=$((SLUDGE_IOS + 1))
                     ;;
             esac
-        done < <(ls -1 "$subdir" 2>/dev/null || true)
+        done
     fi
 done
 if [ "$SLUDGE_IOS" -gt 0 ]; then
@@ -111,6 +115,19 @@ if [ "$SLUDGE_IOS" -gt 0 ]; then
     exit 1
 fi
 echo "   ✓ No filename sludge in internal/ios"
+
+echo ""
+echo "=== Check 8: PTY test slop guard in VFSPathTests ==="
+SLOP_FILE="IXLandSystemTests/VFSPathTests.m"
+if [ -f "$SLOP_FILE" ]; then
+    PTY_SLOP=$(rg -n '(IX_SIGTTIN|IX_SIGTTOU|IX_LFLAG_TOSTOP|vfs_test_alloc_signal_task|vfs_test_free_signal_task|vfs_test_setup_controlling_pty_session|testPtyBackgroundReadSignalsSigttinAndReturnsEintr|testPtyBackgroundReadBlockedSigttinReturnsEio|testPtyBackgroundWriteTostopSignalsSigttouAndReturnsEintr|testPtyBackgroundTcsetsSignalsSigttouAndReturnsEintr)' "$SLOP_FILE" 2>/dev/null || true)
+    if [ -n "$PTY_SLOP" ]; then
+        echo "FAIL: Forbidden PTY test slop found in $SLOP_FILE:"
+        echo "$PTY_SLOP"
+        exit 1
+    fi
+fi
+echo "   ✓ No forbidden PTY test slop in VFSPathTests"
 
 echo ""
 echo "=== All checks passed ==="
