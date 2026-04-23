@@ -81,9 +81,37 @@ __attribute__((visibility("default"))) int mkdir(const char *path, mode_t mode) 
 - Foundation/UIKit imports (`#import <Foundation/Foundation.h>`)
 - NS-prefixed types (`NSString`, `NSArray`, `NSDictionary`, `NSObject`, etc.)
 - App container APIs (`NSFileManager`, `NSURL` bookmarks, document-picker)
+- **Generic host wrapper families** (`kmutex_*`, `kcond_*`, `kthread_*`, `ix_mutex_*`, etc.)
+- **Direct pthread types** (`pthread_mutex_t`, `pthread_cond_t`, etc.) - use Linux futex or subsystem-specific mediation
+- **Direct pthread.h includes** - host mediation must go through `internal/ios/**` narrow interfaces
 - Run `scripts/lint_linux_surface.sh` before committing
 
 **Naming:** Private bridge files under `internal/ios/**` SHALL be named by role (e.g., `backing_io.m`, `wait.c`, `clock.c`), not by platform suffixes like `*_darwin` or `host_*`.
+
+### 3b. Host Mediation Boundary Rules
+
+**CRITICAL: Linux-owner code MUST NOT include generic host wrapper headers.**
+
+Forbidden patterns in Linux-owner code (`fs/`, `kernel/`, `runtime/`, `include/`):
+```c
+/* FORBIDDEN: Generic host wrapper types leaking into Linux-owner code */
+#include "internal/ios/fs/backing_io.h"  /* Only if using host_* file I/O functions */
+typedef pthread_mutex_t kmutex_t;        /* Host type leakage */
+kmutex_lock_impl(...);                   /* Generic wrapper family */
+```
+
+Required pattern for host mediation:
+```c
+/* CORRECT: Narrow subsystem-specific interface */
+/* internal/ios/fs/vfs_backing.h - VFS-specific mediation only */
+int vfs_backing_open(...);    /* VFS-specific, not generic */
+int vfs_backing_stat(...);    /* VFS-specific, not generic */
+
+/* fs/vfs.c uses narrow interface */
+#include "internal/ios/fs/vfs_backing.h"  /* OK: narrow, subsystem-specific */
+```
+
+**Rule:** If Linux-owner code needs host functionality, it must go through a narrow, subsystem-shaped interface in `internal/ios/**`, NOT through generic wrapper families.
 
 ### 4. Build Proof Standard
 - Authoritative builds use `xcodegen` + `xcodebuild` ONLY

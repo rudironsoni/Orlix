@@ -34,14 +34,27 @@ echo "   ✓ No forbidden host includes"
 
 echo ""
 echo "=== Check 4: Forbidden host APIs/tokens ==="
-echo "   Checking for dlsym, RTLD_NEXT, syscall, pthread, etc. ..."
+echo " Checking for dlsym, RTLD_NEXT, syscall, pthread, etc. ..."
 TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|syscall)\b' -e '\bpthread_\w+\b' -e '\bos_log\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_\w+\b' -g '!include/ixland/clangd_owner_policy.h' fs kernel runtime include 2>/dev/null || true)
 if [ -n "$TOKENS" ]; then
-    echo "FAIL: Forbidden host APIs/tokens in Linux-owner paths:"
-    echo "$TOKENS"
-    exit 1
+echo "FAIL: Forbidden host APIs/tokens in Linux-owner paths:"
+echo "$TOKENS"
+exit 1
 fi
-echo "   ✓ No forbidden host APIs"
+echo " ✓ No forbidden host APIs"
+
+echo ""
+echo "=== Check 4b: Generic host wrapper families ==="
+echo " Checking for kmutex_*, kcond_*, kthread_*, ix_mutex_* generic wrappers..."
+WRAPPERS=$(rg -n -e '\b(kmutex_|kcond_|kthread_|konce_|ksig|ix_mutex_|ix_cond_|ix_thread_)[a-z_]*\b' fs kernel runtime include 2>/dev/null || true)
+if [ -n "$WRAPPERS" ]; then
+echo "FAIL: Generic host wrapper families in Linux-owner paths:"
+echo "$WRAPPERS"
+echo ""
+echo "These wrappers must be removed. Use narrow subsystem-shaped interfaces from internal/ios/** instead."
+exit 1
+fi
+echo " ✓ No generic host wrapper families"
 
 echo ""
 echo "=== Check 5: Hand-defined Linux ABI constants ==="
