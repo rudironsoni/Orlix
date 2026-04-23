@@ -1,125 +1,105 @@
-# AGENTS.md - Development Rules for IXLandSystem
+# AGENTS.md - Linux-Shaped Architecture Rules for IXLandSystem
 
-## Core Implementation Pattern: `_impl()` Suffix Convention
+## Project Invariant
 
-**RULE:** All internal implementation functions that back public syscalls MUST use the `_impl()` suffix pattern.
+IXLandSystem is a Linux-shaped headers + syscall + runtime target hosted on iOS.
 
-### The Pattern
+If a change makes IXLandSystem less suitable for real Linux userspace (for example bash, zsh, grep, sed, awk, fzf), the change is wrong.
 
-```c
-/* 1. Private implementation function with _impl suffix */
-static int mkdir_impl(const char *path, mode_t mode) {
-    /* implementation details */
-}
+Repo-local convenience never outranks Linux userspace compatibility.
 
-/* 2. Public syscall wrapper calls _impl */
-__attribute__((visibility("default"))) int mkdir(const char *path, mode_t mode) {
-    return mkdir_impl(path, mode);
-}
-```
+## 1) Linux-Shaped Surface First
 
-### Why This Matters
+Linux-owner behavior must prefer Linux expectations for:
+- headers, constants, and public names
+- struct layouts and ioctl payload contracts
+- errno behavior
+- file descriptor and open-file-description semantics
+- path resolution, dirfd, and pathname rules
+- poll/select readiness behavior
+- signals, default actions, masking, and delivery
+- sessions/process-groups/controlling-tty behavior
+- termios/tty behavior
+- procfs/devfs names and shape
+- exec/shebang/interpreter/argv/env/wait/exit behavior
 
-1. **Consistency**: The entire codebase uses `*_impl()` for internal implementations
-2. **Clarity**: Distinguishes between public ABI and private implementation
-3. **Debugging**: Makes stack traces and symbol tables readable
-4. **Architecture**: Enforces clean separation between public contract and private mediation
+Do not drift toward Darwin-shaped semantics in Linux-owner code.
 
-### Forbidden Patterns
+## 2) Ownership and Directionality
 
-```c
-/* WRONG: Using underscore-prefixed extern declarations */
-extern int _mkdir(const char *, mode_t);
-static int mkdir_impl(...) { return _mkdir(...); }
+Linux-owner paths (Linux semantics live here):
+- `fs/`
+- `kernel/`
+- `runtime/`
+- `include/`
 
-/* WRONG: No _impl separation */
-__attribute__((visibility("default"))) int mkdir(...) {
-    /* direct implementation, no helper */
-}
-```
+Host mediation paths (host mechanics live here only):
+- `internal/ios/**`
 
-### Correct Pattern
+Wrong-direction changes are forbidden:
+- Do not move Linux semantic decisions into `internal/ios/**`.
+- Do not move host mechanics into Linux-owner paths.
 
-```c
-/* CORRECT: Static _impl function, public wrapper */
-static int mkdir_impl(const char *path, mode_t mode) {
-    /* implementation */
-}
+## 3) Narrow Subsystem Seams Only
 
-__attribute__((visibility("default"))) int mkdir(const char *path, mode_t mode) {
-    return mkdir_impl(path, mode);
-}
-```
+When Linux-owner code needs host mediation, use narrow, subsystem-owned, private seams under `internal/ios/**`.
 
-## Additional Rules
+Allowed seam shape:
+- specific to one subsystem
+- minimal exported surface
+- no ambient host vocabulary leakage
 
-### 1. Linux-Shaped Public ABI
-- Public syscall names MUST be canonical Linux names (`mkdir`, `open`, `mount`, etc.)
-- NO branded names like `ixland_mkdir` in the public ABI
-- Darwin/BSD host headers MUST NOT dictate IXLandSystem's public contract
+Forbidden seam shape:
+- generic helper bags
+- catch-all mediation headers used by unrelated subsystems
+- abstractions that rename/deodorize host APIs and make them ambient
 
-### 2. Host Mediation is Private
-- iOS/Darwin syscalls stay behind `_impl()` functions
-- Never expose Darwin-specific signatures in public headers
-- When Darwin headers conflict with Linux ABI, isolate the conflict privately
+## 4) Ambient Host Vocabulary Is Forbidden in Linux-Owner Code
 
-### 3. Objective-C/Objective-C++ Boundary
-**Linux-owner paths MUST be C-only:**
-- `fs/` - Linux filesystem operations
-- `kernel/` - Linux kernel syscall implementations
-- `runtime/` - Native runtime support
-- `include/` - Public headers (Linux-facing)
+In `fs/`, `kernel/`, `runtime/`, `include/`, do not introduce:
+- direct host APIs/types/macros
+- renamed host APIs wrapped as generic helpers
+- generic wrapper families for mutex/thread/cond/signal/io/platform bridging
+- broad mediation headers that encode host assumptions globally
 
-**Private iOS bridge boundary:**
-- `internal/ios/**` - iOS/Darwin bridge implementations (C, ObjC, ObjC++, Foundation allowed)
+Category rule: banning one prefix and reintroducing the same leakage with a new prefix is still a violation.
 
-**Test boundary:**
-- `IXLandSystemTests/**` - Test code (ObjC/ObjC++ allowed)
+## 5) Public ABI Discipline
 
-**Forbidden in Linux-owner paths:**
-- Objective-C files (.m, .mm)
-- Foundation/UIKit imports (`#import <Foundation/Foundation.h>`)
-- NS-prefixed types (`NSString`, `NSArray`, `NSDictionary`, `NSObject`, etc.)
-- App container APIs (`NSFileManager`, `NSURL` bookmarks, document-picker)
-- **Generic host wrapper families** (`kmutex_*`, `kcond_*`, `kthread_*`, `ix_mutex_*`, etc.)
-- **Direct pthread types** (`pthread_mutex_t`, `pthread_cond_t`, etc.) - use Linux futex or subsystem-specific mediation
-- **Direct pthread.h includes** - host mediation must go through `internal/ios/**` narrow interfaces
-- Run `scripts/lint_linux_surface.sh` before committing
+- Public syscall names remain Linux-shaped.
+- No branded/public ABI names that encode platform identity.
+- Darwin/BSD header behavior must not define Linux-facing contracts.
+- Keep internal implementation behind private `*_impl()` helpers and preserve clean public wrapper boundaries.
 
-**Naming:** Private bridge files under `internal/ios/**` SHALL be named by role (e.g., `backing_io.m`, `wait.c`, `clock.c`), not by platform suffixes like `*_darwin` or `host_*`.
+## 6) Proof Discipline (Required)
 
-### 3b. Host Mediation Boundary Rules
+Lint green is necessary but insufficient.
+Build green is necessary but insufficient.
 
-**CRITICAL: Linux-owner code MUST NOT include generic host wrapper headers.**
+Authoritative proof target is iOS Simulator:
+1. `bash ./scripts/lint_linux_surface.sh`
+2. `xcodegen generate --project .`
+3. `xcodebuild build-for-testing -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'`
+4. required targeted tests for the current tranche
 
-Forbidden patterns in Linux-owner code (`fs/`, `kernel/`, `runtime/`, `include/`):
-```c
-/* FORBIDDEN: Generic host wrapper types leaking into Linux-owner code */
-#include "internal/ios/fs/backing_io.h"  /* Only if using host_* file I/O functions */
-typedef pthread_mutex_t kmutex_t;        /* Host type leakage */
-kmutex_lock_impl(...);                   /* Generic wrapper family */
-```
+Catalyst may be secondary smoke only.
+No commit/push before required proof is green.
 
-Required pattern for host mediation:
-```c
-/* CORRECT: Narrow subsystem-specific interface */
-/* internal/ios/fs/vfs_backing.h - VFS-specific mediation only */
-int vfs_backing_open(...);    /* VFS-specific, not generic */
-int vfs_backing_stat(...);    /* VFS-specific, not generic */
+## 7) Tranche Discipline
 
-/* fs/vfs.c uses narrow interface */
-#include "internal/ios/fs/vfs_backing.h"  /* OK: narrow, subsystem-specific */
-```
+Changes must be bounded by subsystem tranche with explicit ownership and proof.
 
-**Rule:** If Linux-owner code needs host functionality, it must go through a narrow, subsystem-shaped interface in `internal/ios/**`, NOT through generic wrapper families.
+Do not mix unrelated architecture migrations into one tranche.
+Do not “fix lint” by weakening checks or broadening allowlists.
 
-### 4. Build Proof Standard
-- Authoritative builds use `xcodegen` + `xcodebuild` ONLY
-- `swift build` is NOT valid proof for iOS-targeted code
-- Symbol verification via `nm -goU` on the static archive
+## 8) No Policy Theater
 
-### 5. Error Handling
-- Use `ENOSYS` for unimplemented functionality
-- Use `EINVAL` for invalid arguments
-- Use `EPERM`/`EACCES` only when access is genuinely denied
-- Do NOT use `EPERM` as a lazy placeholder for missing implementation
+Forbidden:
+- incident-specific blacklist hacks (single test/helper name grudges)
+- fake completion claims without repo truth and proof logs
+- cosmetic renames that preserve the same architectural violation
+
+Required response to lint conflicts:
+- refine seam boundaries
+- relocate host mechanics behind `internal/ios/**`
+- preserve Linux-owner semantics and contracts

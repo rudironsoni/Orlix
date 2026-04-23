@@ -3,7 +3,6 @@
  * Automatic initialization using constructor attribute
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -69,9 +68,6 @@ vfs_deinit();
 
 atomic_store(&library_initialized, 0);
 
-if (getenv("IXLAND_DEBUG")) {
-fprintf(stderr, "ixland: Library deinitialized\n");
-}
 }
 
 /* ============================================================================

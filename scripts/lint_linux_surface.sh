@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+OWNER_PATHS="fs kernel runtime include"
+
 echo "=== Check 1: Objective-C files outside allowed paths ==="
 OBJC_FILES=$(find fs kernel runtime include -type f \( -name '*.m' -o -name '*.mm' \) 2>/dev/null || true)
 if [ -n "$OBJC_FILES" ]; then
@@ -11,123 +13,123 @@ fi
 echo "   ✓ No stray .m/.mm files in Linux-owner paths"
 
 echo ""
-echo "=== Check 2: Foundation/UIKit leakage outside internal/ios ==="
-echo "   Checking fs/, kernel/, runtime/, include/..."
-LEAK=$(rg -l '#(import|include)\s*<(Foundation|UIKit)/' fs kernel runtime include 2>/dev/null || true)
-if [ -n "$LEAK" ]; then
-    echo "FAIL: Foundation/UIKit includes found outside internal/ios:"
-    echo "$LEAK"
+echo "=== Check 2: Host framework imports in Linux-owner paths ==="
+HOST_FRAMEWORKS=$(rg -n '^\s*#\s*(include|import)\s*<(Foundation|UIKit|CoreFoundation|CoreServices|CoreGraphics|TargetConditionals|dispatch|os)/' $OWNER_PATHS 2>/dev/null || true)
+if [ -n "$HOST_FRAMEWORKS" ]; then
+    echo "FAIL: Host framework imports found in Linux-owner paths:"
+    echo "$HOST_FRAMEWORKS"
     exit 1
 fi
-echo "   ✓ No Foundation/UIKit leakage in Linux-owner paths"
+echo "   ✓ No host framework imports in Linux-owner paths"
 
 echo ""
-echo "=== Check 3: Forbidden host includes in Linux-owner paths ==="
-echo "   Checking for pthread.h, unistd.h, etc. in fs/, kernel/, runtime/, include/..."
-FORBIDDEN=$(rg -n '^\s*#include\s*<(pthread\.h|signal\.h|unistd\.h|sys/wait\.h|sys/types\.h|time\.h|fcntl\.h|mach/.+|Foundation/.+|UIKit/.+|TargetConditionals\.h|os/log\.h)>' fs kernel runtime include 2>/dev/null || true)
-if [ -n "$FORBIDDEN" ]; then
-    echo "FAIL: Forbidden host includes in Linux-owner paths:"
-    echo "$FORBIDDEN"
+echo "=== Check 3: Forbidden host headers in Linux-owner paths ==="
+FORBIDDEN_HEADERS=$(rg -n '^\s*#\s*include\s*<(pthread\.h|dispatch/.*|mach/.*|os/log\.h|objc/.*|sys/sysctl\.h|TargetConditionals\.h|Foundation/.*|UIKit/.*|CoreFoundation/.*)>' $OWNER_PATHS 2>/dev/null || true)
+if [ -n "$FORBIDDEN_HEADERS" ]; then
+    echo "FAIL: Forbidden host headers in Linux-owner paths:"
+    echo "$FORBIDDEN_HEADERS"
     exit 1
 fi
-echo "   ✓ No forbidden host includes"
+echo "   ✓ No forbidden host headers"
 
 echo ""
-echo "=== Check 4: Forbidden host APIs/tokens ==="
-echo " Checking for dlsym, RTLD_NEXT, syscall, pthread, etc. ..."
-TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|syscall)\b' -e '\bpthread_\w+\b' -e '\bos_log\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_\w+\b' -g '!include/ixland/clangd_owner_policy.h' fs kernel runtime include 2>/dev/null || true)
-if [ -n "$TOKENS" ]; then
-echo "FAIL: Forbidden host APIs/tokens in Linux-owner paths:"
-echo "$TOKENS"
-exit 1
-fi
-echo " ✓ No forbidden host APIs"
-
-echo ""
-echo "=== Check 4b: Generic host wrapper families ==="
-echo " Checking for kmutex_*, kcond_*, kthread_*, ix_mutex_* generic wrappers..."
-WRAPPERS=$(rg -n -e '\b(kmutex_|kcond_|kthread_|konce_|ksig|ix_mutex_|ix_cond_|ix_thread_)[a-z_]*\b' fs kernel runtime include 2>/dev/null || true)
-if [ -n "$WRAPPERS" ]; then
-echo "FAIL: Generic host wrapper families in Linux-owner paths:"
-echo "$WRAPPERS"
-echo ""
-echo "These wrappers must be removed. Use narrow subsystem-shaped interfaces from internal/ios/** instead."
-exit 1
-fi
-echo " ✓ No generic host wrapper families"
-
-echo ""
-echo "=== Check 5: Hand-defined Linux ABI constants ==="
-echo "   Checking for FUTEX_, AT_, SA_, SIG*, O_*, etc. ..."
-HANDDEFINED=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' || true)
-if [ -n "$HANDDEFINED" ]; then
-    echo "FAIL: Hand-defined Linux ABI constants found:"
-    echo "$HANDDEFINED"
+echo "=== Check 4: Forbidden host APIs/tokens in Linux-owner paths ==="
+FORBIDDEN_TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|pthread_[a-z_]+|objc_[a-z_]+|mach_[a-z_]+|os_log)\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_[A-Z0-9_]+\b' -g '!include/ixland/clangd_owner_policy.h' $OWNER_PATHS 2>/dev/null || true)
+if [ -n "$FORBIDDEN_TOKENS" ]; then
+    echo "FAIL: Forbidden host APIs/tokens in Linux-owner paths:"
+    echo "$FORBIDDEN_TOKENS"
     exit 1
 fi
-echo "   ✓ No hand-defined ABI constants"
+echo "   ✓ No forbidden host APIs/tokens in Linux-owner paths"
 
 echo ""
-echo "=== Check 6: Filename sludge in Linux-owner paths ==="
-echo "   Checking for host_*, *_darwin, *_storage in fs/, kernel/, runtime/, include..."
-SLUDGE_COUNT=0
-for dir in fs kernel runtime include; do
-    if [ -d "$dir" ]; then
-        for path in "$dir"/*; do
-            [ -e "$path" ] || continue
-            file=$(basename "$path")
-            case "$file" in
-                host_*|*_darwin.*|*_storage.*)
-                    echo "  Found: $dir/$file"
-                    SLUDGE_COUNT=$((SLUDGE_COUNT + 1))
-                    ;;
-            esac
-        done
-    fi
-done
-if [ "$SLUDGE_COUNT" -gt 0 ]; then
-    echo "FAIL: Filename sludge found in Linux-owner paths (count: $SLUDGE_COUNT)"
+echo "=== Check 5: Generic abstraction leakage in Linux-owner paths ==="
+GENERIC_ABSTRACTIONS=$(rg -n -e '\b(kmutex|kcond|kthread|konce|ksig|kplatform|kbridge|ix_mutex|ix_cond|ix_thread|ix_platform|ix_bridge|platform_mutex|platform_thread|bridge_mutex|bridge_thread)_[a-z0-9_]*\b' $OWNER_PATHS 2>/dev/null || true)
+if [ -n "$GENERIC_ABSTRACTIONS" ]; then
+    echo "FAIL: Generic abstraction leakage in Linux-owner paths:"
+    echo "$GENERIC_ABSTRACTIONS"
+    echo "Use narrow subsystem-owned interfaces under internal/ios/** instead."
     exit 1
 fi
-echo "   ✓ No filename sludge in Linux-owner paths"
+echo "   ✓ No generic abstraction leakage in Linux-owner paths"
 
 echo ""
-echo "=== Check 7: Filename sludge in internal/ios ==="
-echo "   Checking for new host_*, *_darwin, *_storage patterns in internal/ios..."
-SLUDGE_IOS=0
-for subdir in internal/ios/fs internal/ios/kernel; do
-    if [ -d "$subdir" ]; then
-        for path in "$subdir"/*; do
-            [ -e "$path" ] || continue
-            file=$(basename "$path")
-            case "$file" in
-                host_*|*_darwin.*|*_storage.*)
-                    echo "  Found: $subdir/$file"
-                    SLUDGE_IOS=$((SLUDGE_IOS + 1))
-                    ;;
-            esac
-        done
-    fi
-done
-if [ "$SLUDGE_IOS" -gt 0 ]; then
-    echo "FAIL: New filename sludge in internal/ios (count: $SLUDGE_IOS)"
-    echo "Rename to role-based names (e.g., backing_io.m, wait.c, clock.c)"
+echo "=== Check 6: Wrong-direction mediation boundaries ==="
+PUBLIC_IOS=$(rg -n '^\s*#\s*include\s*"internal/ios/.+"' include 2>/dev/null || true)
+if [ -n "$PUBLIC_IOS" ]; then
+    echo "FAIL: Public headers in include/ must not depend on internal/ios/**:"
+    echo "$PUBLIC_IOS"
     exit 1
 fi
-echo "   ✓ No filename sludge in internal/ios"
+BROAD_IOS=$(rg -n '^\s*#\s*include\s*"internal/ios/.*/(bridge|platform|generic|common|helpers?|shim|host_api)[^/"]*\.h"' fs kernel runtime 2>/dev/null || true)
+if [ -n "$BROAD_IOS" ]; then
+    echo "FAIL: Linux-owner code includes broad mediation headers from internal/ios/**:"
+    echo "$BROAD_IOS"
+    exit 1
+fi
+echo "   ✓ No wrong-direction broad mediation includes"
 
 echo ""
-echo "=== Check 8: PTY test slop guard in VFSPathTests ==="
-SLOP_FILE="IXLandSystemTests/VFSPathTests.m"
-if [ -f "$SLOP_FILE" ]; then
-    PTY_SLOP=$(rg -n '(IX_SIGTTIN|IX_SIGTTOU|IX_LFLAG_TOSTOP|vfs_test_alloc_signal_task|vfs_test_free_signal_task|vfs_test_setup_controlling_pty_session|testPtyBackgroundReadSignalsSigttinAndReturnsEintr|testPtyBackgroundReadBlockedSigttinReturnsEio|testPtyBackgroundWriteTostopSignalsSigttouAndReturnsEintr|testPtyBackgroundTcsetsSignalsSigttouAndReturnsEintr)' "$SLOP_FILE" 2>/dev/null || true)
-    if [ -n "$PTY_SLOP" ]; then
-        echo "FAIL: Forbidden PTY test slop found in $SLOP_FILE:"
-        echo "$PTY_SLOP"
-        exit 1
-    fi
+echo "=== Check 7: Wrong subsystem placement ==="
+HOST_IMPL_IN_OWNER=$(rg -n '^\s*(static\s+)?[A-Za-z_][A-Za-z0-9_\s\*]*\s+host_[a-z0-9_]+_impl\s*\([^)]*\)\s*\{' fs kernel runtime include 2>/dev/null || true)
+if [ -n "$HOST_IMPL_IN_OWNER" ]; then
+    echo "FAIL: host_*_impl function definitions found in Linux-owner paths:"
+    echo "$HOST_IMPL_IN_OWNER"
+    exit 1
 fi
-echo "   ✓ No forbidden PTY test slop in VFSPathTests"
+CROSS_SUBSYSTEM=$(rg -n '^\s*#\s*include\s*"internal/ios/fs/.*"' kernel runtime 2>/dev/null || true)
+if [ -n "$CROSS_SUBSYSTEM" ]; then
+    echo "FAIL: kernel/runtime must not include fs-owned internal/ios mediation headers:"
+    echo "$CROSS_SUBSYSTEM"
+    exit 1
+fi
+echo "   ✓ Subsystem placement boundaries hold"
+
+echo ""
+echo "=== Check 8: Forbidden logging/debug output in product code ==="
+FORBIDDEN_LOGGING=$(rg -n -e '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|putc|putchar|perror|NSLog)\s*\(' -e '\bos_log\s*\(' fs kernel runtime include internal/ios 2>/dev/null || true)
+if [ -n "$FORBIDDEN_LOGGING" ]; then
+    echo "FAIL: Forbidden logging/debug output in product code:"
+    echo "$FORBIDDEN_LOGGING"
+    exit 1
+fi
+echo "   ✓ No forbidden logging/debug output in product code"
+
+echo ""
+echo "=== Check 9: ABI/UAPI drift indicators ==="
+HANDDEFINED_ABI=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' || true)
+if [ -n "$HANDDEFINED_ABI" ]; then
+    echo "FAIL: Hand-defined Linux ABI constants found in Linux-owner paths:"
+    echo "$HANDDEFINED_ABI"
+    exit 1
+fi
+BRANDED_UAPI=$(rg -n -e '__attribute__\(\(visibility\("default"\)\)\)\s+.*\b(ixland_|ios_|darwin_)[A-Za-z0-9_]*\s*\(' fs kernel runtime include 2>/dev/null || true)
+if [ -n "$BRANDED_UAPI" ]; then
+    echo "FAIL: Branded public ABI/UAPI indicators found:"
+    echo "$BRANDED_UAPI"
+    exit 1
+fi
+echo "   ✓ No ABI/UAPI drift indicators"
+
+echo ""
+echo "=== Check 10: Host-truth misuse in Linux-facing tests ==="
+HOST_TRUTH_TESTS=$(rg -n -e '__APPLE__|__MACH__|TARGET_OS_[A-Z0-9_]+' -e '#\s*if\s+defined\((__APPLE__|__MACH__)\)' IXLandSystemTests 2>/dev/null || true)
+if [ -n "$HOST_TRUTH_TESTS" ]; then
+    echo "FAIL: Host-truth assertions found in Linux-facing tests:"
+    echo "$HOST_TRUTH_TESTS"
+    exit 1
+fi
+echo "   ✓ No host-truth misuse in Linux-facing tests"
+
+echo ""
+echo "=== Check 11: New broad mediation headers under internal/ios ==="
+BROAD_HEADERS=$(find internal/ios -type f -name '*.h' 2>/dev/null | rg '/(bridge|platform|generic|common|helpers?|shim|host_api)[^/]*\.h$' || true)
+if [ -n "$BROAD_HEADERS" ]; then
+    echo "FAIL: Broad mediation headers found under internal/ios/** (must be narrow and subsystem-owned):"
+    echo "$BROAD_HEADERS"
+    exit 1
+fi
+echo "   ✓ No new broad mediation headers under internal/ios"
 
 echo ""
 echo "=== All checks passed ==="

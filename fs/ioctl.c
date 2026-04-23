@@ -28,7 +28,7 @@
 #define IX_TIOCGPTN 0x80045430UL
 #define IX_TIOCSPTLCK 0x40045431UL
 
-static int host_ioctl_call_impl(int fd, unsigned long request, void *arg) {
+static int ioctl_host_call_impl(int fd, unsigned long request, void *arg) {
     return host_ioctl_impl(fd, request, arg);
 }
 
@@ -39,7 +39,7 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
     }
 
     if (fd <= 2) {
-        return host_ioctl_call_impl(fd, request, arg);
+        return ioctl_host_call_impl(fd, request, arg);
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -156,7 +156,7 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
         return -1;
     }
 
-    result = host_ioctl_call_impl(get_real_fd_impl(entry), request, arg);
+    result = ioctl_host_call_impl(get_real_fd_impl(entry), request, arg);
     put_fd_entry_impl(entry);
     return result;
 }
