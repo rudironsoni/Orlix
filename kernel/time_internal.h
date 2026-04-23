@@ -8,31 +8,10 @@
 #ifndef IXLAND_KERNEL_TIME_INTERNAL_H
 #define IXLAND_KERNEL_TIME_INTERNAL_H
 
-#include <sys/types.h>
-#include <time.h>
+#include "../internal/ios/fs/backing_io.h"
 
-#ifndef _IXLAND_TIMEVAL_DEFINED
-#define _IXLAND_TIMEVAL_DEFINED
-struct timeval {
-    time_t tv_sec;
-    suseconds_t tv_usec;
-};
-#endif
-
-#ifndef _IXLAND_TIMEZONE_DEFINED
-#define _IXLAND_TIMEZONE_DEFINED
-struct timezone {
-    int tz_minuteswest;
-    int tz_dsttime;
-};
-#endif
-
-#ifndef _IXLAND_ITIMERVAL_DEFINED
-#define _IXLAND_ITIMERVAL_DEFINED
-struct itimerval {
-    struct timeval it_interval;
-    struct timeval it_value;
-};
-#endif
+struct timeval;
+struct timezone;
+struct itimerval;
 
 #endif /* IXLAND_KERNEL_TIME_INTERNAL_H */

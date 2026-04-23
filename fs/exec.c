@@ -12,7 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+
+#include "internal/ios/fs/backing_io.h"
 
 /* environ is not available on iOS; use _NSGetEnviron() */
 #include <crt_externs.h>
@@ -156,7 +157,7 @@ int exec_close_cloexec(struct task_struct *task) {
         return -1;
     }
 
-    pthread_mutex_lock(&task->files->lock);
+    ix_mutex_lock_impl(&task->files->lock);
     for (size_t i = 0; i < task->files->max_fds; i++) {
         if (task->files->fd[i] && (task->files->fd[i]->fd_flags & FD_CLOEXEC)) {
             struct file *file = task->files->fd[i];
@@ -164,7 +165,7 @@ int exec_close_cloexec(struct task_struct *task) {
             free_file(file);
         }
     }
-    pthread_mutex_unlock(&task->files->lock);
+    ix_mutex_unlock_impl(&task->files->lock);
 
     return 0;
 }
@@ -174,7 +175,7 @@ void exec_reset_signals(struct signal_struct *sighand) {
         return;
     }
 
-    for (int i = 0; i < SIGNAL_NSIG; i++) {
+    for (int i = 0; i < IX_SIGNAL_NSIG; i++) {
         if (sighand->actions[i].handler != SIG_IGN) {
             sighand->actions[i].handler = SIG_DFL;
         }

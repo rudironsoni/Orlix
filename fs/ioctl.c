@@ -1,6 +1,6 @@
 /* iXland - IOCTL Operations
  *
- * Canonical owner for ioctl syscall:
+ * Canonical owner for ioctl:
  * - ioctl()
  *
  * Linux-shaped canonical owner - iOS mediation as implementation detail

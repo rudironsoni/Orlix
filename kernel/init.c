@@ -3,11 +3,9 @@
  * Automatic initialization using constructor attribute
  */
 
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "../fs/vfs.h"
 #include "../runtime/native/registry.h"
@@ -15,7 +13,7 @@
 
 /* Global initialization flag */
 static atomic_int library_initialized = 0;
-static pthread_mutex_t library_init_lock = PTHREAD_MUTEX_INITIALIZER;
+static ix_mutex_t library_init_lock = IX_MUTEX_INITIALIZER;
 
 /* ============================================================================
  * INITIALIZATION
@@ -30,11 +28,11 @@ if (atomic_load(&library_initialized)) {
 return;
 }
 
-pthread_mutex_lock(&library_init_lock);
+ix_mutex_lock_impl(&library_init_lock);
 
 /* Double-check after acquiring lock */
 if (atomic_load(&library_initialized)) {
-pthread_mutex_unlock(&library_init_lock);
+ix_mutex_unlock_impl(&library_init_lock);
 return;
 }
 
@@ -48,7 +46,7 @@ if (vfs_result != 0) {
 /* Initialize task system - creates init task */
 int task_result = task_init();
 if (task_result != 0) {
-pthread_mutex_unlock(&library_init_lock);
+ix_mutex_unlock_impl(&library_init_lock);
 return;
 }
 
@@ -58,7 +56,7 @@ native_registry_init();
 /* Set initialized flag */
 atomic_store(&library_initialized, 1);
 
-pthread_mutex_unlock(&library_init_lock);
+ix_mutex_unlock_impl(&library_init_lock);
 }
 
 void library_deinit_destructor(void) {

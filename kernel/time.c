@@ -14,7 +14,7 @@
 
 /* Forward declarations for private implementation - defined in time_darwin.c */
 time_t time_impl(time_t *tloc);
-int gettimeofday_impl(struct timeval *tv, struct timezone *tz);
+int gettimeofday_impl(struct timeval *tv, void *tz);
 int settimeofday_impl(const struct timeval *tv, const struct timezone *tz);
 int clock_gettime_impl(clockid_t clk_id, struct timespec *tp);
 int clock_getres_impl(clockid_t clk_id, struct timespec *res);
@@ -35,7 +35,7 @@ __attribute__((visibility("default"))) time_t time(time_t *tloc) {
     return time_impl(tloc);
 }
 
-__attribute__((visibility("default"))) int gettimeofday(struct timeval *tv, struct timezone *tz) {
+__attribute__((visibility("default"))) int gettimeofday(struct timeval *tv, void *tz) {
     return gettimeofday_impl(tv, tz);
 }
 

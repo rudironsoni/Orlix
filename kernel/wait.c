@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/resource.h>
-#include <sys/wait.h>
 
 #include "task.h"
 
@@ -44,7 +43,7 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
 
     struct task_struct *child = NULL;
 
-    pthread_mutex_lock(&parent->lock);
+    ix_mutex_lock_impl(&parent->lock);
     parent->waiters++;
 
     while (1) {
@@ -116,14 +115,14 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
         /* No matching exited child */
         if (options & WNOHANG) {
             parent->waiters--;
-            pthread_mutex_unlock(&parent->lock);
+            ix_mutex_unlock_impl(&parent->lock);
             return 0;
         }
 
         if (!parent->children) {
             /* No children at all */
             parent->waiters--;
-            pthread_mutex_unlock(&parent->lock);
+            ix_mutex_unlock_impl(&parent->lock);
             errno = ECHILD;
             return -1;
         }
@@ -132,12 +131,12 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
         if (options & WNOHANG) {
             /* Non-blocking: just check once */
             parent->waiters--;
-            pthread_mutex_unlock(&parent->lock);
+            ix_mutex_unlock_impl(&parent->lock);
             return 0;
         }
 
         /* Block waiting for child */
-        pthread_cond_wait(&parent->wait_cond, &parent->lock);
+        ix_cond_wait_impl(&parent->wait_cond, &parent->lock);
     }
 
     /* Determine if child should be reaped (exited/signaled) or just reported (stopped/continued) */
@@ -155,7 +154,7 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
     }
 
     parent->waiters--;
-    pthread_mutex_unlock(&parent->lock);
+    ix_mutex_unlock_impl(&parent->lock);
 
     /* Return status */
     if (wstatus) {
@@ -188,8 +187,6 @@ int32_t wait_impl(int *wstatus) {
  * These wrappers convert between POSIX/Linux public types and
  * IXLandSystem's internal representation.
  */
-
-#include <sys/types.h>
 
 __attribute__((visibility("default"))) pid_t waitpid(pid_t pid, int *wstatus, int options) {
     return (pid_t)waitpid_impl((int32_t)pid, wstatus, options);

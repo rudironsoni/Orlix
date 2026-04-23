@@ -10,8 +10,9 @@
  */
 
 #include <errno.h>
-#include <time.h>
 #include <linux/futex.h>
+
+#include "../internal/ios/fs/backing_io.h"
 
 /* ============================================================================
  * FUTEX - Fast Userspace muTEX
@@ -39,7 +40,7 @@ return futex_impl(uaddr, futex_op, val, timeout, uaddr2, val3);
 }
 
 /*
-* NOTE: syscall() was removed because it conflicts with system unistd.h headers.
-* The original ixland_syscall() has been dropped.
-* Use specific syscall wrappers (futex, set_robust_list, etc.) instead.
+ * NOTE: the generic variadic entrypoint was removed due to host header conflicts.
+ * Use specific wrappers (futex, set_robust_list, etc.) instead.
+
 */

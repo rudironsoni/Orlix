@@ -3,12 +3,10 @@
 
 #define _DARWIN_NO_64_BIT_INODE
 
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 
 #include "fdtable.h"
 
@@ -169,7 +167,7 @@ struct fs_struct {
     struct dentry *pwd;
     mode_t umask;
     atomic_int users;
-    pthread_mutex_t lock;
+    ix_mutex_t lock;
     /* Task-aware path resolution state */
     char root_path[MAX_PATH];      /* Virtual root path (absolute, normalized) */
     char pwd_path[MAX_PATH];       /* Virtual pwd path (absolute, normalized) */

@@ -12,10 +12,10 @@
 
 #define _DARWIN_FEATURE_64_BIT_INODE 1
 #include <errno.h>
-#include <fcntl.h>
 #include <sys/param.h>
 #include <sys/statvfs.h>
-#include <unistd.h>
+
+#include "internal/ios/fs/backing_io.h"
 
 /* iOS system call stubs - private implementation detail */
 extern int _statfs(const char *, struct statfs *);

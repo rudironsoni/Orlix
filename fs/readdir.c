@@ -5,9 +5,6 @@
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 #include "fdtable.h"
 #include "path.h"
 #include "vfs.h"
@@ -29,7 +26,7 @@ typedef struct fd_description {
     bool is_dir;
     void *synthetic_state;
     atomic_int refs;
-    pthread_mutex_t lock;
+    ix_mutex_t lock;
 } fd_description_t;
 
 

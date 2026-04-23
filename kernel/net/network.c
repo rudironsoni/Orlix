@@ -12,16 +12,15 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <unistd.h>
+
+#include "../../internal/ios/fs/backing_io.h"
 
 /* iOS Network framework includes */
 #import <Network/Network.h>
@@ -46,7 +45,7 @@ typedef struct {
 
 #define MAX_SOCKETS 256
 static socket_entry_t socket_table[MAX_SOCKETS];
-static pthread_mutex_t socket_table_lock = PTHREAD_MUTEX_INITIALIZER;
+static ix_mutex_t socket_table_lock = IX_MUTEX_INITIALIZER;
 
 /* Network initialization state */
 static atomic_int network_initialized = 0;
@@ -56,15 +55,15 @@ static atomic_int network_initialized = 0;
  * ============================================================================ */
 
 static int socket_alloc(void) {
-    pthread_mutex_lock(&socket_table_lock);
+    ix_mutex_lock_impl(&socket_table_lock);
     for (int i = 0; i < MAX_SOCKETS; i++) {
         if (!socket_table[i].used) {
             socket_table[i].used = 1;
-            pthread_mutex_unlock(&socket_table_lock);
+            ix_mutex_unlock_impl(&socket_table_lock);
             return i;
         }
     }
-    pthread_mutex_unlock(&socket_table_lock);
+    ix_mutex_unlock_impl(&socket_table_lock);
     errno = EMFILE;
     return -1;
 }
@@ -73,7 +72,7 @@ static void socket_free(int fd) {
     if (fd < 0 || fd >= MAX_SOCKETS)
         return;
 
-    pthread_mutex_lock(&socket_table_lock);
+    ix_mutex_lock_impl(&socket_table_lock);
     if (socket_table[fd].used) {
         /* Release iOS Network resources */
         if (socket_table[fd].connection) {
@@ -86,7 +85,7 @@ static void socket_free(int fd) {
         }
         memset(&socket_table[fd], 0, sizeof(socket_entry_t));
     }
-    pthread_mutex_unlock(&socket_table_lock);
+    ix_mutex_unlock_impl(&socket_table_lock);
 }
 
 static socket_entry_t *socket_get(int fd) {
@@ -123,7 +122,7 @@ static int network_deinit_impl(void) {
     }
 
     /* Close all sockets */
-    pthread_mutex_lock(&socket_table_lock);
+    ix_mutex_lock_impl(&socket_table_lock);
     for (int i = 0; i < MAX_SOCKETS; i++) {
         if (socket_table[i].used) {
             if (socket_table[i].connection) {
@@ -135,7 +134,7 @@ static int network_deinit_impl(void) {
         }
     }
     memset(socket_table, 0, sizeof(socket_table));
-    pthread_mutex_unlock(&socket_table_lock);
+    ix_mutex_unlock_impl(&socket_table_lock);
 
     atomic_store(&network_initialized, 0);
     return 0;

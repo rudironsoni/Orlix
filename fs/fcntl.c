@@ -1,7 +1,7 @@
 #include <errno.h>
-#include <fcntl.h>
 #include <stdarg.h>
-#include <unistd.h>
+
+#include "internal/ios/fs/backing_io.h"
 
 #include "fdtable.h"
 

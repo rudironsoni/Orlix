@@ -10,9 +10,9 @@
  */
 
 #include <errno.h>
-#include <fcntl.h>
 #include <sys/stat.h>
-#include <unistd.h>
+
+#include "internal/ios/fs/backing_io.h"
 
 /* ============================================================================
  * CHMOD - Change file mode
@@ -78,11 +78,11 @@ static mode_t umask_impl(mode_t mask) {
  * ============================================================================ */
 
 static int truncate_impl(const char *path, off_t length) {
-    return truncate(path, length);
+    return host_truncate_impl(path, length);
 }
 
 static int ftruncate_impl(int fd, off_t length) {
-    return ftruncate(fd, length);
+    return host_ftruncate_impl(fd, length);
 }
 
 /* ============================================================================

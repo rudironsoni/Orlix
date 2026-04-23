@@ -8,8 +8,8 @@
  */
 
 #include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
+
+#include "../internal/ios/fs/backing_io.h"
 
 /* iOS system getentropy - private implementation detail */
 extern int _getentropy(void *buf, size_t buflen);

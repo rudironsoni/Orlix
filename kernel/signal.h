@@ -17,10 +17,11 @@
 #ifndef KERNEL_SIGNAL_H
 #define KERNEL_SIGNAL_H
 
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdatomic.h>
+
+#include "../internal/ios/fs/backing_io.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,16 +31,18 @@ extern "C" {
 struct task_struct;
 
 /* Signal count - Linux uses 64 signals */
-#define SIGNAL_NSIG 64
+#define IX_SIGNAL_NSIG 64
 
 /* Signal handler type - private internal */
 typedef void (*sighandler_t)(int);
 
 /* Signal set representation - private internal */
-#define SIGNAL_NSIG_WORDS ((SIGNAL_NSIG + 63) / 64)
+#define IX_SIGNAL_NSIG_WORDS ((IX_SIGNAL_NSIG + 63) / 64)
+#define SIGNAL_NSIG IX_SIGNAL_NSIG
+#define SIGNAL_NSIG_WORDS IX_SIGNAL_NSIG_WORDS
 
 struct signal_mask_bits {
-    uint64_t sig[SIGNAL_NSIG_WORDS];
+    uint64_t sig[IX_SIGNAL_NSIG_WORDS];
 };
 
 /* Signal queue entry - private internal */
@@ -56,7 +59,7 @@ struct signal_queue {
     struct signal_queue_entry *head;
     struct signal_queue_entry *tail;
     int count;
-    pthread_mutex_t lock;
+    ix_mutex_t lock;
 };
 
 /* Signal action slot - private internal
@@ -71,11 +74,11 @@ struct signal_action_slot {
  * This is the private internal state, NOT the public ABI struct sigaction */
 struct signal_struct {
     atomic_int refs;
-    struct signal_action_slot actions[SIGNAL_NSIG];
+    struct signal_action_slot actions[IX_SIGNAL_NSIG];
     struct signal_mask_bits blocked;
     struct signal_mask_bits pending;
     struct signal_queue queue;
-    pthread_mutex_t lock;
+    ix_mutex_t lock;
 };
 
 /* Signal stack state - private internal */

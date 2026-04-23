@@ -1,4 +1,3 @@
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -13,7 +12,7 @@
 /* Free list stack for O(1) PID allocation/reuse */
 static pid_t pid_free_stack[PID_COUNT];
 static _Atomic int pid_stack_top = 0;
-static pthread_mutex_t pid_lock = PTHREAD_MUTEX_INITIALIZER;
+static ix_mutex_t pid_lock = IX_MUTEX_INITIALIZER;
 static atomic_bool pid_initialized = false;
 
 /* Private implementation - matches _impl() suffix convention */
@@ -23,17 +22,17 @@ static int32_t pid_alloc_impl(void) {
         pid_init();
     }
 
-    pthread_mutex_lock(&pid_lock);
+    ix_mutex_lock_impl(&pid_lock);
     int top = atomic_load(&pid_stack_top);
     if (top <= 0) {
-        pthread_mutex_unlock(&pid_lock);
+        ix_mutex_unlock_impl(&pid_lock);
         return -1; /* No PIDs available */
     }
 
     top--;
     pid_t pid = pid_free_stack[top];
     atomic_store(&pid_stack_top, top);
-    pthread_mutex_unlock(&pid_lock);
+    ix_mutex_unlock_impl(&pid_lock);
 
     return (int32_t)pid;
 }
@@ -49,18 +48,18 @@ static void pid_free_impl(int32_t pid) {
         pid_init();
     }
 
-    pthread_mutex_lock(&pid_lock);
+    ix_mutex_lock_impl(&pid_lock);
     int top = atomic_load(&pid_stack_top);
 
     /* Defensive: check for stack overflow (shouldn't happen with correct usage) */
     if (top >= PID_COUNT) {
-        pthread_mutex_unlock(&pid_lock);
+        ix_mutex_unlock_impl(&pid_lock);
         return;
     }
 
     pid_free_stack[top] = pid;
     atomic_store(&pid_stack_top, top + 1);
-    pthread_mutex_unlock(&pid_lock);
+    ix_mutex_unlock_impl(&pid_lock);
 }
 
 /**
@@ -74,9 +73,9 @@ void pid_init(void) {
         return;
     }
 
-    pthread_mutex_lock(&pid_lock);
+    ix_mutex_lock_impl(&pid_lock);
     if (atomic_load(&pid_initialized)) {
-        pthread_mutex_unlock(&pid_lock);
+        ix_mutex_unlock_impl(&pid_lock);
         return;
     }
 
@@ -88,7 +87,7 @@ void pid_init(void) {
     atomic_store(&pid_stack_top, PID_COUNT);
     atomic_store(&pid_initialized, true);
 
-    pthread_mutex_unlock(&pid_lock);
+    ix_mutex_unlock_impl(&pid_lock);
 }
 
 /* Public wrappers declared in task.h */

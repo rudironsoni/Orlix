@@ -4,17 +4,14 @@
  */
 
 #include <errno.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <signal.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/event.h>
-#include <time.h>
-#include <unistd.h>
+
+#include "internal/ios/fs/backing_io.h"
 
 /* Private epoll definitions - internal types not matching Linux UAPI */
 #ifndef EPOLL_EVENT_DEFINED
@@ -87,7 +84,7 @@ typedef struct epoll_instance {
     uint32_t flags;
     int size;
     atomic_int ref_count;
-    pthread_mutex_t lock;
+    ix_mutex_t lock;
     epitem_t **items;
     int hash_size;
     int item_count;
@@ -202,18 +199,18 @@ static uint32_t kqueue_to_epoll_events(int16_t filter, uint16_t flags, int data)
 
 #define MAX_EPOLL_INSTANCES 256
 static epoll_instance_t *epoll_table[MAX_EPOLL_INSTANCES];
-static pthread_mutex_t epoll_table_lock = PTHREAD_MUTEX_INITIALIZER;
+static ix_mutex_t epoll_table_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static int epoll_register_instance(epoll_instance_t *epi) {
-    pthread_mutex_lock(&epoll_table_lock);
+    ix_mutex_lock_impl(&epoll_table_lock);
     for (int i = 0; i < MAX_EPOLL_INSTANCES; i++) {
         if (epoll_table[i] == NULL) {
             epoll_table[i] = epi;
-            pthread_mutex_unlock(&epoll_table_lock);
+            ix_mutex_unlock_impl(&epoll_table_lock);
             return i + NR_OPEN_DEFAULT + 100;
         }
     }
-    pthread_mutex_unlock(&epoll_table_lock);
+    ix_mutex_unlock_impl(&epoll_table_lock);
     return -1;
 }
 
@@ -228,9 +225,9 @@ static epoll_instance_t *epoll_lookup_instance(int epfd) {
 __attribute__((unused)) static void epoll_unregister_instance(int epfd) {
     int idx = epfd - NR_OPEN_DEFAULT - 100;
     if (idx >= 0 && idx < MAX_EPOLL_INSTANCES) {
-        pthread_mutex_lock(&epoll_table_lock);
+        ix_mutex_lock_impl(&epoll_table_lock);
         epoll_table[idx] = NULL;
-        pthread_mutex_unlock(&epoll_table_lock);
+        ix_mutex_unlock_impl(&epoll_table_lock);
     }
 }
 
@@ -282,7 +279,7 @@ int epoll_create1(int flags) {
     epi->item_count = 0;
     epi->total_events = 0;
     atomic_init(&epi->ref_count, 1);
-    pthread_mutex_init(&epi->lock, NULL);
+    ix_mutex_init_impl(&epi->lock);
 
     int epfd = epoll_register_instance(epi);
     if (epfd < 0) {
@@ -313,27 +310,27 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
         return -1;
     }
 
-    pthread_mutex_lock(&epi->lock);
+    ix_mutex_lock_impl(&epi->lock);
 
     epitem_t *item = epoll_find_item(epi, fd);
 
     switch (op) {
     case EPOLL_CTL_ADD: {
         if (!event) {
-            pthread_mutex_unlock(&epi->lock);
+            ix_mutex_unlock_impl(&epi->lock);
             errno = EINVAL;
             return -1;
         }
 
         if (item != NULL) {
-            pthread_mutex_unlock(&epi->lock);
+            ix_mutex_unlock_impl(&epi->lock);
             errno = EEXIST;
             return -1;
         }
 
         item = calloc(1, sizeof(epitem_t));
         if (!item) {
-            pthread_mutex_unlock(&epi->lock);
+            ix_mutex_unlock_impl(&epi->lock);
             errno = ENOMEM;
             return -1;
         }
@@ -351,7 +348,7 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
             int ret = kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
             if (ret < 0) {
                 free(item);
-                pthread_mutex_unlock(&epi->lock);
+                ix_mutex_unlock_impl(&epi->lock);
                 errno = EPERM;
                 return -1;
             }
@@ -363,7 +360,7 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
 
     case EPOLL_CTL_DEL: {
         if (item == NULL) {
-            pthread_mutex_unlock(&epi->lock);
+            ix_mutex_unlock_impl(&epi->lock);
             errno = ENOENT;
             return -1;
         }
@@ -381,13 +378,13 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
 
     case EPOLL_CTL_MOD: {
         if (!event) {
-            pthread_mutex_unlock(&epi->lock);
+            ix_mutex_unlock_impl(&epi->lock);
             errno = EINVAL;
             return -1;
         }
 
         if (item == NULL) {
-            pthread_mutex_unlock(&epi->lock);
+            ix_mutex_unlock_impl(&epi->lock);
             errno = ENOENT;
             return -1;
         }
@@ -405,7 +402,7 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
         if (nchanges > 0) {
             int ret = kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
             if (ret < 0) {
-                pthread_mutex_unlock(&epi->lock);
+                ix_mutex_unlock_impl(&epi->lock);
                 errno = EPERM;
                 return -1;
             }
@@ -414,12 +411,12 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
     }
 
     default:
-        pthread_mutex_unlock(&epi->lock);
+        ix_mutex_unlock_impl(&epi->lock);
         errno = EINVAL;
         return -1;
     }
 
-    pthread_mutex_unlock(&epi->lock);
+    ix_mutex_unlock_impl(&epi->lock);
     return 0;
 }
 
@@ -445,7 +442,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     if (sigmask) {
         memset(&newmask, 0, sizeof(newmask));
         memcpy(&newmask, sigmask, sizeof(newmask) < 128 ? sizeof(newmask) : 128);
-        pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
+        ix_thread_sigmask_impl(SIG_SETMASK, &newmask, &oldmask);
     }
 
     struct timespec ts;
@@ -459,7 +456,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     struct kevent *kevents = calloc(maxevents, sizeof(struct kevent));
     if (!kevents) {
         if (sigmask) {
-            pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
+            ix_thread_sigmask_impl(SIG_SETMASK, &oldmask, NULL);
         }
         errno = ENOMEM;
         return -1;
@@ -471,7 +468,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
         int saved_errno = errno;
         free(kevents);
         if (sigmask) {
-            pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
+            ix_thread_sigmask_impl(SIG_SETMASK, &oldmask, NULL);
         }
         errno = (saved_errno == EINTR) ? EINTR : EBADF;
         return -1;
@@ -489,7 +486,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
         memcpy(&events[ready_count].data, &item->event.data, sizeof(epoll_data_internal_t));
 
         if (item->event.events & EPOLLONESHOT) {
-            pthread_mutex_lock(&epi->lock);
+            ix_mutex_lock_impl(&epi->lock);
             struct kevent changes[2];
             int nchanges =
                 epoll_build_kevents(changes, 2, item->fd, item->registered_events, item, false);
@@ -497,7 +494,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
                 kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
             }
             item->is_registered = false;
-            pthread_mutex_unlock(&epi->lock);
+            ix_mutex_unlock_impl(&epi->lock);
         }
 
         ready_count++;
@@ -506,7 +503,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     free(kevents);
 
     if (sigmask) {
-        pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
+        ix_thread_sigmask_impl(SIG_SETMASK, &oldmask, NULL);
     }
 
     epi->total_events += ready_count;

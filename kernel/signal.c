@@ -9,7 +9,6 @@
 
 #include <string.h>
 #include <errno.h>
-#include <pthread.h>
 #include <stdlib.h>
 
 #include "task.h"
@@ -20,20 +19,19 @@
 #ifndef IXLAND_SIGOPS_DEFINED
 #define IXLAND_SIGOPS_DEFINED
 /* Undefine Darwin values first if they exist */
-#ifdef SIG_BLOCK
-#undef SIG_BLOCK
-#undef SIG_UNBLOCK
-#undef SIG_SETMASK
+#ifdef IX_SIG_BLOCK
+#undef IX_SIG_BLOCK
+#undef IX_SIG_UNBLOCK
+#undef IX_SIG_SETMASK
 #endif
 /* Linux UAPI values */
-#define SIG_BLOCK   0
-#define SIG_UNBLOCK 1
-#define SIG_SETMASK 2
+#define IX_SIG_BLOCK   0
+#define IX_SIG_UNBLOCK 1
+#define IX_SIG_SETMASK 2
 #endif
 
 /* Include host signal.h ONLY for the public wrapper signatures.
  * This is acceptable because signal.c owns the public signal contract. */
-#include <signal.h>
 
 struct signal_struct *alloc_signal_struct(void) {
     struct signal_struct *sig = calloc(1, sizeof(struct signal_struct));
@@ -41,7 +39,7 @@ struct signal_struct *alloc_signal_struct(void) {
         return NULL;
 
     atomic_init(&sig->refs, 1);
-    pthread_mutex_init(&sig->queue.lock, NULL);
+    ix_mutex_init_impl(&sig->queue.lock);
 
     /* Initialize default handlers (SIG_DFL = NULL) */
     for (int i = 0; i < SIGNAL_NSIG; i++) {
@@ -63,16 +61,16 @@ void free_signal_struct(struct signal_struct *sig) {
         return;
 
     /* Free queued signals */
-    pthread_mutex_lock(&sig->queue.lock);
+    ix_mutex_lock_impl(&sig->queue.lock);
     struct signal_queue_entry *entry = sig->queue.head;
     while (entry) {
         struct signal_queue_entry *next = entry->next;
         free(entry);
         entry = next;
     }
-    pthread_mutex_unlock(&sig->queue.lock);
+    ix_mutex_unlock_impl(&sig->queue.lock);
 
-    pthread_mutex_destroy(&sig->queue.lock);
+    ix_mutex_destroy_impl(&sig->queue.lock);
     free(sig);
 }
 
@@ -127,16 +125,16 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
 
     /* Notify parent */
     if (task->parent) {
-        pthread_mutex_lock(&task->parent->lock);
+        ix_mutex_lock_impl(&task->parent->lock);
         if (task->parent->waiters > 0) {
-            pthread_cond_broadcast(&task->parent->wait_cond);
+            ix_cond_broadcast_impl(&task->parent->wait_cond);
         }
-        pthread_mutex_unlock(&task->parent->lock);
+        ix_mutex_unlock_impl(&task->parent->lock);
     }
 
     /* Wake up this task if waiting */
     if (task->waiters > 0) {
-        pthread_cond_broadcast(&task->wait_cond);
+        ix_cond_broadcast_impl(&task->wait_cond);
     }
 }
 
@@ -149,9 +147,9 @@ int signal_generate_task(struct task_struct *target, int32_t sig) {
         return 0;
     }
 
-    pthread_mutex_lock(&target->lock);
+    ix_mutex_lock_impl(&target->lock);
     apply_signal_to_task(target, sig);
-    pthread_mutex_unlock(&target->lock);
+    ix_mutex_unlock_impl(&target->lock);
 
     return 0;
 }
@@ -169,7 +167,7 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig) {
 
     int found = 0;
 
-    pthread_mutex_lock(&task_table_lock);
+    ix_mutex_lock_impl(&task_table_lock);
 
     for (int i = 0; i < TASK_MAX_TASKS; i++) {
         struct task_struct *task = task_table[i];
@@ -177,16 +175,16 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig) {
             if (task->pgid == pgid) {
                 found = 1;
                 atomic_fetch_add(&task->refs, 1);
-                pthread_mutex_lock(&task->lock);
+                ix_mutex_lock_impl(&task->lock);
                 apply_signal_to_task(task, sig);
-                pthread_mutex_unlock(&task->lock);
+                ix_mutex_unlock_impl(&task->lock);
                 free_task(task);
             }
             task = task->hash_next;
         }
     }
 
-    pthread_mutex_unlock(&task_table_lock);
+    ix_mutex_unlock_impl(&task_table_lock);
 
     if (!found)
         return -ESRCH;
@@ -249,11 +247,11 @@ void signal_wake_task(struct task_struct *task, bool group_wide) {
         return;
 
     /* Wake the task if it's waiting */
-    pthread_mutex_lock(&task->wait_lock);
+    ix_mutex_lock_impl(&task->wait_lock);
     if (task->waiters > 0) {
-        pthread_cond_broadcast(&task->wait_cond);
+        ix_cond_broadcast_impl(&task->wait_cond);
     }
-    pthread_mutex_unlock(&task->wait_lock);
+    ix_mutex_unlock_impl(&task->wait_lock);
 }
 
 bool signal_is_blocked(const struct task_struct *task, int32_t sig) {
@@ -341,17 +339,17 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
 
 	if (set) {
 		switch (how) {
-		case SIG_BLOCK: /* Block signals in set */
+		case IX_SIG_BLOCK: /* Block signals in set */
 			for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
 				sig->blocked.sig[i] |= set->sig[i];
 			}
 			break;
-		case SIG_UNBLOCK: /* Unblock signals in set */
+		case IX_SIG_UNBLOCK: /* Unblock signals in set */
 			for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
 				sig->blocked.sig[i] &= ~set->sig[i];
 			}
 			break;
-		case SIG_SETMASK: /* Replace blocked set with set */
+		case IX_SIG_SETMASK: /* Replace blocked set with set */
 			sig->blocked = *set;
 			break;
 		default:
@@ -428,15 +426,15 @@ int do_pause(void) {
         return -1;
     }
 
-    pthread_mutex_lock(&task->wait_lock);
+    ix_mutex_lock_impl(&task->wait_lock);
 
     while (is_sigset_empty(&task->signal->pending)) {
         task->waiters++;
-        pthread_cond_wait(&task->wait_cond, &task->wait_lock);
+        ix_cond_wait_impl(&task->wait_cond, &task->wait_lock);
         task->waiters--;
     }
 
-    pthread_mutex_unlock(&task->wait_lock);
+    ix_mutex_unlock_impl(&task->wait_lock);
 
     errno = EINTR;
     return -1;
@@ -461,11 +459,11 @@ int do_sigsuspend(const struct signal_mask_bits *mask) {
     task->signal->blocked = *mask;
 
     /* Wait for signal */
-    pthread_mutex_lock(&task->wait_lock);
+    ix_mutex_lock_impl(&task->wait_lock);
     task->waiters++;
-    pthread_cond_wait(&task->wait_cond, &task->wait_lock);
+    ix_cond_wait_impl(&task->wait_cond, &task->wait_lock);
     task->waiters--;
-    pthread_mutex_unlock(&task->wait_lock);
+    ix_mutex_unlock_impl(&task->wait_lock);
 
     /* Restore old mask */
     task->signal->blocked = old_mask;
@@ -600,7 +598,7 @@ __attribute__((visibility("default"))) int killpg(int32_t pgrp, int sig) {
 }
 
 __attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-	if (how < SIG_BLOCK || how > SIG_SETMASK) {
+	if (how < IX_SIG_BLOCK || how > IX_SIG_SETMASK) {
 		errno = EINVAL;
 		return -1;
 	}

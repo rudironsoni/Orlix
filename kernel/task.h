@@ -16,13 +16,13 @@
 #ifndef KERNEL_TASK_H
 #define KERNEL_TASK_H
 
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
+#include "../internal/ios/fs/backing_io.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,7 +130,7 @@ struct task_struct {
     atomic_bool execed;     /* Set after execve() - blocks setpgid per Linux semantics */
 
     /* Host thread backing for this virtual task */
-    pthread_t thread;
+    ix_thread_t thread;
     char comm[TASK_COMM_LEN];
     char exe[MAX_PATH];
     int argc;
@@ -154,8 +154,8 @@ struct task_struct {
     struct task_struct *vfork_parent;
 
     /* Virtual wait queue / sleep state */
-    pthread_cond_t wait_cond;
-    pthread_mutex_t wait_lock;
+    ix_cond_t wait_cond;
+    ix_mutex_t wait_lock;
     int waiters;
 
     /* Resource limits - virtual kernel tracked
@@ -168,11 +168,11 @@ struct task_struct {
 
     /* Reference counting and locking */
     atomic_int refs;
-    pthread_mutex_t lock;
+    ix_mutex_t lock;
 };
 
 /* Task global table - virtual PID namespace */
-extern pthread_mutex_t task_table_lock;
+extern ix_mutex_t task_table_lock;
 extern struct task_struct *task_table[TASK_MAX_TASKS];
 
 /* Task allocation - virtual kernel internal */

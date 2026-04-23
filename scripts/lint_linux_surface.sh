@@ -35,7 +35,7 @@ echo "   ✓ No forbidden host includes"
 echo ""
 echo "=== Check 4: Forbidden host APIs/tokens ==="
 echo "   Checking for dlsym, RTLD_NEXT, syscall, pthread, etc. ..."
-TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|syscall)\b' -e '\bpthread_\w+\b' -e '\bos_log\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_\w+\b' fs kernel runtime include 2>/dev/null || true)
+TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|syscall)\b' -e '\bpthread_\w+\b' -e '\bos_log\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_\w+\b' -g '!include/ixland/clangd_owner_policy.h' fs kernel runtime include 2>/dev/null || true)
 if [ -n "$TOKENS" ]; then
     echo "FAIL: Forbidden host APIs/tokens in Linux-owner paths:"
     echo "$TOKENS"

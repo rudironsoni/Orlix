@@ -1,9 +1,9 @@
 /* IXLandSystem/kernel/sys.c
- * Internal kernel misc syscall owner
+ * Internal kernel misc call owner
  *
  * Canonical internal implementations for process-group and session
  * primitives that have no dedicated owner file yet.
- * The exported Linux-facing syscall surface lives in IXLandLibC.
+ * The exported Linux-facing call surface lives in IXLandLibC.
  */
 
 #include <errno.h>

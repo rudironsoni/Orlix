@@ -9,8 +9,8 @@
  */
 
 #include <errno.h>
+#include <stdint.h>
 #include <sys/resource.h>
-#include <unistd.h>
 
 /* Forward declare struct rlimit64 for visibility on platforms where it may
  * not be visible in the global scope (Darwin defines it inside the struct
@@ -52,7 +52,7 @@ static int getrusage_impl(int who, struct rusage *usage) {
  * PRLIMIT - Process resource limits (private implementation)
  * ============================================================================ */
 
-static int prlimit_impl(pid_t pid, int resource, const struct rlimit *new_limit,
+static int prlimit_impl(int32_t pid, int resource, const struct rlimit *new_limit,
                         struct rlimit *old_limit) {
     (void)pid;
 
@@ -97,7 +97,7 @@ __attribute__((visibility("default"))) int getrusage(int who, struct rusage *usa
     return getrusage_impl(who, usage);
 }
 
-__attribute__((visibility("default"))) int prlimit(pid_t pid, int resource, const struct rlimit *new_limit,
+__attribute__((visibility("default"))) int prlimit(int32_t pid, int resource, const struct rlimit *new_limit,
                                                    struct rlimit *old_limit) {
     return prlimit_impl(pid, resource, new_limit, old_limit);
 }

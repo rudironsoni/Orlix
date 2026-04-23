@@ -165,43 +165,22 @@ int host_ioctl_impl(int fd, unsigned long request, void *arg) {
     return ret;
 }
 
-int host_ensure_directory_impl(const char *path, mode_t mode) {
+int host_truncate_impl(const char *path, off_t length) {
+    int ret = syscall(SYS_truncate, path, length);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
 
-    struct stat st;
-    if (stat(path, &st) == 0) {
-        if (S_ISDIR(st.st_mode)) {
-            return 0;
-        }
-        errno = ENOTDIR;
+int host_ftruncate_impl(int fd, off_t length) {
+    int ret = syscall(SYS_ftruncate, fd, length);
+    if (ret < 0) {
+        errno = -ret;
         return -1;
     }
-    if (errno != ENOENT) {
-        return -1;
-    }
-    /* Create parent directories recursively */
-    char parent[4096];
-    size_t len = strlen(path);
-    if (len >= sizeof(parent)) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-    memcpy(parent, path, len + 1);
-    
-    /* Find the last slash */
-    char *last_slash = strrchr(parent, '/');
-    if (last_slash && last_slash != parent) {
-        *last_slash = '\0';
-        if (host_ensure_directory_impl(parent, mode) < 0) {
-            return -1;
-        }
-    }
-    
-    /* Create this directory */
-    int ret = syscall(SYS_mkdir, path, mode);
-    if (ret < 0 && errno != EEXIST) {
-        return -1;
-    }
-    return 0;
+    return ret;
 }
 
 #pragma clang diagnostic pop

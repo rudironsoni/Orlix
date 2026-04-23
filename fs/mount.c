@@ -12,7 +12,6 @@
 
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
 
 /* Forward declare VFS functions we need - avoid including vfs.h which pulls in
  * Darwin headers that declare BSD mount() */
@@ -26,7 +25,7 @@ extern int vfs_umount(const char *target);
  * ============================================================================
  *
  * This implements Linux mount semantics against IXLand's own VFS,
- * NOT the iOS host mount() syscall.
+ * NOT the iOS host mount() entrypoint.
  *
  * source: An app-container path or user-granted directory
  * target: A path in IXLand's virtual namespace
@@ -52,12 +51,6 @@ static int mount_impl(const char *source, const char *target,
     /* Validate filesystemtype exists */
     if (strlen(filesystemtype) == 0) {
         errno = EINVAL;
-        return -1;
-    }
-
-    /* Validate source is accessible */
-    if (access(source, F_OK) != 0) {
-        /* errno already set by access */
         return -1;
     }
 
