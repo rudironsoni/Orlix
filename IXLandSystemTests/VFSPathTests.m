@@ -2833,11 +2833,27 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
         return;
     }
 
+    int tty_at_fd = openat(AT_FDCWD, "/dev/tty", O_RDWR);
+    XCTAssertTrue(tty_at_fd >= 0, @"openat(/dev/tty) should succeed with controlling tty");
+    if (tty_at_fd < 0) {
+        close(tty_fd);
+        close(slave_fd);
+        close(master_fd);
+        set_current(original_task);
+        free_task(session_task);
+        return;
+    }
+
     int32_t expected_pgrp = (int32_t)getpgrp();
     int32_t got_pgrp = 0;
     XCTAssertEqual(ioctl(tty_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed via /dev/tty");
     XCTAssertEqual(got_pgrp, expected_pgrp, @"/dev/tty should reference controlling terminal pgrp");
 
+    int32_t got_pgrp_at = 0;
+    XCTAssertEqual(ioctl(tty_at_fd, IX_TIOCGPGRP, &got_pgrp_at), 0, @"TIOCGPGRP should succeed via openat(/dev/tty)");
+    XCTAssertEqual(got_pgrp_at, expected_pgrp, @"openat(/dev/tty) should reference controlling terminal pgrp");
+
+    close(tty_at_fd);
     close(tty_fd);
     close(slave_fd);
     close(master_fd);
