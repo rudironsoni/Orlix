@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <string.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -176,6 +177,19 @@ int host_truncate_impl(const char *path, off_t length) {
 
 int host_ftruncate_impl(int fd, off_t length) {
     int ret = syscall(SYS_ftruncate, fd, length);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+int host_fcntl_impl(int fd, int cmd, ...) {
+    va_list args;
+    va_start(args, cmd);
+    int arg = va_arg(args, int);
+    va_end(args);
+    int ret = syscall(SYS_fcntl, fd, cmd, arg);
     if (ret < 0) {
         errno = -ret;
         return -1;

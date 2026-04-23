@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "fdtable.h"
+#include "internal/ios/fs/backing_io.h"
 #include "path.h"
 #include "vfs.h"
 
@@ -26,7 +27,7 @@ typedef struct fd_description {
     bool is_dir;
     void *synthetic_state;
     atomic_int refs;
-    kmutex_t lock;
+    fs_mutex_t lock;
 } fd_description_t;
 
 
@@ -456,20 +457,21 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
         errno = EINVAL;
         return -1;
     }
-  int dup_fd = dup(real_fd);
-  if (dup_fd < 0) {
-    put_fd_entry_impl(entry);
-    return -1;
-  }
+int dup_fd = host_dup_impl(real_fd);
+    if (dup_fd < 0) {
+        put_fd_entry_impl(entry);
+        return -1;
+    }
 
     DIR *dp = fdopendir(dup_fd);
     if (dp == NULL) {
         int saved_errno = errno;
-        close(dup_fd);
+        host_close_impl(dup_fd);
         put_fd_entry_impl(entry);
         errno = saved_errno;
         return -1;
     }
+
 
     if (saved_offset > 0) {
         seekdir(dp, saved_offset);
@@ -481,31 +483,35 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
 
     while (true) {
         struct dirent *native = readdir(dp);
-        if (native == NULL) {
-            if (errno != 0 && written == 0) {
-                int saved_errno = errno;
-                closedir(dp);
-                put_fd_entry_impl(entry);
-                errno = saved_errno;
-                return -1;
-            }
-            break;
+    if (native == NULL) {
+        if (errno != 0 && written == 0) {
+            int saved_errno = errno;
+            closedir(dp);
+            host_close_impl(dup_fd);
+            put_fd_entry_impl(entry);
+            errno = saved_errno;
+            return -1;
         }
+        break;
+    }
+
 
         size_t name_len = strlen(native->d_name);
         size_t base_len = sizeof(struct linux_dirent64);
         size_t record_len = base_len + name_len + 1;
         size_t aligned_len = (record_len + 7U) & ~7U;
 
-        if (aligned_len > count - written) {
-            if (written == 0) {
-                closedir(dp);
-                put_fd_entry_impl(entry);
-                errno = EINVAL;
-                return -1;
-            }
-            break;
+    if (aligned_len > count - written) {
+        if (written == 0) {
+            closedir(dp);
+            host_close_impl(dup_fd);
+            put_fd_entry_impl(entry);
+            errno = EINVAL;
+            return -1;
         }
+        break;
+    }
+
 
         struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
         out->d_ino = native->d_ino;
@@ -524,6 +530,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
 
     set_fd_offset_impl(entry, latest_offset);
     closedir(dp);
+    host_close_impl(dup_fd);
     put_fd_entry_impl(entry);
     return (ssize_t)written;
 }

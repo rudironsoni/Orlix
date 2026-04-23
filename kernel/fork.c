@@ -36,8 +36,8 @@ typedef struct {
     jmp_buf jmpbuf;           /* Shared jump buffer */
     volatile pid_t result;    /* Result from child perspective */
     volatile int child_ready; /* Synchronization flag */
-    kmutex_t lock;
-    kcond_t cond;
+    kernel_mutex_t lock;
+    kernel_cond_t cond;
 } fork_ctx_t;
 
 /* Global fork context (only valid during fork) */
@@ -49,23 +49,23 @@ static void *fork_child_trampoline(void *arg) {
 
     /* Set child as current task in thread-local storage */
     set_current(ctx->child);
-    ctx->child->thread = kthread_self_impl();
+    ctx->child->thread = kernel_thread_self();
 
     /* Copy parent's state from task structure */
     /* Child inherits parent's signal mask, working directory, etc. */
 
     /* Signal that child is initialized */
-    kmutex_lock_impl(&ctx->lock);
+    kernel_mutex_lock(&ctx->lock);
     ctx->child_ready = 1;
-    kcond_broadcast_impl(&ctx->cond);
-    kmutex_unlock_impl(&ctx->lock);
+    kernel_cond_broadcast(&ctx->cond);
+    kernel_mutex_unlock(&ctx->lock);
 
     /* Wait for parent to be ready for the "return" */
-    kmutex_lock_impl(&ctx->lock);
+    kernel_mutex_lock(&ctx->lock);
     while (ctx->result == 0) {
-        kcond_wait_impl(&ctx->cond, &ctx->lock);
+        kernel_cond_wait(&ctx->cond, &ctx->lock);
     }
-    kmutex_unlock_impl(&ctx->lock);
+    kernel_mutex_unlock(&ctx->lock);
 
     /* Child returns 0 via longjmp to fork's setjmp */
     /* The result is already set to 0 for child */
@@ -84,18 +84,18 @@ pid_t fork_impl(void) {
 
     /* Check process limit */
     int child_count = 0;
-    kmutex_lock_impl(&parent->lock);
+    kernel_mutex_lock(&parent->lock);
     struct task_struct *c = parent->children;
     while (c) {
         child_count++;
         c = c->next_sibling;
     }
     if (child_count >= (int)parent->rlimits[RLIMIT_NPROC].cur) {
-        kmutex_unlock_impl(&parent->lock);
+        kernel_mutex_unlock(&parent->lock);
         errno = EAGAIN;
         return -1;
     }
-    kmutex_unlock_impl(&parent->lock);
+    kernel_mutex_unlock(&parent->lock);
 
     /* Allocate child task */
     struct task_struct *child = alloc_task();
@@ -140,11 +140,11 @@ pid_t fork_impl(void) {
     }
 
     /* Link into parent's children list */
-    kmutex_lock_impl(&parent->lock);
+    kernel_mutex_lock(&parent->lock);
     child->parent = parent;
     child->next_sibling = parent->children;
     parent->children = child;
-    kmutex_unlock_impl(&parent->lock);
+    kernel_mutex_unlock(&parent->lock);
 
     /* Set up fork context on stack */
     fork_ctx_t ctx;
@@ -152,8 +152,8 @@ pid_t fork_impl(void) {
     ctx.child = child;
     ctx.result = 0;
     ctx.child_ready = 0;
-    kmutex_init_impl(&ctx.lock);
-    kcond_init_impl(&ctx.cond);
+    kernel_mutex_init(&ctx.lock);
+    kernel_cond_init(&ctx.cond);
 
     /* Make context available globally for this thread */
     active_fork_ctx = &ctx;
@@ -161,51 +161,51 @@ pid_t fork_impl(void) {
     /* Save parent's context */
     if (setjmp(ctx.jmpbuf) == 0) {
         /* Parent: Create child thread */
-            kthread_t child_thread;
-        kthread_attr_t attr;
-        kthread_attr_init_impl(&attr);
+            kernel_thread_t child_thread;
+        kernel_thread_attr_t attr;
+        kernel_thread_attr_init(&attr);
 
         /* Set stack size from resource limits */
         size_t stacksize = parent->rlimits[RLIMIT_STACK].cur;
         if (stacksize < IXLAND_THREAD_STACK_MIN) {
             stacksize = IXLAND_THREAD_STACK_MIN;
         }
-        kthread_attr_setstacksize_impl(&attr, stacksize);
+        kernel_thread_attr_setstacksize(&attr, stacksize);
 
-        int rc = kthread_create_impl(&child_thread, &attr, fork_child_trampoline, &ctx);
-        kthread_attr_destroy_impl(&attr);
+        int rc = kernel_thread_create(&child_thread, &attr, fork_child_trampoline, &ctx);
+        kernel_thread_attr_destroy(&attr);
 
         if (rc != 0) {
             /* Cleanup on failure */
-            kmutex_lock_impl(&parent->lock);
+            kernel_mutex_lock(&parent->lock);
             parent->children = child->next_sibling;
-            kmutex_unlock_impl(&parent->lock);
+            kernel_mutex_unlock(&parent->lock);
             free_task(child);
             active_fork_ctx = NULL;
-            kmutex_destroy_impl(&ctx.lock);
-            kcond_destroy_impl(&ctx.cond);
+            kernel_mutex_destroy(&ctx.lock);
+            kernel_cond_destroy(&ctx.cond);
             errno = EAGAIN;
             return -1;
         }
 
         /* Wait for child to initialize */
-        kmutex_lock_impl(&ctx.lock);
+        kernel_mutex_lock(&ctx.lock);
         while (!ctx.child_ready) {
-            kcond_wait_impl(&ctx.cond, &ctx.lock);
+            kernel_cond_wait(&ctx.cond, &ctx.lock);
         }
 
         /* Set result: parent gets child's PID */
         ctx.result = child->pid;
-        kcond_broadcast_impl(&ctx.cond);
-        kmutex_unlock_impl(&ctx.lock);
+        kernel_cond_broadcast(&ctx.cond);
+        kernel_mutex_unlock(&ctx.lock);
 
         /* Detach child thread - it will exit via longjmp */
-        kthread_detach_impl(child_thread);
+        kernel_thread_detach(child_thread);
 
         /* Cleanup context */
         active_fork_ctx = NULL;
-        kmutex_destroy_impl(&ctx.lock);
-        kcond_destroy_impl(&ctx.cond);
+        kernel_mutex_destroy(&ctx.lock);
+        kernel_cond_destroy(&ctx.cond);
 
         /* Parent returns child's PID */
         return child->pid;
@@ -215,8 +215,8 @@ pid_t fork_impl(void) {
     /* ctx is still valid on child's stack */
 
     /* Cleanup synchronization primitives */
-    kmutex_destroy_impl(&ctx.lock);
-    kcond_destroy_impl(&ctx.cond);
+    kernel_mutex_destroy(&ctx.lock);
+    kernel_cond_destroy(&ctx.cond);
     active_fork_ctx = NULL;
 
     /* Child returns 0 */
@@ -247,8 +247,8 @@ typedef struct {
     jmp_buf child_jmp;         /* Child's entry point */
     volatile int child_done;   /* Set when child execs or exits */
     volatile int child_execed; /* Set if child called execve */
-    kmutex_t lock;
-    kcond_t cond;
+    kernel_mutex_t lock;
+    kernel_cond_t cond;
     pid_t child_pid;
 } vfork_ctx_t;
 
@@ -261,12 +261,12 @@ static void *vfork_child_trampoline(void *arg) {
 
     /* Set child as current task */
     set_current(ctx->child);
-    ctx->child->thread = kthread_self_impl();
+    ctx->child->thread = kernel_thread_self();
 
     /* Signal that child is ready */
-    kmutex_lock_impl(&ctx->lock);
-    kcond_broadcast_impl(&ctx->cond);
-    kmutex_unlock_impl(&ctx->lock);
+    kernel_mutex_lock(&ctx->lock);
+    kernel_cond_broadcast(&ctx->cond);
+    kernel_mutex_unlock(&ctx->lock);
 
     /* Jump to child continuation */
     longjmp(ctx->child_jmp, 1);
@@ -283,7 +283,7 @@ int vfork_impl(void) {
     }
 
     /* Check resource limits */
-    kmutex_lock_impl(&parent->lock);
+    kernel_mutex_lock(&parent->lock);
     int child_count = 0;
     struct task_struct *c = parent->children;
     while (c) {
@@ -291,11 +291,11 @@ int vfork_impl(void) {
         c = c->next_sibling;
     }
     if (child_count >= (int)parent->rlimits[RLIMIT_NPROC].cur) {
-        kmutex_unlock_impl(&parent->lock);
+        kernel_mutex_unlock(&parent->lock);
         errno = EAGAIN;
         return -1;
     }
-    kmutex_unlock_impl(&parent->lock);
+    kernel_mutex_unlock(&parent->lock);
 
     /* Allocate child task */
     struct task_struct *child = alloc_task();
@@ -314,9 +314,9 @@ int vfork_impl(void) {
     if (parent->fs) {
         child->fs = dup_fs_struct(parent->fs);
         if (!child->fs) {
-            kmutex_lock_impl(&parent->lock);
+            kernel_mutex_lock(&parent->lock);
             parent->children = child->next_sibling;
-            kmutex_unlock_impl(&parent->lock);
+            kernel_mutex_unlock(&parent->lock);
             free_task(child);
             errno = ENOMEM;
             return -1;
@@ -330,9 +330,9 @@ int vfork_impl(void) {
         /* Duplicate the file table (shallow copy that shares file references) */
         child->files = dup_files(parent->files);
         if (!child->files) {
-            kmutex_lock_impl(&parent->lock);
+            kernel_mutex_lock(&parent->lock);
             parent->children = child->next_sibling;
-            kmutex_unlock_impl(&parent->lock);
+            kernel_mutex_unlock(&parent->lock);
             free_task(child);
             errno = ENOMEM;
             return -1;
@@ -352,11 +352,11 @@ int vfork_impl(void) {
     }
 
     /* Link into parent's children list */
-    kmutex_lock_impl(&parent->lock);
+    kernel_mutex_lock(&parent->lock);
     child->parent = parent;
     child->next_sibling = parent->children;
     parent->children = child;
-    kmutex_unlock_impl(&parent->lock);
+    kernel_mutex_unlock(&parent->lock);
 
     /* Mark parent as suspended (vfork semantics) */
     atomic_store(&parent->state, TASK_UNINTERRUPTIBLE);
@@ -368,8 +368,8 @@ int vfork_impl(void) {
     ctx.child_done = 0;
     ctx.child_execed = 0;
     ctx.child_pid = child->pid;
-    kmutex_init_impl(&ctx.lock);
-    kcond_init_impl(&ctx.cond);
+    kernel_mutex_init(&ctx.lock);
+    kernel_cond_init(&ctx.cond);
 
     active_vfork_ctx = &ctx;
 
@@ -378,48 +378,48 @@ int vfork_impl(void) {
         /* Child: Set up entry point */
         if (setjmp(ctx.child_jmp) == 0) {
             /* Parent continues here after creating thread */
-        kthread_t child_thread;
-            kthread_attr_t attr;
-    kthread_attr_init_impl(&attr);
+        kernel_thread_t child_thread;
+            kernel_thread_attr_t attr;
+    kernel_thread_attr_init(&attr);
 
     size_t stacksize = parent->rlimits[RLIMIT_STACK].cur;
     if (stacksize < IXLAND_THREAD_STACK_MIN) {
                 stacksize = IXLAND_THREAD_STACK_MIN;
             }
-            kthread_attr_setstacksize_impl(&attr, stacksize);
+            kernel_thread_attr_setstacksize(&attr, stacksize);
 
-            int rc = kthread_create_impl(&child_thread, &attr, vfork_child_trampoline, &ctx);
-            kthread_attr_destroy_impl(&attr);
+            int rc = kernel_thread_create(&child_thread, &attr, vfork_child_trampoline, &ctx);
+            kernel_thread_attr_destroy(&attr);
 
             if (rc != 0) {
-                kmutex_lock_impl(&parent->lock);
+                kernel_mutex_lock(&parent->lock);
                 parent->children = child->next_sibling;
-                kmutex_unlock_impl(&parent->lock);
+                kernel_mutex_unlock(&parent->lock);
                 atomic_store(&parent->state, TASK_RUNNING);
                 free_task(child);
                 active_vfork_ctx = NULL;
-        kmutex_destroy_impl(&ctx.lock);
-                kcond_destroy_impl(&ctx.cond);
+        kernel_mutex_destroy(&ctx.lock);
+                kernel_cond_destroy(&ctx.cond);
                 errno = EAGAIN;
                 return -1;
             }
 
             /* Wait for child to exec or exit (vfork semantics) */
-            kmutex_lock_impl(&ctx.lock);
+            kernel_mutex_lock(&ctx.lock);
             while (!ctx.child_done) {
-                kcond_wait_impl(&ctx.cond, &ctx.lock);
+                kernel_cond_wait(&ctx.cond, &ctx.lock);
             }
-            kmutex_unlock_impl(&ctx.lock);
+            kernel_mutex_unlock(&ctx.lock);
 
             /* Child has execed or exited - parent can resume */
             atomic_store(&parent->state, TASK_RUNNING);
 
-            kthread_detach_impl(child_thread);
+            kernel_thread_detach(child_thread);
 
             /* Cleanup */
             active_vfork_ctx = NULL;
-            kmutex_destroy_impl(&ctx.lock);
-            kcond_destroy_impl(&ctx.cond);
+            kernel_mutex_destroy(&ctx.lock);
+            kernel_cond_destroy(&ctx.cond);
 
             /* If child execed, parent returns PID */
             /* If child exited, parent returns PID (child is zombie) */
@@ -432,29 +432,29 @@ int vfork_impl(void) {
 
     /* Child returns 0 */
     active_vfork_ctx = NULL;
-    kmutex_destroy_impl(&ctx.lock);
-    kcond_destroy_impl(&ctx.cond);
+    kernel_mutex_destroy(&ctx.lock);
+    kernel_cond_destroy(&ctx.cond);
     return 0;
 }
 
 /* Called from execve to notify vfork parent */
 void vfork_exec_notify(void) {
     if (active_vfork_ctx) {
-        kmutex_lock_impl(&active_vfork_ctx->lock);
+        kernel_mutex_lock(&active_vfork_ctx->lock);
         active_vfork_ctx->child_done = 1;
         active_vfork_ctx->child_execed = 1;
-        kcond_broadcast_impl(&active_vfork_ctx->cond);
-        kmutex_unlock_impl(&active_vfork_ctx->lock);
+        kernel_cond_broadcast(&active_vfork_ctx->cond);
+        kernel_mutex_unlock(&active_vfork_ctx->lock);
     }
 }
 
 /* Called from exit to notify vfork parent */
 void vfork_exit_notify(void) {
     if (active_vfork_ctx) {
-        kmutex_lock_impl(&active_vfork_ctx->lock);
+        kernel_mutex_lock(&active_vfork_ctx->lock);
         active_vfork_ctx->child_done = 1;
-        kcond_broadcast_impl(&active_vfork_ctx->cond);
-        kmutex_unlock_impl(&active_vfork_ctx->lock);
+        kernel_cond_broadcast(&active_vfork_ctx->cond);
+        kernel_mutex_unlock(&active_vfork_ctx->lock);
     }
 }
 

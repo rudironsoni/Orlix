@@ -3,17 +3,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../internal/ios/fs/backing_io.h"
+#include "../../internal/ios/runtime/sync.h"
 
 static native_cmd_t *registry_head = NULL;
-static kmutex_t registry_lock = KMUTEX_INITIALIZER;
+static runtime_mutex_t registry_lock = RUNTIME_MUTEX_INITIALIZER;
 
 void native_registry_init(void) {
     /* Registry is lazy-initialized on first register call */
 }
 
 void native_registry_clear(void) {
-    kmutex_lock_impl(&registry_lock);
+    runtime_mutex_lock(&registry_lock);
     native_cmd_t *cmd = registry_head;
     while (cmd) {
         native_cmd_t *next = cmd->next;
@@ -21,7 +21,7 @@ void native_registry_clear(void) {
         cmd = next;
     }
     registry_head = NULL;
-    kmutex_unlock_impl(&registry_lock);
+    runtime_mutex_unlock(&registry_lock);
 }
 
 int native_register(const char *path, native_entry_fn entry) {
@@ -37,10 +37,10 @@ int native_register(const char *path, native_entry_fn entry) {
     cmd->path = path;
     cmd->entry = entry;
 
-    kmutex_lock_impl(&registry_lock);
+    runtime_mutex_lock(&registry_lock);
     cmd->next = registry_head;
     registry_head = cmd;
-    kmutex_unlock_impl(&registry_lock);
+    runtime_mutex_unlock(&registry_lock);
 
     return 0;
 }
@@ -50,17 +50,17 @@ native_entry_fn native_lookup(const char *path) {
         return NULL;
     }
 
-    kmutex_lock_impl(&registry_lock);
+    runtime_mutex_lock(&registry_lock);
     native_cmd_t *cmd = registry_head;
     while (cmd) {
         if (strcmp(cmd->path, path) == 0) {
             native_entry_fn entry = cmd->entry;
-            kmutex_unlock_impl(&registry_lock);
+            runtime_mutex_unlock(&registry_lock);
             return entry;
         }
         cmd = cmd->next;
     }
-    kmutex_unlock_impl(&registry_lock);
+    runtime_mutex_unlock(&registry_lock);
 
     return NULL;
 }

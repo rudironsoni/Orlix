@@ -22,7 +22,7 @@
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
-#include "../internal/ios/fs/backing_io.h"
+#include "../internal/ios/kernel/sync.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,7 +130,7 @@ struct task_struct {
     atomic_bool execed;     /* Set after execve() - blocks setpgid per Linux semantics */
 
     /* Host thread backing for this virtual task */
-    kthread_t thread;
+    kernel_thread_t thread;
     char comm[TASK_COMM_LEN];
     char exe[MAX_PATH];
     int argc;
@@ -154,8 +154,8 @@ struct task_struct {
     struct task_struct *vfork_parent;
 
     /* Virtual wait queue / sleep state */
-    kcond_t wait_cond;
-    kmutex_t wait_lock;
+    kernel_cond_t wait_cond;
+    kernel_mutex_t wait_lock;
     int waiters;
 
     /* Resource limits - virtual kernel tracked
@@ -168,11 +168,11 @@ struct task_struct {
 
     /* Reference counting and locking */
     atomic_int refs;
-    kmutex_t lock;
+    kernel_mutex_t lock;
 };
 
 /* Task global table - virtual PID namespace */
-extern kmutex_t task_table_lock;
+extern kernel_mutex_t task_table_lock;
 extern struct task_struct *task_table[TASK_MAX_TASKS];
 
 /* Task allocation - virtual kernel internal */

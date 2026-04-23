@@ -9,7 +9,7 @@
 
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/sync.h"
 
 #define PTY_MAX 128
 #define PTY_BUFFER_CAPACITY 4096
@@ -55,7 +55,7 @@ typedef struct pty_pair {
 } pty_pair_t;
 
 static pty_pair_t pty_table[PTY_MAX];
-static kmutex_t pty_lock = KMUTEX_INITIALIZER;
+static fs_mutex_t pty_lock = FS_MUTEX_INITIALIZER;
 static atomic_uint pty_next_hint = 0;
 
 static void pty_ring_init(pty_ring_buffer_t *ring) {
@@ -260,7 +260,7 @@ int pty_allocate_pair_impl(unsigned int *pty_index) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     unsigned int hint = atomic_load(&pty_next_hint) % PTY_MAX;
     for (unsigned int i = 0; i < PTY_MAX; i++) {
         unsigned int idx = (hint + i) % PTY_MAX;
@@ -278,11 +278,11 @@ int pty_allocate_pair_impl(unsigned int *pty_index) {
 
         atomic_store(&pty_next_hint, idx + 1);
         *pty_index = idx;
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         return 0;
     }
 
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     errno = EAGAIN;
     return -1;
 }
@@ -354,21 +354,21 @@ int pty_open_slave_by_path_impl(const char *path, unsigned int *pty_index) {
     }
 
     unsigned int idx = (unsigned int)value;
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[idx];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = ENOENT;
         return -1;
     }
     if (pair->slave_locked) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
     pair->slave_open = true;
     *pty_index = idx;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -378,10 +378,10 @@ int pty_close_end_impl(unsigned int pty_index, bool is_master) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
@@ -396,7 +396,7 @@ int pty_close_end_impl(unsigned int pty_index, bool is_master) {
         memset(pair, 0, sizeof(*pair));
     }
 
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -445,16 +445,16 @@ ssize_t pty_read_master_impl(unsigned int pty_index, void *buf, size_t count, bo
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated || !pair->master_open) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
 
     ssize_t ret = pty_read_from_ring(&pair->slave_to_master, pair->slave_open, buf, count, nonblock);
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return ret;
 }
 
@@ -464,16 +464,16 @@ ssize_t pty_write_master_impl(unsigned int pty_index, const void *buf, size_t co
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated || !pair->master_open) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
 
     if (!pair->slave_open) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
@@ -482,7 +482,7 @@ ssize_t pty_write_master_impl(unsigned int pty_index, const void *buf, size_t co
     if (ret < 0 && !nonblock && errno == EAGAIN) {
         errno = EAGAIN;
     }
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return ret;
 }
 
@@ -492,10 +492,10 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated || !pair->slave_open) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
@@ -508,22 +508,22 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
         if (vmin == 0) {
             if (available == 0) {
                 if (vtime == 0) {
-                    kmutex_unlock_impl(&pty_lock);
+                    fs_mutex_unlock(&pty_lock);
                     return 0;
                 }
-                kmutex_unlock_impl(&pty_lock);
+                fs_mutex_unlock(&pty_lock);
                 errno = EAGAIN;
                 return -1;
             }
         } else if (available < vmin) {
-            kmutex_unlock_impl(&pty_lock);
+            fs_mutex_unlock(&pty_lock);
             errno = EAGAIN;
             return -1;
         }
     }
 
     ssize_t ret = pty_read_from_ring(&pair->master_to_slave, pair->master_open, buf, count, nonblock);
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return ret;
 }
 
@@ -533,16 +533,16 @@ ssize_t pty_write_slave_impl(unsigned int pty_index, const void *buf, size_t cou
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated || !pair->slave_open) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
 
     ssize_t ret = pty_write_to_ring(&pair->slave_to_master, pair->master_open, buf, count, nonblock);
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return ret;
 }
 
@@ -552,17 +552,17 @@ int pty_get_readable_bytes_impl(unsigned int pty_index, bool is_master, int *byt
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
 
     pty_ring_buffer_t *read_ring = is_master ? &pair->slave_to_master : &pair->master_to_slave;
     *bytes = (int)read_ring->len;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -571,10 +571,10 @@ short pty_poll_revents_impl(unsigned int pty_index, bool is_master, short events
         return POLLNVAL;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         return POLLNVAL;
     }
 
@@ -586,7 +586,7 @@ short pty_poll_revents_impl(unsigned int pty_index, bool is_master, short events
     short revents = 0;
     if (!this_open) {
         revents |= POLLNVAL;
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         return revents;
     }
 
@@ -606,7 +606,7 @@ short pty_poll_revents_impl(unsigned int pty_index, bool is_master, short events
         revents |= POLLHUP;
     }
 
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return revents;
 }
 
@@ -616,15 +616,15 @@ int pty_set_lock_impl(unsigned int pty_index, bool locked) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
     pair->slave_locked = locked;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -634,15 +634,15 @@ int pty_get_lock_impl(unsigned int pty_index, int *locked) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
     *locked = pair->slave_locked ? 1 : 0;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -652,15 +652,15 @@ int pty_get_termios_impl(unsigned int pty_index, pty_linux_termios_t *termios) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
     *termios = pair->termios;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -674,10 +674,10 @@ int pty_set_termios_with_action_impl(unsigned int pty_index, const pty_linux_ter
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
@@ -688,7 +688,7 @@ int pty_set_termios_with_action_impl(unsigned int pty_index, const pty_linux_ter
     }
 
     pair->termios = *termios;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -702,15 +702,15 @@ int pty_get_winsize_impl(unsigned int pty_index, pty_linux_winsize_t *winsize) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
     *winsize = pair->winsize;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -723,10 +723,10 @@ int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *wins
     int32_t foreground_pgrp = 0;
     int changed = 0;
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
@@ -736,7 +736,7 @@ int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *wins
     }
     pair->winsize = *winsize;
     foreground_pgrp = pair->foreground_pgrp;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
 
     if (changed && foreground_pgrp > 0) {
         signal_generate_pgrp(foreground_pgrp, PTY_SIGWINCH);
@@ -762,45 +762,45 @@ int pty_set_controlling_tty_impl(unsigned int pty_index, int arg) {
         return -1;
     }
 
-    kmutex_lock_impl(&task->lock);
+    fs_mutex_lock(&task->lock);
 
     if (task->sid <= 0 || task->pid != task->sid) {
-        kmutex_unlock_impl(&task->lock);
+        fs_mutex_unlock(&task->lock);
         errno = EPERM;
         return -1;
     }
 
     if (task->tty && task->tty->index == (int)pty_index) {
-        kmutex_unlock_impl(&task->lock);
+        fs_mutex_unlock(&task->lock);
         return 0;
     }
 
     if (task->tty) {
-        kmutex_unlock_impl(&task->lock);
+        fs_mutex_unlock(&task->lock);
         errno = EPERM;
         return -1;
     }
 
     struct tty_struct *tty = calloc(1, sizeof(*tty));
     if (!tty) {
-        kmutex_unlock_impl(&task->lock);
+        fs_mutex_unlock(&task->lock);
         errno = ENOMEM;
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
-        kmutex_unlock_impl(&task->lock);
+        fs_mutex_unlock(&pty_lock);
+        fs_mutex_unlock(&task->lock);
         free(tty);
         errno = EINVAL;
         return -1;
     }
 
     if (pair->has_controlling_session && pair->controlling_sid != task->sid) {
-        kmutex_unlock_impl(&pty_lock);
-        kmutex_unlock_impl(&task->lock);
+        fs_mutex_unlock(&pty_lock);
+        fs_mutex_unlock(&task->lock);
         free(tty);
         errno = EPERM;
         return -1;
@@ -809,14 +809,14 @@ int pty_set_controlling_tty_impl(unsigned int pty_index, int arg) {
     pair->has_controlling_session = true;
     pair->controlling_sid = task->sid;
     pair->foreground_pgrp = task->pgid;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
 
     tty->index = (int)pty_index;
     tty->foreground_pgrp = task->pgid;
     atomic_init(&tty->refs, 1);
     task->tty = tty;
 
-    kmutex_unlock_impl(&task->lock);
+    fs_mutex_unlock(&task->lock);
     return 0;
 }
 
@@ -832,22 +832,22 @@ int pty_get_foreground_pgrp_impl(unsigned int pty_index, int32_t *pgrp) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
 
     if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = ENOTTY;
         return -1;
     }
 
     *pgrp = pair->foreground_pgrp;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
@@ -868,21 +868,21 @@ int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp) {
         return -1;
     }
 
-    kmutex_lock_impl(&pty_lock);
+    fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = EINVAL;
         return -1;
     }
 
     if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
-        kmutex_unlock_impl(&pty_lock);
+        fs_mutex_unlock(&pty_lock);
         errno = ENOTTY;
         return -1;
     }
 
     pair->foreground_pgrp = pgrp;
-    kmutex_unlock_impl(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
     return 0;
 }

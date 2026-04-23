@@ -381,7 +381,7 @@ struct fs_struct *alloc_fs_struct(void) {
         return NULL;
 
     atomic_init(&fs->users, 1);
-    kmutex_init_impl(&fs->lock);
+    fs_mutex_init(&fs->lock);
     fs->umask = 022;
 
     return fs;
@@ -393,7 +393,7 @@ void free_fs_struct(struct fs_struct *fs) {
     if (atomic_fetch_sub(&fs->users, 1) > 1)
         return;
 
-    kmutex_destroy_impl(&fs->lock);
+    fs_mutex_destroy(&fs->lock);
     free(fs);
 }
 
@@ -405,7 +405,7 @@ struct fs_struct *dup_fs_struct(struct fs_struct *old) {
     if (!new)
         return NULL;
 
-    kmutex_lock_impl(&old->lock);
+    fs_mutex_lock(&old->lock);
     if (old->root)
         new->root = old->root;
     if (old->pwd)
@@ -413,7 +413,7 @@ struct fs_struct *dup_fs_struct(struct fs_struct *old) {
     new->umask = old->umask;
     memcpy(new->root_path, old->root_path, MAX_PATH);
     memcpy(new->pwd_path, old->pwd_path, MAX_PATH);
-    kmutex_unlock_impl(&old->lock);
+    fs_mutex_unlock(&old->lock);
 
     return new;
 }
@@ -427,12 +427,12 @@ int fs_init_root(struct fs_struct *fs, const char *root_path) {
     if (vfs_normalize_linux_path(root_path, normalized, sizeof(normalized)) < 0)
         return -EINVAL;
 
-    kmutex_lock_impl(&fs->lock);
+    fs_mutex_lock(&fs->lock);
     memcpy(fs->root_path, normalized, MAX_PATH);
     /* Also set pwd to root if not already set */
     if (fs->pwd_path[0] == '\0')
         memcpy(fs->pwd_path, normalized, MAX_PATH);
-    kmutex_unlock_impl(&fs->lock);
+    fs_mutex_unlock(&fs->lock);
 
     return 0;
 }
@@ -446,12 +446,12 @@ int fs_init_pwd(struct fs_struct *fs, const char *pwd_path) {
     if (vfs_normalize_linux_path(pwd_path, normalized, sizeof(normalized)) < 0)
         return -EINVAL;
 
-    kmutex_lock_impl(&fs->lock);
+    fs_mutex_lock(&fs->lock);
     memcpy(fs->pwd_path, normalized, MAX_PATH);
     /* Also set root to pwd if not already set */
     if (fs->root_path[0] == '\0')
         memcpy(fs->root_path, normalized, MAX_PATH);
-    kmutex_unlock_impl(&fs->lock);
+    fs_mutex_unlock(&fs->lock);
 
     return 0;
 }

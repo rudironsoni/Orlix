@@ -12,7 +12,7 @@
 /* Free list stack for O(1) PID allocation/reuse */
 static pid_t pid_free_stack[PID_COUNT];
 static _Atomic int pid_stack_top = 0;
-static kmutex_t pid_lock = KMUTEX_INITIALIZER;
+static kernel_mutex_t pid_lock = KERNEL_MUTEX_INITIALIZER;
 static atomic_bool pid_initialized = false;
 
 /* Private implementation - matches _impl() suffix convention */
@@ -22,17 +22,17 @@ static int32_t pid_alloc_impl(void) {
         pid_init();
     }
 
-    kmutex_lock_impl(&pid_lock);
+    kernel_mutex_lock(&pid_lock);
     int top = atomic_load(&pid_stack_top);
     if (top <= 0) {
-        kmutex_unlock_impl(&pid_lock);
+        kernel_mutex_unlock(&pid_lock);
         return -1; /* No PIDs available */
     }
 
     top--;
     pid_t pid = pid_free_stack[top];
     atomic_store(&pid_stack_top, top);
-    kmutex_unlock_impl(&pid_lock);
+    kernel_mutex_unlock(&pid_lock);
 
     return (int32_t)pid;
 }
@@ -48,18 +48,18 @@ static void pid_free_impl(int32_t pid) {
         pid_init();
     }
 
-    kmutex_lock_impl(&pid_lock);
+    kernel_mutex_lock(&pid_lock);
     int top = atomic_load(&pid_stack_top);
 
     /* Defensive: check for stack overflow (shouldn't happen with correct usage) */
     if (top >= PID_COUNT) {
-        kmutex_unlock_impl(&pid_lock);
+        kernel_mutex_unlock(&pid_lock);
         return;
     }
 
     pid_free_stack[top] = pid;
     atomic_store(&pid_stack_top, top + 1);
-    kmutex_unlock_impl(&pid_lock);
+    kernel_mutex_unlock(&pid_lock);
 }
 
 /**
@@ -73,9 +73,9 @@ void pid_init(void) {
         return;
     }
 
-    kmutex_lock_impl(&pid_lock);
+    kernel_mutex_lock(&pid_lock);
     if (atomic_load(&pid_initialized)) {
-        kmutex_unlock_impl(&pid_lock);
+        kernel_mutex_unlock(&pid_lock);
         return;
     }
 
@@ -87,7 +87,7 @@ void pid_init(void) {
     atomic_store(&pid_stack_top, PID_COUNT);
     atomic_store(&pid_initialized, true);
 
-    kmutex_unlock_impl(&pid_lock);
+    kernel_mutex_unlock(&pid_lock);
 }
 
 /* Public wrappers declared in task.h */

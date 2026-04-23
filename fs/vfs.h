@@ -7,8 +7,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/stat.h>
+#include <sys/_types/_off_t.h>
+#include <sys/_types/_size_t.h>
+#include <sys/_types/_ssize_t.h>
 
 #include "fdtable.h"
+#include "internal/ios/fs/sync.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -167,7 +171,7 @@ struct fs_struct {
     struct dentry *pwd;
     mode_t umask;
     atomic_int users;
-    kmutex_t lock;
+    fs_mutex_t lock;
     /* Task-aware path resolution state */
     char root_path[MAX_PATH];      /* Virtual root path (absolute, normalized) */
     char pwd_path[MAX_PATH];       /* Virtual pwd path (absolute, normalized) */

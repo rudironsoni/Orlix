@@ -145,6 +145,7 @@ int host_ioctl_impl(int fd, unsigned long request, void *arg);
 int host_truncate_impl(const char *path, off_t length);
 int host_ftruncate_impl(int fd, off_t length);
 int host_ensure_directory_impl(const char *path, mode_t mode);
+int host_fcntl_impl(int fd, int cmd, ...);
 
 #ifdef __cplusplus
 }

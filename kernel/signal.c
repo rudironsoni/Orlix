@@ -39,7 +39,7 @@ struct signal_struct *alloc_signal_struct(void) {
         return NULL;
 
     atomic_init(&sig->refs, 1);
-    kmutex_init_impl(&sig->queue.lock);
+    kernel_mutex_init(&sig->queue.lock);
 
     /* Initialize default handlers (SIG_DFL = NULL) */
     for (int i = 0; i < SIGNAL_NSIG; i++) {
@@ -61,16 +61,16 @@ void free_signal_struct(struct signal_struct *sig) {
         return;
 
     /* Free queued signals */
-    kmutex_lock_impl(&sig->queue.lock);
+    kernel_mutex_lock(&sig->queue.lock);
     struct signal_queue_entry *entry = sig->queue.head;
     while (entry) {
         struct signal_queue_entry *next = entry->next;
         free(entry);
         entry = next;
     }
-    kmutex_unlock_impl(&sig->queue.lock);
+    kernel_mutex_unlock(&sig->queue.lock);
 
-    kmutex_destroy_impl(&sig->queue.lock);
+    kernel_mutex_destroy(&sig->queue.lock);
     free(sig);
 }
 
@@ -125,16 +125,16 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
 
     /* Notify parent */
     if (task->parent) {
-        kmutex_lock_impl(&task->parent->lock);
+        kernel_mutex_lock(&task->parent->lock);
         if (task->parent->waiters > 0) {
-            kcond_broadcast_impl(&task->parent->wait_cond);
+            kernel_cond_broadcast(&task->parent->wait_cond);
         }
-        kmutex_unlock_impl(&task->parent->lock);
+        kernel_mutex_unlock(&task->parent->lock);
     }
 
     /* Wake up this task if waiting */
     if (task->waiters > 0) {
-        kcond_broadcast_impl(&task->wait_cond);
+        kernel_cond_broadcast(&task->wait_cond);
     }
 }
 
@@ -147,9 +147,9 @@ int signal_generate_task(struct task_struct *target, int32_t sig) {
         return 0;
     }
 
-    kmutex_lock_impl(&target->lock);
+    kernel_mutex_lock(&target->lock);
     apply_signal_to_task(target, sig);
-    kmutex_unlock_impl(&target->lock);
+    kernel_mutex_unlock(&target->lock);
 
     return 0;
 }
@@ -167,7 +167,7 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig) {
 
     int found = 0;
 
-    kmutex_lock_impl(&task_table_lock);
+    kernel_mutex_lock(&task_table_lock);
 
     for (int i = 0; i < TASK_MAX_TASKS; i++) {
         struct task_struct *task = task_table[i];
@@ -175,16 +175,16 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig) {
             if (task->pgid == pgid) {
                 found = 1;
                 atomic_fetch_add(&task->refs, 1);
-                kmutex_lock_impl(&task->lock);
+                kernel_mutex_lock(&task->lock);
                 apply_signal_to_task(task, sig);
-                kmutex_unlock_impl(&task->lock);
+                kernel_mutex_unlock(&task->lock);
                 free_task(task);
             }
             task = task->hash_next;
         }
     }
 
-    kmutex_unlock_impl(&task_table_lock);
+    kernel_mutex_unlock(&task_table_lock);
 
     if (!found)
         return -ESRCH;
@@ -247,11 +247,11 @@ void signal_wake_task(struct task_struct *task, bool group_wide) {
         return;
 
     /* Wake the task if it's waiting */
-    kmutex_lock_impl(&task->wait_lock);
+    kernel_mutex_lock(&task->wait_lock);
     if (task->waiters > 0) {
-        kcond_broadcast_impl(&task->wait_cond);
+        kernel_cond_broadcast(&task->wait_cond);
     }
-    kmutex_unlock_impl(&task->wait_lock);
+    kernel_mutex_unlock(&task->wait_lock);
 }
 
 bool signal_is_blocked(const struct task_struct *task, int32_t sig) {
@@ -426,15 +426,15 @@ int do_pause(void) {
         return -1;
     }
 
-    kmutex_lock_impl(&task->wait_lock);
+    kernel_mutex_lock(&task->wait_lock);
 
     while (is_sigset_empty(&task->signal->pending)) {
         task->waiters++;
-        kcond_wait_impl(&task->wait_cond, &task->wait_lock);
+        kernel_cond_wait(&task->wait_cond, &task->wait_lock);
         task->waiters--;
     }
 
-    kmutex_unlock_impl(&task->wait_lock);
+    kernel_mutex_unlock(&task->wait_lock);
 
     errno = EINTR;
     return -1;
@@ -459,11 +459,11 @@ int do_sigsuspend(const struct signal_mask_bits *mask) {
     task->signal->blocked = *mask;
 
     /* Wait for signal */
-    kmutex_lock_impl(&task->wait_lock);
+    kernel_mutex_lock(&task->wait_lock);
     task->waiters++;
-    kcond_wait_impl(&task->wait_cond, &task->wait_lock);
+    kernel_cond_wait(&task->wait_cond, &task->wait_lock);
     task->waiters--;
-    kmutex_unlock_impl(&task->wait_lock);
+    kernel_mutex_unlock(&task->wait_lock);
 
     /* Restore old mask */
     task->signal->blocked = old_mask;
