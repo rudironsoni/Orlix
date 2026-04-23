@@ -43,6 +43,7 @@ static char vfs_persistent_root[MAX_PATH] = {0};
 static char vfs_cache_root[MAX_PATH] = {0};
 static char vfs_temp_root[MAX_PATH] = {0};
 static int vfs_backing_initialized = 0;
+static int vfs_etc_bootstrapped = 0;
 
 struct vfs_route_entry {
     enum vfs_route_identity route_id;
@@ -542,9 +543,7 @@ static int vfs_bootstrap_etc_files_impl(void) {
 
 /* VFS operations - to be implemented in full */
 int vfs_init(void) {
-    /* Bootstrap Linux identity/config baseline */
-    vfs_bootstrap_etc_files_impl();
-    return 0;
+    return vfs_ensure_backing_initialized();
 }
 
 void vfs_deinit(void) {
@@ -816,6 +815,15 @@ static int vfs_ensure_backing_initialized(void) {
     }
 
     vfs_backing_initialized = 1;
+
+    if (!vfs_etc_bootstrapped) {
+        ret = vfs_bootstrap_etc_files_impl();
+        if (ret != 0) {
+            return ret;
+        }
+        vfs_etc_bootstrapped = 1;
+    }
+
     return 0;
 }
 
