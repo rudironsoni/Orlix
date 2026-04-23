@@ -669,7 +669,7 @@ int pty_set_termios_with_action_impl(unsigned int pty_index, const pty_linux_ter
         errno = EINVAL;
         return -1;
     }
-    if (action != PTY_TCSET_ACTION_NOW && action != PTY_TCSET_ACTION_FLUSH) {
+    if (action != PTY_TCSET_ACTION_NOW && action != PTY_TCSET_ACTION_DRAIN && action != PTY_TCSET_ACTION_FLUSH) {
         errno = EINVAL;
         return -1;
     }

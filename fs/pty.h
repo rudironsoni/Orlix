@@ -14,7 +14,8 @@ extern "C" {
 
 #define PTY_LINUX_NCCS 19
 #define PTY_TCSET_ACTION_NOW 0
-#define PTY_TCSET_ACTION_FLUSH 1
+#define PTY_TCSET_ACTION_DRAIN 1
+#define PTY_TCSET_ACTION_FLUSH 2
 
 struct pty_linux_termios {
     uint32_t c_iflag;
