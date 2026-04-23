@@ -157,7 +157,7 @@ int exec_close_cloexec(struct task_struct *task) {
         return -1;
     }
 
-    ix_mutex_lock_impl(&task->files->lock);
+    kmutex_lock_impl(&task->files->lock);
     for (size_t i = 0; i < task->files->max_fds; i++) {
         if (task->files->fd[i] && (task->files->fd[i]->fd_flags & FD_CLOEXEC)) {
             struct file *file = task->files->fd[i];
@@ -165,7 +165,7 @@ int exec_close_cloexec(struct task_struct *task) {
             free_file(file);
         }
     }
-    ix_mutex_unlock_impl(&task->files->lock);
+    kmutex_unlock_impl(&task->files->lock);
 
     return 0;
 }
