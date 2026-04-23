@@ -16,7 +16,7 @@ static __thread struct task_struct *current_task = NULL;
 struct task_struct *init_task = NULL;
 
 /* Task table - accessible to signal.c for killpg */
-ix_mutex_t task_table_lock = IX_MUTEX_INITIALIZER;
+kmutex_t task_table_lock = KMUTEX_INITIALIZER;
 struct task_struct *task_table[TASK_MAX_TASKS] = {NULL};
 
 int task_hash(int32_t pid) {
@@ -48,20 +48,20 @@ struct task_struct *alloc_task(void) {
     atomic_init(&task->exited, false);
     atomic_init(&task->signaled, false);
 
-    ix_mutex_init_impl(&task->lock);
-    ix_cond_init_impl(&task->wait_cond);
-    ix_mutex_init_impl(&task->wait_lock);
+    kmutex_init_impl(&task->lock);
+    kcond_init_impl(&task->wait_cond);
+    kmutex_init_impl(&task->wait_lock);
 
     /* Store start time as nanoseconds instead of struct timespec */
     struct timespec ts;
-    ix_clock_gettime_impl(CLOCK_MONOTONIC, &ts);
+    kclock_gettime_impl(CLOCK_MONOTONIC, &ts);
     task->start_time_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 
     int idx = task_hash(task->pid);
-    ix_mutex_lock_impl(&task_table_lock);
+    kmutex_lock_impl(&task_table_lock);
     task->hash_next = task_table[idx];
     task_table[idx] = task;
-    ix_mutex_unlock_impl(&task_table_lock);
+    kmutex_unlock_impl(&task_table_lock);
 
     return task;
 }
@@ -74,7 +74,7 @@ void free_task(struct task_struct *task) {
         return;
 
     int idx = task_hash(task->pid);
-    ix_mutex_lock_impl(&task_table_lock);
+    kmutex_lock_impl(&task_table_lock);
     struct task_struct **pp = &task_table[idx];
     while (*pp && *pp != task) {
         pp = &(*pp)->hash_next;
@@ -82,7 +82,7 @@ void free_task(struct task_struct *task) {
     if (*pp) {
         *pp = task->hash_next;
     }
-    ix_mutex_unlock_impl(&task_table_lock);
+    kmutex_unlock_impl(&task_table_lock);
 
     if (task->files)
         free_files(task->files);
@@ -97,9 +97,9 @@ void free_task(struct task_struct *task) {
     if (task->exec_image)
         free(task->exec_image);
 
-    ix_cond_destroy_impl(&task->wait_cond);
-    ix_mutex_destroy_impl(&task->wait_lock);
-    ix_mutex_destroy_impl(&task->lock);
+    kcond_destroy_impl(&task->wait_cond);
+    kmutex_destroy_impl(&task->wait_lock);
+    kmutex_destroy_impl(&task->lock);
 
     free_pid(task->pid);
     free(task);
@@ -110,7 +110,7 @@ struct task_struct *task_lookup(int32_t pid) {
         return NULL;
 
     int idx = task_hash(pid);
-    ix_mutex_lock_impl(&task_table_lock);
+    kmutex_lock_impl(&task_table_lock);
     struct task_struct *task = task_table[idx];
     while (task && task->pid != pid) {
         task = task->hash_next;
@@ -118,7 +118,7 @@ struct task_struct *task_lookup(int32_t pid) {
     if (task) {
         atomic_fetch_add(&task->refs, 1);
     }
-    ix_mutex_unlock_impl(&task_table_lock);
+    kmutex_unlock_impl(&task_table_lock);
     return task;
 }
 
@@ -164,9 +164,9 @@ static void task_init_once(void) {
 }
 
 int task_init(void) {
-    static ix_once_t once = IX_ONCE_INIT;
+    static konce_t once = KONCE_INIT;
 
-    ix_once_impl(&once, task_init_once);
+    konce_impl(&once, task_init_once);
 
     return init_task ? 0 : -1;
 }
@@ -260,11 +260,11 @@ int setpgid_impl(int32_t pid, int32_t pgid) {
         return -1;
     }
 
-    ix_mutex_lock_impl(&target->lock);
+    kmutex_lock_impl(&target->lock);
 
     /* Linux: check permissions: caller must be target or target's parent */
     if (target->ppid != current->pid && target->pid != current->pid) {
-        ix_mutex_unlock_impl(&target->lock);
+        kmutex_unlock_impl(&target->lock);
         free_task(target);
         errno = EPERM;
         return -1;
@@ -272,7 +272,7 @@ int setpgid_impl(int32_t pid, int32_t pgid) {
 
     /* Linux: session match - can't move to different session */
     if (target->sid != current->sid) {
-        ix_mutex_unlock_impl(&target->lock);
+        kmutex_unlock_impl(&target->lock);
         free_task(target);
         errno = EPERM;
         return -1;
@@ -280,7 +280,7 @@ int setpgid_impl(int32_t pid, int32_t pgid) {
 
     /* Linux: cannot change PGID of a session leader */
     if (target->pid == target->sid) {
-        ix_mutex_unlock_impl(&target->lock);
+        kmutex_unlock_impl(&target->lock);
         free_task(target);
         errno = EPERM;
         return -1;
@@ -302,7 +302,7 @@ int setpgid_impl(int32_t pid, int32_t pgid) {
             if (found_group) break;
         }
         if (!found_group) {
-            ix_mutex_unlock_impl(&target->lock);
+            kmutex_unlock_impl(&target->lock);
             free_task(target);
             errno = EPERM;
             return -1;
@@ -311,14 +311,14 @@ int setpgid_impl(int32_t pid, int32_t pgid) {
 
     /* Linux: if child already execve'd, reject with EACCES */
     if (target->pid != current->pid && atomic_load(&target->execed)) {
-        ix_mutex_unlock_impl(&target->lock);
+        kmutex_unlock_impl(&target->lock);
         free_task(target);
         errno = EACCES;
         return -1;
     }
 
     target->pgid = pgid;
-    ix_mutex_unlock_impl(&target->lock);
+    kmutex_unlock_impl(&target->lock);
     free_task(target);
 
     return 0;
@@ -352,11 +352,11 @@ int32_t setsid_impl(void) {
         return -1;
     }
 
-    ix_mutex_lock_impl(&task->lock);
+    kmutex_lock_impl(&task->lock);
 
     /* Check if already process group leader */
     if (task->pgid == task->pid) {
-        ix_mutex_unlock_impl(&task->lock);
+        kmutex_unlock_impl(&task->lock);
         errno = EPERM;
         return -1;
     }
@@ -370,7 +370,7 @@ int32_t setsid_impl(void) {
     task->sid = task->pid;
     task->pgid = task->pid;
 
-    ix_mutex_unlock_impl(&task->lock);
+    kmutex_unlock_impl(&task->lock);
 
     return task->pid;
 }
@@ -382,7 +382,7 @@ int task_session_has_pgrp_impl(int32_t sid, int32_t pgid) {
 
     int found = 0;
 
-    ix_mutex_lock_impl(&task_table_lock);
+    kmutex_lock_impl(&task_table_lock);
     for (int i = 0; i < TASK_MAX_TASKS; i++) {
         struct task_struct *task = task_table[i];
         while (task) {
@@ -396,7 +396,7 @@ int task_session_has_pgrp_impl(int32_t sid, int32_t pgid) {
             break;
         }
     }
-    ix_mutex_unlock_impl(&task_table_lock);
+    kmutex_unlock_impl(&task_table_lock);
 
     return found;
 }

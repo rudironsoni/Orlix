@@ -13,7 +13,7 @@
 
 /* Global initialization flag */
 static atomic_int library_initialized = 0;
-static ix_mutex_t library_init_lock = IX_MUTEX_INITIALIZER;
+static kmutex_t library_init_lock = KMUTEX_INITIALIZER;
 
 /* ============================================================================
  * INITIALIZATION
@@ -28,11 +28,11 @@ if (atomic_load(&library_initialized)) {
 return;
 }
 
-ix_mutex_lock_impl(&library_init_lock);
+kmutex_lock_impl(&library_init_lock);
 
 /* Double-check after acquiring lock */
 if (atomic_load(&library_initialized)) {
-ix_mutex_unlock_impl(&library_init_lock);
+kmutex_unlock_impl(&library_init_lock);
 return;
 }
 
@@ -46,7 +46,7 @@ if (vfs_result != 0) {
 /* Initialize task system - creates init task */
 int task_result = task_init();
 if (task_result != 0) {
-ix_mutex_unlock_impl(&library_init_lock);
+kmutex_unlock_impl(&library_init_lock);
 return;
 }
 
@@ -56,7 +56,7 @@ native_registry_init();
 /* Set initialized flag */
 atomic_store(&library_initialized, 1);
 
-ix_mutex_unlock_impl(&library_init_lock);
+kmutex_unlock_impl(&library_init_lock);
 }
 
 void library_deinit_destructor(void) {

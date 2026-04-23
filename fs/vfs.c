@@ -142,7 +142,7 @@ int vfs_normalize_linux_path(const char *input, char *output, size_t output_len)
 }
 
 static bool vfs_path_matches_prefix(const char *vpath, const char *prefix) {
-    size_t prefix_len;
+    size_t prefklen;
 
     if (!vpath || !prefix) {
         return false;
@@ -152,12 +152,12 @@ static bool vfs_path_matches_prefix(const char *vpath, const char *prefix) {
         return vpath[0] == '/';
     }
 
-    prefix_len = strlen(prefix);
-    if (strncmp(vpath, prefix, prefix_len) != 0) {
+    prefklen = strlen(prefix);
+    if (strncmp(vpath, prefix, prefklen) != 0) {
         return false;
     }
 
-    return vpath[prefix_len] == '\0' || vpath[prefix_len] == '/';
+    return vpath[prefklen] == '\0' || vpath[prefklen] == '/';
 }
 
 static const struct vfs_route_entry *vfs_route_for_path(const char *vpath) {
@@ -171,22 +171,22 @@ static const struct vfs_route_entry *vfs_route_for_path(const char *vpath) {
 
     for (i = 0; i < vfs_route_table_count; i++) {
         const struct vfs_route_entry *route = &vfs_route_table[i];
-        size_t prefix_len = strlen(route->linux_prefix);
+        size_t prefklen = strlen(route->linux_prefix);
 
         if (!vfs_path_matches_prefix(vpath, route->linux_prefix)) {
             continue;
         }
 
-        if (prefix_len > best_len) {
+        if (prefklen > best_len) {
             best_match = route;
-            best_len = prefix_len;
+            best_len = prefklen;
         }
     }
 
     return best_match;
 }
 
-static const char *vfs_relative_suffix_for_route(const struct vfs_route_entry *route,
+static const char *vfs_relative_suffkfor_route(const struct vfs_route_entry *route,
                                                  const char *normalized_virtual_path) {
     if (!route || !normalized_virtual_path) {
         return NULL;
@@ -313,7 +313,7 @@ static int vfs_join_backing_root_for_route(const struct vfs_route_entry *route,
     const char *backing_root;
     const char *relative_suffix;
     size_t root_len;
-    size_t suffix_len;
+    size_t suffklen;
     size_t total_len;
 
     if (!route || !normalized_virtual_path || !host_path || host_path_len == 0) {
@@ -326,25 +326,25 @@ static int vfs_join_backing_root_for_route(const struct vfs_route_entry *route,
         return -ENOTSUP;
     }
 
-    relative_suffix = vfs_relative_suffix_for_route(route, normalized_virtual_path);
+    relative_suffix = vfs_relative_suffkfor_route(route, normalized_virtual_path);
     if (!relative_suffix) {
         return -EINVAL;
     }
 
     root_len = strlen(backing_root);
-    suffix_len = strlen(relative_suffix);
+    suffklen = strlen(relative_suffix);
 
-    if (suffix_len == 0 || strcmp(relative_suffix, "/") == 0) {
+    if (suffklen == 0 || strcmp(relative_suffix, "/") == 0) {
         return vfs_copy_string(backing_root, host_path, host_path_len);
     }
 
-    total_len = root_len + suffix_len;
+    total_len = root_len + suffklen;
     if (total_len >= host_path_len) {
         return -ENAMETOOLONG;
     }
 
     memcpy(host_path, backing_root, root_len);
-    memcpy(host_path + root_len, relative_suffix, suffix_len + 1);
+    memcpy(host_path + root_len, relative_suffix, suffklen + 1);
     return 0;
 }
 
@@ -381,7 +381,7 @@ struct fs_struct *alloc_fs_struct(void) {
         return NULL;
 
     atomic_init(&fs->users, 1);
-    ix_mutex_init_impl(&fs->lock);
+    kmutex_init_impl(&fs->lock);
     fs->umask = 022;
 
     return fs;
@@ -393,7 +393,7 @@ void free_fs_struct(struct fs_struct *fs) {
     if (atomic_fetch_sub(&fs->users, 1) > 1)
         return;
 
-    ix_mutex_destroy_impl(&fs->lock);
+    kmutex_destroy_impl(&fs->lock);
     free(fs);
 }
 
@@ -405,7 +405,7 @@ struct fs_struct *dup_fs_struct(struct fs_struct *old) {
     if (!new)
         return NULL;
 
-    ix_mutex_lock_impl(&old->lock);
+    kmutex_lock_impl(&old->lock);
     if (old->root)
         new->root = old->root;
     if (old->pwd)
@@ -413,7 +413,7 @@ struct fs_struct *dup_fs_struct(struct fs_struct *old) {
     new->umask = old->umask;
     memcpy(new->root_path, old->root_path, MAX_PATH);
     memcpy(new->pwd_path, old->pwd_path, MAX_PATH);
-    ix_mutex_unlock_impl(&old->lock);
+    kmutex_unlock_impl(&old->lock);
 
     return new;
 }
@@ -427,12 +427,12 @@ int fs_init_root(struct fs_struct *fs, const char *root_path) {
     if (vfs_normalize_linux_path(root_path, normalized, sizeof(normalized)) < 0)
         return -EINVAL;
 
-    ix_mutex_lock_impl(&fs->lock);
+    kmutex_lock_impl(&fs->lock);
     memcpy(fs->root_path, normalized, MAX_PATH);
     /* Also set pwd to root if not already set */
     if (fs->pwd_path[0] == '\0')
         memcpy(fs->pwd_path, normalized, MAX_PATH);
-    ix_mutex_unlock_impl(&fs->lock);
+    kmutex_unlock_impl(&fs->lock);
 
     return 0;
 }
@@ -446,12 +446,12 @@ int fs_init_pwd(struct fs_struct *fs, const char *pwd_path) {
     if (vfs_normalize_linux_path(pwd_path, normalized, sizeof(normalized)) < 0)
         return -EINVAL;
 
-    ix_mutex_lock_impl(&fs->lock);
+    kmutex_lock_impl(&fs->lock);
     memcpy(fs->pwd_path, normalized, MAX_PATH);
     /* Also set root to pwd if not already set */
     if (fs->root_path[0] == '\0')
         memcpy(fs->root_path, normalized, MAX_PATH);
-    ix_mutex_unlock_impl(&fs->lock);
+    kmutex_unlock_impl(&fs->lock);
 
     return 0;
 }
@@ -629,37 +629,37 @@ int vfs_rmdir(const char *path) {
 static int vfs_join_virtual_path(const char *base_path, const char *suffix, char *joined_path,
                                  size_t joined_path_len) {
     size_t base_len;
-    size_t suffix_len;
-    size_t suffix_offset;
+    size_t suffklen;
+    size_t suffkoffset;
 
     if (!base_path || !suffix || !joined_path || joined_path_len == 0) {
         return -EINVAL;
     }
 
     base_len = strlen(base_path);
-    suffix_len = strlen(suffix);
-    suffix_offset = (suffix[0] == '/') ? 1 : 0;
+    suffklen = strlen(suffix);
+    suffkoffset = (suffix[0] == '/') ? 1 : 0;
 
     if (base_len == 0) {
         return -EINVAL;
     }
 
     if (strcmp(base_path, "/") == 0) {
-        if (suffix_len - suffix_offset + 1 >= joined_path_len) {
+        if (suffklen - suffkoffset + 1 >= joined_path_len) {
             return -ENAMETOOLONG;
         }
         joined_path[0] = '/';
-        memcpy(joined_path + 1, suffix + suffix_offset, suffix_len - suffix_offset + 1);
+        memcpy(joined_path + 1, suffix + suffkoffset, suffklen - suffkoffset + 1);
         return 0;
     }
 
-    if (base_len + 1 + suffix_len - suffix_offset >= joined_path_len) {
+    if (base_len + 1 + suffklen - suffkoffset >= joined_path_len) {
         return -ENAMETOOLONG;
     }
 
     memcpy(joined_path, base_path, base_len);
     joined_path[base_len] = '/';
-    memcpy(joined_path + base_len + 1, suffix + suffix_offset, suffix_len - suffix_offset + 1);
+    memcpy(joined_path + base_len + 1, suffix + suffkoffset, suffklen - suffkoffset + 1);
     return 0;
 }
 
@@ -830,7 +830,7 @@ static int vfs_ensure_backing_initialized(void) {
 int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) {
     const struct vfs_route_entry *best_route = NULL;
     const char *best_host_suffix = NULL;
-    size_t best_prefix_len = 0;
+    size_t best_prefklen = 0;
     size_t i;
     int ret;
 
@@ -848,7 +848,7 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
         const char *backing_root;
         const char *host_suffix;
         size_t root_len;
-        size_t prefix_len;
+        size_t prefklen;
         char route_host_prefix[MAX_PATH];
 
         if (!route->reverse_linux_prefix) {
@@ -873,20 +873,20 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
             }
         }
 
-        prefix_len = strlen(route_host_prefix);
-        if (strncmp(host_path, route_host_prefix, prefix_len) != 0) {
+        prefklen = strlen(route_host_prefix);
+        if (strncmp(host_path, route_host_prefix, prefklen) != 0) {
             continue;
         }
 
-        host_suffix = host_path + prefix_len;
+        host_suffix = host_path + prefklen;
         if (*host_suffix != '\0' && *host_suffix != '/') {
             continue;
         }
 
-        if (prefix_len > best_prefix_len) {
+        if (prefklen > best_prefklen) {
             best_route = route;
             best_host_suffix = host_suffix;
-            best_prefix_len = prefix_len;
+            best_prefklen = prefklen;
         }
     }
 

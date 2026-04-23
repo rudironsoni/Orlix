@@ -45,7 +45,7 @@ typedef struct {
 
 #define MAX_SOCKETS 256
 static socket_entry_t socket_table[MAX_SOCKETS];
-static ix_mutex_t socket_table_lock = IX_MUTEX_INITIALIZER;
+static kmutex_t socket_table_lock = KMUTEX_INITIALIZER;
 
 /* Network initialization state */
 static atomic_int network_initialized = 0;
@@ -55,15 +55,15 @@ static atomic_int network_initialized = 0;
  * ============================================================================ */
 
 static int socket_alloc(void) {
-    ix_mutex_lock_impl(&socket_table_lock);
+    kmutex_lock_impl(&socket_table_lock);
     for (int i = 0; i < MAX_SOCKETS; i++) {
         if (!socket_table[i].used) {
             socket_table[i].used = 1;
-            ix_mutex_unlock_impl(&socket_table_lock);
+            kmutex_unlock_impl(&socket_table_lock);
             return i;
         }
     }
-    ix_mutex_unlock_impl(&socket_table_lock);
+    kmutex_unlock_impl(&socket_table_lock);
     errno = EMFILE;
     return -1;
 }
@@ -72,7 +72,7 @@ static void socket_free(int fd) {
     if (fd < 0 || fd >= MAX_SOCKETS)
         return;
 
-    ix_mutex_lock_impl(&socket_table_lock);
+    kmutex_lock_impl(&socket_table_lock);
     if (socket_table[fd].used) {
         /* Release iOS Network resources */
         if (socket_table[fd].connection) {
@@ -85,7 +85,7 @@ static void socket_free(int fd) {
         }
         memset(&socket_table[fd], 0, sizeof(socket_entry_t));
     }
-    ix_mutex_unlock_impl(&socket_table_lock);
+    kmutex_unlock_impl(&socket_table_lock);
 }
 
 static socket_entry_t *socket_get(int fd) {
@@ -122,7 +122,7 @@ static int network_deinit_impl(void) {
     }
 
     /* Close all sockets */
-    ix_mutex_lock_impl(&socket_table_lock);
+    kmutex_lock_impl(&socket_table_lock);
     for (int i = 0; i < MAX_SOCKETS; i++) {
         if (socket_table[i].used) {
             if (socket_table[i].connection) {
@@ -134,7 +134,7 @@ static int network_deinit_impl(void) {
         }
     }
     memset(socket_table, 0, sizeof(socket_table));
-    ix_mutex_unlock_impl(&socket_table_lock);
+    kmutex_unlock_impl(&socket_table_lock);
 
     atomic_store(&network_initialized, 0);
     return 0;
