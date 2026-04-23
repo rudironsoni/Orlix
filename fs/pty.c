@@ -423,6 +423,46 @@ bool pty_is_virtual_slave_path_impl(const char *path) {
     return pty_open_slave_by_path_impl(path, &idx) == 0;
 }
 
+int pty_open_controlling_slave_impl(unsigned int *pty_index) {
+    if (!pty_index) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct task_struct *task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    fs_mutex_lock(&task->lock);
+    struct tty_struct *tty = task->tty;
+    if (!tty) {
+        fs_mutex_unlock(&task->lock);
+        errno = ENXIO;
+        return -1;
+    }
+    unsigned int idx = (unsigned int)tty->index;
+    fs_mutex_unlock(&task->lock);
+
+    if (!pty_valid_index(idx)) {
+        errno = ENXIO;
+        return -1;
+    }
+
+    fs_mutex_lock(&pty_lock);
+    pty_pair_t *pair = &pty_table[idx];
+    if (!pair->allocated || !pair->slave_open) {
+        fs_mutex_unlock(&pty_lock);
+        errno = EIO;
+        return -1;
+    }
+
+    *pty_index = idx;
+    fs_mutex_unlock(&pty_lock);
+    return 0;
+}
+
 int pty_open_slave_by_path_impl(const char *path, unsigned int *pty_index) {
     if (!path || !pty_index) {
         errno = EINVAL;

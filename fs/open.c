@@ -142,6 +142,18 @@ if (proc_class == PROC_SELF_FDINFO_FILE) {
 
     {
         unsigned int pty_index;
+        if (strcmp(resolved_path, "/dev/tty") == 0) {
+            if (pty_open_controlling_slave_impl(&pty_index) != 0) {
+                return -1;
+            }
+            int fd = alloc_fd_impl();
+            if (fd < 0) {
+                return -1;
+            }
+            init_synthetic_pty_fd_entry_impl(fd, flags, mode, resolved_path, pty_index, false);
+            return fd;
+        }
+
         if (pty_open_slave_by_path_impl(resolved_path, &pty_index) == 0) {
             int fd = alloc_fd_impl();
             if (fd < 0) {

@@ -1155,9 +1155,35 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertEqual(stat("/dev/sda", &st), -1, @"stat(/dev/sda) should fail for unsupported dev node");
     XCTAssertEqual(errno, ENOENT, @"stat(/dev/sda) should set ENOENT");
 
+    struct task_struct *original_task = get_current();
+    struct task_struct *isolated_task = alloc_task();
+    XCTAssertTrue(isolated_task != NULL, @"task allocation should succeed");
+    if (!isolated_task) return;
+
+    isolated_task->fs = alloc_fs_struct();
+    XCTAssertTrue(isolated_task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!isolated_task->fs) {
+        free_task(isolated_task);
+        return;
+    }
+
+    isolated_task->signal = alloc_signal_struct();
+    XCTAssertTrue(isolated_task->signal != NULL, @"signal_struct allocation should succeed");
+    if (!isolated_task->signal) {
+        free_task(isolated_task);
+        return;
+    }
+
+    fs_init_root(isolated_task->fs, @"/".UTF8String);
+    fs_init_pwd(isolated_task->fs, @"/".UTF8String);
+    set_current(isolated_task);
+
     errno = 0;
-    XCTAssertEqual(open("/dev/tty", O_RDONLY), -1, @"open(/dev/tty) should fail for unsupported dev node");
-    XCTAssertEqual(errno, ENOTSUP, @"open(/dev/tty) should set ENOTSUP");
+    XCTAssertEqual(open("/dev/tty", O_RDONLY), -1, @"open(/dev/tty) should fail without usable controlling tty");
+    XCTAssertTrue(errno == ENXIO || errno == EIO, @"open(/dev/tty) should set ENXIO (no controlling tty) or EIO (unusable controlling tty)");
+
+    set_current(original_task);
+    free_task(isolated_task);
 }
 
 - (void)testSyntheticGetdentsUsesIntentionalUnsupportedPolicy {
@@ -2742,6 +2768,81 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
     close(synthetic_fd);
     close(host_fd);
     vfs_test_remove_linux_path("/tmp/poll-test-host-file");
+}
+
+- (void)testDevTtyOpensControllingTerminal {
+    struct task_struct *original_task = get_current();
+    struct task_struct *session_task = alloc_task();
+    XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
+    if (!session_task) return;
+
+    session_task->fs = alloc_fs_struct();
+    XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!session_task->fs) {
+        free_task(session_task);
+        return;
+    }
+
+    session_task->signal = alloc_signal_struct();
+    XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
+    if (!session_task->signal) {
+        free_task(session_task);
+        return;
+    }
+
+    fs_init_root(session_task->fs, @"/".UTF8String);
+    fs_init_pwd(session_task->fs, @"/".UTF8String);
+    session_task->sid = session_task->pid;
+    session_task->pgid = session_task->pid;
+    set_current(session_task);
+
+    int master_fd = open("/dev/ptmx", O_RDWR);
+    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
+    if (master_fd < 0) {
+        set_current(original_task);
+        free_task(session_task);
+        return;
+    }
+
+    unsigned int pty_number = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
+
+    int unlock = 0;
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
+
+    char slave_path[64];
+    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
+    int slave_fd = open(slave_path, O_RDWR);
+    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
+    if (slave_fd < 0) {
+        close(master_fd);
+        set_current(original_task);
+        free_task(session_task);
+        return;
+    }
+
+    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed for session leader");
+
+    int tty_fd = open("/dev/tty", O_RDWR);
+    XCTAssertTrue(tty_fd >= 0, @"open(/dev/tty) should succeed with controlling tty");
+    if (tty_fd < 0) {
+        close(slave_fd);
+        close(master_fd);
+        set_current(original_task);
+        free_task(session_task);
+        return;
+    }
+
+    int32_t expected_pgrp = (int32_t)getpgrp();
+    int32_t got_pgrp = 0;
+    XCTAssertEqual(ioctl(tty_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed via /dev/tty");
+    XCTAssertEqual(got_pgrp, expected_pgrp, @"/dev/tty should reference controlling terminal pgrp");
+
+    close(tty_fd);
+    close(slave_fd);
+    close(master_fd);
+    set_current(original_task);
+    free_task(session_task);
 }
 
 - (void)testPtyTtyControlPlaneSemantics {

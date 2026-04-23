@@ -41,6 +41,7 @@ typedef struct pty_linux_winsize pty_linux_winsize_t;
 
 int pty_allocate_pair_impl(unsigned int *pty_index);
 int pty_open_slave_by_path_impl(const char *path, unsigned int *pty_index);
+int pty_open_controlling_slave_impl(unsigned int *pty_index);
 bool pty_is_virtual_slave_path_impl(const char *path);
 
 int pty_close_end_impl(unsigned int pty_index, bool is_master);
