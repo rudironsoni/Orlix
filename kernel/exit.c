@@ -12,7 +12,7 @@ void exit_impl(int status) {
         _Exit(status);
     }
 
-    kmutex_lock_impl(&task->lock);
+    ix_mutex_lock_impl(&task->lock);
 
     /* Set exit status */
     task->exit_status = status;
@@ -22,18 +22,18 @@ void exit_impl(int status) {
     /* Reparent children to init (orphan adoption) */
     if (task->children && init_task && init_task != task) {
         /* Lock init's children list */
-        kmutex_lock_impl(&init_task->lock);
+        ix_mutex_lock_impl(&init_task->lock);
 
         /* Iterate through all children and reparent them */
         struct task_struct *child = task->children;
         while (child) {
-            kmutex_lock_impl(&child->lock);
+            ix_mutex_lock_impl(&child->lock);
 
             /* Update parent pointer and ppid */
             child->parent = init_task;
             child->ppid = init_task->pid;
 
-            kmutex_unlock_impl(&child->lock);
+            ix_mutex_unlock_impl(&child->lock);
             child = child->next_sibling;
         }
 
@@ -53,27 +53,27 @@ void exit_impl(int status) {
 
         /* Wake up init if it's waiting for children */
         if (init_task->waiters > 0) {
-            kcond_broadcast_impl(&init_task->wait_cond);
+            ix_cond_broadcast_impl(&init_task->wait_cond);
         }
 
-        kmutex_unlock_impl(&init_task->lock);
+        ix_mutex_unlock_impl(&init_task->lock);
     } else if (task->children) {
         /* No init task available, just update ppid to 1 */
         struct task_struct *child = task->children;
         while (child) {
-            kmutex_lock_impl(&child->lock);
+            ix_mutex_lock_impl(&child->lock);
             child->ppid = 1;
-            kmutex_unlock_impl(&child->lock);
+            ix_mutex_unlock_impl(&child->lock);
             child = child->next_sibling;
         }
     }
 
     /* Wake up any waiters on this task */
     if (task->waiters > 0) {
-        kcond_broadcast_impl(&task->wait_cond);
+        ix_cond_broadcast_impl(&task->wait_cond);
     }
 
-    kmutex_unlock_impl(&task->lock);
+    ix_mutex_unlock_impl(&task->lock);
 
     /* Notify vfork parent if this is a vfork child */
     if (task->vfork_parent) {
@@ -83,11 +83,11 @@ void exit_impl(int status) {
     /* Notify parent via SIGCHLD */
     if (task->parent) {
         /* In real implementation: kill(task->parent->pid, SIGCHLD); */
-        kmutex_lock_impl(&task->parent->lock);
+        ix_mutex_lock_impl(&task->parent->lock);
         if (task->parent->waiters > 0) {
-            kcond_broadcast_impl(&task->parent->wait_cond);
+            ix_cond_broadcast_impl(&task->parent->wait_cond);
         }
-        kmutex_unlock_impl(&task->parent->lock);
+        ix_mutex_unlock_impl(&task->parent->lock);
     }
 
     /* Terminate thread but keep task until parent waits */
@@ -95,7 +95,7 @@ void exit_impl(int status) {
 
 __attribute__((visibility("default"), __noreturn__)) void exit(int status) {
     exit_impl(status);
-    kthread_exit_impl(NULL);
+    ix_thread_exit_impl(NULL);
     _Exit(status);
 }
 

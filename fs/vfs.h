@@ -167,7 +167,7 @@ struct fs_struct {
     struct dentry *pwd;
     mode_t umask;
     atomic_int users;
-    kmutex_t lock;
+    ix_mutex_t lock;
     /* Task-aware path resolution state */
     char root_path[MAX_PATH];      /* Virtual root path (absolute, normalized) */
     char pwd_path[MAX_PATH];       /* Virtual pwd path (absolute, normalized) */

@@ -26,7 +26,7 @@ typedef struct fd_description {
     bool is_dir;
     void *synthetic_state;
     atomic_int refs;
-    kmutex_t lock;
+    ix_mutex_t lock;
 } fd_description_t;
 
 
