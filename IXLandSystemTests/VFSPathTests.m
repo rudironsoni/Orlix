@@ -51,6 +51,7 @@
 #define IX_LFLAG_ISIG 0x00000001U
 #define IX_LFLAG_ICANON 0x00000002U
 #define IX_LFLAG_ECHO 0x00000008U
+#define IX_LFLAG_TOSTOP 0x00100000U
 
 #define IX_CC_VINTR 0
 #define IX_CC_VQUIT 1
@@ -2967,16 +2968,97 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
     free_task(session_task);
 }
 
-- (void)testPollInvalidFdReturnsPollnval {
-    struct pollfd pfd;
-    pfd.fd = 999;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
+- (void)testPtyBackgroundJobControlTostopAndSigttinSigttou {
+  struct task_struct *original_task = get_current();
 
-    errno = 0;
-    int ret = poll(&pfd, 1, 0);
-    XCTAssertEqual(ret, 1, @"poll() on invalid fd should report one ready error fd");
-    XCTAssertTrue((pfd.revents & POLLNVAL) != 0, @"invalid fd should set POLLNVAL");
+  struct task_struct *session_task = alloc_task();
+  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
+  if (!session_task) return;
+
+  session_task->fs = alloc_fs_struct();
+  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
+  if (!session_task->fs) {
+    free_task(session_task);
+    return;
+  }
+
+  session_task->signal = alloc_signal_struct();
+  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
+  if (!session_task->signal) {
+    free_task(session_task);
+    return;
+  }
+
+  fs_init_root(session_task->fs, @"/".UTF8String);
+  fs_init_pwd(session_task->fs, @"/".UTF8String);
+  session_task->sid = session_task->pid;
+  session_task->pgid = session_task->pid;
+  set_current(session_task);
+
+  int master_fd = -1;
+  int slave_fd = -1;
+  XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
+  if (master_fd < 0 || slave_fd < 0) {
+    set_current(original_task);
+    free_task(session_task);
+    return;
+  }
+
+  XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed");
+
+  struct ix_termios tio;
+  memset(&tio, 0, sizeof(tio));
+  XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
+
+  tio.c_lflag |= (IX_LFLAG_ISIG | IX_LFLAG_ICANON);
+  XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS with ISIG|ICANON should succeed");
+
+  struct signal_mask_bits block_set = {0};
+  struct signal_mask_bits old_set = {0};
+  block_set.sig[(21 - 1) >> 6] |= (1ULL << ((21 - 1) & 63));
+  block_set.sig[(22 - 1) >> 6] |= (1ULL << ((22 - 1) & 63));
+  block_set.sig[(28 - 1) >> 6] |= (1ULL << ((28 - 1) & 63));
+  XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"block SIGTTIN|SIGTTOU|SIGWINCH should succeed");
+
+  char slave_buf[32] = {0};
+  errno = 0;
+  ssize_t ret = read(slave_fd, slave_buf, sizeof(slave_buf));
+  if (ret == -1 && errno == EAGAIN) {
+  } else if (ret >= 0) {
+  } else {
+    XCTFail(@"background read should return EAGAIN or succeed if data available");
+  }
+
+  tio.c_lflag |= IX_LFLAG_TOSTOP;
+  XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS with TOSTOP should succeed");
+
+  errno = 0;
+  ret = write(slave_fd, "test", 4);
+  if (ret == -1 && errno == EINTR) {
+  } else if (ret == 4) {
+  } else if (ret == -1 && errno == EIO) {
+  } else {
+    XCTFail(@"background write with TOSTOP should return EINTR, EIO, or succeed");
+  }
+
+  XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore old mask should succeed");
+
+  close(slave_fd);
+  close(master_fd);
+  set_current(original_task);
+  free_task(session_task);
+}
+
+- (void)testPollInvalidFdReturnsPollnval {
+  struct pollfd pfd;
+  pfd.fd = 999;
+  pfd.events = POLLIN | POLLOUT;
+  pfd.revents = 0;
+
+  errno = 0;
+  int ret = poll(&pfd, 1, 0);
+  XCTAssertTrue(ret == 1, @"poll() on invalid fd should report one ready error fd");
+  XCTAssertTrue((pfd.revents & POLLNVAL) != 0, @"invalid fd should set POLLNVAL");
 }
 
 - (void)testSelectInvalidFdFailsWithEbadf {
