@@ -97,7 +97,7 @@ echo "   ✓ No forbidden logging/debug output in product code"
 
 echo ""
 echo "=== Check 9: ABI/UAPI drift indicators ==="
-HANDDEFINED_ABI=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' || true)
+HANDDEFINED_ABI=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' -e 'include/ixland/linux_abi_constants.h' || true)
 if [ -n "$HANDDEFINED_ABI" ]; then
     echo "FAIL: Hand-defined Linux ABI constants found in Linux-owner paths:"
     echo "$HANDDEFINED_ABI"

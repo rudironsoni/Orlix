@@ -9,7 +9,9 @@
  */
 
 /* Include Linux UAPI constants FIRST */
-#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+/* Include Linux UAPI constants FIRST */
+/* Linux UAPI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -302,7 +304,7 @@ void exec_reset_signals(struct signal_struct *sighand) {
         return;
     }
 
-    for (int i = 0; i < IX_SIGNAL_NSIG; i++) {
+    for (int i = 0; i < KERNEL_SIG_NUM; i++) {
         if (sighand->actions[i].handler != SIG_IGN) {
             sighand->actions[i].handler = SIG_DFL;
         }

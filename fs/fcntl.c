@@ -1,11 +1,10 @@
-/* Include Linux UAPI constants FIRST */
-#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+/* Linux UAPI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
 
 #include <errno.h>
 #include <stdarg.h>
 
 #include "internal/ios/fs/sync.h"
-
 #include "fdtable.h"
 
 static int fcntl_get_entry_or_badf(int fd, void **entry_out) {

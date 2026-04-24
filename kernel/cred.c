@@ -24,21 +24,21 @@
 
 /* Default IXLand virtual credential values
  * These are deterministic IXLand-internal values, NOT host identity */
-#define IXLAND_DEFAULT_UID      0       /* Virtual root user in IXLand */
-#define IXLAND_DEFAULT_GID      0       /* Virtual root group in IXLand */
-#define IXLAND_DEFAULT_EUID     0       /* Virtual effective root */
-#define IXLAND_DEFAULT_EGID     0       /* Virtual effective root */
-#define IXLAND_DEFAULT_SUID     0       /* Virtual saved root */
-#define IXLAND_DEFAULT_SGID     0       /* Virtual saved root */
+#define KERNEL_DEFAULT_UID      0       /* Virtual root user */
+#define KERNEL_DEFAULT_GID      0       /* Virtual root group */
+#define KERNEL_DEFAULT_EUID     0       /* Virtual effective root */
+#define KERNEL_DEFAULT_EGID     0       /* Virtual effective root */
+#define KERNEL_DEFAULT_SUID     0       /* Virtual saved root */
+#define KERNEL_DEFAULT_SGID     0       /* Virtual saved root */
 
 /* Global virtual credential state for init/standalone tasks */
 static struct cred global_init_cred = {
-    .uid = IXLAND_DEFAULT_UID,
-    .gid = IXLAND_DEFAULT_GID,
-    .euid = IXLAND_DEFAULT_EUID,
-    .egid = IXLAND_DEFAULT_EGID,
-    .suid = IXLAND_DEFAULT_SUID,
-    .sgid = IXLAND_DEFAULT_SGID,
+    .uid = KERNEL_DEFAULT_UID,
+    .gid = KERNEL_DEFAULT_GID,
+    .euid = KERNEL_DEFAULT_EUID,
+    .egid = KERNEL_DEFAULT_EGID,
+    .suid = KERNEL_DEFAULT_SUID,
+    .sgid = KERNEL_DEFAULT_SGID,
     .refs = 1
 };
 
@@ -85,12 +85,12 @@ void cred_init_defaults(struct cred *cred) {
     if (!cred) {
         return;
     }
-    cred->uid = IXLAND_DEFAULT_UID;
-    cred->gid = IXLAND_DEFAULT_GID;
-    cred->euid = IXLAND_DEFAULT_EUID;
-    cred->egid = IXLAND_DEFAULT_EGID;
-    cred->suid = IXLAND_DEFAULT_SUID;
-    cred->sgid = IXLAND_DEFAULT_SGID;
+    cred->uid = KERNEL_DEFAULT_UID;
+    cred->gid = KERNEL_DEFAULT_GID;
+    cred->euid = KERNEL_DEFAULT_EUID;
+    cred->egid = KERNEL_DEFAULT_EGID;
+    cred->suid = KERNEL_DEFAULT_SUID;
+    cred->sgid = KERNEL_DEFAULT_SGID;
 }
 
 int cred_init(void) {
@@ -108,12 +108,12 @@ int cred_init(void) {
 /* Reset global credentials to IXLand defaults - for testing */
 void cred_reset_to_defaults(void) {
     /* Reset global init cred to defaults */
-    global_init_cred.uid = IXLAND_DEFAULT_UID;
-    global_init_cred.gid = IXLAND_DEFAULT_GID;
-    global_init_cred.euid = IXLAND_DEFAULT_EUID;
-    global_init_cred.egid = IXLAND_DEFAULT_EGID;
-    global_init_cred.suid = IXLAND_DEFAULT_SUID;
-    global_init_cred.sgid = IXLAND_DEFAULT_SGID;
+    global_init_cred.uid = KERNEL_DEFAULT_UID;
+    global_init_cred.gid = KERNEL_DEFAULT_GID;
+    global_init_cred.euid = KERNEL_DEFAULT_EUID;
+    global_init_cred.egid = KERNEL_DEFAULT_EGID;
+    global_init_cred.suid = KERNEL_DEFAULT_SUID;
+    global_init_cred.sgid = KERNEL_DEFAULT_SGID;
     global_init_cred.refs = 1;
     
     /* Reset current_cred pointer to point to global_init_cred */

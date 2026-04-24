@@ -1,5 +1,7 @@
 /* Include Linux UAPI constants FIRST */
-#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+/* Include Linux UAPI constants FIRST */
+/* Linux UAPI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
 
 #include <errno.h>
 #include <limits.h>

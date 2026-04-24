@@ -10,7 +10,7 @@
 #include "task.h"
 
 /* Thread stack minimum fallback for portability */
-#define IXLAND_THREAD_STACK_MIN (64 * 1024)
+#define KERNEL_THREAD_STACK_MIN (64 * 1024)
 
 /* ============================================================================
  * FORK IMPLEMENTATION WITH SETJMP/LONGJMP
@@ -167,8 +167,8 @@ pid_t fork_impl(void) {
 
         /* Set stack size from resource limits */
         size_t stacksize = parent->rlimits[RLIMIT_STACK].cur;
-        if (stacksize < IXLAND_THREAD_STACK_MIN) {
-            stacksize = IXLAND_THREAD_STACK_MIN;
+        if (stacksize < KERNEL_THREAD_STACK_MIN) {
+            stacksize = KERNEL_THREAD_STACK_MIN;
         }
         kernel_thread_attr_setstacksize(&attr, stacksize);
 
@@ -383,8 +383,8 @@ int vfork_impl(void) {
     kernel_thread_attr_init(&attr);
 
     size_t stacksize = parent->rlimits[RLIMIT_STACK].cur;
-    if (stacksize < IXLAND_THREAD_STACK_MIN) {
-                stacksize = IXLAND_THREAD_STACK_MIN;
+            if (stacksize < KERNEL_THREAD_STACK_MIN) {
+                stacksize = KERNEL_THREAD_STACK_MIN;
             }
             kernel_thread_attr_setstacksize(&attr, stacksize);
 

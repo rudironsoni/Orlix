@@ -1,15 +1,20 @@
 #ifndef VFS_H
 #define VFS_H
 
-#define _DARWIN_NO_64_BIT_INODE
+/* Linux ABI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <sys/stat.h>
-#include <sys/_types/_off_t.h>
-#include <sys/_types/_size_t.h>
-#include <sys/_types/_ssize_t.h>
+
+/* Forward declare struct stat instead of including <sys/stat.h> here.
+ * This keeps Darwin types out of the Linux-owner header surface.
+ * Implementation files that need struct stat should include it directly
+ * AFTER the Linux ABI constants header. */
+struct stat;
+struct statfs;
+struct timespec;
 
 #include "fdtable.h"
 #include "internal/ios/fs/sync.h"

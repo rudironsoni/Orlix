@@ -5,6 +5,9 @@
  * Internal logic uses private types only.
  */
 
+/* Linux UAPI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
+
 #include "signal.h"
 
 #include <string.h>
@@ -12,26 +15,6 @@
 #include <stdlib.h>
 
 #include "task.h"
-
-/* For internal implementation, use Linux UAPI constants.
- * These match the Linux ABI (0, 1, 2) not Darwin host values (1, 2, 3).
- * Internal do_* functions must use Linux values. */
-#ifndef IXLAND_SIGOPS_DEFINED
-#define IXLAND_SIGOPS_DEFINED
-/* Undefine Darwin values first if they exist */
-#ifdef IX_SIG_BLOCK
-#undef IX_SIG_BLOCK
-#undef IX_SIG_UNBLOCK
-#undef IX_SIG_SETMASK
-#endif
-/* Linux UAPI values */
-#define IX_SIG_BLOCK   0
-#define IX_SIG_UNBLOCK 1
-#define IX_SIG_SETMASK 2
-#endif
-
-/* Include host signal.h ONLY for the public wrapper signatures.
- * This is acceptable because signal.c owns the public signal contract. */
 
 struct signal_struct *alloc_signal_struct(void) {
     struct signal_struct *sig = calloc(1, sizeof(struct signal_struct));
@@ -42,7 +25,7 @@ struct signal_struct *alloc_signal_struct(void) {
     kernel_mutex_init(&sig->queue.lock);
 
     /* Initialize default handlers (SIG_DFL = NULL) */
-    for (int i = 0; i < IXLAND_SIG_NUM; i++) {
+    for (int i = 0; i < KERNEL_SIG_NUM; i++) {
         sig->actions[i].handler = NULL;
         memset(&sig->actions[i].mask, 0, sizeof(struct signal_mask_bits));
         sig->actions[i].flags = 0;
@@ -101,7 +84,7 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
     /* Mark signal as pending - use 0-based indexing (sig - 1) */
     int idx = (sig - 1) / 64;
     int bit = (sig - 1) % 64;
-    if (idx < IXLAND_SIG_NUM_WORDS && sig >= 1 && sig <= IXLAND_SIG_NUM) {
+    if (idx < KERNEL_SIG_NUM_WORDS && sig >= 1 && sig <= KERNEL_SIG_NUM) {
         task->signal->pending.sig[idx] |= (1ULL << bit);
     }
 
@@ -139,7 +122,7 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
 }
 
 int signal_generate_task(struct task_struct *target, int32_t sig) {
-    if (!target || sig < 1 || sig > IXLAND_SIG_NUM)
+    if (!target || sig < 1 || sig > KERNEL_SIG_NUM)
         return -EINVAL;
 
     if (sig == 0) {
@@ -155,7 +138,7 @@ int signal_generate_task(struct task_struct *target, int32_t sig) {
 }
 
 int signal_generate_pgrp(int32_t pgid, int32_t sig) {
-    if (sig < 0 || sig > IXLAND_SIG_NUM)
+    if (sig < 0 || sig > KERNEL_SIG_NUM)
         return -EINVAL;
 
     /* Convert negative pgid to positive (killpg semantics) */
@@ -205,12 +188,12 @@ int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int3
         return -EINVAL;
 
     /* Find first pending signal that's not blocked */
-    for (int i = 1; i <= IXLAND_SIG_NUM; i++) {
+    for (int i = 1; i <= KERNEL_SIG_NUM; i++) {
         /* Use 0-based indexing (sig - 1) */
         int idx = (i - 1) / 64;
         int bit = (i - 1) % 64;
 
-        if (idx >= IXLAND_SIG_NUM_WORDS)
+        if (idx >= KERNEL_SIG_NUM_WORDS)
             continue;
 
         /* Check if pending and not blocked */
@@ -262,7 +245,7 @@ bool signal_is_blocked(const struct task_struct *task, int32_t sig) {
     int idx = (sig - 1) / 64;
     int bit = (sig - 1) % 64;
 
-    if (idx >= IXLAND_SIG_NUM_WORDS)
+    if (idx >= KERNEL_SIG_NUM_WORDS)
         return false;
 
     return (task->signal->blocked.sig[idx] & (1ULL << bit)) != 0;
@@ -296,7 +279,7 @@ int signal_init_task(struct task_struct *task) {
 
 int do_sigaction(int32_t sig, const struct signal_action_slot *act,
                  struct signal_action_slot *oldact) {
-    if (sig < 1 || sig >= IXLAND_SIG_NUM) {
+    if (sig < 1 || sig >= KERNEL_SIG_NUM) {
         errno = EINVAL;
         return -1;
     }
@@ -339,17 +322,17 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
 
 	if (set) {
 		switch (how) {
-		case IX_SIG_BLOCK: /* Block signals in set */
-			for (int i = 0; i < IXLAND_SIG_NUM_WORDS; i++) {
+		case SIG_BLOCK: /* Block signals in set */
+			for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] |= set->sig[i];
 			}
 			break;
-		case IX_SIG_UNBLOCK: /* Unblock signals in set */
-			for (int i = 0; i < IXLAND_SIG_NUM_WORDS; i++) {
+		case SIG_UNBLOCK: /* Unblock signals in set */
+			for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] &= ~set->sig[i];
 			}
 			break;
-		case IX_SIG_SETMASK: /* Replace blocked set with set */
+		case SIG_SETMASK: /* Replace blocked set with set */
 			sig->blocked = *set;
 			break;
 		default:
@@ -378,12 +361,12 @@ int do_sigpending(struct signal_mask_bits *set) {
 }
 
 sighandler_t do_signal(int32_t signum, sighandler_t handler) {
-    if (signum < 1 || signum >= IXLAND_SIG_NUM) {
+    if (signum < 1 || signum >= KERNEL_SIG_NUM) {
         errno = EINVAL;
         return NULL;
     }
 
-    if (signum == 9 || signum == 19) {
+    if (signum == SIGKILL || signum == SIGSTOP) {
         errno = EINVAL;
         return NULL;
     }
@@ -412,7 +395,7 @@ int do_raise(int32_t sig) {
 }
 
 static int is_sigset_empty(const struct signal_mask_bits *set) {
-    for (int i = 0; i < IXLAND_SIG_NUM_WORDS; i++) {
+    for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
         if (set->sig[i] != 0)
             return 0;
     }
@@ -473,7 +456,7 @@ int do_sigsuspend(const struct signal_mask_bits *mask) {
 }
 
 int do_kill(int32_t pid, int32_t sig) {
-    if (sig < 0 || sig > IXLAND_SIG_NUM) {
+    if (sig < 0 || sig > KERNEL_SIG_NUM) {
         errno = EINVAL;
         return -1;
     }
@@ -575,7 +558,7 @@ __attribute__((visibility("default"))) int sigaction(int signum, const struct si
 }
 
 __attribute__((visibility("default"))) sighandler_t signal(int signum, sighandler_t handler) {
-    if (signum < 1 || signum >= IXLAND_SIG_NUM) {
+    if (signum < 1 || signum >= KERNEL_SIG_NUM) {
         errno = EINVAL;
         return (sighandler_t)-1;
     }
@@ -598,7 +581,7 @@ __attribute__((visibility("default"))) int killpg(int32_t pgrp, int sig) {
 }
 
 __attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-	if (how < IX_SIG_BLOCK || how > IX_SIG_SETMASK) {
+    if (how < SIG_BLOCK || how > SIG_SETMASK) {
 		errno = EINVAL;
 		return -1;
 	}

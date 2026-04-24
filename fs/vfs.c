@@ -1,5 +1,5 @@
-/* Include Linux UAPI constants FIRST */
-#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+/* Linux UAPI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
 
 #include "vfs.h"
 #include "internal/ios/fs/backing_io_decls.h"

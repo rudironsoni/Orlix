@@ -5,8 +5,8 @@
  * Shared between time.c (public wrappers) and time_darwin.c (implementations).
  */
 
-#ifndef IXLAND_KERNEL_TIME_INTERNAL_H
-#define IXLAND_KERNEL_TIME_INTERNAL_H
+#ifndef KERNEL_TIME_INTERNAL_H
+#define KERNEL_TIME_INTERNAL_H
 
 #include <stddef.h>
 
@@ -17,4 +17,4 @@ struct timespec;
 
 int kernel_clock_gettime(int clock_id, struct timespec *tp);
 
-#endif /* IXLAND_KERNEL_TIME_INTERNAL_H */
+#endif /* KERNEL_TIME_INTERNAL_H */
