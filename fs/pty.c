@@ -1037,6 +1037,21 @@ int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp) {
     return -1;
   }
 
+  int32_t fg_pgrp = pair->foreground_pgrp;
+  if (fg_pgrp > 0 && fg_pgrp != task->pgid) {
+    if (pty_signal_is_ignored(task, PTY_SIGTTOU)) {
+    } else if (signal_is_blocked(task, PTY_SIGTTOU)) {
+      fs_mutex_unlock(&pty_lock);
+      errno = EINTR;
+      return -1;
+    } else {
+      (void)signal_generate_pgrp(task->pgid, PTY_SIGTTOU);
+      fs_mutex_unlock(&pty_lock);
+      errno = EINTR;
+      return -1;
+    }
+  }
+
   pair->foreground_pgrp = pgrp;
   fs_mutex_unlock(&pty_lock);
   return 0;
