@@ -3348,17 +3348,84 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
 }
 
 - (void)testSelectInvalidFdFailsWithEbadf {
-    fd_set readfds, writefds;
-    FD_ZERO(&readfds);
-    FD_ZERO(&writefds);
-    FD_SET(999, &readfds);
-    FD_SET(999, &writefds);
+  fd_set readfds, writefds;
+  FD_ZERO(&readfds);
+  FD_ZERO(&writefds);
+  FD_SET(999, &readfds);
+  FD_SET(999, &writefds);
 
-    struct timeval tv = {0, 0};
-    errno = 0;
-    int ret = select_impl(1000, &readfds, &writefds, NULL, &tv);
-    XCTAssertEqual(ret, -1, @"select_impl() with invalid fd should fail");
-    XCTAssertEqual(errno, EBADF, @"select_impl() with invalid fd should set EBADF");
+  struct timeval tv = {0, 0};
+  errno = 0;
+  int ret = select_impl(1000, &readfds, &writefds, NULL, &tv);
+  XCTAssertEqual(ret, -1, @"select_impl() with invalid fd should fail");
+  XCTAssertEqual(errno, EBADF, @"select_impl() with invalid fd should set EBADF");
+}
+
+- (void)testPtySlaveReopenLifecycle {
+  struct task_struct *original_task = get_current();
+
+  struct task_struct *session_task = alloc_task();
+  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
+  if (!session_task) return;
+
+  session_task->fs = alloc_fs_struct();
+  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
+  if (!session_task->fs) {
+    free_task(session_task);
+    return;
+  }
+
+  session_task->signal = alloc_signal_struct();
+  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
+  if (!session_task->signal) {
+    free_task(session_task);
+    return;
+  }
+
+  fs_init_root(session_task->fs, @"/".UTF8String);
+  fs_init_pwd(session_task->fs, @"/".UTF8String);
+  session_task->sid = session_task->pid;
+  session_task->pgid = session_task->pid;
+  set_current(session_task);
+
+  int master_fd = open("/dev/ptmx", O_RDWR);
+  XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
+  if (master_fd < 0) {
+    set_current(original_task);
+    free_task(session_task);
+    return;
+  }
+
+  unsigned int pty_number = 0;
+  XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
+
+  int unlock = 0;
+  XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
+
+  char slave_path[64];
+  snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
+
+  int slave_fd1 = open(slave_path, O_RDWR);
+  XCTAssertTrue(slave_fd1 >= 0, @"first open(slave) should succeed");
+
+  int slave_fd2 = open(slave_path, O_RDWR);
+  XCTAssertTrue(slave_fd2 >= 0, @"second open(slave) should succeed");
+
+  close(slave_fd1);
+
+  int slave_fd3 = open(slave_path, O_RDWR);
+  XCTAssertTrue(slave_fd3 >= 0, @"third open(slave) after close should succeed");
+
+  close(slave_fd2);
+  close(slave_fd3);
+  close(master_fd);
+
+  int slave_fd4 = open(slave_path, O_RDWR);
+  XCTAssertTrue(slave_fd4 < 0, @"open(slave) after master close should fail");
+  XCTAssertEqual(errno, ENOENT, @"open(slave) after master close should set ENOENT");
+
+  set_current(original_task);
+  free_task(session_task);
 }
 
 @end
