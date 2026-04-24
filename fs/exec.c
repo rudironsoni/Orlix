@@ -8,10 +8,16 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
+#include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+
+#include "../kernel/task.h"
 
 #include "internal/ios/fs/backing_io.h"
 
@@ -19,7 +25,6 @@
 #include <crt_externs.h>
 #define environ (*_NSGetEnviron())
 
-#include "../kernel/task.h"
 #include "../kernel/signal.h"
 #include "../runtime/native/registry.h"
 #include "fdtable.h"
@@ -29,6 +34,9 @@
 int exec_native(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
 int exec_wasi(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
 int exec_script(struct task_struct *task, const char *path, int argc, char **argv, char **envp);
+int exec_build_script_argv_from_line(const char *shebang_line, const char *path, int argc, char **argv,
+                                      char *interpreter_path, size_t interpreter_path_len,
+                                      char **script_argv, int *script_argc);
 
 /* Deep copy argv array */
 static char **exec_copy_argv(char *const argv[]) {
@@ -118,6 +126,122 @@ static int exec_image_ensure(struct task_struct *task) {
         errno = ENOMEM;
         return -1;
     }
+
+    return 0;
+}
+
+static int exec_read_shebang_line(const char *path, char *buffer, size_t buffer_len) {
+    if (!path || !buffer || buffer_len < 3) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        return -1;
+    }
+
+    ssize_t nread = read(fd, buffer, buffer_len - 1);
+    int saved_errno = errno;
+    close(fd);
+    errno = saved_errno;
+    if (nread < 0) {
+        return -1;
+    }
+
+    buffer[nread] = '\0';
+    char *newline = strchr(buffer, '\n');
+    if (newline) {
+        *newline = '\0';
+    }
+
+    return 0;
+}
+
+int exec_build_script_argv(const char *path, int argc, char **argv,
+                           char *interpreter_path, size_t interpreter_path_len,
+                           char **script_argv, int *script_argc) {
+    if (!path || !interpreter_path || interpreter_path_len == 0 || !script_argv || !script_argc) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    char shebang[MAX_PATH];
+    if (exec_read_shebang_line(path, shebang, sizeof(shebang)) < 0) {
+        return -1;
+    }
+
+    return exec_build_script_argv_from_line(shebang, path, argc, argv,
+                                             interpreter_path, interpreter_path_len,
+                                             script_argv, script_argc);
+}
+
+int exec_build_script_argv_from_line(const char *shebang_line, const char *path, int argc, char **argv,
+                                      char *interpreter_path, size_t interpreter_path_len,
+                                      char **script_argv, int *script_argc) {
+    if (!shebang_line || !path || !interpreter_path || interpreter_path_len == 0 || !script_argv || !script_argc) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (shebang_line[0] != '#' || shebang_line[1] != '!') {
+        errno = ENOEXEC;
+        return -1;
+    }
+
+    char linebuf[MAX_PATH];
+    strncpy(linebuf, shebang_line, sizeof(linebuf) - 1);
+    linebuf[sizeof(linebuf) - 1] = '\0';
+
+    char *cursor = linebuf + 2;
+    while (*cursor && isspace((unsigned char)*cursor)) {
+        cursor++;
+    }
+
+    if (*cursor == '\0') {
+        errno = ENOEXEC;
+        return -1;
+    }
+
+    char *tokens[TASK_MAX_ARGS];
+    int token_count = 0;
+    while (*cursor && token_count < TASK_MAX_ARGS - 1) {
+        while (*cursor && isspace((unsigned char)*cursor)) {
+            *cursor = '\0';
+            cursor++;
+        }
+        if (*cursor == '\0') {
+            break;
+        }
+        tokens[token_count++] = cursor;
+        while (*cursor && !isspace((unsigned char)*cursor)) {
+            cursor++;
+        }
+    }
+
+    if (token_count == 0) {
+        errno = ENOEXEC;
+        return -1;
+    }
+
+    if (strlen(tokens[0]) >= interpreter_path_len) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    strcpy(interpreter_path, tokens[0]);
+
+    int outc = 0;
+    script_argv[outc++] = interpreter_path;
+    for (int i = 1; i < token_count && outc < TASK_MAX_ARGS - 1; i++) {
+        script_argv[outc++] = tokens[i];
+    }
+    script_argv[outc++] = (char *)path;
+    for (int i = 1; i < argc && outc < TASK_MAX_ARGS - 1; i++) {
+        script_argv[outc++] = argv[i];
+    }
+    script_argv[outc] = NULL;
+    *script_argc = outc;
 
     return 0;
 }
@@ -369,11 +493,31 @@ int exec_wasi(struct task_struct *task, const char *path, int argc, char **argv,
 }
 
 int exec_script(struct task_struct *task, const char *path, int argc, char **argv, char **envp) {
-    (void)task;
-    (void)path;
-    (void)argc;
-    (void)argv;
-    (void)envp;
-    errno = ENOEXEC;
-    return -1;
+    if (!task || !path || !argv) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    char interpreter_path[MAX_PATH];
+    char *script_argv[TASK_MAX_ARGS + 4];
+    int script_argc = 0;
+
+    if (exec_build_script_argv(path, argc, argv,
+                               interpreter_path, sizeof(interpreter_path),
+                               script_argv, &script_argc) < 0) {
+        return -1;
+    }
+
+    if (task->exec_image) {
+        strncpy(task->exec_image->interpreter, interpreter_path, sizeof(task->exec_image->interpreter) - 1);
+        task->exec_image->interpreter[sizeof(task->exec_image->interpreter) - 1] = '\0';
+    }
+
+    native_entry_fn entry = native_lookup(interpreter_path);
+    if (!entry) {
+        errno = ENOENT;
+        return -1;
+    }
+
+    return entry(script_argc, script_argv, envp);
 }

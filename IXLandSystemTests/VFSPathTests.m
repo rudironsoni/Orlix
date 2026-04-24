@@ -93,6 +93,7 @@ struct linux_dirent64 {
 #include "kernel/task.h"
 #include "kernel/signal.h"
 #include "internal/ios/fs/backing_io.h"
+#include "runtime/native/registry.h"
 
 extern char *getcwd_impl(char *buf, size_t size);
 extern int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode);
@@ -111,6 +112,10 @@ extern int close(int fd);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int poll(struct pollfd *fds, nfds_t nfds, int timeout);
 extern int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);
+extern int execve(const char *pathname, char *const argv[], char *const envp[]);
+extern int exec_build_script_argv_from_line(const char *shebang_line, const char *path, int argc, char **argv,
+                                             char *interpreter_path, size_t interpreter_path_len,
+                                             char **script_argv, int *script_argc);
 
 static void vfs_test_translate_virtual_path(const char *path, char *host_path, size_t host_path_len) {
     int ret = vfs_translate_path(path, host_path, host_path_len);
@@ -3424,8 +3429,65 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
   XCTAssertTrue(slave_fd4 < 0, @"open(slave) after master close should fail");
   XCTAssertEqual(errno, ENOENT, @"open(slave) after master close should set ENOENT");
 
-  set_current(original_task);
-  free_task(session_task);
+    set_current(original_task);
+    free_task(session_task);
+}
+
+- (void)testExecveShebangDispatchesToRegisteredInterpreter {
+    char interpreter_path[MAX_PATH];
+    char *script_argv[TASK_MAX_ARGS + 4];
+    int script_argc = 0;
+    char *argv[] = { (char *)"/tmp/shebang-test-script.sh", (char *)"arg1", NULL };
+    int argc = 2;
+
+    errno = 0;
+    int ret = exec_build_script_argv_from_line("#!/bin/test-interpreter", "/tmp/shebang-test-script.sh", argc, argv,
+                                                interpreter_path, sizeof(interpreter_path),
+                                                script_argv, &script_argc);
+    XCTAssertEqual(ret, 0, @"exec_build_script_argv_from_line should succeed");
+    XCTAssertEqual(script_argc, 3, @"shebang dispatch should produce 3 args: interpreter, script, arg1");
+    XCTAssertTrue(strcmp(interpreter_path, "/bin/test-interpreter") == 0, @"interpreter should be /bin/test-interpreter");
+    XCTAssertTrue(script_argv[0] != NULL && strcmp(script_argv[0], "/bin/test-interpreter") == 0, @"argv[0] should be interpreter path");
+    XCTAssertTrue(script_argv[1] != NULL && strcmp(script_argv[1], "/tmp/shebang-test-script.sh") == 0, @"argv[1] should be script path");
+    XCTAssertTrue(script_argv[2] != NULL && strcmp(script_argv[2], "arg1") == 0, @"argv[2] should be original argv[1]");
+    XCTAssertTrue(script_argv[3] == NULL, @"argv[3] should be NULL terminator");
+}
+
+- (void)testExecveShebangWithOptionalArg {
+    char interpreter_path[MAX_PATH];
+    char *script_argv[TASK_MAX_ARGS + 4];
+    int script_argc = 0;
+    char *argv[] = { (char *)"/tmp/shebang-test-optarg.sh", NULL };
+    int argc = 1;
+
+    errno = 0;
+    int ret = exec_build_script_argv_from_line("#!/bin/test-interp-arg --norc", "/tmp/shebang-test-optarg.sh", argc, argv,
+                                                interpreter_path, sizeof(interpreter_path),
+                                                script_argv, &script_argc);
+    XCTAssertEqual(ret, 0, @"exec_build_script_argv_from_line with optional arg should succeed");
+    XCTAssertEqual(script_argc, 3, @"shebang with one optional arg should produce 3 args: interpreter, --norc, script");
+    XCTAssertTrue(script_argv[0] != NULL && strcmp(script_argv[0], "/bin/test-interp-arg") == 0, @"argv[0] should be interpreter path");
+    XCTAssertTrue(script_argv[1] != NULL && strcmp(script_argv[1], "--norc") == 0, @"argv[1] should be optional interpreter arg");
+    XCTAssertTrue(script_argv[2] != NULL && strcmp(script_argv[2], "/tmp/shebang-test-optarg.sh") == 0, @"argv[2] should be script path");
+    XCTAssertTrue(script_argv[3] == NULL, @"argv[3] should be NULL terminator");
+}
+
+- (void)testExecveShebangMissingInterpreterReturnsEnoent {
+    char interpreter_path[MAX_PATH];
+    char *script_argv[TASK_MAX_ARGS + 4];
+    int script_argc = 0;
+    char *argv[] = { (char *)"/tmp/shebang-missing-interp.sh", NULL };
+    int argc = 1;
+
+    errno = 0;
+    int ret = exec_build_script_argv_from_line("#!/bin/nonexistent-interpreter-xyz", "/tmp/shebang-missing-interp.sh", argc, argv,
+                                                interpreter_path, sizeof(interpreter_path),
+                                                script_argv, &script_argc);
+    XCTAssertEqual(ret, 0, @"exec_build_script_argv_from_line should parse shebang even for missing interpreter");
+    XCTAssertTrue(strcmp(interpreter_path, "/bin/nonexistent-interpreter-xyz") == 0, @"interpreter should be parsed as /bin/nonexistent-interpreter-xyz");
+
+    native_entry_fn entry = native_lookup("/bin/nonexistent-interpreter-xyz");
+    XCTAssertTrue(entry == NULL, @"nonexistent interpreter should not be in native registry");
 }
 
 @end
