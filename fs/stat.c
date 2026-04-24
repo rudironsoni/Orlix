@@ -1,19 +1,20 @@
 /* IXLandSystem/fs/stat.c
  * Virtual stat/fstat implementation
  */
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
 
 #include "fdtable.h"
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/sync.h"
 #include "vfs.h"
 
 #ifndef MAX_PATH
 #define MAX_PATH 4096
 #endif
-
-#define IX_AT_SYMLINK_NOFOLLOW 0x100
 
 int stat_impl(const char *pathname, struct stat *statbuf) {
     int ret;
@@ -75,7 +76,7 @@ int lstat_impl(const char *pathname, struct stat *statbuf) {
     }
 
     if (vfs_path_is_linux_route(pathname)) {
-        ret = vfs_fstatat(AT_FDCWD, pathname, statbuf, IX_AT_SYMLINK_NOFOLLOW);
+        ret = vfs_fstatat(AT_FDCWD, pathname, statbuf, AT_SYMLINK_NOFOLLOW);
         if (ret != 0) {
             errno = -ret;
             return -1;

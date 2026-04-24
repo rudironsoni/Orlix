@@ -3,9 +3,8 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/sync.h"
 #include "pty.h"
 
 struct files_struct *alloc_files(size_t max_fds) {
@@ -313,7 +312,7 @@ typedef struct fd_description {
 
 
 static fd_entry_t fd_table[NR_OPEN_DEFAULT];
-static fs_mutex_t fd_table_lock = PTHREAD_MUTEX_INITIALIZER;
+static fs_mutex_t fd_table_lock = FS_MUTEX_INITIALIZER;
 static atomic_int fd_table_initialized = 0;
 
 static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mode, const char *path) {

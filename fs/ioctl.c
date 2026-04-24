@@ -6,28 +6,16 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <errno.h>
 #include <stdarg.h>
 #include <stdint.h>
-#include <sys/ioctl.h>
 
 #include "fdtable.h"
 #include "pty.h"
-#include "internal/ios/fs/backing_io.h"
-
-#define IX_TCGETS 0x5401
-#define IX_TCSETS 0x5402
-#define IX_TCSETSW 0x5403
-#define IX_TCSETSF 0x5404
-#define IX_TIOCSCTTY 0x540E
-#define IX_TIOCNOTTY 0x5432
-#define IX_TIOCGPGRP 0x540F
-#define IX_TIOCSPGRP 0x5410
-#define IX_TIOCGWINSZ 0x5413
-#define IX_TIOCSWINSZ 0x5414
-#define IX_FIONREAD 0x541B
-#define IX_TIOCGPTN 0x80045430UL
-#define IX_TIOCSPTLCK 0x40045431UL
+#include "internal/ios/fs/sync.h"
 
 static int ioctl_host_call_impl(int fd, unsigned long request, void *arg) {
     return host_ioctl_impl(fd, request, arg);
@@ -55,7 +43,7 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
         int result = -1;
 
         switch (request) {
-        case IX_TIOCGPTN:
+        case TIOCGPTN:
             if (!is_master || !arg) {
                 errno = !arg ? EFAULT : EINVAL;
                 break;
@@ -63,21 +51,21 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
             *(unsigned int *)arg = pty_index;
             result = 0;
             break;
-        case IX_TIOCSPTLCK:
+        case TIOCSPTLCK:
             if (!is_master || !arg) {
                 errno = !arg ? EFAULT : EINVAL;
                 break;
             }
             result = pty_set_lock_impl(pty_index, (*(const int *)arg) != 0);
             break;
-        case IX_TCGETS:
+        case TCGETS:
             if (!arg) {
                 errno = EFAULT;
                 break;
             }
             result = pty_get_termios_impl(pty_index, (pty_linux_termios_t *)arg);
             break;
-        case IX_TCSETS:
+        case TCSETS:
             if (!arg) {
                 errno = EFAULT;
                 break;
@@ -85,7 +73,7 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
             result = pty_set_termios_with_action_impl(pty_index, (const pty_linux_termios_t *)arg,
                                                       PTY_TCSET_ACTION_NOW);
             break;
-        case IX_TCSETSW:
+        case TCSETSW:
             if (!arg) {
                 errno = EFAULT;
                 break;
@@ -93,7 +81,7 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
             result = pty_set_termios_with_action_impl(pty_index, (const pty_linux_termios_t *)arg,
                                                       PTY_TCSET_ACTION_DRAIN);
             break;
-        case IX_TCSETSF:
+        case TCSETSF:
             if (!arg) {
                 errno = EFAULT;
                 break;
@@ -101,41 +89,41 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
             result = pty_set_termios_with_action_impl(pty_index, (const pty_linux_termios_t *)arg,
                                                       PTY_TCSET_ACTION_FLUSH);
             break;
-        case IX_TIOCGWINSZ:
+        case TIOCGWINSZ:
             if (!arg) {
                 errno = EFAULT;
                 break;
             }
             result = pty_get_winsize_impl(pty_index, (pty_linux_winsize_t *)arg);
             break;
-        case IX_TIOCSWINSZ:
+        case TIOCSWINSZ:
             if (!arg) {
                 errno = EFAULT;
                 break;
             }
             result = pty_set_winsize_impl(pty_index, (const pty_linux_winsize_t *)arg);
             break;
-case IX_TIOCSCTTY:
-        result = pty_set_controlling_tty_impl(pty_index, (int)(intptr_t)arg);
-        break;
-      case IX_TIOCNOTTY:
-        result = pty_detach_controlling_tty_impl();
-        break;
-      case IX_TIOCGPGRP:
+        case TIOCSCTTY:
+            result = pty_set_controlling_tty_impl(pty_index, (int)(intptr_t)arg);
+            break;
+        case TIOCNOTTY:
+            result = pty_detach_controlling_tty_impl();
+            break;
+        case TIOCGPGRP:
             if (!arg) {
                 errno = EFAULT;
                 break;
             }
             result = pty_get_foreground_pgrp_impl(pty_index, (int32_t *)arg);
             break;
-        case IX_TIOCSPGRP:
+        case TIOCSPGRP:
             if (!arg) {
                 errno = EFAULT;
                 break;
             }
             result = pty_set_foreground_pgrp_impl(pty_index, *(const int32_t *)arg);
             break;
-        case IX_FIONREAD: {
+        case FIONREAD: {
             if (!arg) {
                 errno = EFAULT;
                 break;

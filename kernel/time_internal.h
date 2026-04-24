@@ -8,10 +8,13 @@
 #ifndef IXLAND_KERNEL_TIME_INTERNAL_H
 #define IXLAND_KERNEL_TIME_INTERNAL_H
 
-#include "../internal/ios/fs/backing_io.h"
+#include <stddef.h>
 
 struct timeval;
 struct timezone;
 struct itimerval;
+struct timespec;
+
+int kernel_clock_gettime(int clock_id, struct timespec *tp);
 
 #endif /* IXLAND_KERNEL_TIME_INTERNAL_H */

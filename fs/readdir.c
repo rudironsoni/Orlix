@@ -1,12 +1,17 @@
 /* IXLandSystem/fs/readdir.c
  * Virtual getdents/getdents64 implementation
  */
+
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <dirent.h>
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
+
 #include "fdtable.h"
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/sync.h"
 #include "path.h"
 #include "vfs.h"
 

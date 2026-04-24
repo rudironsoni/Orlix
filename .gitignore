@@ -71,6 +71,7 @@ build/
 
 # Clangd compilation database cache
 .clangd-cache/
+.cache/
 
 # Generated binary
 bin/ixland-cc

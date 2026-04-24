@@ -1,5 +1,4 @@
 /* iXland - Inode Operations
- *
  * Canonical owner for inode-level operations:
  * - chmod(), fchmod(), fchmodat()
  * - chown(), fchown(), lchown(), fchownat()
@@ -12,7 +11,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/sync.h"
 
 /* ============================================================================
  * CHMOD - Change file mode

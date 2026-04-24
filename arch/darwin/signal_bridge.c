@@ -13,6 +13,14 @@
 
 #include "kernel/signal.h"
 
+/* Signal constants - must match kernel/signal.h */
+#ifndef IXLAND_SIG_NUM
+#define IXLAND_SIG_NUM 64
+#endif
+#ifndef IXLAND_SIG_NUM_WORDS
+#define IXLAND_SIG_NUM_WORDS ((IXLAND_SIG_NUM + 63) / 64)
+#endif
+
 /* Private bridge helpers - used by kernel/signal.c public wrappers */
 
 /* Convert Darwin sigset_t to internal signal_mask_bits */
@@ -24,7 +32,7 @@ void bridge_sigset_from_host(const sigset_t *host_set, struct signal_mask_bits *
         if (sigismember(host_set, sig)) {
             int idx = (sig - 1) / 64;  // Fixed: signal 64 now maps to idx 0, bit 63
             int bit = (sig - 1) % 64;
-            if (idx < IX_SIGNAL_NSIG_WORDS && bit < 64) {
+            if (idx < IXLAND_SIG_NUM_WORDS && bit < 64) {
                 out_set->sig[idx] |= (1ULL << bit);
             }
         }
@@ -40,7 +48,7 @@ void bridge_sigset_to_host(const struct signal_mask_bits *internal_set, sigset_t
     for (int sig = 1; sig <= 64; sig++) {
         int idx = (sig - 1) / 64;  // Fixed: signal 64 now maps to idx 0, bit 63
         int bit = (sig - 1) % 64;
-        if (idx < IX_SIGNAL_NSIG_WORDS && (internal_set->sig[idx] & (1ULL << bit))) {
+        if (idx < IXLAND_SIG_NUM_WORDS && (internal_set->sig[idx] & (1ULL << bit))) {
             sigaddset(host_set, sig);
         }
     }

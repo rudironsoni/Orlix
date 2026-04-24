@@ -1,4 +1,5 @@
 /* iXland - Superblock Operations
+
  *
  * Canonical owner for filesystem-level operations:
  * - sync(), fsync(), fdatasync()
@@ -12,10 +13,10 @@
 
 #define _DARWIN_FEATURE_64_BIT_INODE 1
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/param.h>
 #include <sys/statvfs.h>
-
-#include "internal/ios/fs/backing_io.h"
+#include <unistd.h>
 
 /* iOS system call stubs - private implementation detail */
 extern int _statfs(const char *, struct statfs *);

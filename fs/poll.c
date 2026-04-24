@@ -1,3 +1,6 @@
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <errno.h>
 #include <limits.h>
 #include <poll.h>
@@ -7,9 +10,9 @@
 #include <sys/time.h>
 
 #include "fdtable.h"
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/sync.h"
 #include "pty.h"
-#include "internal/ios/fs/backing_io.h"
 
 static int host_poll_wait(struct pollfd *fds, nfds_t nfds, int timeout) {
     return host_poll_impl(fds, nfds, timeout);

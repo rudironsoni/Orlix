@@ -1,7 +1,11 @@
 /* iOS Subsystem for Linux - epoll Implementation
+
  *
  * Linux epoll API using kqueue as the underlying mechanism.
  */
+
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
 
 #include <errno.h>
 #include <stdatomic.h>
@@ -10,7 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/event.h>
-#include "internal/ios/fs/backing_io.h"
 
 #include "internal/ios/fs/sync.h"
 

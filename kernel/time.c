@@ -10,7 +10,11 @@
  */
 
 #include "time_internal.h"
+
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 /* Forward declarations for private implementation - defined in time_darwin.c */
 time_t time_impl(time_t *tloc);

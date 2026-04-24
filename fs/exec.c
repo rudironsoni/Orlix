@@ -8,6 +8,9 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -19,7 +22,7 @@
 
 #include "../kernel/task.h"
 
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/sync.h"
 
 /* environ is not available on iOS; use _NSGetEnviron() */
 #include <crt_externs.h>

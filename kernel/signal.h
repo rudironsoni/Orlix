@@ -23,6 +23,11 @@
 
 #include "../internal/ios/kernel/sync.h"
 
+/* Include Linux UAPI for signal operation constants.
+ * Note: We don't include asm-generic/signal.h because it defines sigset_t
+ * which conflicts with Darwin's sigset_t. We define _NSIG directly. */
+#include <asm-generic/signal-defs.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,18 +36,14 @@ extern "C" {
 struct task_struct;
 
 /* Signal count - Linux uses 64 signals */
-#define IX_SIGNAL_NSIG 64
+#define IXLAND_SIG_NUM 64
+#define IXLAND_SIG_NUM_WORDS ((IXLAND_SIG_NUM + 63) / 64)
 
 /* Signal handler type - private internal */
 typedef void (*sighandler_t)(int);
 
-/* Signal set representation - private internal */
-#define IX_SIGNAL_NSIG_WORDS ((IX_SIGNAL_NSIG + 63) / 64)
-#define SIGNAL_NSIG IX_SIGNAL_NSIG
-#define SIGNAL_NSIG_WORDS IX_SIGNAL_NSIG_WORDS
-
 struct signal_mask_bits {
-    uint64_t sig[IX_SIGNAL_NSIG_WORDS];
+    uint64_t sig[IXLAND_SIG_NUM_WORDS];
 };
 
 /* Signal queue entry - private internal */
@@ -74,7 +75,7 @@ struct signal_action_slot {
  * This is the private internal state, NOT the public ABI struct sigaction */
 struct signal_struct {
     atomic_int refs;
-    struct signal_action_slot actions[IX_SIGNAL_NSIG];
+    struct signal_action_slot actions[IXLAND_SIG_NUM];
     struct signal_mask_bits blocked;
     struct signal_mask_bits pending;
     struct signal_queue queue;

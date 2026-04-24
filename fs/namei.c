@@ -1,17 +1,13 @@
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/stdio.h>
 
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/backing_io_decls.h"
 #include "vfs.h"
 #include "../kernel/task.h"
-
-/* Linux UAPI renameat2 flag values - vendored header conflicts with Darwin, use canonical values directly */
-#define IX_RENAME_NOREPLACE 0x0001
-#define IX_RENAME_EXCHANGE 0x0002
-#define IX_RENAME_WHITEOUT 0x0004
 
 static int directory_validate_path(const char *path) {
     if (path == NULL) {
@@ -147,26 +143,26 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
         return -1;
     }
 
-    if (flags & ~(IX_RENAME_NOREPLACE | IX_RENAME_EXCHANGE | IX_RENAME_WHITEOUT)) {
+    if (flags & ~(AT_RENAME_NOREPLACE | AT_RENAME_EXCHANGE | AT_RENAME_WHITEOUT)) {
         errno = EINVAL;
         return -1;
     }
 
-    if ((flags & IX_RENAME_WHITEOUT) != 0) {
+    if ((flags & AT_RENAME_WHITEOUT) != 0) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
-    if ((flags & IX_RENAME_NOREPLACE) != 0 && (flags & IX_RENAME_EXCHANGE) != 0) {
+    if ((flags & AT_RENAME_NOREPLACE) != 0 && (flags & AT_RENAME_EXCHANGE) != 0) {
         errno = EINVAL;
         return -1;
     }
 
-    if ((flags & IX_RENAME_NOREPLACE) != 0) {
+    if ((flags & AT_RENAME_NOREPLACE) != 0) {
         host_flags |= RENAME_EXCL;
     }
 
-    if ((flags & IX_RENAME_EXCHANGE) != 0) {
+    if ((flags & AT_RENAME_EXCHANGE) != 0) {
         host_flags |= RENAME_SWAP;
     }
 

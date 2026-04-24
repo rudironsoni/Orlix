@@ -16,8 +16,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
-#include "../internal/ios/fs/backing_io.h"
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {

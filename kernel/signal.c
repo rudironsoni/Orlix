@@ -42,7 +42,7 @@ struct signal_struct *alloc_signal_struct(void) {
     kernel_mutex_init(&sig->queue.lock);
 
     /* Initialize default handlers (SIG_DFL = NULL) */
-    for (int i = 0; i < SIGNAL_NSIG; i++) {
+    for (int i = 0; i < IXLAND_SIG_NUM; i++) {
         sig->actions[i].handler = NULL;
         memset(&sig->actions[i].mask, 0, sizeof(struct signal_mask_bits));
         sig->actions[i].flags = 0;
@@ -101,7 +101,7 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
     /* Mark signal as pending - use 0-based indexing (sig - 1) */
     int idx = (sig - 1) / 64;
     int bit = (sig - 1) % 64;
-    if (idx < SIGNAL_NSIG_WORDS && sig >= 1 && sig <= SIGNAL_NSIG) {
+    if (idx < IXLAND_SIG_NUM_WORDS && sig >= 1 && sig <= IXLAND_SIG_NUM) {
         task->signal->pending.sig[idx] |= (1ULL << bit);
     }
 
@@ -139,7 +139,7 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
 }
 
 int signal_generate_task(struct task_struct *target, int32_t sig) {
-    if (!target || sig < 1 || sig > SIGNAL_NSIG)
+    if (!target || sig < 1 || sig > IXLAND_SIG_NUM)
         return -EINVAL;
 
     if (sig == 0) {
@@ -155,7 +155,7 @@ int signal_generate_task(struct task_struct *target, int32_t sig) {
 }
 
 int signal_generate_pgrp(int32_t pgid, int32_t sig) {
-    if (sig < 0 || sig > SIGNAL_NSIG)
+    if (sig < 0 || sig > IXLAND_SIG_NUM)
         return -EINVAL;
 
     /* Convert negative pgid to positive (killpg semantics) */
@@ -205,12 +205,12 @@ int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int3
         return -EINVAL;
 
     /* Find first pending signal that's not blocked */
-    for (int i = 1; i <= SIGNAL_NSIG; i++) {
+    for (int i = 1; i <= IXLAND_SIG_NUM; i++) {
         /* Use 0-based indexing (sig - 1) */
         int idx = (i - 1) / 64;
         int bit = (i - 1) % 64;
 
-        if (idx >= SIGNAL_NSIG_WORDS)
+        if (idx >= IXLAND_SIG_NUM_WORDS)
             continue;
 
         /* Check if pending and not blocked */
@@ -262,7 +262,7 @@ bool signal_is_blocked(const struct task_struct *task, int32_t sig) {
     int idx = (sig - 1) / 64;
     int bit = (sig - 1) % 64;
 
-    if (idx >= SIGNAL_NSIG_WORDS)
+    if (idx >= IXLAND_SIG_NUM_WORDS)
         return false;
 
     return (task->signal->blocked.sig[idx] & (1ULL << bit)) != 0;
@@ -296,7 +296,7 @@ int signal_init_task(struct task_struct *task) {
 
 int do_sigaction(int32_t sig, const struct signal_action_slot *act,
                  struct signal_action_slot *oldact) {
-    if (sig < 1 || sig >= SIGNAL_NSIG) {
+    if (sig < 1 || sig >= IXLAND_SIG_NUM) {
         errno = EINVAL;
         return -1;
     }
@@ -340,12 +340,12 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
 	if (set) {
 		switch (how) {
 		case IX_SIG_BLOCK: /* Block signals in set */
-			for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+			for (int i = 0; i < IXLAND_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] |= set->sig[i];
 			}
 			break;
 		case IX_SIG_UNBLOCK: /* Unblock signals in set */
-			for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+			for (int i = 0; i < IXLAND_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] &= ~set->sig[i];
 			}
 			break;
@@ -378,7 +378,7 @@ int do_sigpending(struct signal_mask_bits *set) {
 }
 
 sighandler_t do_signal(int32_t signum, sighandler_t handler) {
-    if (signum < 1 || signum >= SIGNAL_NSIG) {
+    if (signum < 1 || signum >= IXLAND_SIG_NUM) {
         errno = EINVAL;
         return NULL;
     }
@@ -412,7 +412,7 @@ int do_raise(int32_t sig) {
 }
 
 static int is_sigset_empty(const struct signal_mask_bits *set) {
-    for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+    for (int i = 0; i < IXLAND_SIG_NUM_WORDS; i++) {
         if (set->sig[i] != 0)
             return 0;
     }
@@ -473,7 +473,7 @@ int do_sigsuspend(const struct signal_mask_bits *mask) {
 }
 
 int do_kill(int32_t pid, int32_t sig) {
-    if (sig < 0 || sig > SIGNAL_NSIG) {
+    if (sig < 0 || sig > IXLAND_SIG_NUM) {
         errno = EINVAL;
         return -1;
     }
@@ -575,7 +575,7 @@ __attribute__((visibility("default"))) int sigaction(int signum, const struct si
 }
 
 __attribute__((visibility("default"))) sighandler_t signal(int signum, sighandler_t handler) {
-    if (signum < 1 || signum >= SIGNAL_NSIG) {
+    if (signum < 1 || signum >= IXLAND_SIG_NUM) {
         errno = EINVAL;
         return (sighandler_t)-1;
     }

@@ -7,9 +7,12 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
-#include <errno.h>
+/* Include Linux UAPI constants FIRST */
+#include "../third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
 
-#include "../internal/ios/fs/backing_io.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 /* iOS system getentropy - private implementation detail */
 extern int _getentropy(void *buf, size_t buflen);

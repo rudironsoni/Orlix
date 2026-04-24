@@ -1,17 +1,12 @@
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <errno.h>
 #include <stdarg.h>
 
-#include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/sync.h"
 
 #include "fdtable.h"
-
-#define IX_FD_CLOEXEC 1
-#define IX_F_DUPFD 0
-#define IX_F_GETFD 1
-#define IX_F_SETFD 2
-#define IX_F_GETFL 3
-#define IX_F_SETFL 4
-#define IX_F_DUPFD_CLOEXEC 1030
 
 static int fcntl_get_entry_or_badf(int fd, void **entry_out) {
     void *entry;
@@ -82,32 +77,32 @@ int fcntl_impl(int fd, int cmd, ...) {
     va_end(args);
 
     switch (cmd) {
-    case IX_F_DUPFD:
+    case F_DUPFD:
         return clone_fd_entry_impl(fd, arg, false);
-    case IX_F_DUPFD_CLOEXEC:
+    case F_DUPFD_CLOEXEC:
         return clone_fd_entry_impl(fd, arg, true);
-    case IX_F_GETFD:
+    case F_GETFD:
         if (fcntl_get_entry_or_badf(fd, &entry) != 0) {
             return -1;
         }
-        result = (get_fd_descriptor_flags_impl(entry) & FD_CLOEXEC) ? IX_FD_CLOEXEC : 0;
+        result = (get_fd_descriptor_flags_impl(entry) & FD_CLOEXEC) ? FD_CLOEXEC : 0;
         put_fd_entry_impl(entry);
         return result;
-    case IX_F_SETFD:
+    case F_SETFD:
         if (fcntl_get_entry_or_badf(fd, &entry) != 0) {
             return -1;
         }
-        set_fd_descriptor_flags_impl(entry, (arg & IX_FD_CLOEXEC) ? FD_CLOEXEC : 0);
+        set_fd_descriptor_flags_impl(entry, (arg & FD_CLOEXEC) ? FD_CLOEXEC : 0);
         put_fd_entry_impl(entry);
         return 0;
-    case IX_F_GETFL:
+    case F_GETFL:
         if (fcntl_get_entry_or_badf(fd, &entry) != 0) {
             return -1;
         }
         result = get_fd_flags_impl(entry);
         put_fd_entry_impl(entry);
         return result;
-    case IX_F_SETFL: {
+    case F_SETFL: {
         int mutable_mask = fcntl_mutable_status_mask();
         int current_flags;
         int new_flags;

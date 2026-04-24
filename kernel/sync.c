@@ -12,7 +12,7 @@
 #include <errno.h>
 #include <linux/futex.h>
 
-#include "../internal/ios/fs/backing_io.h"
+#include "../internal/ios/kernel/sync.h"
 
 /* ============================================================================
  * FUTEX - Fast Userspace muTEX

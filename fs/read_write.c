@@ -1,14 +1,19 @@
 /* IXLandSystem/fs/read_write.c
  * Virtual read/write/lseek implementation
  */
+
+/* Include Linux UAPI constants FIRST */
+#include "third_party/linux-uapi/6.12/arm64/include/ixland/linux_uapi_constants.h"
+
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "fdtable.h"
+#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/sync.h"
 #include "pty.h"
 #include "vfs.h"
-#include "internal/ios/fs/backing_io.h"
 
 ssize_t read_impl(int fd, void *buf, size_t count) {
     if (!buf) {
@@ -51,64 +56,27 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
     if (get_fd_is_synthetic_pty_impl(entry)) {
         unsigned int pty_index = get_fd_synthetic_pty_index_impl(entry);
         bool is_master = get_fd_is_synthetic_pty_master_impl(entry);
-        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         put_fd_entry_impl(entry);
 
-        if (is_master) {
-            return pty_read_master_impl(pty_index, buf, count, nonblock);
-        }
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         return pty_read_slave_impl(pty_index, buf, count, nonblock);
     }
 
-    if (get_fd_is_synthetic_proc_file_impl(entry)) {
-synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
-off_t offset = get_fd_offset_impl(entry);
-char content_buf[4096];
-int content_len;
-
-if (proc_file == SYNTHETIC_PROC_FILE_CMDLINE) {
-content_len = vfs_proc_self_cmdline_content(content_buf, sizeof(content_buf));
-} else if (proc_file == SYNTHETIC_PROC_FILE_COMM) {
-content_len = vfs_proc_self_comm_content(content_buf, sizeof(content_buf));
-} else if (proc_file == SYNTHETIC_PROC_FILE_STAT) {
-content_len = vfs_proc_self_stat_content(content_buf, sizeof(content_buf));
-} else if (proc_file == SYNTHETIC_PROC_FILE_STATM) {
-content_len = vfs_proc_self_statm_content(content_buf, sizeof(content_buf));
-} else if (proc_file == SYNTHETIC_PROC_FILE_STATUS) {
-content_len = vfs_proc_self_status_content(content_buf, sizeof(content_buf));
-} else if (proc_file == SYNTHETIC_PROC_FILE_FDINFO) {
-int fd_num = get_fd_proc_file_fd_num_impl(entry);
-content_len = vfs_proc_self_fdinfo_content(fd_num, content_buf, sizeof(content_buf));
-} else {
-put_fd_entry_impl(entry);
-errno = EINVAL;
-return -1;
-}
-
-        if (content_len < 0) {
-            put_fd_entry_impl(entry);
-            errno = -content_len;
-            return -1;
-        }
-
-        if (offset >= content_len) {
-            put_fd_entry_impl(entry);
-            return 0;
-        }
-
-        size_t available = (size_t)(content_len - offset);
-        size_t to_read = (count < available) ? count : available;
-        memcpy(buf, content_buf + offset, to_read);
-        set_fd_offset_impl(entry, offset + (off_t)to_read);
+    if (get_fd_is_synthetic_dir_impl(entry)) {
         put_fd_entry_impl(entry);
-        return (ssize_t)to_read;
+        errno = EISDIR;
+        return -1;
+    }
+
+    if (get_fd_is_synthetic_proc_file_impl(entry)) {
+        synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
+        int fd_num = get_fd_proc_file_fd_num_impl(entry);
+        put_fd_entry_impl(entry);
+
+        return vfs_proc_file_read(proc_file, fd_num, buf, count);
     }
 
     ssize_t bytes = host_read_impl(get_real_fd_impl(entry), buf, count);
-    if (bytes > 0) {
-        set_fd_offset_impl(entry, get_fd_offset_impl(entry) + bytes);
-    }
-
     put_fd_entry_impl(entry);
     return bytes;
 }
@@ -138,58 +106,106 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
         synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
 
-        if (dev_node == SYNTHETIC_DEV_NULL || dev_node == SYNTHETIC_DEV_ZERO || dev_node == SYNTHETIC_DEV_URANDOM) {
+        if (dev_node == SYNTHETIC_DEV_NULL) {
             return (ssize_t)count;
+        } else if (dev_node == SYNTHETIC_DEV_ZERO || dev_node == SYNTHETIC_DEV_URANDOM) {
+            errno = EINVAL;
+            return -1;
         }
-        errno = EINVAL;
-        return -1;
     }
 
     if (get_fd_is_synthetic_pty_impl(entry)) {
         unsigned int pty_index = get_fd_synthetic_pty_index_impl(entry);
         bool is_master = get_fd_is_synthetic_pty_master_impl(entry);
-        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         put_fd_entry_impl(entry);
 
         if (is_master) {
+            bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
             return pty_write_master_impl(pty_index, buf, count, nonblock);
         }
+
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         return pty_write_slave_impl(pty_index, buf, count, nonblock);
     }
 
-    int real_fd = get_real_fd_impl(entry);
+    if (get_fd_is_synthetic_dir_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EISDIR;
+        return -1;
+    }
 
-    /* Check if O_APPEND is set - writes must go to end of file */
-    bool is_append = get_fd_is_append_impl(entry);
-    if (is_append) {
-        /* Seek to end before writing */
-        off_t current_size = host_lseek_impl(real_fd, 0, SEEK_END);
-        if (current_size < 0) {
+    if (get_fd_is_synthetic_proc_file_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    }
+
+    off_t current_size = host_lseek_impl(get_real_fd_impl(entry), 0, SEEK_END);
+    if (current_size < 0) {
+        put_fd_entry_impl(entry);
+        return -1;
+    }
+
+    if (get_fd_is_append_impl(entry)) {
+        if (host_lseek_impl(get_real_fd_impl(entry), 0, SEEK_END) < 0) {
             put_fd_entry_impl(entry);
             return -1;
         }
     }
 
-    ssize_t bytes = host_write_impl(real_fd, buf, count);
-    if (bytes > 0) {
-        /* Only update local offset on append/regular write */
-        off_t new_offset = get_fd_offset_impl(entry) + bytes;
-        set_fd_offset_impl(entry, new_offset);
-    }
-
+    ssize_t bytes = host_write_impl(get_real_fd_impl(entry), buf, count);
     put_fd_entry_impl(entry);
     return bytes;
 }
 
 off_t lseek_impl(int fd, off_t offset, int whence) {
+    void *entry;
+
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
+        errno = EBADF;
+        return (off_t)-1;
+    }
+
+    if (fd <= 2) {
+        return host_lseek_impl(fd, offset, whence);
+    }
+
+    entry = get_fd_entry_impl(fd);
+    if (!entry) {
+        errno = EBADF;
+        return (off_t)-1;
+    }
+
+    if (get_fd_is_synthetic_dir_impl(entry) || get_fd_is_synthetic_proc_file_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = ESPIPE;
+        return (off_t)-1;
+    }
+
+    if (get_fd_is_synthetic_dev_impl(entry) || get_fd_is_synthetic_pty_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = ESPIPE;
+        return (off_t)-1;
+    }
+
+    off_t result = host_lseek_impl(get_real_fd_impl(entry), offset, whence);
+    put_fd_entry_impl(entry);
+    return result;
+}
+
+ssize_t pread_impl(int fd, void *buf, size_t count, off_t offset) {
+    if (!buf) {
+        errno = EFAULT;
+        return -1;
+    }
+
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
     }
 
     if (fd <= 2) {
-        errno = ESPIPE;
-        return -1;
+        return host_pread_impl(fd, buf, count, offset);
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -198,30 +214,9 @@ off_t lseek_impl(int fd, off_t offset, int whence) {
         return -1;
     }
 
-    if (get_fd_is_synthetic_pty_impl(entry)) {
+    if (get_fd_is_synthetic_dir_impl(entry)) {
         put_fd_entry_impl(entry);
-        errno = ESPIPE;
-        return -1;
-    }
-
-    off_t result = host_lseek_impl(get_real_fd_impl(entry), offset, whence);
-    if (result >= 0) {
-        set_fd_offset_impl(entry, result);
-    }
-
-    put_fd_entry_impl(entry);
-    return result;
-}
-
-ssize_t pread_impl(int fd, void *buf, size_t count, off_t offset) {
-    if (fd <= 2) {
-        errno = ESPIPE;
-        return -1;
-    }
-
-    void *entry = get_fd_entry_impl(fd);
-    if (!entry) {
-        errno = EBADF;
+        errno = EISDIR;
         return -1;
     }
 
@@ -231,14 +226,29 @@ ssize_t pread_impl(int fd, void *buf, size_t count, off_t offset) {
 }
 
 ssize_t pwrite_impl(int fd, const void *buf, size_t count, off_t offset) {
-    if (fd <= 2) {
-        errno = ESPIPE;
+    if (!buf) {
+        errno = EFAULT;
         return -1;
+    }
+
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
+        errno = EBADF;
+        return -1;
+    }
+
+    if (fd <= 2) {
+        return host_pwrite_impl(fd, buf, count, offset);
     }
 
     void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
+        return -1;
+    }
+
+    if (get_fd_is_synthetic_dir_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EISDIR;
         return -1;
     }
 
@@ -265,141 +275,4 @@ __attribute__((visibility("default"))) ssize_t pread(int fd, void *buf, size_t c
 
 __attribute__((visibility("default"))) ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset) {
     return pwrite_impl(fd, buf, count, offset);
-}
-
-/* ============================================================================
- * Scatter/Gather I/O (readv/writev)
- * ============================================================================ */
-
-#include <sys/uio.h>
-
-ssize_t readv_impl(int fd, const struct iovec *iov, int iovcnt) {
-    if (!iov || iovcnt < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    
-    if (iovcnt == 0) {
-        return 0;
-    }
-    
-    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
-        errno = EBADF;
-        return -1;
-    }
-    
-    if (fd <= 2) {
-        return host_readv_impl(fd, iov, iovcnt);
-    }
-    
-    void *entry = get_fd_entry_impl(fd);
-    if (!entry) {
-        errno = EBADF;
-        return -1;
-    }
-    
-    ssize_t total = 0;
-    for (int i = 0; i < iovcnt; i++) {
-        if (iov[i].iov_len == 0) {
-            continue;
-        }
-        if (!iov[i].iov_base) {
-            put_fd_entry_impl(entry);
-            errno = EFAULT;
-            return -1;
-        }
-        
-        ssize_t bytes = host_read_impl(get_real_fd_impl(entry), iov[i].iov_base, iov[i].iov_len);
-        if (bytes < 0) {
-            put_fd_entry_impl(entry);
-            return -1;
-        }
-        if (bytes == 0) {
-            break; /* EOF */
-        }
-        total += bytes;
-        if ((size_t)bytes < iov[i].iov_len) {
-            break; /* Short read */
-        }
-    }
-    
-    if (total > 0) {
-        set_fd_offset_impl(entry, get_fd_offset_impl(entry) + total);
-    }
-    
-    put_fd_entry_impl(entry);
-    return total;
-}
-
-ssize_t writev_impl(int fd, const struct iovec *iov, int iovcnt) {
-    if (!iov || iovcnt < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    
-    if (iovcnt == 0) {
-        return 0;
-    }
-    
-    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
-        errno = EBADF;
-        return -1;
-    }
-    
-    if (fd <= 2) {
-        return host_writev_impl(fd, iov, iovcnt);
-    }
-    
-    void *entry = get_fd_entry_impl(fd);
-    if (!entry) {
-        errno = EBADF;
-        return -1;
-    }
-    
-    int real_fd = get_real_fd_impl(entry);
-    
-    /* Handle O_APPEND */
-    if (get_fd_is_append_impl(entry)) {
-        if (host_lseek_impl(real_fd, 0, SEEK_END) < 0) {
-            put_fd_entry_impl(entry);
-            return -1;
-        }
-    }
-    
-    ssize_t total = 0;
-    for (int i = 0; i < iovcnt; i++) {
-        if (iov[i].iov_len == 0) {
-            continue;
-        }
-        if (!iov[i].iov_base) {
-            put_fd_entry_impl(entry);
-            errno = EFAULT;
-            return -1;
-        }
-        
-        ssize_t bytes = host_write_impl(real_fd, iov[i].iov_base, iov[i].iov_len);
-        if (bytes < 0) {
-            put_fd_entry_impl(entry);
-            return -1;
-        }
-        total += bytes;
-        if ((size_t)bytes < iov[i].iov_len) {
-            break; /* Short write */
-        }
-    }
-    
-    if (total > 0) {
-        set_fd_offset_impl(entry, get_fd_offset_impl(entry) + total);
-    }
-    
-    put_fd_entry_impl(entry);
-    return total;
-}
-
-__attribute__((visibility("default"))) ssize_t readv(int fd, const struct iovec *iov, int iovcnt) {
-    return readv_impl(fd, iov, iovcnt);
-}
-
-__attribute__((visibility("default"))) ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
-    return writev_impl(fd, iov, iovcnt);
 }
