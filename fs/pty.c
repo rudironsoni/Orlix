@@ -1059,6 +1059,7 @@ int pty_detach_controlling_tty_impl(void) {
 
   unsigned int pty_index = (unsigned int)task->tty->index;
   int32_t old_fg_pgrp = task->tty->foreground_pgrp;
+  int32_t current_sid = task->sid;
 
   if (task->tty) {
     atomic_fetch_sub(&task->tty->refs, 1);
@@ -1067,11 +1068,16 @@ int pty_detach_controlling_tty_impl(void) {
 
   fs_mutex_lock(&pty_lock);
   pty_pair_t *pair = &pty_table[pty_index];
-  if (pair->allocated && pair->has_controlling_session && pair->controlling_sid == task->sid) {
-    pair->has_controlling_session = false;
-    pair->controlling_sid = 0;
+  if (pair->allocated && pair->has_controlling_session && pair->controlling_sid == current_sid) {
     if (old_fg_pgrp > 0 && old_fg_pgrp != task->pgid) {
       pair->foreground_pgrp = task->pgid;
+    }
+    if (current_sid == pair->controlling_sid) {
+      pair->has_controlling_session = false;
+      pair->controlling_sid = 0;
+      if (old_fg_pgrp > 0) {
+        signal_generate_pgrp(old_fg_pgrp, 1);
+      }
     }
   }
   fs_mutex_unlock(&pty_lock);

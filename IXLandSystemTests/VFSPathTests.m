@@ -3132,6 +3132,86 @@ XCTAssertEqual(stat("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/
   free_task(session_task);
 }
 
+- (void)testDevTtyTiocnottySendsSighup {
+  struct task_struct *original_task = get_current();
+
+  struct task_struct *session_task = alloc_task();
+  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
+  if (!session_task) return;
+
+  session_task->fs = alloc_fs_struct();
+  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
+  if (!session_task->fs) {
+    free_task(session_task);
+    return;
+  }
+
+  session_task->signal = alloc_signal_struct();
+  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
+  if (!session_task->signal) {
+    free_task(session_task);
+    return;
+  }
+
+  fs_init_root(session_task->fs, @"/".UTF8String);
+  fs_init_pwd(session_task->fs, @"/".UTF8String);
+  session_task->sid = session_task->pid;
+  session_task->pgid = session_task->pid;
+  set_current(session_task);
+
+  int master_fd = open("/dev/ptmx", O_RDWR);
+  XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
+  if (master_fd < 0) {
+    set_current(original_task);
+    free_task(session_task);
+    return;
+  }
+
+  unsigned int pty_number = 0;
+  XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
+
+  int unlock = 0;
+  XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
+
+  char slave_path[64];
+  snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
+  int slave_fd = open(slave_path, O_RDWR);
+  XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
+  if (slave_fd < 0) {
+    close(master_fd);
+    set_current(original_task);
+    free_task(session_task);
+    return;
+  }
+
+  XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed for session leader");
+
+  int32_t fg_pgrp_before = session_task->pgid;
+  int32_t fg_pgrp = 0;
+  XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &fg_pgrp), 0, @"TIOCGPGRP should succeed");
+  XCTAssertEqual(fg_pgrp, fg_pgrp_before, @"foreground pgrp should match session pgrp");
+
+  struct signal_mask_bits block_set = {0};
+  block_set.sig[(1 - 1) >> 6] |= (1ULL << ((1 - 1) & 63));
+  struct signal_mask_bits old_set = {0};
+  XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"block SIGHUP should succeed");
+
+  errno = 0;
+  XCTAssertEqual(ioctl(slave_fd, IX_TIOCNOTTY, 0), 0, @"TIOCNOTTY should succeed");
+
+  struct signal_mask_bits pending = {0};
+  XCTAssertEqual(do_sigpending(&pending), 0, @"do_sigpending should succeed");
+  XCTAssertTrue((pending.sig[(1 - 1) >> 6] & (1ULL << ((1 - 1) & 63))) != 0,
+                @"SIGHUP should be pending after TIOCNOTTY by session leader");
+
+  XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore mask should succeed");
+
+  close(slave_fd);
+  close(master_fd);
+  set_current(original_task);
+  free_task(session_task);
+}
+
 - (void)testPtyBackgroundJobControlDistinctTasks {
   struct task_struct *original_task = get_current();
 
