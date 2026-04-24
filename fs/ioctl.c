@@ -20,6 +20,7 @@
 #define IX_TCSETSW 0x5403
 #define IX_TCSETSF 0x5404
 #define IX_TIOCSCTTY 0x540E
+#define IX_TIOCNOTTY 0x5432
 #define IX_TIOCGPGRP 0x540F
 #define IX_TIOCSPGRP 0x5410
 #define IX_TIOCGWINSZ 0x5413
@@ -114,10 +115,13 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
             }
             result = pty_set_winsize_impl(pty_index, (const pty_linux_winsize_t *)arg);
             break;
-        case IX_TIOCSCTTY:
-            result = pty_set_controlling_tty_impl(pty_index, (int)(intptr_t)arg);
-            break;
-        case IX_TIOCGPGRP:
+case IX_TIOCSCTTY:
+        result = pty_set_controlling_tty_impl(pty_index, (int)(intptr_t)arg);
+        break;
+      case IX_TIOCNOTTY:
+        result = pty_detach_controlling_tty_impl();
+        break;
+      case IX_TIOCGPGRP:
             if (!arg) {
                 errno = EFAULT;
                 break;

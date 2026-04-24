@@ -1007,37 +1007,75 @@ int pty_get_foreground_pgrp_impl(unsigned int pty_index, int32_t *pgrp) {
 }
 
 int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp) {
-    if (!pty_valid_index(pty_index) || pgrp <= 0) {
-        errno = EINVAL;
-        return -1;
-    }
+  if (!pty_valid_index(pty_index) || pgrp <= 0) {
+    errno = EINVAL;
+    return -1;
+  }
 
-    struct task_struct *task = get_current();
-    if (!task) {
-        errno = ESRCH;
-        return -1;
-    }
+  struct task_struct *task = get_current();
+  if (!task) {
+    errno = ESRCH;
+    return -1;
+  }
 
-    if (!task_session_has_pgrp_impl(task->sid, pgrp)) {
-        errno = EPERM;
-        return -1;
-    }
+  if (!task_session_has_pgrp_impl(task->sid, pgrp)) {
+    errno = EPERM;
+    return -1;
+  }
 
-    fs_mutex_lock(&pty_lock);
-    pty_pair_t *pair = &pty_table[pty_index];
-    if (!pair->allocated) {
-        fs_mutex_unlock(&pty_lock);
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
-        fs_mutex_unlock(&pty_lock);
-        errno = ENOTTY;
-        return -1;
-    }
-
-    pair->foreground_pgrp = pgrp;
+  fs_mutex_lock(&pty_lock);
+  pty_pair_t *pair = &pty_table[pty_index];
+  if (!pair->allocated) {
     fs_mutex_unlock(&pty_lock);
-    return 0;
+    errno = EINVAL;
+    return -1;
+  }
+
+  if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
+    fs_mutex_unlock(&pty_lock);
+    errno = ENOTTY;
+    return -1;
+  }
+
+  pair->foreground_pgrp = pgrp;
+  fs_mutex_unlock(&pty_lock);
+  return 0;
+}
+
+int pty_detach_controlling_tty_impl(void) {
+  struct task_struct *task = get_current();
+  if (!task) {
+    errno = ESRCH;
+    return -1;
+  }
+
+  fs_mutex_lock(&task->lock);
+
+  if (!task->tty) {
+    fs_mutex_unlock(&task->lock);
+    errno = ENOTTY;
+    return -1;
+  }
+
+  unsigned int pty_index = (unsigned int)task->tty->index;
+  int32_t old_fg_pgrp = task->tty->foreground_pgrp;
+
+  if (task->tty) {
+    atomic_fetch_sub(&task->tty->refs, 1);
+  }
+  task->tty = NULL;
+
+  fs_mutex_lock(&pty_lock);
+  pty_pair_t *pair = &pty_table[pty_index];
+  if (pair->allocated && pair->has_controlling_session && pair->controlling_sid == task->sid) {
+    pair->has_controlling_session = false;
+    pair->controlling_sid = 0;
+    if (old_fg_pgrp > 0 && old_fg_pgrp != task->pgid) {
+      pair->foreground_pgrp = task->pgid;
+    }
+  }
+  fs_mutex_unlock(&pty_lock);
+
+  fs_mutex_unlock(&task->lock);
+  return 0;
 }
