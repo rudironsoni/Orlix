@@ -18,19 +18,11 @@
 /* Host POSIX headers for host-mediated operations */
 #include <sys/stat.h>
 
+/* Linux UAPI constants for fcntl (constants only, no struct definitions) */
+#include "include/ixland/fcntl_constants.h"
+
 /* Host bridge API */
 #include "internal/ios/fs/backing_io_decls.h"
-
-/* Linux UAPI constants for fcntl - defined locally to avoid struct flock conflicts */
-#ifndef O_RDONLY
-#define O_RDONLY        00000000
-#endif
-#ifndef O_CLOEXEC
-#define O_CLOEXEC       02000000
-#endif
-#ifndef FD_CLOEXEC
-#define FD_CLOEXEC      1
-#endif
 
 #include "../kernel/task.h"
 

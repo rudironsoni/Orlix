@@ -1,0 +1,21 @@
+Fix fs/exec.c constant surface - use verified Linux UAPI constants
+
+Tranche 2: Remove local hardcoded fallback constants from fs/exec.c.
+
+Problem:
+fs/exec.c had local #defines for O_RDONLY, O_CLOEXEC, FD_CLOEXEC to avoid
+struct flock conflict with Darwin headers when including <linux/fcntl.h>.
+
+Solution:
+Create include/ixland/fcntl_constants.h with constants-only definitions.
+Values verified against Linux UAPI source:
+- O_RDONLY: 00000000 (from asm-generic/fcntl.h)
+- O_CLOEXEC: 02000000 (from asm-generic/fcntl.h)
+- FD_CLOEXEC: 1 (from asm-generic/fcntl.h)
+
+Changes:
+- New include/ixland/fcntl_constants.h with verified Linux UAPI values
+- fs/exec.c: Include new header instead of local defines
+- fs/exec.c: Keep backing_io_decls.h (correct fs-bridge seam)
+
+Build: TEST BUILD SUCCEEDED
