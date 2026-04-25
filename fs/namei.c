@@ -1,13 +1,17 @@
-#include <linux/fcntl.h>
+/* fs/namei.c
+ * Linux-shaped path operations
+ *
+ * This file contains only Linux-owner logic. All host operations
+ * are delegated through narrow seams in internal/ios/fs/path_host.h
+ */
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
-#include "internal/ios/fs/backing_io_decls.h"
+#include "include/ixland/fcntl_constants.h"
+#include "internal/ios/fs/path_host.h"
 #include "vfs.h"
 #include "../kernel/task.h"
 
@@ -114,7 +118,7 @@ static int rename_apply_host_operation(const char *old_virtual_path, const char 
         return -1;
     }
 
-    if (renameatx_np(AT_FDCWD, old_host_path, AT_FDCWD, new_host_path, host_flags) != 0) {
+    if (host_renameatx_np_impl(AT_FDCWD, old_host_path, AT_FDCWD, new_host_path, host_flags) != 0) {
         return -1;
     }
 
@@ -210,7 +214,7 @@ int chdir_impl(const char *path) {
     }
 
     struct stat st;
-    if (stat(translated_path, &st) != 0) {
+    if (host_stat_impl(translated_path, &st) != 0) {
         return -1;
     }
 
@@ -219,7 +223,7 @@ int chdir_impl(const char *path) {
         return -1;
     }
 
-    if (access(translated_path, X_OK) != 0) {
+    if (host_access_impl(translated_path, X_OK) != 0) {
         errno = EACCES;
         return -1;
     }
@@ -242,7 +246,7 @@ int fchdir_impl(int fd) {
         return -1;
     }
 
-    return fchdir(fd);
+    return host_fchdir_impl(fd);
 }
 
 char *getcwd_impl(char *buf, size_t size) {
@@ -293,7 +297,7 @@ int mkdir_impl(const char *pathname, mode_t mode) {
         return -1;
     }
 
-    return mkdir(translated_path, mode);
+    return host_mkdir_impl(translated_path, mode);
 }
 
 int rmdir_impl(const char *pathname) {
@@ -308,7 +312,7 @@ int rmdir_impl(const char *pathname) {
     }
 
     struct stat st;
-    if (stat(translated_path, &st) != 0) {
+    if (host_stat_impl(translated_path, &st) != 0) {
         return -1;
     }
 
@@ -317,7 +321,7 @@ int rmdir_impl(const char *pathname) {
         return -1;
     }
 
-    return rmdir(translated_path);
+    return host_rmdir_impl(translated_path);
 }
 
 int unlink_impl(const char *pathname) {
@@ -332,12 +336,12 @@ int unlink_impl(const char *pathname) {
     }
 
     struct stat st;
-    if (stat(translated_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+    if (host_stat_impl(translated_path, &st) == 0 && S_ISDIR(st.st_mode)) {
         errno = EISDIR;
         return -1;
     }
 
-    return unlink(translated_path);
+    return host_unlink_impl(translated_path);
 }
 
 int link_impl(const char *oldpath, const char *newpath) {
@@ -363,7 +367,7 @@ int link_impl(const char *oldpath, const char *newpath) {
     }
 
     struct stat st;
-    if (stat(translated_old, &st) != 0) {
+    if (host_stat_impl(translated_old, &st) != 0) {
         return -1;
     }
 
@@ -372,12 +376,12 @@ int link_impl(const char *oldpath, const char *newpath) {
         return -1;
     }
 
-    if (stat(translated_new, &st) == 0) {
+    if (host_stat_impl(translated_new, &st) == 0) {
         errno = EEXIST;
         return -1;
     }
 
-    return link(translated_old, translated_new);
+    return host_link_impl(translated_old, translated_new);
 }
 
 int symlink_impl(const char *target, const char *linkpath) {
@@ -398,12 +402,12 @@ int symlink_impl(const char *target, const char *linkpath) {
     }
 
     struct stat target_stat;
-    if (stat(translated_link, &target_stat) == 0) {
+    if (host_stat_impl(translated_link, &target_stat) == 0) {
         errno = EEXIST;
         return -1;
     }
 
-    return symlink(target, translated_link);
+    return host_symlink_impl(target, translated_link);
 }
 
 ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
@@ -481,7 +485,7 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
     }
 
     struct stat path_stat;
-    if (lstat(translated_path, &path_stat) != 0) {
+    if (host_lstat_impl(translated_path, &path_stat) != 0) {
         return -1;
     }
 
@@ -490,7 +494,7 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
         return -1;
     }
 
-    return readlink(translated_path, buf, bufsiz);
+    return host_readlink_impl(translated_path, buf, bufsiz);
 }
 
 int chroot_impl(const char *path) {

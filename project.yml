@@ -39,6 +39,10 @@ targets:
       group: internal/ios/fs
     - path: internal/ios/fs/backing_io.h
       group: internal/ios/fs
+    - path: internal/ios/fs/path_host.c
+      group: internal/ios/fs
+    - path: internal/ios/fs/path_host.h
+      group: internal/ios/fs
     - path: internal/ios/fs/backing_paths.m
       group: internal/ios/fs
     - path: fs/inode.c

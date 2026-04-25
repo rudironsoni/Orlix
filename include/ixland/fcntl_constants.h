@@ -135,4 +135,34 @@
 #define AT_EACCESS      0x200
 #endif
 
+#ifndef AT_SYMLINK_FOLLOW
+#define AT_SYMLINK_FOLLOW       0x400
+#endif
+
+#ifndef AT_REMOVEDIR
+#define AT_REMOVEDIR            0x200
+#endif
+
+/* Rename flags for renameat2(2) */
+#ifndef AT_RENAME_NOREPLACE
+#define AT_RENAME_NOREPLACE     0x0001
+#endif
+
+#ifndef AT_RENAME_EXCHANGE
+#define AT_RENAME_EXCHANGE      0x0002
+#endif
+
+#ifndef AT_RENAME_WHITEOUT
+#define AT_RENAME_WHITEOUT      0x0004
+#endif
+
+/* Darwin rename flags (for host bridge) */
+#ifndef RENAME_EXCL
+#define RENAME_EXCL             0x00000004
+#endif
+
+#ifndef RENAME_SWAP
+#define RENAME_SWAP             0x00000002
+#endif
+
 #endif /* IXLAND_FCNTL_CONSTANTS_H */
