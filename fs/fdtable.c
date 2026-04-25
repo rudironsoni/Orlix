@@ -3,11 +3,17 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-#include "include/ixland/fcntl_constants.h"
+#include <linux/fcntl.h>
 
 #include "internal/ios/fs/sync.h"
+
+/* Standard file descriptors - local definitions to avoid Darwin <unistd.h> */
+#ifndef STDIN_FILENO
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+#endif
 #include "internal/ios/fs/file_io_host.h"
 #include "pty.h"
 

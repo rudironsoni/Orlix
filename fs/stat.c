@@ -1,10 +1,11 @@
 /* IXLandSystem/fs/stat.c
  * Virtual stat/fstat implementation
  */
-#include "include/ixland/fcntl_constants.h"
+#include <linux/fcntl.h>
 
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "fdtable.h"
 #include "internal/ios/fs/sync.h"

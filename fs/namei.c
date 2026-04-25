@@ -10,8 +10,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/ixland/fcntl_constants.h"
+#include <linux/fcntl.h>
 #include "internal/ios/fs/path_host.h"
+
+/* Standard file descriptors - local definitions to avoid Darwin <unistd.h> */
+#ifndef STDERR_FILENO
+#define STDERR_FILENO 2
+#endif
+
+#ifndef X_OK
+#define X_OK 1
+#endif
+
+/* Linux mode macros from UAPI */
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m) & 0170000) == 0040000)
+#endif
+#ifndef S_ISLNK
+#define S_ISLNK(m) (((m) & 0170000) == 0120000)
+#endif
 #include "vfs.h"
 #include "../kernel/task.h"
 

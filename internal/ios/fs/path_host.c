@@ -36,9 +36,9 @@ int host_renameatx_np_impl(int fromfd, const char *from, int tofd, const char *t
 }
 
 /* Directory operations */
-int host_mkdir_impl(const char *pathname, mode_t mode)
+int host_mkdir_impl(const char *pathname, uint32_t mode)
 {
-    return mkdir(pathname, mode);
+    return mkdir(pathname, (mode_t)mode);
 }
 
 int host_rmdir_impl(const char *pathname)

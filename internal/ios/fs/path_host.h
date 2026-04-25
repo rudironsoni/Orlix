@@ -1,16 +1,22 @@
 /* internal/ios/fs/path_host.h
  * Narrow seam for host path operations
+ *
+ * This header provides ONLY function declarations.
+ * Darwin headers are NOT included here - they are isolated in path_host.c
  */
 
 #ifndef PATH_HOST_H
 #define PATH_HOST_H
 
-#include <sys/stat.h>
-#include <unistd.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Forward declaration - actual struct stat is defined in bridge layer */
+struct stat;
 
 /* Host stat operations */
 int host_stat_impl(const char *path, struct stat *statbuf);
@@ -21,7 +27,7 @@ int host_access_impl(const char *path, int mode);
 int host_renameatx_np_impl(int fromfd, const char *from, int tofd, const char *to, unsigned int flags);
 
 /* Directory operations */
-int host_mkdir_impl(const char *pathname, mode_t mode);
+int host_mkdir_impl(const char *pathname, uint32_t mode);
 int host_rmdir_impl(const char *pathname);
 
 /* File operations */

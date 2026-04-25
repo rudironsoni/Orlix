@@ -13,16 +13,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-/* Host POSIX headers for host-mediated operations */
-#include <sys/stat.h>
-
-/* Linux UAPI constants for fcntl (constants only, no struct definitions) */
-#include "include/ixland/fcntl_constants.h"
+/* Linux UAPI headers for ABI constants */
+#include <linux/fcntl.h>
 
 /* Host bridge API - narrow seam for file I/O */
 #include "internal/ios/fs/file_io_host.h"
+#include "internal/ios/fs/path_host.h"
+
+/* X_OK constant for access - local definition to avoid <unistd.h> */
+#ifndef X_OK
+#define X_OK 1
+#endif
+
+/* Forward declaration for struct stat - defined in bridge layer */
+struct stat;
+
+/* S_ISREG from Linux UAPI - regular file check */
+#ifndef S_ISREG
+#define S_ISREG(m) (((m) & 0170000) == 0100000)
+#endif
 
 #include "../kernel/task.h"
 
@@ -337,7 +347,7 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
     if (native_lookup(pathname)) {
         type = EXEC_IMAGE_NATIVE;
     } else {
-        if (access(pathname, X_OK) < 0) {
+        if (host_access_impl(pathname, X_OK) != 0) {
             return -1;
         }
 
@@ -450,8 +460,8 @@ int execvp(const char *file, char *const argv[]) {
         int len = snprintf(fullpath, sizeof(fullpath), "%s/%s", dir, file);
 
         if (len > 0 && (size_t)len < sizeof(fullpath)) {
-            struct stat st;
-            if (stat(fullpath, &st) == 0 && S_ISREG(st.st_mode) && (access(fullpath, X_OK) == 0)) {
+            struct stat st_local;
+            if (host_stat_impl(fullpath, &st_local) == 0 && S_ISREG(st_local.st_mode) && (host_access_impl(fullpath, X_OK) == 0)) {
                 int result = execv(fullpath, argv);
                 free(path_copy);
                 return result;

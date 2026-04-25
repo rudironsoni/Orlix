@@ -2,20 +2,22 @@
  * Virtual read/write/lseek implementation
  */
 
-#include "include/ixland/fcntl_constants.h"
+#include <linux/fcntl.h>
+#include <linux/fs.h>
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #include "fdtable.h"
 #include "internal/ios/fs/file_io_host.h"
 #include "internal/ios/fs/sync.h"
 #include "pty.h"
 #include "vfs.h"
+
+/* Linux-owner type for file offsets (matches __kernel_off_t) */
+typedef long long linux_off_t;
 
 ssize_t read_impl(int fd, void *buf, size_t count) {
     if (!buf) {
@@ -109,7 +111,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
             return -1;
         }
 
-        linux_off_t offset = get_fd_offset_impl(entry);
+        linux_off_t offset = (linux_off_t)get_fd_offset_impl(entry);
         if (offset < 0) {
             offset = 0;
         }
@@ -189,7 +191,7 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
         return -1;
     }
 
-    off_t current_size = host_lseek_impl(get_real_fd_impl(entry), 0, SEEK_END);
+    linux_off_t current_size = host_lseek_impl(get_real_fd_impl(entry), 0, SEEK_END);
     if (current_size < 0) {
         put_fd_entry_impl(entry);
         return -1;
@@ -207,12 +209,12 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     return bytes;
 }
 
-off_t lseek_impl(int fd, off_t offset, int whence) {
+linux_off_t lseek_impl(int fd, linux_off_t offset, int whence) {
     void *entry;
 
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
-        return (off_t)-1;
+        return (linux_off_t)-1;
     }
 
     if (fd <= 2) {
@@ -222,27 +224,27 @@ off_t lseek_impl(int fd, off_t offset, int whence) {
     entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
-        return (off_t)-1;
+        return (linux_off_t)-1;
     }
 
     if (get_fd_is_synthetic_dir_impl(entry) || get_fd_is_synthetic_proc_file_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = ESPIPE;
-        return (off_t)-1;
+        return (linux_off_t)-1;
     }
 
     if (get_fd_is_synthetic_dev_impl(entry) || get_fd_is_synthetic_pty_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = ESPIPE;
-        return (off_t)-1;
+        return (linux_off_t)-1;
     }
 
-    off_t result = host_lseek_impl(get_real_fd_impl(entry), offset, whence);
+    linux_off_t result = (linux_off_t)host_lseek_impl(get_real_fd_impl(entry), (long long)offset, whence);
     put_fd_entry_impl(entry);
     return result;
 }
 
-ssize_t pread_impl(int fd, void *buf, size_t count, off_t offset) {
+ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
     if (!buf) {
         errno = EFAULT;
         return -1;
@@ -274,7 +276,7 @@ ssize_t pread_impl(int fd, void *buf, size_t count, off_t offset) {
     return bytes;
 }
 
-ssize_t pwrite_impl(int fd, const void *buf, size_t count, off_t offset) {
+ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset) {
     if (!buf) {
         errno = EFAULT;
         return -1;
@@ -314,14 +316,14 @@ __attribute__((visibility("default"))) ssize_t write(int fd, const void *buf, si
     return write_impl(fd, buf, count);
 }
 
-__attribute__((visibility("default"))) off_t lseek(int fd, off_t offset, int whence) {
+__attribute__((visibility("default"))) long long lseek(int fd, long long offset, int whence) {
     return lseek_impl(fd, offset, whence);
 }
 
-__attribute__((visibility("default"))) ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
+__attribute__((visibility("default"))) ssize_t pread(int fd, void *buf, size_t count, long long offset) {
     return pread_impl(fd, buf, count, offset);
 }
 
-__attribute__((visibility("default"))) ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset) {
+__attribute__((visibility("default"))) ssize_t pwrite(int fd, const void *buf, size_t count, long long offset) {
     return pwrite_impl(fd, buf, count, offset);
 }

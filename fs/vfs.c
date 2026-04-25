@@ -1,38 +1,40 @@
 #include "vfs.h"
-#include "internal/ios/fs/backing_io.h"
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+/* Linux UAPI headers for ABI constants */
+#include <linux/fcntl.h>
 
-/* Linux open flags - cannot include linux/fcntl.h due to conflicts, use canonical values */
-#define IX_O_RDONLY		0x0000
-#define IX_O_WRONLY		0x0001
-#define IX_O_RDWR		0x0002
-#define IX_O_ACCMODE		0x0003
-#define IX_O_CREAT		0x0040
-#define IX_O_EXCL		0x0080
-#define IX_O_NOCTTY		0x0100
-#define IX_O_TRUNC		0x0200
-#define IX_O_APPEND		0x0400
-#define IX_O_NONBLOCK		0x0800
-#define IX_O_DSYNC		0x1000
-#define IX_O_SYNC		0x101000
-#define IX_O_RSYNC		0x101000
-#define IX_O_CLOEXEC 0x80000
-
-/* Linux UAPI AT_* flags - use prefixed constants to avoid macro conflicts
- * These match the canonical Linux UAPI ABI values
- */
-#define IX_AT_SYMLINK_NOFOLLOW 0x100
-#define IX_AT_EACCESS 0x200
+/* Narrow seam headers for host operations */
+#include "internal/ios/fs/file_io_host.h"
+#include "internal/ios/fs/path_host.h"
+#include "internal/ios/fs/path_discovery_host.h"
 
 #include "fdtable.h"
 #include "pty.h"
 #include "../kernel/task.h"
 #include "../kernel/cred_internal.h"
+
+/* AT_* constants not in linux/fcntl.h - from Linux UAPI */
+#ifndef AT_SYMLINK_NOFOLLOW
+#define AT_SYMLINK_NOFOLLOW 0x100
+#endif
+
+/* Linux mode macros from sys/stat.h */
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m) & 0170000) == 0040000)
+#endif
+#ifndef S_ISLNK
+#define S_ISLNK(m) (((m) & 0170000) == 0120000)
+#endif
+
+/* makedev for device nodes - local implementation */
+#ifndef makedev
+#define makedev(major, minor) ((((major) & 0xfff) << 8) | ((minor) & 0xff))
+#endif
 
 static const char *vfs_virtual_root_path = "/";
 
@@ -1258,7 +1260,7 @@ int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len) {
     put_fd_entry_impl(entry);
 
     if (fd_flags & FD_CLOEXEC) {
-        flags |= IX_O_CLOEXEC;
+        flags |= O_CLOEXEC;
     }
 
     ret = snprintf(buf, buf_len, "pos:\t%lld\nflags:\t0%o\n", (long long)offset, flags);
@@ -1367,7 +1369,7 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
     char resolved_virtual[MAX_PATH];
     int ret;
     bool follow_symlink;
-    int supported_flags = IX_AT_SYMLINK_NOFOLLOW;
+    int supported_flags = AT_SYMLINK_NOFOLLOW;
 
     if (!pathname || !statbuf) {
         return -EFAULT;
@@ -1377,7 +1379,7 @@ int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags
         return -EINVAL;
     }
 
-    follow_symlink = !(flags & IX_AT_SYMLINK_NOFOLLOW);
+    follow_symlink = !(flags & AT_SYMLINK_NOFOLLOW);
 
     ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_virtual, sizeof(resolved_virtual));
     if (ret != 0) {
@@ -1529,11 +1531,11 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
         return -EFAULT;
     }
 
-    if (flags & ~(IX_AT_EACCESS | IX_AT_SYMLINK_NOFOLLOW)) {
+    if (flags & ~(AT_EACCESS | AT_SYMLINK_NOFOLLOW)) {
         return -EINVAL;
     }
 
-    if (flags & IX_AT_EACCESS) {
+    if (flags & AT_EACCESS) {
         return -ENOTSUP;
     }
 
@@ -1563,7 +1565,7 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
         return ret;
     }
 
-    if (flags & IX_AT_SYMLINK_NOFOLLOW) {
+    if (flags & AT_SYMLINK_NOFOLLOW) {
         return -ENOTSUP;
     }
 
