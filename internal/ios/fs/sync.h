@@ -8,17 +8,26 @@
 extern "C" {
 #endif
 
-/* Opaque synchronization types.
- * Implementation uses host pthread primitives in internal/ios/fs/sync.c */
-struct fs_mutex_opaque;
-struct fs_cond_opaque;
+/* Concrete synchronization types with storage-sized wrappers.
+ * Implementation uses host pthread primitives internally.
+ * These types can be stored by value in Linux-owner structures. */
 
-typedef struct fs_mutex_opaque fs_mutex_t;
-typedef struct fs_cond_opaque fs_cond_t;
+#define FS_MUTEX_STORAGE_SIZE 64
+#define FS_COND_STORAGE_SIZE 64
+
+typedef struct fs_mutex {
+    char _storage[FS_MUTEX_STORAGE_SIZE];
+    int _initialized;
+} fs_mutex_t;
+
+typedef struct fs_cond {
+    char _storage[FS_COND_STORAGE_SIZE];
+    int _initialized;
+} fs_cond_t;
 
 /* Static initializer values */
-#define FS_MUTEX_INITIALIZER {(void*)0}
-#define FS_COND_INITIALIZER {(void*)0}
+#define FS_MUTEX_INITIALIZER {{0}, 0}
+#define FS_COND_INITIALIZER {{0}, 0}
 
 /* Mutex operations */
 int fs_mutex_init(fs_mutex_t *mutex);

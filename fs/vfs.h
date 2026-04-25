@@ -1,20 +1,23 @@
 #ifndef VFS_H
 #define VFS_H
 
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
-
+/* Standard C/POSIX headers first for type definitions */
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
-/* Forward declare struct stat instead of including <sys/stat.h> here.
- * This keeps Darwin types out of the Linux-owner header surface.
- * Implementation files that need struct stat should include it directly
- * AFTER the Linux ABI constants header. */
+/* Use fixed-width types to avoid conflicts with Darwin headers */
+typedef int64_t linux_off_t;
+typedef int64_t linux_ssize_t;
+typedef uint32_t linux_uid_t;
+typedef uint32_t linux_gid_t;
+typedef uint32_t linux_mode_t;
+
+/* Forward declarations for structures */
+struct linux_timespec;
 struct stat;
 struct statfs;
-struct timespec;
 
 #include "fdtable.h"
 #include "internal/ios/fs/sync.h"
@@ -73,23 +76,23 @@ struct writeback_control;
 
 /* Linux-compatible VFS operations structure */
 struct file_operations {
-    ssize_t (*read)(struct file *file, char *buf, size_t count, off_t *pos);
-    ssize_t (*write)(struct file *file, const char *buf, size_t count, off_t *pos);
+    linux_ssize_t (*read)(struct file *file, char *buf, size_t count, linux_off_t *pos);
+    linux_ssize_t (*write)(struct file *file, const char *buf, size_t count, linux_off_t *pos);
     int (*open)(struct inode *inode, struct file *file);
     int (*release)(struct inode *inode, struct file *file);
     int (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
-    int (*mmap)(struct file *file, void *addr, size_t len, int prot, int flags, off_t offset);
+    int (*mmap)(struct file *file, void *addr, size_t len, int prot, int flags, linux_off_t offset);
     unsigned int (*poll)(struct file *file, struct poll_table_struct *table);
 };
 
 /* Linux-compatible inode operations */
 struct inode_operations {
     struct dentry *(*lookup)(struct inode *dir, struct dentry *dentry);
-    int (*create)(struct inode *dir, struct dentry *dentry, mode_t mode);
+    int (*create)(struct inode *dir, struct dentry *dentry, linux_mode_t mode);
     int (*link)(struct dentry *old_dentry, struct inode *dir, struct dentry *new_dentry);
     int (*unlink)(struct inode *dir, struct dentry *dentry);
     int (*symlink)(struct inode *dir, struct dentry *dentry, const char *oldname);
-    int (*mkdir)(struct inode *dir, struct dentry *dentry, mode_t mode);
+    int (*mkdir)(struct inode *dir, struct dentry *dentry, linux_mode_t mode);
     int (*rmdir)(struct inode *dir, struct dentry *dentry);
     int (*rename)(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir,
                   struct dentry *new_dentry);
@@ -102,9 +105,9 @@ struct inode_operations {
 struct address_space_operations {
     int (*readpage)(struct file *file, struct page *page);
     int (*writepage)(struct page *page, struct writeback_control *wbc);
-    int (*write_begin)(struct file *file, struct address_space *mapping, off_t pos, unsigned len,
+    int (*write_begin)(struct file *file, struct address_space *mapping, linux_off_t pos, unsigned len,
                        unsigned flags, struct page **pagep, void **fsdata);
-    int (*write_end)(struct file *file, struct address_space *mapping, off_t pos, unsigned len,
+    int (*write_end)(struct file *file, struct address_space *mapping, linux_off_t pos, unsigned len,
                      unsigned copied, struct page *page, void *fsdata);
 };
 
@@ -125,12 +128,12 @@ struct super_operations {
 struct inode {
     uint64_t i_ino;
     unsigned int i_mode;
-    uid_t i_uid;
-    gid_t i_gid;
-    off_t i_size;
-    struct timespec i_atime;
-    struct timespec i_mtime;
-    struct timespec i_ctime;
+    linux_uid_t i_uid;
+    linux_gid_t i_gid;
+    linux_off_t i_size;
+    struct linux_timespec *i_atime;
+    struct linux_timespec *i_mtime;
+    struct linux_timespec *i_ctime;
     atomic_int i_count;
     void *i_private;
     struct super_block *i_sb;
@@ -174,9 +177,9 @@ struct mount {
 struct fs_struct {
     struct dentry *root;
     struct dentry *pwd;
-    mode_t umask;
+    linux_mode_t umask;
     atomic_int users;
-    fs_mutex_t *lock;
+    fs_mutex_t lock;
     /* Task-aware path resolution state */
     char root_path[MAX_PATH];      /* Virtual root path (absolute, normalized) */
     char pwd_path[MAX_PATH];       /* Virtual pwd path (absolute, normalized) */
@@ -205,12 +208,12 @@ int vfs_mount_basic(void);
 /* Path lookup and walk */
 int vfs_lookup(const char *path, struct dentry **dentry);
 int vfs_path_walk(const char *path, struct dentry **dentry);
-int vfs_mkdir(const char *path, mode_t mode);
+int vfs_mkdir(const char *path, linux_mode_t mode);
 int vfs_unlink(const char *path);
 int vfs_rmdir(const char *path);
 
 /* File operations through VFS */
-int vfs_open(const char *path, int flags, mode_t mode, int *target_fd);
+int vfs_open(const char *path, int flags, linux_mode_t mode, int *target_fd);
 int vfs_close(struct file *file);
 
 /* Task-aware path translation between virtual and host paths */

@@ -16,7 +16,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <sys/types.h>
+
+/* Use Linux-compatible UID/GID types */
+typedef uint32_t uid_t;
+typedef uint32_t gid_t;
 
 #ifdef __cplusplus
 extern "C" {

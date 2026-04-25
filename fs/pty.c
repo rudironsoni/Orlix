@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "include/ixland/linux_abi_constants.h"
+
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
 #include "internal/ios/fs/sync.h"

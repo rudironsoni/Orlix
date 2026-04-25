@@ -7,12 +7,12 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
-/* Include Linux UAPI constants FIRST */
-/* Linux UAPI constants FIRST - before any Darwin headers */
+/* Linux ABI constants FIRST - before any Darwin headers */
 #include "include/ixland/linux_abi_constants.h"
 
 #include <errno.h>
-#include <fcntl.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <unistd.h>
 
 /* iOS system getentropy - private implementation detail */

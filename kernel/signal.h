@@ -55,7 +55,7 @@ struct signal_queue {
     struct signal_queue_entry *head;
     struct signal_queue_entry *tail;
     int count;
-    kernel_mutex_t *lock;
+    kernel_mutex_t lock;
 };
 
 /* Signal action slot - private internal
@@ -74,7 +74,7 @@ struct signal_struct {
     struct signal_mask_bits blocked;
     struct signal_mask_bits pending;
     struct signal_queue queue;
-    kernel_mutex_t *lock;
+    kernel_mutex_t lock;
 };
 
 /* Signal stack state - private internal */

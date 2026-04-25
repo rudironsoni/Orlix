@@ -8,24 +8,53 @@
 extern "C" {
 #endif
 
-/* Opaque synchronization types - implementation uses host pthread primitives.
- * Defined in internal/ios/kernel/sync.c */
-struct kernel_mutex_impl;
-struct kernel_cond_impl;
-struct kernel_thread_impl;
-struct kernel_thread_attr_impl;
-struct kernel_once_impl;
+/* Concrete synchronization types with storage-sized wrappers.
+ * Implementation uses host pthread primitives internally in sync.c.
+ * These types can be stored by value in Linux-owner structures,
+ * similar to how POSIX defines pthread_mutex_t for by-value usage. */
 
-typedef struct kernel_mutex_impl kernel_mutex_t;
-typedef struct kernel_cond_impl kernel_cond_t;
-typedef struct kernel_thread_impl kernel_thread_t;
-typedef struct kernel_thread_attr_impl kernel_thread_attr_t;
-typedef struct kernel_once_impl kernel_once_t;
+#define KERNEL_MUTEX_STORAGE_SIZE 64
+#define KERNEL_COND_STORAGE_SIZE 64
+#define KERNEL_THREAD_STORAGE_SIZE 64
+#define KERNEL_THREAD_ATTR_STORAGE_SIZE 64
+#define KERNEL_ONCE_STORAGE_SIZE 64
+#define KERNEL_SIGSET_STORAGE_SIZE 128
 
-/* Static initializer values */
-#define KERNEL_MUTEX_INITIALIZER {(void*)0}
-#define KERNEL_COND_INITIALIZER {(void*)0}
-#define KERNEL_ONCE_INIT {(void*)0}
+typedef struct kernel_mutex {
+    char _storage[KERNEL_MUTEX_STORAGE_SIZE];
+    int _initialized;
+} kernel_mutex_t;
+
+typedef struct kernel_cond {
+    char _storage[KERNEL_COND_STORAGE_SIZE];
+    int _initialized;
+} kernel_cond_t;
+
+typedef struct kernel_thread {
+    char _storage[KERNEL_THREAD_STORAGE_SIZE];
+    int _initialized;
+} kernel_thread_t;
+
+typedef struct kernel_thread_attr {
+    char _storage[KERNEL_THREAD_ATTR_STORAGE_SIZE];
+    int _initialized;
+} kernel_thread_attr_t;
+
+typedef struct kernel_once {
+    char _storage[KERNEL_ONCE_STORAGE_SIZE];
+    int _initialized;
+} kernel_once_t;
+
+typedef struct kernel_sigset {
+    char _storage[KERNEL_SIGSET_STORAGE_SIZE];
+    int _initialized;
+} kernel_sigset_t;
+
+/* Static initializer values - zero-initialized storage, not initialized flag */
+#define KERNEL_MUTEX_INITIALIZER {{0}, 0}
+#define KERNEL_COND_INITIALIZER {{0}, 0}
+#define KERNEL_ONCE_INIT {{0}, 0}
+#define KERNEL_SIGSET_INITIALIZER {{0}, 0}
 
 /* Mutex operations */
 int kernel_mutex_init(kernel_mutex_t *mutex);
@@ -52,15 +81,13 @@ void kernel_thread_exit(void *value_ptr);
 /* Once operations */
 int kernel_once(kernel_once_t *once_control, void (*init_routine)(void));
 
-/* Signal mask operations - opaque sigset type */
-struct kernel_sigset_impl;
-typedef struct kernel_sigset_impl kernel_sigset_t;
+/* Signal mask operations */
 int kernel_thread_sigmask(int how, const kernel_sigset_t *set, kernel_sigset_t *oldset);
 int kernel_sigemptyset(kernel_sigset_t *set);
 int kernel_sigaddset(kernel_sigset_t *set, int signo);
 int kernel_sigismember(const kernel_sigset_t *set, int signo);
 
-/* Clock operations - uses host clock_id_t, struct timespec from sys/_types */
+/* Clock operations */
 struct timespec;
 int kernel_clock_gettime(int clock_id, struct timespec *tp);
 

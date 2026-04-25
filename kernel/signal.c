@@ -5,7 +5,7 @@
  * Internal logic uses private types only.
  */
 
-/* Linux UAPI constants FIRST - before any Darwin headers */
+/* Linux ABI constants FIRST - before any Darwin headers */
 #include "include/ixland/linux_abi_constants.h"
 
 #include "signal.h"

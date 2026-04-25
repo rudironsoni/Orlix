@@ -4,9 +4,7 @@
  * Linux epoll API using kqueue as the underlying mechanism.
  */
 
-/* Include Linux UAPI constants FIRST */
-/* Include Linux UAPI constants FIRST */
-/* Linux UAPI constants FIRST - before any Darwin headers */
+/* Linux ABI constants FIRST - before any Darwin headers */
 #include "include/ixland/linux_abi_constants.h"
 
 #include <errno.h>

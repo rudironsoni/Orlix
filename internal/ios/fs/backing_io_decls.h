@@ -21,8 +21,8 @@ struct pollfd;
 struct timespec;
 
 /* Linux-sized types for the API */
-typedef long linux_off_t;
-typedef unsigned int linux_mode_t;
+typedef int64_t linux_off_t;
+typedef uint32_t linux_mode_t;
 
 /* Host container path discovery */
 int vfs_discover_persistent_root(char *path, size_t path_len);

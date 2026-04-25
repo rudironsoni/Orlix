@@ -11,9 +11,11 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
+/* Linux ABI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
+
 #define _DARWIN_FEATURE_64_BIT_INODE 1
 #include <errno.h>
-#include <fcntl.h>
 #include <sys/param.h>
 #include <sys/statvfs.h>
 #include <unistd.h>

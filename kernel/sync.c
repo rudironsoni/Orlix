@@ -9,8 +9,10 @@
  * Note: futex is Linux-specific; unsupported operations currently reject with ENOSYS
  */
 
+/* Linux ABI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
+
 #include <errno.h>
-#include <linux/futex.h>
 
 #include "../internal/ios/kernel/sync.h"
 

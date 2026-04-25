@@ -154,8 +154,8 @@ struct task_struct {
     struct task_struct *vfork_parent;
 
     /* Virtual wait queue / sleep state */
-    kernel_cond_t *wait_cond;
-    kernel_mutex_t *wait_lock;
+    kernel_cond_t wait_cond;
+    kernel_mutex_t wait_lock;
     int waiters;
 
     /* Resource limits - virtual kernel tracked
@@ -168,7 +168,7 @@ struct task_struct {
 
     /* Reference counting and locking */
     atomic_int refs;
-    kernel_mutex_t *lock;
+    kernel_mutex_t lock;
 };
 
 /* Task global table - virtual PID namespace */

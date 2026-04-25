@@ -6,7 +6,7 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
-/* Linux UAPI constants FIRST - before any Darwin headers */
+/* Linux ABI constants FIRST - before any Darwin headers */
 #include "include/ixland/linux_abi_constants.h"
 
 #include <errno.h>

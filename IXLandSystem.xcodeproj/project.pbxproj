@@ -36,6 +36,7 @@
 		87046F5302731769EFA41075 /* backing_paths.m in Sources */ = {isa = PBXBuildFile; fileRef = 5FD8D142EC818870892A041C /* backing_paths.m */; };
 		87D87C4892661BFBEE659114 /* TaskGroupTests.m in Sources */ = {isa = PBXBuildFile; fileRef = BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */; };
 		8A81463107C3BC70B06B76A2 /* cred.c in Sources */ = {isa = PBXBuildFile; fileRef = 52402BAA17F7390A34354EB6 /* cred.c */; };
+		9067CDC146694F8EC2C351A7 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = 8EE1C8B47289B38E402A6EFE /* sync.c */; };
 		92F197F28B8A006699CF4DF4 /* task.c in Sources */ = {isa = PBXBuildFile; fileRef = 1196E0E046C9D8486908FEF8 /* task.c */; };
 		9543DF14BEC63791F071A8E3 /* VFSPathTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 073C80D4D34F19B293799FD4 /* VFSPathTests.m */; };
 		9F514956A3C3161C5CC61226 /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = 270F37A8D2223DAAD1C7A498 /* wait.c */; };
@@ -109,6 +110,7 @@
 		85C6F04780BEA9F2AA85D0E4 /* backing_io.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = backing_io.m; sourceTree = "<group>"; };
 		88D453F467952833E1FD3D0D /* poll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = poll.c; sourceTree = "<group>"; };
 		8BE7B6DDA1A833FE4A6C9194 /* random.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = random.c; sourceTree = "<group>"; };
+		8EE1C8B47289B38E402A6EFE /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
 		9935787E313CB1AD8A576244 /* signal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal.c; sourceTree = "<group>"; };
 		BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskGroupTests.m; sourceTree = "<group>"; };
 		C0A71140476601A06FC988D7 /* inode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = inode.c; sourceTree = "<group>"; };
@@ -256,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				FFC9C26D7F3E35F6398D0B73 /* clock.c */,
+				8EE1C8B47289B38E402A6EFE /* sync.c */,
 			);
 			path = kernel;
 			sourceTree = "<group>";
@@ -419,6 +422,7 @@
 				B703299D79C3E0410F45B651 /* stat.c in Sources */,
 				79618F2FA8335DFFB36D8EF5 /* super.c in Sources */,
 				FFE759728F7B2EC121F2D215 /* sync.c in Sources */,
+				9067CDC146694F8EC2C351A7 /* sync.c in Sources */,
 				6B365831A4B17F03AE598CFF /* sys.c in Sources */,
 				92F197F28B8A006699CF4DF4 /* task.c in Sources */,
 				3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */,
@@ -463,9 +467,9 @@
 					_XOPEN_SOURCE,
 				);
 				HEADER_SEARCH_PATHS = (
-					"$(LINUX_UAPI_INCLUDE_ROOT)",
 					"$(SRCROOT)/include",
 					"$(SRCROOT)",
+					"$(LINUX_UAPI_INCLUDE_ROOT)",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -575,9 +579,9 @@
 					_XOPEN_SOURCE,
 				);
 				HEADER_SEARCH_PATHS = (
-					"$(LINUX_UAPI_INCLUDE_ROOT)",
 					"$(SRCROOT)/include",
 					"$(SRCROOT)",
+					"$(LINUX_UAPI_INCLUDE_ROOT)",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

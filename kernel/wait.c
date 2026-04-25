@@ -43,7 +43,7 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
 
     struct task_struct *child = NULL;
 
-    kernel_mutex_lock(parent->lock);
+    kernel_mutex_lock(&parent->lock);
     parent->waiters++;
 
     while (1) {
@@ -115,14 +115,14 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
         /* No matching exited child */
         if (options & WNOHANG) {
             parent->waiters--;
-            kernel_mutex_unlock(parent->lock);
+            kernel_mutex_unlock(&parent->lock);
             return 0;
         }
 
         if (!parent->children) {
             /* No children at all */
             parent->waiters--;
-            kernel_mutex_unlock(parent->lock);
+            kernel_mutex_unlock(&parent->lock);
             errno = ECHILD;
             return -1;
         }
@@ -131,12 +131,12 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
         if (options & WNOHANG) {
             /* Non-blocking: just check once */
             parent->waiters--;
-            kernel_mutex_unlock(parent->lock);
+            kernel_mutex_unlock(&parent->lock);
             return 0;
         }
 
         /* Block waiting for child */
-        kernel_cond_wait(parent->wait_cond, parent->lock);
+        kernel_cond_wait(&parent->wait_cond, &parent->lock);
     }
 
     /* Determine if child should be reaped (exited/signaled) or just reported (stopped/continued) */
@@ -154,7 +154,7 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
     }
 
     parent->waiters--;
-    kernel_mutex_unlock(parent->lock);
+    kernel_mutex_unlock(&parent->lock);
 
     /* Return status */
     if (wstatus) {

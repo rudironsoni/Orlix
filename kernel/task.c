@@ -1,6 +1,10 @@
 /* IXLandSystem/kernel/task.c
  * Virtual task/process subsystem implementation
  */
+
+/* Linux ABI constants FIRST - before any Darwin headers */
+#include "include/ixland/linux_abi_constants.h"
+
 #include "task.h"
 
 #include <errno.h>
