@@ -1,45 +1,33 @@
 /* include/ixland/stat_types.h
  * Linux-shaped stat types for IXLandSystem
- *
- * This header provides Linux UAPI-compatible stat structure that Linux-owner
- * code uses. The bridge layer (internal/ios/fs/path_host.c) translates
- * between this and Darwin's struct stat.
  */
 
 #ifndef IXLAND_STAT_TYPES_H
 #define IXLAND_STAT_TYPES_H
 
-/* Freestanding - no system headers to avoid Darwin module contamination */
-/* Use compiler builtins for fixed-width types */
-typedef __UINT32_TYPE__ __ixland_uint32_t;
-typedef __UINT64_TYPE__ __ixland_uint64_t;
-typedef __INT32_TYPE__ __ixland_int32_t;
-typedef __INT64_TYPE__ __ixland_int64_t;
-
-/* Linux stat structure - compatible with UAPI layout
- * This is what Linux-owner code uses.
- */
+/* Linux stat structure - compatible with UAPI layout */
 struct linux_stat {
-    unsigned long   st_dev;         /* Device */
-    unsigned long   st_ino;         /* Inode */
-    unsigned int    st_mode;        /* Protection */
-    unsigned int    st_nlink;       /* Number of hard links */
-    unsigned int    st_uid;         /* User ID of owner */
-    unsigned int    st_gid;         /* Group ID of owner */
-    unsigned long   st_rdev;        /* Device type (if inode device) */
-    unsigned long   __pad1;
-    long            st_size;        /* Total size, in bytes */
-    int             st_blksize;     /* Block size for filesystem I/O */
-    int             __pad2;
-    long            st_blocks;      /* Number of 512-byte blocks allocated */
-    long            st_atime;       /* Time of last access */
-    unsigned long   st_atime_nsec;
-    long            st_mtime;       /* Time of last modification */
-    unsigned long   st_mtime_nsec;
-    long            st_ctime;       /* Time of last status change */
-    unsigned long   st_ctime_nsec;
-    unsigned int    __unused4;
-    unsigned int    __unused5;
+    unsigned long long st_dev;
+    unsigned long long st_ino;
+    unsigned int st_mode;
+    unsigned int st_nlink;
+    unsigned int st_uid;
+    unsigned int st_gid;
+    unsigned long long st_rdev;
+    unsigned long long __pad1;
+    long long st_size;
+    int st_blksize;
+    int __pad2;
+    long long st_blocks;
+    /* Use separate typedefs for time fields to avoid any macro conflicts */
+    long long st_atime_sec;
+    unsigned long long st_atime_nsec;
+    long long st_mtime_sec;
+    unsigned long long st_mtime_nsec;
+    long long st_ctime_sec;
+    unsigned long long st_ctime_nsec;
+    unsigned int __unused4;
+    unsigned int __unused5;
 };
 
 /* File type macros */

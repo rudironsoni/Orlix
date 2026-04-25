@@ -125,13 +125,13 @@ int vfs_discover_persistent_root(char *path, size_t path_len);
 int vfs_discover_cache_root(char *path, size_t path_len);
 int vfs_discover_temp_root(char *path, size_t path_len);
 
+/* Stat operations - delegated to path_host.h */
+#include "path_host.h"
+
 /* Host filesystem operations via direct syscalls */
 int host_open_impl(const char *path, int flags, mode_t mode);
 int host_close_impl(int fd);
 int host_dup_impl(int fd);
-int host_stat_impl(const char *path, struct stat *statbuf);
-int host_lstat_impl(const char *path, struct stat *statbuf);
-int host_access_impl(const char *path, int mode);
 int host_fstat_impl(int fd, struct stat *statbuf);
 ssize_t host_read_impl(int fd, void *buf, size_t count);
 ssize_t host_write_impl(int fd, const void *buf, size_t count);

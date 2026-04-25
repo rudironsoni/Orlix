@@ -8,12 +8,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Include Linux stat types */
+#include "include/ixland/stat_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Forward declarations for types defined elsewhere */
-struct stat;
 
 /* Linux-sized types for the API */
 typedef int64_t linux_off_t;
@@ -30,9 +30,9 @@ int64_t host_pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
 int64_t host_pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset);
 int host_fcntl_impl(int fd, int cmd, ...);
 
-/* Stat operations */
-int host_stat_impl(const char *path, struct stat *statbuf);
-int host_fstat_impl(int fd, struct stat *statbuf);
+/* Stat operations - use Linux stat type */
+int host_stat_impl(const char *path, struct linux_stat *statbuf);
+int host_fstat_impl(int fd, struct linux_stat *statbuf);
 
 /* Truncate operations */
 int host_truncate_impl(const char *path, linux_off_t length);

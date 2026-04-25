@@ -240,7 +240,7 @@ int chdir_impl(const char *path) {
         return -1;
     }
 
-    struct stat st;
+    struct linux_stat st;
     if (host_stat_impl(translated_path, &st) != 0) {
         return -1;
     }
@@ -338,7 +338,7 @@ int rmdir_impl(const char *pathname) {
         return -1;
     }
 
-    struct stat st;
+    struct linux_stat st;
     if (host_stat_impl(translated_path, &st) != 0) {
         return -1;
     }
@@ -362,7 +362,7 @@ int unlink_impl(const char *pathname) {
         return -1;
     }
 
-    struct stat st;
+    struct linux_stat st;
     if (host_stat_impl(translated_path, &st) == 0 && S_ISDIR(st.st_mode)) {
         errno = EISDIR;
         return -1;
@@ -393,7 +393,7 @@ int link_impl(const char *oldpath, const char *newpath) {
         return -1;
     }
 
-    struct stat st;
+    struct linux_stat st;
     if (host_stat_impl(translated_old, &st) != 0) {
         return -1;
     }
@@ -428,7 +428,7 @@ int symlink_impl(const char *target, const char *linkpath) {
         return -1;
     }
 
-    struct stat target_stat;
+    struct linux_stat target_stat;
     if (host_stat_impl(translated_link, &target_stat) == 0) {
         errno = EEXIST;
         return -1;
@@ -511,7 +511,7 @@ ssize_t readlink_impl(const char *pathname, char *buf, size_t bufsiz) {
         return -1;
     }
 
-    struct stat path_stat;
+    struct linux_stat path_stat;
     if (host_lstat_impl(translated_path, &path_stat) != 0) {
         return -1;
     }

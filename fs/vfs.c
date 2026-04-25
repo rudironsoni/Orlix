@@ -938,7 +938,7 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
     }
 }
 
-int vfs_stat_path(const char *pathname, struct stat *statbuf) {
+int vfs_stat_path(const char *pathname, struct_stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
@@ -951,7 +951,7 @@ int vfs_stat_path(const char *pathname, struct stat *statbuf) {
     return 0;
 }
 
-int vfs_lstat(const char *pathname, struct stat *statbuf) {
+int vfs_lstat(const char *pathname, struct_stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
@@ -1384,7 +1384,7 @@ int vfs_access(const char *pathname, int mode) {
     return 0;
 }
 
-int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
+int vfs_fstatat(int dirfd, const char *pathname, struct_stat *statbuf, int flags) {
     char translated_path[MAX_PATH];
     char resolved_virtual[MAX_PATH];
     int ret;

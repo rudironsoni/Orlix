@@ -463,7 +463,7 @@ int execvp(const char *file, char *const argv[]) {
         int len = snprintf(fullpath, sizeof(fullpath), "%s/%s", dir, file);
 
         if (len > 0 && (size_t)len < sizeof(fullpath)) {
-            struct stat st_local;
+            struct linux_stat st_local;
             if (host_stat_impl(fullpath, &st_local) == 0 && S_ISREG(st_local.st_mode) && (host_access_impl(fullpath, X_OK) == 0)) {
                 int result = execv(fullpath, argv);
                 free(path_copy);

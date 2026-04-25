@@ -11,16 +11,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Include Linux stat types for the interface */
+#include "include/ixland/stat_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Forward declaration - actual struct stat is defined in bridge layer */
-struct stat;
-
-/* Host stat operations */
-int host_stat_impl(const char *path, struct stat *statbuf);
-int host_lstat_impl(const char *path, struct stat *statbuf);
+/* Host stat operations - use Linux stat type */
+int host_stat_impl(const char *path, struct linux_stat *statbuf);
+int host_lstat_impl(const char *path, struct linux_stat *statbuf);
 int host_access_impl(const char *path, int mode);
 
 /* Host rename operation (Darwin renameatx_np) */

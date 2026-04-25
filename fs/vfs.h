@@ -25,6 +25,32 @@ typedef int linux_bool_t;
 /* Linux stat is ixland's linux_stat */
 #define struct_stat struct linux_stat
 
+/* Linux UIDs/GIDs */
+typedef uint32_t linux_uid_t;
+typedef uint32_t linux_gid_t;
+typedef uint32_t linux_mode_t;
+
+/* Linux timespec */
+struct linux_timespec {
+    long tv_sec;
+    long tv_nsec;
+};
+
+/* Linux statfs (minimal definition for VFS) */
+struct linux_statfs {
+    long f_type;
+    long f_bsize;
+    uint64_t f_blocks;
+    uint64_t f_bfree;
+    uint64_t f_bavail;
+    uint64_t f_files;
+    uint64_t f_ffree;
+    long f_fsid;
+    long f_namelen;
+    long f_frsize;
+    long f_flags;
+};
+
 /* Atomic type - use compiler builtin */
 typedef _Atomic int linux_atomic_int;
 
@@ -107,7 +133,7 @@ struct inode_operations {
                   struct dentry *new_dentry);
     int (*readlink)(struct dentry *dentry, char *buf, int buflen);
     int (*setattr)(struct dentry *dentry, struct iattr *attr);
-    int (*getattr)(const char *path, struct dentry *dentry, struct stat *stat);
+    int (*getattr)(const char *path, struct dentry *dentry, struct_stat *statbuf);
 };
 
 /* Linux-compatible address space operations */
@@ -127,7 +153,7 @@ struct super_operations {
     void (*dirty_inode)(struct inode *inode);
     int (*write_inode)(struct inode *inode, struct writeback_control *wbc);
     void (*evict_inode)(struct inode *inode);
-    int (*statfs)(struct dentry *dentry, struct statfs *buf);
+    int (*statfs)(struct dentry *dentry, struct linux_statfs *buf);
     int (*remount_fs)(struct super_block *sb, int *flags, char *data);
     void (*clear_inode)(struct inode *inode);
     void (*umount_begin)(struct super_block *sb);
@@ -143,7 +169,7 @@ struct inode {
     struct linux_timespec *i_atime;
     struct linux_timespec *i_mtime;
     struct linux_timespec *i_ctime;
-    atomic_int i_count;
+    linux_atomic_int i_count;
     void *i_private;
     struct super_block *i_sb;
     const struct inode_operations *i_op;
@@ -156,7 +182,7 @@ struct dentry {
     struct inode *d_inode;
     struct super_block *d_sb;
     const unsigned char *d_name;
-    atomic_int d_count;
+    linux_atomic_int d_count;
     struct dentry *d_parent;
     void *d_fsdata;
 };
@@ -176,8 +202,8 @@ struct mount {
     struct super_block *mnt_sb;
     int mnt_flags;
     char mnt_devname[MAX_PATH];
-    atomic_int mnt_count;
-    atomic_int mnt_ondie;
+    linux_atomic_int mnt_count;
+    linux_atomic_int mnt_ondie;
     struct mount *mnt_parent;
 };
 
@@ -187,7 +213,7 @@ struct fs_struct {
     struct dentry *root;
     struct dentry *pwd;
     linux_mode_t umask;
-    atomic_int users;
+    linux_atomic_int users;
     fs_mutex_t lock;
     /* Task-aware path resolution state */
     char root_path[MAX_PATH];      /* Virtual root path (absolute, normalized) */
@@ -286,10 +312,10 @@ const char *vfs_cache_backing_root(void);
 const char *vfs_temp_backing_root(void);
 
 /* Stat operations */
-int vfs_stat_path(const char *pathname, struct stat *statbuf);
-int vfs_lstat(const char *pathname, struct stat *statbuf);
+int vfs_stat_path(const char *pathname, struct_stat *statbuf);
+int vfs_lstat(const char *pathname, struct_stat *statbuf);
 int vfs_access(const char *pathname, int mode);
-int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags);
+int vfs_fstatat(int dirfd, const char *pathname, struct_stat *statbuf, int flags);
 int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
 #ifdef __cplusplus

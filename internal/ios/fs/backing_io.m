@@ -49,32 +49,7 @@ int host_dup_impl(int fd) {
     return ret;
 }
 
-int host_stat_impl(const char *path, struct stat *statbuf) {
-    int ret = syscall(SYS_stat, path, statbuf);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return ret;
-}
-
-int host_lstat_impl(const char *path, struct stat *statbuf) {
-    int ret = syscall(SYS_lstat, path, statbuf);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return ret;
-}
-
-int host_access_impl(const char *path, int mode) {
-    int ret = syscall(SYS_access, path, mode);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return ret;
-}
+/* Note: host_stat_impl, host_lstat_impl, host_access_impl are now in path_host.c */
 
 int host_fstat_impl(int fd, struct stat *statbuf) {
     int ret = syscall(SYS_fstat, fd, statbuf);
