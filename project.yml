@@ -63,6 +63,8 @@ targets:
       group: fs
     - path: internal/ios/fs/wait.c
       group: internal/ios/fs
+    - path: internal/ios/fs/epoll_bridge.c
+      group: internal/ios/fs
     - path: fs/stat.c
       group: fs
     - path: fs/super.c

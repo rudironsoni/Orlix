@@ -1,5 +1,4 @@
 /* iOS Subsystem for Linux - epoll Implementation
-
  *
  * Linux epoll API using kqueue as the underlying mechanism.
  */
@@ -7,7 +6,6 @@
 #include <linux/fcntl.h>
 
 #include <errno.h>
-#include <signal.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,6 +15,7 @@
 #include <time.h>
 
 #include "internal/ios/fs/sync.h"
+#include "internal/ios/fs/epoll_bridge.h"
 #include "internal/ios/fs/backing_io_decls.h"
 
 /* Private epoll definitions - internal types not matching Linux UAPI */
@@ -85,6 +84,11 @@ typedef struct epitem {
     struct epitem *prev;
 } epitem_t;
 
+/* Static helper forward declarations */
+static uint32_t kqueue_to_epoll_events(int16_t filter, uint16_t flags, int data);
+static int epoll_build_kevents(struct kevent *kev, int max_kev, int fd, uint32_t epoll_events,
+                               epitem_t *item, bool add);
+
 typedef struct epoll_instance {
     int kq;
     uint32_t flags;
@@ -101,7 +105,151 @@ static inline int epoll_hash(epoll_instance_t *epi, int fd) {
     return fd & (epi->hash_size - 1);
 }
 
+static int epoll_instance_fd = -1;
+static fs_mutex_t epoll_instance_lock = FS_MUTEX_INITIALIZER;
+static epoll_instance_t **epoll_instances = NULL;
+static int epoll_instance_capacity = 0;
+
+static int epoll_register_instance(epoll_instance_t *epi) {
+    if (!epi) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    file_init_impl();
+
+    fs_mutex_lock(&epoll_instance_lock);
+
+    if (!epoll_instances) {
+        epoll_instance_capacity = 16;
+        epoll_instances = calloc(epoll_instance_capacity, sizeof(epoll_instance_t *));
+        if (!epoll_instances) {
+            fs_mutex_unlock(&epoll_instance_lock);
+            errno = ENOMEM;
+            return -1;
+        }
+        epoll_instance_fd = 1000;
+    }
+
+    for (int i = 0; i < epoll_instance_capacity; i++) {
+        int fd = epoll_instance_fd + i;
+        int idx = fd % epoll_instance_capacity;
+        if (!epoll_instances[idx]) {
+            epoll_instances[idx] = epi;
+            atomic_fetch_add(&epi->ref_count, 1);
+            fs_mutex_unlock(&epoll_instance_lock);
+            return fd;
+        }
+    }
+
+    int new_capacity = epoll_instance_capacity * 2;
+    epoll_instance_t **new_instances = realloc(epoll_instances, new_capacity * sizeof(epoll_instance_t *));
+    if (!new_instances) {
+        fs_mutex_unlock(&epoll_instance_lock);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    memset(&new_instances[epoll_instance_capacity], 0, (new_capacity - epoll_instance_capacity) * sizeof(epoll_instance_t *));
+    epoll_instances = new_instances;
+    epoll_instance_capacity = new_capacity;
+
+    int fd = epoll_instance_fd;
+    epoll_instances[fd % epoll_instance_capacity] = epi;
+    atomic_fetch_add(&epi->ref_count, 1);
+
+    fs_mutex_unlock(&epoll_instance_lock);
+    return fd;
+}
+
+static epoll_instance_t *epoll_lookup_instance(int epfd) {
+    if (epfd < epoll_instance_fd) {
+        return NULL;
+    }
+
+    fs_mutex_lock(&epoll_instance_lock);
+
+    if (!epoll_instances) {
+        fs_mutex_unlock(&epoll_instance_lock);
+        return NULL;
+    }
+
+    int idx = epfd % epoll_instance_capacity;
+    epoll_instance_t *epi = epoll_instances[idx];
+
+    if (epi) {
+        atomic_fetch_add(&epi->ref_count, 1);
+    }
+
+    fs_mutex_unlock(&epoll_instance_lock);
+    return epi;
+}
+
+static void epoll_release_instance(epoll_instance_t *epi) {
+    if (!epi) {
+        return;
+    }
+
+    if (atomic_fetch_sub(&epi->ref_count, 1) == 1) {
+        if (epi->items) {
+            for (int i = 0; i < epi->hash_size; i++) {
+                epitem_t *item = epi->items[i];
+                while (item) {
+                    epitem_t *next = item->next;
+                    free(item);
+                    item = next;
+                }
+            }
+            free(epi->items);
+        }
+        if (epi->kq >= 0) {
+            host_close_impl(epi->kq);
+        }
+        fs_mutex_destroy(&epi->lock);
+        free(epi);
+    }
+}
+
+static int epoll_grow_items(epoll_instance_t *epi) {
+    if (!epi) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    int new_hash_size = epi->hash_size * 2;
+    epitem_t **new_items = calloc(new_hash_size, sizeof(epitem_t *));
+    if (!new_items) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    for (int i = 0; i < epi->hash_size; i++) {
+        epitem_t *item = epi->items[i];
+        while (item) {
+            epitem_t *next = item->next;
+            int new_idx = item->fd & (new_hash_size - 1);
+            item->next = new_items[new_idx];
+            item->prev = NULL;
+            if (new_items[new_idx]) {
+                new_items[new_idx]->prev = item;
+            }
+            new_items[new_idx] = item;
+            item = next;
+        }
+    }
+
+    free(epi->items);
+    epi->items = new_items;
+    epi->hash_size = new_hash_size;
+
+    return 0;
+}
+
 static epitem_t *epoll_find_item(epoll_instance_t *epi, int fd) {
+    if (!epi || fd < 0) {
+        return NULL;
+    }
+
     int idx = epoll_hash(epi, fd);
     epitem_t *item = epi->items[idx];
 
@@ -111,11 +259,30 @@ static epitem_t *epoll_find_item(epoll_instance_t *epi, int fd) {
         }
         item = item->next;
     }
+
     return NULL;
 }
 
-static void epoll_add_item(epoll_instance_t *epi, epitem_t *item) {
-    int idx = epoll_hash(epi, item->fd);
+static epitem_t *epoll_add_item(epoll_instance_t *epi, int fd) {
+    if (!epi || fd < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (epi->item_count >= epi->hash_size) {
+        if (epoll_grow_items(epi) < 0) {
+            return NULL;
+        }
+    }
+
+    epitem_t *item = calloc(1, sizeof(epitem_t));
+    if (!item) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    item->fd = fd;
+    int idx = epoll_hash(epi, fd);
     item->next = epi->items[idx];
     item->prev = NULL;
     if (epi->items[idx]) {
@@ -123,135 +290,32 @@ static void epoll_add_item(epoll_instance_t *epi, epitem_t *item) {
     }
     epi->items[idx] = item;
     epi->item_count++;
+
+    return item;
 }
 
 static void epoll_remove_item(epoll_instance_t *epi, epitem_t *item) {
+    if (!epi || !item) {
+        return;
+    }
+
+    int idx = epoll_hash(epi, item->fd);
+
     if (item->prev) {
         item->prev->next = item->next;
     } else {
-        int idx = epoll_hash(epi, item->fd);
         epi->items[idx] = item->next;
     }
+
     if (item->next) {
         item->next->prev = item->prev;
     }
+
     epi->item_count--;
-}
-
-static uint32_t epoll_to_kqueue_flags(uint32_t epoll_events) {
-    uint32_t kflags = 0;
-
-    if (epoll_events & EPOLLET) {
-        kflags |= EV_CLEAR;
-    }
-    if (epoll_events & EPOLLONESHOT) {
-        kflags |= EV_ONESHOT;
-    }
-
-    return kflags;
-}
-
-static int epoll_build_kevents(struct kevent *changes, int max_changes, int fd,
-                               uint32_t epoll_events, void *udata, bool add_mode) {
-    int n = 0;
-    uint32_t kflags = epoll_to_kqueue_flags(epoll_events);
-
-    if (epoll_events & (EPOLLIN | EPOLLRDNORM | EPOLLRDBAND | EPOLLPRI)) {
-        if (n < max_changes) {
-            EV_SET(&changes[n], fd, EVFILT_READ, add_mode ? EV_ADD : EV_DELETE, 0, 0, udata);
-            if (add_mode) {
-                changes[n].flags |= kflags;
-            }
-            n++;
-        }
-    }
-
-    if (epoll_events & (EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND)) {
-        if (n < max_changes) {
-            EV_SET(&changes[n], fd, EVFILT_WRITE, add_mode ? EV_ADD : EV_DELETE, 0, 0, udata);
-            if (add_mode) {
-                changes[n].flags |= kflags;
-            }
-            n++;
-        }
-    }
-
-    return n;
-}
-
-static uint32_t kqueue_to_epoll_events(int16_t filter, uint16_t flags, int data) {
-    (void)data;
-    uint32_t events = 0;
-
-    if (filter == EVFILT_READ) {
-        events |= EPOLLIN;
-        if (flags & EV_OOBAND) {
-            events |= EPOLLPRI;
-        }
-    } else if (filter == EVFILT_WRITE) {
-        events |= EPOLLOUT;
-    }
-
-    if (flags & EV_ERROR) {
-        events |= EPOLLERR;
-    }
-    if (flags & EV_EOF) {
-        events |= EPOLLHUP;
-        events |= EPOLLRDHUP;
-    }
-
-    return events;
-}
-
-#define MAX_EPOLL_INSTANCES 256
-static epoll_instance_t *epoll_table[MAX_EPOLL_INSTANCES];
-static fs_mutex_t epoll_table_lock = FS_MUTEX_INITIALIZER;
-
-static int epoll_register_instance(epoll_instance_t *epi) {
-    fs_mutex_lock(&epoll_table_lock);
-    for (int i = 0; i < MAX_EPOLL_INSTANCES; i++) {
-        if (epoll_table[i] == NULL) {
-            epoll_table[i] = epi;
-            fs_mutex_unlock(&epoll_table_lock);
-            return i + NR_OPEN_DEFAULT + 100;
-        }
-    }
-    fs_mutex_unlock(&epoll_table_lock);
-    return -1;
-}
-
-static epoll_instance_t *epoll_lookup_instance(int epfd) {
-    int idx = epfd - NR_OPEN_DEFAULT - 100;
-    if (idx < 0 || idx >= MAX_EPOLL_INSTANCES) {
-        return NULL;
-    }
-    return epoll_table[idx];
-}
-
-__attribute__((unused)) static void epoll_unregister_instance(int epfd) {
-    int idx = epfd - NR_OPEN_DEFAULT - 100;
-    if (idx >= 0 && idx < MAX_EPOLL_INSTANCES) {
-        fs_mutex_lock(&epoll_table_lock);
-        epoll_table[idx] = NULL;
-        fs_mutex_unlock(&epoll_table_lock);
-    }
-}
-
-int epoll_create(int size) {
-    if (size <= 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return epoll_create1(0);
+    free(item);
 }
 
 int epoll_create1(int flags) {
-    if (flags & ~EPOLL_CLOEXEC) {
-        errno = EINVAL;
-        return -1;
-    }
-
     epoll_instance_t *epi = calloc(1, sizeof(epoll_instance_t));
     if (!epi) {
         errno = ENOMEM;
@@ -306,12 +370,8 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
         return -1;
     }
 
-    if (epfd == fd) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (fd < 0 || host_fcntl_impl(fd, F_GETFL, 0) < 0) {
+    if (fd < 0) {
+        epoll_release_instance(epi);
         errno = EBADF;
         return -1;
     }
@@ -322,107 +382,121 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
 
     switch (op) {
     case EPOLL_CTL_ADD: {
-        if (!event) {
+        if (item) {
             fs_mutex_unlock(&epi->lock);
-            errno = EINVAL;
-            return -1;
-        }
-
-        if (item != NULL) {
-            fs_mutex_unlock(&epi->lock);
+            epoll_release_instance(epi);
             errno = EEXIST;
             return -1;
         }
 
-        item = calloc(1, sizeof(epitem_t));
+        item = epoll_add_item(epi, fd);
         if (!item) {
             fs_mutex_unlock(&epi->lock);
-            errno = ENOMEM;
+            epoll_release_instance(epi);
             return -1;
         }
 
-        item->fd = fd;
-        memcpy(&item->event, event, sizeof(epoll_event_internal_t));
-        item->is_registered = true;
-        item->edge_triggered = (event->events & EPOLLET) != 0;
+        if (event) {
+            item->event = *event;
+            item->edge_triggered = (event->events & EPOLLET) != 0;
+        }
 
-        struct kevent changes[2];
-        int nchanges =
-            epoll_build_kevents(changes, 2, fd, event->events & ~EPOLLONESHOT, item, true);
+        struct kevent kev[2];
+        int nkev = 0;
 
-        if (nchanges > 0) {
-            int ret = kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
-            if (ret < 0) {
-                free(item);
+        if (event && (event->events & (EPOLLIN | EPOLLRDNORM))) {
+            EV_SET(&kev[nkev++], fd, EVFILT_READ, EV_ADD | (item->edge_triggered ? EV_CLEAR : 0), 0, 0, NULL);
+        }
+        if (event && (event->events & (EPOLLOUT | EPOLLWRNORM))) {
+            EV_SET(&kev[nkev++], fd, EVFILT_WRITE, EV_ADD | (item->edge_triggered ? EV_CLEAR : 0), 0, 0, NULL);
+        }
+
+        if (nkev > 0) {
+            if (kevent(epi->kq, kev, nkev, NULL, 0, NULL) < 0) {
+                epoll_remove_item(epi, item);
                 fs_mutex_unlock(&epi->lock);
-                errno = EPERM;
+                epoll_release_instance(epi);
+                errno = EBADF;
                 return -1;
             }
         }
 
-        epoll_add_item(epi, item);
+        item->is_registered = true;
+        item->registered_events = event ? event->events : 0;
         break;
     }
 
     case EPOLL_CTL_DEL: {
-        if (item == NULL) {
+        if (!item) {
             fs_mutex_unlock(&epi->lock);
+            epoll_release_instance(epi);
             errno = ENOENT;
             return -1;
         }
 
-        struct kevent changes[2];
-        int nchanges = epoll_build_kevents(changes, 2, fd, item->registered_events, item, false);
-        if (nchanges > 0) {
-            kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
-        }
+        struct kevent kev[2];
+        int nkev = 0;
+
+        EV_SET(&kev[nkev++], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+        EV_SET(&kev[nkev++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+
+        kevent(epi->kq, kev, nkev, NULL, 0, NULL);
 
         epoll_remove_item(epi, item);
-        free(item);
         break;
     }
 
     case EPOLL_CTL_MOD: {
-        if (!event) {
+        if (!item) {
             fs_mutex_unlock(&epi->lock);
-            errno = EINVAL;
-            return -1;
-        }
-
-        if (item == NULL) {
-            fs_mutex_unlock(&epi->lock);
+            epoll_release_instance(epi);
             errno = ENOENT;
             return -1;
         }
 
-        struct kevent changes[2];
-        int nchanges = epoll_build_kevents(changes, 2, fd, item->registered_events, item, false);
-        if (nchanges > 0) {
-            kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
+        struct kevent kev[2];
+        int nkev = 0;
+
+        EV_SET(&kev[nkev++], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+        EV_SET(&kev[nkev++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+
+        kevent(epi->kq, kev, nkev, NULL, 0, NULL);
+
+        if (event) {
+            item->event = *event;
+            item->edge_triggered = (event->events & EPOLLET) != 0;
         }
 
-        memcpy(&item->event, event, sizeof(epoll_event_internal_t));
-        item->edge_triggered = (event->events & EPOLLET) != 0;
+        nkev = 0;
+        if (event && (event->events & (EPOLLIN | EPOLLRDNORM))) {
+            EV_SET(&kev[nkev++], fd, EVFILT_READ, EV_ADD | (item->edge_triggered ? EV_CLEAR : 0), 0, 0, NULL);
+        }
+        if (event && (event->events & (EPOLLOUT | EPOLLWRNORM))) {
+            EV_SET(&kev[nkev++], fd, EVFILT_WRITE, EV_ADD | (item->edge_triggered ? EV_CLEAR : 0), 0, 0, NULL);
+        }
 
-        nchanges = epoll_build_kevents(changes, 2, fd, event->events & ~EPOLLONESHOT, item, true);
-        if (nchanges > 0) {
-            int ret = kevent(epi->kq, changes, nchanges, NULL, 0, NULL);
-            if (ret < 0) {
+        if (nkev > 0) {
+            if (kevent(epi->kq, kev, nkev, NULL, 0, NULL) < 0) {
                 fs_mutex_unlock(&epi->lock);
-                errno = EPERM;
+                epoll_release_instance(epi);
+                errno = EBADF;
                 return -1;
             }
         }
+
+        item->registered_events = event ? event->events : 0;
         break;
     }
 
     default:
         fs_mutex_unlock(&epi->lock);
+        epoll_release_instance(epi);
         errno = EINVAL;
         return -1;
     }
 
     fs_mutex_unlock(&epi->lock);
+    epoll_release_instance(epi);
     return 0;
 }
 
@@ -443,13 +517,8 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
         return -1;
     }
 
-    sigset_t oldmask;
-    sigset_t newmask;
-    if (sigmask) {
-        memset(&newmask, 0, sizeof(newmask));
-        memcpy(&newmask, sigmask, sizeof(newmask) < 128 ? sizeof(newmask) : 128);
-        pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
-    }
+    epoll_sigmask_state_t sigmask_state;
+    bool sigmask_saved = epoll_sigmask_save(&sigmask_state, sigmask);
 
     struct timespec ts;
     struct timespec *tsp = NULL;
@@ -461,8 +530,8 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
 
     struct kevent *kevents = calloc(maxevents, sizeof(struct kevent));
     if (!kevents) {
-        if (sigmask) {
-            pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
+        if (sigmask_saved) {
+            epoll_sigmask_restore(&sigmask_state);
         }
         errno = ENOMEM;
         return -1;
@@ -473,8 +542,8 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     if (nevents < 0) {
         int saved_errno = errno;
         free(kevents);
-        if (sigmask) {
-            pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
+        if (sigmask_saved) {
+            epoll_sigmask_restore(&sigmask_state);
         }
         errno = (saved_errno == EINTR) ? EINTR : EBADF;
         return -1;
@@ -508,10 +577,84 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
 
     free(kevents);
 
-    if (sigmask) {
-        pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
+    if (sigmask_saved) {
+        epoll_sigmask_restore(&sigmask_state);
     }
 
     epi->total_events += ready_count;
+    epoll_release_instance(epi);
     return ready_count;
+}
+
+int epoll_close(int epfd) {
+    epoll_instance_t *epi = epoll_lookup_instance(epfd);
+    if (!epi) {
+        errno = EBADF;
+        return -1;
+    }
+
+    fs_mutex_lock(&epoll_instance_lock);
+    int idx = epfd % epoll_instance_capacity;
+    if (epoll_instances[idx] == epi) {
+        epoll_instances[idx] = NULL;
+    }
+    fs_mutex_unlock(&epoll_instance_lock);
+
+    epoll_release_instance(epi);
+    return 0;
+}
+
+/* Map kqueue filter+flags to epoll events */
+static uint32_t kqueue_to_epoll_events(int16_t filter, uint16_t flags, int data) {
+    uint32_t epoll_events = 0;
+
+    if (filter == EVFILT_READ) {
+        epoll_events |= EPOLLIN;
+        if (data > 0) {
+            epoll_events |= EPOLLRDNORM;
+        }
+    } else if (filter == EVFILT_WRITE) {
+        epoll_events |= EPOLLOUT;
+        if (data > 0) {
+            epoll_events |= EPOLLWRNORM;
+        }
+    }
+
+    if (flags & EV_ERROR) {
+        epoll_events |= EPOLLERR;
+    }
+
+    if (flags & EV_EOF) {
+        epoll_events |= EPOLLHUP;
+    }
+
+    return epoll_events;
+}
+
+/* Build kqueue events from epoll events */
+static int epoll_build_kevents(struct kevent *kev, int max_kev, int fd, uint32_t epoll_events,
+                                epitem_t *item, bool add) {
+    int nkev = 0;
+
+    if (epoll_events & (EPOLLIN | EPOLLRDNORM)) {
+        if (nkev < max_kev) {
+            EV_SET(&kev[nkev], fd, EVFILT_READ, add ? EV_ADD : EV_DELETE, 0, 0, item);
+            if (item && item->edge_triggered) {
+                kev[nkev].flags |= EV_CLEAR;
+            }
+            nkev++;
+        }
+    }
+
+    if (epoll_events & (EPOLLOUT | EPOLLWRNORM)) {
+        if (nkev < max_kev) {
+            EV_SET(&kev[nkev], fd, EVFILT_WRITE, add ? EV_ADD : EV_DELETE, 0, 0, item);
+            if (item && item->edge_triggered) {
+                kev[nkev].flags |= EV_CLEAR;
+            }
+            nkev++;
+        }
+    }
+
+    return nkev;
 }
