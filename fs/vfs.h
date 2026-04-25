@@ -15,15 +15,12 @@ typedef __UINT64_TYPE__ uint64_t;
 typedef __SIZE_TYPE__ size_t;
 
 /* Linux-shaped stat types */
-#include "include/ixland/stat_types.h"
+#include "include/ixland/linux_stat.h"
 
 /* Use fixed-width types to avoid conflicts with Darwin headers */
 typedef __INT64_TYPE__ linux_off_t;
 typedef __INT64_TYPE__ linux_ssize_t;
 typedef int linux_bool_t;
-
-/* Linux stat is ixland's linux_stat */
-#define struct_stat struct linux_stat
 
 /* Linux UIDs/GIDs */
 typedef uint32_t linux_uid_t;

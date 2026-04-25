@@ -1,110 +1,58 @@
 /* include/ixland/linux_stat.h
  * Linux-shaped stat interface for IXLandSystem
  *
- * This header declares IXLand's public stat-family functions.
- * These functions use Linux-shaped types and semantics.
+ * This header provides Linux ABI-compatible stat structure and function declarations.
+ * ABI constants are sourced from vendored Linux UAPI headers.
  */
 
 #ifndef IXLAND_LINUX_STAT_H
 #define IXLAND_LINUX_STAT_H
 
-#include "stat_types.h"
+/* Include vendored Linux UAPI stat constants */
+#include <linux/stat.h>
+
+/* Linux stat structure - compatible with Linux UAPI layout.
+ * Field order and sizes match Linux 6.12 arm64 stat struct.
+ * This is IXLand's Linux-facing stat contract. */
+struct linux_stat {
+    unsigned long st_dev;
+    unsigned long st_ino;
+    unsigned int st_mode;
+    unsigned int st_nlink;
+    unsigned int st_uid;
+    unsigned int st_gid;
+    unsigned long st_rdev;
+    unsigned long __pad1;
+    long st_size;
+    int st_blksize;
+    int __pad2;
+    long st_blocks;
+    long st_atime_sec;
+    unsigned long st_atime_nsec;
+    long st_mtime_sec;
+    unsigned long st_mtime_nsec;
+    long st_ctime_sec;
+    unsigned long st_ctime_nsec;
+    unsigned int __unused4;
+    unsigned int __unused5;
+};
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Public IXLand stat functions - Linux ABI shaped */
-extern int stat(const char *pathname, struct linux_stat *statbuf);
-extern int lstat(const char *pathname, struct linux_stat *statbuf);
-extern int fstat(int fd, struct linux_stat *statbuf);
-extern int fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
+int stat(const char *pathname, struct linux_stat *statbuf);
+int lstat(const char *pathname, struct linux_stat *statbuf);
+int fstat(int fd, struct linux_stat *statbuf);
+int fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
 
-/* Mode test macros - Linux ABI values (guarded for Darwin compatibility) */
-#ifndef S_IFMT
-#define S_IFMT   00170000
-#endif
-#ifndef S_IFSOCK
-#define S_IFSOCK 0140000
-#endif
-#ifndef S_IFLNK
-#define S_IFLNK  0120000
-#endif
-#ifndef S_IFREG
-#define S_IFREG  0100000
-#endif
-#ifndef S_IFBLK
-#define S_IFBLK  0060000
-#endif
-#ifndef S_IFDIR
-#define S_IFDIR  0040000
-#endif
-#ifndef S_IFCHR
-#define S_IFCHR  0020000
-#endif
-#ifndef S_IFIFO
-#define S_IFIFO  0010000
-#endif
-
-#ifndef S_ISLNK
-#define S_ISLNK(m)  (((m) & S_IFMT) == S_IFLNK)
-#endif
-#ifndef S_ISREG
-#define S_ISREG(m)  (((m) & S_IFMT) == S_IFREG)
-#endif
-#ifndef S_ISDIR
-#define S_ISDIR(m)  (((m) & S_IFMT) == S_IFDIR)
-#endif
-#ifndef S_ISCHR
-#define S_ISCHR(m)  (((m) & S_IFMT) == S_IFCHR)
-#endif
-#ifndef S_ISBLK
-#define S_ISBLK(m)  (((m) & S_IFMT) == S_IFBLK)
-#endif
-#ifndef S_ISFIFO
-#define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
-#endif
-#ifndef S_ISSOCK
-#define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
-#endif
-
-/* Permission bits - Linux ABI values (guarded for Darwin compatibility) */
-#ifndef S_ISUID
-#define S_ISUID  0004000
-#endif
-#ifndef S_ISGID
-#define S_ISGID  0002000
-#endif
-#ifndef S_ISVTX
-#define S_ISVTX  0001000
-#endif
-#ifndef S_IRUSR
-#define S_IRUSR  00400
-#endif
-#ifndef S_IWUSR
-#define S_IWUSR  00200
-#endif
-#ifndef S_IXUSR
-#define S_IXUSR  00100
-#endif
-#ifndef S_IRGRP
-#define S_IRGRP  00040
-#endif
-#ifndef S_IWGRP
-#define S_IWGRP  00020
-#endif
-#ifndef S_IXGRP
-#define S_IXGRP  00010
-#endif
-#ifndef S_IROTH
-#define S_IROTH  00004
-#endif
-#ifndef S_IWOTH
-#define S_IWOTH  00002
-#endif
-#ifndef S_IXOTH
-#define S_IXOTH  00001
-#endif
+/* Internal stat implementations */
+int stat_impl(const char *pathname, struct linux_stat *statbuf);
+int lstat_impl(const char *pathname, struct linux_stat *statbuf);
+int fstat_impl(int fd, struct linux_stat *statbuf);
+int fstatat_impl(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
+int newfstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
 
 #ifdef __cplusplus
 }
