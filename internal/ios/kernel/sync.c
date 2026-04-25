@@ -1,0 +1,303 @@
+/*
+ * IXLandSystem Kernel Sync Subsystem - Darwin Bridge
+ *
+ * This file includes Darwin headers and provides the implementation
+ * using Darwin's pthread functions. It is the ONLY file in the kernel
+ * sync subsystem that includes Darwin headers like <pthread.h>.
+ * This is the private bridge - the public interface is in sync.h
+ *
+ * NOTE: This file does NOT include Linux UAPI headers. It implements
+ * the _impl() functions using Darwin's native types directly.
+ */
+
+#include <errno.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#include "sync.h"
+
+/* ============================================================================
+ * MUTEX - Darwin pthread implementation
+ * ============================================================================ */
+
+int kernel_mutex_init(kernel_mutex_t *mutex) {
+    if (!mutex) {
+        return -EINVAL;
+    }
+    pthread_mutex_t *pmutex = (pthread_mutex_t *)mutex->_storage;
+    int ret = pthread_mutex_init(pmutex, NULL);
+    if (ret == 0) {
+        mutex->_initialized = 1;
+    }
+    return ret;
+}
+
+int kernel_mutex_destroy(kernel_mutex_t *mutex) {
+    if (!mutex) {
+        return -EINVAL;
+    }
+    if (!mutex->_initialized) {
+        return 0;
+    }
+    pthread_mutex_t *pmutex = (pthread_mutex_t *)mutex->_storage;
+    int ret = pthread_mutex_destroy(pmutex);
+    mutex->_initialized = 0;
+    return ret;
+}
+
+int kernel_mutex_lock(kernel_mutex_t *mutex) {
+    if (!mutex) {
+        return -EINVAL;
+    }
+    if (!mutex->_initialized) {
+        /* Auto-initialize if needed */
+        int ret = kernel_mutex_init(mutex);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+    pthread_mutex_t *pmutex = (pthread_mutex_t *)mutex->_storage;
+    return pthread_mutex_lock(pmutex);
+}
+
+int kernel_mutex_unlock(kernel_mutex_t *mutex) {
+    if (!mutex) {
+        return -EINVAL;
+    }
+    if (!mutex->_initialized) {
+        return -EINVAL;
+    }
+    pthread_mutex_t *pmutex = (pthread_mutex_t *)mutex->_storage;
+    return pthread_mutex_unlock(pmutex);
+}
+
+/* ============================================================================
+ * CONDITION VARIABLE - Darwin pthread implementation
+ * ============================================================================ */
+
+int kernel_cond_init(kernel_cond_t *cond) {
+    if (!cond) {
+        return -EINVAL;
+    }
+    pthread_cond_t *pcond = (pthread_cond_t *)cond->_storage;
+    int ret = pthread_cond_init(pcond, NULL);
+    if (ret == 0) {
+        cond->_initialized = 1;
+    }
+    return ret;
+}
+
+int kernel_cond_destroy(kernel_cond_t *cond) {
+    if (!cond) {
+        return -EINVAL;
+    }
+    if (!cond->_initialized) {
+        return 0;
+    }
+    pthread_cond_t *pcond = (pthread_cond_t *)cond->_storage;
+    int ret = pthread_cond_destroy(pcond);
+    cond->_initialized = 0;
+    return ret;
+}
+
+int kernel_cond_wait(kernel_cond_t *cond, kernel_mutex_t *mutex) {
+    if (!cond || !mutex) {
+        return -EINVAL;
+    }
+    if (!cond->_initialized) {
+        int ret = kernel_cond_init(cond);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+    if (!mutex->_initialized) {
+        return -EINVAL;
+    }
+    pthread_cond_t *pcond = (pthread_cond_t *)cond->_storage;
+    pthread_mutex_t *pmutex = (pthread_mutex_t *)mutex->_storage;
+    return pthread_cond_wait(pcond, pmutex);
+}
+
+int kernel_cond_broadcast(kernel_cond_t *cond) {
+    if (!cond) {
+        return -EINVAL;
+    }
+    if (!cond->_initialized) {
+        return -EINVAL;
+    }
+    pthread_cond_t *pcond = (pthread_cond_t *)cond->_storage;
+    return pthread_cond_broadcast(pcond);
+}
+
+/* ============================================================================
+ * THREAD - Darwin pthread implementation
+ * ============================================================================ */
+
+int kernel_thread_attr_init(kernel_thread_attr_t *attr) {
+    if (!attr) {
+        return -EINVAL;
+    }
+    pthread_attr_t *pattr = (pthread_attr_t *)attr->_storage;
+    int ret = pthread_attr_init(pattr);
+    if (ret == 0) {
+        attr->_initialized = 1;
+    }
+    return ret;
+}
+
+int kernel_thread_attr_destroy(kernel_thread_attr_t *attr) {
+    if (!attr) {
+        return -EINVAL;
+    }
+    if (!attr->_initialized) {
+        return 0;
+    }
+    pthread_attr_t *pattr = (pthread_attr_t *)attr->_storage;
+    int ret = pthread_attr_destroy(pattr);
+    attr->_initialized = 0;
+    return ret;
+}
+
+int kernel_thread_attr_setstacksize(kernel_thread_attr_t *attr, size_t stacksize) {
+    if (!attr) {
+        return -EINVAL;
+    }
+    if (!attr->_initialized) {
+        return -EINVAL;
+    }
+    pthread_attr_t *pattr = (pthread_attr_t *)attr->_storage;
+    return pthread_attr_setstacksize(pattr, stacksize);
+}
+
+static void *kernel_thread_trampoline(void *arg) {
+    void **args = (void **)arg;
+    void *(*start_routine)(void *) = args[0];
+    void *real_arg = args[1];
+    free(arg);
+    return start_routine(real_arg);
+}
+
+int kernel_thread_create(kernel_thread_t *thread, const kernel_thread_attr_t *attr,
+                         void *(*start_routine)(void *), void *arg) {
+    if (!thread || !start_routine) {
+        return -EINVAL;
+    }
+    
+    void **args = malloc(2 * sizeof(void *));
+    if (!args) {
+        return -ENOMEM;
+    }
+    args[0] = start_routine;
+    args[1] = arg;
+    
+    pthread_t *pthread = (pthread_t *)thread->_storage;
+    pthread_attr_t *pattr = attr && attr->_initialized ? (pthread_attr_t *)attr->_storage : NULL;
+    
+    int ret = pthread_create(pthread, pattr, kernel_thread_trampoline, args);
+    if (ret == 0) {
+        thread->_initialized = 1;
+    } else {
+        free(args);
+    }
+    return ret;
+}
+
+int kernel_thread_detach(kernel_thread_t thread) {
+    if (!thread._initialized) {
+        return -EINVAL;
+    }
+    pthread_t *pthread = (pthread_t *)thread._storage;
+    return pthread_detach(*pthread);
+}
+
+kernel_thread_t kernel_thread_self(void) {
+    kernel_thread_t thread;
+    pthread_t *pthread = (pthread_t *)thread._storage;
+    *pthread = pthread_self();
+    thread._initialized = 1;
+    return thread;
+}
+
+void kernel_thread_exit(void *value_ptr) {
+    pthread_exit(value_ptr);
+}
+
+/* ============================================================================
+ * ONCE - Darwin pthread implementation
+ * ============================================================================ */
+
+int kernel_once(kernel_once_t *once_control, void (*init_routine)(void)) {
+    if (!once_control || !init_routine) {
+        return -EINVAL;
+    }
+    /* Simple implementation using a mutex for once semantics */
+    static pthread_mutex_t once_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&once_mutex);
+    if (!once_control->_initialized) {
+        init_routine();
+        once_control->_initialized = 1;
+    }
+    pthread_mutex_unlock(&once_mutex);
+    return 0;
+}
+
+/* ============================================================================
+ * SIGNAL MASK - Darwin implementation (stub)
+ * ============================================================================ */
+
+int kernel_thread_sigmask(int how, const kernel_sigset_t *set, kernel_sigset_t *oldset) {
+    (void)how;
+    (void)set;
+    (void)oldset;
+    /* Signal masking not implemented on iOS substrate */
+    return 0;
+}
+
+int kernel_sigemptyset(kernel_sigset_t *set) {
+    if (!set) {
+        return -EINVAL;
+    }
+    memset(set->_storage, 0, KERNEL_SIGSET_STORAGE_SIZE);
+    set->_initialized = 1;
+    return 0;
+}
+
+int kernel_sigaddset(kernel_sigset_t *set, int signo) {
+    (void)set;
+    (void)signo;
+    return 0;
+}
+
+int kernel_sigismember(const kernel_sigset_t *set, int signo) {
+    (void)set;
+    (void)signo;
+    return 0;
+}
+
+/* ============================================================================
+ * CLOCK - Darwin implementation
+ * ============================================================================ */
+
+int kernel_clock_gettime(int clock_id, struct timespec *tp) {
+    if (!tp) {
+        return -EINVAL;
+    }
+    
+    /* Convert Linux clock IDs to Darwin clock IDs */
+    clockid_t darwin_clock;
+    switch (clock_id) {
+    case 0: /* CLOCK_REALTIME */
+        darwin_clock = CLOCK_REALTIME;
+        break;
+    case 1: /* CLOCK_MONOTONIC */
+        darwin_clock = CLOCK_MONOTONIC;
+        break;
+    default:
+        errno = EINVAL;
+        return -1;
+    }
+    
+    return clock_gettime(darwin_clock, tp);
+}
