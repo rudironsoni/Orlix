@@ -18,10 +18,6 @@
 #include "internal/ios/fs/backing_io_decls.h"
 #include "internal/ios/fs/sync.h"
 
-static int ioctl_host_call_impl(int fd, unsigned long request, void *arg) {
-    return host_ioctl_impl(fd, request, arg);
-}
-
 static int ioctl_impl(int fd, unsigned long request, void *arg) {
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
@@ -29,7 +25,7 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
     }
 
     if (fd <= 2) {
-        return ioctl_host_call_impl(fd, request, arg);
+        return host_ioctl_impl(fd, request, arg);
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -149,7 +145,7 @@ static int ioctl_impl(int fd, unsigned long request, void *arg) {
         return -1;
     }
 
-    result = ioctl_host_call_impl(get_real_fd_impl(entry), request, arg);
+    result = host_ioctl_impl(get_real_fd_impl(entry), request, arg);
     put_fd_entry_impl(entry);
     return result;
 }
