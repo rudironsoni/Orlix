@@ -14,8 +14,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Linux UAPI headers for ABI constants */
+/* Linux UAPI headers for ABI constants and types */
 #include <linux/fcntl.h>
+#include <asm-generic/stat.h>
+
+/* Linux mode macros - local definitions */
+#ifndef S_IFMT
+#define S_IFMT   00170000
+#define S_IFREG  0100000
+#endif
+
+#ifndef S_ISREG
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#endif
 
 /* Host bridge API - narrow seam for file I/O */
 #include "internal/ios/fs/file_io_host.h"
@@ -24,14 +35,6 @@
 /* X_OK constant for access - local definition to avoid <unistd.h> */
 #ifndef X_OK
 #define X_OK 1
-#endif
-
-/* Forward declaration for struct stat - defined in bridge layer */
-struct stat;
-
-/* S_ISREG from Linux UAPI - regular file check */
-#ifndef S_ISREG
-#define S_ISREG(m) (((m) & 0170000) == 0100000)
 #endif
 
 #include "../kernel/task.h"

@@ -1,23 +1,32 @@
 #ifndef VFS_H
 #define VFS_H
 
-/* Standard C/POSIX headers first for type definitions */
-#include <stdatomic.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stddef.h>
+/* Freestanding - NO system headers that import Darwin modules */
+/* Use compiler builtin types */
+
+typedef __INT8_TYPE__ int8_t;
+typedef __INT16_TYPE__ int16_t;
+typedef __INT32_TYPE__ int32_t;
+typedef __INT64_TYPE__ int64_t;
+typedef __UINT8_TYPE__ uint8_t;
+typedef __UINT16_TYPE__ uint16_t;
+typedef __UINT32_TYPE__ uint32_t;
+typedef __UINT64_TYPE__ uint64_t;
+typedef __SIZE_TYPE__ size_t;
+
+/* Linux-shaped stat types */
+#include "include/ixland/stat_types.h"
 
 /* Use fixed-width types to avoid conflicts with Darwin headers */
-typedef int64_t linux_off_t;
-typedef int64_t linux_ssize_t;
-typedef uint32_t linux_uid_t;
-typedef uint32_t linux_gid_t;
-typedef uint32_t linux_mode_t;
+typedef __INT64_TYPE__ linux_off_t;
+typedef __INT64_TYPE__ linux_ssize_t;
+typedef int linux_bool_t;
 
-/* Forward declarations for structures */
-struct linux_timespec;
-struct stat;
-struct statfs;
+/* Linux stat is ixland's linux_stat */
+#define struct_stat struct linux_stat
+
+/* Atomic type - use compiler builtin */
+typedef _Atomic int linux_atomic_int;
 
 #include "fdtable.h"
 #include "internal/ios/fs/sync.h"

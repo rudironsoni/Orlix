@@ -10,7 +10,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Linux UAPI headers for ABI constants and types */
 #include <linux/fcntl.h>
+#include <asm-generic/stat.h>
+
+/* Linux mode macros - local definitions */
+#ifndef S_IFMT
+#define S_IFMT   00170000
+#define S_IFDIR  0040000
+#define S_IFLNK  0120000
+#endif
+
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#endif
+#ifndef S_ISLNK
+#define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
+#endif
+
 #include "internal/ios/fs/path_host.h"
 
 /* Standard file descriptors - local definitions to avoid Darwin <unistd.h> */
@@ -22,13 +39,6 @@
 #define X_OK 1
 #endif
 
-/* Linux mode macros from UAPI */
-#ifndef S_ISDIR
-#define S_ISDIR(m) (((m) & 0170000) == 0040000)
-#endif
-#ifndef S_ISLNK
-#define S_ISLNK(m) (((m) & 0170000) == 0120000)
-#endif
 #include "vfs.h"
 #include "../kernel/task.h"
 

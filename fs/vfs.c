@@ -8,6 +8,34 @@
 /* Linux UAPI headers for ABI constants */
 #include <linux/fcntl.h>
 
+/* Linux-shaped stat types and mode macros */
+#include "include/ixland/stat_types.h"
+
+/* Map standard names to Linux types for this file */
+#define struct_stat struct linux_stat
+#define S_IFMT   LINUX_S_IFMT
+#define S_IFDIR  LINUX_S_IFDIR
+#define S_IFCHR  LINUX_S_IFCHR
+#define S_IFREG  LINUX_S_IFREG
+#define S_IFLNK  LINUX_S_IFLNK
+#define S_ISDIR  LINUX_S_ISDIR
+#define S_ISLNK  LINUX_S_ISLNK
+#define S_ISCHR  LINUX_S_ISCHR
+#define S_ISREG  LINUX_S_ISREG
+
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#endif
+#ifndef S_ISLNK
+#define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
+#endif
+#ifndef S_ISCHR
+#define S_ISCHR(m) (((m) & S_IFMT) == S_IFCHR)
+#endif
+#ifndef S_ISREG
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#endif
+
 /* Narrow seam headers for host operations */
 #include "internal/ios/fs/file_io_host.h"
 #include "internal/ios/fs/path_host.h"
@@ -23,15 +51,7 @@
 #define AT_SYMLINK_NOFOLLOW 0x100
 #endif
 
-/* Linux mode macros from sys/stat.h */
-#ifndef S_ISDIR
-#define S_ISDIR(m) (((m) & 0170000) == 0040000)
-#endif
-#ifndef S_ISLNK
-#define S_ISLNK(m) (((m) & 0170000) == 0120000)
-#endif
-
-/* makedev for device nodes - local implementation */
+/* makedev for device nodes - Linux UAPI style */
 #ifndef makedev
 #define makedev(major, minor) ((((major) & 0xfff) << 8) | ((minor) & 0xff))
 #endif
