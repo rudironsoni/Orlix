@@ -9,13 +9,19 @@
 #include <errno.h>
 #include <stdlib.h>
 
-/* Linux ABI constants AFTER standard headers but BEFORE kernel headers.
- * Standard headers may bring in Darwin signal macros via modules;
- * including this last ensures Linux definitions win. */
-#include "include/ixland/linux_abi_constants.h"
-
 #include "signal.h"
 #include "task.h"
+
+enum {
+    LINUX_SIG_BLOCK = 0,
+    LINUX_SIG_UNBLOCK = 1,
+    LINUX_SIG_SETMASK = 2,
+    LINUX_SIGINT = 2,
+    LINUX_SIGKILL = 9,
+    LINUX_SIGTERM = 15,
+    LINUX_SIGCONT = 18,
+    LINUX_SIGSTOP = 19,
+};
 
 struct signal_struct *alloc_signal_struct(void) {
     struct signal_struct *sig = calloc(1, sizeof(struct signal_struct));
@@ -90,17 +96,17 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
     }
 
     /* Handle SIGSTOP: transition to STOPPED state */
-    if (sig == 19) {
+    if (sig == LINUX_SIGSTOP) {
         atomic_store(&task->state, TASK_STOPPED);
     }
 
     /* Handle SIGCONT: transition back to RUNNING */
-    if (sig == 18) {
+    if (sig == LINUX_SIGCONT) {
         atomic_store(&task->state, TASK_RUNNING);
     }
 
     /* Handle terminating signals */
-    if (sig == 15 || sig == 9 || sig == 2) {
+    if (sig == LINUX_SIGTERM || sig == LINUX_SIGKILL || sig == LINUX_SIGINT) {
         atomic_store(&task->signaled, true);
         atomic_store(&task->termsig, sig);
         atomic_store(&task->exited, true);
@@ -285,7 +291,7 @@ int do_sigaction(int32_t sig, const struct signal_action_slot *act,
         return -1;
     }
 
-    if (sig == 9 || sig == 19) {
+    if (sig == LINUX_SIGKILL || sig == LINUX_SIGSTOP) {
         errno = EINVAL;
         return -1;
     }
@@ -323,17 +329,17 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
 
 	if (set) {
 		switch (how) {
-		case SIG_BLOCK: /* Block signals in set */
+		case LINUX_SIG_BLOCK: /* Block signals in set */
 			for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] |= set->sig[i];
 			}
 			break;
-		case SIG_UNBLOCK: /* Unblock signals in set */
+		case LINUX_SIG_UNBLOCK: /* Unblock signals in set */
 			for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] &= ~set->sig[i];
 			}
 			break;
-		case SIG_SETMASK: /* Replace blocked set with set */
+		case LINUX_SIG_SETMASK: /* Replace blocked set with set */
 			sig->blocked = *set;
 			break;
 		default:
@@ -367,7 +373,7 @@ sighandler_t do_signal(int32_t signum, sighandler_t handler) {
         return NULL;
     }
 
-    if (signum == SIGKILL || signum == SIGSTOP) {
+    if (signum == LINUX_SIGKILL || signum == LINUX_SIGSTOP) {
         errno = EINVAL;
         return NULL;
     }
@@ -522,125 +528,3 @@ int do_killpg(int32_t pgrp, int32_t sig) {
     return result;
 }
 
-/* ============================================================================
- * PUBLIC CANONICAL SIGNAL WRAPPERS
- * ============================================================================
- * These export the Linux-facing signal ABI from the kernel signal owner.
- * They use opaque void* to avoid depending on Darwin host types.
- */
-
-/* Bridge helpers declared in arch/darwin/signal_bridge.c */
-extern void bridge_signal_from_host(const struct sigaction *host_act, struct signal_action_slot *out);
-extern void bridge_signal_to_host(const struct signal_action_slot *internal, struct sigaction *host_act);
-extern void bridge_sigset_from_host(const sigset_t *host_set, struct signal_mask_bits *out);
-extern void bridge_sigset_to_host(const struct signal_mask_bits *internal, sigset_t *host_set);
-
-__attribute__((visibility("default"))) int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
-    struct signal_action_slot internal_act, internal_oldact;
-    struct signal_action_slot *internal_act_ptr = NULL;
-    struct signal_action_slot *internal_oldact_ptr = NULL;
-
-    if (act) {
-        bridge_signal_from_host(act, &internal_act);
-        internal_act_ptr = &internal_act;
-    }
-
-    if (oldact) {
-        internal_oldact_ptr = &internal_oldact;
-    }
-
-    int result = do_sigaction(signum, internal_act_ptr, internal_oldact_ptr);
-
-    if (oldact && result == 0) {
-        bridge_signal_to_host(&internal_oldact, oldact);
-    }
-
-    return result;
-}
-
-__attribute__((visibility("default"))) sighandler_t signal(int signum, sighandler_t handler) {
-    if (signum < 1 || signum >= KERNEL_SIG_NUM) {
-        errno = EINVAL;
-        return (sighandler_t)-1;
-    }
-
-    if (signum == 9 || signum == 19) {
-        errno = EINVAL;
-        return (sighandler_t)-1;
-    }
-
-    sighandler_t old_handler = do_signal(signum, handler);
-    return old_handler ? old_handler : (sighandler_t)-1;
-}
-
-__attribute__((visibility("default"))) int kill(int32_t pid, int sig) {
-    return do_kill(pid, sig);
-}
-
-__attribute__((visibility("default"))) int killpg(int32_t pgrp, int sig) {
-    return do_killpg(pgrp, sig);
-}
-
-__attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    if (how < SIG_BLOCK || how > SIG_SETMASK) {
-		errno = EINVAL;
-		return -1;
-	}
-
-    struct signal_mask_bits internal_set, internal_oldset;
-    struct signal_mask_bits *internal_set_ptr = NULL;
-    struct signal_mask_bits *internal_oldset_ptr = NULL;
-
-    if (set) {
-        bridge_sigset_from_host(set, &internal_set);
-        internal_set_ptr = &internal_set;
-    }
-
-    if (oldset) {
-        internal_oldset_ptr = &internal_oldset;
-    }
-
-    int result = do_sigprocmask(how, internal_set_ptr, internal_oldset_ptr);
-
-    if (oldset && result == 0) {
-        bridge_sigset_to_host(&internal_oldset, oldset);
-    }
-
-    return result;
-}
-
-__attribute__((visibility("default"))) int sigpending(sigset_t *set) {
-    if (!set) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    struct signal_mask_bits internal_set;
-    int result = do_sigpending(&internal_set);
-
-    if (result == 0) {
-        bridge_sigset_to_host(&internal_set, set);
-    }
-
-    return result;
-}
-
-__attribute__((visibility("default"))) int sigsuspend(const sigset_t *mask) {
-    if (!mask) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    struct signal_mask_bits internal_mask;
-    bridge_sigset_from_host(mask, &internal_mask);
-
-    return do_sigsuspend(&internal_mask);
-}
-
-__attribute__((visibility("default"))) int raise(int sig) {
-    return do_raise(sig);
-}
-
-__attribute__((visibility("default"))) int pause(void) {
-    return do_pause();
-}

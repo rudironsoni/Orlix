@@ -14,6 +14,18 @@ targets:
     platform: iOS
     deploymentTarget:
       iOS: '16.0'
+    settings:
+      HEADER_SEARCH_PATHS:
+      - $(SRCROOT)/include
+      - $(SRCROOT)
+      - $(LINUX_UAPI_INCLUDE_ROOT)
+      - $(LINUX_UAPI_INCLUDE_ROOT)/uapi
+      GCC_PREPROCESSOR_DEFINITIONS:
+      - _XOPEN_SOURCE
+      CLANG_ENABLE_OBJC_ARC: true
+      CLANG_WARN_DOCUMENTATION_COMMENTS: true
+      OTHER_CFLAGS:
+      - -fvisibility=hidden
     sources:
     - path: fs/eventpoll.c
       group: fs
@@ -75,8 +87,8 @@ targets:
       group: kernel
     - path: kernel/signal.c
       group: kernel
-    - path: arch/darwin/signal_bridge.c
-      group: arch/darwin
+    - path: internal/ios/kernel/signal_bridge.c
+      group: internal/ios/kernel
     - path: kernel/sync.c
       group: kernel
     - path: kernel/sys.c
@@ -97,17 +109,6 @@ targets:
       group: observability
     - path: runtime/native/registry.c
       group: runtime/native
-    settings:
-      HEADER_SEARCH_PATHS:
-      - $(SRCROOT)/include
-      - $(SRCROOT)
-      - $(LINUX_UAPI_INCLUDE_ROOT)
-      GCC_PREPROCESSOR_DEFINITIONS:
-      - _XOPEN_SOURCE
-      CLANG_ENABLE_OBJC_ARC: true
-      CLANG_WARN_DOCUMENTATION_COMMENTS: true
-      OTHER_CFLAGS:
-      - -fvisibility=hidden
   IXLandSystemTests:
     type: bundle.unit-test
     platform: iOS
@@ -127,9 +128,9 @@ targets:
     settings:
       GENERATE_INFOPLIST_FILE: true
       HEADER_SEARCH_PATHS:
-      - $(LINUX_UAPI_INCLUDE_ROOT)
       - $(SRCROOT)/include
       - $(SRCROOT)
+      - $(LINUX_UAPI_INCLUDE_ROOT)
       BUNDLE_LOADER: ''
 configurations:
   Debug:

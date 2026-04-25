@@ -3,8 +3,12 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#include <linux/fcntl.h>
 
 #include "internal/ios/fs/sync.h"
+#include "internal/ios/fs/backing_io_decls.h"
 #include "pty.h"
 
 struct files_struct *alloc_files(size_t max_fds) {
@@ -295,7 +299,7 @@ typedef struct fd_description {
     enum fd_type type;
     int fd;
     int flags;
-    mode_t mode;
+    linux_mode_t mode;
     off_t offset;
     char path[MAX_PATH];
     bool is_dir;
@@ -315,7 +319,7 @@ static fd_entry_t fd_table[NR_OPEN_DEFAULT];
 static fs_mutex_t fd_table_lock = FS_MUTEX_INITIALIZER;
 static atomic_int fd_table_initialized = 0;
 
-static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mode, const char *path) {
+static fd_description_t *alloc_fd_description(int real_fd, int flags, linux_mode_t mode, const char *path) {
     fd_description_t *desc = calloc(1, sizeof(fd_description_t));
     if (!desc) {
         errno = ENOMEM;
@@ -351,7 +355,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, mode_t mod
     return desc;
 }
 
-static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class) {
+static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, linux_mode_t mode, const char *path, synthetic_dir_class_t dir_class) {
     fd_description_t *desc = calloc(1, sizeof(fd_description_t));
     if (!desc) {
         errno = ENOMEM;
@@ -384,7 +388,7 @@ static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, mode_t
     return desc;
 }
 
-static fd_description_t *alloc_synthetic_dev_fd_description(int flags, mode_t mode, const char *path, synthetic_dev_node_t dev_node) {
+static fd_description_t *alloc_synthetic_dev_fd_description(int flags, linux_mode_t mode, const char *path, synthetic_dev_node_t dev_node) {
     fd_description_t *desc = calloc(1, sizeof(fd_description_t));
     if (!desc) {
         errno = ENOMEM;
@@ -411,7 +415,7 @@ static fd_description_t *alloc_synthetic_dev_fd_description(int flags, mode_t mo
     return desc;
 }
 
-static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file) {
+static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file) {
     fd_description_t *desc = calloc(1, sizeof(fd_description_t));
     if (!desc) {
         errno = ENOMEM;
@@ -438,7 +442,7 @@ static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, mod
     return desc;
 }
 
-static fd_description_t *alloc_synthetic_pty_fd_description(int flags, mode_t mode, const char *path,
+static fd_description_t *alloc_synthetic_pty_fd_description(int flags, linux_mode_t mode, const char *path,
                                                              unsigned int pty_index, bool is_master) {
     fd_description_t *desc = calloc(1, sizeof(fd_description_t));
     if (!desc) {
@@ -668,7 +672,7 @@ bool get_fd_is_append_impl(fd_entry_t *entry) {
     return entry && entry->desc && (entry->desc->flags & O_APPEND);
 }
 
-void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path) {
+void init_fd_entry_impl(int fd, int real_fd, int flags, linux_mode_t mode, const char *path) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);
@@ -764,7 +768,7 @@ int close_impl(int fd) {
     return 0;
 }
 
-void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *path) {
+void init_synthetic_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);
@@ -773,7 +777,7 @@ void init_synthetic_fd_entry_impl(int fd, int flags, mode_t mode, const char *pa
     fs_mutex_unlock(&entry->lock);
 }
 
-void init_synthetic_dev_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dev_node_t dev_node) {
+void init_synthetic_dev_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_dev_node_t dev_node) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);
@@ -782,7 +786,7 @@ void init_synthetic_dev_fd_entry_impl(int fd, int flags, mode_t mode, const char
     fs_mutex_unlock(&entry->lock);
 }
 
-void init_synthetic_pty_fd_entry_impl(int fd, int flags, mode_t mode, const char *path,
+void init_synthetic_pty_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path,
                                       unsigned int pty_index, bool is_master) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
@@ -817,7 +821,7 @@ unsigned int get_fd_synthetic_pty_index_impl(void *entry) {
     return fd_entry->desc ? fd_entry->desc->pty_index : 0;
 }
 
-void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file) {
+void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);
@@ -826,7 +830,7 @@ void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, mode_t mode, cons
     fs_mutex_unlock(&entry->lock);
 }
 
-void init_synthetic_proc_file_fd_entry_with_fdnum_impl(int fd, int flags, mode_t mode, const char *path, synthetic_proc_file_t proc_file, int fd_num) {
+void init_synthetic_proc_file_fd_entry_with_fdnum_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file, int fd_num) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);
@@ -853,7 +857,7 @@ int get_fd_proc_file_fd_num_impl(void *entry) {
     return fd_entry->desc ? fd_entry->desc->proc_file_fd_num : -1;
 }
 
-void init_synthetic_subdir_fd_entry_impl(int fd, int flags, mode_t mode, const char *path, synthetic_dir_class_t dir_class) {
+void init_synthetic_subdir_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_dir_class_t dir_class) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);

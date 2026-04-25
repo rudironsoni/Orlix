@@ -1,5 +1,4 @@
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
+#include <linux/fcntl.h>
 
 #include <errno.h>
 #include <stdarg.h>

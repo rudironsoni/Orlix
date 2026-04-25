@@ -8,13 +8,29 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
-
 #include <ctype.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+/* Host POSIX headers for host-mediated operations */
+#include <sys/stat.h>
+
+/* Host bridge API */
+#include "internal/ios/fs/backing_io_decls.h"
+
+/* Linux UAPI constants for fcntl - defined locally to avoid struct flock conflicts */
+#ifndef O_RDONLY
+#define O_RDONLY        00000000
+#endif
+#ifndef O_CLOEXEC
+#define O_CLOEXEC       02000000
+#endif
+#ifndef FD_CLOEXEC
+#define FD_CLOEXEC      1
+#endif
 
 #include "../kernel/task.h"
 
@@ -135,14 +151,14 @@ static int exec_read_shebang_line(const char *path, char *buffer, size_t buffer_
         return -1;
     }
 
-    int fd = open(path, O_RDONLY);
+    int fd = host_open_impl(path, O_RDONLY, 0);
     if (fd < 0) {
         return -1;
     }
 
-    ssize_t nread = read(fd, buffer, buffer_len - 1);
+    int64_t nread = host_read_impl(fd, buffer, buffer_len - 1);
     int saved_errno = errno;
-    close(fd);
+    host_close_impl(fd);
     errno = saved_errno;
     if (nread < 0) {
         return -1;
@@ -250,14 +266,14 @@ enum exec_image_type exec_classify(const char *path) {
         return EXEC_IMAGE_NATIVE;
     }
 
-    int fd = open(path, O_RDONLY);
+    int fd = host_open_impl(path, O_RDONLY, 0);
     if (fd < 0) {
         return EXEC_IMAGE_NONE;
     }
 
     unsigned char magic[4];
-    ssize_t n = read(fd, magic, 4);
-    close(fd);
+    int64_t n = host_read_impl(fd, magic, 4);
+    host_close_impl(fd);
 
     if (n < 2) {
         return EXEC_IMAGE_NONE;

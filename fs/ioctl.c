@@ -6,15 +6,16 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
+#include <asm/ioctls.h>
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdarg.h>
 #include <stdint.h>
 
 #include "fdtable.h"
 #include "pty.h"
+#include "internal/ios/fs/backing_io_decls.h"
 #include "internal/ios/fs/sync.h"
 
 static int ioctl_host_call_impl(int fd, unsigned long request, void *arg) {

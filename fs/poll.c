@@ -1,6 +1,3 @@
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
-
 #include <errno.h>
 #include <limits.h>
 #include <poll.h>

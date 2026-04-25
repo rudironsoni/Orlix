@@ -102,7 +102,7 @@ extern int renameat(int olddirfd, const char *oldpath, int newdirfd, const char 
 extern int rename(const char *oldpath, const char *newpath);
 extern int alloc_fd_impl(void);
 extern void free_fd_impl(int fd);
-extern void init_fd_entry_impl(int fd, int real_fd, int flags, mode_t mode, const char *path);
+extern void init_fd_entry_impl(int fd, int real_fd, int flags, uint32_t mode, const char *path);
 extern off_t lseek(int fd, off_t offset, int whence);
 extern int fcntl(int fd, int cmd, ...);
 extern int dup(int oldfd);

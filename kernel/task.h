@@ -130,7 +130,7 @@ struct task_struct {
     atomic_bool execed;     /* Set after execve() - blocks setpgid per Linux semantics */
 
     /* Host thread backing for this virtual task */
-    kernel_thread_t *thread;
+    kernel_thread_t thread;
     char comm[TASK_COMM_LEN];
     char exe[MAX_PATH];
     int argc;

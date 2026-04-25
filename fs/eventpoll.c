@@ -4,18 +4,20 @@
  * Linux epoll API using kqueue as the underlying mechanism.
  */
 
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
+#include <linux/fcntl.h>
 
 #include <errno.h>
+#include <signal.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/event.h>
+#include <time.h>
 
 #include "internal/ios/fs/sync.h"
+#include "internal/ios/fs/backing_io_decls.h"
 
 /* Private epoll definitions - internal types not matching Linux UAPI */
 #ifndef EPOLL_EVENT_DEFINED
@@ -446,7 +448,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     if (sigmask) {
         memset(&newmask, 0, sizeof(newmask));
         memcpy(&newmask, sigmask, sizeof(newmask) < 128 ? sizeof(newmask) : 128);
-        fs_thread_sigmask(SIG_SETMASK, &newmask, &oldmask);
+        pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
     }
 
     struct timespec ts;
@@ -460,7 +462,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     struct kevent *kevents = calloc(maxevents, sizeof(struct kevent));
     if (!kevents) {
         if (sigmask) {
-            fs_thread_sigmask(SIG_SETMASK, &oldmask, NULL);
+            pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
         }
         errno = ENOMEM;
         return -1;
@@ -472,7 +474,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
         int saved_errno = errno;
         free(kevents);
         if (sigmask) {
-            fs_thread_sigmask(SIG_SETMASK, &oldmask, NULL);
+            pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
         }
         errno = (saved_errno == EINTR) ? EINTR : EBADF;
         return -1;
@@ -507,7 +509,7 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     free(kevents);
 
     if (sigmask) {
-        fs_thread_sigmask(SIG_SETMASK, &oldmask, NULL);
+        pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
     }
 
     epi->total_events += ready_count;

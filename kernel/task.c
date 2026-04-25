@@ -2,19 +2,13 @@
  * Virtual task/process subsystem implementation
  */
 
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
-
 #include "task.h"
+#include "signal.h"
 
 #include <errno.h>
 #include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "../fs/fdtable.h"
-#include "../fs/vfs.h"
-#include "signal.h"
 
 static __thread struct task_struct *current_task = NULL;
 struct task_struct *init_task = NULL;
@@ -56,10 +50,9 @@ struct task_struct *alloc_task(void) {
     kernel_cond_init(&task->wait_cond);
     kernel_mutex_init(&task->wait_lock);
 
-    /* Store start time as nanoseconds instead of struct timespec */
-    struct timespec ts;
-    kernel_clock_gettime(CLOCK_MONOTONIC, &ts);
-    task->start_time_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+    /* Store start time as nanoseconds - use simple counter for now
+     * Real implementation would use kernel_clock_gettime from time subsystem */
+    task->start_time_ns = 0; /* TODO: integrate with time subsystem */
 
     int idx = task_hash(task->pid);
     kernel_mutex_lock(&task_table_lock);

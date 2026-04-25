@@ -564,7 +564,7 @@ int vfs_umount(const char *target) {
     return -ENOSYS;
 }
 
-int vfs_open(const char *path, int flags, mode_t mode, int *target_fd) {
+int vfs_open(const char *path, int flags, linux_mode_t mode, int *target_fd) {
     int real_fd;
 
     if (!path || !target_fd) {
@@ -610,7 +610,7 @@ int vfs_path_walk(const char *path, struct dentry **dentry) {
     return -ENOSYS;
 }
 
-int vfs_mkdir(const char *path, mode_t mode) {
+int vfs_mkdir(const char *path, linux_mode_t mode) {
     (void)path;
     (void)mode;
     return -ENOSYS;

@@ -1,9 +1,11 @@
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
+#include <linux/fcntl.h>
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "internal/ios/fs/backing_io_decls.h"
 #include "vfs.h"

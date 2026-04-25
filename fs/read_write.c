@@ -2,12 +2,14 @@
  * Virtual read/write/lseek implementation
  */
 
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
+#include <linux/fcntl.h>
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "fdtable.h"
 #include "internal/ios/fs/backing_io_decls.h"
@@ -56,9 +58,12 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
     if (get_fd_is_synthetic_pty_impl(entry)) {
         unsigned int pty_index = get_fd_synthetic_pty_index_impl(entry);
         bool is_master = get_fd_is_synthetic_pty_master_impl(entry);
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         put_fd_entry_impl(entry);
 
-        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
+        if (is_master) {
+            return pty_read_master_impl(pty_index, buf, count, nonblock);
+        }
         return pty_read_slave_impl(pty_index, buf, count, nonblock);
     }
 
@@ -71,9 +76,54 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
     if (get_fd_is_synthetic_proc_file_impl(entry)) {
         synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
         int fd_num = get_fd_proc_file_fd_num_impl(entry);
-        put_fd_entry_impl(entry);
+        char content[8192];
+        int content_len = -EINVAL;
 
-        return vfs_proc_file_read(proc_file, fd_num, buf, count);
+        switch (proc_file) {
+        case SYNTHETIC_PROC_FILE_CMDLINE:
+            content_len = vfs_proc_self_cmdline_content(content, sizeof(content));
+            break;
+        case SYNTHETIC_PROC_FILE_COMM:
+            content_len = vfs_proc_self_comm_content(content, sizeof(content));
+            break;
+        case SYNTHETIC_PROC_FILE_STAT:
+            content_len = vfs_proc_self_stat_content(content, sizeof(content));
+            break;
+        case SYNTHETIC_PROC_FILE_STATM:
+            content_len = vfs_proc_self_statm_content(content, sizeof(content));
+            break;
+        case SYNTHETIC_PROC_FILE_STATUS:
+            content_len = vfs_proc_self_status_content(content, sizeof(content));
+            break;
+        case SYNTHETIC_PROC_FILE_FDINFO:
+            content_len = vfs_proc_self_fdinfo_content(fd_num, content, sizeof(content));
+            break;
+        default:
+            content_len = -EINVAL;
+            break;
+        }
+
+        if (content_len < 0) {
+            put_fd_entry_impl(entry);
+            errno = -content_len;
+            return -1;
+        }
+
+        linux_off_t offset = get_fd_offset_impl(entry);
+        if (offset < 0) {
+            offset = 0;
+        }
+        if ((size_t)offset >= (size_t)content_len) {
+            put_fd_entry_impl(entry);
+            return 0;
+        }
+
+        size_t available = (size_t)content_len - (size_t)offset;
+        size_t to_copy = (count < available) ? count : available;
+        memcpy(buf, content + offset, to_copy);
+        set_fd_offset_impl((fd_entry_t *)entry, offset + (linux_off_t)to_copy);
+        put_fd_entry_impl(entry);
+        return (ssize_t)to_copy;
     }
 
     ssize_t bytes = host_read_impl(get_real_fd_impl(entry), buf, count);
@@ -117,14 +167,13 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     if (get_fd_is_synthetic_pty_impl(entry)) {
         unsigned int pty_index = get_fd_synthetic_pty_index_impl(entry);
         bool is_master = get_fd_is_synthetic_pty_master_impl(entry);
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         put_fd_entry_impl(entry);
 
         if (is_master) {
-            bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
             return pty_write_master_impl(pty_index, buf, count, nonblock);
         }
 
-        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         return pty_write_slave_impl(pty_index, buf, count, nonblock);
     }
 

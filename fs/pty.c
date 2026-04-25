@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/ixland/linux_abi_constants.h"
+#include <linux/poll.h>
 
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
@@ -437,15 +437,15 @@ int pty_open_controlling_slave_impl(unsigned int *pty_index) {
         return -1;
     }
 
-    fs_mutex_lock(&task->lock);
+    kernel_mutex_lock(&task->lock);
     struct tty_struct *tty = task->tty;
     if (!tty) {
-        fs_mutex_unlock(&task->lock);
+        kernel_mutex_unlock(&task->lock);
         errno = ENXIO;
         return -1;
     }
     unsigned int idx = (unsigned int)tty->index;
-    fs_mutex_unlock(&task->lock);
+    kernel_mutex_unlock(&task->lock);
 
     if (!pty_valid_index(idx)) {
         errno = ENXIO;
@@ -919,28 +919,28 @@ int pty_set_controlling_tty_impl(unsigned int pty_index, int arg) {
         return -1;
     }
 
-    fs_mutex_lock(&task->lock);
+    kernel_mutex_lock(&task->lock);
 
     if (task->sid <= 0 || task->pid != task->sid) {
-        fs_mutex_unlock(&task->lock);
+        kernel_mutex_unlock(&task->lock);
         errno = EPERM;
         return -1;
     }
 
     if (task->tty && task->tty->index == (int)pty_index) {
-        fs_mutex_unlock(&task->lock);
+        kernel_mutex_unlock(&task->lock);
         return 0;
     }
 
     if (task->tty) {
-        fs_mutex_unlock(&task->lock);
+        kernel_mutex_unlock(&task->lock);
         errno = EPERM;
         return -1;
     }
 
     struct tty_struct *tty = calloc(1, sizeof(*tty));
     if (!tty) {
-        fs_mutex_unlock(&task->lock);
+        kernel_mutex_unlock(&task->lock);
         errno = ENOMEM;
         return -1;
     }
@@ -949,7 +949,7 @@ int pty_set_controlling_tty_impl(unsigned int pty_index, int arg) {
     pty_pair_t *pair = &pty_table[pty_index];
     if (!pair->allocated) {
         fs_mutex_unlock(&pty_lock);
-        fs_mutex_unlock(&task->lock);
+        kernel_mutex_unlock(&task->lock);
         free(tty);
         errno = EINVAL;
         return -1;
@@ -957,7 +957,7 @@ int pty_set_controlling_tty_impl(unsigned int pty_index, int arg) {
 
     if (pair->has_controlling_session && pair->controlling_sid != task->sid) {
         fs_mutex_unlock(&pty_lock);
-        fs_mutex_unlock(&task->lock);
+        kernel_mutex_unlock(&task->lock);
         free(tty);
         errno = EPERM;
         return -1;
@@ -973,7 +973,7 @@ int pty_set_controlling_tty_impl(unsigned int pty_index, int arg) {
     atomic_init(&tty->refs, 1);
     task->tty = tty;
 
-    fs_mutex_unlock(&task->lock);
+    kernel_mutex_unlock(&task->lock);
     return 0;
 }
 
@@ -1066,10 +1066,10 @@ int pty_detach_controlling_tty_impl(void) {
     return -1;
   }
 
-  fs_mutex_lock(&task->lock);
+  kernel_mutex_lock(&task->lock);
 
   if (!task->tty) {
-    fs_mutex_unlock(&task->lock);
+    kernel_mutex_unlock(&task->lock);
     errno = ENOTTY;
     return -1;
   }
@@ -1099,6 +1099,6 @@ int pty_detach_controlling_tty_impl(void) {
   }
   fs_mutex_unlock(&pty_lock);
 
-  fs_mutex_unlock(&task->lock);
+  kernel_mutex_unlock(&task->lock);
   return 0;
 }

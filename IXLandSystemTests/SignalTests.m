@@ -265,7 +265,7 @@ extern int library_is_initialized(void);
     XCTAssertEqual(result, 0, @"do_sigpending should succeed");
     
     // Verify all bits are zero
-    for (int i = 0; i < SIGNAL_NSIG_WORDS; i++) {
+    for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
         XCTAssertEqual(pending.sig[i], 0ULL, @"Pending mask should be empty after clear");
     }
 }

@@ -34,7 +34,7 @@ struct file {
 struct files_struct {
     struct file **fd;
     size_t max_fds;
-    fs_mutex_t *lock;
+    fs_mutex_t lock;
 };
 
 struct files_struct *alloc_files(size_t max_fds);
@@ -67,7 +67,7 @@ struct fd_entry {
 	fd_description_t *desc;
 	int fd_flags;
 	bool used;
-    fs_mutex_t *lock;
+    fs_mutex_t lock;
 };
 typedef struct fd_entry fd_entry_t;
 /* FD entry access - returns locked entry, must call put_fd_entry_impl to unlock */
