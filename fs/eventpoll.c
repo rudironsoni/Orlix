@@ -15,8 +15,7 @@
 #include <time.h>
 
 #include "internal/ios/fs/sync.h"
-#include "internal/ios/fs/epoll_bridge.h"
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/epoll_impl.h"
 
 /* Private epoll definitions - internal types not matching Linux UAPI */
 #ifndef EPOLL_EVENT_DEFINED
@@ -50,26 +49,7 @@ enum {
 /* epoll_create flags */
 #define EPOLL_CLOEXEC O_CLOEXEC
 
-/* epoll_data_t union (internal representation) */
-typedef union epoll_data_internal {
-    void *ptr;
-    int fd;
-    uint32_t u32;
-    uint64_t u64;
-} epoll_data_internal_t;
-
-/* epoll_event structure (internal representation) */
-typedef struct epoll_event_internal {
-    uint32_t events;
-    epoll_data_internal_t data;
-} epoll_event_internal_t;
-
 #endif /* EPOLL_EVENT_DEFINED */
-
-/* Forward declarations */
-int epoll_create1(int flags);
-int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout,
-                const sigset_t *sigmask);
 
 /* FD table internal API */
 #include "fdtable.h"
@@ -87,7 +67,7 @@ typedef struct epitem {
 /* Static helper forward declarations */
 static uint32_t kqueue_to_epoll_events(int16_t filter, uint16_t flags, int data);
 static int epoll_build_kevents(struct kevent *kev, int max_kev, int fd, uint32_t epoll_events,
-                               epitem_t *item, bool add);
+                                epitem_t *item, bool add);
 
 typedef struct epoll_instance {
     int kq;
@@ -109,6 +89,10 @@ static int epoll_instance_fd = -1;
 static fs_mutex_t epoll_instance_lock = FS_MUTEX_INITIALIZER;
 static epoll_instance_t **epoll_instances = NULL;
 static int epoll_instance_capacity = 0;
+
+/* Forward declarations for host backing I/O (declared elsewhere) */
+int host_fcntl_impl(int fd, int cmd, ...);
+int host_close_impl(int fd);
 
 static int epoll_register_instance(epoll_instance_t *epi) {
     if (!epi) {
@@ -315,7 +299,7 @@ static void epoll_remove_item(epoll_instance_t *epi, epitem_t *item) {
     free(item);
 }
 
-int epoll_create1(int flags) {
+int epoll_create1_impl(int flags) {
     epoll_instance_t *epi = calloc(1, sizeof(epoll_instance_t));
     if (!epi) {
         errno = ENOMEM;
@@ -363,7 +347,7 @@ int epoll_create1(int flags) {
     return epfd;
 }
 
-int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
+int epoll_ctl_impl(int epfd, int op, int fd, epoll_event_internal_t *event) {
     epoll_instance_t *epi = epoll_lookup_instance(epfd);
     if (!epi) {
         errno = EBADF;
@@ -500,12 +484,7 @@ int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
     return 0;
 }
 
-int epoll_wait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout) {
-    return epoll_pwait(epfd, events, maxevents, timeout, NULL);
-}
-
-int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout,
-                const sigset_t *sigmask) {
+int epoll_pwait_impl(int epfd, epoll_event_internal_t *events, int maxevents, int timeout) {
     if (!events || maxevents <= 0) {
         errno = EINVAL;
         return -1;
@@ -517,9 +496,6 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
         return -1;
     }
 
-    epoll_sigmask_state_t sigmask_state;
-    bool sigmask_saved = epoll_sigmask_save(&sigmask_state, sigmask);
-
     struct timespec ts;
     struct timespec *tsp = NULL;
     if (timeout >= 0) {
@@ -530,9 +506,6 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
 
     struct kevent *kevents = calloc(maxevents, sizeof(struct kevent));
     if (!kevents) {
-        if (sigmask_saved) {
-            epoll_sigmask_restore(&sigmask_state);
-        }
         errno = ENOMEM;
         return -1;
     }
@@ -542,9 +515,6 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
     if (nevents < 0) {
         int saved_errno = errno;
         free(kevents);
-        if (sigmask_saved) {
-            epoll_sigmask_restore(&sigmask_state);
-        }
         errno = (saved_errno == EINTR) ? EINTR : EBADF;
         return -1;
     }
@@ -577,16 +547,12 @@ int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int tim
 
     free(kevents);
 
-    if (sigmask_saved) {
-        epoll_sigmask_restore(&sigmask_state);
-    }
-
     epi->total_events += ready_count;
     epoll_release_instance(epi);
     return ready_count;
 }
 
-int epoll_close(int epfd) {
+int epoll_close_impl(int epfd) {
     epoll_instance_t *epi = epoll_lookup_instance(epfd);
     if (!epi) {
         errno = EBADF;

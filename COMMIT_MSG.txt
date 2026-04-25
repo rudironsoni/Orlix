@@ -1,0 +1,24 @@
+Complete eventpoll boundary cleanup - split owner/bridge concerns
+
+Finish Tranche 1 by fully separating Linux-owner epoll logic from
+host-facing ABI details.
+
+Changes:
+- fs/eventpoll.c: Rename public functions to _impl versions, remove
+  sigset_t and backing_io_decls.h dependencies
+- internal/ios/fs/epoll_impl.h: New narrow seam interface
+- internal/ios/fs/epoll_bridge.c: Extended with public ABI wrappers
+  that handle sigset_t adaptation
+
+fs/eventpoll.c now contains only Linux-owner logic:
+- Uses epoll_event_internal_t (private types)
+- No direct host ABI types
+- No bridge headers
+
+Host-facing concerns isolated to internal/ios/fs/epoll_bridge.c:
+- Public epoll_pwait() with sigset_t parameter
+- Sigmask adaptation via epoll_sigmask_save/restore
+- Calls internal _impl functions
+
+Build: TEST BUILD SUCCEEDED
+Lint: No forbidden host APIs in Linux-owner paths

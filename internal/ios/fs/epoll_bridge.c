@@ -1,5 +1,5 @@
 /* internal/ios/fs/epoll_bridge.c
- * Host bridge for epoll signal mask operations
+ * Host bridge for epoll public API wrappers and signal mask operations
  */
 
 #include <signal.h>
@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include "epoll_bridge.h"
+#include "epoll_impl.h"
+#include "backing_io_decls.h"
 
 typedef struct epoll_sigmask_state_internal {
     sigset_t oldmask;
@@ -45,4 +47,36 @@ void epoll_sigmask_restore(epoll_sigmask_state_t *state) {
         pthread_sigmask(SIG_SETMASK, &internal->oldmask, NULL);
         internal->saved = false;
     }
+}
+
+/* Public API wrappers that call internal _impl functions */
+
+int epoll_create1(int flags) {
+    return epoll_create1_impl(flags);
+}
+
+int epoll_ctl(int epfd, int op, int fd, epoll_event_internal_t *event) {
+    return epoll_ctl_impl(epfd, op, fd, event);
+}
+
+int epoll_pwait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout,
+                const sigset_t *sigmask) {
+    epoll_sigmask_state_t sigmask_state;
+    bool sigmask_saved = epoll_sigmask_save(&sigmask_state, sigmask);
+
+    int result = epoll_pwait_impl(epfd, events, maxevents, timeout);
+
+    if (sigmask_saved) {
+        epoll_sigmask_restore(&sigmask_state);
+    }
+
+    return result;
+}
+
+int epoll_wait(int epfd, epoll_event_internal_t *events, int maxevents, int timeout) {
+    return epoll_pwait(epfd, events, maxevents, timeout, NULL);
+}
+
+int epoll_close(int epfd) {
+    return epoll_close_impl(epfd);
 }
