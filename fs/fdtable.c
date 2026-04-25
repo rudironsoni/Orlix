@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <linux/fcntl.h>
+#include "include/ixland/fcntl_constants.h"
 
 #include "internal/ios/fs/sync.h"
 #include "internal/ios/fs/backing_io_decls.h"
