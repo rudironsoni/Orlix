@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/file_io_host.h"
 #include "path.h"
 #include "vfs.h"
 

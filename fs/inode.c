@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/file_io_host.h"
 #include "internal/ios/fs/sync.h"
 
 /* ============================================================================

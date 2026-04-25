@@ -1,14 +1,14 @@
 /* IXLandSystem/fs/stat.c
  * Virtual stat/fstat implementation
  */
-#include <linux/fcntl.h>
+#include "include/ixland/fcntl_constants.h"
 
 #include <errno.h>
 #include <string.h>
 
 #include "fdtable.h"
 #include "internal/ios/fs/sync.h"
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/file_io_host.h"
 #include "vfs.h"
 
 #ifndef MAX_PATH

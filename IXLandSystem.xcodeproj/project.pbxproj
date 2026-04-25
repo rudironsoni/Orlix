@@ -32,6 +32,7 @@
 		6643C6662AEDE42A70EA8F8C /* FutexTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 5BA099AF8849390F2936F1B2 /* FutexTests.m */; };
 		6B365831A4B17F03AE598CFF /* sys.c in Sources */ = {isa = PBXBuildFile; fileRef = CE4E5039272874EE6A5FFD11 /* sys.c */; };
 		6DCCC30A9E2767FEAA8316D2 /* vfs.c in Sources */ = {isa = PBXBuildFile; fileRef = CC8A063128CC02CB6B938762 /* vfs.c */; };
+		70DFBB25D68D1C86B3F68C17 /* epoll_bridge.c in Sources */ = {isa = PBXBuildFile; fileRef = BA898A59834C42247E34F3A2 /* epoll_bridge.c */; };
 		76236EBE1D125F243FE8D067 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = CC4338AECA611FDBA915367D /* sync.c */; };
 		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; };
 		87046F5302731769EFA41075 /* backing_paths.m in Sources */ = {isa = PBXBuildFile; fileRef = 5FD8D142EC818870892A041C /* backing_paths.m */; };
@@ -113,6 +114,7 @@
 		8EE1C8B47289B38E402A6EFE /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
 		9935787E313CB1AD8A576244 /* signal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal.c; sourceTree = "<group>"; };
 		B406B94580B141493CBDB020 /* signal_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal_bridge.c; sourceTree = "<group>"; };
+		BA898A59834C42247E34F3A2 /* epoll_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = epoll_bridge.c; sourceTree = "<group>"; };
 		BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskGroupTests.m; sourceTree = "<group>"; };
 		C0A71140476601A06FC988D7 /* inode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = inode.c; sourceTree = "<group>"; };
 		C391F80635EE5296CE8C8466 /* namei.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = namei.c; sourceTree = "<group>"; };
@@ -186,6 +188,7 @@
 				DC6020ECDA4585334611FE7D /* backing_io.h */,
 				85C6F04780BEA9F2AA85D0E4 /* backing_io.m */,
 				5FD8D142EC818870892A041C /* backing_paths.m */,
+				BA898A59834C42247E34F3A2 /* epoll_bridge.c */,
 				CC4338AECA611FDBA915367D /* sync.c */,
 				CC70547DB7E639309BAFA02D /* wait.c */,
 			);
@@ -381,6 +384,7 @@
 				87046F5302731769EFA41075 /* backing_paths.m in Sources */,
 				5D1AA08946E9CB8B3AFAE1C6 /* clock.c in Sources */,
 				8A81463107C3BC70B06B76A2 /* cred.c in Sources */,
+				70DFBB25D68D1C86B3F68C17 /* epoll_bridge.c in Sources */,
 				C4EB75804B7F62026355C226 /* eventpoll.c in Sources */,
 				5C2D26EAA916B6D9060B278B /* exec.c in Sources */,
 				0BF178D86A3C666E8174EFB1 /* exit.c in Sources */,

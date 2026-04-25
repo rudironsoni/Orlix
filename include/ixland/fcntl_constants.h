@@ -122,4 +122,17 @@
 #define SEEK_END        2
 #endif
 
+/* AT_* constants for fstatat/accessat */
+#ifndef AT_FDCWD
+#define AT_FDCWD        -100
+#endif
+
+#ifndef AT_SYMLINK_NOFOLLOW
+#define AT_SYMLINK_NOFOLLOW 0x100
+#endif
+
+#ifndef AT_EACCESS
+#define AT_EACCESS      0x200
+#endif
+
 #endif /* IXLAND_FCNTL_CONSTANTS_H */

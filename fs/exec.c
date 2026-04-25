@@ -21,8 +21,8 @@
 /* Linux UAPI constants for fcntl (constants only, no struct definitions) */
 #include "include/ixland/fcntl_constants.h"
 
-/* Host bridge API */
-#include "internal/ios/fs/backing_io_decls.h"
+/* Host bridge API - narrow seam for file I/O */
+#include "internal/ios/fs/file_io_host.h"
 
 #include "../kernel/task.h"
 

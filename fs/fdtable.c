@@ -8,7 +8,7 @@
 #include "include/ixland/fcntl_constants.h"
 
 #include "internal/ios/fs/sync.h"
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/file_io_host.h"
 #include "pty.h"
 
 struct files_struct *alloc_files(size_t max_fds) {

@@ -2,7 +2,7 @@
  * Virtual read/write/lseek implementation
  */
 
-#include <linux/fcntl.h>
+#include "include/ixland/fcntl_constants.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "fdtable.h"
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/file_io_host.h"
 #include "internal/ios/fs/sync.h"
 #include "pty.h"
 #include "vfs.h"

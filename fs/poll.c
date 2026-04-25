@@ -7,7 +7,7 @@
 #include <sys/time.h>
 
 #include "fdtable.h"
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/poll_host.h"
 #include "internal/ios/fs/sync.h"
 #include "pty.h"
 
