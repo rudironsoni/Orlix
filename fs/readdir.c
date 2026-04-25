@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "fdtable.h"
 #include "internal/ios/fs/backing_io_decls.h"
@@ -79,26 +81,22 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
     size_t written = 0;
     int rc;
 
+    /* Write "." entry if at cursor 0 */
     if (cursor == 0) {
         rc = append_linux_dirent64(dirp, count, &written, 1, 1, DT_DIR, ".");
         if (rc == 0) {
-            errno = EINVAL;
-            return -1;
+            goto done;
         }
         cursor = 1;
-        set_fd_offset_impl(entry, cursor);
-        return (ssize_t)written;
     }
 
+    /* Write ".." entry if at cursor 1 */
     if (cursor == 1) {
         rc = append_linux_dirent64(dirp, count, &written, 1, 2, DT_DIR, "..");
         if (rc == 0) {
-            errno = EINVAL;
-            return -1;
+            goto done;
         }
         cursor = 2;
-        set_fd_offset_impl(entry, cursor);
-        return (ssize_t)written;
     }
 
     synthetic_dir_class_t dir_class = get_fd_synthetic_dir_class_impl(entry);
@@ -119,24 +117,24 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             {"fdinfo", DT_DIR},
         };
 
+        size_t num_entries = sizeof(entries) / sizeof(entries[0]);
         size_t idx = (size_t)(cursor - 2);
-        if (idx >= (sizeof(entries) / sizeof(entries[0]))) {
-            return 0;
-        }
 
-        rc = append_linux_dirent64(dirp, count, &written, 1, (int64_t)(cursor + 1),
-                                   entries[idx].dtype, entries[idx].name);
-        if (rc == 0) {
-            errno = EINVAL;
-            return -1;
+        while (idx < num_entries) {
+            rc = append_linux_dirent64(dirp, count, &written, 1, (int64_t)(idx + 3),
+                                       entries[idx].dtype, entries[idx].name);
+            if (rc == 0) {
+                break;
+            }
+            idx++;
+            cursor++;
         }
-
-        set_fd_offset_impl(entry, cursor + 1);
-        return (ssize_t)written;
     }
 
+    /* SYNTHETIC_DIR_GENERIC and SYNTHETIC_DIR_PROC_SELF_FD* handled above */
+
     if (dir_class == SYNTHETIC_DIR_PROC_SELF_FD || dir_class == SYNTHETIC_DIR_PROC_SELF_FDINFO) {
-        int scan_fd = (cursor >= 2) ? ((int)cursor + 1) : 3;
+        int scan_fd = (cursor >= 2) ? ((int)cursor - 1) : 3;
 
         for (; scan_fd < NR_OPEN_DEFAULT; scan_fd++) {
             if (!fdtable_is_used_impl(scan_fd)) {
@@ -169,17 +167,13 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             if (rc == 0) {
                 break;
             }
-            set_fd_offset_impl(entry, (linux_off_t)scan_fd);
+            cursor = scan_fd + 1;
         }
-
-        if (scan_fd >= NR_OPEN_DEFAULT) {
-            set_fd_offset_impl(entry, (linux_off_t)NR_OPEN_DEFAULT);
-        }
-
-        return (ssize_t)written;
     }
 
-    return 0;
+done:
+    set_fd_offset_impl(entry, cursor);
+    return (ssize_t)written;
 }
 
 ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
