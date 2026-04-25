@@ -5,15 +5,16 @@
  * Internal logic uses private types only.
  */
 
-/* Linux ABI constants FIRST - before any Darwin headers */
-#include "include/ixland/linux_abi_constants.h"
-
-#include "signal.h"
-
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
 
+/* Linux ABI constants AFTER standard headers but BEFORE kernel headers.
+ * Standard headers may bring in Darwin signal macros via modules;
+ * including this last ensures Linux definitions win. */
+#include "include/ixland/linux_abi_constants.h"
+
+#include "signal.h"
 #include "task.h"
 
 struct signal_struct *alloc_signal_struct(void) {
