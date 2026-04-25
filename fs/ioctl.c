@@ -15,7 +15,7 @@
 
 #include "fdtable.h"
 #include "pty.h"
-#include "internal/ios/fs/backing_io_decls.h"
+#include "internal/ios/fs/ioctl_host.h"
 #include "internal/ios/fs/sync.h"
 
 static int ioctl_impl(int fd, unsigned long request, void *arg) {
