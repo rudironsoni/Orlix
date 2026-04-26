@@ -50,6 +50,22 @@ int linux_sigquit(void);
 int linux_sigtstp(void);
 int linux_sigwinch(void);
 
+/* Termios lflag constants - Linux UAPI sourced */
+unsigned int linux_lflag_isig(void);
+unsigned int linux_lflag_icanon(void);
+unsigned int linux_lflag_echo(void);
+unsigned int linux_lflag_tostop(void);
+
+/* Termios c_cc indices - Linux UAPI sourced */
+int linux_cc_vintr(void);
+int linux_cc_vquit(void);
+int linux_cc_verase(void);
+int linux_cc_vkill(void);
+int linux_cc_veof(void);
+int linux_cc_vtime(void);
+int linux_cc_vmin(void);
+int linux_cc_vsusp(void);
+
 #ifdef __cplusplus
 }
 #endif

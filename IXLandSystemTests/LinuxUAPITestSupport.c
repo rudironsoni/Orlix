@@ -9,6 +9,7 @@
 #include <linux/stat.h>
 #include <asm-generic/ioctls.h>
 #include <asm-generic/signal.h>
+#include <asm-generic/termbits.h>
 
 /* Stat mode test functions - Linux UAPI sourced */
 int linux_s_isdir(unsigned int mode) { return S_ISDIR(mode); }
@@ -47,3 +48,19 @@ int linux_sigint(void) { return SIGINT; }
 int linux_sigquit(void) { return SIGQUIT; }
 int linux_sigtstp(void) { return SIGTSTP; }
 int linux_sigwinch(void) { return SIGWINCH; }
+
+/* Termios lflag constants - Linux UAPI sourced */
+unsigned int linux_lflag_isig(void) { return ISIG; }
+unsigned int linux_lflag_icanon(void) { return ICANON; }
+unsigned int linux_lflag_echo(void) { return ECHO; }
+unsigned int linux_lflag_tostop(void) { return TOSTOP; }
+
+/* Termios c_cc indices - Linux UAPI sourced */
+int linux_cc_vintr(void) { return VINTR; }
+int linux_cc_vquit(void) { return VQUIT; }
+int linux_cc_verase(void) { return VERASE; }
+int linux_cc_vkill(void) { return VKILL; }
+int linux_cc_veof(void) { return VEOF; }
+int linux_cc_vtime(void) { return VTIME; }
+int linux_cc_vmin(void) { return VMIN; }
+int linux_cc_vsusp(void) { return VSUSP; }
