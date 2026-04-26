@@ -132,4 +132,48 @@ fi
 echo "   ✓ No new broad mediation headers under internal/ios"
 
 echo ""
+echo "=== Check 12: Test ABI contamination - IX_* wrapper macros ==="
+IX_WRAPPERS=$(rg -n '^\s*#define\s+IX_' IXLandSystemTests/*.m 2>/dev/null || true)
+if [ -n "$IX_WRAPPERS" ]; then
+    echo "FAIL: IX_* wrapper macros found in test files:"
+    echo "$IX_WRAPPERS"
+    echo "Use semantic test helpers from LinuxUAPITestSupport.h instead."
+    exit 1
+fi
+echo "   ✓ No IX_* wrapper macros in tests"
+
+echo ""
+echo "=== Check 13: Test ABI contamination - linux_* accessor soup ==="
+LINUX_ACCESSORS=$(rg -n '\blinux_[a-z0-9_]+\(\)' IXLandSystemTests/*.m 2>/dev/null || true)
+if [ -n "$LINUX_ACCESSORS" ]; then
+    echo "FAIL: linux_*() accessor soup found in Objective-C test files:"
+    echo "$LINUX_ACCESSORS"
+    echo "Use semantic test helpers (ixland_test_uapi_*) instead."
+    exit 1
+fi
+echo "   ✓ No linux_* accessor soup in Objective-C tests"
+
+echo ""
+echo "=== Check 14: Test ABI contamination - raw Linux constants ==="
+RAW_CONSTANTS=$(rg -n '\b0x54[0-9a-fA-F]{2}\b|\b0x[0-9a-fA-F]+\s*\/\*\s*TIOC' IXLandSystemTests/*.m 2>/dev/null || true)
+if [ -n "$RAW_CONSTANTS" ]; then
+    echo "FAIL: Raw Linux ABI constants found in test files:"
+    echo "$RAW_CONSTANTS"
+    echo "Source constants from LinuxUAPITestSupport.c only."
+    exit 1
+fi
+echo "   ✓ No raw Linux ABI constants in tests"
+
+echo ""
+echo "=== Check 15: Darwin S_IS* used as Linux proof ==="
+DARWIN_STAT=$(rg -n '\bS_ISDIR\s*\(|\bS_ISLNK\s*\(|\bS_ISREG\s*\(|\bS_ISCHR\s*\(' IXLandSystemTests/*.m 2>/dev/null | rg -v 'LinuxUAPITestSupport' || true)
+if [ -n "$DARWIN_STAT" ]; then
+    echo "FAIL: Darwin S_IS* macros used as Linux proof in tests:"
+    echo "$DARWIN_STAT"
+    echo "Use ixland_test_uapi_mode_is_* helpers instead."
+    exit 1
+fi
+echo "   ✓ No Darwin S_IS* misuse in tests"
+
+echo ""
 echo "=== All checks passed ==="

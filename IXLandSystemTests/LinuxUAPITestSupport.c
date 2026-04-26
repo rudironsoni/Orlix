@@ -1,66 +1,253 @@
 /* IXLandSystemTests/LinuxUAPITestSupport.c
- * Linux UAPI constants for testing
+ * Semantic test helpers for Linux UAPI-sensitive assertions
  *
- * This file sources Linux UAPI constants from vendored headers
- * and exposes them for test use. Compiled as part of test target.
+ * This file implements semantic test helpers that internally use vendored
+ * Linux UAPI headers with canonical names (S_ISDIR, TIOCNOTTY, SIGINT, etc.).
+ *
+ * The Objective-C tests call behavior-level helpers, not renamed constants.
  */
 
-/* Include vendored Linux UAPI headers */
+/* Forward declare host APIs to avoid Darwin header contamination */
+extern int ioctl(int, unsigned long, ...);
+extern int open(const char *, int, ...);
+extern int close(int);
+extern int sigaction(int, const void *, void *);
+extern int sigprocmask(int, const void *, void *);
+extern int sigemptyset(void *);
+extern int sigaddset(void *, int);
+
+/* Include vendored Linux UAPI headers - canonical names used internally */
 #include <linux/stat.h>
 #include <asm-generic/ioctls.h>
 #include <asm-generic/signal.h>
 #include <asm-generic/termbits.h>
 
-/* Stat mode test functions - Linux UAPI sourced */
-int linux_s_isdir(unsigned int mode) { return S_ISDIR(mode); }
-int linux_s_islnk(unsigned int mode) { return S_ISLNK(mode); }
-int linux_s_isreg(unsigned int mode) { return S_ISREG(mode); }
-int linux_s_ischr(unsigned int mode) { return S_ISCHR(mode); }
-int linux_s_isblk(unsigned int mode) { return S_ISBLK(mode); }
-int linux_s_isfifo(unsigned int mode) { return S_ISFIFO(mode); }
+/* ============================================================================
+ * Stat mode semantic test helpers
+ * ============================================================================ */
 
-/* File type constants - Linux UAPI sourced */
-unsigned int linux_s_ifmt(void) { return S_IFMT; }
-unsigned int linux_s_ifdir(void) { return S_IFDIR; }
-unsigned int linux_s_iflnk(void) { return S_IFLNK; }
-unsigned int linux_s_ifreg(void) { return S_IFREG; }
-unsigned int linux_s_ifchr(void) { return S_IFCHR; }
+int ixland_test_uapi_mode_is_directory(unsigned int mode) {
+    return S_ISDIR(mode);
+}
 
-/* TTY ioctl constants - Linux UAPI sourced */
-unsigned long linux_tcgets(void) { return TCGETS; }
-unsigned long linux_tcsets(void) { return TCSETS; }
-unsigned long linux_tcsetsw(void) { return TCSETSW; }
-unsigned long linux_tcsetsf(void) { return TCSETSF; }
-unsigned long linux_tiocsctty(void) { return TIOCSCTTY; }
-unsigned long linux_tiocnotty(void) { return TIOCNOTTY; }  /* Correct: 0x5422 */
-unsigned long linux_tiocgpgrp(void) { return TIOCGPGRP; }
-unsigned long linux_tiocspgrp(void) { return TIOCSPGRP; }
-unsigned long linux_tiocgwinsz(void) { return TIOCGWINSZ; }
-unsigned long linux_tiocswinsz(void) { return TIOCSWINSZ; }
-unsigned long linux_fionread(void) { return FIONREAD; }
-unsigned long linux_tiocgptn(void) { return TIOCGPTN; }
-unsigned long linux_tiocsptlck(void) { return TIOCSPTLCK; }
+int ixland_test_uapi_mode_is_symlink(unsigned int mode) {
+    return S_ISLNK(mode);
+}
 
-/* Signal constants - Linux UAPI sourced */
-int linux_sig_block(void) { return SIG_BLOCK; }
-int linux_sig_setmask(void) { return SIG_SETMASK; }
-int linux_sigint(void) { return SIGINT; }
-int linux_sigquit(void) { return SIGQUIT; }
-int linux_sigtstp(void) { return SIGTSTP; }
-int linux_sigwinch(void) { return SIGWINCH; }
+int ixland_test_uapi_mode_is_regular(unsigned int mode) {
+    return S_ISREG(mode);
+}
 
-/* Termios lflag constants - Linux UAPI sourced */
-unsigned int linux_lflag_isig(void) { return ISIG; }
-unsigned int linux_lflag_icanon(void) { return ICANON; }
-unsigned int linux_lflag_echo(void) { return ECHO; }
-unsigned int linux_lflag_tostop(void) { return TOSTOP; }
+int ixland_test_uapi_mode_is_char_device(unsigned int mode) {
+    return S_ISCHR(mode);
+}
 
-/* Termios c_cc indices - Linux UAPI sourced */
-int linux_cc_vintr(void) { return VINTR; }
-int linux_cc_vquit(void) { return VQUIT; }
-int linux_cc_verase(void) { return VERASE; }
-int linux_cc_vkill(void) { return VKILL; }
-int linux_cc_veof(void) { return VEOF; }
-int linux_cc_vtime(void) { return VTIME; }
-int linux_cc_vmin(void) { return VMIN; }
-int linux_cc_vsusp(void) { return VSUSP; }
+int ixland_test_uapi_mode_is_block_device(unsigned int mode) {
+    return S_ISBLK(mode);
+}
+
+int ixland_test_uapi_mode_is_fifo(unsigned int mode) {
+    return S_ISFIFO(mode);
+}
+
+/* ============================================================================
+ * Signal semantic test helpers
+ * ============================================================================ */
+
+static struct {
+    int valid;
+    void *old_handler;
+} sigint_state = {0, 0};
+
+int ixland_test_signal_install_sigint_ign(void) {
+    struct {
+        void *sa_handler;
+        unsigned long sa_flags;
+        void *sa_restorer;
+        unsigned char sa_mask[128];
+    } new_sa, old_sa;
+
+    new_sa.sa_handler = (void *)1; /* SIG_IGN = 1 */
+    new_sa.sa_flags = 0;
+    new_sa.sa_restorer = 0;
+
+    /* Clear sigset_t */
+    for (int i = 0; i < 128; i++) {
+        new_sa.sa_mask[i] = 0;
+    }
+
+    if (sigaction(SIGINT, &new_sa, &old_sa) != 0) {
+        return -1;
+    }
+
+    sigint_state.valid = 1;
+    sigint_state.old_handler = old_sa.sa_handler;
+    return 0;
+}
+
+int ixland_test_signal_restore_sigint(void) {
+    struct {
+        void *sa_handler;
+        unsigned long sa_flags;
+        void *sa_restorer;
+        unsigned char sa_mask[128];
+    } new_sa;
+
+    if (!sigint_state.valid) {
+        return -1;
+    }
+
+    new_sa.sa_handler = sigint_state.old_handler;
+    new_sa.sa_flags = 0;
+    new_sa.sa_restorer = 0;
+    for (int i = 0; i < 128; i++) {
+        new_sa.sa_mask[i] = 0;
+    }
+
+    return sigaction(SIGINT, &new_sa, 0);
+}
+
+static struct {
+    int valid;
+    unsigned char old_mask[128];
+} mask_state = {0, {0}};
+
+int ixland_test_signal_block_sigint(void) {
+    unsigned char set[128], oldset[128];
+
+    for (int i = 0; i < 128; i++) {
+        set[i] = 0;
+        oldset[i] = 0;
+    }
+
+    /* sigaddset for SIGINT (signal 2) */
+    set[0] |= (1 << (SIGINT - 1));
+
+    if (sigprocmask(SIG_BLOCK, set, oldset) != 0) {
+        return -1;
+    }
+
+    mask_state.valid = 1;
+    for (int i = 0; i < 128; i++) {
+        mask_state.old_mask[i] = oldset[i];
+    }
+
+    return 0;
+}
+
+int ixland_test_signal_restore_mask(void) {
+    if (!mask_state.valid) {
+        return -1;
+    }
+
+    return sigprocmask(SIG_SETMASK, mask_state.old_mask, 0);
+}
+
+/* ============================================================================
+ * PTY test helpers
+ * ============================================================================ */
+
+int ixland_test_pty_get_number(int master_fd, unsigned int *pty_number) {
+    return ioctl(master_fd, TIOCGPTN, pty_number);
+}
+
+int ixland_test_pty_unlock_slave(int master_fd) {
+    int unlock = 0;
+    return ioctl(master_fd, TIOCSPTLCK, &unlock);
+}
+
+int ixland_test_pty_open_pair(int *master_fd, int *slave_fd) {
+    int master;
+    unsigned int pty_number = 0;
+    char slave_path[64];
+
+    if (!master_fd || !slave_fd) {
+        return -1;
+    }
+
+    master = open("/dev/ptmx", 2 /* O_RDWR */);
+    if (master < 0) {
+        return -1;
+    }
+
+    if (ioctl(master, TIOCGPTN, &pty_number) != 0) {
+        close(master);
+        return -1;
+    }
+
+    if (ixland_test_pty_unlock_slave(master) != 0) {
+        close(master);
+        return -1;
+    }
+
+    /* Build slave path */
+    slave_path[0] = '/';
+    slave_path[1] = 'd';
+    slave_path[2] = 'e';
+    slave_path[3] = 'v';
+    slave_path[4] = '/';
+    slave_path[5] = 'p';
+    slave_path[6] = 't';
+    slave_path[7] = 's';
+    slave_path[8] = '/';
+
+    /* Convert pty_number to string (simple case for 0-999) */
+    if (pty_number < 10) {
+        slave_path[9] = '0' + pty_number;
+        slave_path[10] = '\0';
+    } else if (pty_number < 100) {
+        slave_path[9] = '0' + (pty_number / 10);
+        slave_path[10] = '0' + (pty_number % 10);
+        slave_path[11] = '\0';
+    } else {
+        slave_path[9] = '0' + (pty_number / 100);
+        slave_path[10] = '0' + ((pty_number / 10) % 10);
+        slave_path[11] = '0' + (pty_number % 10);
+        slave_path[12] = '\0';
+    }
+
+    *slave_fd = open(slave_path, 2 /* O_RDWR */);
+    if (*slave_fd < 0) {
+        close(master);
+        return -1;
+    }
+
+    *master_fd = master;
+    return 0;
+}
+
+/* ============================================================================
+ * TTY ioctl helpers
+ * ============================================================================ */
+
+int ixland_test_tty_disassociate(int fd) {
+    return ioctl(fd, TIOCNOTTY, 0);
+}
+
+/* ============================================================================
+ * Termios semantic test helpers
+ * ============================================================================ */
+
+int ixland_test_termios_has_isig(unsigned int lflag) {
+    return (lflag & ISIG) != 0;
+}
+
+int ixland_test_termios_has_icanon(unsigned int lflag) {
+    return (lflag & ICANON) != 0;
+}
+
+int ixland_test_termios_has_echo(unsigned int lflag) {
+    return (lflag & ECHO) != 0;
+}
+
+int ixland_test_termios_has_tostop(unsigned int lflag) {
+    return (lflag & TOSTOP) != 0;
+}
+
+int ixland_test_termios_cc_vmin_index(void) {
+    return VMIN;
+}
+
+int ixland_test_termios_cc_vtime_index(void) {
+    return VTIME;
+}

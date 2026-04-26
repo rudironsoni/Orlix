@@ -1,8 +1,17 @@
 /* IXLandSystemTests/LinuxUAPITestSupport.h
- * Linux UAPI constants for testing
+ * Semantic test helpers for Linux UAPI-sensitive assertions
  *
- * This header declares Linux UAPI constants sourced from vendored headers.
- * Used by tests to validate Linux-facing behavior.
+ * This header declares semantic test helpers that internally use vendored
+ * Linux UAPI headers with canonical names. The Objective-C tests call
+ * behavior-level helpers, not renamed constants.
+ *
+ * FORBIDDEN in this file:
+ * - Accessor functions that just return a constant (e.g., linux_tcgets())
+ * - Renamed Linux UAPI constants (e.g., ixland_test_sigint())
+ *
+ * ALLOWED in this file:
+ * - Semantic test helpers that express behavior or assertions
+ * - Helper functions that encapsulate Linux UAPI operations
  */
 
 #ifndef LINUX_UAPI_TEST_SUPPORT_H
@@ -12,59 +21,85 @@
 extern "C" {
 #endif
 
-/* Stat mode test functions - Linux UAPI sourced */
-int linux_s_isdir(unsigned int mode);
-int linux_s_islnk(unsigned int mode);
-int linux_s_isreg(unsigned int mode);
-int linux_s_ischr(unsigned int mode);
-int linux_s_isblk(unsigned int mode);
-int linux_s_isfifo(unsigned int mode);
+/* ============================================================================
+ * Stat mode semantic test helpers
+ * ============================================================================ */
 
-/* File type constants - Linux UAPI sourced */
-unsigned int linux_s_ifmt(void);
-unsigned int linux_s_ifdir(void);
-unsigned int linux_s_iflnk(void);
-unsigned int linux_s_ifreg(void);
-unsigned int linux_s_ifchr(void);
+/* Returns non-zero if mode represents a directory */
+int ixland_test_uapi_mode_is_directory(unsigned int mode);
 
-/* TTY ioctl constants - Linux UAPI sourced */
-unsigned long linux_tcgets(void);
-unsigned long linux_tcsets(void);
-unsigned long linux_tcsetsw(void);
-unsigned long linux_tcsetsf(void);
-unsigned long linux_tiocsctty(void);
-unsigned long linux_tiocnotty(void);   /* Correct: 0x5422 */
-unsigned long linux_tiocgpgrp(void);
-unsigned long linux_tiocspgrp(void);
-unsigned long linux_tiocgwinsz(void);
-unsigned long linux_tiocswinsz(void);
-unsigned long linux_fionread(void);
-unsigned long linux_tiocgptn(void);
-unsigned long linux_tiocsptlck(void);
+/* Returns non-zero if mode represents a symlink */
+int ixland_test_uapi_mode_is_symlink(unsigned int mode);
 
-/* Signal constants - Linux UAPI sourced */
-int linux_sig_block(void);
-int linux_sig_setmask(void);
-int linux_sigint(void);
-int linux_sigquit(void);
-int linux_sigtstp(void);
-int linux_sigwinch(void);
+/* Returns non-zero if mode represents a regular file */
+int ixland_test_uapi_mode_is_regular(unsigned int mode);
 
-/* Termios lflag constants - Linux UAPI sourced */
-unsigned int linux_lflag_isig(void);
-unsigned int linux_lflag_icanon(void);
-unsigned int linux_lflag_echo(void);
-unsigned int linux_lflag_tostop(void);
+/* Returns non-zero if mode represents a character device */
+int ixland_test_uapi_mode_is_char_device(unsigned int mode);
 
-/* Termios c_cc indices - Linux UAPI sourced */
-int linux_cc_vintr(void);
-int linux_cc_vquit(void);
-int linux_cc_verase(void);
-int linux_cc_vkill(void);
-int linux_cc_veof(void);
-int linux_cc_vtime(void);
-int linux_cc_vmin(void);
-int linux_cc_vsusp(void);
+/* Returns non-zero if mode represents a block device */
+int ixland_test_uapi_mode_is_block_device(unsigned int mode);
+
+/* Returns non-zero if mode represents a FIFO */
+int ixland_test_uapi_mode_is_fifo(unsigned int mode);
+
+/* ============================================================================
+ * Signal semantic test helpers
+ * ============================================================================ */
+
+/* Install SIG_IGN handler for SIGINT, returns 0 on success, -1 on error */
+int ixland_test_signal_install_sigint_ign(void);
+
+/* Restore SIGINT handler to previous disposition, returns 0 on success */
+int ixland_test_signal_restore_sigint(void);
+
+/* Block SIGINT, returns 0 on success, -1 on error */
+int ixland_test_signal_block_sigint(void);
+
+/* Restore signal mask from previous blocked state, returns 0 on success */
+int ixland_test_signal_restore_mask(void);
+
+/* ============================================================================
+ * PTY test helpers
+ * ============================================================================ */
+
+/* Open PTY master/slave pair, returns 0 on success, -1 on error */
+int ixland_test_pty_open_pair(int *master_fd, int *slave_fd);
+
+/* Get PTY number from master fd, returns 0 on success, -1 on error */
+int ixland_test_pty_get_number(int master_fd, unsigned int *pty_number);
+
+/* Unlock PTY slave, returns 0 on success, -1 on error */
+int ixland_test_pty_unlock_slave(int master_fd);
+
+/* ============================================================================
+ * TTY ioctl helpers
+ * ============================================================================ */
+
+/* Disassociate controlling tty, returns 0 on success, -1 on error with errno set */
+int ixland_test_tty_disassociate(int fd);
+
+/* ============================================================================
+ * Termios semantic test helpers
+ * ============================================================================ */
+
+/* Returns non-zero if lflag has ISIG set */
+int ixland_test_termios_has_isig(unsigned int lflag);
+
+/* Returns non-zero if lflag has ICANON set */
+int ixland_test_termios_has_icanon(unsigned int lflag);
+
+/* Returns non-zero if lflag has ECHO set */
+int ixland_test_termios_has_echo(unsigned int lflag);
+
+/* Returns non-zero if lflag has TOSTOP set */
+int ixland_test_termios_has_tostop(unsigned int lflag);
+
+/* Returns the VMIN index for c_cc array */
+int ixland_test_termios_cc_vmin_index(void);
+
+/* Returns the VTIME index for c_cc array */
+int ixland_test_termios_cc_vtime_index(void);
 
 #ifdef __cplusplus
 }

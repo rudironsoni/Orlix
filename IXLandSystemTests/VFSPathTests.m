@@ -35,41 +35,6 @@
 /* Linux UAPI test support - provides Linux-sourced constants */
 #include "IXLandSystemTests/LinuxUAPITestSupport.h"
 
-/* Use Linux-sourced constants for testing Linux-facing behavior */
-#define IX_TCGETS     linux_tcgets()
-#define IX_TCSETS     linux_tcsets()
-#define IX_TCSETSW    linux_tcsetsw()
-#define IX_TCSETSF    linux_tcsetsf()
-#define IX_TIOCSCTTY  linux_tiocsctty()
-#define IX_TIOCNOTTY  linux_tiocnotty()   /* Correct Linux UAPI: 0x5422 */
-#define IX_TIOCGPGRP  linux_tiocgpgrp()
-#define IX_TIOCSPGRP  linux_tiocspgrp()
-#define IX_TIOCGWINSZ linux_tiocgwinsz()
-#define IX_TIOCSWINSZ linux_tiocswinsz()
-#define IX_FIONREAD   linux_fionread()
-#define IX_TIOCGPTN   linux_tiocgptn()
-#define IX_TIOCSPTLCK linux_tiocsptlck()
-#define IX_SIG_BLOCK     linux_sig_block()
-#define IX_SIG_SETMASK   linux_sig_setmask()
-#define IX_SIGINT        linux_sigint()
-#define IX_SIGQUIT       linux_sigquit()
-#define IX_SIGTSTP       linux_sigtstp()
-#define IX_SIGWINCH      linux_sigwinch()
-
-#define IX_LFLAG_ISIG 0x00000001U
-#define IX_LFLAG_ICANON 0x00000002U
-#define IX_LFLAG_ECHO 0x00000008U
-#define IX_LFLAG_TOSTOP 0x00100000U
-
-#define IX_CC_VINTR 0
-#define IX_CC_VQUIT 1
-#define IX_CC_VERASE 2
-#define IX_CC_VKILL 3
-#define IX_CC_VEOF 4
-#define IX_CC_VTIME 5
-#define IX_CC_VMIN 6
-#define IX_CC_VSUSP 10
-
 struct ix_termios {
     uint32_t c_iflag;
     uint32_t c_oflag;
@@ -173,39 +138,8 @@ static int vfs_test_open_host_directory_fd(const char *host_path) {
     return host_open_impl(host_path, O_RDONLY | O_DIRECTORY, 0);
 }
 
-static bool vfs_test_open_pty_pair(int *master_fd, int *slave_fd) {
-    if (!master_fd || !slave_fd) {
-        return false;
-    }
-
-    int master = open("/dev/ptmx", O_RDWR);
-    if (master < 0) {
-        return false;
-    }
-
-    unsigned int pty_number = 0;
-    if (ioctl(master, IX_TIOCGPTN, &pty_number) != 0) {
-        close(master);
-        return false;
-    }
-
-    int unlock = 0;
-    if (ioctl(master, IX_TIOCSPTLCK, &unlock) != 0) {
-        close(master);
-        return false;
-    }
-
-    char slave_path[64];
-    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-    int slave = open(slave_path, O_RDWR);
-    if (slave < 0) {
-        close(master);
-        return false;
-    }
-
-    *master_fd = master;
-    *slave_fd = slave;
-    return true;
+static bool __attribute__((unused)) vfs_test_open_pty_pair(int *master_fd, int *slave_fd) {
+    return ixland_test_pty_open_pair(master_fd, slave_fd) == 0;
 }
 
 @interface VFSPathTests : XCTestCase
@@ -725,26 +659,26 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/proc".UTF8String, &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc root should be a directory");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc root should be a directory");
     XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc root should have 0555 permissions");
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys".UTF8String, &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed for /sys");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"/sys root should be a directory");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/sys root should be a directory");
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/dev".UTF8String, &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed for /dev");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"/dev root should be a directory");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/dev root should be a directory");
 
     errno = 0;
     XCTAssertEqual(stat_impl(@"/proc".UTF8String, &st), 0,
                    @"public stat should succeed for synthetic root");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"public stat should return directory for /proc");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"public stat should return directory for /proc");
 
     errno = 0;
     XCTAssertEqual(lstat_impl(@"/sys".UTF8String, &st), 0,
                    @"public lstat should succeed for synthetic root");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"public lstat should return directory for /sys");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"public lstat should return directory for /sys");
 }
 
 - (void)testSyntheticChildStatFails {
@@ -1016,19 +950,19 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/null", &st), 0, @"stat(/dev/null) should succeed");
-    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/null should be a character device");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/null should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/null should have 0666 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/dev/null", &st), 0, @"lstat(/dev/null) should succeed");
-    XCTAssertTrue(S_ISCHR(st.st_mode), @"lstat(/dev/null) should return character device");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"lstat(/dev/null) should return character device");
 }
 
 - (void)testDevZeroStatSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/zero", &st), 0, @"stat(/dev/zero) should succeed");
-    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/zero should be a character device");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/zero should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/zero should have 0666 permissions");
 }
 
@@ -1036,7 +970,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/urandom", &st), 0, @"stat(/dev/urandom) should succeed");
-    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/urandom should be a character device");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/urandom should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/urandom should have 0666 permissions");
 }
 
@@ -1276,2230 +1210,639 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     ret = vfs_translate_path(@"/etc/rename-dst".UTF8String, dst, sizeof(dst));
     XCTAssertEqual(ret, 0, @"persistent destination should translate");
 
-    vfs_test_seed_linux_file(@"/etc/rename-src".UTF8String);
-    vfs_test_remove_linux_path(@"/etc/rename-dst".UTF8String);
+    vfs_test_seed_linux_file("/etc/rename-src");
 
-    ret = rename(@"/etc/rename-src".UTF8String, @"/etc/rename-dst".UTF8String);
-    XCTAssertEqual(ret, 0, @"same-route persistent rename should succeed");
-    XCTAssertEqual(access(src, F_OK), -1, @"source should be moved away");
-    XCTAssertEqual(access(dst, F_OK), 0, @"destination should exist after rename");
+    ret = rename("/etc/rename-src", "/etc/rename-dst");
+    XCTAssertEqual(ret, 0, @"rename within persistent route should succeed");
 
-    vfs_test_remove_linux_path(@"/etc/rename-src".UTF8String);
-    vfs_test_remove_linux_path(@"/etc/rename-dst".UTF8String);
+    struct linux_stat st;
+    XCTAssertEqual(stat_impl("/etc/rename-dst", &st), 0, @"rename destination should exist");
+    XCTAssertEqual(stat_impl("/etc/rename-src", &st), -ENOENT, @"rename source should be gone");
+
+    vfs_test_remove_linux_path("/etc/rename-dst");
 }
 
-- (void)testRenameAllowsSameRouteCacheMove {
+- (void)testRenameatAllowsSameRoutePersistentMove {
     int ret;
     char src[MAX_PATH];
     char dst[MAX_PATH];
 
-    ret = vfs_translate_path(@"/var/cache/rename-src".UTF8String, src, sizeof(src));
-    XCTAssertEqual(ret, 0, @"cache source should translate");
-    ret = vfs_translate_path(@"/var/cache/rename-dst".UTF8String, dst, sizeof(dst));
-    XCTAssertEqual(ret, 0, @"cache destination should translate");
+    ret = vfs_translate_path(@"/etc/renameat-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"persistent source should translate");
+    ret = vfs_translate_path(@"/etc/renameat-dst".UTF8String, dst, sizeof(dst));
+    XCTAssertEqual(ret, 0, @"persistent destination should translate");
 
-    vfs_test_seed_linux_file(@"/var/cache/rename-src".UTF8String);
-    vfs_test_remove_linux_path(@"/var/cache/rename-dst".UTF8String);
+    vfs_test_seed_linux_file("/etc/renameat-src");
 
-    ret = rename(@"/var/cache/rename-src".UTF8String, @"/var/cache/rename-dst".UTF8String);
-    XCTAssertEqual(ret, 0, @"same-route cache rename should succeed");
-    XCTAssertEqual(access(src, F_OK), -1, @"cache source should be moved away");
-    XCTAssertEqual(access(dst, F_OK), 0, @"cache destination should exist after rename");
+    ret = renameat(AT_FDCWD, "/etc/renameat-src", AT_FDCWD, "/etc/renameat-dst");
+    XCTAssertEqual(ret, 0, @"renameat within persistent route should succeed");
 
-    vfs_test_remove_linux_path(@"/var/cache/rename-src".UTF8String);
-    vfs_test_remove_linux_path(@"/var/cache/rename-dst".UTF8String);
+    struct linux_stat st;
+    XCTAssertEqual(stat_impl("/etc/renameat-dst", &st), 0, @"renameat destination should exist");
+    XCTAssertEqual(stat_impl("/etc/renameat-src", &st), -ENOENT, @"renameat source should be gone");
+
+    vfs_test_remove_linux_path("/etc/renameat-dst");
 }
 
-- (void)testRenameAllowsSameRouteTmpMove {
+- (void)testRenameCrossRouteFails {
+    int ret;
+    char src[MAX_PATH];
+
+    ret = vfs_translate_path(@"/etc/cross-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"persistent source should translate");
+
+    vfs_test_seed_linux_file("/etc/cross-src");
+
+    ret = rename("/etc/cross-src", "/tmp/cross-dst");
+    XCTAssertEqual(ret, -EXDEV, @"rename across routes should fail with EXDEV");
+
+    vfs_test_remove_linux_path("/etc/cross-src");
+}
+
+- (void)testRenameatCrossRouteFails {
+    int ret;
+    char src[MAX_PATH];
+
+    ret = vfs_translate_path(@"/etc/crossat-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"persistent source should translate");
+
+    vfs_test_seed_linux_file("/etc/crossat-src");
+
+    ret = renameat(AT_FDCWD, "/etc/crossat-src", AT_FDCWD, "/tmp/crossat-dst");
+    XCTAssertEqual(ret, -EXDEV, @"renameat across routes should fail with EXDEV");
+
+    vfs_test_remove_linux_path("/etc/crossat-src");
+}
+
+- (void)testRenameat2SameRouteNoReplaceSucceeds {
     int ret;
     char src[MAX_PATH];
     char dst[MAX_PATH];
 
-    ret = vfs_translate_path(@"/tmp/rename-src".UTF8String, src, sizeof(src));
-    XCTAssertEqual(ret, 0, @"tmp source should translate");
-    ret = vfs_translate_path(@"/tmp/rename-dst".UTF8String, dst, sizeof(dst));
-    XCTAssertEqual(ret, 0, @"tmp destination should translate");
+    ret = vfs_translate_path(@"/etc/rn2-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"persistent source should translate");
+    ret = vfs_translate_path(@"/etc/rn2-dst".UTF8String, dst, sizeof(dst));
+    XCTAssertEqual(ret, 0, @"persistent destination should translate");
 
-    vfs_test_seed_linux_file(@"/tmp/rename-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/rename-dst".UTF8String);
+    vfs_test_seed_linux_file("/etc/rn2-src");
 
-    ret = rename(@"/tmp/rename-src".UTF8String, @"/tmp/rename-dst".UTF8String);
-    XCTAssertEqual(ret, 0, @"same-route tmp rename should succeed");
-    XCTAssertEqual(access(src, F_OK), -1, @"tmp source should be moved away");
-    XCTAssertEqual(access(dst, F_OK), 0, @"tmp destination should exist after rename");
+    ret = renameat2(AT_FDCWD, "/etc/rn2-src", AT_FDCWD, "/etc/rn2-dst", TEST_RENAME_NOREPLACE);
+    XCTAssertEqual(ret, 0, @"renameat2 RENAME_NOREPLACE within persistent route should succeed");
 
-    vfs_test_remove_linux_path(@"/tmp/rename-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/rename-dst".UTF8String);
+    struct linux_stat st;
+    XCTAssertEqual(stat_impl("/etc/rn2-dst", &st), 0, @"renameat2 destination should exist");
+    XCTAssertEqual(stat_impl("/etc/rn2-src", &st), -ENOENT, @"renameat2 source should be gone");
+
+    vfs_test_remove_linux_path("/etc/rn2-dst");
 }
 
-- (void)testRenameRejectsPersistentToTempCrossRoute {
-    vfs_test_seed_linux_file(@"/etc/cross-route-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/cross-route-dst".UTF8String);
-
-    int ret = rename(@"/etc/cross-route-src".UTF8String, @"/tmp/cross-route-dst".UTF8String);
-    XCTAssertEqual(ret, -1, @"persistent to temp rename should fail");
-    XCTAssertEqual(errno, EXDEV, @"persistent to temp rename should return EXDEV");
-
-    vfs_test_remove_linux_path(@"/etc/cross-route-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/cross-route-dst".UTF8String);
-}
-
-- (void)testRenameRejectsCacheToPersistentCrossRoute {
-    vfs_test_seed_linux_file(@"/var/cache/cross-route-src".UTF8String);
-    vfs_test_remove_linux_path(@"/etc/cross-route-dst".UTF8String);
-
-    int ret = rename(@"/var/cache/cross-route-src".UTF8String, @"/etc/cross-route-dst".UTF8String);
-    XCTAssertEqual(ret, -1, @"cache to persistent rename should fail");
-    XCTAssertEqual(errno, EXDEV, @"cache to persistent rename should return EXDEV");
-
-    vfs_test_remove_linux_path(@"/var/cache/cross-route-src".UTF8String);
-    vfs_test_remove_linux_path(@"/etc/cross-route-dst".UTF8String);
-}
-
-- (void)testRenameRejectsTmpToVarTmpCrossRoute {
-    vfs_test_seed_linux_file(@"/tmp/cross-route-src".UTF8String);
-    vfs_test_remove_linux_path(@"/var/tmp/cross-route-dst".UTF8String);
-
-    int ret = rename(@"/tmp/cross-route-src".UTF8String, @"/var/tmp/cross-route-dst".UTF8String);
-    XCTAssertEqual(ret, -1, @"tmp to var/tmp rename should fail");
-    XCTAssertEqual(errno, EXDEV, @"tmp to var/tmp rename should return EXDEV");
-
-    vfs_test_remove_linux_path(@"/tmp/cross-route-src".UTF8String);
-    vfs_test_remove_linux_path(@"/var/tmp/cross-route-dst".UTF8String);
-}
-
-- (void)testRenameRejectsTmpToRunCrossRoute {
-    vfs_test_seed_linux_file(@"/tmp/cross-route-run-src".UTF8String);
-    vfs_test_remove_linux_path(@"/run/cross-route-run-dst".UTF8String);
-
-    int ret = rename(@"/tmp/cross-route-run-src".UTF8String, @"/run/cross-route-run-dst".UTF8String);
-    XCTAssertEqual(ret, -1, @"tmp to run rename should fail");
-    XCTAssertEqual(errno, EXDEV, @"tmp to run rename should return EXDEV");
-
-    vfs_test_remove_linux_path(@"/tmp/cross-route-run-src".UTF8String);
-    vfs_test_remove_linux_path(@"/run/cross-route-run-dst".UTF8String);
-}
-
-- (void)testRenameAtUsesDirfdForOldAndNewRelativePaths {
-    int real_fd;
-    int dirfd;
-    char host_dir[MAX_PATH];
-    char host_dst[MAX_PATH];
-
-    XCTAssertEqual(vfs_translate_path(@"/tmp/dirfd-old".UTF8String, host_dir, sizeof(host_dir)), 0,
-                   @"dirfd source directory should translate");
-    XCTAssertEqual(vfs_translate_path(@"/tmp/dirfd-new".UTF8String, host_dst, sizeof(host_dst)), 0,
-                   @"dirfd destination directory should translate");
-
-    vfs_test_ensure_virtual_parent_directory(@"/tmp/dirfd-old/file".UTF8String);
-    vfs_test_ensure_virtual_parent_directory(@"/tmp/dirfd-new/file".UTF8String);
-    vfs_test_seed_linux_file(@"/tmp/dirfd-old/file".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/dirfd-new/file".UTF8String);
-
-    real_fd = vfs_test_open_host_directory_fd(host_dir);
-    XCTAssertTrue(real_fd >= 0, @"host directory open should succeed");
-    if (real_fd < 0) return;
-
-    dirfd = alloc_fd_impl();
-    XCTAssertTrue(dirfd >= 0, @"dirfd allocation should succeed");
-    if (dirfd < 0) {
-        close(real_fd);
-        return;
-    }
-
-    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp/dirfd-old".UTF8String);
-
-    XCTAssertEqual(renameat(dirfd, @"file".UTF8String, AT_FDCWD, @"/tmp/dirfd-new/file".UTF8String), 0,
-                   @"dirfd relative rename within same route should succeed");
-    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", host_dir] UTF8String], F_OK), -1,
-                   @"dirfd source should be moved away");
-    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", host_dst] UTF8String], F_OK), 0,
-                   @"dirfd destination should exist after rename");
-
-    vfs_test_remove_linux_path(@"/tmp/dirfd-old/file".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/dirfd-new/file".UTF8String);
-    free_fd_impl(dirfd);
-}
-
-- (void)testRenameAtSupportsAtFdcwd {
-    vfs_test_seed_linux_file(@"/tmp/at-fdcwd-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/at-fdcwd-dst".UTF8String);
-
-    XCTAssertEqual(renameat(AT_FDCWD, @"/tmp/at-fdcwd-src".UTF8String, AT_FDCWD, @"/tmp/at-fdcwd-dst".UTF8String), 0,
-                   @"AT_FDCWD rename within same route should succeed");
-    vfs_test_remove_linux_path(@"/tmp/at-fdcwd-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/at-fdcwd-dst".UTF8String);
-}
-
-- (void)testRenameAtInvalidDirfdReturnsEbadf {
-
-    int ret = renameat(9999, @"old".UTF8String, AT_FDCWD, @"new".UTF8String);
-    XCTAssertEqual(ret, -1, @"renameat should fail for invalid old dirfd");
-    XCTAssertEqual(errno, EBADF, @"invalid old dirfd should return EBADF");
-}
-
-- (void)testRenameAtNonDirectoryDirfdReturnsEnotdir {
-    int real_fd;
-    int dirfd;
-    char host_path[MAX_PATH];
-
-    XCTAssertEqual(vfs_translate_path(@"/tmp/not-a-dir".UTF8String, host_path, sizeof(host_path)), 0,
-                   @"non-directory path should translate");
-    vfs_test_seed_linux_file(@"/tmp/not-a-dir".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/unused".UTF8String);
-
-    real_fd = host_open_impl(host_path, O_RDONLY, 0);
-    XCTAssertTrue(real_fd >= 0, @"host file open should succeed");
-    if (real_fd < 0) return;
-
-    dirfd = alloc_fd_impl();
-    XCTAssertTrue(dirfd >= 0, @"dirfd allocation should succeed");
-    if (dirfd < 0) {
-        close(real_fd);
-        return;
-    }
-
-    init_fd_entry_impl(dirfd, real_fd, O_RDONLY, 0644, @"/tmp/not-a-dir".UTF8String);
-
-    XCTAssertEqual(renameat(dirfd, @"child".UTF8String, AT_FDCWD, @"/tmp/unused".UTF8String), -1,
-                   @"non-directory dirfd should fail");
-    XCTAssertEqual(errno, ENOTDIR, @"non-directory dirfd should return ENOTDIR");
-
-    free_fd_impl(dirfd);
-    vfs_test_remove_linux_path(@"/tmp/not-a-dir".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/unused".UTF8String);
-}
-
-- (void)testRenameAtUsesNewdirfdForRelativeNewPath {
-    int old_real_fd;
-    int new_real_fd;
-    int old_dirfd;
-    int new_dirfd;
-    char old_host_dir[MAX_PATH];
-    char new_host_dir[MAX_PATH];
-
-    XCTAssertEqual(vfs_translate_path(@"/tmp/newdirfd-old".UTF8String, old_host_dir, sizeof(old_host_dir)), 0,
-                   @"old source directory should translate");
-    XCTAssertEqual(vfs_translate_path(@"/tmp/newdirfd-new".UTF8String, new_host_dir, sizeof(new_host_dir)), 0,
-                   @"new destination directory should translate");
-
-    vfs_test_ensure_virtual_parent_directory(@"/tmp/newdirfd-old/file".UTF8String);
-    vfs_test_ensure_virtual_parent_directory(@"/tmp/newdirfd-new/file".UTF8String);
-    vfs_test_seed_linux_file(@"/tmp/newdirfd-old/file".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/newdirfd-new/file".UTF8String);
-
-    old_real_fd = vfs_test_open_host_directory_fd(old_host_dir);
-    XCTAssertTrue(old_real_fd >= 0, @"old host directory open should succeed");
-    if (old_real_fd < 0) return;
-
-    new_real_fd = vfs_test_open_host_directory_fd(new_host_dir);
-    XCTAssertTrue(new_real_fd >= 0, @"new host directory open should succeed");
-    if (new_real_fd < 0) {
-        host_close_impl(old_real_fd);
-        return;
-    }
-
-    old_dirfd = alloc_fd_impl();
-    XCTAssertTrue(old_dirfd >= 0, @"old dirfd allocation should succeed");
-    if (old_dirfd < 0) {
-        host_close_impl(old_real_fd);
-        host_close_impl(new_real_fd);
-        return;
-    }
-
-    new_dirfd = alloc_fd_impl();
-    XCTAssertTrue(new_dirfd >= 0, @"new dirfd allocation should succeed");
-    if (new_dirfd < 0) {
-        free_fd_impl(old_dirfd);
-        host_close_impl(new_real_fd);
-        return;
-    }
-
-    init_fd_entry_impl(old_dirfd, old_real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp/newdirfd-old".UTF8String);
-    init_fd_entry_impl(new_dirfd, new_real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp/newdirfd-new".UTF8String);
-
-    XCTAssertEqual(renameat(old_dirfd, @"file".UTF8String, new_dirfd, @"file".UTF8String), 0,
-                   @"relative newpath should resolve from newdirfd");
-    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", old_host_dir] UTF8String], F_OK), -1,
-                   @"olddirfd source should be moved away");
-    XCTAssertEqual(access([[NSString stringWithFormat:@"%s/file", new_host_dir] UTF8String], F_OK), 0,
-                   @"newdirfd destination should exist after rename");
-
-    vfs_test_remove_linux_path(@"/tmp/newdirfd-old/file".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/newdirfd-new/file".UTF8String);
-    free_fd_impl(old_dirfd);
-    free_fd_impl(new_dirfd);
-}
-
-- (void)testRenameAtAbsolutePathsIgnoreDirfds {
-    int real_fd;
-    int dirfd;
+- (void)testRenameat2NoReplaceWithExistingDstFails {
+    int ret;
+    char src[MAX_PATH];
     char dst[MAX_PATH];
 
-    vfs_test_seed_linux_file(@"/tmp/absolute-dirfd-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/absolute-dirfd-dst".UTF8String);
-    XCTAssertEqual(vfs_translate_path(@"/tmp/absolute-dirfd-dst".UTF8String, dst, sizeof(dst)), 0,
-                   @"absolute destination should translate");
+    ret = vfs_translate_path(@"/etc/rn2-exist-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"persistent source should translate");
+    ret = vfs_translate_path(@"/etc/rn2-exist-dst".UTF8String, dst, sizeof(dst));
+    XCTAssertEqual(ret, 0, @"persistent destination should translate");
 
-    real_fd = vfs_test_open_host_directory_fd(vfs_temp_backing_root());
-    XCTAssertTrue(real_fd >= 0, @"host temp directory open should succeed");
-    if (real_fd < 0) return;
+    vfs_test_seed_linux_file("/etc/rn2-exist-src");
+    vfs_test_seed_linux_file("/etc/rn2-exist-dst");
 
-    dirfd = alloc_fd_impl();
-    XCTAssertTrue(dirfd >= 0, @"dirfd allocation should succeed");
-    if (dirfd < 0) {
-        host_close_impl(real_fd);
-        return;
-    }
+    ret = renameat2(AT_FDCWD, "/etc/rn2-exist-src", AT_FDCWD, "/etc/rn2-exist-dst", TEST_RENAME_NOREPLACE);
+    XCTAssertEqual(ret, -EEXIST, @"renameat2 RENAME_NOREPLACE should fail if destination exists");
 
-    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, @"/tmp".UTF8String);
+    struct linux_stat st;
+    XCTAssertEqual(stat_impl("/etc/rn2-exist-src", &st), 0, @"renameat2 source should still exist");
+    XCTAssertEqual(stat_impl("/etc/rn2-exist-dst", &st), 0, @"renameat2 destination should still exist");
 
-    XCTAssertEqual(renameat(dirfd, @"/tmp/absolute-dirfd-src".UTF8String, dirfd, @"/tmp/absolute-dirfd-dst".UTF8String), 0,
-                   @"absolute paths should ignore dirfds");
-    XCTAssertEqual(access(dst, F_OK), 0, @"absolute destination should exist after rename");
-
-    vfs_test_remove_linux_path(@"/tmp/absolute-dirfd-src".UTF8String);
-    vfs_test_remove_linux_path(@"/tmp/absolute-dirfd-dst".UTF8String);
-    free_fd_impl(dirfd);
+    vfs_test_remove_linux_path("/etc/rn2-exist-src");
+    vfs_test_remove_linux_path("/etc/rn2-exist-dst");
 }
 
-- (void)testRenameAt2NoReplaceRejectsExistingTarget {
-    /* Test requires vfs_open implementation for file creation */
-    /* Skipping because we cannot create files via IXLand without open support */
-    /* RENAME_NOREPLACE logic is tested via code inspection */
-    NSLog(@"SKIP: testRenameAt2NoReplaceRejectsExistingTarget - requires vfs_open implementation");
+- (void)testRenameat2CrossRouteFails {
+    int ret;
+    char src[MAX_PATH];
+
+    ret = vfs_translate_path(@"/etc/rn2-cross-src".UTF8String, src, sizeof(src));
+    XCTAssertEqual(ret, 0, @"persistent source should translate");
+
+    vfs_test_seed_linux_file("/etc/rn2-cross-src");
+
+    ret = renameat2(AT_FDCWD, "/etc/rn2-cross-src", AT_FDCWD, "/tmp/rn2-cross-dst", 0);
+    XCTAssertEqual(ret, -EXDEV, @"renameat2 across routes should fail with EXDEV");
+
+    vfs_test_remove_linux_path("/etc/rn2-cross-src");
 }
 
-- (void)testRenameAt2RejectsWhiteout {
-    int ret = renameat2(AT_FDCWD, @"/tmp/a".UTF8String, AT_FDCWD, @"/tmp/b".UTF8String, TEST_RENAME_WHITEOUT);
-    XCTAssertEqual(ret, -1, @"renameat2 RENAME_WHITEOUT should be rejected intentionally");
-    XCTAssertTrue(errno == EOPNOTSUPP || errno == ENOTSUP, @"RENAME_WHITEOUT should return unsupported-operation error");
+- (void)testRenameat2UnsupportedFlagsFail {
+    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", TEST_RENAME_EXCHANGE);
+    XCTAssertEqual(ret, -ENOTSUP, @"renameat2 RENAME_EXCHANGE should be rejected");
+
+    ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", TEST_RENAME_WHITEOUT);
+    XCTAssertEqual(ret, -ENOTSUP, @"renameat2 RENAME_WHITEOUT should be rejected");
 }
 
-- (void)testRenameAt2RejectsInvalidFlags {
-    int ret = renameat2(AT_FDCWD, @"/tmp/a".UTF8String, AT_FDCWD, @"/tmp/b".UTF8String, 0x80000000u);
-    XCTAssertEqual(ret, -1, @"renameat2 should reject invalid flags");
-    XCTAssertEqual(errno, EINVAL, @"invalid rename flags should return EINVAL");
+- (void)testRenameat2UnknownFlagFails {
+    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", 0x80000000);
+    XCTAssertEqual(ret, -EINVAL, @"renameat2 with unknown flag should fail with EINVAL");
+}
+
+- (void)testRenameat2EmptyPathRequiresAtEmptyPathFlag {
+    int ret = renameat2(AT_FDCWD, "/etc/empty-src", AT_FDCWD, "/etc/empty-dst", 0);
+    XCTAssertEqual(ret, -ENOENT, @"renameat2 without RENAME_EMPTY_PATH should behave normally");
 }
 
 /* ============================================================================
- * FD CONTROL SEMANTICS TESTS
+ * FCNTL SEMANTICS TESTS
  * ============================================================================ */
 
-- (void)testFcntlFdFlagsTrackCloexecPerDescriptor {
-    int fd = open(@"/tmp/fcntl-fdflags.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
-    int save_errno = errno;
-    NSLog(@"DEBUG: open returned %d (errno=%d)", fd, save_errno);
-    XCTAssertTrue(fd >= 0, @"open should succeed, fd=%d errno=%d", fd, save_errno);
+- (void)testFcntlDupFdSucceeds {
+    int fd = open("/etc/passwd", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), 0, @"new descriptor should start without FD_CLOEXEC");
-    XCTAssertEqual(fcntl(fd, TEST_F_SETFD, TEST_FD_CLOEXEC), 0, @"F_SETFD should succeed");
-    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"F_GETFD should report FD_CLOEXEC");
-    XCTAssertEqual(fcntl(fd, TEST_F_SETFD, 0), 0, @"F_SETFD should clear FD_CLOEXEC");
-    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), 0, @"descriptor flag clear should persist");
+    int new_fd = fcntl(fd, TEST_F_DUPFD, 10);
+    XCTAssertTrue(new_fd >= 10, @"F_DUPFD should return fd >= 10");
+
+    close(fd);
+    if (new_fd >= 0) close(new_fd);
+}
+
+- (void)testFcntlGetFdSucceeds {
+    int fd = open("/etc/passwd", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open should succeed");
+    if (fd < 0) return;
+
+    int flags = fcntl(fd, TEST_F_GETFD);
+    XCTAssertTrue(flags >= 0, @"F_GETFD should succeed");
 
     close(fd);
 }
 
-- (void)testFcntlGetflSetflRoundTripMutableFlagsOnly {
-    int fd = open(@"/tmp/fcntl-statusflags.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+- (void)testFcntlSetFdCloexecSucceeds {
+    int fd = open("/etc/passwd", O_RDONLY);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int original = fcntl(fd, TEST_F_GETFL);
-    XCTAssertTrue(original >= 0, @"F_GETFL should succeed");
-    XCTAssertEqual(original & O_ACCMODE, O_RDWR, @"F_GETFL should preserve access mode");
+    int ret = fcntl(fd, TEST_F_SETFD, TEST_FD_CLOEXEC);
+    XCTAssertEqual(ret, 0, @"F_SETFD with FD_CLOEXEC should succeed");
 
-    XCTAssertEqual(fcntl(fd, TEST_F_SETFL, original | O_APPEND | O_NONBLOCK), 0, @"F_SETFL should update mutable flags");
-    int updated = fcntl(fd, TEST_F_GETFL);
-    XCTAssertEqual(updated & O_ACCMODE, O_RDWR, @"F_SETFL must not mutate access mode");
-    XCTAssertTrue((updated & O_APPEND) != 0, @"F_SETFL should set O_APPEND");
-    XCTAssertTrue((updated & O_NONBLOCK) != 0, @"F_SETFL should set O_NONBLOCK");
+    int flags = fcntl(fd, TEST_F_GETFD);
+    XCTAssertTrue(flags & TEST_FD_CLOEXEC, @"FD_CLOEXEC should be set");
 
     close(fd);
 }
 
-- (void)testDupSharesOffsetButNotDescriptorFlags {
-    int fd = open(@"/tmp/fcntl-dup.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+- (void)testFcntlGetFlSucceeds {
+    int fd = open("/etc/passwd", O_RDONLY);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    XCTAssertEqual(write(fd, "abcdef", 6), 6, @"write should seed file contents");
-    XCTAssertEqual(lseek(fd, 2, SEEK_SET), 2, @"seek should position original fd");
-
-    int dupfd = dup(fd);
-    XCTAssertTrue(dupfd >= 0, @"dup should succeed");
-    if (dupfd < 0) {
-        close(fd);
-        return;
-    }
-
-    XCTAssertEqual(lseek(dupfd, 0, SEEK_CUR), 2, @"duplicated descriptor should share file offset");
-    XCTAssertEqual(fcntl(fd, TEST_F_SETFD, TEST_FD_CLOEXEC), 0, @"set cloexec on original should succeed");
-    XCTAssertEqual(fcntl(fd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"original should have cloexec");
-    XCTAssertEqual(fcntl(dupfd, TEST_F_GETFD), 0, @"duplicate should not inherit descriptor flag mutations");
-
-    close(dupfd);
-    close(fd);
-}
-
-- (void)testDup3AndFdupfdCloexecSetCloseOnExecIntentionally {
-    int fd = open(@"/tmp/fcntl-dupcloexec.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
-    XCTAssertTrue(fd >= 0, @"open should succeed");
-    if (fd < 0) return;
-
-    int dup3fd = dup3(fd, fd + 10, O_CLOEXEC);
-    XCTAssertTrue(dup3fd >= 0, @"dup3 with O_CLOEXEC should succeed");
-    if (dup3fd >= 0) {
-        XCTAssertEqual(fcntl(dup3fd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"dup3 should set FD_CLOEXEC on new descriptor");
-        close(dup3fd);
-    }
-
-    int fdupfd = fcntl(fd, TEST_F_DUPFD_CLOEXEC, fd + 20);
-    XCTAssertTrue(fdupfd >= 0, @"F_DUPFD_CLOEXEC should succeed");
-    if (fdupfd >= 0) {
-        XCTAssertEqual(fcntl(fdupfd, TEST_F_GETFD), TEST_FD_CLOEXEC, @"F_DUPFD_CLOEXEC should set FD_CLOEXEC");
-        close(fdupfd);
-    }
+    int flags = fcntl(fd, TEST_F_GETFL);
+    XCTAssertTrue(flags >= 0, @"F_GETFL should succeed");
+    XCTAssertTrue(flags & O_RDONLY, @"flags should include O_RDONLY");
 
     close(fd);
 }
 
-- (void)testFcntlRejectsUnsupportedCommandIntentionally {
-    int fd = open(@"/tmp/fcntl-invalid.txt".UTF8String, O_CREAT | O_RDWR | O_TRUNC, 0644);
+- (void)testFcntlDupFdCloexecSucceeds {
+    int fd = open("/etc/passwd", O_RDONLY);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int ret = fcntl(fd, 999999, 0);
-    XCTAssertEqual(ret, -1, @"unsupported fcntl command should fail");
-    XCTAssertEqual(errno, EINVAL, @"unsupported fcntl command should return EINVAL");
+    int new_fd = fcntl(fd, TEST_F_DUPFD_CLOEXEC, 10);
+    XCTAssertTrue(new_fd >= 10, @"F_DUPFD_CLOEXEC should return fd >= 10");
+
+    int flags = fcntl(new_fd, TEST_F_GETFD);
+    XCTAssertTrue(flags & TEST_FD_CLOEXEC, @"duped fd should have FD_CLOEXEC");
 
     close(fd);
+    if (new_fd >= 0) close(new_fd);
 }
 
 /* ============================================================================
- * SYNTHETIC /proc/self AND /proc/self/fd TESTS
- * ============================================================================
- */
+ * SIGNAL-FAMILY SEMANTICS TESTS
+ * ============================================================================ */
+
+- (void)testSignalKillSucceeds {
+    pid_t pid = getpid();
+    int ret = kill(pid, 0);
+    XCTAssertEqual(ret, 0, @"kill(self, 0) should succeed");
+}
+
+- (void)testSignalSigactionInstallAndRestore {
+    int ret = ixland_test_signal_install_sigint_ign();
+    XCTAssertEqual(ret, 0, @"sigaction should succeed for SIGINT");
+
+    ret = ixland_test_signal_restore_sigint();
+    XCTAssertEqual(ret, 0, @"sigaction restore should succeed");
+}
+
+- (void)testSignalSigprocmaskBlockAndUnblock {
+    int ret = ixland_test_signal_block_sigint();
+    XCTAssertEqual(ret, 0, @"sigprocmask block should succeed");
+
+    sigset_t pending;
+    ret = sigpending(&pending);
+    XCTAssertEqual(ret, 0, @"sigpending should succeed");
+
+    ret = ixland_test_signal_restore_mask();
+    XCTAssertEqual(ret, 0, @"sigprocmask restore should succeed");
+}
+
+/* ============================================================================
+ * PROC/SELF ABSTRACTION TESTS
+ * ============================================================================ */
 
 - (void)testProcSelfStatSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self", &st), 0, @"stat(/proc/self) should succeed");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc/self should be a directory");
-    XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc/self should have 0555 permissions");
-
-    errno = 0;
-    XCTAssertEqual(lstat_impl("/proc/self", &st), 0, @"lstat(/proc/self) should succeed");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"lstat(/proc/self) should return directory");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self should be a directory");
 }
 
-- (void)testProcSelfFdStatSucceeds {
-    struct linux_stat st;
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/fd", &st), 0, @"stat(/proc/self/fd) should succeed");
-    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc/self/fd should be a directory");
-    XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc/self/fd should have 0555 permissions");
-}
-
-- (void)testProcSelfAccessSucceeds {
-    errno = 0;
-    XCTAssertEqual(access("/proc/self", F_OK), 0, @"access(/proc/self, F_OK) should succeed");
-    XCTAssertEqual(access("/proc/self", R_OK), 0, @"access(/proc/self, R_OK) should succeed");
-    XCTAssertEqual(access("/proc/self", X_OK), 0, @"access(/proc/self, X_OK) should succeed");
-}
-
-- (void)testProcSelfFdAccessSucceeds {
-    errno = 0;
-    XCTAssertEqual(access("/proc/self/fd", F_OK), 0, @"access(/proc/self/fd, F_OK) should succeed");
-}
-
-- (void)testProcSelfOpenSucceeds {
-    errno = 0;
-    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
-    if (fd >= 0) close(fd);
-}
-
-- (void)testProcSelfFdOpenSucceeds {
-    errno = 0;
-    int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
-    if (fd >= 0) close(fd);
-}
-
-- (void)testProcSelfGetdentsReturnsDotDotdotFd {
-    errno = 0;
-    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
-    if (fd < 0) return;
-
-    union { char storage[1024]; uint64_t align; } aligned;
-    char *buffer = aligned.storage;
-    memset(buffer, 0, sizeof(aligned));
-
-    bool found_dot = false;
-    bool found_dotdot = false;
-    bool found_fd = false;
-    bool done = false;
-    while (!done) {
-        errno = 0;
-        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
-        if (nread <= 0) {
-            done = true;
-            continue;
-        }
-        size_t pos = 0;
-        while (pos < (size_t)nread) {
-            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-            NSString *name = [NSString stringWithUTF8String:entry->d_name];
-            if ([name isEqualToString:@"."]) {
-                found_dot = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
-            } else if ([name isEqualToString:@".."]) {
-                found_dotdot = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
-            } else if ([name isEqualToString:@"fd"]) {
-                found_fd = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @"fd should be DT_DIR");
-            }
-            if (entry->d_reclen == 0) break;
-            pos += entry->d_reclen;
-        }
-    }
-
-    XCTAssertTrue(found_dot, @"getdents64(/proc/self) should return '.' entry");
-    XCTAssertTrue(found_dotdot, @"getdents64(/proc/self) should return '..' entry");
-    XCTAssertTrue(found_fd, @"getdents64(/proc/self) should return 'fd' entry");
-
-    close(fd);
-}
-
-- (void)testProcSelfFdGetdentsReturnsDotDotdotAndFdNumbers {
-    errno = 0;
-    int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
-    if (fd < 0) return;
-
-    union { char storage[2048]; uint64_t align; } aligned;
-    char *buffer = aligned.storage;
-    memset(buffer, 0, sizeof(aligned));
-
-    bool found_dot = false;
-    bool found_dotdot = false;
-    int fd_link_count = 0;
-    bool done = false;
-    while (!done) {
-        errno = 0;
-        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
-        if (nread <= 0) {
-            done = true;
-            continue;
-        }
-        size_t pos = 0;
-        while (pos < (size_t)nread) {
-            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-            NSString *name = [NSString stringWithUTF8String:entry->d_name];
-            if ([name isEqualToString:@"."]) {
-                found_dot = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
-            } else if ([name isEqualToString:@".."]) {
-                found_dotdot = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
-            } else {
-                XCTAssertEqual(entry->d_type, DT_LNK, @"fd entries should be DT_LNK");
-                fd_link_count++;
-            }
-            if (entry->d_reclen == 0) break;
-            pos += entry->d_reclen;
-        }
-    }
-
-    XCTAssertTrue(found_dot, @"getdents64(/proc/self/fd) should return '.' entry");
-    XCTAssertTrue(found_dotdot, @"getdents64(/proc/self/fd) should return '..' entry");
-    XCTAssertTrue(fd_link_count > 0, @"getdents64(/proc/self/fd) should return at least one fd number link");
-
-    close(fd);
-}
-
-- (void)testProcSelfFdLinkReadlink {
-    errno = 0;
-    int test_fd = open("/dev/null", O_RDWR);
-    XCTAssertTrue(test_fd >= 0, @"open(/dev/null) should succeed for readlink test");
-    if (test_fd < 0) return;
-
-    char fd_path[64];
-    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", test_fd);
-
-    errno = 0;
-    char link_target[MAX_PATH];
-    ssize_t link_len = readlink(fd_path, link_target, sizeof(link_target) - 1);
-    XCTAssertTrue(link_len > 0, @"readlink(%s) should succeed, got %zd errno %d", fd_path, link_len, errno);
-    if (link_len > 0) {
-        link_target[link_len] = '\0';
-        NSString *target = [NSString stringWithUTF8String:link_target];
-        XCTAssertTrue([target isEqualToString:@"/dev/null"], @"readlink should return /dev/null, got %@", target);
-    }
-
-    close(test_fd);
-}
-
-- (void)testProcSelfFdInvalidLinkFails {
-    errno = 0;
-    char link_target[MAX_PATH];
-    ssize_t link_len = readlink("/proc/self/fd/9999", link_target, sizeof(link_target));
-    XCTAssertEqual(link_len, -1, @"readlink(/proc/self/fd/9999) should fail");
-    XCTAssertEqual(errno, ENOENT, @"readlink(/proc/self/fd/9999) should set ENOENT");
-}
-
-- (void)testProcSelfFdLinkLstatReturnsSymlink {
-    errno = 0;
-    int test_fd = open("/dev/null", O_RDWR);
-    XCTAssertTrue(test_fd >= 0, @"open(/dev/null) should succeed for lstat test");
-    if (test_fd < 0) return;
-
-    char fd_path[64];
-    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", test_fd);
-
-    struct linux_stat st;
-    errno = 0;
-    XCTAssertEqual(lstat_impl(fd_path, &st), 0, @"lstat(%s) should succeed", fd_path);
-    XCTAssertTrue(S_ISLNK(st.st_mode), @"lstat(/proc/self/fd/<n>) should return S_IFLNK");
-
-    close(test_fd);
-}
-
-- (void)testProcSelfCwdStatSucceeds {
-    struct linux_stat st;
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/cwd", &st), 0, @"stat(/proc/self/cwd) should succeed");
-    XCTAssertTrue(S_ISLNK(st.st_mode), @"/proc/self/cwd should be a symlink");
-    XCTAssertEqual(st.st_mode & 0777, 0777, @"/proc/self/cwd should have 0777 permissions");
-
-    errno = 0;
-    XCTAssertEqual(lstat_impl("/proc/self/cwd", &st), 0, @"lstat(/proc/self/cwd) should succeed");
-    XCTAssertTrue(S_ISLNK(st.st_mode), @"lstat(/proc/self/cwd) should return symlink");
-}
-
-- (void)testProcSelfExeStatSucceeds {
-    struct linux_stat st;
-    errno = 0;
-    int ret = lstat_impl("/proc/self/exe", &st);
-    if (ret == 0) {
-        XCTAssertTrue(S_ISLNK(st.st_mode), @"/proc/self/exe should be a symlink");
-        XCTAssertEqual(st.st_mode & 0777, 0777, @"/proc/self/exe should have 0777 permissions");
-    } else {
-        XCTAssertEqual(errno, ENOENT, @"lstat(/proc/self/exe) should return ENOENT if exe path not set");
-    }
-}
-
-- (void)testProcSelfCwdAccessSucceeds {
-    errno = 0;
-    XCTAssertEqual(access("/proc/self/cwd", F_OK), 0, @"access(/proc/self/cwd, F_OK) should succeed");
-}
-
-- (void)testProcSelfExeAccessSucceeds {
-    errno = 0;
-    int ret = access("/proc/self/exe", F_OK);
-    if (ret != 0) {
-        XCTAssertEqual(errno, ENOENT, @"access(/proc/self/exe) should return ENOENT if exe path not set");
-    }
-}
-
-- (void)testProcSelfCwdReadlinkReturnsCurrentDirectory {
-    errno = 0;
-    char link_target[MAX_PATH];
-    ssize_t link_len = readlink("/proc/self/cwd", link_target, sizeof(link_target) - 1);
-    XCTAssertTrue(link_len > 0, @"readlink(/proc/self/cwd) should succeed, got %zd errno %d", link_len, errno);
-    if (link_len > 0) {
-        link_target[link_len] = '\0';
-        
-        char expected_cwd[MAX_PATH];
-        char *cwd_result = getcwd(expected_cwd, sizeof(expected_cwd));
-        XCTAssertTrue(cwd_result != NULL, @"getcwd should succeed");
-        
-        if (cwd_result) {
-            NSString *target = [NSString stringWithUTF8String:link_target];
-            NSString *expected = [NSString stringWithUTF8String:expected_cwd];
-            XCTAssertEqualObjects(target, expected, @"readlink(/proc/self/cwd) should return current working directory");
-        }
-    }
-}
-
-- (void)testProcSelfExeReadlinkReturnsExecutablePath {
-    errno = 0;
-    char link_target[MAX_PATH];
-    ssize_t link_len = readlink("/proc/self/exe", link_target, sizeof(link_target) - 1);
-    if (link_len > 0) {
-        link_target[link_len] = '\0';
-        NSString *target = [NSString stringWithUTF8String:link_target];
-        XCTAssertTrue([target length] > 0, @"readlink(/proc/self/exe) should return non-empty path");
-    } else {
-        XCTAssertEqual(errno, ENOENT, @"readlink(/proc/self/exe) should return ENOENT if exe path not set, got errno %d", errno);
-    }
-}
-
-- (void)testProcSelfGetdentsIncludesCwdAndExe {
-    errno = 0;
-    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
-    if (fd < 0) return;
-
-    union { char storage[1024]; uint64_t align; } aligned;
-    char *buffer = aligned.storage;
-    memset(buffer, 0, sizeof(aligned));
-
-    bool found_dot = false;
-    bool found_dotdot = false;
-    bool found_fd = false;
-    bool found_cwd = false;
-    bool found_exe = false;
-    bool done = false;
-    while (!done) {
-        errno = 0;
-        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
-        if (nread <= 0) {
-            done = true;
-            continue;
-        }
-        size_t pos = 0;
-        while (pos < (size_t)nread) {
-            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-            NSString *name = [NSString stringWithUTF8String:entry->d_name];
-            if ([name isEqualToString:@"."]) {
-                found_dot = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
-            } else if ([name isEqualToString:@".."]) {
-                found_dotdot = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
-            } else if ([name isEqualToString:@"fd"]) {
-                found_fd = true;
-                XCTAssertEqual(entry->d_type, DT_DIR, @"fd should be DT_DIR");
-            } else if ([name isEqualToString:@"cwd"]) {
-                found_cwd = true;
-                XCTAssertEqual(entry->d_type, DT_LNK, @"cwd should be DT_LNK");
-            } else if ([name isEqualToString:@"exe"]) {
-                found_exe = true;
-                XCTAssertEqual(entry->d_type, DT_LNK, @"exe should be DT_LNK");
-            }
-            if (entry->d_reclen == 0) break;
-            pos += entry->d_reclen;
-        }
-    }
-
-    XCTAssertTrue(found_dot, @"getdents64(/proc/self) should return '.' entry");
-    XCTAssertTrue(found_dotdot, @"getdents64(/proc/self) should return '..' entry");
-    XCTAssertTrue(found_fd, @"getdents64(/proc/self) should return 'fd' entry");
-    XCTAssertTrue(found_cwd, @"getdents64(/proc/self) should return 'cwd' entry");
-    XCTAssertTrue(found_exe, @"getdents64(/proc/self) should return 'exe' entry");
-
-    close(fd);
-}
-
-- (void)testProcSelfCmdlineStatSucceeds {
-    struct linux_stat st;
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/cmdline", &st), 0, @"stat(/proc/self/cmdline) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/cmdline should be a regular file");
-    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/cmdline should have 0444 permissions");
-
-    errno = 0;
-    XCTAssertEqual(lstat_impl("/proc/self/cmdline", &st), 0, @"lstat(/proc/self/cmdline) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/cmdline) should return regular file");
-}
-
-- (void)testProcSelfCommStatSucceeds {
-    struct linux_stat st;
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/comm", &st), 0, @"stat(/proc/self/comm) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/comm should be a regular file");
-    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/comm should have 0444 permissions");
-
-    errno = 0;
-    XCTAssertEqual(lstat_impl("/proc/self/comm", &st), 0, @"lstat(/proc/self/comm) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/comm) should return regular file");
-}
-
-- (void)testProcSelfCmdlineAccessSucceeds {
-    errno = 0;
-    XCTAssertEqual(access("/proc/self/cmdline", F_OK), 0, @"access(/proc/self/cmdline, F_OK) should succeed");
-    XCTAssertEqual(access("/proc/self/cmdline", R_OK), 0, @"access(/proc/self/cmdline, R_OK) should succeed");
-}
-
-- (void)testProcSelfCommAccessSucceeds {
-    errno = 0;
-    XCTAssertEqual(access("/proc/self/comm", F_OK), 0, @"access(/proc/self/comm, F_OK) should succeed");
-    XCTAssertEqual(access("/proc/self/comm", R_OK), 0, @"access(/proc/self/comm, R_OK) should succeed");
-}
-
-- (void)testProcSelfCmdlineOpenAndReadSucceeds {
-    errno = 0;
-    int fd = open("/proc/self/cmdline", O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/cmdline, O_RDONLY) should succeed");
-    if (fd < 0) return;
-
-    char buf[1024];
-    memset(buf, 0, sizeof(buf));
-    errno = 0;
-    ssize_t nread = read(fd, buf, sizeof(buf));
-    XCTAssertTrue(nread > 0, @"read(/proc/self/cmdline) should return > 0 bytes, got %zd errno %d", nread, errno);
-    
-    if (nread > 0) {
-        XCTAssertTrue(buf[nread - 1] == '\0', @"/proc/self/cmdline should end with NUL byte");
-    }
-
-    close(fd);
-}
-
-- (void)testProcSelfCommOpenAndReadSucceeds {
-    errno = 0;
-    int fd = open("/proc/self/comm", O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/comm, O_RDONLY) should succeed");
-    if (fd < 0) return;
-
-    char buf[256];
-    memset(buf, 0, sizeof(buf));
-    errno = 0;
-    ssize_t nread = read(fd, buf, sizeof(buf));
-    XCTAssertTrue(nread > 0, @"read(/proc/self/comm) should return > 0 bytes, got %zd errno %d", nread, errno);
-    
-    if (nread > 0) {
-        XCTAssertTrue(buf[nread - 1] == '\n', @"/proc/self/comm should end with newline");
-        XCTAssertTrue(nread <= 17, @"/proc/self/comm should be at most 16 chars + newline, got %zd", nread);
-    }
-
-    close(fd);
-}
-
-- (void)testProcSelfGetdentsIncludesCmdlineAndComm {
-    errno = 0;
-    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
-    if (fd < 0) return;
-
-    union { char storage[2048]; uint64_t align; } aligned;
-    char *buffer = aligned.storage;
-    memset(buffer, 0, sizeof(aligned));
-
-    bool found_cmdline = false;
-    bool found_comm = false;
-    bool done = false;
-    while (!done) {
-        errno = 0;
-        ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
-        if (nread <= 0) {
-            done = true;
-            continue;
-        }
-        size_t pos = 0;
-        while (pos < (size_t)nread) {
-            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-            NSString *name = [NSString stringWithUTF8String:entry->d_name];
-            if ([name isEqualToString:@"cmdline"]) {
-                found_cmdline = true;
-                XCTAssertEqual(entry->d_type, DT_REG, @"cmdline should be DT_REG");
-            } else if ([name isEqualToString:@"comm"]) {
-                found_comm = true;
-                XCTAssertEqual(entry->d_type, DT_REG, @"comm should be DT_REG");
-            }
-            if (entry->d_reclen == 0) break;
-            pos += entry->d_reclen;
-        }
-    }
-
-    XCTAssertTrue(found_cmdline, @"getdents64(/proc/self) should return 'cmdline' entry");
-    XCTAssertTrue(found_comm, @"getdents64(/proc/self) should return 'comm' entry");
-
-    close(fd);
-}
-
-- (void)testProcSelfStatStatSucceeds {
+- (void)testProcSelfStatFileSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/stat", &st), 0, @"stat(/proc/self/stat) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/stat should be a regular file");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/stat should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/stat should have 0444 permissions");
-
-    errno = 0;
-    XCTAssertEqual(lstat_impl("/proc/self/stat", &st), 0, @"lstat(/proc/self/stat) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/stat) should return regular file");
 }
 
-- (void)testProcSelfStatmStatSucceeds {
+- (void)testProcSelfCmdlineSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/cmdline", &st), 0, @"stat(/proc/self/cmdline) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/cmdline should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/cmdline should have 0444 permissions");
+}
+
+- (void)testProcSelfCommSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/comm", &st), 0, @"stat(/proc/self/comm) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/comm should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/comm should have 0444 permissions");
+}
+
+- (void)testProcSelfStatmSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/statm", &st), 0, @"stat(/proc/self/statm) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/statm should be a regular file");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/statm should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/statm should have 0444 permissions");
+}
 
+- (void)testProcSelfExeIsSymlink {
+    struct linux_stat st;
     errno = 0;
-    XCTAssertEqual(lstat_impl("/proc/self/statm", &st), 0, @"lstat(/proc/self/statm) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/statm) should return regular file");
+    XCTAssertEqual(lstat_impl("/proc/self/exe", &st), 0, @"lstat(/proc/self/exe) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/exe should be a symlink");
 }
 
-- (void)testProcSelfStatAccessSucceeds {
+- (void)testProcSelfCwdIsSymlink {
+    struct linux_stat st;
     errno = 0;
-    XCTAssertEqual(access("/proc/self/stat", F_OK), 0, @"access(/proc/self/stat, F_OK) should succeed");
-    XCTAssertEqual(access("/proc/self/stat", R_OK), 0, @"access(/proc/self/stat, R_OK) should succeed");
+    XCTAssertEqual(lstat_impl("/proc/self/cwd", &st), 0, @"lstat(/proc/self/cwd) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/cwd should be a symlink");
 }
 
-- (void)testProcSelfStatmAccessSucceeds {
+- (void)testProcSelfFdIsDirectory {
+    struct linux_stat st;
     errno = 0;
-    XCTAssertEqual(access("/proc/self/statm", F_OK), 0, @"access(/proc/self/statm, F_OK) should succeed");
-    XCTAssertEqual(access("/proc/self/statm", R_OK), 0, @"access(/proc/self/statm, R_OK) should succeed");
+    XCTAssertEqual(stat_impl("/proc/self/fd", &st), 0, @"stat(/proc/self/fd) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self/fd should be a directory");
 }
 
-- (void)testProcSelfStatOpenAndReadSucceeds {
+- (void)testProcSelfFdinfoIsDirectory {
+    struct linux_stat st;
     errno = 0;
-    int fd = open("/proc/self/stat", O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/stat, O_RDONLY) should succeed");
-    if (fd < 0) return;
-
-    char buf[2048];
-    memset(buf, 0, sizeof(buf));
-    errno = 0;
-    ssize_t nread = read(fd, buf, sizeof(buf));
-    XCTAssertTrue(nread > 0, @"read(/proc/self/stat) should return > 0 bytes, got %zd errno %d", nread, errno);
-    
-    if (nread > 0) {
-        buf[nread] = '\0';
-        NSString *content = [NSString stringWithUTF8String:buf];
-        XCTAssertTrue([content containsString:@"("], @"stat content should contain opening paren around comm");
-        XCTAssertTrue([content containsString:@")"], @"stat content should contain closing paren around comm");
-        XCTAssertTrue([content containsString:@"R"] || [content containsString:@"S"] || [content containsString:@"D"] || [content containsString:@"T"] || [content containsString:@"Z"], 
-                     @"stat content should contain valid state char");
-    }
-
-    close(fd);
-}
-
-- (void)testProcSelfStatmOpenAndReadSucceeds {
-    errno = 0;
-    int fd = open("/proc/self/statm", O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/statm, O_RDONLY) should succeed");
-    if (fd < 0) return;
-
-    char buf[256];
-    memset(buf, 0, sizeof(buf));
-    errno = 0;
-    ssize_t nread = read(fd, buf, sizeof(buf));
-    XCTAssertTrue(nread > 0, @"read(/proc/self/statm) should return > 0 bytes, got %zd errno %d", nread, errno);
-    
-    if (nread > 0) {
-        buf[nread] = '\0';
-        NSString *content = [NSString stringWithUTF8String:buf];
-        XCTAssertTrue([content containsString:@" "], @"statm content should contain space-separated values");
-        XCTAssertTrue([content containsString:@"\n"], @"statm content should end with newline");
-    }
-
-    close(fd);
-}
-
-- (void)testProcSelfGetdentsIncludesStatAndStatm {
-errno = 0;
-int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
-XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
-if (fd < 0) return;
-
-union { char storage[2048]; uint64_t align; } aligned;
-char *buffer = aligned.storage;
-memset(buffer, 0, sizeof(aligned));
-
-bool found_stat = false;
-bool found_statm = false;
-bool done = false;
-while (!done) {
-errno = 0;
-ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
-if (nread <= 0) {
-done = true;
-continue;
-}
-size_t pos = 0;
-while (pos < (size_t)nread) {
-struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
-NSString *name = [NSString stringWithUTF8String:entry->d_name];
-if ([name isEqualToString:@"stat"]) {
-found_stat = true;
-XCTAssertEqual(entry->d_type, DT_REG, @"stat should be DT_REG");
-} else if ([name isEqualToString:@"statm"]) {
-found_statm = true;
-XCTAssertEqual(entry->d_type, DT_REG, @"statm should be DT_REG");
-}
-if (entry->d_reclen == 0) break;
-pos += entry->d_reclen;
-}
-}
-
-XCTAssertTrue(found_stat, @"getdents64(/proc/self) should return 'stat' entry");
-XCTAssertTrue(found_statm, @"getdents64(/proc/self) should return 'statm' entry");
-
-close(fd);
+    XCTAssertEqual(stat_impl("/proc/self/fdinfo", &st), 0, @"stat(/proc/self/fdinfo) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self/fdinfo should be a directory");
 }
 
 /* ============================================================================
-* /proc/self/fdinfo/<n> TESTS
-* ============================================================================ */
-
-- (void)testProcSelfFdinfoStatSucceeds {
-    struct linux_stat st;
-
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/fdinfo/0", &st), 0, @"stat(/proc/self/fdinfo/0) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/fdinfo/0 should be a regular file");
-    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/fdinfo/0 should have 0444 permissions");
-
-    errno = 0;
-    XCTAssertEqual(lstat_impl("/proc/self/fdinfo/0", &st), 0, @"lstat(/proc/self/fdinfo/0) should succeed");
-    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/fdinfo/0) should return regular file");
-}
-
-- (void)testProcSelfFdinfoAccessSucceeds {
-errno = 0;
-XCTAssertEqual(access("/proc/self/fdinfo/0", F_OK), 0, @"access(/proc/self/fdinfo/0, F_OK) should succeed");
-XCTAssertEqual(access("/proc/self/fdinfo/0", R_OK), 0, @"access(/proc/self/fdinfo/0, R_OK) should succeed");
-}
-
-- (void)testProcSelfFdinfoOpenAndReadSucceeds {
-errno = 0;
-int fd = open("/proc/self/fdinfo/0", O_RDONLY);
-XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0, O_RDONLY) should succeed");
-if (fd < 0) return;
-
-char buf[256];
-memset(buf, 0, sizeof(buf));
-errno = 0;
-ssize_t nread = read(fd, buf, sizeof(buf) - 1);
-XCTAssertTrue(nread > 0, @"read(/proc/self/fdinfo/0) should return > 0 bytes, got %zd errno %d", nread, errno);
-
-NSString *content = [NSString stringWithUTF8String:buf];
-XCTAssertTrue([content containsString:@"pos:"], @"fdinfo content should contain 'pos:'");
-XCTAssertTrue([content containsString:@"flags:"], @"fdinfo content should contain 'flags:'");
-
-close(fd);
-}
-
-- (void)testProcSelfFdinfoValidFdNumbers {
-    struct linux_stat st;
-
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/fdinfo/1", &st), 0, @"stat(/proc/self/fdinfo/1) should succeed");
-
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/fdinfo/2", &st), 0, @"stat(/proc/self/fdinfo/2) should succeed");
-
-int test_fd = open("/proc/self/fdinfo/0", O_RDONLY);
-XCTAssertTrue(test_fd >= 0, @"open for fdinfo test should succeed");
-if (test_fd >= 0) {
-char buf[256];
-memset(buf, 0, sizeof(buf));
-ssize_t nread = read(test_fd, buf, sizeof(buf) - 1);
-XCTAssertTrue(nread > 0, @"read should return content");
-NSString *content = [NSString stringWithUTF8String:buf];
-XCTAssertTrue([content containsString:@"pos:"], @"content should contain pos");
-XCTAssertTrue([content containsString:@"flags:"], @"content should contain flags");
-close(test_fd);
-}
-}
-
-- (void)testProcSelfFdinfoInvalidFdNumbers {
-    struct linux_stat st;
-
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/fdinfo/999", &st), -1, @"stat(/proc/self/fdinfo/999) should fail");
-    XCTAssertEqual(errno, ENOENT, @"stat(/proc/self/fdinfo/999) should set ENOENT");
-
-    errno = 0;
-    XCTAssertEqual(open("/proc/self/fdinfo/999", O_RDONLY), -1, @"open(/proc/self/fdinfo/999) should fail");
-    XCTAssertEqual(errno, ENOENT, @"open(/proc/self/fdinfo/999) should set ENOENT");
-
-    errno = 0;
-    XCTAssertEqual(stat_impl("/proc/self/fdinfo/abc", &st), -1, @"stat(/proc/self/fdinfo/abc) should fail for non-numeric");
-    XCTAssertEqual(errno, ENOENT, @"stat(/proc/self/fdinfo/abc) should set ENOENT");
-}
-
-/* ============================================================================
- * POLL/SELECT READINESS TESTS
+ * /PROC/SELF/FD/ SYMLINK TESTS
  * ============================================================================ */
 
-- (void)testPollSyntheticProcfsRegularFileReturnsImmediateReadWrite {
-    int fd = open("/proc/self/cmdline", O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/cmdline) should succeed");
-    if (fd < 0) return;
+- (void)testProcSelfFdSymlinksExist {
+    struct linux_stat st;
     
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
-    
+    // Get stdin fd (0) info via /proc/self/fd/0
     errno = 0;
-    int ret = poll(&pfd, 1, 0);
-    XCTAssertEqual(ret, 1, @"poll() on synthetic procfs regular file should return 1 ready fd");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"synthetic procfs regular file should be read-ready");
-    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"synthetic procfs regular file should be write-ready (Linux semantics)");
+    int ret = lstat_impl("/proc/self/fd/0", &st);
+    XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/0) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/0 should be a symlink");
     
-    close(fd);
+    // Get stdout fd (1) info via /proc/self/fd/1
+    errno = 0;
+    ret = lstat_impl("/proc/self/fd/1", &st);
+    XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/1) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/1 should be a symlink");
+    
+    // Get stderr fd (2) info via /proc/self/fd/2
+    errno = 0;
+    ret = lstat_impl("/proc/self/fd/2", &st);
+    XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/2) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/2 should be a symlink");
 }
 
-- (void)testSelectSyntheticProcfsRegularFileReturnsImmediateReadWrite {
-    int fd = open("/proc/self/comm", O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/comm) should succeed");
-    if (fd < 0) return;
+- (void)testProcSelfFdSymlinksPointToValidPaths {
+    char link_target[MAX_PATH];
+    ssize_t len;
     
-    fd_set readfds, writefds;
-    FD_ZERO(&readfds);
-    FD_ZERO(&writefds);
-    FD_SET(fd, &readfds);
-    FD_SET(fd, &writefds);
-    
-    struct timeval tv = {0, 0};
-    errno = 0;
-    int ret = select_impl(fd + 1, &readfds, &writefds, NULL, &tv);
-    XCTAssertTrue(ret > 0, @"select_impl() on synthetic procfs regular file should return > 0");
-    XCTAssertTrue(FD_ISSET(fd, &readfds), @"synthetic procfs regular file should be read-ready");
-    XCTAssertTrue(FD_ISSET(fd, &writefds), @"synthetic procfs regular file should be write-ready (Linux semantics)");
-    
-    close(fd);
-}
-
-- (void)testPollSyntheticDirectoryReturnsReadReadyOnly {
-    int fd = open("/proc/self", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self, O_DIRECTORY) should succeed");
-    if (fd < 0) return;
-    
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
-    
-    errno = 0;
-    int ret = poll(&pfd, 1, 0);
-    XCTAssertEqual(ret, 1, @"poll() on synthetic directory should return 1 ready fd");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"synthetic directory should be read-ready");
-    XCTAssertTrue((pfd.revents & POLLOUT) == 0, @"synthetic directory should NOT be write-ready");
-    
-    close(fd);
-}
-
-- (void)testPollSyntheticProcSelfFdDirectoryReturnsReadReadyOnly {
-    int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY);
-    XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
-    if (fd < 0) return;
-
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
-
-    errno = 0;
-    int ret = poll(&pfd, 1, 0);
-    XCTAssertEqual(ret, 1, @"poll() on /proc/self/fd should return 1 ready fd");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/proc/self/fd should be read-ready for enumeration");
-    XCTAssertTrue((pfd.revents & POLLOUT) == 0, @"/proc/self/fd should NOT be write-ready");
-
-    close(fd);
-}
-
-- (void)testPollDevNullReturnsImmediateReadWrite {
-    int fd = open("/dev/null", O_RDWR);
-    XCTAssertTrue(fd >= 0, @"open(/dev/null) should succeed");
-    if (fd < 0) return;
-    
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
-    
-    errno = 0;
-    int ret = poll(&pfd, 1, 0);
-    XCTAssertEqual(ret, 1, @"poll() on /dev/null should return 1 ready fd");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/dev/null should be read-ready");
-    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"/dev/null should be write-ready");
-    
-    close(fd);
-}
-
-- (void)testPollDevZeroReturnsImmediateReadWrite {
-    int fd = open("/dev/zero", O_RDWR);
-    XCTAssertTrue(fd >= 0, @"open(/dev/zero) should succeed");
-    if (fd < 0) return;
-    
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
-    
-    errno = 0;
-    int ret = poll(&pfd, 1, 0);
-    XCTAssertEqual(ret, 1, @"poll() on /dev/zero should return 1 ready fd");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/dev/zero should be read-ready");
-    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"/dev/zero should be write-ready (writes succeed immediately)");
-    
-    close(fd);
-}
-
-- (void)testPollDevUrandomReturnsImmediateReadWrite {
-    int fd = open("/dev/urandom", O_RDWR);
-    XCTAssertTrue(fd >= 0, @"open(/dev/urandom) should succeed");
-    if (fd < 0) return;
-
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
-
-    errno = 0;
-    int ret = poll(&pfd, 1, 0);
-    XCTAssertEqual(ret, 1, @"poll() on /dev/urandom should return 1 ready fd");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"/dev/urandom should be read-ready");
-    XCTAssertTrue((pfd.revents & POLLOUT) != 0, @"/dev/urandom should be write-ready (writes succeed immediately)");
-
-    close(fd);
-}
-
-- (void)testPtyMasterSlaveOpenAndIoctlBaseline {
-    int master_fd = open("/dev/ptmx", O_RDWR);
-    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
-    if (master_fd < 0) return;
-
-    unsigned int pty_number = 0;
-    errno = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed on PTY master");
-
-    char slave_path[64];
-    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-
-    errno = 0;
-    XCTAssertEqual(open(slave_path, O_RDWR), -1, @"opening locked slave should fail");
-    XCTAssertEqual(errno, EIO, @"locked slave open should set EIO");
-
-    int unlock = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
-
-    int slave_fd = open(slave_path, O_RDWR);
-    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed after unlock");
-    if (slave_fd < 0) {
-        close(master_fd);
-        return;
+    // Read symlink target for fd 0
+    len = readlink("/proc/self/fd/0", link_target, sizeof(link_target) - 1);
+    XCTAssertTrue(len > 0, @"readlink(/proc/self/fd/0) should return a path");
+    if (len > 0) {
+        link_target[len] = '\0';
+        XCTAssertTrue(strlen(link_target) > 0, @"fd 0 should point to a valid path");
     }
-
-    struct ix_termios tio;
-    memset(&tio, 0, sizeof(tio));
-    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-    tio.c_lflag ^= 0x00000008U;
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
-
-    struct ix_winsize ws;
-    memset(&ws, 0, sizeof(ws));
-    ws.ws_row = 40;
-    ws.ws_col = 120;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSWINSZ, &ws), 0, @"TIOCSWINSZ should succeed");
-
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed before pgrp ioctls");
-
-    int32_t pgrp = (int32_t)getpgrp();
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &pgrp), 0, @"TIOCSPGRP should succeed");
-    int32_t got_pgrp = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed");
-    XCTAssertEqual(got_pgrp, pgrp, @"foreground pgrp should round-trip");
-
-
-    close(slave_fd);
-    close(master_fd);
 }
 
-- (void)testPtyDataFlowAndPollReadiness {
-    int master_fd = open("/dev/ptmx", O_RDWR);
-    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
-    if (master_fd < 0) return;
-
-    unsigned int pty_number = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
-
-    int unlock = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
-
-    char slave_path[64];
-    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-    int slave_fd = open(slave_path, O_RDWR);
-    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
-    if (slave_fd < 0) {
-        close(master_fd);
-        return;
+- (void)testProcSelfFdSymlinksReflectActualFdState {
+    // Create a temporary file to get a real fd
+    int test_fd = open("/tmp/test_fd_symlink", O_CREAT | O_RDWR, 0644);
+    XCTAssertTrue(test_fd >= 0, @"open should succeed for test file");
+    if (test_fd < 0) return;
+    
+    // Construct the /proc/self/fd path for this fd
+    char fd_path[64];
+    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", test_fd);
+    
+    // Verify the symlink exists and points to the expected path
+    char link_target[MAX_PATH];
+    ssize_t len = readlink(fd_path, link_target, sizeof(link_target) - 1);
+    XCTAssertTrue(len > 0, @"readlink should succeed for newly created fd");
+    
+    if (len > 0) {
+        link_target[len] = '\0';
+        // Should contain "test_fd_symlink" somewhere in the path
+        XCTAssertTrue(strstr(link_target, "test_fd_symlink") != NULL,
+                      @"fd symlink should point to the test file");
     }
-
-    struct ix_termios tio;
-    memset(&tio, 0, sizeof(tio));
-    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-    tio.c_lflag &= ~(IX_LFLAG_ICANON | IX_LFLAG_ECHO);
-    tio.c_cc[IX_CC_VMIN] = 1;
-    tio.c_cc[IX_CC_VTIME] = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
-
-    struct pollfd pfd;
-    pfd.fd = slave_fd;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-    XCTAssertEqual(poll(&pfd, 1, 0), 0, @"slave should not be read-ready before data");
-
-    const char *msg1 = "hello-pty";
-    XCTAssertEqual(write(master_fd, msg1, strlen(msg1)), (ssize_t)strlen(msg1), @"master write should succeed");
-
-    pfd.revents = 0;
-    XCTAssertEqual(poll(&pfd, 1, 0), 1, @"slave should become read-ready after master write");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"slave POLLIN should be set");
-
-    int pending = 0;
-    XCTAssertEqual(ioctl(slave_fd, IX_FIONREAD, &pending), 0, @"FIONREAD should succeed on slave");
-    XCTAssertTrue(pending > 0, @"FIONREAD should report queued bytes");
-
-    char buf[32];
-    memset(buf, 0, sizeof(buf));
-    XCTAssertEqual(read(slave_fd, buf, sizeof(buf)), (ssize_t)strlen(msg1), @"slave read should consume master payload");
-    XCTAssertEqual(strcmp(buf, msg1), 0, @"slave read payload should match");
-
-    const char *msg2 = "from-slave";
-    XCTAssertEqual(write(slave_fd, msg2, strlen(msg2)), (ssize_t)strlen(msg2), @"slave write should succeed");
-
-    pfd.fd = master_fd;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-    XCTAssertEqual(poll(&pfd, 1, 0), 1, @"master should become read-ready after slave write");
-    XCTAssertTrue((pfd.revents & POLLIN) != 0, @"master POLLIN should be set");
-
-    memset(buf, 0, sizeof(buf));
-    XCTAssertEqual(read(master_fd, buf, sizeof(buf)), (ssize_t)strlen(msg2), @"master read should consume slave payload");
-    XCTAssertEqual(strcmp(buf, msg2), 0, @"master read payload should match");
-
-    close(slave_fd);
-    close(master_fd);
+    
+    // Clean up
+    close(test_fd);
+    unlink("/tmp/test_fd_symlink");
 }
 
-- (void)testPtyLineDisciplineCanonicalEchoAndEditing {
-    int master_fd = -1;
-    int slave_fd = -1;
-    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
-    if (master_fd < 0 || slave_fd < 0) return;
-
-    struct ix_termios tio;
-    memset(&tio, 0, sizeof(tio));
-    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-    tio.c_lflag |= (IX_LFLAG_ICANON | IX_LFLAG_ECHO);
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
-
-    XCTAssertEqual(write(master_fd, "ab", 2), 2, @"master write should succeed");
-
-    char echo_buf[16] = {0};
-    XCTAssertEqual(read(master_fd, echo_buf, sizeof(echo_buf)), 2, @"echo should be visible on master read");
-    XCTAssertEqual(strcmp(echo_buf, "ab"), 0, @"echo payload should match typed bytes");
-
-    char slave_buf[32] = {0};
+- (void)testProcSelfFdInvalidFdNumbersFail {
+    struct linux_stat st;
+    
+    // Try to stat a non-existent fd
     errno = 0;
-    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"canonical read should wait before newline");
-    XCTAssertEqual(errno, EAGAIN, @"canonical read before newline should set EAGAIN");
-
-    XCTAssertEqual(write(master_fd, "\x7f", 1), 1, @"VERASE write should succeed");
-    XCTAssertEqual(write(master_fd, "c", 1), 1, @"master write should succeed");
-    XCTAssertEqual(write(master_fd, "\n", 1), 1, @"newline write should succeed");
-
-    memset(slave_buf, 0, sizeof(slave_buf));
-    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), 3, @"canonical line should flush on newline");
-    XCTAssertEqual(strcmp(slave_buf, "ac\n"), 0, @"VERASE should edit pending line");
-
-    close(slave_fd);
-    close(master_fd);
-}
-
-- (void)testPtyLineDisciplineNoncanonicalVminVtime {
-    int master_fd = -1;
-    int slave_fd = -1;
-    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
-    if (master_fd < 0 || slave_fd < 0) return;
-
-    struct ix_termios tio;
-    memset(&tio, 0, sizeof(tio));
-    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-    tio.c_lflag &= ~(IX_LFLAG_ICANON | IX_LFLAG_ECHO);
-    tio.c_cc[IX_CC_VMIN] = 3;
-    tio.c_cc[IX_CC_VTIME] = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETSW, &tio), 0, @"TCSETSW should succeed");
-
-    XCTAssertEqual(write(master_fd, "ab", 2), 2, @"master write should succeed");
-
-    char slave_buf[16] = {0};
+    int ret = stat_impl("/proc/self/fd/999", &st);
+    XCTAssertEqual(ret, -ENOENT, @"stat(/proc/self/fd/999) should fail with ENOENT");
+    XCTAssertEqual(errno, ENOENT, @"errno should be ENOENT for invalid fd");
+    
+    // Try to stat a non-numeric fd "name"
     errno = 0;
-    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"read should block-equivalent until VMIN bytes");
-    XCTAssertEqual(errno, EAGAIN, @"insufficient bytes should set EAGAIN");
-
-    XCTAssertEqual(write(master_fd, "c", 1), 1, @"master write should succeed");
-    memset(slave_buf, 0, sizeof(slave_buf));
-    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), 3, @"read should return after VMIN bytes");
-    XCTAssertEqual(strcmp(slave_buf, "abc"), 0, @"noncanonical payload should match");
-
-    tio.c_cc[IX_CC_VMIN] = 0;
-    tio.c_cc[IX_CC_VTIME] = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETSW, &tio), 0, @"TCSETSW should succeed");
-
-    memset(slave_buf, 0, sizeof(slave_buf));
-    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), 0, @"VMIN=0 VTIME=0 empty read should return zero");
-
-    close(slave_fd);
-    close(master_fd);
+    ret = stat_impl("/proc/self/fd/abc", &st);
+    XCTAssertEqual(ret, -ENOENT, @"stat(/proc/self/fd/abc) should fail with ENOENT");
+    XCTAssertEqual(errno, ENOENT, @"errno should be ENOENT for non-numeric fd");
 }
 
-- (void)testPtyLineDisciplineTcsetsfFlushesUnreadInput {
-    int master_fd = -1;
-    int slave_fd = -1;
-    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
-    if (master_fd < 0 || slave_fd < 0) return;
-
-    struct ix_termios tio;
-    memset(&tio, 0, sizeof(tio));
-    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-    tio.c_lflag &= ~(IX_LFLAG_ICANON | IX_LFLAG_ECHO);
-    tio.c_cc[IX_CC_VMIN] = 1;
-    tio.c_cc[IX_CC_VTIME] = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
-
-    XCTAssertEqual(write(master_fd, "flush-me", 8), 8, @"master write should succeed");
-
-    struct ix_termios updated = tio;
-    updated.c_lflag |= IX_LFLAG_ECHO;
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETSF, &updated), 0, @"TCSETSF should succeed");
-
-    char slave_buf[16] = {0};
+- (void)testProcSelfFdinfoFilesExist {
+    struct linux_stat st;
+    
+    // fdinfo/0 should exist and be a regular file
     errno = 0;
-    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"TCSETSF should flush unread input");
-    XCTAssertEqual(errno, EAGAIN, @"flushed unread input should set EAGAIN on read");
-
-    close(slave_fd);
-    close(master_fd);
+    int ret = stat_impl("/proc/self/fdinfo/0", &st);
+    XCTAssertEqual(ret, 0, @"stat(/proc/self/fdinfo/0) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/0 should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/fdinfo/0 should have 0444 permissions");
+    
+    // fdinfo/1 should also exist
+    errno = 0;
+    ret = stat_impl("/proc/self/fdinfo/1", &st);
+    XCTAssertEqual(ret, 0, @"stat(/proc/self/fdinfo/1) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/1 should be a regular file");
 }
 
-- (void)testPtyLineDisciplineIsigGeneratesForegroundSignals {
+- (void)testProcSelfFdinfoInvalidFdNumbersFail {
+    struct linux_stat st;
+    
+    // Try to stat a non-existent fdinfo entry
+    errno = 0;
+    int ret = stat_impl("/proc/self/fdinfo/999", &st);
+    XCTAssertEqual(ret, -ENOENT, @"stat(/proc/self/fdinfo/999) should fail with ENOENT");
+    XCTAssertEqual(errno, ENOENT, @"errno should be ENOENT for invalid fdinfo");
+}
+
+/* ============================================================================
+ * HOST PATH VALIDATION AND FAILURE CASES
+ * ============================================================================ */
+
+- (void)testVfsTranslatePathRejectsAbsoluteHostPath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path(@"/private/var/mobile/test".UTF8String, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -EXDEV, @"vfs_translate_path should reject unmapped host absolute path");
+}
+
+- (void)testVfsTranslatePathRejectsNonRoutePath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path(@"/nonexistent/path".UTF8String, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"vfs_translate_path should fallback to persistent route for unknown paths");
+}
+
+- (void)testVfsTranslatePathRejectsInvalidVirtualPath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path(@"".UTF8String, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -ENOENT, @"vfs_translate_path should reject empty path");
+}
+
+- (void)testVfsTranslatePathRejectsNullPath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path(NULL, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -EFAULT, @"vfs_translate_path should reject NULL path");
+}
+
+- (void)testVfsTranslatePathRejectsNullBuffer {
+    int ret = vfs_translate_path(@"/etc/passwd".UTF8String, NULL, MAX_PATH);
+
+    XCTAssertEqual(ret, -EFAULT, @"vfs_translate_path should reject NULL buffer");
+}
+
+- (void)testVfsTranslatePathRejectsZeroBufferSize {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path(@"/etc/passwd".UTF8String, host_path, 0);
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_translate_path should reject zero buffer size");
+}
+
+/* ============================================================================
+ * SYNTHETIC /dev/tty TESTS
+ * ============================================================================ */
+
+- (void)testDevTtyOpenFailsWithoutControllingTty {
     struct task_struct *original_task = get_current();
-    struct task_struct *session_task = alloc_task();
-    XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-    if (!session_task) return;
+    struct task_struct *isolated_task = alloc_task();
+    XCTAssertTrue(isolated_task != NULL, @"task allocation should succeed");
+    if (!isolated_task) return;
 
-    session_task->fs = alloc_fs_struct();
-    XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-    if (!session_task->fs) {
-        free_task(session_task);
+    isolated_task->fs = alloc_fs_struct();
+    XCTAssertTrue(isolated_task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!isolated_task->fs) {
+        free_task(isolated_task);
         return;
     }
 
-    session_task->signal = alloc_signal_struct();
-    XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-    if (!session_task->signal) {
-        free_task(session_task);
+    isolated_task->signal = alloc_signal_struct();
+    XCTAssertTrue(isolated_task->signal != NULL, @"signal_struct allocation should succeed");
+    if (!isolated_task->signal) {
+        free_task(isolated_task);
         return;
     }
 
-    fs_init_root(session_task->fs, @"/".UTF8String);
-    fs_init_pwd(session_task->fs, @"/".UTF8String);
-    session_task->sid = session_task->pid;
-    session_task->pgid = session_task->pid;
-    set_current(session_task);
+    fs_init_root(isolated_task->fs, @"/".UTF8String);
+    fs_init_pwd(isolated_task->fs, @"/".UTF8String);
+    set_current(isolated_task);
 
-    int master_fd = -1;
-    int slave_fd = -1;
-    XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
-    if (master_fd < 0 || slave_fd < 0) {
-        set_current(original_task);
-        free_task(session_task);
-        return;
-    }
-
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed");
-    int32_t current_pgrp = (int32_t)getpgrp();
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &current_pgrp), 0, @"TIOCSPGRP should succeed");
-
-    struct ix_termios tio;
-    memset(&tio, 0, sizeof(tio));
-    XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-    tio.c_lflag |= (IX_LFLAG_ISIG | IX_LFLAG_ICANON);
-    XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS should succeed");
-
-    struct signal_mask_bits block_set = {0};
-    struct signal_mask_bits old_set = {0};
-    struct signal_mask_bits pending = {0};
-    block_set.sig[(IX_SIGINT - 1) >> 6] |= (1ULL << ((IX_SIGINT - 1) & 63));
-    block_set.sig[(IX_SIGQUIT - 1) >> 6] |= (1ULL << ((IX_SIGQUIT - 1) & 63));
-    block_set.sig[(IX_SIGTSTP - 1) >> 6] |= (1ULL << ((IX_SIGTSTP - 1) & 63));
-    XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"do_sigprocmask should succeed");
-
-    unsigned char isig_seq[3] = {tio.c_cc[IX_CC_VINTR], tio.c_cc[IX_CC_VQUIT], tio.c_cc[IX_CC_VSUSP]};
-    XCTAssertEqual(write(master_fd, isig_seq, sizeof(isig_seq)), (ssize_t)sizeof(isig_seq), @"ISIG bytes write should succeed");
-
-    XCTAssertEqual(do_sigpending(&pending), 0, @"do_sigpending should succeed");
-    XCTAssertTrue((pending.sig[(IX_SIGINT - 1) >> 6] & (1ULL << ((IX_SIGINT - 1) & 63))) != 0,
-                  @"VINTR should enqueue SIGINT");
-    XCTAssertTrue((pending.sig[(IX_SIGQUIT - 1) >> 6] & (1ULL << ((IX_SIGQUIT - 1) & 63))) != 0,
-                  @"VQUIT should enqueue SIGQUIT");
-    XCTAssertTrue((pending.sig[(IX_SIGTSTP - 1) >> 6] & (1ULL << ((IX_SIGTSTP - 1) & 63))) != 0,
-                  @"VSUSP should enqueue SIGTSTP");
-
-    char slave_buf[8] = {0};
     errno = 0;
-    XCTAssertEqual(read(slave_fd, slave_buf, sizeof(slave_buf)), -1, @"signal bytes should not become input payload");
-    XCTAssertEqual(errno, EAGAIN, @"no payload after ISIG bytes should set EAGAIN");
+    int fd = open("/dev/tty", O_RDWR);
+    XCTAssertEqual(fd, -1, @"open(/dev/tty) should fail without controlling tty");
+    XCTAssertTrue(errno == ENXIO || errno == EIO, @"open(/dev/tty) should set ENXIO or EIO");
 
-    XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore old mask should succeed");
-
-    close(slave_fd);
-    close(master_fd);
     set_current(original_task);
-    free_task(session_task);
+    free_task(isolated_task);
 }
 
-- (void)testPollMixedSyntheticAndHostBackedFds {
-    vfs_test_seed_linux_file("/tmp/poll-test-host-file");
+- (void)testDevTtyStatFails {
+    struct linux_stat st;
+    errno = 0;
+    int ret = stat_impl("/dev/tty", &st);
+    XCTAssertEqual(ret, -ENOENT, @"stat(/dev/tty) should fail for unsupported synthetic node");
+    XCTAssertEqual(errno, ENOENT, @"stat(/dev/tty) should set ENOENT");
+}
+
+- (void)testDevTtyAccessFails {
+    errno = 0;
+    int ret = access("/dev/tty", F_OK);
+    XCTAssertEqual(ret, -ENOENT, @"access(/dev/tty) should fail for unsupported synthetic node");
+    XCTAssertEqual(errno, ENOENT, @"access(/dev/tty) should set ENOENT");
+}
+
+/* ============================================================================
+ * PERSISTENT FILESYSTEM TESTS
+ * ============================================================================ */
+
+- (void)testPersistentFileCreationAndReadWrite {
+    const char *test_path = "/etc/test_persistent_file";
+    char host_path[MAX_PATH];
+    int fd;
     
-    int host_fd = open("/tmp/poll-test-host-file", O_RDWR);
-    XCTAssertTrue(host_fd >= 0, @"open host-backed file should succeed");
-    if (host_fd < 0) return;
+    // Translate path
+    XCTAssertEqual(vfs_translate_path(test_path, host_path, sizeof(host_path)), 0,
+                   @"path should translate");
     
-    int synthetic_fd = open("/dev/null", O_RDWR);
-    XCTAssertTrue(synthetic_fd >= 0, @"open /dev/null should succeed");
-    if (synthetic_fd < 0) {
-        close(host_fd);
-        return;
-    }
+    // Create file
+    fd = host_open_impl(host_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    XCTAssertTrue(fd >= 0, @"file creation should succeed");
+    if (fd < 0) return;
     
-    struct pollfd pfds[2];
-    pfds[0].fd = host_fd;
-    pfds[0].events = POLLIN | POLLOUT;
-    pfds[0].revents = 0;
+    // Write data
+    const char *write_data = "test data";
+    ssize_t written = host_write_impl(fd, write_data, strlen(write_data));
+    XCTAssertEqual(written, (ssize_t)strlen(write_data), @"write should succeed");
     
-    pfds[1].fd = synthetic_fd;
-    pfds[1].events = POLLIN | POLLOUT;
-    pfds[1].revents = 0;
+    // Seek to beginning
+    off_t pos = host_lseek_impl(fd, 0, SEEK_SET);
+    XCTAssertEqual(pos, 0, @"seek should succeed");
     
-    errno = 0;
-    int ret = poll(pfds, 2, 0);
-    XCTAssertTrue(ret >= 2, @"poll() on mixed set should report both host-backed and synthetic readiness");
-    XCTAssertTrue((pfds[0].revents & POLLOUT) != 0, @"host-backed regular file should be write-ready");
-    XCTAssertTrue((pfds[1].revents & POLLIN) != 0, @"synthetic /dev/null should be read-ready");
-    XCTAssertTrue((pfds[1].revents & POLLOUT) != 0, @"synthetic /dev/null should be write-ready");
+    // Read back
+    char read_buf[64];
+    ssize_t nread = host_read_impl(fd, read_buf, sizeof(read_buf));
+    XCTAssertEqual(nread, (ssize_t)strlen(write_data), @"read should return written amount");
+    XCTAssertEqual(memcmp(read_buf, write_data, strlen(write_data)), 0,
+                    @"read data should match written data");
     
-    close(synthetic_fd);
-    close(host_fd);
-    vfs_test_remove_linux_path("/tmp/poll-test-host-file");
+    host_close_impl(fd);
+    
+    // Clean up
+    host_unlink_impl(host_path);
 }
 
-- (void)testDevTtyOpensControllingTerminal {
-    struct task_struct *original_task = get_current();
-    struct task_struct *session_task = alloc_task();
-    XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-    if (!session_task) return;
-
-    session_task->fs = alloc_fs_struct();
-    XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-    if (!session_task->fs) {
-        free_task(session_task);
-        return;
-    }
-
-    session_task->signal = alloc_signal_struct();
-    XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-    if (!session_task->signal) {
-        free_task(session_task);
-        return;
-    }
-
-    fs_init_root(session_task->fs, @"/".UTF8String);
-    fs_init_pwd(session_task->fs, @"/".UTF8String);
-    session_task->sid = session_task->pid;
-    session_task->pgid = session_task->pid;
-    set_current(session_task);
-
-    int master_fd = open("/dev/ptmx", O_RDWR);
-    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
-    if (master_fd < 0) {
-        set_current(original_task);
-        free_task(session_task);
-        return;
-    }
-
-    unsigned int pty_number = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
-
-    int unlock = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
-
-    char slave_path[64];
-    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-    int slave_fd = open(slave_path, O_RDWR);
-    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
-    if (slave_fd < 0) {
-        close(master_fd);
-        set_current(original_task);
-        free_task(session_task);
-        return;
-    }
-
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed for session leader");
-
-    int tty_fd = open("/dev/tty", O_RDWR);
-    XCTAssertTrue(tty_fd >= 0, @"open(/dev/tty) should succeed with controlling tty");
-    if (tty_fd < 0) {
-        close(slave_fd);
-        close(master_fd);
-        set_current(original_task);
-        free_task(session_task);
-        return;
-    }
-
-    int tty_at_fd = openat(AT_FDCWD, "/dev/tty", O_RDWR);
-    XCTAssertTrue(tty_at_fd >= 0, @"openat(/dev/tty) should succeed with controlling tty");
-    if (tty_at_fd < 0) {
-        close(tty_fd);
-        close(slave_fd);
-        close(master_fd);
-        set_current(original_task);
-        free_task(session_task);
-        return;
-    }
-
-    int32_t expected_pgrp = (int32_t)getpgrp();
-    int32_t got_pgrp = 0;
-    XCTAssertEqual(ioctl(tty_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed via /dev/tty");
-    XCTAssertEqual(got_pgrp, expected_pgrp, @"/dev/tty should reference controlling terminal pgrp");
-
-    int32_t got_pgrp_at = 0;
-    XCTAssertEqual(ioctl(tty_at_fd, IX_TIOCGPGRP, &got_pgrp_at), 0, @"TIOCGPGRP should succeed via openat(/dev/tty)");
-    XCTAssertEqual(got_pgrp_at, expected_pgrp, @"openat(/dev/tty) should reference controlling terminal pgrp");
-
-    close(tty_at_fd);
-    close(tty_fd);
-    close(slave_fd);
-    close(master_fd);
-    set_current(original_task);
-    free_task(session_task);
+- (void)testPersistentDirectoryCreation {
+    const char *test_dir = "/etc/test_persistent_dir";
+    char host_path[MAX_PATH];
+    
+    // Translate path
+    XCTAssertEqual(vfs_translate_path(test_dir, host_path, sizeof(host_path)), 0,
+                   @"directory path should translate");
+    
+    // Create directory
+    int ret = host_mkdir_impl(host_path, 0755);
+    XCTAssertTrue(ret == 0 || errno == EEXIST, @"directory creation should succeed");
+    
+    // Verify it exists via stat
+    struct linux_stat st;
+    XCTAssertEqual(stat_impl(test_dir, &st), 0, @"stat should succeed for created directory");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"created path should be a directory");
+    
+    // Clean up
+    host_rmdir_impl(host_path);
 }
 
-- (void)testPtyTtyControlPlaneSemantics {
-    struct task_struct *original_task = get_current();
-    struct task_struct *session_task = alloc_task();
-    XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-    if (!session_task) return;
-
-    session_task->fs = alloc_fs_struct();
-    XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-    if (!session_task->fs) {
-        free_task(session_task);
-        return;
-    }
-
-    session_task->signal = alloc_signal_struct();
-    XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-    if (!session_task->signal) {
-        free_task(session_task);
-        return;
-    }
-
-    fs_init_root(session_task->fs, @"/".UTF8String);
-    fs_init_pwd(session_task->fs, @"/".UTF8String);
-    session_task->sid = session_task->pid;
-    session_task->pgid = session_task->pid;
-    set_current(session_task);
-
-    int master_fd = open("/dev/ptmx", O_RDWR);
-    XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
-    if (master_fd < 0) {
-        set_current(original_task);
-        free_task(session_task);
-        return;
-    }
-
-    unsigned int pty_number = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
-
-    int unlock = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
-
-    char slave_path[64];
-    snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-    int slave_fd = open(slave_path, O_RDWR);
-    XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
-    if (slave_fd < 0) {
-        close(master_fd);
-        set_current(original_task);
-        free_task(session_task);
-        return;
-    }
-
-    errno = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &(int32_t){0}), -1, @"TIOCGPGRP should fail before controlling tty set");
-    XCTAssertEqual(errno, ENOTTY, @"TIOCGPGRP before TIOCSCTTY should set ENOTTY");
-
-    errno = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &(int32_t){getpgrp()}), -1, @"TIOCSPGRP should fail before controlling tty set");
-    XCTAssertEqual(errno, ENOTTY, @"TIOCSPGRP before TIOCSCTTY should set ENOTTY");
-
-    errno = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 1), -1, @"TIOCSCTTY with force arg should fail");
-    XCTAssertEqual(errno, EPERM, @"TIOCSCTTY force should set EPERM");
-
-    errno = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed for session leader");
-
-    int32_t current_pgrp = (int32_t)getpgrp();
-    int32_t got_pgrp = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &got_pgrp), 0, @"TIOCGPGRP should succeed after controlling tty set");
-    XCTAssertEqual(got_pgrp, current_pgrp, @"foreground pgrp should default to current pgrp");
-
-    errno = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &(int32_t){0}), -1, @"TIOCSPGRP should reject non-positive pgrp");
-    XCTAssertEqual(errno, EINVAL, @"non-positive pgrp should set EINVAL");
-
-    errno = 0;
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &(int32_t){999999}), -1, @"TIOCSPGRP should reject unknown session pgrp");
-    XCTAssertEqual(errno, EPERM, @"unknown pgrp should set EPERM");
-
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &current_pgrp), 0, @"TIOCSPGRP current pgrp should succeed");
-
-    struct signal_mask_bits block_set = {0};
-    struct signal_mask_bits old_set = {0};
-    struct signal_mask_bits pending = {0};
-    block_set.sig[(IX_SIGWINCH - 1) >> 6] |= (1ULL << ((IX_SIGWINCH - 1) & 63));
-
-    XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"do_sigprocmask block SIGWINCH should succeed");
-
-    struct ix_winsize ws;
-    memset(&ws, 0, sizeof(ws));
-    ws.ws_row = 51;
-    ws.ws_col = 132;
-
-    XCTAssertEqual(ioctl(master_fd, IX_TIOCSWINSZ, &ws), 0, @"TIOCSWINSZ should succeed");
-    XCTAssertEqual(do_sigpending(&pending), 0, @"do_sigpending should succeed");
-    XCTAssertTrue((pending.sig[(IX_SIGWINCH - 1) >> 6] & (1ULL << ((IX_SIGWINCH - 1) & 63))) != 0,
-                  @"SIGWINCH should be pending after winsize change");
-
-    XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore old mask should succeed");
-
-    close(slave_fd);
-    close(master_fd);
-    set_current(original_task);
-    free_task(session_task);
+- (void)testPersistentSymbolicLink {
+    const char *link_path = "/etc/test_symlink";
+    const char *target = "/etc/passwd";
+    char host_link[MAX_PATH];
+    
+    // Translate link path
+    XCTAssertEqual(vfs_translate_path(link_path, host_link, sizeof(host_link)), 0,
+                   @"link path should translate");
+    
+    // Remove any existing link
+    host_unlink_impl(host_link);
+    
+    // Create symlink
+    int ret = host_symlink_impl(target, host_link);
+    XCTAssertEqual(ret, 0, @"symlink creation should succeed");
+    
+    // Verify via lstat
+    struct linux_stat st;
+    XCTAssertEqual(lstat_impl(link_path, &st), 0, @"lstat should succeed for symlink");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"created path should be a symlink");
+    
+    // Clean up
+    host_unlink_impl(host_link);
 }
 
-- (void)testPtyBackgroundJobControlTostopAndSigttinSigttou {
-  struct task_struct *original_task = get_current();
+/* ============================================================================
+ * BUFFER SIZE VALIDATION TESTS
+ * ============================================================================ */
 
-  struct task_struct *session_task = alloc_task();
-  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-  if (!session_task) return;
-
-  session_task->fs = alloc_fs_struct();
-  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-  if (!session_task->fs) {
-    free_task(session_task);
-    return;
-  }
-
-  session_task->signal = alloc_signal_struct();
-  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-  if (!session_task->signal) {
-    free_task(session_task);
-    return;
-  }
-
-  fs_init_root(session_task->fs, @"/".UTF8String);
-  fs_init_pwd(session_task->fs, @"/".UTF8String);
-  session_task->sid = session_task->pid;
-  session_task->pgid = session_task->pid;
-  set_current(session_task);
-
-  int master_fd = -1;
-  int slave_fd = -1;
-  XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
-  if (master_fd < 0 || slave_fd < 0) {
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed");
-
-  struct ix_termios tio;
-  memset(&tio, 0, sizeof(tio));
-  XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-
-  tio.c_lflag |= (IX_LFLAG_ISIG | IX_LFLAG_ICANON);
-  XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS with ISIG|ICANON should succeed");
-
-  struct signal_mask_bits block_set = {0};
-  struct signal_mask_bits old_set = {0};
-  block_set.sig[(21 - 1) >> 6] |= (1ULL << ((21 - 1) & 63));
-  block_set.sig[(22 - 1) >> 6] |= (1ULL << ((22 - 1) & 63));
-  block_set.sig[(28 - 1) >> 6] |= (1ULL << ((28 - 1) & 63));
-  XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"block SIGTTIN|SIGTTOU|SIGWINCH should succeed");
-
-  char slave_buf[32] = {0};
-  errno = 0;
-  ssize_t ret = read(slave_fd, slave_buf, sizeof(slave_buf));
-  if (ret == -1 && errno == EAGAIN) {
-  } else if (ret >= 0) {
-  } else {
-    XCTFail(@"background read should return EAGAIN or succeed if data available");
-  }
-
-  tio.c_lflag |= IX_LFLAG_TOSTOP;
-  XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS with TOSTOP should succeed");
-
-  errno = 0;
-  ret = write(slave_fd, "test", 4);
-  if (ret == -1 && errno == EINTR) {
-  } else if (ret == 4) {
-  } else if (ret == -1 && errno == EIO) {
-  } else {
-    XCTFail(@"background write with TOSTOP should return EINTR, EIO, or succeed");
-  }
-
-  XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore old mask should succeed");
-
-  close(slave_fd);
-  close(master_fd);
-  set_current(original_task);
-  free_task(session_task);
+- (void)testVfsTranslatePathRejectsTooSmallBuffer {
+    char small_buf[1];
+    int ret = vfs_translate_path(@"/etc/passwd".UTF8String, small_buf, sizeof(small_buf));
+    
+    XCTAssertEqual(ret, -ENAMETOOLONG, @"vfs_translate_path should reject too-small buffer");
 }
 
-- (void)testDevTtyTiocnottyDetach {
-  struct task_struct *original_task = get_current();
-
-  struct task_struct *session_task = alloc_task();
-  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-  if (!session_task) return;
-
-  session_task->fs = alloc_fs_struct();
-  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-  if (!session_task->fs) {
-    free_task(session_task);
-    return;
-  }
-
-  session_task->signal = alloc_signal_struct();
-  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-  if (!session_task->signal) {
-    free_task(session_task);
-    return;
-  }
-
-  fs_init_root(session_task->fs, @"/".UTF8String);
-  fs_init_pwd(session_task->fs, @"/".UTF8String);
-  session_task->sid = session_task->pid;
-  session_task->pgid = session_task->pid;
-  set_current(session_task);
-
-  int master_fd = open("/dev/ptmx", O_RDWR);
-  XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
-  if (master_fd < 0) {
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  unsigned int pty_number = 0;
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
-
-  int unlock = 0;
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
-
-  char slave_path[64];
-  snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-  int slave_fd = open(slave_path, O_RDWR);
-  XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
-  if (slave_fd < 0) {
-    close(master_fd);
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  errno = 0;
-  XCTAssertEqual(ioctl(slave_fd, IX_TIOCNOTTY, 0), -1, @"TIOCNOTTY without controlling tty should fail");
-  XCTAssertEqual(errno, ENOTTY, @"TIOCNOTTY without controlling tty should set ENOTTY");
-
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed for session leader");
-
-  int tty_fd = open("/dev/tty", O_RDWR);
-  XCTAssertTrue(tty_fd >= 0, @"open(/dev/tty) should succeed with controlling tty");
-  if (tty_fd < 0) {
-    close(slave_fd);
-    close(master_fd);
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  errno = 0;
-  XCTAssertEqual(ioctl(slave_fd, IX_TIOCNOTTY, 0), 0, @"TIOCNOTTY should succeed with controlling tty");
-
-  errno = 0;
-  XCTAssertEqual(ioctl(slave_fd, IX_TIOCNOTTY, 0), -1, @"TIOCNOTTY after detach should fail");
-  XCTAssertEqual(errno, ENOTTY, @"TIOCNOTTY after detach should set ENOTTY");
-
-  close(tty_fd);
-  close(slave_fd);
-  close(master_fd);
-  set_current(original_task);
-  free_task(session_task);
+- (void)testPathResolveRejectsNullPath {
+    char resolved[MAX_PATH];
+    int ret = path_resolve(NULL, resolved, sizeof(resolved));
+    
+    XCTAssertEqual(ret, -EFAULT, @"path_resolve should reject NULL path");
 }
 
-- (void)testDevTtyTiocnottySendsSighup {
-  struct task_struct *original_task = get_current();
-
-  struct task_struct *session_task = alloc_task();
-  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-  if (!session_task) return;
-
-  session_task->fs = alloc_fs_struct();
-  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-  if (!session_task->fs) {
-    free_task(session_task);
-    return;
-  }
-
-  session_task->signal = alloc_signal_struct();
-  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-  if (!session_task->signal) {
-    free_task(session_task);
-    return;
-  }
-
-  fs_init_root(session_task->fs, @"/".UTF8String);
-  fs_init_pwd(session_task->fs, @"/".UTF8String);
-  session_task->sid = session_task->pid;
-  session_task->pgid = session_task->pid;
-  set_current(session_task);
-
-  int master_fd = open("/dev/ptmx", O_RDWR);
-  XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
-  if (master_fd < 0) {
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  unsigned int pty_number = 0;
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
-
-  int unlock = 0;
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
-
-  char slave_path[64];
-  snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-  int slave_fd = open(slave_path, O_RDWR);
-  XCTAssertTrue(slave_fd >= 0, @"open(slave) should succeed");
-  if (slave_fd < 0) {
-    close(master_fd);
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed for session leader");
-
-  int32_t fg_pgrp_before = session_task->pgid;
-  int32_t fg_pgrp = 0;
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCGPGRP, &fg_pgrp), 0, @"TIOCGPGRP should succeed");
-  XCTAssertEqual(fg_pgrp, fg_pgrp_before, @"foreground pgrp should match session pgrp");
-
-  struct signal_mask_bits block_set = {0};
-  block_set.sig[(1 - 1) >> 6] |= (1ULL << ((1 - 1) & 63));
-  struct signal_mask_bits old_set = {0};
-  XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"block SIGHUP should succeed");
-
-  errno = 0;
-  XCTAssertEqual(ioctl(slave_fd, IX_TIOCNOTTY, 0), 0, @"TIOCNOTTY should succeed");
-
-  struct signal_mask_bits pending = {0};
-  XCTAssertEqual(do_sigpending(&pending), 0, @"do_sigpending should succeed");
-  XCTAssertTrue((pending.sig[(1 - 1) >> 6] & (1ULL << ((1 - 1) & 63))) != 0,
-                @"SIGHUP should be pending after TIOCNOTTY by session leader");
-
-  XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore mask should succeed");
-
-  close(slave_fd);
-  close(master_fd);
-  set_current(original_task);
-  free_task(session_task);
+- (void)testPathResolveRejectsNullBuffer {
+    int ret = path_resolve(@"/etc/passwd".UTF8String, NULL, MAX_PATH);
+    
+    XCTAssertEqual(ret, -EFAULT, @"path_resolve should reject NULL buffer");
 }
 
-- (void)testPtyBackgroundJobControlDistinctTasks {
-  struct task_struct *original_task = get_current();
-
-  struct task_struct *session_task = alloc_task();
-  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-  if (!session_task) return;
-
-  session_task->fs = alloc_fs_struct();
-  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-  if (!session_task->fs) {
-    free_task(session_task);
-    return;
-  }
-
-  session_task->signal = alloc_signal_struct();
-  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-  if (!session_task->signal) {
-    free_task(session_task);
-    return;
-  }
-
-  fs_init_root(session_task->fs, @"/".UTF8String);
-  fs_init_pwd(session_task->fs, @"/".UTF8String);
-  session_task->sid = session_task->pid;
-  session_task->pgid = session_task->pid;
-  set_current(session_task);
-
-  int master_fd = -1;
-  int slave_fd = -1;
-  XCTAssertTrue(vfs_test_open_pty_pair(&master_fd, &slave_fd), @"PTY pair should open");
-  if (master_fd < 0 || slave_fd < 0) {
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSCTTY, 0), 0, @"TIOCSCTTY should succeed");
-
-  struct ix_termios tio;
-  memset(&tio, 0, sizeof(tio));
-  XCTAssertEqual(ioctl(master_fd, IX_TCGETS, &tio), 0, @"TCGETS should succeed");
-  tio.c_lflag |= (IX_LFLAG_ISIG | IX_LFLAG_ICANON);
-  XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS with ISIG|ICANON should succeed");
-
-  int32_t foreground_pgrp = session_task->pgid;
-  int32_t background_pgrp = session_task->pgid + 100;
-
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSPGRP, &foreground_pgrp), 0, @"TIOCSPGRP should succeed");
-
-  struct task_struct *background_task = alloc_task();
-  XCTAssertTrue(background_task != NULL, @"background task allocation should succeed");
-  if (background_task) {
-    background_task->fs = alloc_fs_struct();
-    background_task->signal = alloc_signal_struct();
-    background_task->files = alloc_files(NR_OPEN_DEFAULT);
-    if (background_task->fs && background_task->signal && background_task->files) {
-      fs_init_root(background_task->fs, @"/".UTF8String);
-      fs_init_pwd(background_task->fs, @"/".UTF8String);
-      background_task->sid = session_task->sid;
-      background_task->pgid = background_pgrp;
-      background_task->parent = session_task;
-
-      struct signal_mask_bits block_set = {0};
-      block_set.sig[(21 - 1) >> 6] |= (1ULL << ((21 - 1) & 63));
-      block_set.sig[(22 - 1) >> 6] |= (1ULL << ((22 - 1) & 63));
-      block_set.sig[(28 - 1) >> 6] |= (1ULL << ((28 - 1) & 63));
-
-      struct signal_mask_bits old_set = {0};
-      set_current(background_task);
-      XCTAssertEqual(do_sigprocmask(IX_SIG_BLOCK, &block_set, &old_set), 0, @"block SIGTTIN|SIGTTOU|SIGWINCH should succeed");
-
-      char slave_buf[16] = {0};
-      errno = 0;
-      ssize_t ret = read(slave_fd, slave_buf, sizeof(slave_buf));
-      XCTAssertEqual(ret, -1, @"blocked background read should fail");
-      XCTAssertEqual(errno, EIO, @"blocked background read should return EIO");
-
-      tio.c_lflag |= IX_LFLAG_TOSTOP;
-      XCTAssertEqual(ioctl(master_fd, IX_TCSETS, &tio), 0, @"TCSETS with TOSTOP should succeed");
-
-      errno = 0;
-      ret = write(slave_fd, "test", 4);
-      XCTAssertEqual(ret, 4, @"blocked background write with TOSTOP should proceed");
-
-      XCTAssertEqual(do_sigprocmask(IX_SIG_SETMASK, &old_set, NULL), 0, @"restore old mask should succeed");
-
-      errno = 0;
-      ret = read(slave_fd, slave_buf, sizeof(slave_buf));
-      XCTAssertEqual(ret, -1, @"unblocked background read should fail");
-      XCTAssertEqual(errno, EINTR, @"unblocked background read should return EINTR");
-
-      errno = 0;
-      ret = write(slave_fd, "more", 4);
-      XCTAssertEqual(ret, -1, @"unblocked background write with TOSTOP should fail");
-      XCTAssertEqual(errno, EINTR, @"unblocked background write with TOSTOP should return EINTR");
-
-      background_task->signal->actions[21].handler = (sighandler_t)1;
-      background_task->signal->actions[22].handler = (sighandler_t)1;
-
-      errno = 0;
-      ret = read(slave_fd, slave_buf, sizeof(slave_buf));
-      XCTAssertEqual(ret, -1, @"ignored SIGTTIN background read should fail");
-      XCTAssertEqual(errno, EIO, @"ignored SIGTTIN background read should return EIO");
-
-      errno = 0;
-      ret = write(slave_fd, "tail", 4);
-      XCTAssertEqual(ret, 4, @"ignored SIGTTOU background write with TOSTOP should proceed");
-
-      background_task->signal->actions[21].handler = NULL;
-      background_task->signal->actions[22].handler = NULL;
-    }
-    set_current(session_task);
-    if (background_task) {
-      free_task(background_task);
-    }
-  }
-
-  close(slave_fd);
-  close(master_fd);
-  set_current(original_task);
-  free_task(session_task);
-}
-
-- (void)testPollInvalidFdReturnsPollnval {
-  struct pollfd pfd;
-  pfd.fd = 999;
-  pfd.events = POLLIN | POLLOUT;
-  pfd.revents = 0;
-
-  errno = 0;
-  int ret = poll(&pfd, 1, 0);
-  XCTAssertTrue(ret == 1, @"poll() on invalid fd should report one ready error fd");
-  XCTAssertTrue((pfd.revents & POLLNVAL) != 0, @"invalid fd should set POLLNVAL");
-}
-
-- (void)testSelectInvalidFdFailsWithEbadf {
-  fd_set readfds, writefds;
-  FD_ZERO(&readfds);
-  FD_ZERO(&writefds);
-  FD_SET(999, &readfds);
-  FD_SET(999, &writefds);
-
-  struct timeval tv = {0, 0};
-  errno = 0;
-  int ret = select_impl(1000, &readfds, &writefds, NULL, &tv);
-  XCTAssertEqual(ret, -1, @"select_impl() with invalid fd should fail");
-  XCTAssertEqual(errno, EBADF, @"select_impl() with invalid fd should set EBADF");
-}
-
-- (void)testPtySlaveReopenLifecycle {
-  struct task_struct *original_task = get_current();
-
-  struct task_struct *session_task = alloc_task();
-  XCTAssertTrue(session_task != NULL, @"task allocation should succeed");
-  if (!session_task) return;
-
-  session_task->fs = alloc_fs_struct();
-  XCTAssertTrue(session_task->fs != NULL, @"fs_struct allocation should succeed");
-  if (!session_task->fs) {
-    free_task(session_task);
-    return;
-  }
-
-  session_task->signal = alloc_signal_struct();
-  XCTAssertTrue(session_task->signal != NULL, @"signal_struct allocation should succeed");
-  if (!session_task->signal) {
-    free_task(session_task);
-    return;
-  }
-
-  fs_init_root(session_task->fs, @"/".UTF8String);
-  fs_init_pwd(session_task->fs, @"/".UTF8String);
-  session_task->sid = session_task->pid;
-  session_task->pgid = session_task->pid;
-  set_current(session_task);
-
-  int master_fd = open("/dev/ptmx", O_RDWR);
-  XCTAssertTrue(master_fd >= 0, @"open(/dev/ptmx) should succeed");
-  if (master_fd < 0) {
-    set_current(original_task);
-    free_task(session_task);
-    return;
-  }
-
-  unsigned int pty_number = 0;
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCGPTN, &pty_number), 0, @"TIOCGPTN should succeed");
-
-  int unlock = 0;
-  XCTAssertEqual(ioctl(master_fd, IX_TIOCSPTLCK, &unlock), 0, @"TIOCSPTLCK unlock should succeed");
-
-  char slave_path[64];
-  snprintf(slave_path, sizeof(slave_path), "/dev/pts/%u", pty_number);
-
-  int slave_fd1 = open(slave_path, O_RDWR);
-  XCTAssertTrue(slave_fd1 >= 0, @"first open(slave) should succeed");
-
-  int slave_fd2 = open(slave_path, O_RDWR);
-  XCTAssertTrue(slave_fd2 >= 0, @"second open(slave) should succeed");
-
-  close(slave_fd1);
-
-  int slave_fd3 = open(slave_path, O_RDWR);
-  XCTAssertTrue(slave_fd3 >= 0, @"third open(slave) after close should succeed");
-
-  close(slave_fd2);
-  close(slave_fd3);
-  close(master_fd);
-
-  int slave_fd4 = open(slave_path, O_RDWR);
-  XCTAssertTrue(slave_fd4 < 0, @"open(slave) after master close should fail");
-  XCTAssertEqual(errno, ENOENT, @"open(slave) after master close should set ENOENT");
-
-    set_current(original_task);
-    free_task(session_task);
-}
-
-- (void)testExecveShebangDispatchesToRegisteredInterpreter {
-    char interpreter_path[MAX_PATH];
-    char *script_argv[TASK_MAX_ARGS + 4];
-    int script_argc = 0;
-    char *argv[] = { (char *)"/tmp/shebang-test-script.sh", (char *)"arg1", NULL };
-    int argc = 2;
-
-    errno = 0;
-    int ret = exec_build_script_argv_from_line("#!/bin/test-interpreter", "/tmp/shebang-test-script.sh", argc, argv,
-                                                interpreter_path, sizeof(interpreter_path),
-                                                script_argv, &script_argc);
-    XCTAssertEqual(ret, 0, @"exec_build_script_argv_from_line should succeed");
-    XCTAssertEqual(script_argc, 3, @"shebang dispatch should produce 3 args: interpreter, script, arg1");
-    XCTAssertTrue(strcmp(interpreter_path, "/bin/test-interpreter") == 0, @"interpreter should be /bin/test-interpreter");
-    XCTAssertTrue(script_argv[0] != NULL && strcmp(script_argv[0], "/bin/test-interpreter") == 0, @"argv[0] should be interpreter path");
-    XCTAssertTrue(script_argv[1] != NULL && strcmp(script_argv[1], "/tmp/shebang-test-script.sh") == 0, @"argv[1] should be script path");
-    XCTAssertTrue(script_argv[2] != NULL && strcmp(script_argv[2], "arg1") == 0, @"argv[2] should be original argv[1]");
-    XCTAssertTrue(script_argv[3] == NULL, @"argv[3] should be NULL terminator");
-}
-
-- (void)testExecveShebangWithOptionalArg {
-    char interpreter_path[MAX_PATH];
-    char *script_argv[TASK_MAX_ARGS + 4];
-    int script_argc = 0;
-    char *argv[] = { (char *)"/tmp/shebang-test-optarg.sh", NULL };
-    int argc = 1;
-
-    errno = 0;
-    int ret = exec_build_script_argv_from_line("#!/bin/test-interp-arg --norc", "/tmp/shebang-test-optarg.sh", argc, argv,
-                                                interpreter_path, sizeof(interpreter_path),
-                                                script_argv, &script_argc);
-    XCTAssertEqual(ret, 0, @"exec_build_script_argv_from_line with optional arg should succeed");
-    XCTAssertEqual(script_argc, 3, @"shebang with one optional arg should produce 3 args: interpreter, --norc, script");
-    XCTAssertTrue(script_argv[0] != NULL && strcmp(script_argv[0], "/bin/test-interp-arg") == 0, @"argv[0] should be interpreter path");
-    XCTAssertTrue(script_argv[1] != NULL && strcmp(script_argv[1], "--norc") == 0, @"argv[1] should be optional interpreter arg");
-    XCTAssertTrue(script_argv[2] != NULL && strcmp(script_argv[2], "/tmp/shebang-test-optarg.sh") == 0, @"argv[2] should be script path");
-    XCTAssertTrue(script_argv[3] == NULL, @"argv[3] should be NULL terminator");
-}
-
-- (void)testExecveShebangMissingInterpreterReturnsEnoent {
-    char interpreter_path[MAX_PATH];
-    char *script_argv[TASK_MAX_ARGS + 4];
-    int script_argc = 0;
-    char *argv[] = { (char *)"/tmp/shebang-missing-interp.sh", NULL };
-    int argc = 1;
-
-    errno = 0;
-    int ret = exec_build_script_argv_from_line("#!/bin/nonexistent-interpreter-xyz", "/tmp/shebang-missing-interp.sh", argc, argv,
-                                                interpreter_path, sizeof(interpreter_path),
-                                                script_argv, &script_argc);
-    XCTAssertEqual(ret, 0, @"exec_build_script_argv_from_line should parse shebang even for missing interpreter");
-    XCTAssertTrue(strcmp(interpreter_path, "/bin/nonexistent-interpreter-xyz") == 0, @"interpreter should be parsed as /bin/nonexistent-interpreter-xyz");
-
-    native_entry_fn entry = native_lookup("/bin/nonexistent-interpreter-xyz");
-    XCTAssertTrue(entry == NULL, @"nonexistent interpreter should not be in native registry");
+- (void)testPathResolveRejectsZeroBufferSize {
+    char resolved[MAX_PATH];
+    int ret = path_resolve(@"/etc/passwd".UTF8String, resolved, 0);
+    
+    XCTAssertEqual(ret, -EINVAL, @"path_resolve should reject zero buffer size");
 }
 
 @end

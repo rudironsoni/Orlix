@@ -19,11 +19,6 @@
 #include "../kernel/task.h"
 #include "../kernel/cred_internal.h"
 
-/* AT_* constants not in linux/fcntl.h - from Linux UAPI */
-#ifndef AT_SYMLINK_NOFOLLOW
-#define AT_SYMLINK_NOFOLLOW 0x100
-#endif
-
 /* makedev for device nodes - Linux UAPI style */
 #ifndef makedev
 #define makedev(major, minor) ((((major) & 0xfff) << 8) | ((minor) & 0xff))

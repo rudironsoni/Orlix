@@ -37,6 +37,7 @@
 		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; };
 		87046F5302731769EFA41075 /* backing_paths.m in Sources */ = {isa = PBXBuildFile; fileRef = 5FD8D142EC818870892A041C /* backing_paths.m */; };
 		87D87C4892661BFBEE659114 /* TaskGroupTests.m in Sources */ = {isa = PBXBuildFile; fileRef = BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */; };
+		89A95AE44517413BD4FB88B5 /* LinuxUAPITestSupport.c in Sources */ = {isa = PBXBuildFile; fileRef = AFB687869E5B956E04C27D33 /* LinuxUAPITestSupport.c */; };
 		8A81463107C3BC70B06B76A2 /* cred.c in Sources */ = {isa = PBXBuildFile; fileRef = 52402BAA17F7390A34354EB6 /* cred.c */; };
 		9067CDC146694F8EC2C351A7 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = 8EE1C8B47289B38E402A6EFE /* sync.c */; };
 		92F197F28B8A006699CF4DF4 /* task.c in Sources */ = {isa = PBXBuildFile; fileRef = 1196E0E046C9D8486908FEF8 /* task.c */; };
@@ -117,6 +118,8 @@
 		8EE1C8B47289B38E402A6EFE /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
 		9400E47E570892E792DD720A /* path_host.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = path_host.c; sourceTree = "<group>"; };
 		9935787E313CB1AD8A576244 /* signal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal.c; sourceTree = "<group>"; };
+		AB0754E669F76C771DAE1482 /* LinuxUAPITestSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LinuxUAPITestSupport.h; sourceTree = "<group>"; };
+		AFB687869E5B956E04C27D33 /* LinuxUAPITestSupport.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = LinuxUAPITestSupport.c; sourceTree = "<group>"; };
 		B406B94580B141493CBDB020 /* signal_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal_bridge.c; sourceTree = "<group>"; };
 		BA898A59834C42247E34F3A2 /* epoll_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = epoll_bridge.c; sourceTree = "<group>"; };
 		BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskGroupTests.m; sourceTree = "<group>"; };
@@ -179,6 +182,8 @@
 				5BA099AF8849390F2936F1B2 /* FutexTests.m */,
 				DA8F8F9EFFB5FCE3BD87FAC2 /* FutexUAPICompileSmoke.c */,
 				84B7EE143A9CA194FD055CDA /* LinuxUAPICompileSmoke.c */,
+				AFB687869E5B956E04C27D33 /* LinuxUAPITestSupport.c */,
+				AB0754E669F76C771DAE1482 /* LinuxUAPITestSupport.h */,
 				4683BA0EA109D1320BC09ACF /* RootfsBootstrapTests.m */,
 				667BE890D514BA87E4BDA1BF /* SignalTests.m */,
 				BE8938EBBF4F9F0745C5A482 /* TaskGroupTests.m */,
@@ -440,6 +445,7 @@
 				6643C6662AEDE42A70EA8F8C /* FutexTests.m in Sources */,
 				2726CA6EE9A60532D7C0705F /* FutexUAPICompileSmoke.c in Sources */,
 				398F68458C9177477A65A9EE /* LinuxUAPICompileSmoke.c in Sources */,
+				89A95AE44517413BD4FB88B5 /* LinuxUAPITestSupport.c in Sources */,
 				2EDB0D8B37216282DABEC526 /* RootfsBootstrapTests.m in Sources */,
 				412EF8D788799D420EF84B74 /* SignalTests.m in Sources */,
 				87D87C4892661BFBEE659114 /* TaskGroupTests.m in Sources */,
