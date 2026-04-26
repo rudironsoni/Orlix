@@ -22,8 +22,7 @@
 #include <string.h>
 #include <poll.h>
 
-/* Standard system headers - these provide S_IFMT, S_ISDIR, etc.
- * Darwin's values are compatible with Linux ABI */
+/* Standard system headers */
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -33,25 +32,29 @@
 /* IXLand VFS types */
 #include "fs/vfs.h"
 
-#define IX_TCGETS 0x5401
-#define IX_TCSETS 0x5402
-#define IX_TCSETSW 0x5403
-#define IX_TCSETSF 0x5404
-#define IX_TIOCSCTTY 0x540E
-#define IX_TIOCNOTTY 0x5432
-#define IX_TIOCGPGRP 0x540F
-#define IX_TIOCSPGRP 0x5410
-#define IX_TIOCGWINSZ 0x5413
-#define IX_TIOCSWINSZ 0x5414
-#define IX_FIONREAD 0x541B
-#define IX_TIOCGPTN 0x80045430UL
-#define IX_TIOCSPTLCK 0x40045431UL
-#define IX_SIG_BLOCK 0
-#define IX_SIG_SETMASK 2
-#define IX_SIGINT 2
-#define IX_SIGQUIT 3
-#define IX_SIGTSTP 20
-#define IX_SIGWINCH 28
+/* Linux UAPI test support - provides Linux-sourced constants */
+#include "IXLandSystemTests/LinuxUAPITestSupport.h"
+
+/* Use Linux-sourced constants for testing Linux-facing behavior */
+#define IX_TCGETS     linux_tcgets()
+#define IX_TCSETS     linux_tcsets()
+#define IX_TCSETSW    linux_tcsetsw()
+#define IX_TCSETSF    linux_tcsetsf()
+#define IX_TIOCSCTTY  linux_tiocsctty()
+#define IX_TIOCNOTTY  linux_tiocnotty()   /* Correct Linux UAPI: 0x5422 */
+#define IX_TIOCGPGRP  linux_tiocgpgrp()
+#define IX_TIOCSPGRP  linux_tiocspgrp()
+#define IX_TIOCGWINSZ linux_tiocgwinsz()
+#define IX_TIOCSWINSZ linux_tiocswinsz()
+#define IX_FIONREAD   linux_fionread()
+#define IX_TIOCGPTN   linux_tiocgptn()
+#define IX_TIOCSPTLCK linux_tiocsptlck()
+#define IX_SIG_BLOCK     linux_sig_block()
+#define IX_SIG_SETMASK   linux_sig_setmask()
+#define IX_SIGINT        linux_sigint()
+#define IX_SIGQUIT       linux_sigquit()
+#define IX_SIGTSTP       linux_sigtstp()
+#define IX_SIGWINCH      linux_sigwinch()
 
 #define IX_LFLAG_ISIG 0x00000001U
 #define IX_LFLAG_ICANON 0x00000002U
