@@ -255,7 +255,7 @@ echo "   ✓ No Linux UAPI headers in Objective-C test files"
 
 echo ""
 echo "=== Check 20: Host syscall declarations in test support ==="
-HOST_SYSCALL_DECLS=$(rg -n 'extern\s+int\s+(ioctl|open|close|snprintf)\s*\(' IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+HOST_SYSCALL_DECLS=$(rg -n 'extern\s+int\s+(ioctl|open|close|snprintf)\s*\(' IXLandSystemLinuxKernelTests/*.c IXLandSystemLinuxKernelTests/*.m IXLandSystemHostBridgeTests/*.c IXLandSystemHostBridgeTests/*.m 2>/dev/null || true)
 if [ -n "$HOST_SYSCALL_DECLS" ]; then
     echo "FAIL: Host syscall forward declarations in test support files:"
     echo "$HOST_SYSCALL_DECLS"
@@ -266,7 +266,7 @@ echo "   ✓ No host syscall forward declarations"
 
 echo ""
 echo "=== Check 21: snprintf in test support ==="
-SNPRINTF_USAGE=$(rg -n 'snprintf' IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+SNPRINTF_USAGE=$(rg -n 'snprintf' IXLandSystemLinuxKernelTests/*.c IXLandSystemLinuxKernelTests/*.m IXLandSystemHostBridgeTests/*.c IXLandSystemHostBridgeTests/*.m 2>/dev/null || true)
 if [ -n "$SNPRINTF_USAGE" ]; then
     echo "FAIL: snprintf usage found in test support files:"
     echo "$SNPRINTF_USAGE"

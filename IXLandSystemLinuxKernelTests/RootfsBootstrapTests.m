@@ -41,12 +41,11 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/passwd should succeed");
 
-    /* Verify file is accessible by opening it via IXLand's open() */
-    extern int open(const char *, int, ...);
-    int fd = open(@"/etc/passwd".UTF8String, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/passwd through IXLand should succeed");
+    /* Verify file is accessible by opening it via IXLand's owner open_impl/read_impl */
+    int fd = open_impl(@"/etc/passwd".UTF8String, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"open_impl /etc/passwd through IXLand should succeed");
     if (fd >= 0) {
-        close(fd);
+        close_impl(fd);
     }
 }
 
@@ -60,11 +59,10 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/group should succeed");
 
-    extern int open(const char *, int, ...);
-    int fd = open(@"/etc/group".UTF8String, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/group through IXLand should succeed");
+    int fd = open_impl(@"/etc/group".UTF8String, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"open_impl /etc/group through IXLand should succeed");
     if (fd >= 0) {
-        close(fd);
+        close_impl(fd);
     }
 }
 
@@ -78,11 +76,10 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/hosts should succeed");
 
-    extern int open(const char *, int, ...);
-    int fd = open(@"/etc/hosts".UTF8String, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/hosts through IXLand should succeed");
+    int fd = open_impl(@"/etc/hosts".UTF8String, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"open_impl /etc/hosts through IXLand should succeed");
     if (fd >= 0) {
-        close(fd);
+        close_impl(fd);
     }
 }
 
@@ -96,11 +93,10 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/resolv.conf should succeed");
 
-    extern int open(const char *, int, ...);
-    int fd = open(@"/etc/resolv.conf".UTF8String, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/resolv.conf through IXLand should succeed");
+    int fd = open_impl(@"/etc/resolv.conf".UTF8String, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"open_impl /etc/resolv.conf through IXLand should succeed");
     if (fd >= 0) {
-        close(fd);
+        close_impl(fd);
     }
 }
 
@@ -109,17 +105,14 @@
  * (at minimum: root user entry with valid fields)
  */
 - (void)testVirtualEtcPasswdContent {
-    extern int open(const char *, int, ...);
-    extern ssize_t read(int, void *, size_t);
-    extern int close(int);
-
-    int fd = open(@"/etc/passwd".UTF8String, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/passwd should succeed");
+    /* Use owner open_impl/read_impl/close_impl to avoid forward-declaring host syscalls */
+    int fd = open_impl(@"/etc/passwd".UTF8String, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"open_impl /etc/passwd should succeed");
     if (fd < 0) return;
 
     char buf[4096];
-    ssize_t n = read(fd, buf, sizeof(buf) - 1);
-    close(fd);
+    ssize_t n = read_impl(fd, buf, sizeof(buf) - 1);
+    close_impl(fd);
 
     XCTAssertTrue(n > 0, @"read /etc/passwd should return content, n=%zd", n);
     if (n <= 0) return;
@@ -140,17 +133,13 @@
  * (at minimum: root group entry with valid fields)
  */
 - (void)testVirtualEtcGroupContent {
-    extern int open(const char *, int, ...);
-    extern ssize_t read(int, void *, size_t);
-    extern int close(int);
-
-    int fd = open(@"/etc/group".UTF8String, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/group should succeed");
+    int fd = open_impl(@"/etc/group".UTF8String, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"open_impl /etc/group should succeed");
     if (fd < 0) return;
 
     char buf[4096];
-    ssize_t n = read(fd, buf, sizeof(buf) - 1);
-    close(fd);
+    ssize_t n = read_impl(fd, buf, sizeof(buf) - 1);
+    close_impl(fd);
 
     XCTAssertTrue(n > 0, @"read /etc/group should return content");
     if (n <= 0) return;

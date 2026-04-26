@@ -125,7 +125,6 @@ targets:
     - IXLandSystemLinuxKernelTests/TaskGroupTests.m
     - IXLandSystemLinuxKernelTests/CredentialTests.m
     - IXLandSystemLinuxKernelTests/VFSPathTests.m
-    - IXLandSystemLinuxKernelTests/RootfsBootstrapTests.m
     - IXLandSystemLinuxKernelTests/FutexTests.m
     - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
@@ -156,6 +155,8 @@ targets:
     sources:
     - IXLandSystemHostBridgeTests/HostBridgeSmokeTests.m
     - IXLandSystemHostBridgeTests/PTYHostBridgeTests.m
+    - IXLandSystemHostBridgeTests/VFSPathHostBridgeTests.m
+    - IXLandSystemHostBridgeTests/RootfsBootstrapTests.m
     - IXLandSystemHostBridgeTests/HostTestSupport.c
     - IXLandSystemHostBridgeTests/HostTestSupport.h
     - IXLandSystemHostBridgeTests/PTYTestSupport.c

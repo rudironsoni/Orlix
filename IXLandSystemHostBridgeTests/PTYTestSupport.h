@@ -1,8 +1,9 @@
 /* IXLandSystemHostBridgeTests/PTYTestSupport.h
  * PTY test helpers placeholder
  *
- * Host bridge PTY tests are currently disabled because proper PTY setup
- * requires snprintf and manual path construction which are forbidden.
+ * Host bridge PTY tests use POSIX helpers (posix_openpt/grantpt/unlockpt/ptsname)
+ * and avoid manual host path construction. The implementation lives in the
+ * HostBridge test target.
  */
 
 #ifndef PTY_TEST_SUPPORT_H
