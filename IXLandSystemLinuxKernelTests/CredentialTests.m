@@ -12,6 +12,8 @@
 
 /* Pull in private internal headers for credential subsystem testing */
 #include "../kernel/cred_internal.h"
+/* close_impl and other owner fd helpers are declared in fs/fdtable.h */
+#include "fs/fdtable.h"
 
 /* Declare internal _impl entry points for testing */
 extern uid_t getuid_impl(void);

@@ -14,7 +14,9 @@
 #include <unistd.h>
 
 #include "HostTestSupport.h"
-#include "../include/fs/vfs.h"
+#include "fs/vfs.h"
+/* host_open_impl/host_close_impl are declared in internal host backing IO headers */
+#include "internal/ios/fs/backing_io.h"
 
 @interface VFSPathHostBridgeTests : XCTestCase
 @end
