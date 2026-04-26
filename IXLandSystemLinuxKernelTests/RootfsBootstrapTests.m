@@ -17,6 +17,11 @@
 #include <unistd.h>
 
 #include "fs/vfs.h"
+#include "fs/fdtable.h"
+
+/* Owner API declarations used by this Linux-only test target. */
+int open_impl(const char *pathname, int flags, mode_t mode);
+ssize_t read_impl(int fd, void *buf, size_t count);
 
 @interface RootfsBootstrapTests : XCTestCase
 @end

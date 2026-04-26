@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "internal/ios/fs/backing_io.h"
 #include "fs/vfs.h"
 
 @interface RootfsBootstrapTests : XCTestCase
@@ -33,10 +34,10 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/passwd should succeed");
 
-    /* Verify file is accessible by opening it via host open() */
-    int fd = open(host_path, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/passwd via host should succeed");
-    if (fd >= 0) close(fd);
+    /* Verify file is accessible by opening it via host bridge */
+    int fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/passwd via host bridge should succeed");
+    if (fd >= 0) host_close_impl(fd);
 }
 
 - (void)testVirtualEtcGroupExists {
@@ -45,9 +46,9 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/group should succeed");
 
-    int fd = open(host_path, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/group via host should succeed");
-    if (fd >= 0) close(fd);
+    int fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/group via host bridge should succeed");
+    if (fd >= 0) host_close_impl(fd);
 }
 
 - (void)testVirtualEtcHostsExists {
@@ -56,9 +57,9 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/hosts should succeed");
 
-    int fd = open(host_path, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/hosts via host should succeed");
-    if (fd >= 0) close(fd);
+    int fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/hosts via host bridge should succeed");
+    if (fd >= 0) host_close_impl(fd);
 }
 
 - (void)testVirtualEtcResolvConfExists {
@@ -67,9 +68,9 @@
 
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/resolv.conf should succeed");
 
-    int fd = open(host_path, O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open /etc/resolv.conf via host should succeed");
-    if (fd >= 0) close(fd);
+    int fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/resolv.conf via host bridge should succeed");
+    if (fd >= 0) host_close_impl(fd);
 }
 
 @end

@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "HostTestSupport.h"
+#include "internal/ios/fs/backing_io.h"
 #include "fs/vfs.h"
 
 @interface VFSPathHostBridgeTests : XCTestCase
@@ -34,10 +34,10 @@
     int ret = vfs_translate_path("/etc/passwd", host_path, sizeof(host_path));
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/passwd should succeed");
 
-    /* Verify file is accessible via narrow host test helpers */
-    int fd = ixland_test_host_open(host_path, O_RDONLY, 0);
-    XCTAssertTrue(fd >= 0, @"ixland_test_host_open /etc/passwd should succeed");
-    if (fd >= 0) ixland_test_host_close(fd);
+    /* Verify file is accessible via host bridge helpers */
+    int fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/passwd should succeed");
+    if (fd >= 0) host_close_impl(fd);
 }
 
 // More host-backed VFS tests can be added here.

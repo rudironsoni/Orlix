@@ -286,4 +286,59 @@ fi
 echo "   ✓ No internal/ios includes from Linux kernel tests"
 
 echo ""
+echo "=== Check 23: Test ABI contamination - IX_* wrapper macros ==="
+IX_WRAPPERS=$(rg -n '^\s*int\s+ixland_test_host_(open|close|open_readonly)\s*\(' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$IX_WRAPPERS" ]; then
+    echo "FAIL: IX_* wrapper macros found in test files:"
+    echo "$IX_WRAPPERS"
+    echo "Remove fake wrapper vocabulary; use direct target-correct includes/calls."
+    exit 1
+fi
+echo "   ✓ No IX_* wrapper macros in tests"
+
+echo ""
+echo "=== Check 24: Test ABI contamination - linux_* accessor soup ==="
+LINUX_ACCESSORS=$(rg -n '^\s*int\s+linux_\w+\s*\(' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$LINUX_ACCESSORS" ]; then
+    echo "FAIL: linux_*() accessor soup found in Objective-C test files:"
+    echo "$LINUX_ACCESSORS"
+    echo "Remove fake accessor soup; use direct target-correct includes/calls."
+    exit 1
+fi
+echo "   ✓ No linux_* accessor soup in tests"
+
+echo ""
+echo "=== Check 25: Test ABI contamination - TEST_* raw constants ==="
+TEST_CONSTANTS=$(rg -n '^\s*#define\s+TEST_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$TEST_CONSTANTS" ]; then
+    echo "FAIL: TEST_* raw constants found in test files:"
+    echo "$TEST_CONSTANTS"
+    echo "Remove fake TEST_* constants; use semantic helpers or direct UAPI."
+    exit 1
+fi
+echo "   ✓ No TEST_* raw constants in tests"
+
+echo ""
+echo "=== Check 26: Bridge bag usage in Linux-facing tests ==="
+BRIDGE_BAG_LINUX=$(rg -n 'backing_io\.h|backing_io_decls\.h' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c 2>/dev/null || true)
+if [ -n "$BRIDGE_BAG_LINUX" ]; then
+    echo "FAIL: Broad bridge bag headers found in Linux-facing tests:"
+    echo "$BRIDGE_BAG_LINUX"
+    echo "Use narrow subsystem-owned interfaces under internal/ios/** instead."
+    exit 1
+fi
+echo "   ✓ No broad bridge bag usage in Linux-facing tests"
+
+echo ""
+echo "=== Check 27: Test gutted with 'omitted for brevity' ==="
+GUTTED_TESTS=$(rg -n 'omitted for brevity\|Additional owner-only tests continue here' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$GUTTED_TESTS" ]; then
+    echo "FAIL: Gutted tests found:"
+    echo "$GUTTED_TESTS"
+    echo "Restore test coverage; do not leave stubs."
+    exit 1
+fi
+echo "   ✓ No gutted tests"
+
+echo ""
 echo "=== All checks passed ==="

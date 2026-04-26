@@ -126,6 +126,7 @@ targets:
     - IXLandSystemLinuxKernelTests/CredentialTests.m
     - IXLandSystemLinuxKernelTests/VFSPathTests.m
     - IXLandSystemLinuxKernelTests/FutexTests.m
+    - IXLandSystemLinuxKernelTests/RootfsBootstrapTests.m
     - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
@@ -168,6 +169,9 @@ targets:
       HEADER_SEARCH_PATHS:
       - $(SRCROOT)/include
       - $(SRCROOT)
+      - $(SRCROOT)/internal/ios
+      - $(SRCROOT)/internal/ios/fs
+      - $(SRCROOT)/internal/ios/kernel
       BUNDLE_LOADER: ''
 configurations:
   Debug:
