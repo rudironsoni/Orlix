@@ -12,21 +12,8 @@
 
 /* Linux UAPI headers for ABI constants and types */
 #include <linux/fcntl.h>
+#include <linux/stat.h>
 #include <asm-generic/stat.h>
-
-/* Linux mode macros - local definitions */
-#ifndef S_IFMT
-#define S_IFMT   00170000
-#define S_IFDIR  0040000
-#define S_IFLNK  0120000
-#endif
-
-#ifndef S_ISDIR
-#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
-#endif
-#ifndef S_ISLNK
-#define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
-#endif
 
 #include "internal/ios/fs/path_host.h"
 

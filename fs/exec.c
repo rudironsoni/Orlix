@@ -16,17 +16,8 @@
 
 /* Linux UAPI headers for ABI constants and types */
 #include <linux/fcntl.h>
+#include <linux/stat.h>
 #include <asm-generic/stat.h>
-
-/* Linux mode macros - local definitions */
-#ifndef S_IFMT
-#define S_IFMT   00170000
-#define S_IFREG  0100000
-#endif
-
-#ifndef S_ISREG
-#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
-#endif
 
 /* Host bridge API - narrow seam for file I/O */
 #include "internal/ios/fs/file_io_host.h"
