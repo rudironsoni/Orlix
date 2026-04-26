@@ -29,11 +29,20 @@
 #include <sys/select.h>
 #include <unistd.h>
 
+/* Linux UAPI headers for canonical constants */
+#include <linux/fcntl.h>
+#include <linux/fs.h>
+
 /* IXLand VFS types */
 #include "fs/vfs.h"
 
 /* Linux UAPI test support - provides Linux-sourced constants */
 #include "IXLandSystemTests/LinuxUAPITestSupport.h"
+
+/* Helper for invalid flag testing - raw value to test rejection */
+#ifndef INVALID_FLAG_TEST_VALUE
+#define INVALID_FLAG_TEST_VALUE INVALID_FLAG_TEST_VALUE
+#endif
 
 struct ix_termios {
     uint32_t c_iflag;
@@ -640,14 +649,14 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
 - (void)testVfsFstatatSupportsSymlinkNoFollow {
     struct linux_stat st;
-    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, ixland_test_at_symlink_nofollow());
+    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, AT_SYMLINK_NOFOLLOW);
 
     XCTAssertEqual(ret, 0, @"vfs_fstatat with AT_SYMLINK_NOFOLLOW should succeed");
 }
 
 - (void)testVfsFstatatRejectsInvalidFlags {
     struct linux_stat st;
-    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, 0x80000000);
+    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, INVALID_FLAG_TEST_VALUE);
 
     XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
 }
@@ -684,7 +693,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/proc/meminfo".UTF8String, &st, 0), -ENOENT,
                    @"synthetic child vfs_fstatat should reject through descriptor policy");
-    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys/kernel".UTF8String, &st, ixland_test_at_symlink_nofollow()), -ENOENT,
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys/kernel".UTF8String, &st, AT_SYMLINK_NOFOLLOW), -ENOENT,
                    @"synthetic child vfs_fstatat lstat path should reject through descriptor policy");
 
     errno = 0;
@@ -1177,19 +1186,19 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 }
 
 - (void)testVfsFaccessatRejectsInvalidFlags {
-    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, 0x80000000);
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, INVALID_FLAG_TEST_VALUE);
 
     XCTAssertEqual(ret, -EINVAL, @"vfs_faccessat should reject invalid flags");
 }
 
 - (void)testVfsFaccessatReportsUnsupportedAtEaccess {
-    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, ixland_test_at_eaccess());
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, AT_EACCESS);
 
     XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat AT_EACCESS should return ENOTSUP");
 }
 
 - (void)testVfsFaccessatReportsUnsupportedSymlinkNoFollow {
-    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, ixland_test_at_symlink_nofollow());
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, AT_SYMLINK_NOFOLLOW);
 
     XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat AT_SYMLINK_NOFOLLOW should return ENOTSUP");
 }
@@ -1284,7 +1293,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
     vfs_test_seed_linux_file("/etc/rn2-src");
 
-    ret = renameat2(AT_FDCWD, "/etc/rn2-src", AT_FDCWD, "/etc/rn2-dst", ixland_test_rename_noreplace());
+    ret = renameat2(AT_FDCWD, "/etc/rn2-src", AT_FDCWD, "/etc/rn2-dst", RENAME_NOREPLACE);
     XCTAssertEqual(ret, 0, @"renameat2 RENAME_NOREPLACE within persistent route should succeed");
 
     struct linux_stat st;
@@ -1307,7 +1316,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     vfs_test_seed_linux_file("/etc/rn2-exist-src");
     vfs_test_seed_linux_file("/etc/rn2-exist-dst");
 
-    ret = renameat2(AT_FDCWD, "/etc/rn2-exist-src", AT_FDCWD, "/etc/rn2-exist-dst", ixland_test_rename_noreplace());
+    ret = renameat2(AT_FDCWD, "/etc/rn2-exist-src", AT_FDCWD, "/etc/rn2-exist-dst", RENAME_NOREPLACE);
     XCTAssertEqual(ret, -EEXIST, @"renameat2 RENAME_NOREPLACE should fail if destination exists");
 
     struct linux_stat st;
@@ -1334,15 +1343,15 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 }
 
 - (void)testRenameat2UnsupportedFlagsFail {
-    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", ixland_test_rename_exchange());
+    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", RENAME_EXCHANGE);
     XCTAssertEqual(ret, -ENOTSUP, @"renameat2 RENAME_EXCHANGE should be rejected");
 
-    ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", ixland_test_rename_whiteout());
+    ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", RENAME_WHITEOUT);
     XCTAssertEqual(ret, -ENOTSUP, @"renameat2 RENAME_WHITEOUT should be rejected");
 }
 
 - (void)testRenameat2UnknownFlagFails {
-    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", 0x80000000);
+    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", INVALID_FLAG_TEST_VALUE);
     XCTAssertEqual(ret, -EINVAL, @"renameat2 with unknown flag should fail with EINVAL");
 }
 

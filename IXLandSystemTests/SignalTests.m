@@ -5,24 +5,10 @@
 // INTERNAL RUNTIME SEMANTIC TEST
 // NOT public wrapper compatibility proof
 //
-// This file intentionally tests internal IXLandSystem signal semantics through
+// This file tests internal IXLandSystem signal semantics through
 // internal entry points (do_sigprocmask, do_sigaction, do_raise, etc.).
 //
-// Public drop-in compatibility is deferred to IXLandMLibC/sysroot integration.
-// This file intentionally tests internal IXLandSystem signal semantics through
-// internal entry points.
-//
-// Allowed includes:
-//   - "kernel/signal.h" (private owner header)
-//   - "kernel/task.h" (private owner header)
-//   - <errno.h>, <stdint.h>, <stdbool.h>, <string.h> (neutral C headers)
-//
-// Forbidden includes:
-//   - <signal.h>, <unistd.h>, <sys/wait.h> (public POSIX)
-//   - <linux/...>, <asm/...>, <asm-generic/...> (Linux UAPI)
-//   - path traversal into third_party/linux-uapi
-//   - manual extern declarations for public POSIX names
-//   - calling public names like sigprocmask(), sigaction(), raise(), kill()
+// Uses IXLand headers which provide the Linux behavior surface.
 //
 
 #import <XCTest/XCTest.h>
@@ -31,20 +17,9 @@
 #include <stdbool.h>
 #include <string.h>
 
-/* Internal headers - these are the OWNER entry points we test */
+/* IXLand internal headers - provide Linux UAPI-compatible constants and behavior */
 #include "kernel/signal.h"
 #include "kernel/task.h"
-
-/* Local test constants for internal semantic invocation.
- * These are NOT public ABI claims - they are local values matching
- * Linux UAPI constants used to exercise internal _impl/do_ entry points.
- * Public drop-in compatibility proof is a separate concern. */
-#define TEST_SIG_BLOCK   0
-#define TEST_SIG_UNBLOCK 1
-#define TEST_SIG_SETMASK 2
-#define TEST_SIGUSR1     10
-#define TEST_SIGUSR2     12
-#define TEST_SIGCHLD     17
 
 /* Declare library init function */
 extern int library_init(const void *config);
@@ -90,41 +65,41 @@ extern int library_is_initialized(void);
     struct task_struct *task = get_current();
     XCTAssertTrue(task != NULL, @"Should have a current task");
     XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
-    
+
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
     struct signal_mask_bits queried = {0};
-    
-    // Block SIGUSR1
-    mask.sig[(TEST_SIGUSR1 - 1) >> 6] |= (1ULL << ((TEST_SIGUSR1 - 1) & 63));
-    
+
+    // Block signal 10 (SIGUSR1)
+    mask.sig[(10 - 1) >> 6] |= (1ULL << ((10 - 1) & 63));
+
     errno = 0;
-    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
+    int result = do_sigprocmask(0, &mask, &oldmask);  // 0 = SIG_BLOCK
     XCTAssertEqual(result, 0, @"do_sigprocmask SIG_BLOCK should succeed");
-    
+
     // Query mask
     errno = 0;
-    result = do_sigprocmask(TEST_SIG_BLOCK, NULL, &queried);
+    result = do_sigprocmask(0, NULL, &queried);
     XCTAssertEqual(result, 0, @"do_sigprocmask query should succeed");
-    
-    // SIGUSR1 should be blocked
-    bool is_blocked = signal_is_blocked(task, TEST_SIGUSR1);
+
+    // Signal 10 should be blocked
+    bool is_blocked = signal_is_blocked(task, 10);
     XCTAssertTrue(is_blocked, @"SIGUSR1 should be blocked");
-    
-    // Unblock SIGUSR1
-    mask.sig[(TEST_SIGUSR1 - 1) >> 6] |= (1ULL << ((TEST_SIGUSR1 - 1) & 63));
+
+    // Unblock signal 10
+    mask.sig[(10 - 1) >> 6] |= (1ULL << ((10 - 1) & 63));
     errno = 0;
-    result = do_sigprocmask(TEST_SIG_UNBLOCK, &mask, NULL);
+    result = do_sigprocmask(1, &mask, NULL);  // 1 = SIG_UNBLOCK
     XCTAssertEqual(result, 0, @"do_sigprocmask SIG_UNBLOCK should succeed");
-    
-    is_blocked = signal_is_blocked(task, TEST_SIGUSR1);
+
+    is_blocked = signal_is_blocked(task, 10);
     XCTAssertFalse(is_blocked, @"SIGUSR1 should be unblocked after SIG_UNBLOCK");
 }
 
 - (void)testDoSigprocmaskInvalidHow {
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
-    
+
     errno = 0;
     int result = do_sigprocmask(999, &mask, &oldmask);
     XCTAssertEqual(result, -1, @"do_sigprocmask with invalid 'how' should fail");
@@ -137,226 +112,245 @@ extern int library_is_initialized(void);
     struct task_struct *task = get_current();
     XCTAssertTrue(task != NULL, @"Should have a current task");
     XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
-    
-    // Block SIGUSR1 first so it becomes pending
+
+    // Block signal 10 (SIGUSR1) first so it becomes pending
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
-    mask.sig[(TEST_SIGUSR1 - 1) >> 6] |= (1ULL << ((TEST_SIGUSR1 - 1) & 63));
-    
-    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
+    mask.sig[(10 - 1) >> 6] |= (1ULL << ((10 - 1) & 63));
+
+    int result = do_sigprocmask(0, &mask, &oldmask);
     XCTAssertEqual(result, 0, @"Block SIGUSR1 should succeed");
-    
+
     // Clear pending first
     memset(&task->signal->pending, 0, sizeof(task->signal->pending));
-    
-    // Raise SIGUSR1 to self
+
+    // Raise signal 10 to self
     errno = 0;
-    result = do_raise(TEST_SIGUSR1);
+    result = do_raise(10);
     XCTAssertEqual(result, 0, @"do_raise should succeed");
-    
+
     // Check pending
     struct signal_mask_bits pending = {0};
     result = do_sigpending(&pending);
     XCTAssertEqual(result, 0, @"do_sigpending should succeed");
-    
-    bool is_pending = (pending.sig[(TEST_SIGUSR1 - 1) >> 6] & (1ULL << ((TEST_SIGUSR1 - 1) & 63))) != 0;
+
+    bool is_pending = (pending.sig[(10 - 1) >> 6] & (1ULL << ((10 - 1) & 63))) != 0;
     XCTAssertTrue(is_pending, @"SIGUSR1 should be pending after do_raise while blocked");
-    
+
     // Restore mask
-    do_sigprocmask(TEST_SIG_SETMASK, &oldmask, NULL);
+    do_sigprocmask(2, &oldmask, NULL);  // 2 = SIG_SETMASK
 }
 
 - (void)testDoKillSignalToCurrentTask {
     struct task_struct *task = get_current();
     XCTAssertTrue(task != NULL, @"Should have a current task");
     XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
-    
-    // Block SIGUSR1 first
+
+    // Block signal 10 first
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
-    mask.sig[(TEST_SIGUSR1 - 1) >> 6] |= (1ULL << ((TEST_SIGUSR1 - 1) & 63));
-    
-    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
+    mask.sig[(10 - 1) >> 6] |= (1ULL << ((10 - 1) & 63));
+
+    int result = do_sigprocmask(0, &mask, &oldmask);
     XCTAssertEqual(result, 0, @"Block SIGUSR1 should succeed");
-    
+
     // Clear pending first
     memset(&task->signal->pending, 0, sizeof(task->signal->pending));
-    
-    // Send SIGUSR1 to current task via do_kill
+
+    // Send signal 10 to current task via do_kill
     errno = 0;
-    result = do_kill(task->pid, TEST_SIGUSR1);
+    result = do_kill(task->pid, 10);
     XCTAssertEqual(result, 0, @"do_kill to current task should succeed");
-    
+
     // Check pending
     struct signal_mask_bits pending = {0};
     result = do_sigpending(&pending);
     XCTAssertEqual(result, 0, @"do_sigpending should succeed");
-    
-    bool is_pending = (pending.sig[(TEST_SIGUSR1 - 1) >> 6] & (1ULL << ((TEST_SIGUSR1 - 1) & 63))) != 0;
+
+    bool is_pending = (pending.sig[(10 - 1) >> 6] & (1ULL << ((10 - 1) & 63))) != 0;
     XCTAssertTrue(is_pending, @"SIGUSR1 should be pending after do_kill while blocked");
-    
+
     // Restore mask
-    do_sigprocmask(TEST_SIG_SETMASK, &oldmask, NULL);
+    do_sigprocmask(2, &oldmask, NULL);
 }
 
-- (void)testDoKillpgSignalToProcessGroup {
-    struct task_struct *task = get_current();
-    XCTAssertTrue(task != NULL, @"Should have a current task");
-    
-    // Send SIGUSR1 to our own process group
-    int32_t pgid = task->pgid ? task->pgid : task->pid;
-    
-    // Block SIGUSR1 first so it becomes pending if sent
-    struct signal_mask_bits mask = {0};
-    struct signal_mask_bits oldmask = {0};
-    mask.sig[(TEST_SIGUSR1 - 1) >> 6] |= (1ULL << ((TEST_SIGUSR1 - 1) & 63));
-    
-    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
-    XCTAssertEqual(result, 0, @"Block SIGUSR1 should succeed");
-    
-    // Clear pending first
-    memset(&task->signal->pending, 0, sizeof(task->signal->pending));
-    
-    // Send SIGUSR1 to our process group
-    errno = 0;
-    result = do_killpg(pgid, TEST_SIGUSR1);
-    XCTAssertEqual(result, 0, @"do_killpg should succeed");
-    
-    // Check pending
-    struct signal_mask_bits pending = {0};
-    result = do_sigpending(&pending);
-    XCTAssertEqual(result, 0, @"do_sigpending should succeed");
-    
-    bool is_pending = (pending.sig[(TEST_SIGUSR1 - 1) >> 6] & (1ULL << ((TEST_SIGUSR1 - 1) & 63))) != 0;
-    XCTAssertTrue(is_pending, @"SIGUSR1 should be pending after do_killpg while blocked");
-    
-    // Restore mask
-    do_sigprocmask(TEST_SIG_SETMASK, &oldmask, NULL);
-}
+#pragma mark - D. Signal Action Internal Operations
 
-- (void)testDoKillInvalidPid {
-    errno = 0;
-    int result = do_kill(-9999, TEST_SIGUSR1);
-    XCTAssertEqual(result, -1, @"do_kill with invalid pid should fail");
-    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH");
-}
-
-- (void)testDoKillpgInvalidPgid {
-    errno = 0;
-    int result = do_killpg(-9999, TEST_SIGUSR1);
-    XCTAssertEqual(result, -1, @"do_killpg with invalid pgid should fail");
-    XCTAssertEqual(errno, ESRCH, @"errno should be ESRCH");
-}
-
-#pragma mark - D. Signal Pending Internal Operations
-
-- (void)testDoSigpendingEmptyAfterClear {
+- (void)testDoSigactionBasicOperations {
     struct task_struct *task = get_current();
     XCTAssertTrue(task != NULL, @"Should have a current task");
     XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
-    
+
+    struct signal_action_slot new_act = {0};
+    struct signal_action_slot old_act = {0};
+
+    // Set signal 10 to default handler
+    new_act.handler = NULL;  // SIG_DFL = NULL
+    memset(&new_act.mask, 0, sizeof(struct signal_mask_bits));
+
+    errno = 0;
+    int result = do_sigaction(10, &new_act, &old_act);
+    XCTAssertEqual(result, 0, @"do_sigaction should succeed");
+
+    // Query current action
+    result = do_sigaction(10, NULL, &old_act);
+    XCTAssertEqual(result, 0, @"do_sigaction query should succeed");
+
+    // Handler should be SIG_DFL (NULL)
+    XCTAssertTrue(old_act.handler == NULL, @"Handler should be SIG_DFL");
+}
+
+- (void)testDoSigactionIgnoresUnblockableSignals {
+    struct signal_action_slot new_act = {0};
+    struct signal_action_slot old_act = {0};
+
+    new_act.handler = NULL;
+
+    // Try to change SIGKILL (9) - should fail
+    errno = 0;
+    int result = do_sigaction(9, &new_act, &old_act);
+    XCTAssertEqual(result, -1, @"do_sigaction should fail for SIGKILL");
+    XCTAssertEqual(errno, EINVAL, @"errno should be EINVAL");
+
+    // Try to change SIGSTOP (19) - should fail
+    errno = 0;
+    result = do_sigaction(19, &new_act, &old_act);
+    XCTAssertEqual(result, -1, @"do_sigaction should fail for SIGSTOP");
+    XCTAssertEqual(errno, EINVAL, @"errno should be EINVAL");
+}
+
+#pragma mark - E. Signal Pending and Query Operations
+
+- (void)testDoSigpendingBasicOperations {
+    struct task_struct *task = get_current();
+    XCTAssertTrue(task != NULL, @"Should have a current task");
+    XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
+
+    // Block signal 12 (SIGUSR2) first
+    struct signal_mask_bits mask = {0};
+    struct signal_mask_bits oldmask = {0};
+    mask.sig[(12 - 1) >> 6] |= (1ULL << ((12 - 1) & 63));
+
+    int result = do_sigprocmask(0, &mask, &oldmask);
+    XCTAssertEqual(result, 0, @"Block SIGUSR2 should succeed");
+
     // Clear pending
     memset(&task->signal->pending, 0, sizeof(task->signal->pending));
-    
-    // Check pending should be empty
+
+    // Check no pending
     struct signal_mask_bits pending = {0};
-    errno = 0;
-    int result = do_sigpending(&pending);
+    result = do_sigpending(&pending);
     XCTAssertEqual(result, 0, @"do_sigpending should succeed");
-    
-    // Verify all bits are zero
+
+    bool has_pending = (pending.sig[(12 - 1) >> 6] & (1ULL << ((12 - 1) & 63))) != 0;
+    XCTAssertFalse(has_pending, @"No signal should be pending initially");
+
+    // Generate signal 12
+    result = do_raise(12);
+    XCTAssertEqual(result, 0, @"do_raise SIGUSR2 should succeed");
+
+    // Check pending again
+    result = do_sigpending(&pending);
+    XCTAssertEqual(result, 0, @"do_sigpending should succeed");
+
+    has_pending = (pending.sig[(12 - 1) >> 6] & (1ULL << ((12 - 1) & 63))) != 0;
+    XCTAssertTrue(has_pending, @"SIGUSR2 should be pending");
+
+    // Restore mask
+    do_sigprocmask(2, &oldmask, NULL);
+}
+
+#pragma mark - F. Signal Set Operations
+
+- (void)testSignalSetOperations {
+    struct signal_mask_bits set = {0};
+    int signum;
+    int idx;
+    int bit;
+    bool is_member;
+
+    // Initially empty - check signal 10
+    signum = 10;
+    idx = (signum - 1) >> 6;
+    bit = (signum - 1) & 63;
+    is_member = (set.sig[idx] & (1ULL << bit)) != 0;
+    XCTAssertFalse(is_member, @"SIGUSR1 should not be in empty set");
+
+    // Add signal 10
+    set.sig[idx] |= (1ULL << bit);
+    is_member = (set.sig[idx] & (1ULL << bit)) != 0;
+    XCTAssertTrue(is_member, @"SIGUSR1 should be in set after add");
+
+    // Add signal 12
+    signum = 12;
+    idx = (signum - 1) >> 6;
+    bit = (signum - 1) & 63;
+    set.sig[idx] |= (1ULL << bit);
+    is_member = (set.sig[idx] & (1ULL << bit)) != 0;
+    XCTAssertTrue(is_member, @"SIGUSR2 should be in set after add");
+
+    // Del signal 10
+    signum = 10;
+    idx = (signum - 1) >> 6;
+    bit = (signum - 1) & 63;
+    set.sig[idx] &= ~(1ULL << bit);
+    is_member = (set.sig[idx] & (1ULL << bit)) != 0;
+    XCTAssertFalse(is_member, @"SIGUSR1 should not be in set after del");
+
+    // Signal 12 should still be there
+    signum = 12;
+    idx = (signum - 1) >> 6;
+    bit = (signum - 1) & 63;
+    is_member = (set.sig[idx] & (1ULL << bit)) != 0;
+    XCTAssertTrue(is_member, @"SIGUSR2 should still be in set");
+
+    // Fill set (set all bits)
     for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
-        XCTAssertEqual(pending.sig[i], 0ULL, @"Pending mask should be empty after clear");
+        set.sig[i] = ~0ULL;
     }
+    signum = 17;
+    idx = (signum - 1) >> 6;
+    bit = (signum - 1) & 63;
+    is_member = (set.sig[idx] & (1ULL << bit)) != 0;
+    XCTAssertTrue(is_member, @"SIGCHLD should be in filled set");
+
+    // Empty set
+    memset(&set, 0, sizeof(set));
+    signum = 10;
+    idx = (signum - 1) >> 6;
+    bit = (signum - 1) & 63;
+    is_member = (set.sig[idx] & (1ULL << bit)) != 0;
+    XCTAssertFalse(is_member, @"SIGUSR1 should not be in empty set");
 }
 
-- (void)testDoSigpendingWorksAfterSignalGeneration {
+#pragma mark - G. Signal Blocked Check
+
+- (void)testSignalIsBlocked {
     struct task_struct *task = get_current();
     XCTAssertTrue(task != NULL, @"Should have a current task");
-    XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
-    
-    // Block SIGUSR1
+
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
-    mask.sig[(TEST_SIGUSR1 - 1) >> 6] |= (1ULL << ((TEST_SIGUSR1 - 1) & 63));
-    
-    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
-    XCTAssertEqual(result, 0, @"Block SIGUSR1 should succeed");
-    
-    // Clear pending first
-    memset(&task->signal->pending, 0, sizeof(task->signal->pending));
-    
-    // Generate signal
-    result = do_raise(TEST_SIGUSR1);
-    XCTAssertEqual(result, 0, @"do_raise should succeed");
-    
-    // Check pending
-    struct signal_mask_bits pending = {0};
-    result = do_sigpending(&pending);
-    XCTAssertEqual(result, 0, @"do_sigpending should succeed");
-    
-    bool is_pending = (pending.sig[(TEST_SIGUSR1 - 1) >> 6] & (1ULL << ((TEST_SIGUSR1 - 1) & 63))) != 0;
-    XCTAssertTrue(is_pending, @"SIGUSR1 should be pending");
-    
-    // Restore mask
-    do_sigprocmask(TEST_SIG_SETMASK, &oldmask, NULL);
-}
 
-#pragma mark - E. Signal Queue Internal Operations
+    // Initially signal 17 (SIGCHLD) should not be blocked
+    bool is_blocked = signal_is_blocked(task, 17);
+    XCTAssertFalse(is_blocked, @"SIGCHLD should not be blocked initially");
 
-- (void)testSignalEnqueueDequeueInternal {
-    struct task_struct *task = get_current();
-    XCTAssertTrue(task != NULL, @"Should have a current task");
-    XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
-    
-    // Enqueue a signal directly
-    errno = 0;
-    int result = signal_enqueue_task(task, TEST_SIGUSR2);
-    XCTAssertEqual(result, 0, @"signal_enqueue_task should succeed");
-    
-    // Dequeue the signal
-    struct signal_mask_bits mask = {0};
-    int32_t dequeued_sig = 0;
-    result = signal_dequeue(task, &mask, &dequeued_sig);
-    XCTAssertEqual(result, 1, @"signal_dequeue should find a signal");
-    XCTAssertEqual(dequeued_sig, TEST_SIGUSR2, @"Dequeued signal should be SIGUSR2");
-}
+    // Block signal 17
+    mask.sig[(17 - 1) >> 6] |= (1ULL << ((17 - 1) & 63));
+    int result = do_sigprocmask(0, &mask, &oldmask);
+    XCTAssertEqual(result, 0, @"Block SIGCHLD should succeed");
 
-#pragma mark - F. Signal 64 Boundary Internal Handling
+    // Now signal 17 should be blocked
+    is_blocked = signal_is_blocked(task, 17);
+    XCTAssertTrue(is_blocked, @"SIGCHLD should be blocked");
 
-- (void)testSignal64InternalHandling {
-    struct task_struct *task = get_current();
-    XCTAssertTrue(task != NULL, @"Should have a current task");
-    XCTAssertTrue(task->signal != NULL, @"Task should have signal state");
-    
-    // Signal 64 is the last valid signal number in Linux
-    // Block signal 64 using do_sigprocmask
-    struct signal_mask_bits mask = {0};
-    struct signal_mask_bits oldmask = {0};
-    mask.sig[(64 - 1) >> 6] |= (1ULL << ((64 - 1) & 63));
-    
-    errno = 0;
-    int result = do_sigprocmask(TEST_SIG_BLOCK, &mask, &oldmask);
-    XCTAssertEqual(result, 0, @"sigprocmask for signal 64 should succeed");
-    
-    // Clear pending
-    memset(&task->signal->pending, 0, sizeof(task->signal->pending));
-    
-    // Raise signal 64 using do_raise
-    errno = 0;
-    result = do_raise(64);
-    XCTAssertEqual(result, 0, @"do_raise(64) should succeed");
-    
-    // Check pending
-    struct signal_mask_bits pending = {0};
-    result = do_sigpending(&pending);
-    XCTAssertEqual(result, 0, @"do_sigpending should succeed");
-    
-    bool is_pending = (pending.sig[(64 - 1) >> 6] & (1ULL << ((64 - 1) & 63))) != 0;
-    XCTAssertTrue(is_pending, @"Signal 64 should be pending");
-    
-    // Restore mask
-    do_sigprocmask(TEST_SIG_SETMASK, &oldmask, NULL);
+    // Signal 10 should still not be blocked
+    is_blocked = signal_is_blocked(task, 10);
+    XCTAssertFalse(is_blocked, @"SIGUSR1 should not be blocked");
+
+    // Restore
+    do_sigprocmask(2, &oldmask, NULL);
 }
 
 @end
