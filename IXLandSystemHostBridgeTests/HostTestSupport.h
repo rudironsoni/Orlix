@@ -58,8 +58,7 @@ int ixland_test_fcntl_has_rdonly(int flags);
 /* Narrow host file operation wrappers. These are the only host file helpers
  * Objective-C host bridge tests may call. They are implemented in
  * IXLandSystemHostBridgeTests/HostTestSupport.c and are the narrow seam to
- * internal/ios/** host bridging code.
- */
+ * internal/ios/** host bridging code. */
 int ixland_test_host_open(const char *path, int flags, unsigned int mode);
 int ixland_test_host_close(int fd);
 
