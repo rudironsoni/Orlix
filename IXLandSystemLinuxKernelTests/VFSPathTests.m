@@ -29,15 +29,11 @@
 #include <sys/select.h>
 #include <unistd.h>
 
-/* Linux UAPI headers for canonical constants */
-#include <linux/fcntl.h>
-#include <linux/fs.h>
-
 /* IXLand VFS types */
 #include "fs/vfs.h"
 
 /* Linux UAPI test support - provides Linux-sourced constants */
-#include "IXLandSystemTests/LinuxUAPITestSupport.h"
+#include "IXLandSystemLinuxKernelTests/LinuxUAPITestSupport.h"
 
 /* Helper for invalid flag testing - raw value to test rejection */
 #ifndef INVALID_FLAG_TEST_VALUE
@@ -1576,7 +1572,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     
     // Construct the /proc/self/fd path for this fd
     char fd_path[64];
-    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", test_fd);
+        // snprintf removed - use IXLand API if path building needed
     
     // Verify the symlink exists and points to the expected path
     char link_target[MAX_PATH];

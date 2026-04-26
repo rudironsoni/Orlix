@@ -125,8 +125,6 @@
     if (n <= 0) return;
 
     buf[n] = '\0';
-    
-    NSLog(@"PASSWD CONTENT: %s", buf);
 
     /* Verify root user entry exists */
     XCTAssertTrue(strstr(buf, "root") != NULL,

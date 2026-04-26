@@ -115,24 +115,31 @@ targets:
       group: observability
     - path: runtime/native/registry.c
       group: runtime/native
-  IXLandSystemTests:
+  IXLandSystemLinuxKernelTests:
     type: bundle.unit-test
     platform: iOS
     deploymentTarget:
       iOS: '16.0'
     sources:
-    - IXLandSystemTests/SignalTests.m
-    - IXLandSystemTests/TaskGroupTests.m
-    - IXLandSystemTests/CredentialTests.m
-    - IXLandSystemTests/VFSPathTests.m
-    - IXLandSystemTests/RootfsBootstrapTests.m
-    - IXLandSystemTests/FutexTests.m
-    - IXLandSystemTests/LinuxUAPICompileSmoke.c
-    - IXLandSystemTests/FutexUAPICompileSmoke.c
-    - IXLandSystemTests/LinuxUAPITestSupport.c
-    - IXLandSystemTests/LinuxUAPITestSupport.h
-    - IXLandSystemTests/HostTestSupport.c
-    - IXLandSystemTests/PTYTestSupport.c
+    - IXLandSystemLinuxKernelTests/SignalTests.m
+    - IXLandSystemLinuxKernelTests/TaskGroupTests.m
+    - IXLandSystemLinuxKernelTests/CredentialTests.m
+    - IXLandSystemLinuxKernelTests/VFSPathTests.m
+    - IXLandSystemLinuxKernelTests/RootfsBootstrapTests.m
+    - IXLandSystemLinuxKernelTests/FutexTests.m
+    - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/FutexUAPICompileSmoke.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/LinuxUAPITestSupport.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - IXLandSystemLinuxKernelTests/LinuxUAPITestSupport.h
     dependencies:
     - target: IXLandSystem
     settings:
@@ -140,7 +147,26 @@ targets:
       HEADER_SEARCH_PATHS:
       - $(SRCROOT)/include
       - $(SRCROOT)
-      - $(LINUX_UAPI_INCLUDE_ROOT)
+      BUNDLE_LOADER: ''
+  IXLandSystemHostBridgeTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget:
+      iOS: '16.0'
+    sources:
+    - IXLandSystemHostBridgeTests/HostBridgeSmokeTests.m
+    - IXLandSystemHostBridgeTests/PTYHostBridgeTests.m
+    - IXLandSystemHostBridgeTests/HostTestSupport.c
+    - IXLandSystemHostBridgeTests/HostTestSupport.h
+    - IXLandSystemHostBridgeTests/PTYTestSupport.c
+    - IXLandSystemHostBridgeTests/PTYTestSupport.h
+    dependencies:
+    - target: IXLandSystem
+    settings:
+      GENERATE_INFOPLIST_FILE: true
+      HEADER_SEARCH_PATHS:
+      - $(SRCROOT)/include
+      - $(SRCROOT)
       BUNDLE_LOADER: ''
 configurations:
   Debug:
@@ -158,7 +184,9 @@ schemes:
     build:
       targets:
         IXLandSystem: all
-        IXLandSystemTests: all
+        IXLandSystemLinuxKernelTests: all
+        IXLandSystemHostBridgeTests: all
     test:
       targets:
-      - IXLandSystemTests
+      - IXLandSystemLinuxKernelTests
+      - IXLandSystemHostBridgeTests

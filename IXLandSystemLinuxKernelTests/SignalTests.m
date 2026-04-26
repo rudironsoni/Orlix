@@ -55,7 +55,6 @@ extern int library_is_initialized(void);
 
 - (void)testLibraryInitialization {
     BOOL isInit = library_is_initialized();
-    NSLog(@"SignalTests: Library initialized: %@", isInit ? @"YES" : @"NO");
     XCTAssertTrue(isInit, @"Library should be initialized");
 }
 

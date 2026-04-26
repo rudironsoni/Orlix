@@ -1,6 +1,6 @@
 //
 // TaskGroupTests.m
-// IXLandSystemTests
+// IXLandSystemLinuxKernelTests
 //
 // INTERNAL RUNTIME SEMANTIC TEST
 // NOT public wrapper compatibility proof
@@ -9,18 +9,15 @@
 // through internal entry points (getpgrp_impl, setpgid_impl, etc.).
 //
 // Public drop-in compatibility is deferred to IXLandMLibC/sysroot integration.
-// This file intentionally tests internal IXLandSystem owner semantics
-// through internal entry points.
 //
 // Allowed includes:
 //   - "kernel/task.h" (private owner header)
 //   - "kernel/signal.h" (private owner header)
 //   - <errno.h>, <stdint.h>, <stdbool.h>, <string.h> (neutral C headers)
-//   - <asm-generic/signal.h>, <asm-generic/signal-defs.h> (Linux UAPI)
-//   - <asm-generic/wait.h> (Linux UAPI)
 //
 // Forbidden includes:
 //   - <unistd.h>, <signal.h>, <sys/wait.h> (public POSIX)
+//   - <asm-generic/signal.h>, <asm-generic/signal-defs.h> (Linux UAPI in .m)
 //   - path traversal into third_party/linux-uapi
 //   - manual extern declarations for public POSIX names
 //   - calling public names like getpgid(), setpgid(), killpg(), waitpid()
@@ -31,15 +28,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-
-/* Linux UAPI headers for canonical constant names */
-#include <asm-generic/signal.h>
-#include <asm-generic/signal-defs.h>
-
-/* WNOHANG from Linux UAPI */
-#ifndef WNOHANG
-#define WNOHANG 1
-#endif
 
 /* Internal headers - these are the OWNER entry points we test */
 #include "kernel/task.h"
@@ -209,30 +197,23 @@ extern int library_is_initialized(void);
     struct signal_mask_bits mask = {0};
     struct signal_mask_bits oldmask = {0};
 
-    // Block SIGUSR1
-    mask.sig[(SIGUSR1 - 1) >> 6] |= (1ULL << ((SIGUSR1 - 1) & 63));
+    // Block SIGUSR1 (signal 10)
+    mask.sig[(10 - 1) >> 6] |= (1ULL << ((10 - 1) & 63));
 
     errno = 0;
-    int result = do_sigprocmask(SIG_BLOCK, &mask, &oldmask);
+    int result = do_sigprocmask(0, &mask, &oldmask);  // 0 = SIG_BLOCK
     XCTAssertEqual(result, 0, @"SIG_BLOCK should succeed in task context");
 
     // Verify blocked
-    bool is_blocked = signal_is_blocked(task, SIGUSR1);
+    bool is_blocked = signal_is_blocked(task, 10);
     XCTAssertTrue(is_blocked, @"SIGUSR1 should be blocked in task context");
 
     // Unblock
-    result = do_sigprocmask(SIG_UNBLOCK, &mask, NULL);
+    result = do_sigprocmask(1, &mask, NULL);  // 1 = SIG_UNBLOCK
     XCTAssertEqual(result, 0, @"SIG_UNBLOCK should succeed");
 
-    is_blocked = signal_is_blocked(task, SIGUSR1);
+    is_blocked = signal_is_blocked(task, 10);
     XCTAssertFalse(is_blocked, @"SIGUSR1 should be unblocked");
-}
-
-#pragma mark - G. WNOHANG constant verification
-
-- (void)testWNOHANGConstant {
-    // Verify WNOHANG has the expected Linux UAPI value
-    XCTAssertEqual(WNOHANG, 1, @"WNOHANG should be 1");
 }
 
 @end

@@ -6,19 +6,11 @@
  *
  * ALLOWED: Semantic interpretation helpers (e.g., is_directory(mode))
  * FORBIDDEN: Constant accessor soup (e.g., sigusr1(), at_nofollow())
+ * FORBIDDEN: Linux UAPI includes - these are scoped to LinuxUAPITestSupport.c only
  */
 
 #ifndef LINUX_UAPI_TEST_SUPPORT_H
 #define LINUX_UAPI_TEST_SUPPORT_H
-
-/* Linux UAPI headers - tests use these directly for constants */
-#include <linux/stat.h>
-#include <linux/fcntl.h>
-#include <asm-generic/ioctls.h>
-#include <asm-generic/signal.h>
-#include <asm-generic/siginfo.h>
-#include <asm-generic/signal-defs.h>
-#include <asm-generic/termbits.h>
 
 #ifdef __cplusplus
 extern "C" {
