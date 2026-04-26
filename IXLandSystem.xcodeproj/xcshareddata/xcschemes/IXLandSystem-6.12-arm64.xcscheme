@@ -29,9 +29,23 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "086555C039F1E70449247247"
-               BuildableName = "IXLandSystemTests.xctest"
-               BlueprintName = "IXLandSystemTests"
+               BlueprintIdentifier = "3CD1156E92184871A6CBCF1F"
+               BuildableName = "IXLandSystemHostBridgeTests.xctest"
+               BlueprintName = "IXLandSystemHostBridgeTests"
+               ReferencedContainer = "container:IXLandSystem.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B4B118A427827A89B3C5EED0"
+               BuildableName = "IXLandSystemLinuxKernelTests.xctest"
+               BlueprintName = "IXLandSystemLinuxKernelTests"
                ReferencedContainer = "container:IXLandSystem.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -58,9 +72,20 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "086555C039F1E70449247247"
-               BuildableName = "IXLandSystemTests.xctest"
-               BlueprintName = "IXLandSystemTests"
+               BlueprintIdentifier = "B4B118A427827A89B3C5EED0"
+               BuildableName = "IXLandSystemLinuxKernelTests.xctest"
+               BlueprintName = "IXLandSystemLinuxKernelTests"
+               ReferencedContainer = "container:IXLandSystem.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "3CD1156E92184871A6CBCF1F"
+               BuildableName = "IXLandSystemHostBridgeTests.xctest"
+               BlueprintName = "IXLandSystemHostBridgeTests"
                ReferencedContainer = "container:IXLandSystem.xcodeproj">
             </BuildableReference>
          </TestableReference>
