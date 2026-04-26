@@ -7,7 +7,7 @@
  */
 
 /* Include shared stat type definition */
-#include "fs/stat_types.h"
+#include "include/ixland/stat_types.h"
 
 #include "path_host.h"
 

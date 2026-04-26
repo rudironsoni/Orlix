@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 /* Include shared stat type definition */
-#include "fs/stat_types.h"
+#include "include/ixland/stat_types.h"
 
 #ifdef __cplusplus
 extern "C" {

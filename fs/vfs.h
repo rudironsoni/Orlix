@@ -15,7 +15,7 @@ typedef __UINT64_TYPE__ uint64_t;
 typedef __SIZE_TYPE__ size_t;
 
 /* Linux stat structure - defined in stat_types.h for shared use */
-#include "fs/stat_types.h"
+#include "include/ixland/stat_types.h"
 
 /* Use fixed-width types to avoid conflicts with Darwin headers */
 typedef __INT64_TYPE__ linux_off_t;
