@@ -78,9 +78,7 @@ ModuleCache/
 # Clangd compilation database cache
 .clangd-cache/
 .cache/
-# Some tools create an @.cache folder variant; ignore it too
-@.cache/
-@.cache
+# (No @.cache variants should be tracked; only .cache is ignored)
 
 # Generated binary
 bin/ixland-cc
