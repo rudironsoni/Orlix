@@ -64,10 +64,23 @@ struct linux_dirent64 {
 #include "fs/path.h"
 #include "kernel/task.h"
 #include "kernel/signal.h"
-#include "internal/ios/fs/backing_io.h"
 #include "runtime/native/registry.h"
 
+/* Narrow seam: Host test setup helpers (not Linux UAPI proof) */
+extern int host_open_impl(const char *path, int flags, mode_t mode);
+extern int host_close_impl(int fd);
+extern ssize_t host_write_impl(int fd, const void *buf, size_t count);
+extern ssize_t host_read_impl(int fd, void *buf, size_t count);
+extern off_t host_lseek_impl(int fd, off_t offset, int whence);
+extern int host_mkdir_impl(const char *path, mode_t mode);
+extern int host_rmdir_impl(const char *path);
+extern int host_unlink_impl(const char *path);
+extern int host_symlink_impl(const char *target, const char *linkpath);
+
 extern char *getcwd_impl(char *buf, size_t size);
+extern int vfs_discover_persistent_root(char *path, size_t size);
+extern int vfs_discover_cache_root(char *path, size_t size);
+extern int vfs_discover_temp_root(char *path, size_t size);
 extern int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode);
 extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags);
 extern int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
@@ -618,21 +631,6 @@ extern int fstatat_impl(int dirfd, const char *pathname, struct linux_stat *stat
 extern int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
 extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
-#define TEST_AT_SYMLINK_NOFOLLOW 0x100
-#define TEST_AT_EACCESS 0x200
-#define TEST_AT_EMPTY_PATH 0x1000
-#define TEST_AT_REMOVEDIR 0x200
-#define TEST_RENAME_NOREPLACE 0x0001
-#define TEST_RENAME_EXCHANGE 0x0002
-#define TEST_RENAME_WHITEOUT 0x0004
-#define TEST_F_DUPFD 0
-#define TEST_F_GETFD 1
-#define TEST_F_SETFD 2
-#define TEST_F_GETFL 3
-#define TEST_F_SETFL 4
-#define TEST_F_DUPFD_CLOEXEC 1030
-#define TEST_FD_CLOEXEC 1
-
 - (void)testVfsFstatatSupportsAtFdcwd {
     struct linux_stat st;
     int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, 0);
@@ -642,7 +640,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
 - (void)testVfsFstatatSupportsSymlinkNoFollow {
     struct linux_stat st;
-    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, TEST_AT_SYMLINK_NOFOLLOW);
+    int ret = vfs_fstatat(AT_FDCWD, @"/etc/passwd".UTF8String, &st, ixland_test_at_symlink_nofollow());
 
     XCTAssertEqual(ret, 0, @"vfs_fstatat with AT_SYMLINK_NOFOLLOW should succeed");
 }
@@ -686,7 +684,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/proc/meminfo".UTF8String, &st, 0), -ENOENT,
                    @"synthetic child vfs_fstatat should reject through descriptor policy");
-    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys/kernel".UTF8String, &st, TEST_AT_SYMLINK_NOFOLLOW), -ENOENT,
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys/kernel".UTF8String, &st, ixland_test_at_symlink_nofollow()), -ENOENT,
                    @"synthetic child vfs_fstatat lstat path should reject through descriptor policy");
 
     errno = 0;
@@ -1185,13 +1183,13 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 }
 
 - (void)testVfsFaccessatReportsUnsupportedAtEaccess {
-    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, TEST_AT_EACCESS);
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, ixland_test_at_eaccess());
 
     XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat AT_EACCESS should return ENOTSUP");
 }
 
 - (void)testVfsFaccessatReportsUnsupportedSymlinkNoFollow {
-    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, TEST_AT_SYMLINK_NOFOLLOW);
+    int ret = vfs_faccessat(AT_FDCWD, @"/etc".UTF8String, X_OK, ixland_test_at_symlink_nofollow());
 
     XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat AT_SYMLINK_NOFOLLOW should return ENOTSUP");
 }
@@ -1286,7 +1284,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
     vfs_test_seed_linux_file("/etc/rn2-src");
 
-    ret = renameat2(AT_FDCWD, "/etc/rn2-src", AT_FDCWD, "/etc/rn2-dst", TEST_RENAME_NOREPLACE);
+    ret = renameat2(AT_FDCWD, "/etc/rn2-src", AT_FDCWD, "/etc/rn2-dst", ixland_test_rename_noreplace());
     XCTAssertEqual(ret, 0, @"renameat2 RENAME_NOREPLACE within persistent route should succeed");
 
     struct linux_stat st;
@@ -1309,7 +1307,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     vfs_test_seed_linux_file("/etc/rn2-exist-src");
     vfs_test_seed_linux_file("/etc/rn2-exist-dst");
 
-    ret = renameat2(AT_FDCWD, "/etc/rn2-exist-src", AT_FDCWD, "/etc/rn2-exist-dst", TEST_RENAME_NOREPLACE);
+    ret = renameat2(AT_FDCWD, "/etc/rn2-exist-src", AT_FDCWD, "/etc/rn2-exist-dst", ixland_test_rename_noreplace());
     XCTAssertEqual(ret, -EEXIST, @"renameat2 RENAME_NOREPLACE should fail if destination exists");
 
     struct linux_stat st;
@@ -1336,10 +1334,10 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 }
 
 - (void)testRenameat2UnsupportedFlagsFail {
-    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", TEST_RENAME_EXCHANGE);
+    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", ixland_test_rename_exchange());
     XCTAssertEqual(ret, -ENOTSUP, @"renameat2 RENAME_EXCHANGE should be rejected");
 
-    ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", TEST_RENAME_WHITEOUT);
+    ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", ixland_test_rename_whiteout());
     XCTAssertEqual(ret, -ENOTSUP, @"renameat2 RENAME_WHITEOUT should be rejected");
 }
 
@@ -1362,7 +1360,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int new_fd = fcntl(fd, TEST_F_DUPFD, 10);
+    int new_fd = ixland_test_fcntl_dupfd(fd, 10);
     XCTAssertTrue(new_fd >= 10, @"F_DUPFD should return fd >= 10");
 
     close(fd);
@@ -1374,7 +1372,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int flags = fcntl(fd, TEST_F_GETFD);
+    int flags = ixland_test_fcntl_getfd(fd);
     XCTAssertTrue(flags >= 0, @"F_GETFD should succeed");
 
     close(fd);
@@ -1385,11 +1383,11 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int ret = fcntl(fd, TEST_F_SETFD, TEST_FD_CLOEXEC);
+    int ret = ixland_test_fcntl_setfd(fd, FD_CLOEXEC);
     XCTAssertEqual(ret, 0, @"F_SETFD with FD_CLOEXEC should succeed");
 
-    int flags = fcntl(fd, TEST_F_GETFD);
-    XCTAssertTrue(flags & TEST_FD_CLOEXEC, @"FD_CLOEXEC should be set");
+    int flags = ixland_test_fcntl_getfd(fd);
+    XCTAssertTrue(flags & FD_CLOEXEC, @"FD_CLOEXEC should be set");
 
     close(fd);
 }
@@ -1399,7 +1397,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int flags = fcntl(fd, TEST_F_GETFL);
+    int flags = ixland_test_fcntl_getfl(fd);
     XCTAssertTrue(flags >= 0, @"F_GETFL should succeed");
     XCTAssertTrue(flags & O_RDONLY, @"flags should include O_RDONLY");
 
@@ -1411,11 +1409,11 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int new_fd = fcntl(fd, TEST_F_DUPFD_CLOEXEC, 10);
+    int new_fd = ixland_test_fcntl_dupfd_cloexec(fd, 10);
     XCTAssertTrue(new_fd >= 10, @"F_DUPFD_CLOEXEC should return fd >= 10");
 
-    int flags = fcntl(new_fd, TEST_F_GETFD);
-    XCTAssertTrue(flags & TEST_FD_CLOEXEC, @"duped fd should have FD_CLOEXEC");
+    int flags = ixland_test_fcntl_getfd(new_fd);
+    XCTAssertTrue(flags & FD_CLOEXEC, @"duped fd should have FD_CLOEXEC");
 
     close(fd);
     if (new_fd >= 0) close(new_fd);

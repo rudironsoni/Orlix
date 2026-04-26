@@ -165,6 +165,28 @@ fi
 echo "   ✓ No raw Linux ABI constants in tests"
 
 echo ""
+echo "=== Check 15: Test ABI contamination - TEST_* raw constants ==="
+TEST_CONSTANTS=$(rg -n '^\s*#define\s+TEST_(AT_|RENAME_|F_|FD_)' IXLandSystemTests/*.m IXLandSystemTests/*.c 2>/dev/null || true)
+if [ -n "$TEST_CONSTANTS" ]; then
+    echo "FAIL: TEST_* raw constants found in test files:"
+    echo "$TEST_CONSTANTS"
+    echo "Use semantic test helpers instead of #define TEST_* constants."
+    exit 1
+fi
+echo "   ✓ No TEST_* raw constants in tests"
+
+echo ""
+echo "=== Check 16: Bridge bag usage in Linux-facing tests ==="
+BRIDGE_BAG=$(rg -n 'internal/ios/fs/backing_io\.h|internal/ios/fs/backing_io_decls\.h' IXLandSystemTests/*.m 2>/dev/null || true)
+if [ -n "$BRIDGE_BAG" ]; then
+    echo "FAIL: Broad bridge bag headers found in Linux-facing tests:"
+    echo "$BRIDGE_BAG"
+    echo "Use narrow forward declarations instead of broad bridge bags."
+    exit 1
+fi
+echo "   ✓ No broad bridge bag usage in Linux-facing tests"
+
+echo ""
 echo "=== Check 15: Darwin S_IS* used as Linux proof ==="
 DARWIN_STAT=$(rg -n '\bS_ISDIR\s*\(|\bS_ISLNK\s*\(|\bS_ISREG\s*\(|\bS_ISCHR\s*\(' IXLandSystemTests/*.m 2>/dev/null | rg -v 'LinuxUAPITestSupport' || true)
 if [ -n "$DARWIN_STAT" ]; then

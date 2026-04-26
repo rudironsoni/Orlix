@@ -131,6 +131,8 @@ targets:
     - IXLandSystemTests/FutexUAPICompileSmoke.c
     - IXLandSystemTests/LinuxUAPITestSupport.c
     - IXLandSystemTests/LinuxUAPITestSupport.h
+    - IXLandSystemTests/HostTestSupport.c
+    - IXLandSystemTests/PTYTestSupport.c
     dependencies:
     - target: IXLandSystem
     settings:

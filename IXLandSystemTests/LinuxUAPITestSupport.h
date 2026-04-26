@@ -101,6 +101,57 @@ int ixland_test_termios_cc_vmin_index(void);
 /* Returns the VTIME index for c_cc array */
 int ixland_test_termios_cc_vtime_index(void);
 
+/* ============================================================================
+ * fcntl semantic test helpers
+ * ============================================================================ */
+
+/* Duplicate fd to min_fd or higher, returns new fd or -1 on error */
+int ixland_test_fcntl_dupfd(int fd, int min_fd);
+
+/* Duplicate fd with FD_CLOEXEC set, returns new fd or -1 on error */
+int ixland_test_fcntl_dupfd_cloexec(int fd, int min_fd);
+
+/* Get fd flags, returns flags or -1 on error */
+int ixland_test_fcntl_getfd(int fd);
+
+/* Set fd flags, returns 0 on success, -1 on error */
+int ixland_test_fcntl_setfd(int fd, int flags);
+
+/* Get file status flags, returns flags or -1 on error */
+int ixland_test_fcntl_getfl(int fd);
+
+/* Returns non-zero if FD_CLOEXEC is set in flags */
+int ixland_test_fcntl_has_cloexec(int flags);
+
+/* Returns non-zero if O_RDONLY is set in flags */
+int ixland_test_fcntl_has_rdonly(int flags);
+
+/* ============================================================================
+ * AT_* flag helpers for namei operations
+ * ============================================================================ */
+
+/* Returns AT_SYMLINK_NOFOLLOW for fstatat operations */
+int ixland_test_at_symlink_nofollow(void);
+
+/* Returns AT_EACCESS for faccessat operations */
+int ixland_test_at_eaccess(void);
+
+/* Returns AT_REMOVEDIR for unlinkat operations */
+int ixland_test_at_removedir(void);
+
+/* ============================================================================
+ * renameat2 flag helpers
+ * ============================================================================ */
+
+/* Returns RENAME_NOREPLACE flag */
+int ixland_test_rename_noreplace(void);
+
+/* Returns RENAME_EXCHANGE flag */
+int ixland_test_rename_exchange(void);
+
+/* Returns RENAME_WHITEOUT flag */
+int ixland_test_rename_whiteout(void);
+
 #ifdef __cplusplus
 }
 #endif
