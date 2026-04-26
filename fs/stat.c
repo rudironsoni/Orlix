@@ -6,9 +6,7 @@
 #include <errno.h>
 #include <string.h>
 
-/* Linux-shaped stat types */
-#include "include/ixland/stat_types.h"
-
+#include "vfs.h"
 #include "fdtable.h"
 #include "internal/ios/fs/sync.h"
 #include "internal/ios/fs/file_io_host.h"
@@ -18,10 +16,7 @@
 #define MAX_PATH 4096
 #endif
 
-/* Use Linux stat type throughout this file */
-#define struct_stat struct linux_stat
-
-int stat_impl(const char *pathname, struct_stat *statbuf) {
+int stat_impl(const char *pathname, struct linux_stat *statbuf) {
     int ret;
 
     if (!pathname || !statbuf) {
@@ -41,7 +36,7 @@ int stat_impl(const char *pathname, struct_stat *statbuf) {
     return host_stat_impl(pathname, statbuf);
 }
 
-int fstat_impl(int fd, struct_stat *statbuf) {
+int fstat_impl(int fd, struct linux_stat *statbuf) {
     if (!statbuf) {
         errno = EFAULT;
         return -1;
@@ -72,7 +67,7 @@ int fstat_impl(int fd, struct_stat *statbuf) {
     return result;
 }
 
-int lstat_impl(const char *pathname, struct_stat *statbuf) {
+int lstat_impl(const char *pathname, struct linux_stat *statbuf) {
     int ret;
 
     if (!pathname || !statbuf) {
@@ -113,7 +108,7 @@ int access_impl(const char *pathname, int mode) {
     return 0;
 }
 
-int fstatat_impl(int dirfd, const char *pathname, struct_stat *statbuf, int flags) {
+int fstatat_impl(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
     int ret;
 
     if (!pathname || !statbuf) {
@@ -145,15 +140,15 @@ int faccessat_impl(int dirfd, const char *pathname, int mode, int flags) {
     return 0;
 }
 
-__attribute__((visibility("default"))) int stat(const char *pathname, struct_stat *statbuf) {
+__attribute__((visibility("default"))) int stat(const char *pathname, struct linux_stat *statbuf) {
     return stat_impl(pathname, statbuf);
 }
 
-__attribute__((visibility("default"))) int fstat(int fd, struct_stat *statbuf) {
+__attribute__((visibility("default"))) int fstat(int fd, struct linux_stat *statbuf) {
     return fstat_impl(fd, statbuf);
 }
 
-__attribute__((visibility("default"))) int lstat(const char *pathname, struct_stat *statbuf) {
+__attribute__((visibility("default"))) int lstat(const char *pathname, struct linux_stat *statbuf) {
     return lstat_impl(pathname, statbuf);
 }
 
@@ -165,10 +160,10 @@ __attribute__((visibility("default"))) int faccessat(int dirfd, const char *path
     return faccessat_impl(dirfd, pathname, mode, flags);
 }
 
-__attribute__((visibility("default"))) int fstatat(int dirfd, const char *pathname, struct_stat *statbuf, int flags) {
+__attribute__((visibility("default"))) int fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
     return fstatat_impl(dirfd, pathname, statbuf, flags);
 }
 
-__attribute__((visibility("default"))) int newfstatat(int dirfd, const char *pathname, struct_stat *statbuf, int flags) {
+__attribute__((visibility("default"))) int newfstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
     return fstatat_impl(dirfd, pathname, statbuf, flags);
 }

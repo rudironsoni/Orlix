@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Include Linux stat types */
-#include "include/ixland/stat_types.h"
+/* Include shared stat type definition */
+#include "fs/stat_types.h"
 
 #ifdef __cplusplus
 extern "C" {

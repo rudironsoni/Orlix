@@ -6,13 +6,18 @@
  * Linux-owner code in fs/namei.c
  */
 
+/* Include shared stat type definition */
+#include "fs/stat_types.h"
+
+#include "path_host.h"
+
+/* Darwin headers - these define S_IFMT, S_ISDIR, etc. which are compatible
+ * with Linux ABI values, so we use them directly in bridge code */
 #include <sys/stat.h>
 #include <sys/stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-
-#include "path_host.h"
 
 /* Translate Darwin struct stat to Linux struct linux_stat */
 static void translate_stat_to_linux(const struct stat *darwin_stat, struct linux_stat *linux_stat)

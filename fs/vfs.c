@@ -7,34 +7,7 @@
 
 /* Linux UAPI headers for ABI constants */
 #include <linux/fcntl.h>
-
-/* Linux-shaped stat types and mode macros */
-#include "include/ixland/stat_types.h"
-
-/* Map standard names to Linux types for this file */
-#define struct_stat struct linux_stat
-#define S_IFMT   LINUX_S_IFMT
-#define S_IFDIR  LINUX_S_IFDIR
-#define S_IFCHR  LINUX_S_IFCHR
-#define S_IFREG  LINUX_S_IFREG
-#define S_IFLNK  LINUX_S_IFLNK
-#define S_ISDIR  LINUX_S_ISDIR
-#define S_ISLNK  LINUX_S_ISLNK
-#define S_ISCHR  LINUX_S_ISCHR
-#define S_ISREG  LINUX_S_ISREG
-
-#ifndef S_ISDIR
-#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
-#endif
-#ifndef S_ISLNK
-#define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
-#endif
-#ifndef S_ISCHR
-#define S_ISCHR(m) (((m) & S_IFMT) == S_IFCHR)
-#endif
-#ifndef S_ISREG
-#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
-#endif
+#include <linux/stat.h>
 
 /* Narrow seam headers for host operations */
 #include "internal/ios/fs/file_io_host.h"
@@ -938,7 +911,7 @@ int vfs_reverse_translate(const char *host_path, char *vpath, size_t vpath_len) 
     }
 }
 
-int vfs_stat_path(const char *pathname, struct_stat *statbuf) {
+int vfs_stat_path(const char *pathname, struct linux_stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
@@ -951,7 +924,7 @@ int vfs_stat_path(const char *pathname, struct_stat *statbuf) {
     return 0;
 }
 
-int vfs_lstat(const char *pathname, struct_stat *statbuf) {
+int vfs_lstat(const char *pathname, struct linux_stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
@@ -1384,7 +1357,7 @@ int vfs_access(const char *pathname, int mode) {
     return 0;
 }
 
-int vfs_fstatat(int dirfd, const char *pathname, struct_stat *statbuf, int flags) {
+int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
     char translated_path[MAX_PATH];
     char resolved_virtual[MAX_PATH];
     int ret;

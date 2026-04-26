@@ -12,7 +12,7 @@
 #import <Foundation/Foundation.h>
 #import <XCTest/XCTest.h>
 
-/* Minimal standard headers - avoid Darwin sys/stat.h */
+/* Minimal standard headers */
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -22,22 +22,16 @@
 #include <string.h>
 #include <poll.h>
 
-/* IXLand Linux-shaped stat types */
-#include "include/ixland/stat_types.h"
-
-/* S_IS* macros for Linux file type testing - define BEFORE Darwin headers */
-#define IX_S_ISLNK(m)  (((m) & 00170000U) == 0120000U)
-#define IX_S_ISREG(m)  (((m) & 00170000U) == 0100000U)
-#define IX_S_ISDIR(m)  (((m) & 00170000U) == 0040000U)
-#define IX_S_ISCHR(m)  (((m) & 00170000U) == 0020000U)
-#define IX_S_ISBLK(m)  (((m) & 00170000U) == 0060000U)
-
-/* Now include headers that might pull in Darwin stat */
+/* Standard system headers - these provide S_IFMT, S_ISDIR, etc.
+ * Darwin's values are compatible with Linux ABI */
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <unistd.h>
+
+/* IXLand VFS types */
+#include "fs/vfs.h"
 
 #define IX_TCGETS 0x5401
 #define IX_TCSETS 0x5402
@@ -728,26 +722,26 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/proc".UTF8String, &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"/proc root should be a directory");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc root should be a directory");
     XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc root should have 0555 permissions");
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/sys".UTF8String, &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed for /sys");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"/sys root should be a directory");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/sys root should be a directory");
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, @"/dev".UTF8String, &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed for /dev");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"/dev root should be a directory");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/dev root should be a directory");
 
     errno = 0;
     XCTAssertEqual(stat_impl(@"/proc".UTF8String, &st), 0,
                    @"public stat should succeed for synthetic root");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"public stat should return directory for /proc");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"public stat should return directory for /proc");
 
     errno = 0;
     XCTAssertEqual(lstat_impl(@"/sys".UTF8String, &st), 0,
                    @"public lstat should succeed for synthetic root");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"public lstat should return directory for /sys");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"public lstat should return directory for /sys");
 }
 
 - (void)testSyntheticChildStatFails {
@@ -1019,19 +1013,19 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/null", &st), 0, @"stat(/dev/null) should succeed");
-    XCTAssertTrue(IX_S_ISCHR(st.st_mode), @"/dev/null should be a character device");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/null should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/null should have 0666 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/dev/null", &st), 0, @"lstat(/dev/null) should succeed");
-    XCTAssertTrue(IX_S_ISCHR(st.st_mode), @"lstat(/dev/null) should return character device");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"lstat(/dev/null) should return character device");
 }
 
 - (void)testDevZeroStatSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/zero", &st), 0, @"stat(/dev/zero) should succeed");
-    XCTAssertTrue(IX_S_ISCHR(st.st_mode), @"/dev/zero should be a character device");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/zero should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/zero should have 0666 permissions");
 }
 
@@ -1039,7 +1033,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/urandom", &st), 0, @"stat(/dev/urandom) should succeed");
-    XCTAssertTrue(IX_S_ISCHR(st.st_mode), @"/dev/urandom should be a character device");
+    XCTAssertTrue(S_ISCHR(st.st_mode), @"/dev/urandom should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/urandom should have 0666 permissions");
 }
 
@@ -1690,19 +1684,19 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self", &st), 0, @"stat(/proc/self) should succeed");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"/proc/self should be a directory");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc/self should be a directory");
     XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc/self should have 0555 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self", &st), 0, @"lstat(/proc/self) should succeed");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"lstat(/proc/self) should return directory");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"lstat(/proc/self) should return directory");
 }
 
 - (void)testProcSelfFdStatSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/fd", &st), 0, @"stat(/proc/self/fd) should succeed");
-    XCTAssertTrue(IX_S_ISDIR(st.st_mode), @"/proc/self/fd should be a directory");
+    XCTAssertTrue(S_ISDIR(st.st_mode), @"/proc/self/fd should be a directory");
     XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc/self/fd should have 0555 permissions");
 }
 
@@ -1868,7 +1862,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(lstat_impl(fd_path, &st), 0, @"lstat(%s) should succeed", fd_path);
-    XCTAssertTrue(IX_S_ISLNK(st.st_mode), @"lstat(/proc/self/fd/<n>) should return S_IFLNK");
+    XCTAssertTrue(S_ISLNK(st.st_mode), @"lstat(/proc/self/fd/<n>) should return S_IFLNK");
 
     close(test_fd);
 }
@@ -1877,12 +1871,12 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/cwd", &st), 0, @"stat(/proc/self/cwd) should succeed");
-    XCTAssertTrue(IX_S_ISLNK(st.st_mode), @"/proc/self/cwd should be a symlink");
+    XCTAssertTrue(S_ISLNK(st.st_mode), @"/proc/self/cwd should be a symlink");
     XCTAssertEqual(st.st_mode & 0777, 0777, @"/proc/self/cwd should have 0777 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/cwd", &st), 0, @"lstat(/proc/self/cwd) should succeed");
-    XCTAssertTrue(IX_S_ISLNK(st.st_mode), @"lstat(/proc/self/cwd) should return symlink");
+    XCTAssertTrue(S_ISLNK(st.st_mode), @"lstat(/proc/self/cwd) should return symlink");
 }
 
 - (void)testProcSelfExeStatSucceeds {
@@ -1890,7 +1884,7 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     errno = 0;
     int ret = lstat_impl("/proc/self/exe", &st);
     if (ret == 0) {
-        XCTAssertTrue(IX_S_ISLNK(st.st_mode), @"/proc/self/exe should be a symlink");
+        XCTAssertTrue(S_ISLNK(st.st_mode), @"/proc/self/exe should be a symlink");
         XCTAssertEqual(st.st_mode & 0777, 0777, @"/proc/self/exe should have 0777 permissions");
     } else {
         XCTAssertEqual(errno, ENOENT, @"lstat(/proc/self/exe) should return ENOENT if exe path not set");
@@ -2004,24 +1998,24 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/cmdline", &st), 0, @"stat(/proc/self/cmdline) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"/proc/self/cmdline should be a regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/cmdline should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/cmdline should have 0444 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/cmdline", &st), 0, @"lstat(/proc/self/cmdline) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"lstat(/proc/self/cmdline) should return regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/cmdline) should return regular file");
 }
 
 - (void)testProcSelfCommStatSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/comm", &st), 0, @"stat(/proc/self/comm) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"/proc/self/comm should be a regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/comm should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/comm should have 0444 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/comm", &st), 0, @"lstat(/proc/self/comm) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"lstat(/proc/self/comm) should return regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/comm) should return regular file");
 }
 
 - (void)testProcSelfCmdlineAccessSucceeds {
@@ -2121,24 +2115,24 @@ extern int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/stat", &st), 0, @"stat(/proc/self/stat) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"/proc/self/stat should be a regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/stat should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/stat should have 0444 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/stat", &st), 0, @"lstat(/proc/self/stat) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"lstat(/proc/self/stat) should return regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/stat) should return regular file");
 }
 
 - (void)testProcSelfStatmStatSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/statm", &st), 0, @"stat(/proc/self/statm) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"/proc/self/statm should be a regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/statm should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/statm should have 0444 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/statm", &st), 0, @"lstat(/proc/self/statm) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"lstat(/proc/self/statm) should return regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/statm) should return regular file");
 }
 
 - (void)testProcSelfStatAccessSucceeds {
@@ -2250,12 +2244,12 @@ close(fd);
 
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/fdinfo/0", &st), 0, @"stat(/proc/self/fdinfo/0) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"/proc/self/fdinfo/0 should be a regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"/proc/self/fdinfo/0 should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/fdinfo/0 should have 0444 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/fdinfo/0", &st), 0, @"lstat(/proc/self/fdinfo/0) should succeed");
-    XCTAssertTrue(IX_S_ISREG(st.st_mode), @"lstat(/proc/self/fdinfo/0) should return regular file");
+    XCTAssertTrue(S_ISREG(st.st_mode), @"lstat(/proc/self/fdinfo/0) should return regular file");
 }
 
 - (void)testProcSelfFdinfoAccessSucceeds {

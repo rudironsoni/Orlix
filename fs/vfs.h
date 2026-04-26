@@ -14,8 +14,8 @@ typedef __UINT32_TYPE__ uint32_t;
 typedef __UINT64_TYPE__ uint64_t;
 typedef __SIZE_TYPE__ size_t;
 
-/* Linux-shaped stat types */
-#include "include/ixland/linux_stat.h"
+/* Linux stat structure - defined in stat_types.h for shared use */
+#include "fs/stat_types.h"
 
 /* Use fixed-width types to avoid conflicts with Darwin headers */
 typedef __INT64_TYPE__ linux_off_t;
@@ -130,7 +130,7 @@ struct inode_operations {
                   struct dentry *new_dentry);
     int (*readlink)(struct dentry *dentry, char *buf, int buflen);
     int (*setattr)(struct dentry *dentry, struct iattr *attr);
-    int (*getattr)(const char *path, struct dentry *dentry, struct_stat *statbuf);
+    int (*getattr)(const char *path, struct dentry *dentry, struct linux_stat *statbuf);
 };
 
 /* Linux-compatible address space operations */
@@ -309,10 +309,10 @@ const char *vfs_cache_backing_root(void);
 const char *vfs_temp_backing_root(void);
 
 /* Stat operations */
-int vfs_stat_path(const char *pathname, struct_stat *statbuf);
-int vfs_lstat(const char *pathname, struct_stat *statbuf);
+int vfs_stat_path(const char *pathname, struct linux_stat *statbuf);
+int vfs_lstat(const char *pathname, struct linux_stat *statbuf);
 int vfs_access(const char *pathname, int mode);
-int vfs_fstatat(int dirfd, const char *pathname, struct_stat *statbuf, int flags);
+int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
 int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
 #ifdef __cplusplus

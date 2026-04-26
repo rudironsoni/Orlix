@@ -10,9 +10,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <unistd.h>  /* For ssize_t */
 
-/* Include Linux stat types for the interface */
-#include "include/ixland/stat_types.h"
+/* Forward declaration - defined in fs/vfs.h for Linux-owner code */
+struct linux_stat;
 
 #ifdef __cplusplus
 extern "C" {
