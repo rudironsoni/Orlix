@@ -127,7 +127,12 @@ targets:
     - IXLandSystemLinuxKernelTests/VFSPathTests.m
     - IXLandSystemLinuxKernelTests/FutexTests.m
     - IXLandSystemLinuxKernelTests/RootfsBootstrapTests.m
+    - IXLandSystemLinuxKernelTests/KernelBootTests.m
     - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/KernelBoot.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi

@@ -38,6 +38,27 @@ int ixland_test_uapi_mode_is_block_device(unsigned int mode);
 /* Returns non-zero if mode represents a FIFO */
 int ixland_test_uapi_mode_is_fifo(unsigned int mode);
 
+/* ============================================================================
+ * AT_* flag semantic helpers - Linux UAPI constants
+ * These are scoped to the C implementation file which has Linux UAPI access.
+ * ============================================================================ */
+
+/* Returns AT_SYMLINK_NOFOLLOW from Linux UAPI */
+int ixland_test_uapi_at_symlink_nofollow(void);
+
+/* Returns AT_EACCESS from Linux UAPI */
+int ixland_test_uapi_at_eaccess(void);
+
+/* Returns AT_EMPTY_PATH from Linux UAPI */
+int ixland_test_uapi_at_empty_path(void);
+
+/* ============================================================================
+ * Fcntl flag semantic helpers - Linux UAPI constants
+ * ============================================================================ */
+
+/* Returns F_DUPFD_CLOEXEC from Linux UAPI */
+int ixland_test_uapi_f_dupfd_cloexec(void);
+
 #ifdef __cplusplus
 }
 #endif

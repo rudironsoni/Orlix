@@ -8,6 +8,15 @@
 
 #import <XCTest/XCTest.h>
 
+/* Forward declarations for C test functions in KernelBoot.c */
+extern int kernel_boot_test_system_booted(void);
+extern int kernel_boot_test_vfs_backing_roots(void);
+extern int kernel_boot_test_vfs_routing(void);
+extern int kernel_boot_test_synthetic_roots(void);
+extern int kernel_boot_test_task_init(void);
+extern int kernel_boot_test_fd_table(void);
+extern int kernel_boot_test_idempotent(void);
+
 #include "kernel/init.h"
 
 @interface KernelBootTests : XCTestCase

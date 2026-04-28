@@ -93,5 +93,53 @@ return "1.0.0";
 }
 
 void library_deinit(void) {
-library_deinit_destructor();
+    library_deinit_destructor();
+}
+
+/* ============================================================================
+ * LINUX-SHAPED BOOT LIFECYCLE
+ * ============================================================================
+ *
+ * These functions provide a Linux-shaped virtual kernel boot interface.
+ * They are thin wrappers over the existing initialization system.
+ */
+
+/* Static flag for kernel boot state */
+static atomic_int kernel_booted = 0;
+
+int start_kernel(void) {
+    kernel_mutex_lock(&library_init_lock);
+
+    if (atomic_load(&kernel_booted)) {
+        kernel_mutex_unlock(&library_init_lock);
+        return 0; /* Already booted - idempotent */
+    }
+
+    /* Ensure library is initialized */
+    if (!atomic_load(&library_initialized)) {
+        library_init_constructor();
+    }
+
+    atomic_store(&kernel_booted, 1);
+    kernel_mutex_unlock(&library_init_lock);
+    return 0;
+}
+
+int kernel_is_booted(void) {
+    return atomic_load(&kernel_booted) && atomic_load(&library_initialized);
+}
+
+int kernel_shutdown(void) {
+    kernel_mutex_lock(&library_init_lock);
+
+    if (!atomic_load(&kernel_booted)) {
+        kernel_mutex_unlock(&library_init_lock);
+        return 0; /* Already shut down */
+    }
+
+    library_deinit_destructor();
+    atomic_store(&kernel_booted, 0);
+
+    kernel_mutex_unlock(&library_init_lock);
+    return 0;
 }

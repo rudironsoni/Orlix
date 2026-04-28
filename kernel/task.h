@@ -175,6 +175,9 @@ struct task_struct {
 extern kernel_mutex_t task_table_lock;
 extern struct task_struct *task_table[TASK_MAX_TASKS];
 
+/* The init_task (pid 1) - set up during kernel boot */
+extern struct task_struct *init_task;
+
 /* Task allocation - virtual kernel internal */
 struct task_struct *alloc_task(void);
 void free_task(struct task_struct *task);

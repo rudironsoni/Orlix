@@ -14,7 +14,6 @@
 #include <unistd.h>
 
 #include "internal/ios/fs/backing_io.h"
-#include "include/ixland/linux_uapi_constants.h"
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
 #include "kernel/task.h"
@@ -402,7 +401,7 @@ static void vfs_test_seed_linux_file(const char *path) {
     XCTAssertTrue(fd >= 0, @"open should succeed");
     if (fd < 0) return;
 
-    int new_fd = fcntl(fd, IX_F_DUPFD_CLOEXEC, 10);
+    int new_fd = ixland_test_fcntl_dupfd_cloexec(fd, 10);
     XCTAssertTrue(new_fd >= 0, @"Linux F_DUPFD_CLOEXEC should succeed");
 
     int flags = fcntl(new_fd, F_GETFD);
