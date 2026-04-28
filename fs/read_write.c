@@ -158,11 +158,10 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
         synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
 
-        if (dev_node == SYNTHETIC_DEV_NULL) {
+        if (dev_node == SYNTHETIC_DEV_NULL ||
+            dev_node == SYNTHETIC_DEV_ZERO ||
+            dev_node == SYNTHETIC_DEV_URANDOM) {
             return (ssize_t)count;
-        } else if (dev_node == SYNTHETIC_DEV_ZERO || dev_node == SYNTHETIC_DEV_URANDOM) {
-            errno = EINVAL;
-            return -1;
         }
     }
 
