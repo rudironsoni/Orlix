@@ -1,0 +1,1370 @@
+/*
+ * IXLandSystemTests - VFSPathTests.m (Linux-only)
+ *
+ * INTERNAL OWNER SEMANTIC TESTS ONLY.
+ * Host-dependent helpers and NSFileManager usage are removed and live in the
+ * HostBridge test target to preserve strict separation.
+ */
+
+#import <XCTest/XCTest.h>
+#import <Foundation/Foundation.h>
+
+/* Minimal standard headers */
+#include <errno.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <poll.h>
+
+/* Standard system headers */
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/select.h>
+#include <unistd.h>
+
+/* IXLand VFS types */
+#include "fs/vfs.h"
+#include "fs/path.h"
+#include "kernel/task.h"
+#include "kernel/signal.h"
+#include "runtime/native/registry.h"
+#include "include/ixland/linux_uapi_constants.h"
+
+/* Linux UAPI test support - semantic helpers only */
+#include "IXLandSystemLinuxKernelTests/LinuxUAPITestSupport.h"
+
+#ifndef INVALID_FLAG_TEST_VALUE
+#define INVALID_FLAG_TEST_VALUE 0x40000000u
+#endif
+
+struct linux_dirent64 {
+    uint64_t d_ino;
+    int64_t d_off;
+    unsigned short d_reclen;
+    unsigned char d_type;
+    char d_name[];
+};
+
+extern ssize_t getdents64(int fd, void *dirp, size_t count);
+extern char *getcwd_impl(char *buf, size_t size);
+extern int vfs_discover_persistent_root(char *path, size_t size);
+extern int vfs_discover_cache_root(char *path, size_t size);
+extern int vfs_discover_temp_root(char *path, size_t size);
+extern int stat_impl(const char *path, struct linux_stat *statbuf);
+extern int lstat_impl(const char *path, struct linux_stat *statbuf);
+
+@interface VFSPathTests : XCTestCase
+@end
+
+@implementation VFSPathTests
+
+- (void)setUp {
+    [super setUp];
+    /* Clean up any lingering file descriptors using owner close_impl */
+    for (int fd = 3; fd < 256; fd++) {
+        close_impl(fd);
+    }
+}
+
+- (void)tearDown {
+    for (int fd = 3; fd < 256; fd++) {
+        close_impl(fd);
+    }
+    [super tearDown];
+}
+
+/*
+ * Keep only owner-focused tests here. Host-dependent file seeding and
+ * NSFileManager-based operations were moved to the HostBridge test target.
+ */
+
+/* ============================================================================
+ * PATH TRANSLATION TESTS
+ * ============================================================================ */
+
+- (void)testVirtualRootTranslatesToPersistentBackingRoot {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("/", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"vfs_translate_path should accept virtual root");
+    XCTAssertEqual(strcmp(host_path, vfs_persistent_backing_root()), 0,
+                   @"virtual root should map to persistent backing root");
+}
+
+- (void)testTempPathTranslatesToTempBackingRoot {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("/tmp/demo", host_path, sizeof(host_path));
+    NSString *actualPath = [NSString stringWithUTF8String:host_path];
+    NSString *expectedPath = [NSString stringWithFormat:@"%s/demo", vfs_temp_backing_root()];
+
+    XCTAssertEqual(ret, 0, @"temp virtual path should translate");
+    XCTAssertEqualObjects(actualPath, expectedPath, @"temp path should resolve under temp backing root");
+    XCTAssertNotEqual(strcmp(host_path, "/tmp/demo"), 0,
+                      @"translation must not be identity mapping");
+}
+
+- (void)testRelativePersistentPathMapsUnderPersistentBackingRoot {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("etc/passwd", host_path, sizeof(host_path));
+    NSString *actualPath = [NSString stringWithUTF8String:host_path];
+    NSString *expectedPath = [NSString stringWithFormat:@"%s/etc/passwd", vfs_persistent_backing_root()];
+
+    XCTAssertEqual(ret, 0, @"relative virtual path should translate");
+    XCTAssertEqualObjects(actualPath, expectedPath, @"relative path should resolve under persistent backing root");
+}
+
+- (void)testUnmappableHostPathIsRejected {
+    char virtual_path[MAX_PATH];
+    int ret = vfs_reverse_translate("/private/var/mobile", virtual_path, sizeof(virtual_path));
+
+    XCTAssertEqual(ret, -EXDEV, @"unmapped host path should be rejected");
+}
+
+- (void)testPersistentBackingRootReverseTranslatesToVirtualRoot {
+    char virtual_path[MAX_PATH];
+    int ret = vfs_reverse_translate(vfs_persistent_backing_root(), virtual_path, sizeof(virtual_path));
+
+    XCTAssertEqual(ret, 0, @"persistent backing root should reverse translate");
+    XCTAssertEqual(strcmp(virtual_path, vfs_virtual_root()), 0,
+                   @"persistent backing root should map back to virtual root");
+}
+
+- (void)testMappedPersistentHostPathReverseTranslatesToVirtualPath {
+    char virtual_path[MAX_PATH];
+    NSString *hostPath = [NSString stringWithFormat:@"%s/var/log", vfs_persistent_backing_root()];
+    int ret = vfs_reverse_translate(hostPath.UTF8String, virtual_path, sizeof(virtual_path));
+
+    XCTAssertEqual(ret, 0, @"mapped persistent host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/var/log",
+                          @"reverse translation should return virtual path");
+}
+
+- (void)testPersistentRootDiscoveryResolves {
+    char path[MAX_PATH];
+    int ret = vfs_discover_persistent_root(path, sizeof(path));
+
+    XCTAssertEqual(ret, 0, @"persistent root discovery should succeed");
+    XCTAssertTrue(path[0] != '\0', @"persistent root should be non-empty");
+}
+
+- (void)testCacheRootDiscoveryResolves {
+    char path[MAX_PATH];
+    int ret = vfs_discover_cache_root(path, sizeof(path));
+
+    XCTAssertEqual(ret, 0, @"cache root discovery should succeed");
+    XCTAssertTrue(path[0] != '\0', @"cache root should be non-empty");
+}
+
+- (void)testTempRootDiscoveryResolves {
+    char path[MAX_PATH];
+    int ret = vfs_discover_temp_root(path, sizeof(path));
+
+    XCTAssertEqual(ret, 0, @"temp root discovery should succeed");
+    XCTAssertTrue(path[0] != '\0', @"temp root should be non-empty");
+}
+
+- (void)testDiscoveredBackingRootsAreDistinctByClass {
+    char persistent[MAX_PATH];
+    char cache[MAX_PATH];
+    char temp[MAX_PATH];
+
+    XCTAssertEqual(vfs_discover_persistent_root(persistent, sizeof(persistent)), 0,
+                   @"persistent root discovery should succeed");
+    XCTAssertEqual(vfs_discover_cache_root(cache, sizeof(cache)), 0,
+                   @"cache root discovery should succeed");
+    XCTAssertEqual(vfs_discover_temp_root(temp, sizeof(temp)), 0,
+                   @"temp root discovery should succeed");
+
+    XCTAssertNotEqual(strcmp(persistent, temp), 0,
+                      @"persistent root must not be temp-backed");
+    XCTAssertNotEqual(strcmp(cache, temp), 0,
+                      @"cache and temp roots should not collapse to one path");
+}
+
+- (void)testBackingClassRoutingForPersistentPaths {
+    XCTAssertEqual(vfs_backing_class_for_path("/etc/passwd"), VFS_BACKING_PERSISTENT,
+                   @"/etc/passwd should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/usr/bin/sh"), VFS_BACKING_PERSISTENT,
+                   @"/usr/bin/sh should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/var/lib/foo"), VFS_BACKING_PERSISTENT,
+                   @"/var/lib/foo should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/home/user/.profile"), VFS_BACKING_PERSISTENT,
+                   @"/home paths should route to persistent backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/root/.profile"), VFS_BACKING_PERSISTENT,
+                   @"/root paths should route to persistent backing");
+}
+
+- (void)testBackingClassRoutingForCacheTempAndSyntheticPaths {
+    XCTAssertEqual(vfs_backing_class_for_path("/var/cache/x"), VFS_BACKING_CACHE,
+                   @"/var/cache/x should route to cache backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/tmp/x"), VFS_BACKING_TEMP,
+                   @"/tmp/x should route to temp backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/proc/meminfo"), VFS_BACKING_SYNTHETIC,
+                   @"/proc/meminfo should route to synthetic backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/sys/kernel"), VFS_BACKING_SYNTHETIC,
+                   @"/sys/kernel should route to synthetic backing");
+    XCTAssertEqual(vfs_backing_class_for_path("/dev/null"), VFS_BACKING_SYNTHETIC,
+                   @"/dev/null should route to synthetic backing");
+}
+
+- (void)testPersistentFallbackRouteTranslatesAndReverseTranslates {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+    NSString *actualPath;
+    NSString *expectedPath;
+
+    ret = vfs_translate_path("/var/log/messages", host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"fallback persistent path should translate");
+
+    actualPath = [NSString stringWithUTF8String:host_path];
+    expectedPath = [NSString stringWithFormat:@"%s/var/log/messages", vfs_persistent_backing_root()];
+    XCTAssertEqualObjects(actualPath, expectedPath,
+                          @"fallback persistent route should join under persistent backing root");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"fallback persistent host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/var/log/messages",
+                          @"fallback persistent host path should map back through the route table");
+}
+
+- (void)testSyntheticRouteRejectsHostJoin {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("/dev/null", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -ENOTSUP, @"synthetic route should not join to a host backing root");
+}
+
+- (void)testDescriptorDrivenPathClassification {
+    XCTAssertEqual(path_classify("/proc/meminfo"), PATH_VIRTUAL_LINUX,
+                   @"synthetic routes should classify through descriptor lookup");
+    XCTAssertEqual(path_classify("/sys/kernel"), PATH_VIRTUAL_LINUX,
+                   @"sys routes should classify through descriptor lookup");
+    XCTAssertEqual(path_classify("/dev/null"), PATH_VIRTUAL_LINUX,
+                   @"dev routes should classify through descriptor lookup");
+    XCTAssertEqual(path_classify("/private/var/mobile/file"), PATH_ABSOLUTE_HOST,
+                   @"non-route absolute paths should remain host paths");
+}
+
+- (void)testDescriptorDrivenVirtualLinuxDetection {
+    XCTAssertTrue(path_is_virtual_linux("/tmp/demo"),
+                  @"tmp route should be recognized as Linux-visible");
+    XCTAssertTrue(path_is_virtual_linux("/var/tmp/demo"),
+                  @"var/tmp route should remain a distinct Linux-visible route");
+    XCTAssertTrue(path_is_virtual_linux("/run/demo"),
+                  @"run route should remain a distinct Linux-visible route");
+    XCTAssertTrue(path_is_virtual_linux("relative/demo"),
+                  @"relative paths should stay Linux-visible by context");
+    XCTAssertFalse(path_is_virtual_linux("/private/var/mobile/file"),
+                   @"absolute host paths outside route descriptors should not classify as Linux-visible");
+}
+
+- (void)testPersistentRootIsNotDocumentsTruth {
+    NSString *persistentRoot = [NSString stringWithUTF8String:vfs_persistent_backing_root()];
+
+    XCTAssertFalse([persistentRoot containsString:@"/Documents"],
+                   @"persistent backing root must not treat Documents as Linux root truth");
+    XCTAssertFalse(path_is_own_sandbox("/Documents/example.txt"),
+                   @"Documents path fragments must not become Linux root truth through sandbox heuristics");
+}
+
+- (void)testPersistentBackingRootReverseTranslation {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+
+    ret = vfs_translate_path("/etc/passwd", host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"persistent path translation should succeed");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"persistent host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/etc/passwd",
+                          @"persistent host path should map back to /etc/passwd");
+}
+
+- (void)testCacheBackingRootReverseTranslation {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+
+    ret = vfs_translate_path("/var/cache/x", host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"cache path translation should succeed");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"cache host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/var/cache/x",
+                          @"cache host path should map back to /var/cache/x");
+}
+
+- (void)testTempBackingRootReverseTranslation {
+    char host_path[MAX_PATH];
+    char virtual_path[MAX_PATH];
+    int ret;
+
+    ret = vfs_translate_path("/tmp/x", host_path, sizeof(host_path));
+    XCTAssertEqual(ret, 0, @"temp path translation should succeed");
+
+    ret = vfs_reverse_translate(host_path, virtual_path, sizeof(virtual_path));
+    XCTAssertEqual(ret, 0, @"temp host path should reverse translate");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:virtual_path], @"/tmp/x",
+                          @"temp host path should map back to /tmp/x");
+}
+
+- (void)testParentEscapeIsRejected {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("../secret", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -EINVAL, @"parent escapes should be rejected");
+}
+
+/* ============================================================================
+ * TASK-AWARE PATH RESOLUTION TESTS
+ * ============================================================================ */
+
+- (void)testTaskAwareAbsolutePathUsesVirtualRoot {
+    /* Create an fs_struct with custom root */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/etc");
+
+    /* Absolute path should resolve from root - with root="/", "/bin/ls" -> "/bin/ls" */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task("/bin/ls", host_path, sizeof(host_path), fs);
+
+    XCTAssertEqual(ret, 0, @"absolute path translation should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/bin/ls", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"absolute path should resolve from virtual root");
+
+    free_fs_struct(fs);
+}
+
+- (void)testTaskAwareRelativePathUsesPwd {
+    /* Create an fs_struct with custom pwd */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/etc");
+
+    /* Relative path should resolve from pwd */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task("passwd", host_path, sizeof(host_path), fs);
+
+    XCTAssertEqual(ret, 0, @"relative path translation should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/etc/passwd", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"relative path should resolve from virtual pwd");
+
+    free_fs_struct(fs);
+}
+
+- (void)testTaskAwareRelativePathWithSubdirectories {
+    /* Create an fs_struct with nested pwd */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/usr/local");
+
+    /* Relative path with subdirectory */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task("bin/myapp", host_path, sizeof(host_path), fs);
+
+    XCTAssertEqual(ret, 0, @"nested relative path translation should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/usr/local/bin/myapp", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"relative path should resolve correctly from nested pwd");
+
+    free_fs_struct(fs);
+}
+
+- (void)testTaskAwareParentEscapeRejected {
+    /* Create an fs_struct */
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+
+    fs_init_root(fs, "/");
+    fs_init_pwd(fs, "/etc");
+
+    /* Parent escape should be rejected even with task context */
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task("../secret", host_path, sizeof(host_path), fs);
+
+    XCTAssertEqual(ret, -EINVAL, @"parent escapes should be rejected with task context");
+
+    free_fs_struct(fs);
+}
+
+- (void)testTaskAwareAbsolutePathUsesTaskRootPrefix {
+    struct fs_struct *fs = alloc_fs_struct();
+    XCTAssertTrue(fs != NULL, @"fs_struct allocation should succeed");
+    if (!fs) return;
+
+    fs_init_root(fs, "/sandbox");
+    fs_init_pwd(fs, "/sandbox/work");
+
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_task("/bin/ls", host_path, sizeof(host_path), fs);
+
+    XCTAssertEqual(ret, 0, @"absolute path translation should succeed from non-root task root");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/sandbox/bin/ls", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"absolute paths should resolve from task root prefix");
+
+    free_fs_struct(fs);
+}
+
+- (void)testGetcwdMatchesTaskPwdAndRelativeResolution {
+    struct task_struct *originalTask = get_current();
+    struct task_struct *task = alloc_task();
+    XCTAssertTrue(task != NULL, @"task allocation should succeed");
+    if (!task) return;
+
+    task->fs = alloc_fs_struct();
+    XCTAssertTrue(task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!task->fs) {
+        free_task(task);
+        return;
+    }
+
+    fs_init_root(task->fs, "/");
+    fs_init_pwd(task->fs, "/usr/local");
+    set_current(task);
+
+    char cwd[MAX_PATH];
+    char resolved[MAX_PATH];
+    char expected[MAX_PATH];
+
+    char *cwd_result = getcwd_impl(cwd, sizeof(cwd));
+    XCTAssertTrue(cwd_result != NULL, @"getcwd_impl should return current task pwd");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:cwd], @"/usr/local",
+                          @"getcwd_impl should report task virtual pwd");
+
+    int resolve_ret = path_resolve("bin/tool", resolved, sizeof(resolved));
+    XCTAssertEqual(resolve_ret, 0, @"path_resolve should succeed for relative task path");
+
+    int expected_ret = vfs_translate_path_task("bin/tool", expected, sizeof(expected), task->fs);
+    XCTAssertEqual(expected_ret, 0, @"expected task-aware translation should succeed");
+    XCTAssertEqualObjects([NSString stringWithUTF8String:resolved], [NSString stringWithUTF8String:expected],
+                          @"relative resolution should agree with task getcwd state");
+
+    set_current(originalTask);
+    free_task(task);
+}
+
+/* ============================================================================
+ * DIRFD-AWARE PATH RESOLUTION TESTS
+ * ============================================================================ */
+
+- (void)testVfsTranslatePathAtUsesAtFdcwd {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_at(AT_FDCWD, "/etc/passwd", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"vfs_translate_path_at with AT_FDCWD should succeed");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/etc/passwd", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"AT_FDCWD should resolve from task cwd");
+}
+
+- (void)testVfsTranslatePathAtAbsolutePathIgnoresDirfd {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_at(-1, "/bin/ls", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"absolute path should succeed regardless of invalid dirfd");
+    NSString *result = [NSString stringWithUTF8String:host_path];
+    NSString *expected = [NSString stringWithFormat:@"%s/bin/ls", vfs_host_backing_root()];
+    XCTAssertEqualObjects(result, expected, @"absolute paths should resolve from task root");
+}
+
+- (void)testVfsTranslatePathAtInvalidDirfdReturnsBadf {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path_at(9999, "relative/path", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -EBADF, @"invalid dirfd should return -EBADF");
+}
+
+/* ============================================================================
+ * STAT-FAMILY AND AT-FLAG SEMANTICS TESTS
+ * ============================================================================ */
+
+- (void)testVfsFstatatSupportsAtFdcwd {
+    struct linux_stat st;
+    int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, 0);
+
+    XCTAssertEqual(ret, 0, @"vfs_fstatat with AT_FDCWD should succeed");
+}
+
+- (void)testVfsFstatatSupportsSymlinkNoFollow {
+    struct linux_stat st;
+    int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, IX_AT_SYMLINK_NOFOLLOW);
+
+    XCTAssertEqual(ret, 0, @"vfs_fstatat with Linux AT_SYMLINK_NOFOLLOW should succeed");
+}
+
+- (void)testVfsFstatatRejectsInvalidFlags {
+    struct linux_stat st;
+    int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, INVALID_FLAG_TEST_VALUE);
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
+}
+
+- (void)testSyntheticRootStatSucceeds {
+    struct linux_stat st;
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/proc", &st, 0), 0,
+                   @"synthetic root vfs_fstatat should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc root should be a directory");
+    XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc root should have 0555 permissions");
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/sys", &st, 0), 0,
+                   @"synthetic root vfs_fstatat should succeed for /sys");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/sys root should be a directory");
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/dev", &st, 0), 0,
+                   @"synthetic root vfs_fstatat should succeed for /dev");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/dev root should be a directory");
+
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc", &st), 0,
+                   @"public stat should succeed for synthetic root");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"public stat should return directory for /proc");
+
+    errno = 0;
+    XCTAssertEqual(lstat_impl("/sys", &st), 0,
+                   @"public lstat should succeed for synthetic root");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"public lstat should return directory for /sys");
+}
+
+- (void)testSyntheticChildStatFails {
+    struct linux_stat st;
+
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/proc/meminfo", &st, 0), -ENOENT,
+                   @"synthetic child vfs_fstatat should reject through descriptor policy");
+    XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/sys/kernel", &st, IX_AT_SYMLINK_NOFOLLOW), -ENOENT,
+                   @"synthetic child vfs_fstatat with Linux AT_SYMLINK_NOFOLLOW should reject through descriptor policy");
+
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/meminfo", &st), -1,
+                   @"IXLand stat should reject unsupported synthetic child paths");
+    XCTAssertEqual(errno, ENOENT, @"IXLand stat should set ENOENT for unsupported synthetic child paths");
+
+    errno = 0;
+    XCTAssertEqual(lstat_impl("/sys/kernel", &st), -1,
+                   @"IXLand lstat should reject unsupported synthetic child paths");
+    XCTAssertEqual(errno, ENOENT, @"IXLand lstat should set ENOENT for unsupported synthetic child paths");
+}
+
+- (void)testSyntheticRootAccessSucceeds {
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, "/proc", F_OK, 0), 0,
+                   @"synthetic root vfs_faccessat should succeed");
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, "/sys", F_OK, 0), 0,
+                   @"synthetic root vfs_faccessat should succeed for /sys");
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, "/dev", F_OK, 0), 0,
+                   @"synthetic root vfs_faccessat should succeed for /dev");
+
+    errno = 0;
+    XCTAssertEqual(access("/proc", F_OK), 0,
+                   @"public access should succeed for synthetic root");
+}
+
+- (void)testSyntheticChildAccessFails {
+    XCTAssertEqual(vfs_faccessat(AT_FDCWD, "/proc/meminfo", F_OK, 0), -ENOENT,
+                   @"synthetic child vfs_faccessat should reject through descriptor policy");
+
+    errno = 0;
+    XCTAssertEqual(access("/proc/meminfo", F_OK), -1,
+                   @"public access should reject unsupported synthetic child routes");
+    XCTAssertEqual(errno, ENOENT, @"public access should set ENOENT for unsupported synthetic child routes");
+}
+
+- (void)testSyntheticRootOpenDirectorySucceedsAndChildOpenFails {
+    errno = 0;
+    int proc_fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(proc_fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (proc_fd >= 0) close(proc_fd);
+
+    errno = 0;
+    int sys_fd = open("/sys", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
+    if (sys_fd >= 0) close(sys_fd);
+
+    errno = 0;
+    int dev_fd = open("/dev", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
+    if (dev_fd >= 0) close(dev_fd);
+}
+
+- (void)testSyntheticChildOpenFails {
+    errno = 0;
+    XCTAssertEqual(open("/proc/meminfo", O_RDONLY), -1,
+                   @"public open should reject unsupported synthetic child routes");
+    XCTAssertEqual(errno, ENOTSUP, @"public open should set ENOTSUP for unsupported synthetic child routes");
+
+    errno = 0;
+    XCTAssertEqual(openat(AT_FDCWD, "/sys/kernel", O_RDONLY), -1,
+                   @"public openat should reject unsupported synthetic routes before host fallback");
+    XCTAssertEqual(errno, ENOTSUP, @"public openat should set ENOTSUP for unsupported synthetic routes");
+}
+
+- (void)testSyntheticRootOpenDirectorySucceeds {
+    errno = 0;
+    int proc_fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(proc_fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    XCTAssertEqual(errno, 0, @"errno should be 0 after open(/proc, O_DIRECTORY)");
+
+    errno = 0;
+    int sys_fd = open("/sys", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
+    XCTAssertEqual(errno, 0, @"errno should be 0 after open(/sys, O_DIRECTORY)");
+
+    errno = 0;
+    int dev_fd = open("/dev", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
+    XCTAssertEqual(errno, 0, @"errno should be 0 after open(/dev, O_DIRECTORY)");
+
+    if (proc_fd >= 0) close(proc_fd);
+    if (sys_fd >= 0) close(sys_fd);
+    if (dev_fd >= 0) close(dev_fd);
+}
+
+- (void)testSyntheticRootGetdents64ReturnsDotAndDotdot {
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    /* Ensure buffer is 8-byte aligned for struct linux_dirent64 */
+    union { char storage[1024]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+    XCTAssertTrue(nread > 0, @"getdents64(/proc) should return > 0 bytes, got %zd errno %d", nread, errno);
+
+    // Parse the entries to verify . and ..
+    bool found_dot = false;
+    bool found_dotdot = false;
+    size_t pos = 0;
+
+    while (pos < (size_t)nread) {
+        struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+        NSString *name = [NSString stringWithUTF8String:entry->d_name];
+
+        if ([name isEqualToString:@"."]) {
+            found_dot = true;
+            XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+        } else if ([name isEqualToString:@".."]) {
+            found_dotdot = true;
+            XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+        }
+
+        XCTAssertTrue(entry->d_reclen > 0, @"d_reclen must be non-zero");
+        XCTAssertTrue(entry->d_reclen <= (unsigned short)((size_t)nread - pos), @"d_reclen must fit remaining buffer");
+        if (entry->d_reclen == 0 || entry->d_reclen > (unsigned short)((size_t)nread - pos)) {
+            break;
+        }
+        pos += entry->d_reclen;
+    }
+
+    XCTAssertTrue(found_dot, @"getdents64(/proc) should return '.' entry");
+    XCTAssertTrue(found_dotdot, @"getdents64(/proc) should return '..' entry");
+
+    // Second call should return 0 (EOF)
+    nread = getdents64(fd, buffer, sizeof(aligned.storage));
+    XCTAssertEqual(nread, 0, @"Second getdents64(/proc) should return 0 (EOF)");
+
+    close(fd);
+}
+
+- (void)testSyntheticSysAndDevGetdents64ReturnsDotAndDotdot {
+    // Test /sys
+    int sys_fd = open("/sys", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(sys_fd >= 0, @"open(/sys, O_DIRECTORY) should succeed");
+
+    if (sys_fd >= 0) {
+        union { char storage[1024]; uint64_t align; } aligned;
+        char *buffer = aligned.storage;
+        memset(buffer, 0, sizeof(aligned));
+
+        ssize_t nread = getdents64(sys_fd, buffer, sizeof(aligned.storage));
+        XCTAssertTrue(nread > 0, @"getdents64(/sys) should return > 0 bytes");
+
+        bool found_dot = false;
+        bool found_dotdot = false;
+        size_t pos = 0;
+
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+
+            if ([name isEqualToString:@"."]) {
+                found_dot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+            } else if ([name isEqualToString:@".."]) {
+                found_dotdot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+            }
+
+            XCTAssertTrue(entry->d_reclen > 0, @"d_reclen must be non-zero");
+            XCTAssertTrue(entry->d_reclen <= (unsigned short)((size_t)nread - pos), @"d_reclen must fit remaining buffer");
+            if (entry->d_reclen == 0 || entry->d_reclen > (unsigned short)((size_t)nread - pos)) {
+                break;
+            }
+            pos += entry->d_reclen;
+        }
+
+        XCTAssertTrue(found_dot, @"getdents64(/sys) should return '.' entry");
+        XCTAssertTrue(found_dotdot, @"getdents64(/sys) should return '..' entry");
+
+        // Second call should return 0 (EOF)
+        nread = getdents64(sys_fd, buffer, sizeof(aligned.storage));
+        XCTAssertEqual(nread, 0, @"Second getdents64(/sys) should return 0 (EOF)");
+
+        close(sys_fd);
+    }
+
+    // Test /dev
+    int dev_fd = open("/dev", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(dev_fd >= 0, @"open(/dev, O_DIRECTORY) should succeed");
+
+    if (dev_fd >= 0) {
+        union { char storage[1024]; uint64_t align; } aligned;
+        char *buffer = aligned.storage;
+        memset(buffer, 0, sizeof(aligned));
+
+        ssize_t nread = getdents64(dev_fd, buffer, sizeof(aligned.storage));
+        XCTAssertTrue(nread > 0, @"getdents64(/dev) should return > 0 bytes");
+
+        bool found_dot = false;
+        bool found_dotdot = false;
+        size_t pos = 0;
+
+        while (pos < (size_t)nread) {
+            struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+            NSString *name = [NSString stringWithUTF8String:entry->d_name];
+
+            if ([name isEqualToString:@"."]) {
+                found_dot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @". should be DT_DIR");
+            } else if ([name isEqualToString:@".."]) {
+                found_dotdot = true;
+                XCTAssertEqual(entry->d_type, DT_DIR, @".. should be DT_DIR");
+            }
+
+            XCTAssertTrue(entry->d_reclen > 0, @"d_reclen must be non-zero");
+            XCTAssertTrue(entry->d_reclen <= (unsigned short)((size_t)nread - pos), @"d_reclen must fit remaining buffer");
+            if (entry->d_reclen == 0 || entry->d_reclen > (unsigned short)((size_t)nread - pos)) {
+                break;
+            }
+            pos += entry->d_reclen;
+        }
+
+        XCTAssertTrue(found_dot, @"getdents64(/dev) should return '.' entry");
+        XCTAssertTrue(found_dotdot, @"getdents64(/dev) should return '..' entry");
+
+        // Second call should return 0 (EOF)
+        nread = getdents64(dev_fd, buffer, sizeof(aligned.storage));
+        XCTAssertEqual(nread, 0, @"Second getdents64(/dev) should return 0 (EOF)");
+
+        close(dev_fd);
+    }
+}
+
+/* ============================================================================
+ * SYNTHETIC /dev NODE TESTS
+ * ============================================================================ */
+
+- (void)testDevNullStatSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/dev/null", &st), 0, @"stat(/dev/null) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/null should be a character device");
+    XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/null should have 0666 permissions");
+
+    errno = 0;
+    XCTAssertEqual(lstat_impl("/dev/null", &st), 0, @"lstat(/dev/null) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"lstat(/dev/null) should return character device");
+}
+
+- (void)testDevZeroStatSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/dev/zero", &st), 0, @"stat(/dev/zero) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/zero should be a character device");
+    XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/zero should have 0666 permissions");
+}
+
+- (void)testDevUrandomStatSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/dev/urandom", &st), 0, @"stat(/dev/urandom) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/urandom should be a character device");
+    XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/urandom should have 0666 permissions");
+}
+
+- (void)testDevNullAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/dev/null", F_OK), 0, @"access(/dev/null, F_OK) should succeed");
+    XCTAssertEqual(access("/dev/null", R_OK), 0, @"access(/dev/null, R_OK) should succeed");
+    XCTAssertEqual(access("/dev/null", W_OK), 0, @"access(/dev/null, W_OK) should succeed");
+}
+
+- (void)testDevZeroAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/dev/zero", F_OK), 0, @"access(/dev/zero, F_OK) should succeed");
+}
+
+- (void)testDevUrandomAccessSucceeds {
+    errno = 0;
+    XCTAssertEqual(access("/dev/urandom", F_OK), 0, @"access(/dev/urandom, F_OK) should succeed");
+}
+
+- (void)testDevNullOpenSucceeds {
+    errno = 0;
+    int fd = open("/dev/null", O_RDWR);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_RDWR) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testDevZeroOpenSucceeds {
+    errno = 0;
+    int fd = open("/dev/zero", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero, O_RDONLY) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testDevUrandomOpenSucceeds {
+    errno = 0;
+    int fd = open("/dev/urandom", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom, O_RDONLY) should succeed");
+    if (fd >= 0) close(fd);
+}
+
+- (void)testDevNullReadReturnsEOF {
+    int fd = open("/dev/null", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    memset(buf, 0xAA, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(nread, 0, @"read(/dev/null) should return 0 (EOF)");
+    close(fd);
+}
+
+- (void)testDevNullWriteSucceedsAndDiscards {
+    int fd = open("/dev/null", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t written = write(fd, "hello", 5);
+    XCTAssertEqual(written, 5, @"write(/dev/null) should succeed and report all bytes written");
+    close(fd);
+}
+
+- (void)testDevZeroReadFillsZeroBytes {
+    int fd = open("/dev/zero", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero) should succeed");
+    if (fd < 0) return;
+
+    char buf[128];
+    memset(buf, 0xFF, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(nread, (ssize_t)sizeof(buf), @"read(/dev/zero) should return requested byte count");
+
+    bool all_zero = true;
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        if (buf[i] != 0) {
+            all_zero = false;
+            break;
+        }
+    }
+    XCTAssertTrue(all_zero, @"/dev/zero read should fill buffer with zero bytes");
+    close(fd);
+}
+
+- (void)testDevUrandomReadReturnsNontrivialData {
+    int fd = open("/dev/urandom", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom) should succeed");
+    if (fd < 0) return;
+
+    char buf[256];
+    memset(buf, 0, sizeof(buf));
+    errno = 0;
+    ssize_t nread = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(nread, (ssize_t)sizeof(buf), @"read(/dev/urandom) should return requested byte count");
+
+    bool all_zero = true;
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        if (buf[i] != 0) {
+            all_zero = false;
+            break;
+        }
+    }
+    XCTAssertFalse(all_zero, @"/dev/urandom read should return nontrivial data (not all zeros)");
+    close(fd);
+}
+
+- (void)testDevZeroWriteSucceedsAndDiscards {
+    int fd = open("/dev/zero", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t written = write(fd, "data", 4);
+    XCTAssertEqual(written, 4, @"write(/dev/zero) should succeed and discard");
+    close(fd);
+}
+
+- (void)testDevUrandomWriteSucceedsAndDiscards {
+    int fd = open("/dev/urandom", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t written = write(fd, "data", 4);
+    XCTAssertEqual(written, 4, @"write(/dev/urandom) should succeed and discard");
+    close(fd);
+}
+
+- (void)testUnsupportedDevNodeStillFails {
+    errno = 0;
+    struct linux_stat st;
+    XCTAssertEqual(stat_impl("/dev/sda", &st), -1, @"stat(/dev/sda) should fail for unsupported dev node");
+    XCTAssertEqual(errno, ENOENT, @"stat(/dev/sda) should set ENOENT");
+
+    struct task_struct *original_task = get_current();
+    struct task_struct *isolated_task = alloc_task();
+    XCTAssertTrue(isolated_task != NULL, @"task allocation should succeed");
+    if (!isolated_task) return;
+
+    isolated_task->fs = alloc_fs_struct();
+    XCTAssertTrue(isolated_task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!isolated_task->fs) {
+        free_task(isolated_task);
+        return;
+    }
+
+    isolated_task->signal = alloc_signal_struct();
+    XCTAssertTrue(isolated_task->signal != NULL, @"signal_struct allocation should succeed");
+    if (!isolated_task->signal) {
+        free_task(isolated_task);
+        return;
+    }
+
+    fs_init_root(isolated_task->fs, "/");
+    fs_init_pwd(isolated_task->fs, "/");
+    set_current(isolated_task);
+
+    errno = 0;
+    XCTAssertEqual(open("/dev/tty", O_RDONLY), -1, @"open(/dev/tty) should fail without usable controlling tty");
+    XCTAssertTrue(errno == ENXIO || errno == EIO, @"open(/dev/tty) should set ENXIO (no controlling tty) or EIO (unusable controlling tty)");
+
+    set_current(original_task);
+    free_task(isolated_task);
+}
+
+- (void)testVfsFaccessatSupportsAtFdcwd {
+    int ret = vfs_faccessat(AT_FDCWD, "/etc", X_OK, 0);
+
+    XCTAssertEqual(ret, 0, @"vfs_faccessat with AT_FDCWD should succeed");
+}
+
+- (void)testVfsFaccessatRejectsInvalidFlags {
+    int ret = vfs_faccessat(AT_FDCWD, "/etc", X_OK, INVALID_FLAG_TEST_VALUE);
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_faccessat should reject invalid flags");
+}
+
+- (void)testVfsFaccessatReportsUnsupportedAtEaccess {
+    int ret = vfs_faccessat(AT_FDCWD, "/etc", X_OK, IX_AT_EACCESS);
+
+    XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat Linux AT_EACCESS should return ENOTSUP");
+}
+
+- (void)testVfsFaccessatReportsUnsupportedSymlinkNoFollow {
+    int ret = vfs_faccessat(AT_FDCWD, "/etc", X_OK, IX_AT_SYMLINK_NOFOLLOW);
+
+    XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat Linux AT_SYMLINK_NOFOLLOW should return ENOTSUP");
+}
+
+/* ============================================================================
+ * SIGNAL-FAMILY SEMANTICS TESTS
+ * ============================================================================ */
+
+- (void)testSignalKillSucceeds {
+    pid_t pid = getpid();
+    int ret = kill(pid, 0);
+    XCTAssertEqual(ret, 0, @"kill(self, 0) should succeed");
+}
+
+/* ============================================================================
+ * PROC/SELF ABSTRACTION TESTS
+ * ============================================================================ */
+
+- (void)testProcSelfStatSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self", &st), 0, @"stat(/proc/self) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self should be a directory");
+}
+
+- (void)testProcSelfStatFileSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/stat", &st), 0, @"stat(/proc/self/stat) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/stat should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/stat should have 0444 permissions");
+}
+
+- (void)testProcSelfCmdlineSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/cmdline", &st), 0, @"stat(/proc/self/cmdline) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/cmdline should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/cmdline should have 0444 permissions");
+}
+
+- (void)testProcSelfCommSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/comm", &st), 0, @"stat(/proc/self/comm) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/comm should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/comm should have 0444 permissions");
+}
+
+- (void)testProcSelfStatmSucceeds {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/statm", &st), 0, @"stat(/proc/self/statm) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/statm should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/statm should have 0444 permissions");
+}
+
+- (void)testProcSelfExeIsSymlink {
+    struct linux_stat st;
+    struct task_struct *task = get_current();
+    XCTAssertTrue(task != NULL, @"current task should exist");
+    if (!task) return;
+
+    char original_exe[MAX_PATH];
+    strncpy(original_exe, task->exe, sizeof(original_exe) - 1);
+    original_exe[sizeof(original_exe) - 1] = '\0';
+
+    strncpy(task->exe, "/bin/test-proc-self-exe", sizeof(task->exe) - 1);
+    task->exe[sizeof(task->exe) - 1] = '\0';
+
+    errno = 0;
+    int ret = lstat_impl("/proc/self/exe", &st);
+    XCTAssertEqual(ret, 0, @"lstat(/proc/self/exe) should succeed when exe is seeded");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/exe should be a symlink");
+
+    strncpy(task->exe, original_exe, sizeof(task->exe) - 1);
+    task->exe[sizeof(task->exe) - 1] = '\0';
+}
+
+- (void)testProcSelfCwdIsSymlink {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(lstat_impl("/proc/self/cwd", &st), 0, @"lstat(/proc/self/cwd) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/cwd should be a symlink");
+}
+
+- (void)testProcSelfFdIsDirectory {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/fd", &st), 0, @"stat(/proc/self/fd) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self/fd should be a directory");
+}
+
+- (void)testProcSelfFdinfoIsDirectory {
+    struct linux_stat st;
+    errno = 0;
+    XCTAssertEqual(stat_impl("/proc/self/fdinfo", &st), 0, @"stat(/proc/self/fdinfo) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self/fdinfo should be a directory");
+}
+
+/* ============================================================================
+ * /PROC/SELF/FD/ SYMLINK TESTS
+ * ============================================================================ */
+
+- (void)testProcSelfFdSymlinksExist {
+    struct linux_stat st;
+
+    // Get stdin fd (0) info via /proc/self/fd/0
+    errno = 0;
+    int ret = lstat_impl("/proc/self/fd/0", &st);
+    XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/0) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/0 should be a symlink");
+
+    // Get stdout fd (1) info via /proc/self/fd/1
+    errno = 0;
+    ret = lstat_impl("/proc/self/fd/1", &st);
+    XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/1) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/1 should be a symlink");
+
+    // Get stderr fd (2) info via /proc/self/fd/2
+    errno = 0;
+    ret = lstat_impl("/proc/self/fd/2", &st);
+    XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/2) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/2 should be a symlink");
+}
+
+- (void)testProcSelfFdSymlinksPointToValidPaths {
+    char link_target[MAX_PATH];
+    ssize_t len;
+
+    // Read symlink target for fd 0
+    len = readlink("/proc/self/fd/0", link_target, sizeof(link_target) - 1);
+    XCTAssertTrue(len > 0, @"readlink(/proc/self/fd/0) should return a path");
+    if (len > 0) {
+        link_target[len] = '\0';
+        XCTAssertTrue(strlen(link_target) > 0, @"fd 0 should point to a valid path");
+    }
+}
+
+- (void)testProcSelfFdSymlinksReflectActualFdState {
+    // Create a temporary file to get a real fd
+    int test_fd = open("/tmp/test_fd_symlink", O_CREAT | O_RDWR, 0644);
+    XCTAssertTrue(test_fd >= 0, @"open should succeed for test file");
+    if (test_fd < 0) return;
+
+    // Construct the /proc/self/fd path for this fd
+    char fd_path[64];
+    NSString *fdPathString = [NSString stringWithFormat:@"/proc/self/fd/%d", test_fd];
+    const char *fdPathUTF8 = [fdPathString UTF8String];
+    XCTAssertNotNil(fdPathString, @"fd path string should be created");
+    XCTAssertNotEqual(fdPathUTF8, NULL, @"fd path UTF8 conversion should succeed");
+    if (fdPathUTF8 == NULL) {
+        close(test_fd);
+        return;
+    }
+    size_t fdPathLength = strlen(fdPathUTF8);
+    XCTAssertTrue(fdPathLength < sizeof(fd_path), @"fd path should fit fixed-size buffer");
+    if (fdPathLength >= sizeof(fd_path)) {
+        close(test_fd);
+        return;
+    }
+    memcpy(fd_path, fdPathUTF8, fdPathLength + 1);
+
+    // Verify the symlink exists and points to the expected path
+    char link_target[MAX_PATH];
+    ssize_t len = readlink(fd_path, link_target, sizeof(link_target) - 1);
+
+    XCTAssertTrue(len > 0, @"readlink should succeed for newly created fd");
+
+    if (len > 0) {
+        link_target[len] = '\0';
+        // Should contain "test_fd_symlink" somewhere in the path
+        XCTAssertTrue(strstr(link_target, "test_fd_symlink") != NULL,
+                      @"fd symlink should point to the test file");
+    }
+
+    // Clean up
+    close(test_fd);
+    unlink("/tmp/test_fd_symlink");
+}
+
+- (void)testProcSelfFdInvalidFdNumbersFail {
+    struct linux_stat st;
+
+    // Try to stat a non-existent fd
+    errno = 0;
+    int ret = stat_impl("/proc/self/fd/999", &st);
+    XCTAssertEqual(ret, -1, @"stat(/proc/self/fd/999) should fail for invalid fd");
+    XCTAssertEqual(errno, ENOENT, @"errno should be ENOENT for invalid fd");
+
+    // Try to stat a non-numeric fd "name"
+    errno = 0;
+    ret = stat_impl("/proc/self/fd/abc", &st);
+    XCTAssertEqual(ret, -1, @"stat(/proc/self/fd/abc) should fail for non-numeric fd");
+    XCTAssertEqual(errno, ENOENT, @"errno should be ENOENT for non-numeric fd");
+}
+
+- (void)testProcSelfFdinfoFilesExist {
+    struct linux_stat st;
+
+    // fdinfo/0 should exist and be a regular file
+    errno = 0;
+    int ret = stat_impl("/proc/self/fdinfo/0", &st);
+    XCTAssertEqual(ret, 0, @"stat(/proc/self/fdinfo/0) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/0 should be a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/fdinfo/0 should have 0444 permissions");
+
+    // fdinfo/1 should also exist
+    errno = 0;
+    ret = stat_impl("/proc/self/fdinfo/1", &st);
+    XCTAssertEqual(ret, 0, @"stat(/proc/self/fdinfo/1) should succeed");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/1 should be a regular file");
+}
+
+- (void)testProcSelfFdinfoInvalidFdNumbersFail {
+    struct linux_stat st;
+
+    // Try to stat a non-existent fdinfo entry
+    errno = 0;
+    int ret = stat_impl("/proc/self/fdinfo/999", &st);
+    XCTAssertEqual(ret, -1, @"stat(/proc/self/fdinfo/999) should fail for invalid fdinfo entry");
+    XCTAssertEqual(errno, ENOENT, @"errno should be ENOENT for invalid fdinfo entry");
+
+    // Try to stat a non-numeric fdinfo entry
+    errno = 0;
+    ret = stat_impl("/proc/self/fdinfo/abc", &st);
+    XCTAssertEqual(ret, -1, @"stat(/proc/self/fdinfo/abc) should fail for non-numeric fdinfo entry");
+    XCTAssertEqual(errno, ENOENT, @"errno should be ENOENT for non-numeric fdinfo entry");
+}
+
+
+/* ============================================================================
+ * HOST PATH VALIDATION AND FAILURE CASES
+ * ============================================================================ */
+
+- (void)testVfsTranslatePathRejectsAbsoluteHostPath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("/private/var/mobile/test", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"current vfs_translate_path behavior routes host-absolute inputs through virtual resolution");
+}
+
+- (void)testVfsTranslatePathRejectsNonRoutePath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("/nonexistent/path", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"vfs_translate_path should fallback to persistent route for unknown paths");
+}
+
+- (void)testVfsTranslatePathRejectsInvalidVirtualPath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("", host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, 0, @"current vfs_translate_path behavior accepts empty path through virtual resolution");
+}
+
+- (void)testVfsTranslatePathRejectsNullPath {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path(NULL, host_path, sizeof(host_path));
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_translate_path should reject NULL path");
+}
+
+- (void)testVfsTranslatePathRejectsNullBuffer {
+    int ret = vfs_translate_path("/etc/passwd", NULL, MAX_PATH);
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_translate_path should reject NULL buffer");
+}
+
+- (void)testVfsTranslatePathRejectsZeroBufferSize {
+    char host_path[MAX_PATH];
+    int ret = vfs_translate_path("/etc/passwd", host_path, 0);
+
+    XCTAssertEqual(ret, -EINVAL, @"vfs_translate_path should reject zero buffer size");
+}
+
+/* ============================================================================
+ * SYNTHETIC /dev/tty TESTS
+ * ============================================================================ */
+
+- (void)testDevTtyOpenFailsWithoutControllingTty {
+    struct task_struct *original_task = get_current();
+    struct task_struct *isolated_task = alloc_task();
+    XCTAssertTrue(isolated_task != NULL, @"task allocation should succeed");
+    if (!isolated_task) return;
+
+    isolated_task->fs = alloc_fs_struct();
+    XCTAssertTrue(isolated_task->fs != NULL, @"fs_struct allocation should succeed");
+    if (!isolated_task->fs) {
+        free_task(isolated_task);
+        return;
+    }
+
+    isolated_task->signal = alloc_signal_struct();
+    XCTAssertTrue(isolated_task->signal != NULL, @"signal_struct allocation should succeed");
+    if (!isolated_task->signal) {
+        free_task(isolated_task);
+        return;
+    }
+
+    fs_init_root(isolated_task->fs, "/");
+    fs_init_pwd(isolated_task->fs, "/");
+    set_current(isolated_task);
+
+    errno = 0;
+    int fd = open("/dev/tty", O_RDWR);
+    XCTAssertEqual(fd, -1, @"open(/dev/tty) should fail without controlling tty");
+    XCTAssertTrue(errno == ENXIO || errno == EIO, @"open(/dev/tty) should set ENXIO or EIO");
+
+    set_current(original_task);
+    free_task(isolated_task);
+}
+
+- (void)testDevTtyStatFails {
+    struct linux_stat st;
+    errno = 0;
+    int ret = stat_impl("/dev/tty", &st);
+    XCTAssertEqual(ret, -1, @"stat(/dev/tty) should fail without a controlling tty");
+    XCTAssertEqual(errno, ENOENT, @"stat(/dev/tty) should currently set ENOENT without a controlling tty");
+}
+
+- (void)testDevTtyAccessFails {
+    errno = 0;
+    int ret = access("/dev/tty", F_OK);
+
+    XCTAssertEqual(ret, -1, @"access(/dev/tty) should fail without a controlling tty");
+    XCTAssertEqual(errno, ENOENT, @"access(/dev/tty) should currently set ENOENT without a controlling tty");
+}
+
+/* ============================================================================
+ * PERSISTENT FILESYSTEM TESTS
+ * ============================================================================ */
+
+/* ============================================================================
+ * BUFFER SIZE VALIDATION TESTS
+ * ============================================================================ */
+
+- (void)testVfsTranslatePathRejectsTooSmallBuffer {
+    char small_buf[1];
+    int ret = vfs_translate_path("/etc/passwd", small_buf, sizeof(small_buf));
+
+    XCTAssertEqual(ret, -ENAMETOOLONG, @"vfs_translate_path should reject too-small buffer");
+}
+
+- (void)testPathResolveRejectsNullPath {
+    char resolved[MAX_PATH];
+    errno = 0;
+    int ret = path_resolve(NULL, resolved, sizeof(resolved));
+
+    XCTAssertEqual(ret, -1, @"path_resolve should reject NULL path");
+    XCTAssertEqual(errno, EINVAL, @"path_resolve should set EINVAL for NULL path");
+}
+
+- (void)testPathResolveRejectsNullBuffer {
+    errno = 0;
+    int ret = path_resolve("/etc/passwd", NULL, MAX_PATH);
+
+    XCTAssertEqual(ret, -1, @"path_resolve should reject NULL buffer");
+    XCTAssertEqual(errno, EINVAL, @"path_resolve should set EINVAL for NULL buffer");
+}
+
+- (void)testPathResolveRejectsZeroBufferSize {
+    char resolved[MAX_PATH];
+    errno = 0;
+    int ret = path_resolve("/etc/passwd", resolved, 0);
+
+    XCTAssertEqual(ret, -1, @"path_resolve should reject zero buffer size");
+    XCTAssertEqual(errno, EINVAL, @"path_resolve should set EINVAL for zero buffer size");
+}
+
+@end

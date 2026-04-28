@@ -1,0 +1,161 @@
+/* IXLandSystemTests/KernelBoot.c
+ * C translation unit for Linux virtual kernel boot contract.
+ *
+ * Proves the virtual kernel reaches a deterministic ready state.
+ * Compiled in a Linux-UAPI-clean context.
+ * Uses canonical Linux names directly.
+ */
+
+#include <errno.h>
+#include <string.h>
+
+#include <linux/fcntl.h>
+
+#include "fs/vfs.h"
+#include "fs/fdtable.h"
+#include "kernel/task.h"
+#include "kernel/init.h"
+
+/* Test 1: System is booted */
+int kernel_boot_test_system_booted(void) {
+    if (!kernel_is_booted()) {
+        return -1;
+    }
+    return 0;
+}
+
+/* Test 2: VFS backing roots are discoverable and non-empty */
+int kernel_boot_test_vfs_backing_roots(void) {
+    const char *persistent;
+    const char *cache;
+    const char *temp;
+
+    persistent = vfs_persistent_backing_root();
+    cache = vfs_cache_backing_root();
+    temp = vfs_temp_backing_root();
+
+    if (!persistent || persistent[0] == '\0') {
+        return -1;
+    }
+    if (!cache || cache[0] == '\0') {
+        return -2;
+    }
+    if (!temp || temp[0] == '\0') {
+        return -3;
+    }
+
+    /* Persistent root must not be temp-backed */
+    if (strcmp(persistent, temp) == 0) {
+        return -4;
+    }
+
+    return 0;
+}
+
+/* Test 3: VFS route table routes correctly */
+int kernel_boot_test_vfs_routing(void) {
+    if (vfs_backing_class_for_path("/") != VFS_BACKING_PERSISTENT) {
+        return -1;
+    }
+    if (vfs_backing_class_for_path("/tmp") != VFS_BACKING_TEMP) {
+        return -2;
+    }
+    if (vfs_backing_class_for_path("/var/cache") != VFS_BACKING_CACHE) {
+        return -3;
+    }
+    return 0;
+}
+
+/* Test 4: Synthetic roots are available */
+int kernel_boot_test_synthetic_roots(void) {
+    struct linux_stat st;
+
+    /* /proc is synthetic */
+    if (!vfs_path_is_synthetic("/proc")) {
+        return -1;
+    }
+    /* /dev is synthetic */
+    if (!vfs_path_is_synthetic("/dev")) {
+        return -2;
+    }
+
+    /* Synthetic root stat succeeds */
+    if (vfs_fstatat(AT_FDCWD, "/proc", &st, 0) != 0) {
+        return -3;
+    }
+    if (vfs_fstatat(AT_FDCWD, "/dev", &st, 0) != 0) {
+        return -4;
+    }
+
+    /* /sys is synthetic if modeled */
+    if (vfs_path_is_synthetic("/sys")) {
+        if (vfs_fstatat(AT_FDCWD, "/sys", &st, 0) != 0) {
+            return -5;
+        }
+    }
+
+    return 0;
+}
+
+/* Test 5: Task system is initialized */
+int kernel_boot_test_task_init(void) {
+    struct task_struct *init;
+
+    init = init_task;
+    if (!init) {
+        return -1;
+    }
+    if (init->pid <= 0) {
+        return -2;
+    }
+    if (!init->fs) {
+        return -3;
+    }
+    if (init->fs->root_path[0] == '\0') {
+        return -4;
+    }
+    if (init->fs->pwd_path[0] == '\0') {
+        return -5;
+    }
+    return 0;
+}
+
+/* Test 6: FD table is ready */
+int kernel_boot_test_fd_table(void) {
+    int fd;
+
+    /* stdio fds should be allocated */
+    if (!fdtable_is_used_impl(0) || !fdtable_is_used_impl(1) || !fdtable_is_used_impl(2)) {
+        return -1;
+    }
+
+    /* Allocate a new fd - should not collide with stdio */
+    fd = alloc_fd_impl();
+    if (fd < 0) {
+        return -2;
+    }
+    if (fd < 3) {
+        free_fd_impl(fd);
+        return -3;
+    }
+
+    free_fd_impl(fd);
+    return 0;
+}
+
+/* Test 7: Boot is idempotent */
+int kernel_boot_test_idempotent(void) {
+    int first;
+    int second;
+
+    first = start_kernel();
+    second = start_kernel();
+
+    if (first != 0) {
+        return -1;
+    }
+    if (second != 0) {
+        return -2;
+    }
+    return 0;
+}
