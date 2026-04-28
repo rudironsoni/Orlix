@@ -9,7 +9,6 @@
  */
 
 #include <linux/stat.h>
-#include <linux/fcntl.h>
 
 /* ============================================================================
  * Stat mode semantic helpers - interpret mode values
@@ -37,28 +36,4 @@ int ixland_test_uapi_mode_is_block_device(unsigned int mode) {
 
 int ixland_test_uapi_mode_is_fifo(unsigned int mode) {
     return S_ISFIFO(mode);
-}
-
-/* ============================================================================
- * AT_* flag semantic helpers - Linux UAPI constants
- * ============================================================================ */
-
-int ixland_test_uapi_at_symlink_nofollow(void) {
-    return AT_SYMLINK_NOFOLLOW;
-}
-
-int ixland_test_uapi_at_eaccess(void) {
-    return AT_EACCESS;
-}
-
-int ixland_test_uapi_at_empty_path(void) {
-    return AT_EMPTY_PATH;
-}
-
-/* ============================================================================
- * Fcntl flag semantic helpers - Linux UAPI constants
- * ============================================================================ */
-
-int ixland_test_uapi_f_dupfd_cloexec(void) {
-    return F_DUPFD_CLOEXEC;
 }

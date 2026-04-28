@@ -145,6 +145,10 @@ targets:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/LinuxUAPITestSupport.h
+    - path: IXLandSystemLinuxKernelTests/VFSAtContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     dependencies:
     - target: IXLandSystem
     settings:

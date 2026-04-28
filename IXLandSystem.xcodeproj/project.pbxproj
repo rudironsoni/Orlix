@@ -17,6 +17,7 @@
 		17569519F7B7B56C5572BED6 /* path.c in Sources */ = {isa = PBXBuildFile; fileRef = 51D066274EE2D55E90787D9C /* path.c */; };
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
+		2A87FD94AED672D2C4945B04 /* VFSAtContract.c in Sources */ = {isa = PBXBuildFile; fileRef = E1CD35402A585DF342760586 /* VFSAtContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		2D265352D0E476750492B1BF /* poll.c in Sources */ = {isa = PBXBuildFile; fileRef = 88D453F467952833E1FD3D0D /* poll.c */; };
 		3655BF1DA2D2D3DA3FAF986A /* time.c in Sources */ = {isa = PBXBuildFile; fileRef = F5240B1F3DC3BDF0ED535D3B /* time.c */; };
 		3DEC101077E32C26F85507A0 /* TaskGroupTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 767A8483185FE320714CA54E /* TaskGroupTests.m */; };
@@ -163,6 +164,7 @@
 		D979F989EC0D2FF286D59733 /* read_write.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = read_write.c; sourceTree = "<group>"; };
 		DB47AFBCA86B478A6F48BAE6 /* stat.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stat.c; sourceTree = "<group>"; };
 		DC6020ECDA4585334611FE7D /* backing_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = backing_io.h; sourceTree = "<group>"; };
+		E1CD35402A585DF342760586 /* VFSAtContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = VFSAtContract.c; sourceTree = "<group>"; };
 		F2D024F0973242458FE50E93 /* init.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = init.c; sourceTree = "<group>"; };
 		F2D8077FB1F274E58E85378C /* exec.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = exec.c; sourceTree = "<group>"; };
 		F4E2215C61CCAEFB06DDB4FC /* registry.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = registry.c; sourceTree = "<group>"; };
@@ -314,6 +316,7 @@
 				3A7AB548A9E0653A96E8EE61 /* RootfsBootstrapTests.m */,
 				39D1B661F15441FB32765EC6 /* SignalTests.m */,
 				767A8483185FE320714CA54E /* TaskGroupTests.m */,
+				E1CD35402A585DF342760586 /* VFSAtContract.c */,
 				97089E4A77C673C1280D46C1 /* VFSPathTests.m */,
 			);
 			path = IXLandSystemLinuxKernelTests;
@@ -476,6 +479,7 @@
 				14DEFC9BDE432750E36BB297 /* RootfsBootstrapTests.m in Sources */,
 				89EF08DAA55DB8C17CE9F248 /* SignalTests.m in Sources */,
 				3DEC101077E32C26F85507A0 /* TaskGroupTests.m in Sources */,
+				2A87FD94AED672D2C4945B04 /* VFSAtContract.c in Sources */,
 				6B689996B8A951020685A627 /* VFSPathTests.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

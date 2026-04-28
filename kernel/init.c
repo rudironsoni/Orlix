@@ -1,6 +1,7 @@
 /* iOS Subsystem for Linux - Library Initialization
  *
  * Automatic initialization using constructor attribute
+ * AND explicit Linux-shaped boot lifecycle (start_kernel/kernel_shutdown)
  */
 
 #include <stdlib.h>
@@ -10,114 +11,145 @@
 #include "../runtime/native/registry.h"
 #include "task.h"
 
-/* Global initialization flag */
+/* Global initialization state */
 static atomic_int library_initialized = 0;
+static atomic_int kernel_booted = 0;
 static kernel_mutex_t library_init_lock = KERNEL_MUTEX_INITIALIZER;
 
 /* ============================================================================
- * INITIALIZATION
+ * INTERNAL INITIALIZATION - lock must be held by caller
+ * ============================================================================ */
+
+static int kernel_init_locked(void) {
+    int vfs_result;
+    int task_result;
+
+    if (atomic_load(&library_initialized)) {
+        return 0; /* Already initialized */
+    }
+
+    /* Initialize VFS first */
+    vfs_result = vfs_init();
+    if (vfs_result != 0) {
+        return -1; /* VFS init failed */
+    }
+
+    /* Initialize task system - creates init task */
+    task_result = task_init();
+    if (task_result != 0) {
+        vfs_deinit();
+        return -1; /* Task init failed */
+    }
+
+    /* Initialize native command registry */
+    native_registry_init();
+
+    atomic_store(&library_initialized, 1);
+    return 0;
+}
+
+static void kernel_deinit_locked(void) {
+    if (!atomic_load(&library_initialized)) {
+        return;
+    }
+
+    task_deinit();
+    vfs_deinit();
+    atomic_store(&library_initialized, 0);
+    atomic_store(&kernel_booted, 0);
+}
+
+/* ============================================================================
+ * CONSTRUCTOR/DESTRUCTOR - for auto-init on library load
  * ============================================================================ */
 
 void library_init_constructor(void) __attribute__((constructor(101))) __attribute__((used));
 void library_deinit_destructor(void) __attribute__((destructor)) __attribute__((used));
 
 void library_init_constructor(void) {
-/* Check if already initialized */
-if (atomic_load(&library_initialized)) {
-return;
-}
+    /* Fast path: check without lock */
+    if (atomic_load(&library_initialized)) {
+        return;
+    }
 
-kernel_mutex_lock(&library_init_lock);
+    kernel_mutex_lock(&library_init_lock);
 
-/* Double-check after acquiring lock */
-if (atomic_load(&library_initialized)) {
-kernel_mutex_unlock(&library_init_lock);
-return;
-}
+    /* Double-check after acquiring lock */
+    if (atomic_load(&library_initialized)) {
+        kernel_mutex_unlock(&library_init_lock);
+        return;
+    }
 
-/* Initialize VFS first (safe initialization) */
-int vfs_result = vfs_init();
-if (vfs_result != 0) {
-/* VFS init failed - continue anyway with defaults */
-/* This allows the library to work even if HOME is not set */
-}
+    kernel_init_locked();
+    atomic_store(&kernel_booted, 1); /* Constructor counts as booted */
 
-/* Initialize task system - creates init task */
-int task_result = task_init();
-if (task_result != 0) {
-kernel_mutex_unlock(&library_init_lock);
-return;
-}
-
-/* Initialize native command registry */
-native_registry_init();
-
-/* Set initialized flag */
-atomic_store(&library_initialized, 1);
-
-kernel_mutex_unlock(&library_init_lock);
+    kernel_mutex_unlock(&library_init_lock);
 }
 
 void library_deinit_destructor(void) {
-if (!atomic_load(&library_initialized)) {
-return;
-}
-
-task_deinit();
-vfs_deinit();
-
-atomic_store(&library_initialized, 0);
-
+    kernel_mutex_lock(&library_init_lock);
+    kernel_deinit_locked();
+    kernel_mutex_unlock(&library_init_lock);
 }
 
 /* ============================================================================
- * PUBLIC INITIALIZATION API
+ * LEGACY PUBLIC INITIALIZATION API
  * ============================================================================ */
 
 int library_init(const void *config) {
-/* Initialization happens automatically via constructor,
- * but this function allows explicit initialization if needed */
-(void)config; /* Config ignored for now */
-if (!atomic_load(&library_initialized)) {
-library_init_constructor();
-}
-return atomic_load(&library_initialized) ? 0 : -1;
+    int result;
+    (void)config;
+
+    if (atomic_load(&library_initialized)) {
+        return 0;
+    }
+
+    kernel_mutex_lock(&library_init_lock);
+    result = kernel_init_locked();
+    kernel_mutex_unlock(&library_init_lock);
+
+    return result;
 }
 
 int library_is_initialized(void) {
-return atomic_load(&library_initialized);
+    return atomic_load(&library_initialized);
 }
 
 const char *library_version(void) {
-return "1.0.0";
+    return "1.0.0";
 }
 
 void library_deinit(void) {
-    library_deinit_destructor();
+    kernel_mutex_lock(&library_init_lock);
+    kernel_deinit_locked();
+    kernel_mutex_unlock(&library_init_lock);
 }
 
 /* ============================================================================
  * LINUX-SHAPED BOOT LIFECYCLE
- * ============================================================================
- *
- * These functions provide a Linux-shaped virtual kernel boot interface.
- * They are thin wrappers over the existing initialization system.
- */
-
-/* Static flag for kernel boot state */
-static atomic_int kernel_booted = 0;
+ * ============================================================================ */
 
 int start_kernel(void) {
-    kernel_mutex_lock(&library_init_lock);
+    int result;
 
-    if (atomic_load(&kernel_booted)) {
-        kernel_mutex_unlock(&library_init_lock);
-        return 0; /* Already booted - idempotent */
+    /* Fast path: already booted */
+    if (atomic_load(&kernel_booted) && atomic_load(&library_initialized)) {
+        return 0;
     }
 
-    /* Ensure library is initialized */
-    if (!atomic_load(&library_initialized)) {
-        library_init_constructor();
+    kernel_mutex_lock(&library_init_lock);
+
+    /* Double-check after acquiring lock */
+    if (atomic_load(&kernel_booted) && atomic_load(&library_initialized)) {
+        kernel_mutex_unlock(&library_init_lock);
+        return 0;
+    }
+
+    /* Initialize subsystems */
+    result = kernel_init_locked();
+    if (result != 0) {
+        kernel_mutex_unlock(&library_init_lock);
+        return result;
     }
 
     atomic_store(&kernel_booted, 1);
@@ -132,13 +164,12 @@ int kernel_is_booted(void) {
 int kernel_shutdown(void) {
     kernel_mutex_lock(&library_init_lock);
 
-    if (!atomic_load(&kernel_booted)) {
+    if (!atomic_load(&kernel_booted) && !atomic_load(&library_initialized)) {
         kernel_mutex_unlock(&library_init_lock);
         return 0; /* Already shut down */
     }
 
-    library_deinit_destructor();
-    atomic_store(&kernel_booted, 0);
+    kernel_deinit_locked();
 
     kernel_mutex_unlock(&library_init_lock);
     return 0;

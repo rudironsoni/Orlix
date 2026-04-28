@@ -195,6 +195,28 @@ fi
 echo "   ✓ No TEST_* raw constants in tests"
 
 echo ""
+echo "=== Check 15b: Test ABI contamination - ixland_test_uapi_at_* helpers ==="
+IX_UAPI_AT_HELPERS=$(rg -n '\bixland_test_uapi_at_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$IX_UAPI_AT_HELPERS" ]; then
+    echo "FAIL: ixland_test_uapi_at_* helper soup found in test files:"
+    echo "$IX_UAPI_AT_HELPERS"
+    echo "Move Linux UAPI constant usage to C contract files with canonical Linux names."
+    exit 1
+fi
+echo "   ✓ No ixland_test_uapi_at_* helper soup in tests"
+
+echo ""
+echo "=== Check 15c: Test ABI contamination - ixland_test_uapi_f_* helpers ==="
+IX_UAPI_F_HELPERS=$(rg -n '\bixland_test_uapi_f_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$IX_UAPI_F_HELPERS" ]; then
+    echo "FAIL: ixland_test_uapi_f_* helper soup found in test files:"
+    echo "$IX_UAPI_F_HELPERS"
+    echo "Move Linux UAPI constant usage to C contract files with canonical Linux names."
+    exit 1
+fi
+echo "   ✓ No ixland_test_uapi_f_* helper soup in tests"
+
+echo ""
 echo "=== Check 16: Bridge bag usage in Linux-facing tests ==="
 BRIDGE_BAG=$(rg -n 'internal/ios/fs/backing_io\.h|internal/ios/fs/backing_io_decls\.h' IXLandSystemLinuxKernelTests/*.m 2>/dev/null || true)
 if [ -n "$BRIDGE_BAG" ]; then

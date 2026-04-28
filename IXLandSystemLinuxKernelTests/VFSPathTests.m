@@ -36,11 +36,6 @@
 /* Linux UAPI test support - semantic helpers only */
 #include "IXLandSystemLinuxKernelTests/LinuxUAPITestSupport.h"
 
-/* Forward declarations for helper functions from LinuxUAPITestSupport.c */
-extern int ixland_test_uapi_at_symlink_nofollow(void);
-extern int ixland_test_uapi_at_eaccess(void);
-extern int ixland_test_uapi_at_empty_path(void);
-
 #ifndef INVALID_FLAG_TEST_VALUE
 #define INVALID_FLAG_TEST_VALUE 0x40000000u
 #endif
@@ -510,10 +505,9 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 }
 
 - (void)testVfsFstatatSupportsSymlinkNoFollow {
-    struct linux_stat st;
-    int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, ixland_test_uapi_at_symlink_nofollow());
-
-    XCTAssertEqual(ret, 0, @"vfs_fstatat with Linux AT_SYMLINK_NOFOLLOW should succeed");
+    extern int vfs_contract_fstatat_symlink_nofollow(void);
+    XCTAssertEqual(vfs_contract_fstatat_symlink_nofollow(), 0,
+                   @"vfs_fstatat with Linux AT_SYMLINK_NOFOLLOW should succeed");
 }
 
 - (void)testVfsFstatatRejectsInvalidFlags {
@@ -552,10 +546,11 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 
 - (void)testSyntheticChildStatFails {
     struct linux_stat st;
+    extern int vfs_contract_fstatat_synthetic_child_nofollow(void);
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/proc/meminfo", &st, 0), -ENOENT,
                    @"synthetic child vfs_fstatat should reject through descriptor policy");
-    XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/sys/kernel", &st, ixland_test_uapi_at_symlink_nofollow()), -ENOENT,
+    XCTAssertEqual(vfs_contract_fstatat_synthetic_child_nofollow(), -ENOENT,
                    @"synthetic child vfs_fstatat with Linux AT_SYMLINK_NOFOLLOW should reject through descriptor policy");
 
     errno = 0;
@@ -994,15 +989,15 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 }
 
 - (void)testVfsFaccessatReportsUnsupportedAtEaccess {
-    int ret = vfs_faccessat(AT_FDCWD, "/etc", X_OK, ixland_test_uapi_at_eaccess());
-
-    XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat Linux AT_EACCESS should return ENOTSUP");
+    extern int vfs_contract_faccessat_eaccess_returns_enotsup(void);
+    XCTAssertEqual(vfs_contract_faccessat_eaccess_returns_enotsup(), -ENOTSUP,
+                   @"vfs_faccessat Linux AT_EACCESS should return ENOTSUP");
 }
 
 - (void)testVfsFaccessatReportsUnsupportedSymlinkNoFollow {
-    int ret = vfs_faccessat(AT_FDCWD, "/etc", X_OK, ixland_test_uapi_at_symlink_nofollow());
-
-    XCTAssertEqual(ret, -ENOTSUP, @"vfs_faccessat Linux AT_SYMLINK_NOFOLLOW should return ENOTSUP");
+    extern int vfs_contract_faccessat_symlink_nofollow_returns_enotsup(void);
+    XCTAssertEqual(vfs_contract_faccessat_symlink_nofollow_returns_enotsup(), -ENOTSUP,
+                   @"vfs_faccessat Linux AT_SYMLINK_NOFOLLOW should return ENOTSUP");
 }
 
 /* ============================================================================

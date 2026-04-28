@@ -537,6 +537,9 @@ int vfs_init(void) {
 }
 
 void vfs_deinit(void) {
+    /* Reset VFS initialization state for cold boot/reboot */
+    vfs_backing_initialized = 0;
+    vfs_etc_bootstrapped = 0;
 }
 
 int vfs_mount(const char *source, const char *target, const char *fstype, unsigned long flags,

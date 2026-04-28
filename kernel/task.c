@@ -7,6 +7,8 @@
 
 #include <errno.h>
 #include <setjmp.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -119,53 +121,57 @@ struct task_struct *task_lookup(int32_t pid) {
     return task;
 }
 
-static void task_init_once(void) {
-    /* Initialize PID allocator first */
-    pid_init();
-
-  init_task = alloc_task();
-  if (!init_task)
-    return;
-
-  init_task->ppid = init_task->pid;
-  /* init_task is session and process group leader */
-  init_task->pgid = init_task->pid;
-  init_task->sid = init_task->pid;
-  strncpy(init_task->comm, "init", sizeof(init_task->comm));
-
-    init_task->files = alloc_files(NR_OPEN_DEFAULT);
-    if (!init_task->files) {
-        free_task(init_task);
-        init_task = NULL;
-        return;
-    }
-
-    init_task->fs = alloc_fs_struct();
-    if (!init_task->fs) {
-        free_task(init_task);
-        init_task = NULL;
-        return;
-    }
-    /* Initialize virtual root and pwd for init task */
-    fs_init_root(init_task->fs, "/");
-    fs_init_pwd(init_task->fs, "/");
-
-    init_task->signal = alloc_signal_struct();
-    if (!init_task->signal) {
-        free_task(init_task);
-        init_task = NULL;
-        return;
-    }
-
-    current_task = init_task;
-}
+static atomic_bool task_initialized = false;
 
 int task_init(void) {
-    static kernel_once_t once = KERNEL_ONCE_INIT;
+    /* Fast path: already initialized */
+    if (atomic_load(&task_initialized) && init_task) {
+        return 0;
+    }
 
-    kernel_once(&once, task_init_once);
+    /* Re-initialization path after deinit */
+    if (!init_task) {
+        /* Re-initialize from scratch */
+        pid_init();
 
-    return init_task ? 0 : -1;
+        init_task = alloc_task();
+        if (!init_task)
+            return -1;
+
+        init_task->ppid = init_task->pid;
+        init_task->pgid = init_task->pid;
+        init_task->sid = init_task->pid;
+        strncpy(init_task->comm, "init", sizeof(init_task->comm));
+
+        init_task->files = alloc_files(NR_OPEN_DEFAULT);
+        if (!init_task->files) {
+            free_task(init_task);
+            init_task = NULL;
+            return -1;
+        }
+
+        init_task->fs = alloc_fs_struct();
+        if (!init_task->fs) {
+            free_task(init_task);
+            init_task = NULL;
+            return -1;
+        }
+        fs_init_root(init_task->fs, "/");
+        fs_init_pwd(init_task->fs, "/");
+
+        init_task->signal = alloc_signal_struct();
+        if (!init_task->signal) {
+            free_task(init_task);
+            init_task = NULL;
+            return -1;
+        }
+
+        current_task = init_task;
+        atomic_store(&task_initialized, true);
+        return 0;
+    }
+
+    return 0;
 }
 
 void task_deinit(void) {
@@ -173,6 +179,8 @@ void task_deinit(void) {
         free_task(init_task);
         init_task = NULL;
     }
+    current_task = NULL;
+    atomic_store(&task_initialized, false);
 }
 
 /* ============================================================================
