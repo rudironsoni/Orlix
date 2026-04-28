@@ -9,6 +9,14 @@
       "*": "allow"
     }
   },
+  "formatter": {
+    "clang-format": {
+      "extensions": [
+        ".m",
+        ".mm"
+      ]
+    }
+  },
   "lsp": {
     "clangd": {
       "command": [
