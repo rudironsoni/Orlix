@@ -153,6 +153,26 @@ static void vfs_test_seed_linux_file(const char *path) {
     XCTAssertEqual(ret, -EBADF, @"host_fstat_impl should return Linux -EBADF for invalid fd");
 }
 
+- (void)testHostFstatReturnsLinuxEfaultForNullStatbuf_HostBacked {
+    char host_path[MAX_PATH];
+    int fd;
+    int ret;
+
+    XCTAssertEqual(vfs_translate_path("/etc/passwd", host_path, sizeof(host_path)), 0,
+                   @"vfs_translate_path for /etc/passwd should succeed");
+
+    fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/passwd should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    ret = host_fstat_impl(fd, NULL);
+    XCTAssertEqual(ret, -EFAULT, @"host_fstat_impl should return Linux -EFAULT for NULL stat buffer");
+
+    host_close_impl(fd);
+}
+
 - (void)testHostFstatTranslatesHostStatForValidFd_HostBacked {
     char host_path[MAX_PATH];
     struct linux_stat st;

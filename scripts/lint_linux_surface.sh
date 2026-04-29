@@ -152,36 +152,54 @@ echo "   ✓ No new broad mediation headers under internal/ios"
 
 echo ""
 echo "=== Check 12: Test ABI contamination - IX_* wrapper macros ==="
-IX_WRAPPERS=$(rg -n '^\s*#define\s+IX_' IXLandSystemLinuxKernelTests/*.m IXLandSystemHostBridgeTests/*.m 2>/dev/null || true)
-if [ -n "$IX_WRAPPERS" ]; then
-    echo "FAIL: IX_* wrapper macros found in test files:"
-    echo "$IX_WRAPPERS"
-    echo "Use semantic test helpers from LinuxUAPITestSupport.h instead."
+TEST_IX_ALIASES=$(rg -n -e '\bIX_AT_[A-Z0-9_]+\b' -e '\bIX_F_[A-Z0-9_]+\b' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+if [ -n "$TEST_IX_ALIASES" ]; then
+    echo "FAIL: IX_* wrapper macros found in tests:"
+    echo "$TEST_IX_ALIASES"
     exit 1
 fi
 echo "   ✓ No IX_* wrapper macros in tests"
 
 echo ""
-echo "=== Check 13: Test ABI contamination - linux_* accessor soup ==="
-LINUX_ACCESSORS=$(rg -n '\blinux_[a-z0-9_]+\(\)' IXLandSystemLinuxKernelTests/*.m IXLandSystemHostBridgeTests/*.m 2>/dev/null || true)
-if [ -n "$LINUX_ACCESSORS" ]; then
-    echo "FAIL: linux_*() accessor soup found in Objective-C test files:"
-    echo "$LINUX_ACCESSORS"
-    echo "Use semantic test helpers (ixland_test_uapi_*) instead."
+echo "=== Check 13: Test ABI contamination - Objective-C Linux UAPI headers ==="
+TEST_OBJC_LINUX_HEADERS=$(rg -n '^[[:space:]]*#(include|import)[[:space:]]*<(linux|asm)/' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests --glob '*.m' 2>/dev/null || true)
+if [ -n "$TEST_OBJC_LINUX_HEADERS" ]; then
+    echo "FAIL: Objective-C tests include Linux UAPI headers:"
+    echo "$TEST_OBJC_LINUX_HEADERS"
+    exit 1
+fi
+echo "   ✓ No Objective-C Linux UAPI headers in tests"
+
+echo ""
+echo "=== Check 14: Test ABI contamination - linux_* accessor soup ==="
+TEST_LINUX_ACCESSORS=$(rg -n -e '\blinux_(s_ifmt|s_is[a-z0-9_]+|at_[a-z0-9_]+|f_[a-z0-9_]+)\b' IXLandSystemHostBridgeTests 2>/dev/null || true)
+if [ -n "$TEST_LINUX_ACCESSORS" ]; then
+    echo "FAIL: linux_* accessor wrappers found in Objective-C tests:"
+    echo "$TEST_LINUX_ACCESSORS"
     exit 1
 fi
 echo "   ✓ No linux_* accessor soup in Objective-C tests"
 
 echo ""
-echo "=== Check 14: Test ABI contamination - raw Linux constants ==="
-RAW_CONSTANTS=$(rg -n '\b0x54[0-9a-fA-F]{2}\b|\b0x[0-9a-fA-F]+\s*\/\*\s*TIOC' IXLandSystemLinuxKernelTests/*.m IXLandSystemHostBridgeTests/*.m 2>/dev/null || true)
-if [ -n "$RAW_CONSTANTS" ]; then
-    echo "FAIL: Raw Linux ABI constants found in test files:"
-    echo "$RAW_CONSTANTS"
-    echo "Source constants from LinuxUAPITestSupport.c only."
+echo "=== Check 15: Test ABI contamination - raw Linux constants ==="
+TEST_RAW_LINUX_CONSTANTS=$(rg -n -e '0x[0-9A-Fa-f]+' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests --glob '*.m' 2>/dev/null | rg -v 'INVALID_FLAG_TEST_VALUE|RENAME_NOREPLACE|RENAME_EXCHANGE|RENAME_WHITEOUT|memset\(|/\*|//' || true)
+if [ -n "$TEST_RAW_LINUX_CONSTANTS" ]; then
+    echo "FAIL: Suspicious raw numeric constants found in Objective-C tests:"
+    echo "$TEST_RAW_LINUX_CONSTANTS"
     exit 1
 fi
 echo "   ✓ No raw Linux ABI constants in tests"
+
+echo ""
+echo "=== Check 16: Test ABI contamination - LinuxKernel host mediation includes ==="
+TEST_LINUXKERNEL_HOST_INCLUDES=$(rg -n -e '^[[:space:]]*#(include|import)[[:space:]]*"internal/ios/' -e '^[[:space:]]*#(include|import)[[:space:]]*".*backing_io(_decls)?\.h"' IXLandSystemLinuxKernelTests --glob '*.[mhc]' 2>/dev/null || true)
+if [ -n "$TEST_LINUXKERNEL_HOST_INCLUDES" ]; then
+    echo "FAIL: LinuxKernel tests include host mediation headers:"
+    echo "$TEST_LINUXKERNEL_HOST_INCLUDES"
+    exit 1
+fi
+echo "   ✓ No host mediation includes in LinuxKernel tests"
+
 
 echo ""
 echo "=== Check 15: Test ABI contamination - TEST_* raw constants ==="

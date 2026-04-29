@@ -522,12 +522,27 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
 }
 
-- (void)testFstatImplReturnsEbadfForInvalidFd {
+- (void)testFstatInvalidFdReturnsBadf {
     struct linux_stat st;
 
     errno = 0;
     XCTAssertEqual(fstat_impl(-1, &st), -1, @"fstat_impl should reject invalid fd");
     XCTAssertEqual(errno, EBADF, @"fstat_impl should set EBADF for invalid fd");
+}
+
+- (void)testFstatNullStatbufReturnsFault {
+    int fd = open("/etc/passwd", O_RDONLY);
+
+    XCTAssertTrue(fd >= 0, @"open(/etc/passwd) should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    errno = 0;
+    XCTAssertEqual(fstat_impl(fd, NULL), -1, @"fstat_impl should reject NULL stat buffer");
+    XCTAssertEqual(errno, EFAULT, @"fstat_impl should set EFAULT for NULL stat buffer");
+
+    close(fd);
 }
 
 - (void)testFstatImplSucceedsForLinuxOwnedFd {
@@ -546,7 +561,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     close(fd);
 }
 
-- (void)testFstatImplSucceedsForDuplicatedLinuxOwnedFd {
+- (void)testFstatDuplicatedRealBackedFdMatchesOriginal {
     struct linux_stat original_st;
     struct linux_stat duplicate_st;
     int fd = open("/etc/passwd", O_RDONLY);
@@ -575,7 +590,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     close(fd);
 }
 
-- (void)testFstatImplSucceedsForSyntheticProcRootDirectoryFd {
+- (void)testFstatProcDirectoryFdReportsDirectory {
     struct linux_stat st;
     int fd = open("/proc", O_RDONLY | O_DIRECTORY, 0);
 
@@ -592,7 +607,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     close(fd);
 }
 
-- (void)testFstatImplSucceedsForSyntheticProcSelfFdDirectoryFd {
+- (void)testFstatProcSelfFdDirectoryReportsDirectory {
     struct linux_stat st;
     int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY, 0);
 
@@ -609,7 +624,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     close(fd);
 }
 
-- (void)testFstatImplSucceedsForSyntheticProcSelfFdinfoFileFd {
+- (void)testFstatProcSelfFdinfoFileReportsRegularFile {
     struct linux_stat st;
     int fd = open("/proc/self/fdinfo/0", O_RDONLY, 0);
 
