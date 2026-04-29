@@ -678,6 +678,24 @@ bool get_fd_is_append_impl(fd_entry_t *entry) {
     return entry && entry->desc && (entry->desc->flags & O_APPEND);
 }
 
+bool get_fd_is_readable_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    if (!fd_entry || !fd_entry->desc) {
+        return false;
+    }
+    int flags = fd_entry->desc->flags & O_ACCMODE;
+    return flags == O_RDONLY || flags == O_RDWR;
+}
+
+bool get_fd_is_writable_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    if (!fd_entry || !fd_entry->desc) {
+        return false;
+    }
+    int flags = fd_entry->desc->flags & O_ACCMODE;
+    return flags == O_WRONLY || flags == O_RDWR;
+}
+
 void init_fd_entry_impl(int fd, int real_fd, int flags, linux_mode_t mode, const char *path) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];

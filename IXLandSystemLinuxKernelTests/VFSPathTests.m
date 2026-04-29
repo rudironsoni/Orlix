@@ -1772,4 +1772,204 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     close(fd);
 }
 
+/* ============================================================================
+ * FD ACCESS MODE TESTS
+ * ============================================================================ */
+
+- (void)testReadDevNullWriteOnlyFdReturnsBadf {
+    int fd = open("/dev/null", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    errno = 0;
+    ssize_t n = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(n, -1, @"read on write-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"read on write-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testReadDevZeroWriteOnlyFdReturnsBadf {
+    int fd = open("/dev/zero", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    errno = 0;
+    ssize_t n = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(n, -1, @"read on write-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"read on write-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testWriteDevNullReadOnlyFdReturnsBadf {
+    int fd = open("/dev/null", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = write(fd, "hello", 5);
+    XCTAssertEqual(n, -1, @"write on read-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"write on read-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testWriteDevZeroReadOnlyFdReturnsBadf {
+    int fd = open("/dev/zero", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/zero, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = write(fd, "hello", 5);
+    XCTAssertEqual(n, -1, @"write on read-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"write on read-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testWriteDevUrandomReadOnlyFdReturnsBadf {
+    int fd = open("/dev/urandom", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/urandom, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = write(fd, "hello", 5);
+    XCTAssertEqual(n, -1, @"write on read-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"write on read-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testOpenProcSelfFdinfoWriteOnlyReturnsAcces {
+    /* Opening proc files write-only should fail at open time */
+    errno = 0;
+    int fd = open("/proc/self/fdinfo/0", O_WRONLY);
+    XCTAssertEqual(fd, -1, @"open(/proc/self/fdinfo/0, O_WRONLY) should fail");
+    XCTAssertEqual(errno, EACCES, @"open write-only on proc file should set EACCES");
+}
+
+- (void)testWriteProcSelfFdinfoReadOnlyFdReturnsBadf {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = write(fd, "hello", 5);
+    XCTAssertEqual(n, -1, @"write on read-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"write on read-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testPreadProcSelfFdinfoReadOnlyFdWorks {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    errno = 0;
+    ssize_t n = pread(fd, buf, sizeof(buf), 0);
+    XCTAssertTrue(n > 0, @"pread on readable fd should succeed");
+
+    close(fd);
+}
+
+- (void)testPreadDevNullWriteOnlyFdReturnsBadf {
+    int fd = open("/dev/null", O_WRONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_WRONLY) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    errno = 0;
+    ssize_t n = pread(fd, buf, sizeof(buf), 0);
+    XCTAssertEqual(n, -1, @"pread on write-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"pread on write-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testPwriteDevNullReadOnlyFdReturnsBadf {
+    int fd = open("/dev/null", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/dev/null, O_RDONLY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = pwrite(fd, "hello", 5, 0);
+    XCTAssertEqual(n, -1, @"pwrite on read-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"pwrite on read-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testPwriteProcSelfFdinfoReadOnlyFdDoesNotHostFallback {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = pwrite(fd, "hello", 5, 0);
+    /* Should fail with EBADF (access mode) not with EBADF from host fallback on -1 fd */
+    XCTAssertEqual(n, -1, @"pwrite on read-only fd should return -1");
+    XCTAssertEqual(errno, EBADF, @"pwrite on read-only fd should set EBADF");
+
+    close(fd);
+}
+
+- (void)testReadSyntheticDirectoryReturnsEisdir {
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    errno = 0;
+    ssize_t n = read(fd, buf, sizeof(buf));
+    XCTAssertEqual(n, -1, @"read on directory should return -1");
+    XCTAssertEqual(errno, EISDIR, @"read on directory should set EISDIR");
+
+    close(fd);
+}
+
+- (void)testWriteSyntheticDirectoryReturnsEisdir {
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = write(fd, "hello", 5);
+    XCTAssertEqual(n, -1, @"write on directory should return -1");
+    XCTAssertEqual(errno, EISDIR, @"write on directory should set EISDIR");
+
+    close(fd);
+}
+
+- (void)testPwriteSyntheticDirectoryReturnsEisdir {
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = pwrite(fd, "hello", 5, 0);
+    XCTAssertEqual(n, -1, @"pwrite on directory should return -1");
+    XCTAssertEqual(errno, EISDIR, @"pwrite on directory should set EISDIR");
+
+    close(fd);
+}
+
+- (void)testPreadSyntheticDirectoryReturnsEisdir {
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    errno = 0;
+    ssize_t n = pread(fd, buf, sizeof(buf), 0);
+    XCTAssertEqual(n, -1, @"pread on directory should return -1");
+    XCTAssertEqual(errno, EISDIR, @"pread on directory should set EISDIR");
+
+    close(fd);
+}
+
 @end

@@ -40,6 +40,20 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         return -1;
     }
 
+    /* Directory check comes before access mode (EISDIR is more specific) */
+    if (get_fd_is_synthetic_dir_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EISDIR;
+        return -1;
+    }
+
+    /* Enforce read access mode before any dispatch */
+    if (!get_fd_is_readable_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EBADF;
+        return -1;
+    }
+
     if (get_fd_is_synthetic_dev_impl(entry)) {
         synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
@@ -67,12 +81,6 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
             return pty_read_master_impl(pty_index, buf, count, nonblock);
         }
         return pty_read_slave_impl(pty_index, buf, count, nonblock);
-    }
-
-    if (get_fd_is_synthetic_dir_impl(entry)) {
-        put_fd_entry_impl(entry);
-        errno = EISDIR;
-        return -1;
     }
 
     if (get_fd_is_synthetic_proc_file_impl(entry)) {
@@ -154,6 +162,20 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
         return -1;
     }
 
+    /* Directory check comes before access mode (EISDIR is more specific) */
+    if (get_fd_is_synthetic_dir_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EISDIR;
+        return -1;
+    }
+
+    /* Enforce write access mode before any dispatch */
+    if (!get_fd_is_writable_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EBADF;
+        return -1;
+    }
+
     if (get_fd_is_synthetic_dev_impl(entry)) {
         synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
@@ -176,12 +198,6 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
         }
 
         return pty_write_slave_impl(pty_index, buf, count, nonblock);
-    }
-
-    if (get_fd_is_synthetic_dir_impl(entry)) {
-        put_fd_entry_impl(entry);
-        errno = EISDIR;
-        return -1;
     }
 
     if (get_fd_is_synthetic_proc_file_impl(entry)) {
@@ -285,9 +301,17 @@ ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
         return -1;
     }
 
+    /* Directory check comes before access mode (EISDIR is more specific) */
     if (get_fd_is_synthetic_dir_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = EISDIR;
+        return -1;
+    }
+
+    /* Enforce read access mode before any dispatch */
+    if (!get_fd_is_readable_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EBADF;
         return -1;
     }
 
@@ -348,9 +372,37 @@ ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset) {
         return -1;
     }
 
+    /* Directory check comes before access mode (EISDIR is more specific) */
     if (get_fd_is_synthetic_dir_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = EISDIR;
+        return -1;
+    }
+
+    /* Enforce write access mode before any dispatch */
+    if (!get_fd_is_writable_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EBADF;
+        return -1;
+    }
+
+    /* Synthetic proc files are read-only */
+    if (get_fd_is_synthetic_proc_file_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* Synthetic devices accept writes without host fallback */
+    if (get_fd_is_synthetic_dev_impl(entry)) {
+        put_fd_entry_impl(entry);
+        return (ssize_t)count;
+    }
+
+    /* PTY writes handled separately */
+    if (get_fd_is_synthetic_pty_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
         return -1;
     }
 

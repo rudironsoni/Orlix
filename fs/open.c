@@ -95,7 +95,12 @@ return -1;
 init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATUS);
 return fd;
 }
-if (proc_class == PROC_SELF_FDINFO_FILE) {
+        if (proc_class == PROC_SELF_FDINFO_FILE) {
+            /* Proc files are read-only; reject write-only or read-write open attempts */
+            if ((flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR) {
+                errno = EACCES;
+                return -1;
+            }
             const char *fd_str = resolved_path + 18;
             char *endptr;
             long fd_num = strtol(fd_str, &endptr, 10);
@@ -271,6 +276,11 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
             return fd;
         }
         if (proc_class == PROC_SELF_FDINFO_FILE) {
+            /* Proc files are read-only; reject write-only or read-write open attempts */
+            if ((flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR) {
+                errno = EACCES;
+                return -1;
+            }
             const char *fd_str = resolved_path + 18;
             char *endptr;
             long fd_num = strtol(fd_str, &endptr, 10);

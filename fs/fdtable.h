@@ -86,6 +86,8 @@ void set_fd_descriptor_flags_impl(fd_entry_t *entry, int flags);
 linux_off_t get_fd_offset_impl(fd_entry_t *entry);
 void set_fd_offset_impl(fd_entry_t *entry, linux_off_t offset);
 bool get_fd_is_append_impl(fd_entry_t *entry);
+bool get_fd_is_readable_impl(void *entry);
+bool get_fd_is_writable_impl(void *entry);
 int clone_fd_entry_impl(int oldfd, int minfd, bool cloexec);
 int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec);
 
