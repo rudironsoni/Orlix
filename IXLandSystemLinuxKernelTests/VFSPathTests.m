@@ -31,6 +31,7 @@
 #include "fs/path.h"
 #include "kernel/task.h"
 #include "kernel/signal.h"
+#include "kernel/init.h"
 #include "runtime/native/registry.h"
 
 /* Linux UAPI test support - semantic helpers only */
@@ -63,6 +64,10 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 
 - (void)setUp {
     [super setUp];
+    /* Ensure kernel is booted for VFS operations that use current task */
+    int ret = start_kernel();
+    XCTAssertEqual(ret, 0, @"start_kernel must succeed before LinuxKernel VFS tests");
+    XCTAssertTrue(kernel_is_booted(), @"kernel must be booted before LinuxKernel VFS tests");
     /* Clean up any lingering file descriptors using owner close_impl */
     for (int fd = 3; fd < 256; fd++) {
         close_impl(fd);
@@ -498,10 +503,9 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
  * ============================================================================ */
 
 - (void)testVfsFstatatSupportsAtFdcwd {
-    struct linux_stat st;
-    int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, 0);
-
-    XCTAssertEqual(ret, 0, @"vfs_fstatat with AT_FDCWD should succeed");
+    extern int vfs_contract_fstatat_at_fdcwd(void);
+    XCTAssertEqual(vfs_contract_fstatat_at_fdcwd(), 0,
+                   @"vfs_fstatat with AT_FDCWD should succeed");
 }
 
 - (void)testVfsFstatatSupportsSymlinkNoFollow {

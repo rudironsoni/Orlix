@@ -329,7 +329,7 @@ static int vfs_join_backing_root_for_route(const struct vfs_route_entry *route,
     }
 
     total_len = root_len + suffklen;
-    if (total_len >= host_path_len) {
+    if (total_len + 1 > host_path_len) {
         return -ENAMETOOLONG;
     }
 
@@ -916,10 +916,7 @@ int vfs_stat_path(const char *pathname, struct linux_stat *statbuf) {
     if (vfs_path_is_synthetic(pathname)) {
         return -ENOENT;
     }
-    if (host_stat_impl(pathname, statbuf) != 0) {
-        return -errno;
-    }
-    return 0;
+    return host_stat_impl(pathname, statbuf);
 }
 
 int vfs_lstat(const char *pathname, struct linux_stat *statbuf) {
@@ -929,10 +926,7 @@ int vfs_lstat(const char *pathname, struct linux_stat *statbuf) {
     if (vfs_path_is_synthetic(pathname)) {
         return -ENOENT;
     }
-    if (host_lstat_impl(pathname, statbuf) != 0) {
-        return -errno;
-    }
-    return 0;
+    return host_lstat_impl(pathname, statbuf);
 }
 
 proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
@@ -1501,7 +1495,8 @@ int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int
         return -ENOENT;
     }
 
-    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    /* Translate the resolved virtual path to host backing path */
+    ret = vfs_join_host_root(resolved_virtual, translated_path, sizeof(translated_path));
     if (ret != 0) {
         return ret;
     }

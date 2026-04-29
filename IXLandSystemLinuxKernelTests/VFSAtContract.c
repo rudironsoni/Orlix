@@ -5,10 +5,15 @@
  * Uses canonical Linux names directly.
  */
 
+#include <asm-generic/errno.h>
 #include <linux/fcntl.h>
-#include <unistd.h>
 
 #include "fs/vfs.h"
+
+/* Access mode constants - defined locally to avoid Darwin <unistd.h> */
+#ifndef X_OK
+#define X_OK 1
+#endif
 
 /* Contract: vfs_fstatat supports AT_FDCWD */
 int vfs_contract_fstatat_at_fdcwd(void) {
@@ -36,4 +41,21 @@ int vfs_contract_faccessat_eaccess_returns_enotsup(void) {
 /* Contract: vfs_faccessat reports ENOTSUP for AT_SYMLINK_NOFOLLOW */
 int vfs_contract_faccessat_symlink_nofollow_returns_enotsup(void) {
     return vfs_faccessat(AT_FDCWD, "/etc", X_OK, AT_SYMLINK_NOFOLLOW);
+}
+
+/* Diagnostic: prove stat works via translate + stat_path */
+int vfs_contract_probe_stat_via_translate(void) {
+    char host_path[4096];
+    int ret;
+
+    /* Step 1: Translate virtual to host path */
+    ret = vfs_translate_path_at(AT_FDCWD, "/etc/passwd", host_path, sizeof(host_path));
+    if (ret != 0) {
+        return -1000 + ret;
+    }
+
+    /* Step 2: Stat the host path */
+    struct linux_stat st;
+    ret = vfs_stat_path(host_path, &st);
+    return ret;
 }
