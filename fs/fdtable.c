@@ -687,6 +687,10 @@ void init_fd_entry_impl(int fd, int real_fd, int flags, linux_mode_t mode, const
     fs_mutex_unlock(&entry->lock);
 }
 
+void init_host_dirfd_entry_impl(int fd, int real_fd, linux_mode_t mode, const char *path) {
+    init_fd_entry_impl(fd, real_fd, O_RDONLY | O_DIRECTORY, mode, path);
+}
+
 int clone_fd_entry_impl(int oldfd, int minfd, bool cloexec) {
     int newfd;
     file_init_impl();
@@ -778,7 +782,7 @@ void init_synthetic_fd_entry_impl(int fd, int flags, linux_mode_t mode, const ch
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);
-    entry->desc = alloc_synthetic_subdir_fd_description(flags, mode, path, SYNTHETIC_DIR_GENERIC);
+    entry->desc = alloc_synthetic_subdir_fd_description(flags, mode, path, SYNTHETIC_DIR_ROOT);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
     fs_mutex_unlock(&entry->lock);
 }

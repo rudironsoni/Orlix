@@ -168,22 +168,13 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
         return -1;
     }
 
-    if ((flags & AT_RENAME_WHITEOUT) != 0) {
+    if ((flags & (AT_RENAME_EXCHANGE | AT_RENAME_WHITEOUT)) != 0) {
         errno = EOPNOTSUPP;
-        return -1;
-    }
-
-    if ((flags & AT_RENAME_NOREPLACE) != 0 && (flags & AT_RENAME_EXCHANGE) != 0) {
-        errno = EINVAL;
         return -1;
     }
 
     if ((flags & AT_RENAME_NOREPLACE) != 0) {
         host_flags |= RENAME_EXCL;
-    }
-
-    if ((flags & AT_RENAME_EXCHANGE) != 0) {
-        host_flags |= RENAME_SWAP;
     }
 
     return rename_apply_host_operation(resolved_old, resolved_new, translated_old, translated_new, host_flags);

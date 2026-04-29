@@ -16,6 +16,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "include/ixland/linux_uapi_constants.h"
+#include "fs/fdtable.h"
+
 /* ============================================================================
  * Signal test helpers (Darwin implementation)
  * ============================================================================ */
@@ -71,7 +74,11 @@ int ixland_test_fcntl_dupfd(int fd, int min_fd) {
 }
 
 int ixland_test_fcntl_dupfd_cloexec(int fd, int min_fd) {
-    return fcntl(fd, F_DUPFD_CLOEXEC, min_fd);
+    return fcntl(fd, IX_F_DUPFD_CLOEXEC, min_fd);
+}
+
+void ixland_test_init_host_dirfd_entry(int dirfd, int real_fd, const char *path) {
+    init_host_dirfd_entry_impl(dirfd, real_fd, 0755, path);
 }
 
 int ixland_test_fcntl_getfd(int fd) {

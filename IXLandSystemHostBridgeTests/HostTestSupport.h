@@ -40,6 +40,9 @@ int ixland_test_fcntl_dupfd(int fd, int min_fd);
 /* Duplicate fd with FD_CLOEXEC set, returns new fd or -1 on error */
 int ixland_test_fcntl_dupfd_cloexec(int fd, int min_fd);
 
+/* Seed a host-backed directory entry using Linux-shaped flags */
+void ixland_test_init_host_dirfd_entry(int dirfd, int real_fd, const char *path);
+
 /* Get fd flags, returns flags or -1 on error */
 int ixland_test_fcntl_getfd(int fd);
 

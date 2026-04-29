@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "internal/ios/fs/backing_io.h"
+#include "internal/ios/fs/path_host.h"
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
 #include "kernel/task.h"
@@ -115,6 +116,26 @@ static void vfs_test_seed_linux_file(const char *path) {
 
 @implementation VFSPathHostBridgeTests
 
+- (void)testHostStatMissingPathReturnsLinuxEnoent_HostBacked {
+    struct linux_stat st;
+    int ret = host_stat_impl("/definitely/missing/ixland-host-stat", &st);
+
+    XCTAssertEqual(ret, -ENOENT, @"host_stat_impl should return Linux -ENOENT for missing path");
+}
+
+- (void)testHostLstatMissingPathReturnsLinuxEnoent_HostBacked {
+    struct linux_stat st;
+    int ret = host_lstat_impl("/definitely/missing/ixland-host-lstat", &st);
+
+    XCTAssertEqual(ret, -ENOENT, @"host_lstat_impl should return Linux -ENOENT for missing path");
+}
+
+- (void)testHostAccessMissingPathReturnsLinuxEnoent_HostBacked {
+    int ret = host_access_impl("/definitely/missing/ixland-host-access", F_OK);
+
+    XCTAssertEqual(ret, -ENOENT, @"host_access_impl should return Linux -ENOENT for missing path");
+}
+
 - (void)testVirtualEtcPasswdExists_HostBacked {
     char host_path[MAX_PATH];
     int ret = vfs_translate_path("/etc/passwd", host_path, sizeof(host_path));
@@ -147,7 +168,7 @@ static void vfs_test_seed_linux_file(const char *path) {
         return;
     }
 
-    init_fd_entry_impl(dirfd, real_fd, O_RDONLY | O_DIRECTORY, 0755, "/tmp/translate-dirfd");
+    ixland_test_init_host_dirfd_entry(dirfd, real_fd, "/tmp/translate-dirfd");
 
     XCTAssertEqual(vfs_translate_path_at(dirfd, "file", host_path, sizeof(host_path)), 0,
                    @"relative path should resolve from dirfd");

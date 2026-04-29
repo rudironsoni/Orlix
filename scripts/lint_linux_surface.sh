@@ -228,7 +228,17 @@ fi
 echo "   ✓ No broad bridge bag usage in Linux-facing tests"
 
 echo ""
-echo "=== Check 17: Darwin S_IS* used as Linux proof ==="
+echo "=== Check 17: Broken host syscall errno rewriting ==="
+BROKEN_HOST_ERRNO=$(rg -n 'errno[[:space:]]*=[[:space:]]*-ret' internal/ios/fs/path_host.c 2>/dev/null || true)
+if [ -n "$BROKEN_HOST_ERRNO" ]; then
+    echo "FAIL: Broken host syscall errno rewriting found:"
+    echo "$BROKEN_HOST_ERRNO"
+    exit 1
+fi
+echo "   ✓ No broken host syscall errno rewriting"
+
+echo ""
+echo "=== Check 18: Darwin S_IS* used as Linux proof ==="
 DARWIN_STAT=$(rg -n '\bS_ISDIR\s*\(|\bS_ISLNK\s*\(|\bS_ISREG\s*\(|\bS_ISCHR\s*\(' IXLandSystemLinuxKernelTests/*.m IXLandSystemHostBridgeTests/*.m 2>/dev/null | rg -v 'LinuxUAPITestSupport' || true)
 if [ -n "$DARWIN_STAT" ]; then
     echo "FAIL: Darwin S_IS* macros used as Linux proof in tests:"

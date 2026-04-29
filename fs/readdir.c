@@ -101,6 +101,11 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
 
     synthetic_dir_class_t dir_class = get_fd_synthetic_dir_class_impl(entry);
 
+    if (dir_class == SYNTHETIC_DIR_GENERIC) {
+        errno = ENOTSUP;
+        return -1;
+    }
+
     if (dir_class == SYNTHETIC_DIR_PROC_SELF) {
         static const struct {
             const char *name;

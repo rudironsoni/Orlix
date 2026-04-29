@@ -91,9 +91,11 @@ int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec);
 
 /* Initialize/clone fd entries */
 void init_fd_entry_impl(int fd, int real_fd, int flags, linux_mode_t mode, const char *path);
+void init_host_dirfd_entry_impl(int fd, int real_fd, linux_mode_t mode, const char *path);
 
 enum synthetic_dir_class {
     SYNTHETIC_DIR_GENERIC = 0,
+    SYNTHETIC_DIR_ROOT,
     SYNTHETIC_DIR_PROC_SELF,
     SYNTHETIC_DIR_PROC_SELF_FD,
     SYNTHETIC_DIR_PROC_SELF_FDINFO

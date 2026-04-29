@@ -100,7 +100,6 @@ int host_stat_impl(const char *path, struct linux_stat *statbuf)
         translate_stat_to_linux(&darwin_stat, statbuf);
         return 0;
     }
-    errno = -ret;
     return map_darwin_errno_to_linux(errno);
 }
 
@@ -112,7 +111,6 @@ int host_lstat_impl(const char *path, struct linux_stat *statbuf)
         translate_stat_to_linux(&darwin_stat, statbuf);
         return 0;
     }
-    errno = -ret;
     return map_darwin_errno_to_linux(errno);
 }
 
@@ -122,7 +120,6 @@ int host_access_impl(const char *path, int mode)
     if (ret == 0) {
         return 0;
     }
-    errno = -ret;
     return map_darwin_errno_to_linux(errno);
 }
 
@@ -135,39 +132,39 @@ int host_renameatx_np_impl(int fromfd, const char *from, int tofd, const char *t
 /* Directory operations */
 int host_mkdir_impl(const char *pathname, uint32_t mode)
 {
-    return mkdir(pathname, (mode_t)mode);
+    return (int)syscall(SYS_mkdir, pathname, (mode_t)mode);
 }
 
 int host_rmdir_impl(const char *pathname)
 {
-    return rmdir(pathname);
+    return (int)syscall(SYS_rmdir, pathname);
 }
 
 /* File operations */
 int host_unlink_impl(const char *pathname)
 {
-    return unlink(pathname);
+    return (int)syscall(SYS_unlink, pathname);
 }
 
 int host_link_impl(const char *oldpath, const char *newpath)
 {
-    return link(oldpath, newpath);
+    return (int)syscall(SYS_link, oldpath, newpath);
 }
 
 int host_symlink_impl(const char *target, const char *linkpath)
 {
-    return symlink(target, linkpath);
+    return (int)syscall(SYS_symlink, target, linkpath);
 }
 
 ssize_t host_readlink_impl(const char *pathname, char *buf, size_t bufsiz)
 {
-    return readlink(pathname, buf, bufsiz);
+    return (ssize_t)syscall(SYS_readlink, pathname, buf, bufsiz);
 }
 
 /* Fchdir */
 int host_fchdir_impl(int fd)
 {
-    return fchdir(fd);
+    return (int)syscall(SYS_fchdir, fd);
 }
 
 #pragma clang diagnostic pop

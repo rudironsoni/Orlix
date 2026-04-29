@@ -696,7 +696,7 @@ int vfs_getcwd_path_task(struct fs_struct *fs, char *vpath, size_t vpath_len) {
 int vfs_resolve_virtual_path_at(int dirfd, const char *vpath, char *resolved_vpath,
                                 size_t resolved_vpath_len) {
     struct task_struct *task;
-    struct fs_struct *fs;
+    struct fs_struct *fs = NULL;
     char dir_virtual_path[MAX_PATH];
     char joined_virtual_path[MAX_PATH];
     void *entry;
@@ -706,13 +706,11 @@ int vfs_resolve_virtual_path_at(int dirfd, const char *vpath, char *resolved_vpa
         return -EINVAL;
     }
 
-    task = get_current();
-    if (!task) {
-        return -ESRCH;
-    }
-
-    fs = task->fs;
     if (vpath[0] == '/' || dirfd == AT_FDCWD) {
+        task = get_current();
+        if (task) {
+            fs = task->fs;
+        }
         return vfs_resolve_virtual_path_task(vpath, resolved_vpath, resolved_vpath_len, fs);
     }
 

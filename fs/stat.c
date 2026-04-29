@@ -10,6 +10,7 @@
 #include "fdtable.h"
 #include "internal/ios/fs/sync.h"
 #include "internal/ios/fs/file_io_host.h"
+#include "internal/ios/fs/path_host.h"
 #include "vfs.h"
 
 #ifndef MAX_PATH
@@ -33,7 +34,12 @@ int stat_impl(const char *pathname, struct linux_stat *statbuf) {
         return 0;
     }
 
-    return host_stat_impl(pathname, statbuf);
+    ret = host_stat_impl(pathname, statbuf);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int fstat_impl(int fd, struct linux_stat *statbuf) {
@@ -84,7 +90,7 @@ int lstat_impl(const char *pathname, struct linux_stat *statbuf) {
         return 0;
     }
 
-    ret = vfs_lstat(pathname, statbuf);
+    ret = host_lstat_impl(pathname, statbuf);
     if (ret != 0) {
         errno = -ret;
         return -1;
