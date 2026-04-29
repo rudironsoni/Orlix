@@ -1343,10 +1343,7 @@ int vfs_access(const char *pathname, int mode) {
     if (vfs_path_is_synthetic(pathname)) {
         return -ENOENT;
     }
-    if (host_access_impl(pathname, mode) != 0) {
-        return -errno;
-    }
-    return 0;
+    return host_access_impl(pathname, mode);
 }
 
 int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {

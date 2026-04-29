@@ -43,19 +43,3 @@ int vfs_contract_faccessat_symlink_nofollow_returns_enotsup(void) {
     return vfs_faccessat(AT_FDCWD, "/etc", X_OK, AT_SYMLINK_NOFOLLOW);
 }
 
-/* Diagnostic: prove stat works via translate + stat_path */
-int vfs_contract_probe_stat_via_translate(void) {
-    char host_path[4096];
-    int ret;
-
-    /* Step 1: Translate virtual to host path */
-    ret = vfs_translate_path_at(AT_FDCWD, "/etc/passwd", host_path, sizeof(host_path));
-    if (ret != 0) {
-        return -1000 + ret;
-    }
-
-    /* Step 2: Stat the host path */
-    struct linux_stat st;
-    ret = vfs_stat_path(host_path, &st);
-    return ret;
-}

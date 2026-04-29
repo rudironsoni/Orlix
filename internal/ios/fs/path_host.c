@@ -15,9 +15,13 @@
  * with Linux ABI values, so we use them directly in bridge code */
 #include <sys/stat.h>
 #include <sys/stdio.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 /* Linux errno definitions for mapping Darwin errno to Linux errno */
 #define LINUX_EPERM        1
@@ -60,7 +64,7 @@ static int map_darwin_errno_to_linux(int darwin_errno) {
         case ENOTEMPTY: return -LINUX_ENOTEMPTY;
         case ELOOP: return -LINUX_ELOOP;
         case EOPNOTSUPP: return -LINUX_EOPNOTSUPP;
-        default: return -LINUX_EINVAL;
+        default: return -LINUX_EIO;
     }
 }
 
@@ -91,31 +95,34 @@ static void translate_stat_to_linux(const struct stat *darwin_stat, struct linux
 int host_stat_impl(const char *path, struct linux_stat *statbuf)
 {
     struct stat darwin_stat;
-    int ret = stat(path, &darwin_stat);
+    int ret = (int)syscall(SYS_stat64, path, &darwin_stat);
     if (ret == 0) {
         translate_stat_to_linux(&darwin_stat, statbuf);
         return 0;
     }
+    errno = -ret;
     return map_darwin_errno_to_linux(errno);
 }
 
 int host_lstat_impl(const char *path, struct linux_stat *statbuf)
 {
     struct stat darwin_stat;
-    int ret = lstat(path, &darwin_stat);
+    int ret = (int)syscall(SYS_lstat64, path, &darwin_stat);
     if (ret == 0) {
         translate_stat_to_linux(&darwin_stat, statbuf);
         return 0;
     }
+    errno = -ret;
     return map_darwin_errno_to_linux(errno);
 }
 
 int host_access_impl(const char *path, int mode)
 {
-    int ret = access(path, mode);
+    int ret = (int)syscall(SYS_access, path, mode);
     if (ret == 0) {
         return 0;
     }
+    errno = -ret;
     return map_darwin_errno_to_linux(errno);
 }
 
@@ -162,3 +169,5 @@ int host_fchdir_impl(int fd)
 {
     return fchdir(fd);
 }
+
+#pragma clang diagnostic pop
