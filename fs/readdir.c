@@ -78,6 +78,13 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
         cursor = 0;
     }
 
+    /* Check unsupported class BEFORE writing any records */
+    synthetic_dir_class_t dir_class = get_fd_synthetic_dir_class_impl(entry);
+    if (dir_class == SYNTHETIC_DIR_GENERIC) {
+        errno = ENOTSUP;
+        return -1;
+    }
+
     size_t written = 0;
     int rc;
 
@@ -97,13 +104,6 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             goto done;
         }
         cursor = 2;
-    }
-
-    synthetic_dir_class_t dir_class = get_fd_synthetic_dir_class_impl(entry);
-
-    if (dir_class == SYNTHETIC_DIR_GENERIC) {
-        errno = ENOTSUP;
-        return -1;
     }
 
     if (dir_class == SYNTHETIC_DIR_PROC_SELF) {
@@ -285,7 +285,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
 
     set_fd_offset_impl(entry, latest_offset);
     closedir(dp);
-    host_close_impl(dup_fd);
+    /* closedir closes dup_fd; do NOT call host_close_impl here */
     put_fd_entry_impl(entry);
     return (ssize_t)written;
 }

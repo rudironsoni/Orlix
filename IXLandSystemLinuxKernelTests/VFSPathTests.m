@@ -1490,4 +1490,286 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     XCTAssertEqual(errno, EINVAL, @"path_resolve should set EINVAL for zero buffer size");
 }
 
+/* ============================================================================
+ * SYNTHETIC FD READ/PREAD/LSEEK/GETDENTS64 TESTS
+ * ============================================================================ */
+
+- (void)testGetdents64HostBackedDirectoryDoesNotCorruptFdLifecycle {
+    /* Open a real host-backed directory */
+    int fd = open("/etc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/etc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    /* Read directory entries */
+    union { char storage[4096]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    ssize_t nread = getdents64(fd, buffer, sizeof(aligned.storage));
+    XCTAssertTrue(nread > 0, @"getdents64(/etc) should return > 0 bytes");
+
+    /* Close the directory */
+    close(fd);
+
+    /* Open another file - should not get EBADF from fd reuse corruption */
+    int fd2 = open("/etc/passwd", O_RDONLY);
+    XCTAssertTrue(fd2 >= 0, @"open(/etc/passwd) should succeed after getdents64/close cycle");
+    if (fd2 >= 0) {
+        char buf[64];
+        ssize_t n = read(fd2, buf, sizeof(buf));
+        XCTAssertTrue(n >= 0, @"read should succeed on reopened fd");
+        close(fd2);
+    }
+}
+
+- (void)testGetdents64ProcSelfFdListsOpenFd {
+    /* Create a known fd to be listed */
+    int test_fd = open("/dev/null", O_RDONLY);
+    XCTAssertTrue(test_fd >= 0, @"open(/dev/null) should succeed");
+    if (test_fd < 0) return;
+
+    int proc_fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(proc_fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
+    if (proc_fd < 0) {
+        close(test_fd);
+        return;
+    }
+
+    union { char storage[4096]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    ssize_t nread = getdents64(proc_fd, buffer, sizeof(aligned.storage));
+    XCTAssertTrue(nread > 0, @"getdents64(/proc/self/fd) should return > 0 bytes");
+
+    /* Look for the test fd entry */
+    bool found_test_fd = false;
+    size_t pos = 0;
+    char test_fd_name[16];
+    /* manual int-to-string without format functions */
+    {
+        int n = test_fd;
+        char tmp[16];
+        int p = 0;
+        if (n == 0) {
+            tmp[p++] = '0';
+        } else {
+            while (n > 0) {
+                tmp[p++] = (char)('0' + (n % 10));
+                n /= 10;
+            }
+        }
+        for (int j = 0; j < p; j++) {
+            test_fd_name[j] = tmp[p - 1 - j];
+        }
+        test_fd_name[p] = '\0';
+    }
+
+    while (pos < (size_t)nread) {
+        struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+        if (strcmp(entry->d_name, test_fd_name) == 0) {
+            found_test_fd = true;
+            break;
+        }
+        if (entry->d_reclen == 0) break;
+        pos += entry->d_reclen;
+    }
+
+    XCTAssertTrue(found_test_fd, @"getdents64(/proc/self/fd) should list the open test fd");
+
+    close(proc_fd);
+    close(test_fd);
+}
+
+- (void)testGetdents64ProcSelfFdinfoListsOpenFd {
+    /* Create a known fd to be listed */
+    int test_fd = open("/dev/null", O_RDONLY);
+    XCTAssertTrue(test_fd >= 0, @"open(/dev/null) should succeed");
+    if (test_fd < 0) return;
+
+    int proc_fd = open("/proc/self/fdinfo", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(proc_fd >= 0, @"open(/proc/self/fdinfo, O_DIRECTORY) should succeed");
+    if (proc_fd < 0) {
+        close(test_fd);
+        return;
+    }
+
+    union { char storage[4096]; uint64_t align; } aligned;
+    char *buffer = aligned.storage;
+    memset(buffer, 0, sizeof(aligned));
+
+    ssize_t nread = getdents64(proc_fd, buffer, sizeof(aligned.storage));
+    XCTAssertTrue(nread > 0, @"getdents64(/proc/self/fdinfo) should return > 0 bytes");
+
+    /* Look for the test fd entry */
+    bool found_test_fd = false;
+    size_t pos = 0;
+    char test_fd_name[16];
+    /* manual int-to-string without format functions */
+    {
+        int n = test_fd;
+        char tmp[16];
+        int p = 0;
+        if (n == 0) {
+            tmp[p++] = '0';
+        } else {
+            while (n > 0) {
+                tmp[p++] = (char)('0' + (n % 10));
+                n /= 10;
+            }
+        }
+        for (int j = 0; j < p; j++) {
+            test_fd_name[j] = tmp[p - 1 - j];
+        }
+        test_fd_name[p] = '\0';
+    }
+
+    while (pos < (size_t)nread) {
+        struct linux_dirent64 *entry = (struct linux_dirent64 *)(buffer + pos);
+        if (strcmp(entry->d_name, test_fd_name) == 0) {
+            found_test_fd = true;
+            XCTAssertEqual(entry->d_type, DT_REG, @"fdinfo entries should be regular files");
+            break;
+        }
+        if (entry->d_reclen == 0) break;
+        pos += entry->d_reclen;
+    }
+
+    XCTAssertTrue(found_test_fd, @"getdents64(/proc/self/fdinfo) should list the open test fd");
+
+    close(proc_fd);
+    close(test_fd);
+}
+
+- (void)testReadProcSelfFdinfoAdvancesOffset {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    /* First read should get some content */
+    char buf1[64];
+    memset(buf1, 0, sizeof(buf1));
+    ssize_t n1 = read(fd, buf1, sizeof(buf1));
+    XCTAssertTrue(n1 > 0, @"read should return content from /proc/self/fdinfo/0");
+
+    /* Second read should get EOF since buffer was larger than content */
+    char buf2[64];
+    ssize_t n2 = read(fd, buf2, sizeof(buf2));
+    (void)n2; /* n2 should be 0 (EOF) since fdinfo content is small */
+
+    close(fd);
+}
+
+- (void)testPreadProcSelfFdinfoDoesNotAdvanceOffset {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    /* Read the entire content with read() to determine size */
+    char full_content[4096];
+    ssize_t total = 0;
+    ssize_t n;
+    while ((n = read(fd, full_content + total, sizeof(full_content) - total)) > 0) {
+        total += n;
+    }
+
+    /* Reopen to reset offset */
+    close(fd);
+    fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    if (fd < 0) return;
+
+    /* pread at offset 0 should return same first bytes */
+    char pread_buf[64];
+    memset(pread_buf, 0, sizeof(pread_buf));
+    ssize_t pread_n = pread(fd, pread_buf, sizeof(pread_buf), 0);
+    XCTAssertTrue(pread_n > 0, @"pread at offset 0 should return content");
+
+    /* Now read from current position (should be at 0 since pread doesn't advance) */
+    char read_buf[64];
+    memset(read_buf, 0, sizeof(read_buf));
+    ssize_t read_n = read(fd, read_buf, sizeof(read_buf));
+    XCTAssertTrue(read_n > 0, @"read after pread should return content from offset 0");
+
+    /* Content should match */
+    XCTAssertEqual(memcmp(pread_buf, read_buf, (size_t)(pread_n < read_n ? pread_n : read_n)), 0,
+                   @"pread and read should return same content when fd offset was not advanced");
+
+    close(fd);
+}
+
+- (void)testPreadProcSelfFdinfoOffsetAtEofReturnsZero {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    /* Read full content first to determine size */
+    char content[4096];
+    ssize_t total = 0;
+    ssize_t n;
+    while ((n = read(fd, content + total, sizeof(content) - total)) > 0) {
+        total += n;
+    }
+
+    /* pread at or past EOF should return 0 */
+    char buf[64];
+    ssize_t pread_n = pread(fd, buf, sizeof(buf), total);
+    XCTAssertEqual(pread_n, 0, @"pread at EOF should return 0");
+
+    pread_n = pread(fd, buf, sizeof(buf), total + 100);
+    XCTAssertEqual(pread_n, 0, @"pread past EOF should return 0");
+
+    close(fd);
+}
+
+- (void)testPreadProcSelfFdinfoNullBufferReturnsFault {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    errno = 0;
+    ssize_t n = pread(fd, NULL, 64, 0);
+    XCTAssertEqual(n, -1, @"pread with NULL buffer should return -1");
+    XCTAssertEqual(errno, EFAULT, @"pread with NULL buffer should set EFAULT");
+
+    close(fd);
+}
+
+- (void)testPreadSyntheticDirectoryReturnsDirectoryError {
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY);
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) return;
+
+    char buf[64];
+    errno = 0;
+    ssize_t n = pread(fd, buf, sizeof(buf), 0);
+    XCTAssertEqual(n, -1, @"pread on directory should return -1");
+    XCTAssertEqual(errno, EISDIR, @"pread on directory should set EISDIR");
+
+    close(fd);
+}
+
+- (void)testLseekProcSelfFdinfoPolicyIsExplicit {
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) return;
+
+    /* Current policy: synthetic proc files return ESPIPE for lseek */
+    errno = 0;
+    off_t result = lseek(fd, 0, SEEK_SET);
+    XCTAssertEqual(result, (off_t)-1, @"lseek on /proc/self/fdinfo should return -1");
+    XCTAssertEqual(errno, ESPIPE, @"lseek on synthetic proc file should set ESPIPE");
+
+    errno = 0;
+    result = lseek(fd, 0, SEEK_CUR);
+    XCTAssertEqual(result, (off_t)-1, @"lseek(SEEK_CUR) on /proc/self/fdinfo should return -1");
+    XCTAssertEqual(errno, ESPIPE, @"lseek on synthetic proc file should set ESPIPE");
+
+    errno = 0;
+    result = lseek(fd, 0, SEEK_END);
+    XCTAssertEqual(result, (off_t)-1, @"lseek(SEEK_END) on /proc/self/fdinfo should return -1");
+    XCTAssertEqual(errno, ESPIPE, @"lseek on synthetic proc file should set ESPIPE");
+
+    close(fd);
+}
+
 @end
