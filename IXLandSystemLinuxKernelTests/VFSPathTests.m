@@ -546,6 +546,86 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     close(fd);
 }
 
+- (void)testFstatImplSucceedsForDuplicatedLinuxOwnedFd {
+    struct linux_stat original_st;
+    struct linux_stat duplicate_st;
+    int fd = open("/etc/passwd", O_RDONLY);
+    int dup_fd;
+
+    XCTAssertTrue(fd >= 0, @"open(/etc/passwd) should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    dup_fd = dup(fd);
+    XCTAssertTrue(dup_fd >= 0, @"dup should succeed for Linux-owned fd");
+    if (dup_fd < 0) {
+        close(fd);
+        return;
+    }
+
+    errno = 0;
+    XCTAssertEqual(fstat_impl(fd, &original_st), 0, @"fstat_impl should succeed for original Linux-owned fd");
+    XCTAssertEqual(fstat_impl(dup_fd, &duplicate_st), 0, @"fstat_impl should succeed for duplicated Linux-owned fd");
+    XCTAssertEqual(original_st.st_dev, duplicate_st.st_dev, @"duplicated fds should preserve device identity");
+    XCTAssertEqual(original_st.st_ino, duplicate_st.st_ino, @"duplicated fds should preserve inode identity");
+    XCTAssertEqual(original_st.st_mode, duplicate_st.st_mode, @"duplicated fds should preserve mode bits");
+
+    close(dup_fd);
+    close(fd);
+}
+
+- (void)testFstatImplSucceedsForSyntheticProcRootDirectoryFd {
+    struct linux_stat st;
+    int fd = open("/proc", O_RDONLY | O_DIRECTORY, 0);
+
+    XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    errno = 0;
+    XCTAssertEqual(fstat_impl(fd, &st), 0, @"fstat_impl should succeed for synthetic /proc directory fd");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"synthetic /proc fd should stat as a directory");
+    XCTAssertEqual(st.st_mode & 0777, 0555, @"synthetic /proc fd should preserve synthetic permissions");
+
+    close(fd);
+}
+
+- (void)testFstatImplSucceedsForSyntheticProcSelfFdDirectoryFd {
+    struct linux_stat st;
+    int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY, 0);
+
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    errno = 0;
+    XCTAssertEqual(fstat_impl(fd, &st), 0, @"fstat_impl should succeed for synthetic /proc/self/fd directory fd");
+    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"synthetic /proc/self/fd fd should stat as a directory");
+    XCTAssertEqual(st.st_mode & 0777, 0555, @"synthetic /proc/self/fd fd should preserve synthetic permissions");
+
+    close(fd);
+}
+
+- (void)testFstatImplSucceedsForSyntheticProcSelfFdinfoFileFd {
+    struct linux_stat st;
+    int fd = open("/proc/self/fdinfo/0", O_RDONLY, 0);
+
+    XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    errno = 0;
+    XCTAssertEqual(fstat_impl(fd, &st), 0, @"fstat_impl should succeed for synthetic /proc/self/fdinfo file fd");
+    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"synthetic /proc/self/fdinfo fd should stat as a regular file");
+    XCTAssertEqual(st.st_mode & 0777, 0444, @"synthetic /proc/self/fdinfo fd should preserve synthetic permissions");
+
+    close(fd);
+}
+
 - (void)testSyntheticRootStatSucceeds {
     struct linux_stat st;
 

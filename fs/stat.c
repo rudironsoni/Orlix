@@ -44,6 +44,9 @@ int stat_impl(const char *pathname, struct linux_stat *statbuf) {
 
 int fstat_impl(int fd, struct linux_stat *statbuf) {
     int ret;
+    int real_fd;
+    char path[MAX_PATH];
+    void *entry;
 
     if (!statbuf) {
         errno = EFAULT;
@@ -64,14 +67,30 @@ int fstat_impl(int fd, struct linux_stat *statbuf) {
         return 0;
     }
 
-    void *entry = get_fd_entry_impl(fd);
+    entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
         return -1;
     }
 
-    ret = host_fstat_impl(get_real_fd_impl(entry), statbuf);
+    real_fd = get_real_fd_impl(entry);
+    if (real_fd >= 0) {
+        ret = host_fstat_impl(real_fd, statbuf);
+        put_fd_entry_impl(entry);
+        if (ret != 0) {
+            errno = -ret;
+            return -1;
+        }
+        return 0;
+    }
+
+    ret = get_fd_path_impl(entry, path, sizeof(path));
     put_fd_entry_impl(entry);
+    if (ret != 0) {
+        return -1;
+    }
+
+    ret = vfs_fstatat(AT_FDCWD, path, statbuf, 0);
     if (ret != 0) {
         errno = -ret;
         return -1;
