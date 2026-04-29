@@ -229,13 +229,33 @@ echo "   ✓ No broad bridge bag usage in Linux-facing tests"
 
 echo ""
 echo "=== Check 17: Broken host syscall errno rewriting ==="
-BROKEN_HOST_ERRNO=$(rg -n 'errno[[:space:]]*=[[:space:]]*-ret' internal/ios/fs/path_host.c 2>/dev/null || true)
+BROKEN_HOST_ERRNO=$(rg -n 'errno[[:space:]]*=[[:space:]]*-ret|errno[[:space:]]*=[[:space:]]*\(int\)-ret' internal/ios/fs/path_host.c internal/ios/fs/backing_io.m 2>/dev/null || true)
 if [ -n "$BROKEN_HOST_ERRNO" ]; then
     echo "FAIL: Broken host syscall errno rewriting found:"
     echo "$BROKEN_HOST_ERRNO"
     exit 1
 fi
 echo "   ✓ No broken host syscall errno rewriting"
+
+echo ""
+echo "=== Check 17b: Test Linux UAPI contamination aliases ==="
+TEST_UAPI_CONTAMINATION=$(rg -n 'include/ixland/linux_uapi_constants\.h|\bIX_(AT_|F_)|\bTEST_(AT_|F_)|\bixland_test_uapi_(at_|f_)' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+if [ -n "$TEST_UAPI_CONTAMINATION" ]; then
+    echo "FAIL: Test Linux UAPI contamination aliases found:"
+    echo "$TEST_UAPI_CONTAMINATION"
+    exit 1
+fi
+echo "   ✓ No test Linux UAPI contamination aliases"
+
+echo ""
+echo "=== Check 17c: Unified host_fstat_impl contract ==="
+HOST_FSTAT_CONTRACT=$(rg -n 'host_fstat_impl\s*\([^)]*struct stat\s*\*' internal/ios/fs 2>/dev/null || true)
+if [ -n "$HOST_FSTAT_CONTRACT" ]; then
+    echo "FAIL: host_fstat_impl declared with host struct stat:"
+    echo "$HOST_FSTAT_CONTRACT"
+    exit 1
+fi
+echo "   ✓ host_fstat_impl uses linux_stat contract"
 
 echo ""
 echo "=== Check 18: Darwin S_IS* used as Linux proof ==="

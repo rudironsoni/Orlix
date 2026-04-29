@@ -55,6 +55,7 @@ extern int vfs_discover_persistent_root(char *path, size_t size);
 extern int vfs_discover_cache_root(char *path, size_t size);
 extern int vfs_discover_temp_root(char *path, size_t size);
 extern int stat_impl(const char *path, struct linux_stat *statbuf);
+extern int fstat_impl(int fd, struct linux_stat *statbuf);
 extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 
 @interface VFSPathTests : XCTestCase
@@ -519,6 +520,30 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, INVALID_FLAG_TEST_VALUE);
 
     XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
+}
+
+- (void)testFstatImplReturnsEbadfForInvalidFd {
+    struct linux_stat st;
+
+    errno = 0;
+    XCTAssertEqual(fstat_impl(-1, &st), -1, @"fstat_impl should reject invalid fd");
+    XCTAssertEqual(errno, EBADF, @"fstat_impl should set EBADF for invalid fd");
+}
+
+- (void)testFstatImplSucceedsForLinuxOwnedFd {
+    struct linux_stat st;
+    int fd = open("/etc/passwd", O_RDONLY);
+    XCTAssertTrue(fd >= 0, @"open(/etc/passwd) should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    errno = 0;
+    XCTAssertEqual(fstat_impl(fd, &st), 0, @"fstat_impl should succeed for Linux-owned fd");
+    XCTAssertTrue(st.st_mode != 0, @"fstat_impl should populate mode");
+    XCTAssertTrue(st.st_nlink > 0, @"fstat_impl should populate link count");
+
+    close(fd);
 }
 
 - (void)testSyntheticRootStatSucceeds {

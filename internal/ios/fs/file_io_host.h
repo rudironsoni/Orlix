@@ -10,6 +10,7 @@
 
 /* Include shared stat type definition */
 #include "include/ixland/stat_types.h"
+#include "internal/ios/fs/backing_io_decls.h"
 
 #ifdef __cplusplus
 extern "C" {

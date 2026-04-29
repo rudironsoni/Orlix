@@ -20,53 +20,11 @@
 #include <errno.h>
 #include <string.h>
 
+#include "errno_host.h"
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
-/* Linux errno definitions for mapping Darwin errno to Linux errno */
-#define LINUX_EPERM        1
-#define LINUX_ENOENT       2
-#define LINUX_EIO          5
-#define LINUX_EACCES      13
-#define LINUX_EFAULT      14
-#define LINUX_EEXIST      17
-#define LINUX_ENODEV      19
-#define LINUX_ENOTDIR     20
-#define LINUX_EISDIR      21
-#define LINUX_EINVAL      22
-#define LINUX_ENFILE      23
-#define LINUX_EMFILE      24
-#define LINUX_ENOSPC      28
-#define LINUX_ENAMETOOLONG 36
-#define LINUX_ENOSYS      38
-#define LINUX_ENOTEMPTY   39
-#define LINUX_ELOOP       40
-#define LINUX_EOPNOTSUPP  95
-
-/* Map Darwin errno to Linux errno for VFS boundary */
-static int map_darwin_errno_to_linux(int darwin_errno) {
-    switch (darwin_errno) {
-        case EPERM: return -LINUX_EPERM;
-        case ENOENT: return -LINUX_ENOENT;
-        case EIO: return -LINUX_EIO;
-        case EACCES: return -LINUX_EACCES;
-        case EFAULT: return -LINUX_EFAULT;
-        case EEXIST: return -LINUX_EEXIST;
-        case ENODEV: return -LINUX_ENODEV;
-        case ENOTDIR: return -LINUX_ENOTDIR;
-        case EISDIR: return -LINUX_EISDIR;
-        case EINVAL: return -LINUX_EINVAL;
-        case ENFILE: return -LINUX_ENFILE;
-        case EMFILE: return -LINUX_EMFILE;
-        case ENOSPC: return -LINUX_ENOSPC;
-        case ENAMETOOLONG: return -LINUX_ENAMETOOLONG;
-        case ENOSYS: return -LINUX_ENOSYS;
-        case ENOTEMPTY: return -LINUX_ENOTEMPTY;
-        case ELOOP: return -LINUX_ELOOP;
-        case EOPNOTSUPP: return -LINUX_EOPNOTSUPP;
-        default: return -LINUX_EIO;
-    }
-}
 
 /* Translate Darwin struct stat to Linux struct linux_stat */
 static void translate_stat_to_linux(const struct stat *darwin_stat, struct linux_stat *linux_stat)
@@ -100,7 +58,7 @@ int host_stat_impl(const char *path, struct linux_stat *statbuf)
         translate_stat_to_linux(&darwin_stat, statbuf);
         return 0;
     }
-    return map_darwin_errno_to_linux(errno);
+    return -host_errno_to_linux_errno(errno);
 }
 
 int host_lstat_impl(const char *path, struct linux_stat *statbuf)
@@ -111,7 +69,7 @@ int host_lstat_impl(const char *path, struct linux_stat *statbuf)
         translate_stat_to_linux(&darwin_stat, statbuf);
         return 0;
     }
-    return map_darwin_errno_to_linux(errno);
+    return -host_errno_to_linux_errno(errno);
 }
 
 int host_access_impl(const char *path, int mode)
@@ -120,7 +78,7 @@ int host_access_impl(const char *path, int mode)
     if (ret == 0) {
         return 0;
     }
-    return map_darwin_errno_to_linux(errno);
+    return -host_errno_to_linux_errno(errno);
 }
 
 /* Host rename operation (Darwin renameatx_np) */

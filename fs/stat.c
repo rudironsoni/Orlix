@@ -43,13 +43,11 @@ int stat_impl(const char *pathname, struct linux_stat *statbuf) {
 }
 
 int fstat_impl(int fd, struct linux_stat *statbuf) {
+    int ret;
+
     if (!statbuf) {
         errno = EFAULT;
         return -1;
-    }
-
-    if (host_fstat_impl(fd, statbuf) == 0) {
-        return 0;
     }
 
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
@@ -58,7 +56,12 @@ int fstat_impl(int fd, struct linux_stat *statbuf) {
     }
 
     if (fd <= 2) {
-        return host_fstat_impl(fd, statbuf);
+        ret = host_fstat_impl(fd, statbuf);
+        if (ret != 0) {
+            errno = -ret;
+            return -1;
+        }
+        return 0;
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -67,10 +70,13 @@ int fstat_impl(int fd, struct linux_stat *statbuf) {
         return -1;
     }
 
-    int real_fd = get_real_fd_impl(entry);
-    int result = host_fstat_impl(real_fd, statbuf);
+    ret = host_fstat_impl(get_real_fd_impl(entry), statbuf);
     put_fd_entry_impl(entry);
-    return result;
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int lstat_impl(const char *pathname, struct linux_stat *statbuf) {

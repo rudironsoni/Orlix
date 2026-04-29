@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 /* Forward declarations for types defined elsewhere */
-struct stat;
+struct linux_stat;
 struct iovec;
 struct pollfd;
 struct timespec;
@@ -37,10 +37,10 @@ int vfs_discover_temp_root(char *path, size_t path_len);
 int host_open_impl(const char *path, int flags, linux_mode_t mode);
 int host_close_impl(int fd);
 int host_dup_impl(int fd);
-int host_stat_impl(const char *path, struct stat *statbuf);
-int host_lstat_impl(const char *path, struct stat *statbuf);
+int host_stat_impl(const char *path, struct linux_stat *statbuf);
+int host_lstat_impl(const char *path, struct linux_stat *statbuf);
 int host_access_impl(const char *path, int mode);
-int host_fstat_impl(int fd, struct stat *statbuf);
+int host_fstat_impl(int fd, struct linux_stat *statbuf);
 int64_t host_read_impl(int fd, void *buf, size_t count);
 int64_t host_write_impl(int fd, const void *buf, size_t count);
 linux_off_t host_lseek_impl(int fd, linux_off_t offset, int whence);

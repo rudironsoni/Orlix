@@ -132,7 +132,7 @@ int vfs_discover_temp_root(char *path, size_t path_len);
 int host_open_impl(const char *path, int flags, mode_t mode);
 int host_close_impl(int fd);
 int host_dup_impl(int fd);
-int host_fstat_impl(int fd, struct stat *statbuf);
+int host_fstat_impl(int fd, struct linux_stat *statbuf);
 ssize_t host_read_impl(int fd, void *buf, size_t count);
 ssize_t host_write_impl(int fd, const void *buf, size_t count);
 off_t host_lseek_impl(int fd, off_t offset, int whence);

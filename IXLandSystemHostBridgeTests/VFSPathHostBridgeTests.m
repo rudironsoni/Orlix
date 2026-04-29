@@ -146,6 +146,36 @@ static void vfs_test_seed_linux_file(const char *path) {
     if (fd >= 0) host_close_impl(fd);
 }
 
+- (void)testHostFstatReturnsLinuxEbadfForInvalidFd_HostBacked {
+    struct linux_stat st;
+    int ret = host_fstat_impl(-1, &st);
+
+    XCTAssertEqual(ret, -EBADF, @"host_fstat_impl should return Linux -EBADF for invalid fd");
+}
+
+- (void)testHostFstatTranslatesHostStatForValidFd_HostBacked {
+    char host_path[MAX_PATH];
+    struct linux_stat st;
+    int fd;
+    int ret;
+
+    XCTAssertEqual(vfs_translate_path("/etc/passwd", host_path, sizeof(host_path)), 0,
+                   @"vfs_translate_path for /etc/passwd should succeed");
+
+    fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/passwd should succeed");
+    if (fd < 0) {
+        return;
+    }
+
+    ret = host_fstat_impl(fd, &st);
+    XCTAssertEqual(ret, 0, @"host_fstat_impl should succeed for valid host fd");
+    XCTAssertTrue(st.st_mode != 0, @"host_fstat_impl should populate mode");
+    XCTAssertTrue(st.st_nlink > 0, @"host_fstat_impl should populate link count");
+
+    host_close_impl(fd);
+}
+
 - (void)testVfsTranslatePathAtRelativePathUsesDirfd_HostBacked {
     int real_fd;
     int dirfd;
@@ -168,7 +198,7 @@ static void vfs_test_seed_linux_file(const char *path) {
         return;
     }
 
-    ixland_test_init_host_dirfd_entry(dirfd, real_fd, "/tmp/translate-dirfd");
+    init_host_dirfd_entry_impl(dirfd, real_fd, 0755, "/tmp/translate-dirfd");
 
     XCTAssertEqual(vfs_translate_path_at(dirfd, "file", host_path, sizeof(host_path)), 0,
                    @"relative path should resolve from dirfd");
@@ -418,17 +448,27 @@ static void vfs_test_seed_linux_file(const char *path) {
 }
 
 - (void)testFcntlDupFdCloexecSucceeds_HostBacked {
-    int fd = open("/etc/passwd", O_RDONLY);
-    XCTAssertTrue(fd >= 0, @"open should succeed");
+    char host_path[MAX_PATH];
+    XCTAssertEqual(vfs_translate_path("/etc/passwd", host_path, sizeof(host_path)), 0,
+                   @"path should translate");
+
+    int fd = host_open_impl(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host open should succeed");
     if (fd < 0) return;
 
+    errno = 0;
     int new_fd = ixland_test_fcntl_dupfd_cloexec(fd, 10);
-    XCTAssertTrue(new_fd >= 0, @"Linux F_DUPFD_CLOEXEC should succeed");
+    if (new_fd < 0 && (errno == EINVAL || errno == ENOTSUP)) {
+        host_close_impl(fd);
+        XCTSkip(@"host F_DUPFD_CLOEXEC is unavailable on this simulator runtime");
+    }
+
+    XCTAssertTrue(new_fd >= 0, @"host F_DUPFD_CLOEXEC should succeed when available");
 
     int flags = fcntl(new_fd, F_GETFD);
     XCTAssertTrue((flags & FD_CLOEXEC) != 0, @"duped fd should have FD_CLOEXEC");
 
-    close(fd);
+    host_close_impl(fd);
     if (new_fd >= 0) close(new_fd);
 }
 
