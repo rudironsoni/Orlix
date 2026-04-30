@@ -22,7 +22,48 @@
 #include <stdint.h>
 #include <stdatomic.h>
 
+#include "../include/ixland/linux_abi_constants.h"
 #include "../internal/ios/kernel/sync.h"
+
+#ifdef SIGHUP
+#undef SIGHUP
+#endif
+#ifdef SIGINT
+#undef SIGINT
+#endif
+#ifdef SIGQUIT
+#undef SIGQUIT
+#endif
+#ifdef SIGKILL
+#undef SIGKILL
+#endif
+#ifdef SIGTERM
+#undef SIGTERM
+#endif
+#ifdef SIGCONT
+#undef SIGCONT
+#endif
+#ifdef SIGSTOP
+#undef SIGSTOP
+#endif
+#ifdef SIGTSTP
+#undef SIGTSTP
+#endif
+#ifdef SIGTTIN
+#undef SIGTTIN
+#endif
+#ifdef SIGTTOU
+#undef SIGTTOU
+#endif
+#ifdef SIGWINCH
+#undef SIGWINCH
+#endif
+#ifdef SIG_DFL
+#undef SIG_DFL
+#endif
+#ifdef SIG_IGN
+#undef SIG_IGN
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,6 +78,23 @@ struct task_struct;
 
 /* Signal handler type - private internal */
 typedef void (*sighandler_t)(int);
+
+enum {
+    SIGHUP = IX_SIGHUP,
+    SIGINT = IX_SIGINT,
+    SIGQUIT = IX_SIGQUIT,
+    SIGKILL = IX_SIGKILL,
+    SIGTERM = IX_SIGTERM,
+    SIGCONT = IX_SIGCONT,
+    SIGSTOP = IX_SIGSTOP,
+    SIGTSTP = IX_SIGTSTP,
+    SIGTTIN = IX_SIGTTIN,
+    SIGTTOU = IX_SIGTTOU,
+    SIGWINCH = IX_SIGWINCH,
+};
+
+static const sighandler_t SIG_DFL = (sighandler_t)0;
+static const sighandler_t SIG_IGN = (sighandler_t)1;
 
 struct signal_mask_bits {
     uint64_t sig[KERNEL_SIG_NUM_WORDS];
@@ -119,6 +177,7 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig);
 
 /* Check if signal is blocked */
 bool signal_is_blocked(const struct task_struct *task, int32_t sig);
+bool signal_is_pending(const struct task_struct *task, int32_t sig);
 
 /* ============================================================================
  * INTERNAL SYSCALL IMPLEMENTATIONS (for host-bridge use)

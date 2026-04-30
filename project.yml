@@ -132,6 +132,7 @@ targets:
     - IXLandSystemLinuxKernelTests/KernelBootTests.m
     - IXLandSystemLinuxKernelTests/KernelInitTests.m
     - IXLandSystemLinuxKernelTests/PTYSessionTests.m
+    - IXLandSystemLinuxKernelTests/PTYJobControlTests.m
     - IXLandSystemLinuxKernelTests/FcntlTests.m
     - IXLandSystemLinuxKernelTests/ExecFdTests.m
     - IXLandSystemLinuxKernelTests/ExecSyscallTests.m
@@ -152,7 +153,12 @@ targets:
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/PTYJobControlContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/PTYSessionContract.h
+    - IXLandSystemLinuxKernelTests/PTYJobControlContract.h
     - IXLandSystemLinuxKernelTests/PTYSessionIoctlShim.c
     - path: IXLandSystemLinuxKernelTests/FutexUAPICompileSmoke.c
       compilerFlags:

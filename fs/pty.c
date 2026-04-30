@@ -15,12 +15,6 @@
 
 #define PTY_MAX 128
 #define PTY_BUFFER_CAPACITY 4096
-#define PTY_SIGWINCH 28
-#define PTY_SIGINT 2
-#define PTY_SIGQUIT 3
-#define PTY_SIGTSTP 20
-#define PTY_SIGTTIN 21
-#define PTY_SIGTTOU 22
 
 #define PTY_LFLAG_ISIG 0x00000001U
 #define PTY_LFLAG_ICANON 0x00000002U
@@ -138,11 +132,11 @@ static bool pty_deliver_signal_char_impl(pty_pair_t *pair, unsigned char byte) {
 
     int signal_number = 0;
     if (byte == pair->termios.c_cc[PTY_CC_VINTR]) {
-        signal_number = PTY_SIGINT;
+        signal_number = SIGINT;
     } else if (byte == pair->termios.c_cc[PTY_CC_VQUIT]) {
-        signal_number = PTY_SIGQUIT;
+        signal_number = SIGQUIT;
     } else if (byte == pair->termios.c_cc[PTY_CC_VSUSP]) {
-        signal_number = PTY_SIGTSTP;
+        signal_number = SIGTSTP;
     }
 
     if (signal_number == 0) {
@@ -233,10 +227,23 @@ static bool pty_valid_index(unsigned int pty_index) {
 }
 
 static bool pty_signal_is_ignored(const struct task_struct *task, int signal_number) {
-    if (!task || !task->signal || signal_number <= 0 || signal_number >= KERNEL_SIG_NUM) {
+    if (!task || !task->signal || signal_number <= 0 || signal_number > KERNEL_SIG_NUM) {
         return false;
     }
-    return task->signal->actions[signal_number].handler == (sighandler_t)1;
+    return task->signal->actions[signal_number - 1].handler == SIG_IGN;
+}
+
+static struct task_struct *pty_lookup_task_locked(int32_t pid) {
+    if (pid <= 0) {
+        return NULL;
+    }
+
+    int idx = task_hash(pid);
+    struct task_struct *task = task_table[idx];
+    while (task && task->pid != pid) {
+        task = task->hash_next;
+    }
+    return task;
 }
 
 static bool pty_is_orphaned_pgrp(int32_t sid, int32_t pgid) {
@@ -248,8 +255,11 @@ static bool pty_is_orphaned_pgrp(int32_t sid, int32_t pgid) {
         struct task_struct *candidate = task_table[i];
         while (candidate) {
             if (candidate->sid == sid && candidate->pgid == pgid) {
-                has_member = true;
                 struct task_struct *parent = candidate->parent;
+                if (!parent && candidate->ppid > 0) {
+                    parent = pty_lookup_task_locked(candidate->ppid);
+                }
+                has_member = true;
                 if (parent && parent->sid == sid && parent->pgid != pgid) {
                     orphaned = false;
                     break;
@@ -299,12 +309,12 @@ static int pty_check_background_read_access(pty_pair_t *pair) {
         return -1;
     }
 
-    if (signal_is_blocked(task, PTY_SIGTTIN) || pty_signal_is_ignored(task, PTY_SIGTTIN)) {
+    if (signal_is_blocked(task, SIGTTIN) || pty_signal_is_ignored(task, SIGTTIN)) {
         errno = EIO;
         return -1;
     }
 
-    (void)signal_generate_pgrp(task->pgid, PTY_SIGTTIN);
+    (void)signal_generate_pgrp(task->pgid, SIGTTIN);
     errno = EINTR;
     return -1;
 }
@@ -329,7 +339,7 @@ static int pty_check_background_write_access(pty_pair_t *pair, bool enforce_back
         return -1;
     }
 
-    bool blocked_or_ignored = signal_is_blocked(task, PTY_SIGTTOU) || pty_signal_is_ignored(task, PTY_SIGTTOU);
+    bool blocked_or_ignored = signal_is_blocked(task, SIGTTOU) || pty_signal_is_ignored(task, SIGTTOU);
     if (blocked_or_ignored) {
         if (blocked_or_ignored_is_error) {
             errno = EIO;
@@ -338,7 +348,7 @@ static int pty_check_background_write_access(pty_pair_t *pair, bool enforce_back
         return 0;
     }
 
-    (void)signal_generate_pgrp(task->pgid, PTY_SIGTTOU);
+    (void)signal_generate_pgrp(task->pgid, SIGTTOU);
     errno = EINTR;
     return -1;
 }
@@ -930,7 +940,7 @@ int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *wins
     fs_mutex_unlock(&pty_lock);
 
     if (changed && foreground_pgrp > 0) {
-        signal_generate_pgrp(foreground_pgrp, PTY_SIGWINCH);
+        signal_generate_pgrp(foreground_pgrp, SIGWINCH);
     }
 
     return 0;
@@ -1043,96 +1053,81 @@ int pty_get_foreground_pgrp_impl(unsigned int pty_index, int32_t *pgrp) {
 }
 
 int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp) {
-  if (!pty_valid_index(pty_index) || pgrp <= 0) {
-    errno = EINVAL;
-    return -1;
-  }
-
-  struct task_struct *task = get_current();
-  if (!task) {
-    errno = ESRCH;
-    return -1;
-  }
-
-  if (!task_session_has_pgrp_impl(task->sid, pgrp)) {
-    errno = EPERM;
-    return -1;
-  }
-
-  fs_mutex_lock(&pty_lock);
-  pty_pair_t *pair = &pty_table[pty_index];
-  if (!pair->allocated) {
-    fs_mutex_unlock(&pty_lock);
-    errno = EINVAL;
-    return -1;
-  }
-
-  if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
-    fs_mutex_unlock(&pty_lock);
-    errno = ENOTTY;
-    return -1;
-  }
-
-  int32_t fg_pgrp = pair->foreground_pgrp;
-  if (fg_pgrp > 0 && fg_pgrp != task->pgid) {
-    if (pty_signal_is_ignored(task, PTY_SIGTTOU)) {
-    } else if (signal_is_blocked(task, PTY_SIGTTOU)) {
-      fs_mutex_unlock(&pty_lock);
-      errno = EINTR;
-      return -1;
-    } else {
-      (void)signal_generate_pgrp(task->pgid, PTY_SIGTTOU);
-      fs_mutex_unlock(&pty_lock);
-      errno = EINTR;
-      return -1;
+    if (!pty_valid_index(pty_index) || pgrp <= 0) {
+        errno = EINVAL;
+        return -1;
     }
-  }
 
-  pair->foreground_pgrp = pgrp;
-  fs_mutex_unlock(&pty_lock);
-  return 0;
+    struct task_struct *task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    fs_mutex_lock(&pty_lock);
+    pty_pair_t *pair = &pty_table[pty_index];
+    if (!pair->allocated) {
+        fs_mutex_unlock(&pty_lock);
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!pair->has_controlling_session || pair->controlling_sid != task->sid) {
+        fs_mutex_unlock(&pty_lock);
+        errno = ENOTTY;
+        return -1;
+    }
+
+    if (!task_session_has_pgrp_impl(task->sid, pgrp)) {
+        fs_mutex_unlock(&pty_lock);
+        errno = EPERM;
+        return -1;
+    }
+
+    if (pair->foreground_pgrp > 0 && pair->foreground_pgrp != task->pgid) {
+        if (!pty_signal_is_ignored(task, SIGTTOU) && !signal_is_blocked(task, SIGTTOU)) {
+            (void)signal_generate_pgrp(task->pgid, SIGTTOU);
+            fs_mutex_unlock(&pty_lock);
+            errno = EINTR;
+            return -1;
+        }
+    }
+
+    pair->foreground_pgrp = pgrp;
+    fs_mutex_unlock(&pty_lock);
+    return 0;
 }
 
 int pty_detach_controlling_tty_impl(void) {
-  struct task_struct *task = get_current();
-  if (!task) {
-    errno = ESRCH;
-    return -1;
-  }
+    struct task_struct *task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
 
-  kernel_mutex_lock(&task->lock);
+    kernel_mutex_lock(&task->lock);
 
-  if (!task->tty) {
-    kernel_mutex_unlock(&task->lock);
-    errno = ENOTTY;
-    return -1;
-  }
+    if (!task->tty) {
+        kernel_mutex_unlock(&task->lock);
+        errno = ENOTTY;
+        return -1;
+    }
 
-  unsigned int pty_index = (unsigned int)task->tty->index;
-  int32_t old_fg_pgrp = task->tty->foreground_pgrp;
-  int32_t current_sid = task->sid;
+    unsigned int pty_index = (unsigned int)task->tty->index;
+    int32_t current_sid = task->sid;
 
-  if (task->tty) {
     atomic_fetch_sub(&task->tty->refs, 1);
-  }
-  task->tty = NULL;
+    task->tty = NULL;
 
-  fs_mutex_lock(&pty_lock);
-  pty_pair_t *pair = &pty_table[pty_index];
-  if (pair->allocated && pair->has_controlling_session && pair->controlling_sid == current_sid) {
-    if (old_fg_pgrp > 0 && old_fg_pgrp != task->pgid) {
-      pair->foreground_pgrp = task->pgid;
+    fs_mutex_lock(&pty_lock);
+    pty_pair_t *pair = &pty_table[pty_index];
+    if (pair->allocated && pair->has_controlling_session && pair->controlling_sid == current_sid) {
+        pair->has_controlling_session = false;
+        pair->controlling_sid = 0;
+        pair->foreground_pgrp = 0;
     }
-    if (current_sid == pair->controlling_sid) {
-      pair->has_controlling_session = false;
-      pair->controlling_sid = 0;
-      if (old_fg_pgrp > 0) {
-        signal_generate_pgrp(old_fg_pgrp, 1);
-      }
-    }
-  }
-  fs_mutex_unlock(&pty_lock);
+    fs_mutex_unlock(&pty_lock);
 
-  kernel_mutex_unlock(&task->lock);
-  return 0;
+    kernel_mutex_unlock(&task->lock);
+    return 0;
 }

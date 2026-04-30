@@ -41,6 +41,7 @@
 		6B765327CCF9FE19CB035CA0 /* KernelInitTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 53E3EED8E60498770B580706 /* KernelInitTests.m */; };
 		6DCCC30A9E2767FEAA8316D2 /* vfs.c in Sources */ = {isa = PBXBuildFile; fileRef = CC8A063128CC02CB6B938762 /* vfs.c */; };
 		70DFBB25D68D1C86B3F68C17 /* epoll_bridge.c in Sources */ = {isa = PBXBuildFile; fileRef = BA898A59834C42247E34F3A2 /* epoll_bridge.c */; };
+		7382EBBD679D92B216EB7155 /* PTYJobControlTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 88CA631FAF0EDC1ABC5785AE /* PTYJobControlTests.m */; };
 		76236EBE1D125F243FE8D067 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = CC4338AECA611FDBA915367D /* sync.c */; };
 		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; };
 		7A549363DE583E69F024FC2B /* HostTestSupport.c in Sources */ = {isa = PBXBuildFile; fileRef = FFDE13EF2BAECD71C97C7CD4 /* HostTestSupport.c */; };
@@ -61,6 +62,7 @@
 		9F514956A3C3161C5CC61226 /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = 270F37A8D2223DAAD1C7A498 /* wait.c */; };
 		9FB855340C8816E1983BB087 /* fork.c in Sources */ = {isa = PBXBuildFile; fileRef = 384371EDE185511D5F125C45 /* fork.c */; };
 		A1D1D69FEF71D56D14746BD3 /* ExecFdTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B9B17DC7494FE76059C4240F /* ExecFdTests.m */; };
+		ABDAD895A3CF69CFD8687735 /* PTYJobControlContract.c in Sources */ = {isa = PBXBuildFile; fileRef = D04652572AEE290A130DF174 /* PTYJobControlContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		AC68F6A9576024FA180169A3 /* resource.c in Sources */ = {isa = PBXBuildFile; fileRef = 22ED4B4B7E8FD0A20DF3C3C5 /* resource.c */; };
 		AEAB38B6EC299D3B7151819C /* init.c in Sources */ = {isa = PBXBuildFile; fileRef = F2D024F0973242458FE50E93 /* init.c */; };
 		B1AD6A278B1352C350774FB6 /* LinuxUAPICompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 825904975D6668A8AB125E98 /* LinuxUAPICompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
@@ -120,6 +122,7 @@
 
 /* Begin PBXFileReference section */
 		008ECDF9EF2E0DDA77DFE526 /* ExecSyscallContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ExecSyscallContract.c; sourceTree = "<group>"; };
+		0425E98DF40D1AA450ACD57D /* PTYJobControlContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PTYJobControlContract.h; sourceTree = "<group>"; };
 		042E556F1EAD33852492F525 /* HostTestSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HostTestSupport.h; sourceTree = "<group>"; };
 		0869AF46EE225A3EF40ACA99 /* VFSPathHostBridgeTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VFSPathHostBridgeTests.m; sourceTree = "<group>"; };
 		08ACBEB768F495F5996FAED4 /* PTYSessionTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PTYSessionTests.m; sourceTree = "<group>"; };
@@ -161,6 +164,7 @@
 		825904975D6668A8AB125E98 /* LinuxUAPICompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = LinuxUAPICompileSmoke.c; sourceTree = "<group>"; };
 		84669BD046B2E072890F45A9 /* RootfsBootstrapTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RootfsBootstrapTests.m; sourceTree = "<group>"; };
 		85C6F04780BEA9F2AA85D0E4 /* backing_io.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = backing_io.m; sourceTree = "<group>"; };
+		88CA631FAF0EDC1ABC5785AE /* PTYJobControlTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PTYJobControlTests.m; sourceTree = "<group>"; };
 		88D453F467952833E1FD3D0D /* poll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = poll.c; sourceTree = "<group>"; };
 		8B16EB2BAE52DD2CC2C1FF77 /* FcntlContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FcntlContract.c; sourceTree = "<group>"; };
 		8BE7B6DDA1A833FE4A6C9194 /* random.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = random.c; sourceTree = "<group>"; };
@@ -187,6 +191,7 @@
 		CC8A063128CC02CB6B938762 /* vfs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vfs.c; sourceTree = "<group>"; };
 		CE4E5039272874EE6A5FFD11 /* sys.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sys.c; sourceTree = "<group>"; };
 		CEC04AD14B572B960464124B /* network.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = network.c; sourceTree = "<group>"; };
+		D04652572AEE290A130DF174 /* PTYJobControlContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = PTYJobControlContract.c; sourceTree = "<group>"; };
 		D1CA1C465548844BCAD1DDB9 /* PTYHostBridgeTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PTYHostBridgeTests.m; sourceTree = "<group>"; };
 		D46E9099D1DEF53E9F6D3C41 /* eventpoll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = eventpoll.c; sourceTree = "<group>"; };
 		D979F989EC0D2FF286D59733 /* read_write.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = read_write.c; sourceTree = "<group>"; };
@@ -351,6 +356,9 @@
 				825904975D6668A8AB125E98 /* LinuxUAPICompileSmoke.c */,
 				9A8678E28B73B73210D86FAB /* LinuxUAPITestSupport.c */,
 				CAE358DF2C68D021887020F5 /* LinuxUAPITestSupport.h */,
+				D04652572AEE290A130DF174 /* PTYJobControlContract.c */,
+				0425E98DF40D1AA450ACD57D /* PTYJobControlContract.h */,
+				88CA631FAF0EDC1ABC5785AE /* PTYJobControlTests.m */,
 				6E696362C7EAA577A88F4094 /* PTYSessionContract.c */,
 				558916AEFBD0039D223D211A /* PTYSessionContract.h */,
 				3985C757CC26622864437342 /* PTYSessionIoctlShim.c */,
@@ -528,6 +536,8 @@
 				6B765327CCF9FE19CB035CA0 /* KernelInitTests.m in Sources */,
 				B1AD6A278B1352C350774FB6 /* LinuxUAPICompileSmoke.c in Sources */,
 				13FB5E5B82FE3B5C5391A96B /* LinuxUAPITestSupport.c in Sources */,
+				ABDAD895A3CF69CFD8687735 /* PTYJobControlContract.c in Sources */,
+				7382EBBD679D92B216EB7155 /* PTYJobControlTests.m in Sources */,
 				1C5DDE6C6F1D26B8A42FC58D /* PTYSessionContract.c in Sources */,
 				8DF81C1BC8F9CEA110451EED /* PTYSessionIoctlShim.c in Sources */,
 				62A929A945C25B5FD11C7F36 /* PTYSessionTests.m in Sources */,

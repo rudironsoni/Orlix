@@ -16,11 +16,6 @@ enum {
     LINUX_SIG_BLOCK = 0,
     LINUX_SIG_UNBLOCK = 1,
     LINUX_SIG_SETMASK = 2,
-    LINUX_SIGINT = 2,
-    LINUX_SIGKILL = 9,
-    LINUX_SIGTERM = 15,
-    LINUX_SIGCONT = 18,
-    LINUX_SIGSTOP = 19,
 };
 
 struct signal_struct *alloc_signal_struct(void) {
@@ -95,18 +90,18 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
         task->signal->pending.sig[idx] |= (1ULL << bit);
     }
 
-    /* Handle SIGSTOP: transition to STOPPED state */
-    if (sig == LINUX_SIGSTOP) {
+    /* Handle job-control and forced stop signals */
+    if (sig == SIGSTOP || sig == SIGTSTP || sig == SIGTTIN || sig == SIGTTOU) {
         atomic_store(&task->state, TASK_STOPPED);
     }
 
     /* Handle SIGCONT: transition back to RUNNING */
-    if (sig == LINUX_SIGCONT) {
+    if (sig == SIGCONT) {
         atomic_store(&task->state, TASK_RUNNING);
     }
 
     /* Handle terminating signals */
-    if (sig == LINUX_SIGTERM || sig == LINUX_SIGKILL || sig == LINUX_SIGINT) {
+    if (sig == SIGTERM || sig == SIGKILL || sig == SIGINT) {
         atomic_store(&task->signaled, true);
         atomic_store(&task->termsig, sig);
         atomic_store(&task->exited, true);
@@ -258,6 +253,19 @@ bool signal_is_blocked(const struct task_struct *task, int32_t sig) {
     return (task->signal->blocked.sig[idx] & (1ULL << bit)) != 0;
 }
 
+bool signal_is_pending(const struct task_struct *task, int32_t sig) {
+    if (!task || !task->signal || sig < 1 || sig > KERNEL_SIG_NUM)
+        return false;
+
+    int idx = (sig - 1) / 64;
+    int bit = (sig - 1) % 64;
+
+    if (idx >= KERNEL_SIG_NUM_WORDS)
+        return false;
+
+    return (task->signal->pending.sig[idx] & (1ULL << bit)) != 0;
+}
+
 void signal_reset_on_exec(struct task_struct *task) {
     if (!task || !task->signal)
         return;
@@ -291,7 +299,7 @@ int do_sigaction(int32_t sig, const struct signal_action_slot *act,
         return -1;
     }
 
-    if (sig == LINUX_SIGKILL || sig == LINUX_SIGSTOP) {
+    if (sig == SIGKILL || sig == SIGSTOP) {
         errno = EINVAL;
         return -1;
     }
@@ -303,11 +311,11 @@ int do_sigaction(int32_t sig, const struct signal_action_slot *act,
     }
 
     if (oldact) {
-        *oldact = task->signal->actions[sig];
+        *oldact = task->signal->actions[sig - 1];
     }
 
     if (act) {
-        task->signal->actions[sig] = *act;
+        task->signal->actions[sig - 1] = *act;
     }
 
     return 0;
@@ -373,7 +381,7 @@ sighandler_t do_signal(int32_t signum, sighandler_t handler) {
         return NULL;
     }
 
-    if (signum == LINUX_SIGKILL || signum == LINUX_SIGSTOP) {
+    if (signum == SIGKILL || signum == SIGSTOP) {
         errno = EINVAL;
         return NULL;
     }
@@ -384,10 +392,10 @@ sighandler_t do_signal(int32_t signum, sighandler_t handler) {
         return NULL;
     }
 
-    sighandler_t old_handler = task->signal->actions[signum].handler;
-    task->signal->actions[signum].handler = handler;
-    task->signal->actions[signum].flags = 0;
-    memset(&task->signal->actions[signum].mask, 0, sizeof(struct signal_mask_bits));
+    sighandler_t old_handler = task->signal->actions[signum - 1].handler;
+    task->signal->actions[signum - 1].handler = handler;
+    task->signal->actions[signum - 1].flags = 0;
+    memset(&task->signal->actions[signum - 1].mask, 0, sizeof(struct signal_mask_bits));
 
     return old_handler;
 }
