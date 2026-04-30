@@ -1396,6 +1396,35 @@ int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int
         }
     }
 
+    if (pty_is_virtual_slave_path_impl(resolved_virtual)) {
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFCHR | 0666;
+        statbuf->st_nlink = 1;
+        statbuf->st_uid = 0;
+        statbuf->st_gid = 0;
+        statbuf->st_rdev = makedev(136, 0);
+        statbuf->st_blksize = 4096;
+        statbuf->st_blocks = 0;
+        return 0;
+    }
+
+    if (strcmp(resolved_virtual, "/dev/tty") == 0) {
+        unsigned int pty_index;
+        if (pty_open_controlling_slave_impl(&pty_index) != 0) {
+            return -ENOENT;
+        }
+        pty_close_end_impl(pty_index, false);
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFCHR | 0666;
+        statbuf->st_nlink = 1;
+        statbuf->st_uid = 0;
+        statbuf->st_gid = 0;
+        statbuf->st_rdev = makedev(136, 0);
+        statbuf->st_blksize = 4096;
+        statbuf->st_blocks = 0;
+        return 0;
+    }
+
     {
         proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_virtual);
         if (proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) {

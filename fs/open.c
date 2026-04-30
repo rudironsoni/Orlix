@@ -150,14 +150,20 @@ return fd;
     {
         unsigned int pty_index;
         if (strcmp(resolved_path, "/dev/tty") == 0) {
+            char tty_path[MAX_PATH];
             if (pty_open_controlling_slave_impl(&pty_index) != 0) {
+                return -1;
+            }
+            if (pty_format_slave_path_impl(pty_index, tty_path, sizeof(tty_path)) != 0) {
+                pty_close_end_impl(pty_index, false);
                 return -1;
             }
             int fd = alloc_fd_impl();
             if (fd < 0) {
+                pty_close_end_impl(pty_index, false);
                 return -1;
             }
-            init_synthetic_pty_fd_entry_impl(fd, flags, mode, resolved_path, pty_index, false);
+            init_synthetic_pty_fd_entry_impl(fd, flags, mode, tty_path, pty_index, false);
             return fd;
         }
 
@@ -330,14 +336,20 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
     {
         unsigned int pty_index;
         if (strcmp(resolved_path, "/dev/tty") == 0) {
+            char tty_path[MAX_PATH];
             if (pty_open_controlling_slave_impl(&pty_index) != 0) {
+                return -1;
+            }
+            if (pty_format_slave_path_impl(pty_index, tty_path, sizeof(tty_path)) != 0) {
+                pty_close_end_impl(pty_index, false);
                 return -1;
             }
             int fd = alloc_fd_impl();
             if (fd < 0) {
+                pty_close_end_impl(pty_index, false);
                 return -1;
             }
-            init_synthetic_pty_fd_entry_impl(fd, flags, mode, resolved_path, pty_index, false);
+            init_synthetic_pty_fd_entry_impl(fd, flags, mode, tty_path, pty_index, false);
             return fd;
         }
 

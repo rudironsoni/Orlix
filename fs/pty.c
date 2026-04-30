@@ -44,8 +44,8 @@ typedef struct pty_ring_buffer {
 
 typedef struct pty_pair {
     bool allocated;
-    bool master_open;
-    bool slave_open;
+    unsigned int master_open_count;
+    unsigned int slave_open_count;
     bool slave_locked;
     bool has_controlling_session;
     int32_t controlling_sid;
@@ -266,6 +266,23 @@ static bool pty_is_orphaned_pgrp(int32_t sid, int32_t pgid) {
     return has_member && orphaned;
 }
 
+static void pty_clear_task_tty_refs_impl(unsigned int pty_index) {
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
+        while (task) {
+            kernel_mutex_lock(&task->lock);
+            if (task->tty && task->tty->index == (int)pty_index) {
+                atomic_fetch_sub(&task->tty->refs, 1);
+                task->tty = NULL;
+            }
+            kernel_mutex_unlock(&task->lock);
+            task = task->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+}
+
 static int pty_check_background_read_access(pty_pair_t *pair) {
     struct task_struct *task = get_current();
     if (!task || !task->signal || !pair->has_controlling_session || pair->controlling_sid != task->sid) {
@@ -369,8 +386,8 @@ int pty_allocate_pair_impl(unsigned int *pty_index) {
         pty_pair_t *pair = &pty_table[idx];
         memset(pair, 0, sizeof(*pair));
         pair->allocated = true;
-        pair->master_open = true;
-        pair->slave_open = false;
+        pair->master_open_count = 1;
+        pair->slave_open_count = 0;
         pair->slave_locked = true;
         pty_init_defaults(pair);
 
@@ -454,12 +471,13 @@ int pty_open_controlling_slave_impl(unsigned int *pty_index) {
 
     fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[idx];
-    if (!pair->allocated || !pair->slave_open) {
+    if (!pair->allocated || pair->slave_open_count == 0) {
         fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
 
+    pair->slave_open_count++;
     *pty_index = idx;
     fs_mutex_unlock(&pty_lock);
     return 0;
@@ -504,13 +522,15 @@ int pty_open_slave_by_path_impl(const char *path, unsigned int *pty_index) {
         errno = EIO;
         return -1;
     }
-    pair->slave_open = true;
+    pair->slave_open_count++;
     *pty_index = idx;
     fs_mutex_unlock(&pty_lock);
     return 0;
 }
 
 int pty_close_end_impl(unsigned int pty_index, bool is_master) {
+    bool clear_task_tty_refs = false;
+
     if (!pty_valid_index(pty_index)) {
         errno = EINVAL;
         return -1;
@@ -525,16 +545,30 @@ int pty_close_end_impl(unsigned int pty_index, bool is_master) {
     }
 
     if (is_master) {
-        pair->master_open = false;
+        if (pair->master_open_count > 0) {
+            pair->master_open_count--;
+        }
     } else {
-        pair->slave_open = false;
+        if (pair->slave_open_count > 0) {
+            pair->slave_open_count--;
+            if (pair->slave_open_count == 0 && pair->has_controlling_session) {
+                pair->has_controlling_session = false;
+                pair->controlling_sid = 0;
+                pair->foreground_pgrp = 0;
+                clear_task_tty_refs = true;
+            }
+        }
     }
 
-    if (!pair->master_open && !pair->slave_open) {
+    if (pair->master_open_count == 0 && pair->slave_open_count == 0) {
         memset(pair, 0, sizeof(*pair));
     }
 
     fs_mutex_unlock(&pty_lock);
+
+    if (clear_task_tty_refs) {
+        pty_clear_task_tty_refs_impl(pty_index);
+    }
     return 0;
 }
 
@@ -585,13 +619,13 @@ ssize_t pty_read_master_impl(unsigned int pty_index, void *buf, size_t count, bo
 
     fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
-    if (!pair->allocated || !pair->master_open) {
+    if (!pair->allocated || pair->master_open_count == 0) {
         fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
 
-    ssize_t ret = pty_read_from_ring(&pair->slave_to_master, pair->slave_open, buf, count, nonblock);
+    ssize_t ret = pty_read_from_ring(&pair->slave_to_master, pair->slave_open_count > 0, buf, count, nonblock);
     fs_mutex_unlock(&pty_lock);
     return ret;
 }
@@ -604,13 +638,13 @@ ssize_t pty_write_master_impl(unsigned int pty_index, const void *buf, size_t co
 
     fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
-    if (!pair->allocated || !pair->master_open) {
+    if (!pair->allocated || pair->master_open_count == 0) {
         fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
     }
 
-    if (!pair->slave_open) {
+    if (pair->slave_open_count == 0) {
         fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
@@ -632,7 +666,7 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
 
     fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
-    if (!pair->allocated || !pair->slave_open) {
+    if (!pair->allocated || pair->slave_open_count == 0) {
         fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
@@ -666,7 +700,7 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
         }
     }
 
-    ssize_t ret = pty_read_from_ring(&pair->master_to_slave, pair->master_open, buf, count, nonblock);
+    ssize_t ret = pty_read_from_ring(&pair->master_to_slave, pair->master_open_count > 0, buf, count, nonblock);
     fs_mutex_unlock(&pty_lock);
     return ret;
 }
@@ -679,7 +713,7 @@ ssize_t pty_write_slave_impl(unsigned int pty_index, const void *buf, size_t cou
 
     fs_mutex_lock(&pty_lock);
     pty_pair_t *pair = &pty_table[pty_index];
-    if (!pair->allocated || !pair->slave_open) {
+    if (!pair->allocated || pair->slave_open_count == 0) {
         fs_mutex_unlock(&pty_lock);
         errno = EIO;
         return -1;
@@ -692,7 +726,7 @@ ssize_t pty_write_slave_impl(unsigned int pty_index, const void *buf, size_t cou
         return -1;
     }
 
-    ssize_t ret = pty_write_to_ring(&pair->slave_to_master, pair->master_open, buf, count, nonblock);
+    ssize_t ret = pty_write_to_ring(&pair->slave_to_master, pair->master_open_count > 0, buf, count, nonblock);
     fs_mutex_unlock(&pty_lock);
     return ret;
 }
@@ -731,8 +765,8 @@ short pty_poll_revents_impl(unsigned int pty_index, bool is_master, short events
 
     pty_ring_buffer_t *read_ring = is_master ? &pair->slave_to_master : &pair->master_to_slave;
     pty_ring_buffer_t *write_ring = is_master ? &pair->master_to_slave : &pair->slave_to_master;
-    bool this_open = is_master ? pair->master_open : pair->slave_open;
-    bool peer_open = is_master ? pair->slave_open : pair->master_open;
+    bool this_open = is_master ? pair->master_open_count > 0 : pair->slave_open_count > 0;
+    bool peer_open = is_master ? pair->slave_open_count > 0 : pair->master_open_count > 0;
 
     short revents = 0;
     if (!this_open) {
