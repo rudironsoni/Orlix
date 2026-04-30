@@ -796,6 +796,33 @@ int close_impl(int fd) {
     return 0;
 }
 
+int close_on_exec_impl(void) {
+    fd_description_t *descs_to_release[NR_OPEN_DEFAULT];
+    int release_count = 0;
+    int closed = 0;
+
+    file_init_impl();
+    fs_mutex_lock(&fd_table_lock);
+    for (int fd = 0; fd < NR_OPEN_DEFAULT; fd++) {
+        if (!fd_table[fd].used || (fd_table[fd].fd_flags & FD_CLOEXEC) == 0) {
+            continue;
+        }
+
+        descs_to_release[release_count++] = fd_table[fd].desc;
+        fd_table[fd].desc = NULL;
+        fd_table[fd].fd_flags = 0;
+        fd_table[fd].used = false;
+        closed++;
+    }
+    fs_mutex_unlock(&fd_table_lock);
+
+    for (int i = 0; i < release_count; i++) {
+        release_fd_description(descs_to_release[i]);
+    }
+
+    return closed;
+}
+
 void init_synthetic_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];

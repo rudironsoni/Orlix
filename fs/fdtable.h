@@ -151,6 +151,7 @@ bool fdtable_is_used_impl(int fd);
 
 /* Close implementation using static fd table */
 int close_impl(int fd);
+int close_on_exec_impl(void);
 
 #ifdef __cplusplus
 }

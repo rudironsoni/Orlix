@@ -49,9 +49,11 @@
 		92F197F28B8A006699CF4DF4 /* task.c in Sources */ = {isa = PBXBuildFile; fileRef = 1196E0E046C9D8486908FEF8 /* task.c */; };
 		9756427436DC7C2CED7431EA /* PTYHostBridgeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = D1CA1C465548844BCAD1DDB9 /* PTYHostBridgeTests.m */; };
 		9ABA5D0A937A9603B4C52A44 /* FutexUAPICompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A78BCCA6E31095ECC4CD43C /* FutexUAPICompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
+		9B2710699B85D86019F25C7B /* ExecFdContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 2C1E780A747EEBBBE69D1254 /* ExecFdContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		9F3DFA9314BF7A7DEC556F75 /* CredentialTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 21CC2E1844CDBA597704C111 /* CredentialTests.m */; };
 		9F514956A3C3161C5CC61226 /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = 270F37A8D2223DAAD1C7A498 /* wait.c */; };
 		9FB855340C8816E1983BB087 /* fork.c in Sources */ = {isa = PBXBuildFile; fileRef = 384371EDE185511D5F125C45 /* fork.c */; };
+		A1D1D69FEF71D56D14746BD3 /* ExecFdTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B9B17DC7494FE76059C4240F /* ExecFdTests.m */; };
 		AC68F6A9576024FA180169A3 /* resource.c in Sources */ = {isa = PBXBuildFile; fileRef = 22ED4B4B7E8FD0A20DF3C3C5 /* resource.c */; };
 		AEAB38B6EC299D3B7151819C /* init.c in Sources */ = {isa = PBXBuildFile; fileRef = F2D024F0973242458FE50E93 /* init.c */; };
 		B1AD6A278B1352C350774FB6 /* LinuxUAPICompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 825904975D6668A8AB125E98 /* LinuxUAPICompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
@@ -117,6 +119,7 @@
 		21CC2E1844CDBA597704C111 /* CredentialTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CredentialTests.m; sourceTree = "<group>"; };
 		22ED4B4B7E8FD0A20DF3C3C5 /* resource.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = resource.c; sourceTree = "<group>"; };
 		270F37A8D2223DAAD1C7A498 /* wait.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = wait.c; sourceTree = "<group>"; };
+		2C1E780A747EEBBBE69D1254 /* ExecFdContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ExecFdContract.c; sourceTree = "<group>"; };
 		32C8785EC40C73B387D6237A /* fdtable.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fdtable.c; sourceTree = "<group>"; };
 		384371EDE185511D5F125C45 /* fork.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fork.c; sourceTree = "<group>"; };
 		38A6AE564B1CF443D8406232 /* KernelBoot.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = KernelBoot.c; sourceTree = "<group>"; };
@@ -154,6 +157,7 @@
 		B406B94580B141493CBDB020 /* signal_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal_bridge.c; sourceTree = "<group>"; };
 		B6A8D5B76A1301B4F60794A7 /* KernelBootTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KernelBootTests.m; sourceTree = "<group>"; };
 		B814A84B3136F79F9CA46B29 /* errno_host.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = errno_host.c; sourceTree = "<group>"; };
+		B9B17DC7494FE76059C4240F /* ExecFdTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExecFdTests.m; sourceTree = "<group>"; };
 		BA898A59834C42247E34F3A2 /* epoll_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = epoll_bridge.c; sourceTree = "<group>"; };
 		C0A71140476601A06FC988D7 /* inode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = inode.c; sourceTree = "<group>"; };
 		C391F80635EE5296CE8C8466 /* namei.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = namei.c; sourceTree = "<group>"; };
@@ -313,6 +317,8 @@
 			isa = PBXGroup;
 			children = (
 				21CC2E1844CDBA597704C111 /* CredentialTests.m */,
+				2C1E780A747EEBBBE69D1254 /* ExecFdContract.c */,
+				B9B17DC7494FE76059C4240F /* ExecFdTests.m */,
 				8B16EB2BAE52DD2CC2C1FF77 /* FcntlContract.c */,
 				45D5CBDA9FFBBD3019E7C208 /* FcntlTests.m */,
 				459682F08054406508BB6491 /* FutexTests.m */,
@@ -479,6 +485,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				9F3DFA9314BF7A7DEC556F75 /* CredentialTests.m in Sources */,
+				9B2710699B85D86019F25C7B /* ExecFdContract.c in Sources */,
+				A1D1D69FEF71D56D14746BD3 /* ExecFdTests.m in Sources */,
 				14CE14D6D679323F2253A9E3 /* FcntlContract.c in Sources */,
 				14F3242DDCC2EB47EC3949CC /* FcntlTests.m in Sources */,
 				59FAAA0B4A3D9EBD3C077FFA /* FutexTests.m in Sources */,

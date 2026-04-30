@@ -1,0 +1,583 @@
+#include <linux/fcntl.h>
+
+#include <dirent.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+#include "fs/fdtable.h"
+#include "fs/vfs.h"
+
+extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int dup_impl(int oldfd);
+extern int dup3_impl(int oldfd, int newfd, int flags);
+extern int fcntl_impl(int fd, int cmd, ...);
+extern long read_impl(int fd, void *buf, size_t count);
+extern linux_off_t lseek_impl(int fd, linux_off_t offset, int whence);
+extern ssize_t getdents64(int fd, void *dirp, size_t count);
+
+#ifndef SEEK_SET
+#define SEEK_SET 0
+#endif
+
+#ifndef SEEK_CUR
+#define SEEK_CUR 1
+#endif
+
+struct linux_dirent64 {
+    uint64_t d_ino;
+    int64_t d_off;
+    unsigned short d_reclen;
+    unsigned char d_type;
+    char d_name[];
+};
+
+static int close_if_open(int fd) {
+    if (fd >= 0) {
+        return close_impl(fd);
+    }
+    return 0;
+}
+
+static int append_decimal(char *buf, size_t buf_size, int value) {
+    char digits[16];
+    size_t count = 0;
+    size_t i;
+
+    if (value < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    do {
+        digits[count++] = (char)('0' + (value % 10));
+        value /= 10;
+    } while (value > 0 && count < sizeof(digits));
+
+    if (value > 0 || count + 1 > buf_size) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    for (i = 0; i < count; i++) {
+        buf[i] = digits[count - 1 - i];
+    }
+    buf[count] = '\0';
+    return 0;
+}
+
+static int read_fdinfo_flags(int fd_num, unsigned int *flags_out) {
+    static const char prefix[] = "/proc/self/fdinfo/";
+    char path[64];
+    char buf[256];
+    int infofd;
+    long nread;
+    char *flags_line;
+    unsigned int flags = 0;
+    size_t prefix_len = sizeof(prefix) - 1;
+
+    if (!flags_out) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    memcpy(path, prefix, prefix_len);
+    if (append_decimal(path + prefix_len, sizeof(path) - prefix_len, fd_num) != 0) {
+        return -1;
+    }
+
+    infofd = open_impl(path, O_RDONLY, 0);
+    if (infofd < 0) {
+        return -1;
+    }
+
+    nread = read_impl(infofd, buf, sizeof(buf) - 1);
+    close_impl(infofd);
+    if (nread <= 0) {
+        if (nread == 0) {
+            errno = EIO;
+        }
+        return -1;
+    }
+
+    buf[nread] = '\0';
+    flags_line = strstr(buf, "flags:\t0");
+    if (!flags_line) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    for (flags_line += 8; *flags_line >= '0' && *flags_line <= '7'; flags_line++) {
+        flags = (flags << 3) | (unsigned int)(*flags_line - '0');
+    }
+
+    *flags_out = flags;
+    return 0;
+}
+
+int exec_fd_contract_close_on_exec_closes_only_cloexec_descriptor(void) {
+    int cloexec_fd = -1;
+    int keep_fd = -1;
+    int closed;
+    int result = -1;
+
+    cloexec_fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
+    if (cloexec_fd < 0) {
+        return -1;
+    }
+
+    keep_fd = open_impl("/dev/zero", O_RDONLY, 0);
+    if (keep_fd < 0) {
+        goto out;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (fdtable_is_used_impl(cloexec_fd) || !fdtable_is_used_impl(keep_fd)) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(keep_fd);
+    close_if_open(cloexec_fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_preserves_descriptor_without_cloexec(void) {
+    int fd = -1;
+    int closed;
+    int result = -1;
+
+    fd = open_impl("/dev/null", O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!fdtable_is_used_impl(fd)) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_does_not_close_shared_description_still_referenced(void) {
+    int fd = -1;
+    int dupfd = -1;
+    int closed;
+    int result = -1;
+    linux_off_t offset;
+
+    fd = open_impl("/etc/passwd", O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    dupfd = dup_impl(fd);
+    if (dupfd < 0) {
+        goto out;
+    }
+
+    if (fcntl_impl(dupfd, F_SETFD, FD_CLOEXEC) != 0) {
+        goto out;
+    }
+    if (lseek_impl(fd, 7, SEEK_SET) != 7) {
+        goto out;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!fdtable_is_used_impl(fd) || fdtable_is_used_impl(dupfd)) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    offset = lseek_impl(fd, 0, SEEK_CUR);
+    if (offset != 7) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(dupfd);
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_closes_duplicated_descriptor_with_own_cloexec_flag(void) {
+    int fd = -1;
+    int dupfd = -1;
+    int closed;
+    int result = -1;
+    int source_flags;
+
+    fd = open_impl("/dev/null", O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    dupfd = dup3_impl(fd, fd + 1, O_CLOEXEC);
+    if (dupfd < 0) {
+        goto out;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!fdtable_is_used_impl(fd) || fdtable_is_used_impl(dupfd)) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    source_flags = fcntl_impl(fd, F_GETFD, 0);
+    if (source_flags != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(dupfd);
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_preserves_source_descriptor_when_duplicate_is_cloexec(void) {
+    int fd = -1;
+    int dupfd = -1;
+    int closed;
+    int result = -1;
+    long nread;
+    char byte;
+
+    fd = open_impl("/dev/zero", O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    dupfd = dup3_impl(fd, fd + 1, O_CLOEXEC);
+    if (dupfd < 0) {
+        goto out;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    nread = read_impl(fd, &byte, 1);
+    if (nread != 1 || byte != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(dupfd);
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_removes_closed_fd_from_proc_self_fd(void) {
+    static const char prefix[] = "/proc/self/fd/";
+    int fd = -1;
+    int closed;
+    int result = -1;
+    char path[64];
+    char target[64];
+    size_t prefix_len = sizeof(prefix) - 1;
+
+    fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    memcpy(path, prefix, prefix_len);
+    if (append_decimal(path + prefix_len, sizeof(path) - prefix_len, fd) != 0) {
+        goto out;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (vfs_proc_self_fd_link_target(path, target, sizeof(target)) != -ENOENT) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_removes_closed_fd_from_proc_self_fdinfo(void) {
+    int fd = -1;
+    int closed;
+
+    fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed != 1) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (vfs_proc_self_fdinfo_content(fd, (char[64]){0}, 64) != -ENOENT) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    return 0;
+}
+
+int exec_fd_contract_close_on_exec_preserves_non_cloexec_fd_in_proc_self_fd(void) {
+    static const char prefix[] = "/proc/self/fd/";
+    int fd = -1;
+    int result = -1;
+    char path[64];
+    char target[64];
+    size_t prefix_len = sizeof(prefix) - 1;
+
+    fd = open_impl("/dev/null", O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    memcpy(path, prefix, prefix_len);
+    if (append_decimal(path + prefix_len, sizeof(path) - prefix_len, fd) != 0) {
+        goto out;
+    }
+
+    if (close_on_exec_impl() != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (vfs_proc_self_fd_link_target(path, target, sizeof(target)) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (strcmp(target, "/dev/null") != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_works_for_synthetic_dev_fd(void) {
+    int fd = -1;
+
+    fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    if (close_on_exec_impl() != 1) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (fdtable_is_used_impl(fd)) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int exec_fd_contract_close_on_exec_works_for_synthetic_proc_directory_fd(void) {
+    int fd = -1;
+    int closed;
+    int fd_flags;
+
+    fd = alloc_fd_impl();
+    if (fd < 0) {
+        return -1;
+    }
+    init_synthetic_subdir_fd_entry_impl(fd, O_RDONLY, 0, "/proc/self/fd", SYNTHETIC_DIR_PROC_SELF_FD);
+    if (!fdtable_is_used_impl(fd)) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (fcntl_impl(fd, F_SETFD, FD_CLOEXEC) != 0) {
+        return -1;
+    }
+    fd_flags = fcntl_impl(fd, F_GETFD, 0);
+    if (fd_flags != FD_CLOEXEC) {
+        errno = EPROTO;
+        return -1;
+    }
+    closed = close_on_exec_impl();
+    if (closed != 1) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (fdtable_is_used_impl(fd)) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int exec_fd_contract_close_on_exec_works_for_synthetic_proc_file_fd(void) {
+    static const char prefix[] = "/proc/self/fdinfo/";
+    int target_fd = -1;
+    int infofd = -1;
+    int result = -1;
+    char path[64];
+    size_t prefix_len = sizeof(prefix) - 1;
+
+    target_fd = open_impl("/dev/null", O_RDONLY, 0);
+    if (target_fd < 0) {
+        return -1;
+    }
+
+    memcpy(path, prefix, prefix_len);
+    if (append_decimal(path + prefix_len, sizeof(path) - prefix_len, target_fd) != 0) {
+        goto out;
+    }
+
+    infofd = open_impl(path, O_RDONLY | O_CLOEXEC, 0);
+    if (infofd < 0) {
+        goto out;
+    }
+
+    if (close_on_exec_impl() != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (fdtable_is_used_impl(infofd) || !fdtable_is_used_impl(target_fd)) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(infofd);
+    close_if_open(target_fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_is_idempotent_when_no_cloexec_fds_remain(void) {
+    int fd = -1;
+
+    fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    if (close_on_exec_impl() != 1) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (close_on_exec_impl() != 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int exec_fd_contract_close_on_exec_keeps_fd_allocation_deterministic(void) {
+    int fd = -1;
+    int next_fd = -1;
+    int result = -1;
+
+    fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    if (close_on_exec_impl() != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    next_fd = open_impl("/dev/zero", O_RDONLY, 0);
+    if (next_fd != fd) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(next_fd);
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_close_on_exec_does_not_mutate_status_flags_on_survivors(void) {
+    int fd = -1;
+    int dupfd = -1;
+    int result = -1;
+    unsigned int flags_before;
+    unsigned int flags_after;
+
+    fd = open_impl("/dev/null", O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    dupfd = dup3_impl(fd, fd + 1, O_CLOEXEC);
+    if (dupfd < 0) {
+        goto out;
+    }
+
+    if (fcntl_impl(fd, F_SETFL, O_NONBLOCK) != 0) {
+        goto out;
+    }
+    if (read_fdinfo_flags(fd, &flags_before) != 0) {
+        goto out;
+    }
+    if (close_on_exec_impl() != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (read_fdinfo_flags(fd, &flags_after) != 0) {
+        goto out;
+    }
+    if (flags_before != flags_after) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    close_if_open(dupfd);
+    close_if_open(fd);
+    return result;
+}
