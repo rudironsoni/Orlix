@@ -5,6 +5,9 @@
 #include "task.h"
 #include "signal.h"
 
+#include "../fs/fdtable.h"
+#include "../fs/vfs.h"
+
 #include <errno.h>
 #include <setjmp.h>
 #include <stdatomic.h>
@@ -404,6 +407,80 @@ int task_session_has_pgrp_impl(int32_t sid, int32_t pgid) {
     kernel_mutex_unlock(&task_table_lock);
 
     return found;
+}
+
+static const char *task_exec_basename(const char *name) {
+    const char *base;
+
+    if (!name || name[0] == '\0') {
+        return NULL;
+    }
+
+    base = strrchr(name, '/');
+    if (!base) {
+        return name;
+    }
+
+    if (base[1] == '\0') {
+        return name;
+    }
+
+    return base + 1;
+}
+
+int task_exec_transition_impl(const char *path, const char *argv0) {
+    struct task_struct *task;
+    char normalized_path[MAX_PATH];
+    const char *comm_source;
+    size_t comm_len;
+    int closed;
+
+    task = get_current();
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    if (!path) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    closed = vfs_normalize_linux_path(path, normalized_path, sizeof(normalized_path));
+    if (closed < 0) {
+        errno = -closed;
+        return -1;
+    }
+
+    closed = close_on_exec_impl();
+    if (closed < 0) {
+        return -1;
+    }
+
+    memcpy(task->exe, normalized_path, strlen(normalized_path) + 1);
+
+    comm_source = task_exec_basename(argv0);
+    if (!comm_source) {
+        comm_source = task_exec_basename(normalized_path);
+    }
+    if (!comm_source) {
+        comm_source = normalized_path;
+    }
+
+    memset(task->comm, 0, sizeof(task->comm));
+    comm_len = strlen(comm_source);
+    if (comm_len >= sizeof(task->comm)) {
+        comm_len = sizeof(task->comm) - 1;
+    }
+    memcpy(task->comm, comm_source, comm_len);
+
+    atomic_store(&task->execed, true);
+
+    if (task->vfork_parent) {
+        vfork_exec_notify();
+    }
+
+    return 0;
 }
 
 /* ============================================================================

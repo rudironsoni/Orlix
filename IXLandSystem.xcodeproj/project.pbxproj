@@ -16,6 +16,7 @@
 		14CE14D6D679323F2253A9E3 /* FcntlContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B16EB2BAE52DD2CC2C1FF77 /* FcntlContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		14DEFC9BDE432750E36BB297 /* RootfsBootstrapTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A7AB548A9E0653A96E8EE61 /* RootfsBootstrapTests.m */; };
 		14F3242DDCC2EB47EC3949CC /* FcntlTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 45D5CBDA9FFBBD3019E7C208 /* FcntlTests.m */; };
+		1571C17134FD341921B13C74 /* TaskExecContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 90A08DB89035D1656587D959 /* TaskExecContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		17569519F7B7B56C5572BED6 /* path.c in Sources */ = {isa = PBXBuildFile; fileRef = 51D066274EE2D55E90787D9C /* path.c */; };
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
@@ -41,6 +42,7 @@
 		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; };
 		7A549363DE583E69F024FC2B /* HostTestSupport.c in Sources */ = {isa = PBXBuildFile; fileRef = FFDE13EF2BAECD71C97C7CD4 /* HostTestSupport.c */; };
 		7FC2CF492A88F5BDE5A5E8B7 /* HostBridgeSmokeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4937592D664709CBF7746315 /* HostBridgeSmokeTests.m */; };
+		83F06BCA2B801A0D599FC7B2 /* TaskExecTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 92672608BC0DCE77AA7B30F0 /* TaskExecTests.m */; };
 		85446090E824633B84DE19A8 /* libIXLandSystem.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E96E95F0B83F5CC63E21913 /* libIXLandSystem.a */; };
 		87046F5302731769EFA41075 /* backing_paths.m in Sources */ = {isa = PBXBuildFile; fileRef = 5FD8D142EC818870892A041C /* backing_paths.m */; };
 		89EF08DAA55DB8C17CE9F248 /* SignalTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 39D1B661F15441FB32765EC6 /* SignalTests.m */; };
@@ -149,6 +151,8 @@
 		8B16EB2BAE52DD2CC2C1FF77 /* FcntlContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FcntlContract.c; sourceTree = "<group>"; };
 		8BE7B6DDA1A833FE4A6C9194 /* random.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = random.c; sourceTree = "<group>"; };
 		8EE1C8B47289B38E402A6EFE /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
+		90A08DB89035D1656587D959 /* TaskExecContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = TaskExecContract.c; sourceTree = "<group>"; };
+		92672608BC0DCE77AA7B30F0 /* TaskExecTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskExecTests.m; sourceTree = "<group>"; };
 		9400E47E570892E792DD720A /* path_host.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = path_host.c; sourceTree = "<group>"; };
 		97089E4A77C673C1280D46C1 /* VFSPathTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VFSPathTests.m; sourceTree = "<group>"; };
 		9935787E313CB1AD8A576244 /* signal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal.c; sourceTree = "<group>"; };
@@ -330,6 +334,8 @@
 				CAE358DF2C68D021887020F5 /* LinuxUAPITestSupport.h */,
 				3A7AB548A9E0653A96E8EE61 /* RootfsBootstrapTests.m */,
 				39D1B661F15441FB32765EC6 /* SignalTests.m */,
+				90A08DB89035D1656587D959 /* TaskExecContract.c */,
+				92672608BC0DCE77AA7B30F0 /* TaskExecTests.m */,
 				767A8483185FE320714CA54E /* TaskGroupTests.m */,
 				E1CD35402A585DF342760586 /* VFSAtContract.c */,
 				97089E4A77C673C1280D46C1 /* VFSPathTests.m */,
@@ -497,6 +503,8 @@
 				13FB5E5B82FE3B5C5391A96B /* LinuxUAPITestSupport.c in Sources */,
 				14DEFC9BDE432750E36BB297 /* RootfsBootstrapTests.m in Sources */,
 				89EF08DAA55DB8C17CE9F248 /* SignalTests.m in Sources */,
+				1571C17134FD341921B13C74 /* TaskExecContract.c in Sources */,
+				83F06BCA2B801A0D599FC7B2 /* TaskExecTests.m in Sources */,
 				3DEC101077E32C26F85507A0 /* TaskGroupTests.m in Sources */,
 				2A87FD94AED672D2C4945B04 /* VFSAtContract.c in Sources */,
 				6B689996B8A951020685A627 /* VFSPathTests.m in Sources */,

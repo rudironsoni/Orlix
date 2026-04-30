@@ -210,6 +210,7 @@ int task_session_has_pgrp_impl(int32_t sid, int32_t pgid);
 /* Virtual fork/exec - internal helpers */
 int32_t fork_impl(void);
 int32_t vfork_impl(void);
+int task_exec_transition_impl(const char *path, const char *argv0);
 
 /* Virtual exit/wait - internal helpers */
 void exit_impl(int status);

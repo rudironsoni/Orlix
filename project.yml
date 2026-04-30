@@ -132,6 +132,7 @@ targets:
     - IXLandSystemLinuxKernelTests/KernelBootTests.m
     - IXLandSystemLinuxKernelTests/FcntlTests.m
     - IXLandSystemLinuxKernelTests/ExecFdTests.m
+    - IXLandSystemLinuxKernelTests/TaskExecTests.m
     - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
@@ -158,6 +159,10 @@ targets:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - path: IXLandSystemLinuxKernelTests/ExecFdContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/TaskExecContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
