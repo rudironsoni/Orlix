@@ -286,25 +286,6 @@ enum exec_image_type exec_classify(const char *path) {
     return EXEC_IMAGE_NONE;
 }
 
-int exec_close_cloexec(struct task_struct *task) {
-    if (!task || !task->files) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    fs_mutex_lock(&task->files->lock);
-    for (size_t i = 0; i < task->files->max_fds; i++) {
-        if (task->files->fd[i] && (task->files->fd[i]->fd_flags & FD_CLOEXEC)) {
-            struct file *file = task->files->fd[i];
-            task->files->fd[i] = NULL;
-            free_file(file);
-        }
-    }
-    fs_mutex_unlock(&task->files->lock);
-
-    return 0;
-}
-
 void exec_reset_signals(struct signal_struct *sighand) {
     if (!sighand) {
         return;
@@ -371,38 +352,21 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
         return -1;
     }
 
-    exec_close_cloexec(task);
+    if (task_exec_transition_impl(pathname, argv_copy ? argv_copy[0] : NULL) < 0) {
+        exec_free_argv(argv_copy);
+        exec_free_argv(envp_copy);
+        return -1;
+    }
 
     if (task->signal) {
         exec_reset_signals(task->signal);
     }
-
-    if (argv_copy && argv_copy[0]) {
-        strncpy(task->comm, argv_copy[0], TASK_COMM_LEN - 1);
-        task->comm[TASK_COMM_LEN - 1] = '\0';
-    } else {
-        const char *basename = strrchr(pathname, '/');
-        if (basename) {
-            basename++;
-        } else {
-            basename = pathname;
-        }
-        strncpy(task->comm, basename, TASK_COMM_LEN - 1);
-        task->comm[TASK_COMM_LEN - 1] = '\0';
-    }
-
-    strncpy(task->exe, pathname, MAX_PATH - 1);
-    task->exe[MAX_PATH - 1] = '\0';
 
     int argc = 0;
     if (argv_copy) {
         while (argv_copy[argc]) {
             argc++;
         }
-    }
-
-    if (task->vfork_parent) {
-        vfork_exec_notify();
     }
 
     int ret;

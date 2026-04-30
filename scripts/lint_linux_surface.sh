@@ -256,6 +256,24 @@ fi
 echo "   ✓ No broken host syscall errno rewriting"
 
 echo ""
+echo "=== Check 17a: execve transition wiring regressions ==="
+EXECVE_BODY=$(python3 - <<'PY'
+from pathlib import Path
+text = Path('fs/exec.c').read_text()
+start = text.index('int execve(')
+end = text.index('int execv(')
+print(text[start:end])
+PY
+)
+EXECVE_REGRESSIONS=$(printf '%s' "$EXECVE_BODY" | rg -n 'task->comm|task->exe|vfork_exec_notify\s*\(|exec_close_cloexec\s*\(' 2>/dev/null || true)
+if [ -n "$EXECVE_REGRESSIONS" ]; then
+    echo "FAIL: Duplicated exec transition logic found in fs/exec.c execve():"
+    echo "$EXECVE_REGRESSIONS"
+    exit 1
+fi
+echo "   ✓ execve() routes through task_exec_transition_impl"
+
+echo ""
 echo "=== Check 17b: Test Linux UAPI contamination aliases ==="
 TEST_UAPI_CONTAMINATION=$(rg -n 'include/ixland/linux_uapi_constants\.h|\bIX_(AT_|F_)|\bTEST_(AT_|F_)|\bixland_test_uapi_(at_|f_)' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
 if [ -n "$TEST_UAPI_CONTAMINATION" ]; then
