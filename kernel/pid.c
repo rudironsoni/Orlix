@@ -5,7 +5,7 @@
 
 #include "task.h"
 
-#define PID_MIN 1000
+#define PID_MIN 1
 #define PID_MAX 65535
 #define PID_COUNT (PID_MAX - PID_MIN + 1)
 

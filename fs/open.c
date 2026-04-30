@@ -1,5 +1,6 @@
+#include <linux/fcntl.h>
+
 #include <errno.h>
-#include <fcntl.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +31,7 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
     /* Always create synthetic fds for /proc, /sys, /dev */
     if ((strcmp(resolved_path, "/proc") == 0 || 
          strcmp(resolved_path, "/sys") == 0 ||
-         strcmp(resolved_path, "/dev") == 0) && (flags & O_DIRECTORY)) {
+         strcmp(resolved_path, "/dev") == 0) && ((flags & O_DIRECTORY) != 0 || (flags & O_PATH) == 0)) {
         int fd = alloc_fd_impl();
         if (fd < 0) {
             return -1;
@@ -41,7 +42,7 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
 
     {
         proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_path);
-        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) && (flags & O_DIRECTORY)) {
+        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) && ((flags & O_DIRECTORY) != 0 || (flags & O_PATH) == 0)) {
             int fd = alloc_fd_impl();
             if (fd < 0) {
                 return -1;
@@ -218,7 +219,7 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    if (vfs_path_is_synthetic_root(resolved_path) && (flags & O_DIRECTORY)) {
+    if (vfs_path_is_synthetic_root(resolved_path) && ((flags & O_DIRECTORY) != 0 || (flags & O_PATH) == 0)) {
         int fd = alloc_fd_impl();
         if (fd < 0) {
             return -1;
@@ -229,7 +230,7 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
 
     {
         proc_self_path_class_t proc_class = vfs_classify_proc_self_path(resolved_path);
-        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) && (flags & O_DIRECTORY)) {
+        if ((proc_class == PROC_SELF_DIR || proc_class == PROC_SELF_FD_DIR || proc_class == PROC_SELF_FDINFO_DIR) && ((flags & O_DIRECTORY) != 0 || (flags & O_PATH) == 0)) {
             int fd = alloc_fd_impl();
             if (fd < 0) {
                 return -1;

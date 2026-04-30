@@ -53,8 +53,9 @@ int free_fd(struct files_struct *files, int fd);
  * These functions work with the internal static fd table, not files_struct
  * ============================================================================ */
 
-/* Initialize the static fd table */
+/* Initialize/reset the static fd table */
 void file_init_impl(void);
+void file_deinit_impl(void);
 
 /* Allocate/free slots in static fd table */
 int alloc_fd_impl(void);

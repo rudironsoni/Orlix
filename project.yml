@@ -130,6 +130,7 @@ targets:
     - IXLandSystemLinuxKernelTests/FutexTests.m
     - IXLandSystemLinuxKernelTests/RootfsBootstrapTests.m
     - IXLandSystemLinuxKernelTests/KernelBootTests.m
+    - IXLandSystemLinuxKernelTests/KernelInitTests.m
     - IXLandSystemLinuxKernelTests/FcntlTests.m
     - IXLandSystemLinuxKernelTests/ExecFdTests.m
     - IXLandSystemLinuxKernelTests/ExecSyscallTests.m
@@ -139,6 +140,10 @@ targets:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - path: IXLandSystemLinuxKernelTests/KernelBoot.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/KernelInitContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi

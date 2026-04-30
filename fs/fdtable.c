@@ -500,6 +500,15 @@ static void release_fd_description(fd_description_t *desc) {
     }
 }
 
+static void fd_table_bootstrap_stdio_locked(void) {
+    fd_table[STDIN_FILENO].used = true;
+    fd_table[STDIN_FILENO].desc = alloc_synthetic_dev_fd_description(O_RDONLY, 0, "/dev/null", SYNTHETIC_DEV_NULL);
+    fd_table[STDOUT_FILENO].used = true;
+    fd_table[STDOUT_FILENO].desc = alloc_synthetic_dev_fd_description(O_WRONLY, 0, "/dev/null", SYNTHETIC_DEV_NULL);
+    fd_table[STDERR_FILENO].used = true;
+    fd_table[STDERR_FILENO].desc = alloc_synthetic_dev_fd_description(O_WRONLY, 0, "/dev/null", SYNTHETIC_DEV_NULL);
+}
+
 void file_init_impl(void) {
     if (atomic_exchange(&fd_table_initialized, 1) == 1) {
         return;
@@ -510,16 +519,27 @@ void file_init_impl(void) {
     for (int i = 0; i < NR_OPEN_DEFAULT; i++) {
         fs_mutex_init(&fd_table[i].lock);
     }
+    fd_table_bootstrap_stdio_locked();
+    fs_mutex_unlock(&fd_table_lock);
+}
 
-    fd_table[STDIN_FILENO].used = true;
-    fd_table[STDIN_FILENO].desc = alloc_fd_description(STDIN_FILENO, O_RDONLY, 0, "/dev/stdin");
+void file_deinit_impl(void) {
+    if (atomic_exchange(&fd_table_initialized, 0) == 0) {
+        return;
+    }
 
-    fd_table[STDOUT_FILENO].used = true;
-    fd_table[STDOUT_FILENO].desc = alloc_fd_description(STDOUT_FILENO, O_WRONLY, 0, "/dev/stdout");
-
-    fd_table[STDERR_FILENO].used = true;
-    fd_table[STDERR_FILENO].desc = alloc_fd_description(STDERR_FILENO, O_WRONLY, 0, "/dev/stderr");
-
+    fs_mutex_lock(&fd_table_lock);
+    for (int i = 0; i < NR_OPEN_DEFAULT; i++) {
+        fd_description_t *desc = fd_table[i].desc;
+        fd_table[i].desc = NULL;
+        fd_table[i].fd_flags = 0;
+        fd_table[i].used = false;
+        fs_mutex_unlock(&fd_table_lock);
+        release_fd_description(desc);
+        fs_mutex_lock(&fd_table_lock);
+        fs_mutex_destroy(&fd_table[i].lock);
+    }
+    memset(fd_table, 0, sizeof(fd_table));
     fs_mutex_unlock(&fd_table_lock);
 }
 

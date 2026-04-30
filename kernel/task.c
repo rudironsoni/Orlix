@@ -141,10 +141,11 @@ int task_init(void) {
         if (!init_task)
             return -1;
 
-        init_task->ppid = init_task->pid;
+        init_task->ppid = 0;
         init_task->pgid = init_task->pid;
         init_task->sid = init_task->pid;
         strncpy(init_task->comm, "init", sizeof(init_task->comm));
+        init_task->comm[sizeof(init_task->comm) - 1] = '\0';
 
         init_task->files = alloc_files(NR_OPEN_DEFAULT);
         if (!init_task->files) {

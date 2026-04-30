@@ -36,6 +36,7 @@
 		5D1AA08946E9CB8B3AFAE1C6 /* clock.c in Sources */ = {isa = PBXBuildFile; fileRef = FFC9C26D7F3E35F6398D0B73 /* clock.c */; };
 		6B365831A4B17F03AE598CFF /* sys.c in Sources */ = {isa = PBXBuildFile; fileRef = CE4E5039272874EE6A5FFD11 /* sys.c */; };
 		6B689996B8A951020685A627 /* VFSPathTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 97089E4A77C673C1280D46C1 /* VFSPathTests.m */; };
+		6B765327CCF9FE19CB035CA0 /* KernelInitTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 53E3EED8E60498770B580706 /* KernelInitTests.m */; };
 		6DCCC30A9E2767FEAA8316D2 /* vfs.c in Sources */ = {isa = PBXBuildFile; fileRef = CC8A063128CC02CB6B938762 /* vfs.c */; };
 		70DFBB25D68D1C86B3F68C17 /* epoll_bridge.c in Sources */ = {isa = PBXBuildFile; fileRef = BA898A59834C42247E34F3A2 /* epoll_bridge.c */; };
 		76236EBE1D125F243FE8D067 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = CC4338AECA611FDBA915367D /* sync.c */; };
@@ -67,6 +68,7 @@
 		C4EB75804B7F62026355C226 /* eventpoll.c in Sources */ = {isa = PBXBuildFile; fileRef = D46E9099D1DEF53E9F6D3C41 /* eventpoll.c */; };
 		CABBE0F9F7AB329F34E5E2AF /* open.c in Sources */ = {isa = PBXBuildFile; fileRef = 4E3BBA7476909DE92B9A8F8D /* open.c */; };
 		CE1F6989C50EC538B9BEE187 /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = CC70547DB7E639309BAFA02D /* wait.c */; };
+		CF529097BA476D3414418B65 /* KernelInitContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 0B9F6B902F768AA6DE216541 /* KernelInitContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		D01F8EE6B1FF4C363A19D2AF /* inode.c in Sources */ = {isa = PBXBuildFile; fileRef = C0A71140476601A06FC988D7 /* inode.c */; };
 		D029EB47C0BAF7A69D4E6C12 /* path_host.c in Sources */ = {isa = PBXBuildFile; fileRef = 9400E47E570892E792DD720A /* path_host.c */; };
 		D2F1E40B82C0EB49D0B14FF8 /* backing_io.m in Sources */ = {isa = PBXBuildFile; fileRef = 85C6F04780BEA9F2AA85D0E4 /* backing_io.m */; };
@@ -117,6 +119,7 @@
 		008ECDF9EF2E0DDA77DFE526 /* ExecSyscallContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ExecSyscallContract.c; sourceTree = "<group>"; };
 		042E556F1EAD33852492F525 /* HostTestSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HostTestSupport.h; sourceTree = "<group>"; };
 		0869AF46EE225A3EF40ACA99 /* VFSPathHostBridgeTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VFSPathHostBridgeTests.m; sourceTree = "<group>"; };
+		0B9F6B902F768AA6DE216541 /* KernelInitContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = KernelInitContract.c; sourceTree = "<group>"; };
 		1196E0E046C9D8486908FEF8 /* task.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = task.c; sourceTree = "<group>"; };
 		177E646BFF798AE08CBEE284 /* fcntl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fcntl.c; sourceTree = "<group>"; };
 		1A78BCCA6E31095ECC4CD43C /* FutexUAPICompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FutexUAPICompileSmoke.c; sourceTree = "<group>"; };
@@ -139,6 +142,7 @@
 		4E3BBA7476909DE92B9A8F8D /* open.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = open.c; sourceTree = "<group>"; };
 		51D066274EE2D55E90787D9C /* path.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = path.c; sourceTree = "<group>"; };
 		52402BAA17F7390A34354EB6 /* cred.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cred.c; sourceTree = "<group>"; };
+		53E3EED8E60498770B580706 /* KernelInitTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KernelInitTests.m; sourceTree = "<group>"; };
 		5885A2D3F39790AAC62634D5 /* exit.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = exit.c; sourceTree = "<group>"; };
 		5BC97DE08A342CD4299FE7BB /* PTYTestSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PTYTestSupport.h; sourceTree = "<group>"; };
 		5D494D6F83176E636A70E6FF /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
@@ -335,6 +339,8 @@
 				1A78BCCA6E31095ECC4CD43C /* FutexUAPICompileSmoke.c */,
 				38A6AE564B1CF443D8406232 /* KernelBoot.c */,
 				B6A8D5B76A1301B4F60794A7 /* KernelBootTests.m */,
+				0B9F6B902F768AA6DE216541 /* KernelInitContract.c */,
+				53E3EED8E60498770B580706 /* KernelInitTests.m */,
 				825904975D6668A8AB125E98 /* LinuxUAPICompileSmoke.c */,
 				9A8678E28B73B73210D86FAB /* LinuxUAPITestSupport.c */,
 				CAE358DF2C68D021887020F5 /* LinuxUAPITestSupport.h */,
@@ -507,6 +513,8 @@
 				9ABA5D0A937A9603B4C52A44 /* FutexUAPICompileSmoke.c in Sources */,
 				DF02A81D41A3C724D2620308 /* KernelBoot.c in Sources */,
 				DA3E8236801C67CD00707E6D /* KernelBootTests.m in Sources */,
+				CF529097BA476D3414418B65 /* KernelInitContract.c in Sources */,
+				6B765327CCF9FE19CB035CA0 /* KernelInitTests.m in Sources */,
 				B1AD6A278B1352C350774FB6 /* LinuxUAPICompileSmoke.c in Sources */,
 				13FB5E5B82FE3B5C5391A96B /* LinuxUAPITestSupport.c in Sources */,
 				14DEFC9BDE432750E36BB297 /* RootfsBootstrapTests.m in Sources */,

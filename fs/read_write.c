@@ -30,10 +30,6 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         return -1;
     }
 
-    if (fd <= 2) {
-        return host_read_impl(fd, buf, count);
-    }
-
     void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
@@ -152,10 +148,6 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
         return -1;
     }
 
-    if (fd <= 2) {
-        return host_write_impl(fd, buf, count);
-    }
-
     void *entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
@@ -232,10 +224,6 @@ linux_off_t lseek_impl(int fd, linux_off_t offset, int whence) {
         return (linux_off_t)-1;
     }
 
-    if (fd <= 2) {
-        return host_lseek_impl(fd, offset, whence);
-    }
-
     entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
@@ -289,10 +277,6 @@ ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
-    }
-
-    if (fd <= 2) {
-        return host_pread_impl(fd, buf, count, offset);
     }
 
     void *entry = get_fd_entry_impl(fd);
@@ -360,10 +344,6 @@ ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset) {
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
         return -1;
-    }
-
-    if (fd <= 2) {
-        return host_pwrite_impl(fd, buf, count, offset);
     }
 
     void *entry = get_fd_entry_impl(fd);

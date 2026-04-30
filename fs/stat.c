@@ -58,15 +58,6 @@ int fstat_impl(int fd, struct linux_stat *statbuf) {
         return -1;
     }
 
-    if (fd <= 2) {
-        ret = host_fstat_impl(fd, statbuf);
-        if (ret != 0) {
-            errno = -ret;
-            return -1;
-        }
-        return 0;
-    }
-
     entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;

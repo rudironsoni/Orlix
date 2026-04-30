@@ -139,7 +139,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
     /* SYNTHETIC_DIR_GENERIC and SYNTHETIC_DIR_PROC_SELF_FD* handled above */
 
     if (dir_class == SYNTHETIC_DIR_PROC_SELF_FD || dir_class == SYNTHETIC_DIR_PROC_SELF_FDINFO) {
-        int scan_fd = (cursor >= 2) ? ((int)cursor - 1) : 3;
+        int scan_fd = (cursor >= 2) ? ((int)cursor - 2) : 0;
 
         for (; scan_fd < NR_OPEN_DEFAULT; scan_fd++) {
             if (!fdtable_is_used_impl(scan_fd)) {

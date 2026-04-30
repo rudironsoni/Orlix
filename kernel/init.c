@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../fs/fdtable.h"
 #include "../fs/vfs.h"
 #include "../runtime/native/registry.h"
 #include "task.h"
@@ -54,6 +55,7 @@ static void kernel_deinit_locked(void) {
     }
 
     task_deinit();
+    file_deinit_impl();
     vfs_deinit();
     atomic_store(&library_initialized, 0);
     atomic_store(&kernel_booted, 0);
