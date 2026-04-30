@@ -6,15 +6,13 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  * Virtual mount behavior against IXLand's own VFS, NOT host mount(2).
  *
- * NOTE: This file MUST NOT include any headers that transitively pull in
- * Darwin's sys/mount.h to avoid signature conflicts with BSD mount().
  */
 
 #include <errno.h>
 #include <string.h>
 
-/* Forward declare VFS functions we need - avoid including vfs.h which pulls in
- * Darwin headers that declare BSD mount() */
+#include <linux/mount.h>
+
 extern int vfs_mount(const char *source, const char *target,
                       const char *fstype, unsigned long flags,
                       const void *data);
@@ -37,7 +35,7 @@ extern int vfs_umount(const char *target);
 static int mount_impl(const char *source, const char *target,
                       const char *filesystemtype, unsigned long mountflags,
                       const void *data) {
-    if (!source || !target || !filesystemtype) {
+    if (!source || !target) {
         errno = EFAULT;
         return -1;
     }
@@ -48,14 +46,17 @@ static int mount_impl(const char *source, const char *target,
         return -1;
     }
 
-    /* Validate filesystemtype exists */
-    if (strlen(filesystemtype) == 0) {
+    if (filesystemtype && strlen(filesystemtype) == 0) {
         errno = EINVAL;
         return -1;
     }
 
-    /* Delegate to VFS layer for virtual mount */
-    return vfs_mount(source, target, filesystemtype, mountflags, data);
+    int ret = vfs_mount(source, target, filesystemtype, mountflags, data);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
 }
 
 /* ============================================================================
@@ -73,7 +74,12 @@ static int umount_impl(const char *target) {
         return -1;
     }
 
-    return vfs_umount(target);
+    int ret = vfs_umount(target);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
 }
 
 /* ============================================================================
@@ -81,11 +87,10 @@ static int umount_impl(const char *target) {
  * ============================================================================ */
 
 static int umount2_impl(const char *target, int flags) {
-    /* For now, flags are parsed but most are not implemented */
-    /* MNT_FORCE not supported by IXLand VFS yet */
-    /* MNT_DETACH - lazy unmount */
-    /* MNT_EXPIRE - mark for expiry */
-    (void)flags;
+    if (flags != 0) {
+        errno = EINVAL;
+        return -1;
+    }
 
     return umount_impl(target);
 }

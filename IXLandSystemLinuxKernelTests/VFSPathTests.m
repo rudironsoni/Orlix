@@ -1136,6 +1136,30 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
                    @"fchdir should update IXLand task pwd without host cwd, errno %d", errno);
 }
 
+- (void)testBindMountRedirectsTargetTree {
+    extern int vfs_contract_bind_mount_redirects_target_tree(void);
+    XCTAssertEqual(vfs_contract_bind_mount_redirects_target_tree(), 0,
+                   @"MS_BIND mount should redirect target tree through IXLand VFS, errno %d", errno);
+}
+
+- (void)testBindMountDuplicateTargetReturnsBusy {
+    extern int vfs_contract_bind_mount_duplicate_target_returns_busy(void);
+    XCTAssertEqual(vfs_contract_bind_mount_duplicate_target_returns_busy(), 0,
+                   @"duplicate bind mount target should return EBUSY, errno %d", errno);
+}
+
+- (void)testUmountRestoresTargetTree {
+    extern int vfs_contract_umount_restores_target_tree(void);
+    XCTAssertEqual(vfs_contract_umount_restores_target_tree(), 0,
+                   @"umount should restore target tree path resolution, errno %d", errno);
+}
+
+- (void)testBindMountRejectsNonBindMount {
+    extern int vfs_contract_bind_mount_rejects_non_bind_mount(void);
+    XCTAssertEqual(vfs_contract_bind_mount_rejects_non_bind_mount(), 0,
+                   @"non-bind mount should remain unsupported without host mount semantics, errno %d", errno);
+}
+
 /* ============================================================================
  * SIGNAL-FAMILY SEMANTICS TESTS
  * ============================================================================ */

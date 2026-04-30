@@ -5,8 +5,8 @@
  * Uses canonical Linux names directly.
  */
 
-#include <asm-generic/errno.h>
 #include <linux/fcntl.h>
+#include <linux/mount.h>
 
 #include <errno.h>
 
@@ -21,9 +21,13 @@
 extern int chroot(const char *path);
 extern int fchdir(int fd);
 extern char *getcwd(char *buf, size_t size);
+extern int mount(const char *source, const char *target, const char *filesystemtype,
+                 unsigned long mountflags, const void *data);
+extern int umount(const char *target);
 extern int mkdir_impl(const char *pathname, linux_mode_t mode);
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern int close_impl(int fd);
+extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
@@ -41,6 +45,67 @@ static void vfs_contract_restore_fs(struct fs_struct *fs, const char *root, cons
     }
     fs_set_root(fs, root);
     fs_set_pwd(fs, pwd);
+}
+
+static int vfs_contract_write_file(const char *path, const char *content) {
+    int fd;
+    size_t len;
+
+    fd = open_impl(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) {
+        return -1;
+    }
+
+    len = __builtin_strlen(content);
+    if (write_impl(fd, content, len) != (long)len) {
+        int saved_errno = errno;
+        close_impl(fd);
+        errno = saved_errno;
+        return -1;
+    }
+
+    return close_impl(fd);
+}
+
+static int vfs_contract_read_file_exact(const char *path, const char *expected) {
+    char buf[64];
+    int fd;
+    long nread;
+    size_t expected_len = __builtin_strlen(expected);
+
+    if (expected_len >= sizeof(buf)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    fd = open_impl(path, O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    nread = read_impl(fd, buf, sizeof(buf));
+    {
+        int saved_errno = errno;
+        close_impl(fd);
+        errno = saved_errno;
+    }
+    if (nread < 0) {
+        return -1;
+    }
+    if ((size_t)nread != expected_len || __builtin_memcmp(buf, expected, expected_len) != 0) {
+        errno = EIO;
+        return -1;
+    }
+
+    return 0;
+}
+
+static void vfs_contract_cleanup_mount_paths(void) {
+    umount("/tmp/vfs-bind-target");
+    unlink_impl("/tmp/vfs-bind-source/file");
+    unlink_impl("/tmp/vfs-bind-target/file");
+    rmdir_impl("/tmp/vfs-bind-source");
+    rmdir_impl("/tmp/vfs-bind-target");
 }
 
 /* Contract: vfs_fstatat supports AT_FDCWD */
@@ -185,4 +250,104 @@ out:
     vfs_contract_restore_fs(task->fs, old_root, old_pwd);
     rmdir_impl("/tmp/vfs-fchdir-dir");
     return ret;
+}
+
+int vfs_contract_bind_mount_redirects_target_tree(void) {
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-target", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-bind-source/file", "source") != 0) {
+        goto out;
+    }
+
+    if (mount("/tmp/vfs-bind-source", "/tmp/vfs-bind-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-bind-target/file", "source") != 0) {
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    vfs_contract_cleanup_mount_paths();
+    return ret;
+}
+
+int vfs_contract_bind_mount_duplicate_target_returns_busy(void) {
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-target", 0700)) != 0) {
+        goto out;
+    }
+
+    if (mount("/tmp/vfs-bind-source", "/tmp/vfs-bind-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    errno = 0;
+    if (mount("/tmp/vfs-bind-source", "/tmp/vfs-bind-target", NULL, MS_BIND, NULL) != -1 ||
+        errno != EBUSY) {
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    vfs_contract_cleanup_mount_paths();
+    return ret;
+}
+
+int vfs_contract_umount_restores_target_tree(void) {
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-target", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-bind-source/file", "source") != 0 ||
+        vfs_contract_write_file("/tmp/vfs-bind-target/file", "target") != 0) {
+        goto out;
+    }
+
+    if (mount("/tmp/vfs-bind-source", "/tmp/vfs-bind-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-bind-target/file", "source") != 0) {
+        goto out;
+    }
+    if (umount("/tmp/vfs-bind-target") != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-bind-target/file", "target") != 0) {
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    vfs_contract_cleanup_mount_paths();
+    return ret;
+}
+
+int vfs_contract_bind_mount_rejects_non_bind_mount(void) {
+    vfs_contract_cleanup_mount_paths();
+    vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-source", 0700));
+    vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-bind-target", 0700));
+
+    errno = 0;
+    if (mount("/tmp/vfs-bind-source", "/tmp/vfs-bind-target", "tmpfs", 0, NULL) != -1 ||
+        errno != ENOSYS) {
+        vfs_contract_cleanup_mount_paths();
+        return -1;
+    }
+
+    vfs_contract_cleanup_mount_paths();
+    return 0;
 }
