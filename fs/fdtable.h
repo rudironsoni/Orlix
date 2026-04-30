@@ -63,6 +63,7 @@ void free_fd_impl(int fd);
 
 struct fd_description;
 typedef struct fd_description fd_description_t;
+struct pipe_endpoint;
 
 struct fd_entry {
 	fd_description_t *desc;
@@ -123,12 +124,15 @@ typedef enum synthetic_dev_node synthetic_dev_node_t;
 
 void init_synthetic_dev_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_dev_node_t dev_node);
 void init_synthetic_pty_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, unsigned int pty_index, bool is_master);
+int init_pipe_fd_entry_impl(int fd, int flags, struct pipe_endpoint *endpoint);
 
 bool get_fd_is_synthetic_dev_impl(void *entry);
 synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry);
 bool get_fd_is_synthetic_pty_impl(void *entry);
 bool get_fd_is_synthetic_pty_master_impl(void *entry);
 unsigned int get_fd_synthetic_pty_index_impl(void *entry);
+bool get_fd_is_pipe_impl(void *entry);
+struct pipe_endpoint *get_fd_pipe_endpoint_impl(void *entry);
 
 enum synthetic_proc_file {
     SYNTHETIC_PROC_FILE_NONE = 0,

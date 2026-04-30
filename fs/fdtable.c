@@ -1,6 +1,7 @@
 #include "fdtable.h"
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -15,6 +16,7 @@
 #define STDERR_FILENO 2
 #endif
 #include "internal/ios/fs/file_io_host.h"
+#include "pipe.h"
 #include "pty.h"
 
 struct files_struct *alloc_files(size_t max_fds) {
@@ -292,7 +294,8 @@ enum fd_type {
     FD_TYPE_SYNTHETIC_DIR, /* Synthetic directory (no host backing) */
     FD_TYPE_SYNTHETIC_DEV, /* Synthetic char device (no host backing) */
     FD_TYPE_SYNTHETIC_PROC_FILE, /* Synthetic proc file (no host backing) */
-    FD_TYPE_SYNTHETIC_PTY /* Synthetic PTY endpoint */
+    FD_TYPE_SYNTHETIC_PTY, /* Synthetic PTY endpoint */
+    FD_TYPE_PIPE /* Virtual pipe endpoint */
 };
 
 typedef struct synthetic_dir_state {
@@ -315,6 +318,7 @@ typedef struct fd_description {
     int proc_file_fd_num;
     unsigned int pty_index;
     bool pty_is_master;
+    struct pipe_endpoint *pipe_endpoint;
     atomic_int refs;
     fs_mutex_t lock;
 } fd_description_t;
@@ -344,6 +348,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, linux_mode
     desc->proc_file_fd_num = -1;
     desc->pty_index = 0;
     desc->pty_is_master = false;
+    desc->pipe_endpoint = NULL;
     desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
 
     if (!desc->synthetic_state) {
@@ -378,6 +383,7 @@ static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, linux_
     desc->proc_file_fd_num = -1;
     desc->pty_index = 0;
     desc->pty_is_master = false;
+    desc->pipe_endpoint = NULL;
     desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
     if (!desc->synthetic_state) {
         free(desc);
@@ -411,6 +417,7 @@ static fd_description_t *alloc_synthetic_dev_fd_description(int flags, linux_mod
     desc->proc_file_fd_num = -1;
     desc->pty_index = 0;
     desc->pty_is_master = false;
+    desc->pipe_endpoint = NULL;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
@@ -438,6 +445,7 @@ static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, lin
     desc->proc_file_fd_num = -1;
     desc->pty_index = 0;
     desc->pty_is_master = false;
+    desc->pipe_endpoint = NULL;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
@@ -466,6 +474,7 @@ static fd_description_t *alloc_synthetic_pty_fd_description(int flags, linux_mod
     desc->proc_file_fd_num = -1;
     desc->pty_index = pty_index;
     desc->pty_is_master = is_master;
+    desc->pipe_endpoint = NULL;
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
@@ -473,6 +482,44 @@ static fd_description_t *alloc_synthetic_pty_fd_description(int flags, linux_mod
         strncpy(desc->path, path, MAX_PATH - 1);
         desc->path[MAX_PATH - 1] = '\0';
     }
+    return desc;
+}
+
+static fd_description_t *alloc_pipe_fd_description(int flags, struct pipe_endpoint *endpoint) {
+    fd_description_t *desc;
+    char path[MAX_PATH];
+    unsigned long long pipe_id;
+
+    if (!endpoint) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    pipe_id = pipe_endpoint_id_impl(endpoint);
+    snprintf(path, sizeof(path), "pipe:[%llu]", pipe_id);
+
+    desc->type = FD_TYPE_PIPE;
+    desc->fd = -1;
+    desc->flags = flags;
+    desc->mode = 0;
+    desc->offset = 0;
+    desc->is_dir = false;
+    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
+    desc->pipe_endpoint = endpoint;
+    desc->synthetic_state = NULL;
+    atomic_init(&desc->refs, 1);
+    fs_mutex_init(&desc->lock);
+    memcpy(desc->path, path, strlen(path) + 1);
     return desc;
 }
 
@@ -491,6 +538,8 @@ static void release_fd_description(fd_description_t *desc) {
             host_close_impl(desc->fd);
         } else if (desc->type == FD_TYPE_SYNTHETIC_PTY) {
             pty_close_end_impl(desc->pty_index, desc->pty_is_master);
+        } else if (desc->type == FD_TYPE_PIPE) {
+            pipe_close_endpoint_impl(desc->pipe_endpoint);
         }
         if (desc->synthetic_state) {
             free(desc->synthetic_state);
@@ -871,6 +920,20 @@ void init_synthetic_pty_fd_entry_impl(int fd, int flags, linux_mode_t mode, cons
     fs_mutex_unlock(&entry->lock);
 }
 
+int init_pipe_fd_entry_impl(int fd, int flags, struct pipe_endpoint *endpoint) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    fs_mutex_lock(&entry->lock);
+    entry->desc = alloc_pipe_fd_description(flags, endpoint);
+    if (!entry->desc) {
+        fs_mutex_unlock(&entry->lock);
+        return -1;
+    }
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    fs_mutex_unlock(&entry->lock);
+    return 0;
+}
+
 bool get_fd_is_synthetic_dev_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_DEV;
@@ -894,6 +957,16 @@ bool get_fd_is_synthetic_pty_master_impl(void *entry) {
 unsigned int get_fd_synthetic_pty_index_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->pty_index : 0;
+}
+
+bool get_fd_is_pipe_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_PIPE;
+}
+
+struct pipe_endpoint *get_fd_pipe_endpoint_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc ? fd_entry->desc->pipe_endpoint : NULL;
 }
 
 void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file) {

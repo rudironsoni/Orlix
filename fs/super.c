@@ -69,9 +69,7 @@ static int fstatvfs_impl(int fd, struct statvfs *buf) {
     return _fstatvfs(fd, buf);
 }
 
-/* ============================================================================
- * POSIX_FADVISE - File access advice
- * ============================================================================ */
+/* File access advice. */
 
 static int posix_fadvise_impl(int fd, off_t offset, off_t len, int advice) {
     /* iOS doesn't support posix_fadvise, ignore */
@@ -82,9 +80,7 @@ static int posix_fadvise_impl(int fd, off_t offset, off_t len, int advice) {
     return 0;
 }
 
-/* ============================================================================
- * POSIX_FALLOCATE - Preallocate file space
- * ============================================================================ */
+/* Preallocate file space. */
 
 static int posix_fallocate_impl(int fd, off_t offset, off_t len) {
     /* iOS doesn't support fallocate, simulate by writing zeros */

@@ -21,22 +21,22 @@ extern "C" {
  * ============================================================================ */
 
 /* Returns non-zero if mode represents a directory */
-int ixland_test_uapi_mode_is_directory(unsigned int mode);
+int stat_mode_is_directory(unsigned int mode);
 
 /* Returns non-zero if mode represents a symlink */
-int ixland_test_uapi_mode_is_symlink(unsigned int mode);
+int stat_mode_is_symlink(unsigned int mode);
 
 /* Returns non-zero if mode represents a regular file */
-int ixland_test_uapi_mode_is_regular(unsigned int mode);
+int stat_mode_is_regular(unsigned int mode);
 
 /* Returns non-zero if mode represents a character device */
-int ixland_test_uapi_mode_is_char_device(unsigned int mode);
+int stat_mode_is_char_device(unsigned int mode);
 
 /* Returns non-zero if mode represents a block device */
-int ixland_test_uapi_mode_is_block_device(unsigned int mode);
+int stat_mode_is_block_device(unsigned int mode);
 
 /* Returns non-zero if mode represents a FIFO */
-int ixland_test_uapi_mode_is_fifo(unsigned int mode);
+int stat_mode_is_fifo(unsigned int mode);
 
 #ifdef __cplusplus
 }

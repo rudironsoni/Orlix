@@ -14,26 +14,26 @@
  * Stat mode semantic helpers - interpret mode values
  * ============================================================================ */
 
-int ixland_test_uapi_mode_is_directory(unsigned int mode) {
+int stat_mode_is_directory(unsigned int mode) {
     return S_ISDIR(mode);
 }
 
-int ixland_test_uapi_mode_is_symlink(unsigned int mode) {
+int stat_mode_is_symlink(unsigned int mode) {
     return S_ISLNK(mode);
 }
 
-int ixland_test_uapi_mode_is_regular(unsigned int mode) {
+int stat_mode_is_regular(unsigned int mode) {
     return S_ISREG(mode);
 }
 
-int ixland_test_uapi_mode_is_char_device(unsigned int mode) {
+int stat_mode_is_char_device(unsigned int mode) {
     return S_ISCHR(mode);
 }
 
-int ixland_test_uapi_mode_is_block_device(unsigned int mode) {
+int stat_mode_is_block_device(unsigned int mode) {
     return S_ISBLK(mode);
 }
 
-int ixland_test_uapi_mode_is_fifo(unsigned int mode) {
+int stat_mode_is_fifo(unsigned int mode) {
     return S_ISFIFO(mode);
 }

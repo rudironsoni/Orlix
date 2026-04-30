@@ -2,6 +2,7 @@
  * Virtual stat/fstat implementation
  */
 #include <linux/fcntl.h>
+#include <linux/stat.h>
 
 #include <errno.h>
 #include <string.h>
@@ -62,6 +63,18 @@ int fstat_impl(int fd, struct linux_stat *statbuf) {
     if (!entry) {
         errno = EBADF;
         return -1;
+    }
+
+    if (get_fd_is_pipe_impl(entry)) {
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFIFO | 0600;
+        statbuf->st_nlink = 1;
+        statbuf->st_uid = 0;
+        statbuf->st_gid = 0;
+        statbuf->st_blksize = 4096;
+        statbuf->st_blocks = 0;
+        put_fd_entry_impl(entry);
+        return 0;
     }
 
     real_fd = get_real_fd_impl(entry);

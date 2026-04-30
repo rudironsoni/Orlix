@@ -601,7 +601,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 
     errno = 0;
     XCTAssertEqual(fstat_impl(fd, &st), 0, @"fstat_impl should succeed for synthetic /proc directory fd");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"synthetic /proc fd should stat as a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"synthetic /proc fd should stat as a directory");
     XCTAssertEqual(st.st_mode & 0777, 0555, @"synthetic /proc fd should preserve synthetic permissions");
 
     close(fd);
@@ -618,7 +618,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 
     errno = 0;
     XCTAssertEqual(fstat_impl(fd, &st), 0, @"fstat_impl should succeed for synthetic /proc/self/fd directory fd");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"synthetic /proc/self/fd fd should stat as a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"synthetic /proc/self/fd fd should stat as a directory");
     XCTAssertEqual(st.st_mode & 0777, 0555, @"synthetic /proc/self/fd fd should preserve synthetic permissions");
 
     close(fd);
@@ -635,7 +635,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 
     errno = 0;
     XCTAssertEqual(fstat_impl(fd, &st), 0, @"fstat_impl should succeed for synthetic /proc/self/fdinfo file fd");
-    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"synthetic /proc/self/fdinfo fd should stat as a regular file");
+    XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"synthetic /proc/self/fdinfo fd should stat as a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"synthetic /proc/self/fdinfo fd should preserve synthetic permissions");
 
     close(fd);
@@ -646,26 +646,26 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/proc", &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc root should be a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/proc root should be a directory");
     XCTAssertEqual(st.st_mode & 0777, 0555, @"/proc root should have 0555 permissions");
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/sys", &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed for /sys");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/sys root should be a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/sys root should be a directory");
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/dev", &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed for /dev");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/dev root should be a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/dev root should be a directory");
 
     errno = 0;
     XCTAssertEqual(stat_impl("/proc", &st), 0,
                    @"public stat should succeed for synthetic root");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"public stat should return directory for /proc");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"public stat should return directory for /proc");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/sys", &st), 0,
                    @"public lstat should succeed for synthetic root");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"public lstat should return directory for /sys");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"public lstat should return directory for /sys");
 }
 
 - (void)testSyntheticChildStatFails {
@@ -911,19 +911,19 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/null", &st), 0, @"stat(/dev/null) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/null should be a character device");
+    XCTAssertTrue(stat_mode_is_char_device(st.st_mode), @"/dev/null should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/null should have 0666 permissions");
 
     errno = 0;
     XCTAssertEqual(lstat_impl("/dev/null", &st), 0, @"lstat(/dev/null) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"lstat(/dev/null) should return character device");
+    XCTAssertTrue(stat_mode_is_char_device(st.st_mode), @"lstat(/dev/null) should return character device");
 }
 
 - (void)testDevZeroStatSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/zero", &st), 0, @"stat(/dev/zero) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/zero should be a character device");
+    XCTAssertTrue(stat_mode_is_char_device(st.st_mode), @"/dev/zero should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/zero should have 0666 permissions");
 }
 
@@ -931,7 +931,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/urandom", &st), 0, @"stat(/dev/urandom) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_char_device(st.st_mode), @"/dev/urandom should be a character device");
+    XCTAssertTrue(stat_mode_is_char_device(st.st_mode), @"/dev/urandom should be a character device");
     XCTAssertEqual(st.st_mode & 0777, 0666, @"/dev/urandom should have 0666 permissions");
 }
 
@@ -1142,14 +1142,14 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self", &st), 0, @"stat(/proc/self) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self should be a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/proc/self should be a directory");
 }
 
 - (void)testProcSelfStatFileSucceeds {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/stat", &st), 0, @"stat(/proc/self/stat) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/stat should be a regular file");
+    XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/stat should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/stat should have 0444 permissions");
 }
 
@@ -1157,7 +1157,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/cmdline", &st), 0, @"stat(/proc/self/cmdline) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/cmdline should be a regular file");
+    XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/cmdline should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/cmdline should have 0444 permissions");
 }
 
@@ -1165,7 +1165,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/comm", &st), 0, @"stat(/proc/self/comm) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/comm should be a regular file");
+    XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/comm should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/comm should have 0444 permissions");
 }
 
@@ -1173,7 +1173,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/statm", &st), 0, @"stat(/proc/self/statm) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/statm should be a regular file");
+    XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/statm should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/statm should have 0444 permissions");
 }
 
@@ -1193,7 +1193,7 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     errno = 0;
     int ret = lstat_impl("/proc/self/exe", &st);
     XCTAssertEqual(ret, 0, @"lstat(/proc/self/exe) should succeed when exe is seeded");
-    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/exe should be a symlink");
+    XCTAssertTrue(stat_mode_is_symlink(st.st_mode), @"/proc/self/exe should be a symlink");
 
     strncpy(task->exe, original_exe, sizeof(task->exe) - 1);
     task->exe[sizeof(task->exe) - 1] = '\0';
@@ -1203,21 +1203,21 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/cwd", &st), 0, @"lstat(/proc/self/cwd) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/cwd should be a symlink");
+    XCTAssertTrue(stat_mode_is_symlink(st.st_mode), @"/proc/self/cwd should be a symlink");
 }
 
 - (void)testProcSelfFdIsDirectory {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/fd", &st), 0, @"stat(/proc/self/fd) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self/fd should be a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/proc/self/fd should be a directory");
 }
 
 - (void)testProcSelfFdinfoIsDirectory {
     struct linux_stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/fdinfo", &st), 0, @"stat(/proc/self/fdinfo) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_directory(st.st_mode), @"/proc/self/fdinfo should be a directory");
+    XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/proc/self/fdinfo should be a directory");
 }
 
 /* ============================================================================
@@ -1231,19 +1231,19 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     errno = 0;
     int ret = lstat_impl("/proc/self/fd/0", &st);
     XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/0) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/0 should be a symlink");
+    XCTAssertTrue(stat_mode_is_symlink(st.st_mode), @"/proc/self/fd/0 should be a symlink");
 
     // Get stdout fd (1) info via /proc/self/fd/1
     errno = 0;
     ret = lstat_impl("/proc/self/fd/1", &st);
     XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/1) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/1 should be a symlink");
+    XCTAssertTrue(stat_mode_is_symlink(st.st_mode), @"/proc/self/fd/1 should be a symlink");
 
     // Get stderr fd (2) info via /proc/self/fd/2
     errno = 0;
     ret = lstat_impl("/proc/self/fd/2", &st);
     XCTAssertEqual(ret, 0, @"lstat(/proc/self/fd/2) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_symlink(st.st_mode), @"/proc/self/fd/2 should be a symlink");
+    XCTAssertTrue(stat_mode_is_symlink(st.st_mode), @"/proc/self/fd/2 should be a symlink");
 }
 
 - (void)testProcSelfFdSymlinksPointToValidPaths {
@@ -1324,14 +1324,14 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
     errno = 0;
     int ret = stat_impl("/proc/self/fdinfo/0", &st);
     XCTAssertEqual(ret, 0, @"stat(/proc/self/fdinfo/0) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/0 should be a regular file");
+    XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/0 should be a regular file");
     XCTAssertEqual(st.st_mode & 0777, 0444, @"/proc/self/fdinfo/0 should have 0444 permissions");
 
     // fdinfo/1 should also exist
     errno = 0;
     ret = stat_impl("/proc/self/fdinfo/1", &st);
     XCTAssertEqual(ret, 0, @"stat(/proc/self/fdinfo/1) should succeed");
-    XCTAssertTrue(ixland_test_uapi_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/1 should be a regular file");
+    XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/fdinfo/1 should be a regular file");
 }
 
 - (void)testProcSelfFdinfoInvalidFdNumbersFail {

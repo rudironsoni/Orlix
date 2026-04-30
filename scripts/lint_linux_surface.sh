@@ -97,7 +97,7 @@ echo "   ✓ No forbidden logging/debug output in product code"
 
 echo ""
 echo "=== Check 9: ABI/UAPI drift indicators ==="
-HANDDEFINED_ABI=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' || true)
+HANDDEFINED_ABI=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'I[X]_' -e 'TES[T]_' -e '_IMPL' || true)
 if [ -n "$HANDDEFINED_ABI" ]; then
     echo "FAIL: Hand-defined Linux ABI constants found in Linux-owner paths:"
     echo "$HANDDEFINED_ABI"
@@ -151,14 +151,14 @@ fi
 echo "   ✓ No new broad mediation headers under internal/ios"
 
 echo ""
-echo "=== Check 12: Test ABI contamination - IX_* wrapper macros ==="
-TEST_IX_ALIASES=$(rg -n -e '\bIX_AT_[A-Z0-9_]+\b' -e '\bIX_F_[A-Z0-9_]+\b' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
-if [ -n "$TEST_IX_ALIASES" ]; then
-    echo "FAIL: IX_* wrapper macros found in tests:"
-    echo "$TEST_IX_ALIASES"
+echo "=== Check 12: Test ABI contamination - branded wrapper macros ==="
+BRANDED_ALIASES=$(rg -n -e '\bI[X]_AT_[A-Z0-9_]+\b' -e '\bI[X]_F_[A-Z0-9_]+\b' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+if [ -n "$BRANDED_ALIASES" ]; then
+    echo "FAIL: Branded wrapper macros found in tests:"
+    echo "$BRANDED_ALIASES"
     exit 1
 fi
-echo "   ✓ No IX_* wrapper macros in tests"
+echo "   ✓ No branded wrapper macros in tests"
 
 echo ""
 echo "=== Check 13: Test ABI contamination - Objective-C Linux UAPI headers ==="
@@ -213,26 +213,26 @@ fi
 echo "   ✓ No TEST_* raw constants in tests"
 
 echo ""
-echo "=== Check 15b: Test ABI contamination - ixland_test_uapi_at_* helpers ==="
-IX_UAPI_AT_HELPERS=$(rg -n '\bixland_test_uapi_at_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
-if [ -n "$IX_UAPI_AT_HELPERS" ]; then
-    echo "FAIL: ixland_test_uapi_at_* helper soup found in test files:"
-    echo "$IX_UAPI_AT_HELPERS"
+echo "=== Check 15b: Test ABI contamination - at constant helpers ==="
+UAPI_AT_HELPERS=$(rg -n '\bixland_test_uapi[_]at_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$UAPI_AT_HELPERS" ]; then
+    echo "FAIL: at constant helper soup found in test files:"
+    echo "$UAPI_AT_HELPERS"
     echo "Move Linux UAPI constant usage to C contract files with canonical Linux names."
     exit 1
 fi
-echo "   ✓ No ixland_test_uapi_at_* helper soup in tests"
+echo "   ✓ No at constant helper soup in tests"
 
 echo ""
-echo "=== Check 15c: Test ABI contamination - ixland_test_uapi_f_* helpers ==="
-IX_UAPI_F_HELPERS=$(rg -n '\bixland_test_uapi_f_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
-if [ -n "$IX_UAPI_F_HELPERS" ]; then
-    echo "FAIL: ixland_test_uapi_f_* helper soup found in test files:"
-    echo "$IX_UAPI_F_HELPERS"
+echo "=== Check 15c: Test ABI contamination - fcntl constant helpers ==="
+UAPI_F_HELPERS=$(rg -n '\bixland_test_uapi[_]f_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$UAPI_F_HELPERS" ]; then
+    echo "FAIL: fcntl constant helper soup found in test files:"
+    echo "$UAPI_F_HELPERS"
     echo "Move Linux UAPI constant usage to C contract files with canonical Linux names."
     exit 1
 fi
-echo "   ✓ No ixland_test_uapi_f_* helper soup in tests"
+echo "   ✓ No fcntl constant helper soup in tests"
 
 echo ""
 echo "=== Check 16: Bridge bag usage in Linux-facing tests ==="
@@ -275,7 +275,7 @@ echo "   ✓ execve() routes through task_exec_transition_impl"
 
 echo ""
 echo "=== Check 17b: Test Linux UAPI contamination aliases ==="
-TEST_UAPI_CONTAMINATION=$(rg -n 'include/ixland/linux_uapi_constants\.h|\bIX_(AT_|F_)|\bTEST_(AT_|F_)|\bixland_test_uapi_(at_|f_)' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+TEST_UAPI_CONTAMINATION=$(rg -n 'include/ixland/linux_uapi_constants[.]h|\bI[X]_(AT_|F_)|\bTES[T]_(AT_|F_)|\bixland_test_uapi[_](at_|f_)' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
 if [ -n "$TEST_UAPI_CONTAMINATION" ]; then
     echo "FAIL: Test Linux UAPI contamination aliases found:"
     echo "$TEST_UAPI_CONTAMINATION"
@@ -299,7 +299,7 @@ DARWIN_STAT=$(rg -n '\bS_ISDIR\s*\(|\bS_ISLNK\s*\(|\bS_ISREG\s*\(|\bS_ISCHR\s*\(
 if [ -n "$DARWIN_STAT" ]; then
     echo "FAIL: Darwin S_IS* macros used as Linux proof in tests:"
     echo "$DARWIN_STAT"
-    echo "Use ixland_test_uapi_mode_is_* helpers instead."
+    echo "Use mode_is_* helpers instead."
     exit 1
 fi
 echo "   ✓ No Darwin S_IS* misuse in tests"
@@ -374,37 +374,37 @@ fi
 echo "   ✓ No internal/ios includes from Linux kernel tests"
 
 echo ""
-echo "=== Check 23: Test ABI contamination - IX_* wrapper macros ==="
-IX_WRAPPERS=$(rg -n '^\s*int\s+ixland_test_host_(open|close|open_readonly)\s*\(' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
-if [ -n "$IX_WRAPPERS" ]; then
-    echo "FAIL: IX_* wrapper macros found in test files:"
-    echo "$IX_WRAPPERS"
+echo "=== Check 23: Test ABI contamination - branded wrapper functions ==="
+BRANDED_WRAPPERS=$(rg -n '^\s*int\s+ixland_test_host_(open|close|open_readonly)\s*\(' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+if [ -n "$BRANDED_WRAPPERS" ]; then
+    echo "FAIL: Branded wrapper functions found in test files:"
+    echo "$BRANDED_WRAPPERS"
     echo "Remove fake wrapper vocabulary; use direct target-correct includes/calls."
     exit 1
 fi
-echo "   ✓ No IX_* wrapper macros in tests"
+echo "   ✓ No branded wrapper functions in tests"
 
 echo ""
-echo "=== Check 24: Test ABI contamination - linux_* accessor soup ==="
+echo "=== Check 24: Test ABI contamination - Linux-named accessor soup ==="
 LINUX_ACCESSORS=$(rg -n '^\s*int\s+linux_\w+\s*\(' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
 if [ -n "$LINUX_ACCESSORS" ]; then
-    echo "FAIL: linux_*() accessor soup found in Objective-C test files:"
+    echo "FAIL: Linux-named accessor soup found in Objective-C test files:"
     echo "$LINUX_ACCESSORS"
     echo "Remove fake accessor soup; use direct target-correct includes/calls."
     exit 1
 fi
-echo "   ✓ No linux_* accessor soup in tests"
+echo "   ✓ No Linux-named accessor soup in tests"
 
 echo ""
-echo "=== Check 25: Test ABI contamination - TEST_* raw constants ==="
-TEST_CONSTANTS=$(rg -n '^\s*#define\s+TEST_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+echo "=== Check 25: Test ABI contamination - test-prefixed raw constants ==="
+TEST_CONSTANTS=$(rg -n '^\s*#define\s+TES[T]_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
 if [ -n "$TEST_CONSTANTS" ]; then
-    echo "FAIL: TEST_* raw constants found in test files:"
+    echo "FAIL: Test-prefixed raw constants found in test files:"
     echo "$TEST_CONSTANTS"
-    echo "Remove fake TEST_* constants; use semantic helpers or direct UAPI."
+    echo "Remove fake test-prefixed constants; use semantic helpers or direct UAPI."
     exit 1
 fi
-echo "   ✓ No TEST_* raw constants in tests"
+echo "   ✓ No test-prefixed raw constants in tests"
 
 echo ""
 echo "=== Check 26: Bridge bag usage in Linux-facing tests ==="
@@ -430,29 +430,29 @@ echo "   ✓ No gutted tests"
 
 echo ""
 echo "=== Check 28: Signal/wait alias drift ==="
-SIG_WAIT_ALIAS_DRIFT=$(rg -n '\b(IX_SIG|IX_W|TEST_SIG|TEST_W|linux_sig|linux_wait)[A-Za-z0-9_]*\b' fs kernel IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+SIG_WAIT_ALIAS_DRIFT=$(rg -n '\b(I[X]_SIG|I[X]_W|TES[T]_SIG|TES[T]_W|linux[_]sig|linux[_]wait)[A-Za-z0-9_]*\b' fs kernel IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
 if [ -n "$SIG_WAIT_ALIAS_DRIFT" ]; then
     echo "FAIL: Signal/wait alias drift found:"
     echo "$SIG_WAIT_ALIAS_DRIFT"
     exit 1
 fi
-LINUX_SIG_WAIT=$(rg -n '\bLINUX_SIG[A-Za-z0-9_]*\b' kernel/wait.c kernel/signal.c kernel/signal.h 2>/dev/null || true)
-if [ -n "$LINUX_SIG_WAIT" ]; then
-    echo "FAIL: LINUX_SIG alias vocabulary found in signal/wait owner files:"
-    echo "$LINUX_SIG_WAIT"
+ALL_CAPS_SIGNAL_ALIAS=$(rg -n '\bLINU[X]_SIG[A-Za-z0-9_]*\b' kernel/wait.c kernel/signal.c kernel/signal.h 2>/dev/null || true)
+if [ -n "$ALL_CAPS_SIGNAL_ALIAS" ]; then
+    echo "FAIL: All-caps Linux signal alias vocabulary found in signal/wait owner files:"
+    echo "$ALL_CAPS_SIGNAL_ALIAS"
     exit 1
 fi
-PTY_SIG_DRIFT=$(rg -n '\bPTY_SIG[A-Za-z0-9_]*\b' fs/pty.c 2>/dev/null || true)
-if [ -n "$PTY_SIG_DRIFT" ]; then
-    echo "FAIL: PTY_SIG alias vocabulary found in fs/pty.c:"
-    echo "$PTY_SIG_DRIFT"
+TERMINAL_SIGNAL_ALIAS_DRIFT=$(rg -n '\bPT[Y]_SIG[A-Za-z0-9_]*\b' fs/pty.c 2>/dev/null || true)
+if [ -n "$TERMINAL_SIGNAL_ALIAS_DRIFT" ]; then
+    echo "FAIL: PTY signal alias vocabulary found in fs/pty.c:"
+    echo "$TERMINAL_SIGNAL_ALIAS_DRIFT"
     exit 1
 fi
 echo "   ✓ No signal/wait alias drift"
 
 echo ""
 echo "=== Check 29: Test Linux constant alias drift ==="
-TEST_LINUX_CONSTANT_ALIAS=$(rg -n '\b(IX_F|IX_AT|IX_TC|IX_TIOC|IX_SIG|IX_W|TEST_SIG|TEST_W)[A-Za-z0-9_]*\b|include/ixland/linux_(uapi|abi)_constants\.h' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+TEST_LINUX_CONSTANT_ALIAS=$(rg -n '\b(I[X]_F|I[X]_AT|I[X]_TC|I[X]_TIOC|I[X]_SIG|I[X]_W|TES[T]_SIG|TES[T]_W)[A-Za-z0-9_]*\b|include/ixland/linux_(uapi|abi)_constants[.]h' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
 if [ -n "$TEST_LINUX_CONSTANT_ALIAS" ]; then
     echo "FAIL: Test Linux constant alias drift found:"
     echo "$TEST_LINUX_CONSTANT_ALIAS"
@@ -552,6 +552,16 @@ if [ -n "$XCODEGEN_UAPI_DRIFT" ]; then
     exit 1
 fi
 echo "   ✓ XcodeGen Linux UAPI source segregation holds"
+
+echo ""
+echo "=== Check 33: virtual pipe is not host-pipe owned ==="
+HOST_PIPE_OWNER=$(rg -n '\bhost_pipe\b|\bdarwin_pipe\b|Darwin pipe' fs internal/ios 2>/dev/null || true)
+if [ -n "$HOST_PIPE_OWNER" ]; then
+    echo "FAIL: Host pipe ownership vocabulary found:"
+    echo "$HOST_PIPE_OWNER"
+    exit 1
+fi
+echo "   ✓ No host pipe ownership vocabulary"
 
 echo ""
 echo "=== All checks passed ==="

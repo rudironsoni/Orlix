@@ -57,6 +57,8 @@ targets:
       group: fs
     - path: fs/open.c
       group: fs
+    - path: fs/pipe.c
+      group: fs
     - path: fs/poll.c
       group: fs
     - path: fs/pty.c
@@ -134,6 +136,7 @@ targets:
     - IXLandSystemLinuxKernelTests/PTYSessionTests.m
     - IXLandSystemLinuxKernelTests/PTYJobControlTests.m
     - IXLandSystemLinuxKernelTests/WaitJobControlTests.m
+    - IXLandSystemLinuxKernelTests/PipeTests.m
     - IXLandSystemLinuxKernelTests/FcntlTests.m
     - IXLandSystemLinuxKernelTests/ExecFdTests.m
     - IXLandSystemLinuxKernelTests/ExecSyscallTests.m
@@ -162,9 +165,14 @@ targets:
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/PipeContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/PTYSessionContract.h
     - IXLandSystemLinuxKernelTests/PTYJobControlContract.h
     - IXLandSystemLinuxKernelTests/WaitJobControlContract.h
+    - IXLandSystemLinuxKernelTests/PipeContract.h
     - IXLandSystemLinuxKernelTests/PTYSessionIoctlShim.c
     - path: IXLandSystemLinuxKernelTests/FutexUAPICompileSmoke.c
       compilerFlags:

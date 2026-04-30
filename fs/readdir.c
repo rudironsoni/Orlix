@@ -203,6 +203,12 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
     bool is_dir = get_fd_is_dir_impl(entry);
     char fd_path[MAX_PATH];
 
+    if (get_fd_is_pipe_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = ENOTDIR;
+        return -1;
+    }
+
     if (is_dir && get_fd_path_impl(entry, fd_path, sizeof(fd_path)) == 0 &&
         vfs_path_is_synthetic(fd_path) && !get_fd_is_synthetic_dir_impl(entry)) {
         put_fd_entry_impl(entry);

@@ -13,6 +13,7 @@
 #include "fdtable.h"
 #include "internal/ios/fs/file_io_host.h"
 #include "internal/ios/fs/sync.h"
+#include "pipe.h"
 #include "pty.h"
 #include "vfs.h"
 
@@ -20,6 +21,9 @@
 typedef long long linux_off_t;
 
 ssize_t read_impl(int fd, void *buf, size_t count) {
+    if (count == 0) {
+        return 0;
+    }
     if (!buf) {
         errno = EFAULT;
         return -1;
@@ -48,6 +52,14 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         put_fd_entry_impl(entry);
         errno = EBADF;
         return -1;
+    }
+
+    if (get_fd_is_pipe_impl(entry)) {
+        struct pipe_endpoint *endpoint = get_fd_pipe_endpoint_impl(entry);
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
+        ssize_t ret = pipe_read_endpoint_impl(endpoint, buf, count, nonblock);
+        put_fd_entry_impl(entry);
+        return ret;
     }
 
     if (get_fd_is_synthetic_dev_impl(entry)) {
@@ -138,6 +150,9 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
 }
 
 ssize_t write_impl(int fd, const void *buf, size_t count) {
+    if (count == 0) {
+        return 0;
+    }
     if (!buf) {
         errno = EFAULT;
         return -1;
@@ -166,6 +181,14 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
         put_fd_entry_impl(entry);
         errno = EBADF;
         return -1;
+    }
+
+    if (get_fd_is_pipe_impl(entry)) {
+        struct pipe_endpoint *endpoint = get_fd_pipe_endpoint_impl(entry);
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
+        ssize_t ret = pipe_write_endpoint_impl(endpoint, buf, count, nonblock);
+        put_fd_entry_impl(entry);
+        return ret;
     }
 
     if (get_fd_is_synthetic_dev_impl(entry)) {
@@ -242,6 +265,12 @@ linux_off_t lseek_impl(int fd, linux_off_t offset, int whence) {
         return (linux_off_t)-1;
     }
 
+    if (get_fd_is_pipe_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = ESPIPE;
+        return (linux_off_t)-1;
+    }
+
     linux_off_t result = (linux_off_t)host_lseek_impl(get_real_fd_impl(entry), (long long)offset, whence);
     put_fd_entry_impl(entry);
     return result;
@@ -269,6 +298,9 @@ static int synthetic_proc_file_content(synthetic_proc_file_t proc_file, int fd_n
 }
 
 ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
+    if (count == 0) {
+        return 0;
+    }
     if (!buf) {
         errno = EFAULT;
         return -1;
@@ -296,6 +328,12 @@ ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
     if (!get_fd_is_readable_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = EBADF;
+        return -1;
+    }
+
+    if (get_fd_is_pipe_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = ESPIPE;
         return -1;
     }
 
@@ -336,6 +374,9 @@ ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
 }
 
 ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset) {
+    if (count == 0) {
+        return 0;
+    }
     if (!buf) {
         errno = EFAULT;
         return -1;
@@ -363,6 +404,12 @@ ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset) {
     if (!get_fd_is_writable_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = EBADF;
+        return -1;
+    }
+
+    if (get_fd_is_pipe_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = ESPIPE;
         return -1;
     }
 

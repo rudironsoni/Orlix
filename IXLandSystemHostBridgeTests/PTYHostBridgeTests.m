@@ -18,7 +18,7 @@
 //   - claiming Linux ABI proof from host behavior
 //   - raw Linux request constants in Objective-C
 //   - copied constants
-//   - IX_*, TEST_*, or linux_* alias soup
+//   - branded, test-prefixed, or Linux-named alias soup
 //
 
 #import <XCTest/XCTest.h>
