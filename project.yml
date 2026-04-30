@@ -130,6 +130,7 @@ targets:
     - IXLandSystemLinuxKernelTests/FutexTests.m
     - IXLandSystemLinuxKernelTests/RootfsBootstrapTests.m
     - IXLandSystemLinuxKernelTests/KernelBootTests.m
+    - IXLandSystemLinuxKernelTests/FcntlTests.m
     - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
@@ -148,6 +149,10 @@ targets:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/LinuxUAPITestSupport.h
     - path: IXLandSystemLinuxKernelTests/VFSAtContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/FcntlContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi

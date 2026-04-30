@@ -13,7 +13,9 @@
 		10B126B95667913F860EF403 /* namei.c in Sources */ = {isa = PBXBuildFile; fileRef = C391F80635EE5296CE8C8466 /* namei.c */; };
 		13FB5E5B82FE3B5C5391A96B /* LinuxUAPITestSupport.c in Sources */ = {isa = PBXBuildFile; fileRef = 9A8678E28B73B73210D86FAB /* LinuxUAPITestSupport.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		146D62B118F5DC07F20F3ADE /* VFSPathHostBridgeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 0869AF46EE225A3EF40ACA99 /* VFSPathHostBridgeTests.m */; };
+		14CE14D6D679323F2253A9E3 /* FcntlContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B16EB2BAE52DD2CC2C1FF77 /* FcntlContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
 		14DEFC9BDE432750E36BB297 /* RootfsBootstrapTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A7AB548A9E0653A96E8EE61 /* RootfsBootstrapTests.m */; };
+		14F3242DDCC2EB47EC3949CC /* FcntlTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 45D5CBDA9FFBBD3019E7C208 /* FcntlTests.m */; };
 		17569519F7B7B56C5572BED6 /* path.c in Sources */ = {isa = PBXBuildFile; fileRef = 51D066274EE2D55E90787D9C /* path.c */; };
 		23F96E17A5FB5F9FF02C47D1 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 43308FAA8FF808B4BF22777C /* ioctl.c */; };
 		29E1C2D21F213D5B2A063AFF /* ixland_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 666A5EE8B497170CF5C3223A /* ixland_observability.c */; };
@@ -123,6 +125,7 @@
 		402731ED4153CDE2D282C8C4 /* IXLandSystemHostBridgeTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IXLandSystemHostBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		43308FAA8FF808B4BF22777C /* ioctl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ioctl.c; sourceTree = "<group>"; };
 		459682F08054406508BB6491 /* FutexTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FutexTests.m; sourceTree = "<group>"; };
+		45D5CBDA9FFBBD3019E7C208 /* FcntlTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FcntlTests.m; sourceTree = "<group>"; };
 		4937592D664709CBF7746315 /* HostBridgeSmokeTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HostBridgeSmokeTests.m; sourceTree = "<group>"; };
 		4D57509F341C9895C6F7163B /* pid.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pid.c; sourceTree = "<group>"; };
 		4E3BBA7476909DE92B9A8F8D /* open.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = open.c; sourceTree = "<group>"; };
@@ -140,6 +143,7 @@
 		84669BD046B2E072890F45A9 /* RootfsBootstrapTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RootfsBootstrapTests.m; sourceTree = "<group>"; };
 		85C6F04780BEA9F2AA85D0E4 /* backing_io.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = backing_io.m; sourceTree = "<group>"; };
 		88D453F467952833E1FD3D0D /* poll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = poll.c; sourceTree = "<group>"; };
+		8B16EB2BAE52DD2CC2C1FF77 /* FcntlContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FcntlContract.c; sourceTree = "<group>"; };
 		8BE7B6DDA1A833FE4A6C9194 /* random.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = random.c; sourceTree = "<group>"; };
 		8EE1C8B47289B38E402A6EFE /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
 		9400E47E570892E792DD720A /* path_host.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = path_host.c; sourceTree = "<group>"; };
@@ -309,6 +313,8 @@
 			isa = PBXGroup;
 			children = (
 				21CC2E1844CDBA597704C111 /* CredentialTests.m */,
+				8B16EB2BAE52DD2CC2C1FF77 /* FcntlContract.c */,
+				45D5CBDA9FFBBD3019E7C208 /* FcntlTests.m */,
 				459682F08054406508BB6491 /* FutexTests.m */,
 				1A78BCCA6E31095ECC4CD43C /* FutexUAPICompileSmoke.c */,
 				38A6AE564B1CF443D8406232 /* KernelBoot.c */,
@@ -473,6 +479,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				9F3DFA9314BF7A7DEC556F75 /* CredentialTests.m in Sources */,
+				14CE14D6D679323F2253A9E3 /* FcntlContract.c in Sources */,
+				14F3242DDCC2EB47EC3949CC /* FcntlTests.m in Sources */,
 				59FAAA0B4A3D9EBD3C077FFA /* FutexTests.m in Sources */,
 				9ABA5D0A937A9603B4C52A44 /* FutexUAPICompileSmoke.c in Sources */,
 				DF02A81D41A3C724D2620308 /* KernelBoot.c in Sources */,
