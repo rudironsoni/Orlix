@@ -1,5 +1,9 @@
 #include <asm/ioctls.h>
 #include <linux/fcntl.h>
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
+#include <asm-generic/signal-defs.h>
 
 #include <errno.h>
 #include <stddef.h>

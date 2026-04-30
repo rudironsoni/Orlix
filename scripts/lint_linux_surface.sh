@@ -97,7 +97,7 @@ echo "   ✓ No forbidden logging/debug output in product code"
 
 echo ""
 echo "=== Check 9: ABI/UAPI drift indicators ==="
-HANDDEFINED_ABI=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' -e 'include/ixland/linux_abi_constants.h' || true)
+HANDDEFINED_ABI=$(rg -n '^\s*#define\s+(FUTEX_|AT_|SA_|SIG[A-Z0-9_]+|O_[A-Z0-9_]+|F_[A-Z0-9_]+|RENAME_[A-Z0-9_]+)' fs kernel runtime include 2>/dev/null | rg -v -e 'IX_' -e 'TEST_' -e '_IMPL' || true)
 if [ -n "$HANDDEFINED_ABI" ]; then
     echo "FAIL: Hand-defined Linux ABI constants found in Linux-owner paths:"
     echo "$HANDDEFINED_ABI"
@@ -427,6 +427,131 @@ if [ -n "$GUTTED_TESTS" ]; then
     exit 1
 fi
 echo "   ✓ No gutted tests"
+
+echo ""
+echo "=== Check 28: Signal/wait alias drift ==="
+SIG_WAIT_ALIAS_DRIFT=$(rg -n '\b(IX_SIG|IX_W|TEST_SIG|TEST_W|linux_sig|linux_wait)[A-Za-z0-9_]*\b' fs kernel IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+if [ -n "$SIG_WAIT_ALIAS_DRIFT" ]; then
+    echo "FAIL: Signal/wait alias drift found:"
+    echo "$SIG_WAIT_ALIAS_DRIFT"
+    exit 1
+fi
+LINUX_SIG_WAIT=$(rg -n '\bLINUX_SIG[A-Za-z0-9_]*\b' kernel/wait.c kernel/signal.c kernel/signal.h 2>/dev/null || true)
+if [ -n "$LINUX_SIG_WAIT" ]; then
+    echo "FAIL: LINUX_SIG alias vocabulary found in signal/wait owner files:"
+    echo "$LINUX_SIG_WAIT"
+    exit 1
+fi
+PTY_SIG_DRIFT=$(rg -n '\bPTY_SIG[A-Za-z0-9_]*\b' fs/pty.c 2>/dev/null || true)
+if [ -n "$PTY_SIG_DRIFT" ]; then
+    echo "FAIL: PTY_SIG alias vocabulary found in fs/pty.c:"
+    echo "$PTY_SIG_DRIFT"
+    exit 1
+fi
+echo "   ✓ No signal/wait alias drift"
+
+echo ""
+echo "=== Check 29: Test Linux constant alias drift ==="
+TEST_LINUX_CONSTANT_ALIAS=$(rg -n '\b(IX_F|IX_AT|IX_TC|IX_TIOC|IX_SIG|IX_W|TEST_SIG|TEST_W)[A-Za-z0-9_]*\b|include/ixland/linux_(uapi|abi)_constants\.h' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+if [ -n "$TEST_LINUX_CONSTANT_ALIAS" ]; then
+    echo "FAIL: Test Linux constant alias drift found:"
+    echo "$TEST_LINUX_CONSTANT_ALIAS"
+    exit 1
+fi
+echo "   ✓ No test Linux constant alias drift"
+
+echo ""
+echo "=== Check 30: LinuxKernel tests do not use HostBridge support ==="
+LINUX_TEST_HOST_SUPPORT=$(rg -n 'HostTestSupport|IXLandSystemHostBridgeTests' IXLandSystemLinuxKernelTests 2>/dev/null || true)
+if [ -n "$LINUX_TEST_HOST_SUPPORT" ]; then
+    echo "FAIL: LinuxKernel tests reference HostBridge support:"
+    echo "$LINUX_TEST_HOST_SUPPORT"
+    exit 1
+fi
+echo "   ✓ LinuxKernel tests do not use HostBridge support"
+
+echo ""
+echo "=== Check 31: internal/ios errno mediation is not rewritten from negative returns ==="
+BROKEN_HOST_ERRNO_ALL=$(rg -n 'errno[[:space:]]*=[[:space:]]*(\(int\)[[:space:]]*)?-ret' internal/ios/fs 2>/dev/null || true)
+if [ -n "$BROKEN_HOST_ERRNO_ALL" ]; then
+    echo "FAIL: Broken host errno rewriting found under internal/ios/fs:"
+    echo "$BROKEN_HOST_ERRNO_ALL"
+    exit 1
+fi
+echo "   ✓ No internal/ios/fs errno = -ret rewriting"
+
+echo ""
+echo "=== Check 32: XcodeGen Linux UAPI source segregation ==="
+XCODEGEN_UAPI_DRIFT=$(python3 - <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path("project.yml").read_text()
+lines = text.splitlines()
+errors = []
+
+targets = {}
+current_target = None
+for line in lines:
+    m = re.match(r"^  ([A-Za-z0-9_-]+):$", line)
+    if m:
+        current_target = m.group(1)
+        targets[current_target] = []
+        continue
+    if current_target:
+        targets[current_target].append(line)
+
+for target in ("IXLandSystemLinuxKernelTests", "IXLandSystemHostBridgeTests"):
+    block = "\n".join(targets.get(target, []))
+    settings = block.split("sources:", 1)[0]
+    if "LINUX_UAPI_INCLUDE_ROOT" in settings:
+        errors.append(f"{target} has global Linux UAPI include paths")
+
+host_block = "\n".join(targets.get("IXLandSystemHostBridgeTests", []))
+if "LINUX_UAPI_INCLUDE_ROOT" in host_block:
+    errors.append("IXLandSystemHostBridgeTests references Linux UAPI include root")
+
+source_entries = {}
+current_path = None
+for i, line in enumerate(lines):
+    path = None
+    m_obj = re.match(r"^\s*-\s+path:\s+(.+)$", line)
+    m_plain = re.match(r"^\s*-\s+([^:\[][^#]*\.(?:c|m|h))\s*$", line)
+    if m_obj:
+        path = m_obj.group(1).strip()
+    elif m_plain:
+        path = m_plain.group(1).strip()
+    if path:
+        current_path = path
+        source_entries.setdefault(path, {"flags": False})
+        continue
+    if current_path and "compilerFlags:" in line:
+        source_entries[current_path]["flags"] = True
+
+for path, entry in source_entries.items():
+    if path.endswith(".m") and entry["flags"]:
+        errors.append(f"{path} is Objective-C but has per-source compilerFlags")
+    if path.startswith("IXLandSystemLinuxKernelTests/") and "internal/ios" in path:
+        errors.append(f"LinuxKernel test source references internal/ios: {path}")
+
+for source in list(Path("IXLandSystemLinuxKernelTests").glob("*.c")) + list(Path("IXLandSystemHostBridgeTests").glob("*.c")):
+    body = source.read_text(errors="ignore")
+    includes_uapi = re.search(r"^\s*#\s*include\s*<(linux|asm|asm-generic)/", body, re.M)
+    if includes_uapi:
+        entry = source_entries.get(str(source))
+        if not entry or not entry["flags"]:
+            errors.append(f"{source} includes Linux UAPI without per-source compilerFlags")
+
+print("\n".join(errors))
+PY
+)
+if [ -n "$XCODEGEN_UAPI_DRIFT" ]; then
+    echo "FAIL: XcodeGen Linux UAPI segregation drift found:"
+    echo "$XCODEGEN_UAPI_DRIFT"
+    exit 1
+fi
+echo "   ✓ XcodeGen Linux UAPI source segregation holds"
 
 echo ""
 echo "=== All checks passed ==="

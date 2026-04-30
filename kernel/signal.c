@@ -9,6 +9,134 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#ifdef SIGHUP
+#undef SIGHUP
+#endif
+#ifdef SIGINT
+#undef SIGINT
+#endif
+#ifdef SIGQUIT
+#undef SIGQUIT
+#endif
+#ifdef SIGILL
+#undef SIGILL
+#endif
+#ifdef SIGTRAP
+#undef SIGTRAP
+#endif
+#ifdef SIGABRT
+#undef SIGABRT
+#endif
+#ifdef SIGIOT
+#undef SIGIOT
+#endif
+#ifdef SIGBUS
+#undef SIGBUS
+#endif
+#ifdef SIGFPE
+#undef SIGFPE
+#endif
+#ifdef SIGKILL
+#undef SIGKILL
+#endif
+#ifdef SIGUSR1
+#undef SIGUSR1
+#endif
+#ifdef SIGSEGV
+#undef SIGSEGV
+#endif
+#ifdef SIGUSR2
+#undef SIGUSR2
+#endif
+#ifdef SIGPIPE
+#undef SIGPIPE
+#endif
+#ifdef SIGALRM
+#undef SIGALRM
+#endif
+#ifdef SIGTERM
+#undef SIGTERM
+#endif
+#ifdef SIGCHLD
+#undef SIGCHLD
+#endif
+#ifdef SIGCONT
+#undef SIGCONT
+#endif
+#ifdef SIGSTOP
+#undef SIGSTOP
+#endif
+#ifdef SIGTSTP
+#undef SIGTSTP
+#endif
+#ifdef SIGTTIN
+#undef SIGTTIN
+#endif
+#ifdef SIGTTOU
+#undef SIGTTOU
+#endif
+#ifdef SIGURG
+#undef SIGURG
+#endif
+#ifdef SIGXCPU
+#undef SIGXCPU
+#endif
+#ifdef SIGXFSZ
+#undef SIGXFSZ
+#endif
+#ifdef SIGVTALRM
+#undef SIGVTALRM
+#endif
+#ifdef SIGPROF
+#undef SIGPROF
+#endif
+#ifdef SIGWINCH
+#undef SIGWINCH
+#endif
+#ifdef SIGIO
+#undef SIGIO
+#endif
+#ifdef SIGPOLL
+#undef SIGPOLL
+#endif
+#ifdef SIGPWR
+#undef SIGPWR
+#endif
+#ifdef SIGSYS
+#undef SIGSYS
+#endif
+#ifdef SIGUNUSED
+#undef SIGUNUSED
+#endif
+#ifdef SIGRTMIN
+#undef SIGRTMIN
+#endif
+#ifdef SIGRTMAX
+#undef SIGRTMAX
+#endif
+#ifdef SIG_BLOCK
+#undef SIG_BLOCK
+#endif
+#ifdef SIG_UNBLOCK
+#undef SIG_UNBLOCK
+#endif
+#ifdef SIG_SETMASK
+#undef SIG_SETMASK
+#endif
+#ifdef SIG_DFL
+#undef SIG_DFL
+#endif
+#ifdef SIG_IGN
+#undef SIG_IGN
+#endif
+#ifdef SIG_ERR
+#undef SIG_ERR
+#endif
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
+#include <asm-generic/signal-defs.h>
+
 #include "signal.h"
 #include "task.h"
 

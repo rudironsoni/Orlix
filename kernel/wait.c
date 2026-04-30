@@ -5,6 +5,17 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
+#ifdef WSTOPPED
+#undef WSTOPPED
+#endif
+#ifdef WCONTINUED
+#undef WCONTINUED
+#endif
+#ifdef WNOWAIT
+#undef WNOWAIT
+#endif
+#include <linux/wait.h>
+
 #include "signal.h"
 #include "task.h"
 
@@ -41,11 +52,11 @@ static enum wait_report_kind wait_child_report_kind(const struct task_struct *ch
         return WAIT_REPORT_EXITED;
     }
 
-    if ((options & 0x00000002) && atomic_load(&child->stop_report_pending)) {
+    if ((options & WUNTRACED) && atomic_load(&child->stop_report_pending)) {
         return WAIT_REPORT_STOPPED;
     }
 
-    if ((options & 0x00000008) && atomic_load(&child->continue_report_pending)) {
+    if ((options & WCONTINUED) && atomic_load(&child->continue_report_pending)) {
         return WAIT_REPORT_CONTINUED;
     }
 
@@ -74,6 +85,9 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
     struct task_struct *matched_child;
     enum wait_report_kind report_kind;
     bool matched_any_child;
+    int32_t matched_pid;
+    int matched_status;
+    bool should_reap;
     if (!parent) {
         errno = ESRCH;
         return -1;
@@ -111,7 +125,7 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
             return -1;
         }
 
-        if (options & 0x00000001) {
+        if (options & WNOHANG) {
             parent->waiters--;
             kernel_mutex_unlock(&parent->lock);
             return 0;
@@ -120,6 +134,10 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
         kernel_cond_wait(&parent->wait_cond, &parent->lock);
     }
 
+    matched_pid = matched_child->pid;
+    matched_status = wait_report_status(matched_child, report_kind);
+    should_reap = report_kind == WAIT_REPORT_EXITED || report_kind == WAIT_REPORT_SIGNALED;
+
     if (report_kind == WAIT_REPORT_STOPPED) {
         atomic_store(&matched_child->stop_report_pending, false);
     } else if (report_kind == WAIT_REPORT_CONTINUED) {
@@ -127,7 +145,7 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
         atomic_store(&matched_child->continue_report_pending, false);
     }
 
-    if (report_kind == WAIT_REPORT_EXITED || report_kind == WAIT_REPORT_SIGNALED) {
+    if (should_reap) {
         struct task_struct **link = &parent->children;
         while (*link && *link != matched_child) {
             link = &(*link)->next_sibling;
@@ -146,16 +164,14 @@ int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
     kernel_mutex_unlock(&parent->lock);
 
     if (wstatus) {
-        *wstatus = wait_report_status(matched_child, report_kind);
+        *wstatus = matched_status;
     }
 
-    pid_t child_pid = matched_child->pid;
-
-    if (report_kind == WAIT_REPORT_EXITED || report_kind == WAIT_REPORT_SIGNALED) {
+    if (should_reap) {
         free_task(matched_child);
     }
 
-    return child_pid;
+    return matched_pid;
 }
 
 int32_t wait4_impl(int32_t pid, int *wstatus, int options, void *rusage) {

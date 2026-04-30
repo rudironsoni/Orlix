@@ -8,6 +8,67 @@
 #include <string.h>
 
 #include <linux/poll.h>
+#ifdef SIGINT
+#undef SIGINT
+#endif
+#ifdef SIGQUIT
+#undef SIGQUIT
+#endif
+#ifdef SIGIOT
+#undef SIGIOT
+#endif
+#ifdef SIGBUS
+#undef SIGBUS
+#endif
+#ifdef SIGUSR1
+#undef SIGUSR1
+#endif
+#ifdef SIGUSR2
+#undef SIGUSR2
+#endif
+#ifdef SIGCHLD
+#undef SIGCHLD
+#endif
+#ifdef SIGCONT
+#undef SIGCONT
+#endif
+#ifdef SIGSTOP
+#undef SIGSTOP
+#endif
+#ifdef SIGTSTP
+#undef SIGTSTP
+#endif
+#ifdef SIGTTIN
+#undef SIGTTIN
+#endif
+#ifdef SIGTTOU
+#undef SIGTTOU
+#endif
+#ifdef SIGWINCH
+#undef SIGWINCH
+#endif
+#ifdef SIGURG
+#undef SIGURG
+#endif
+#ifdef SIGIO
+#undef SIGIO
+#endif
+#ifdef SIGSYS
+#undef SIGSYS
+#endif
+#ifdef SIG_IGN
+#undef SIG_IGN
+#endif
+#ifdef SIG_DFL
+#undef SIG_DFL
+#endif
+#ifdef SIG_ERR
+#undef SIG_ERR
+#endif
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
+#include <asm-generic/signal-defs.h>
 
 #include "../kernel/signal.h"
 #include "../kernel/task.h"

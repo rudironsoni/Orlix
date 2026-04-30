@@ -24,58 +24,6 @@
 
 #include "../internal/ios/kernel/sync.h"
 
-#ifdef SIGHUP
-#undef SIGHUP
-#endif
-#ifdef SIGINT
-#undef SIGINT
-#endif
-#ifdef SIGQUIT
-#undef SIGQUIT
-#endif
-#ifdef SIGKILL
-#undef SIGKILL
-#endif
-#ifdef SIGTERM
-#undef SIGTERM
-#endif
-#ifdef SIGCHLD
-#undef SIGCHLD
-#endif
-#ifdef SIGCONT
-#undef SIGCONT
-#endif
-#ifdef SIGSTOP
-#undef SIGSTOP
-#endif
-#ifdef SIGTSTP
-#undef SIGTSTP
-#endif
-#ifdef SIGTTIN
-#undef SIGTTIN
-#endif
-#ifdef SIGTTOU
-#undef SIGTTOU
-#endif
-#ifdef SIGWINCH
-#undef SIGWINCH
-#endif
-#ifdef SIG_BLOCK
-#undef SIG_BLOCK
-#endif
-#ifdef SIG_UNBLOCK
-#undef SIG_UNBLOCK
-#endif
-#ifdef SIG_SETMASK
-#undef SIG_SETMASK
-#endif
-#ifdef SIG_DFL
-#undef SIG_DFL
-#endif
-#ifdef SIG_IGN
-#undef SIG_IGN
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -89,30 +37,6 @@ struct task_struct;
 
 /* Signal handler type - private internal */
 typedef void (*sighandler_t)(int);
-
-enum {
-    SIG_BLOCK = 0,
-    SIG_UNBLOCK = 1,
-    SIG_SETMASK = 2,
-};
-
-enum {
-    SIGHUP = 1,
-    SIGINT = 2,
-    SIGQUIT = 3,
-    SIGKILL = 9,
-    SIGTERM = 15,
-    SIGCHLD = 17,
-    SIGCONT = 18,
-    SIGSTOP = 19,
-    SIGTSTP = 20,
-    SIGTTIN = 21,
-    SIGTTOU = 22,
-    SIGWINCH = 28,
-};
-
-static const sighandler_t SIG_DFL = (sighandler_t)0;
-static const sighandler_t SIG_IGN = (sighandler_t)1;
 
 struct signal_mask_bits {
     uint64_t sig[KERNEL_SIG_NUM_WORDS];

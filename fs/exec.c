@@ -18,6 +18,16 @@
 #include <linux/fcntl.h>
 #include <linux/stat.h>
 #include <asm-generic/stat.h>
+#ifdef SIG_DFL
+#undef SIG_DFL
+#endif
+#ifdef SIG_IGN
+#undef SIG_IGN
+#endif
+#ifdef SIG_ERR
+#undef SIG_ERR
+#endif
+#include <asm-generic/signal-defs.h>
 
 /* Host bridge API - narrow seam for file I/O */
 #include "internal/ios/fs/file_io_host.h"

@@ -1,6 +1,9 @@
 #include <asm/ioctls.h>
 #include <linux/fcntl.h>
 #include <linux/wait.h>
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
 
 #include <errno.h>
 #include <stddef.h>
@@ -172,6 +175,7 @@ static void destroy_child_task(struct task_struct *parent, struct task_struct *c
 }
 
 static int stop_and_wait_status(struct task_struct *parent, struct task_struct *child, int32_t sig, int *status_out) {
+    struct task_struct *cursor;
     int status = 0;
     int32_t waited;
 
@@ -182,6 +186,14 @@ static int stop_and_wait_status(struct task_struct *parent, struct task_struct *
     }
     if (!atomic_load(&child->stop_report_pending) || !atomic_load(&child->stopped)) {
         errno = ENODATA;
+        return -1;
+    }
+    cursor = parent->children;
+    while (cursor && cursor != child) {
+        cursor = cursor->next_sibling;
+    }
+    if (!cursor) {
+        errno = ENXIO;
         return -1;
     }
     waited = waitpid_impl(child->pid, &status, WUNTRACED);
@@ -205,12 +217,21 @@ static int stop_and_wait_status(struct task_struct *parent, struct task_struct *
 
 static int exit_child_with_status(struct task_struct *parent, struct task_struct *child, int exit_status) {
     struct task_struct *saved_current = get_current();
+    struct task_struct *cursor;
     clear_pending_signal(parent, SIGCHLD);
     set_current(child);
     exit_impl(exit_status);
     set_current(saved_current);
     if (!atomic_load(&child->exited)) {
         errno = ENODATA;
+        return -1;
+    }
+    cursor = parent->children;
+    while (cursor && cursor != child) {
+        cursor = cursor->next_sibling;
+    }
+    if (!cursor) {
+        errno = ENXIO;
         return -1;
     }
     if (!signal_is_pending(parent, SIGCHLD)) {
