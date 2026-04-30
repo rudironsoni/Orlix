@@ -17,6 +17,8 @@
 #include "../kernel/task.h"
 #include "../kernel/wait_queue.h"
 
+void poll_notify_readiness_impl(void);
+
 #define PIPE_BUFFER_SIZE 65536U
 
 struct pipe_object {
@@ -91,7 +93,7 @@ void pipe_close_endpoint_impl(struct pipe_endpoint *endpoint) {
     }
 
     pipe = endpoint->pipe;
-    kernel_mutex_lock(&pipe->wait.lock);
+    wait_queue_lock(&pipe->wait);
     if (endpoint->read_end) {
         if (pipe->readers > 0) {
             pipe->readers--;
@@ -104,13 +106,14 @@ void pipe_close_endpoint_impl(struct pipe_endpoint *endpoint) {
     pipe->refs--;
     should_free_pipe = pipe->refs == 0;
     wait_queue_wake_all_locked(&pipe->wait);
-    kernel_mutex_unlock(&pipe->wait.lock);
+    wait_queue_unlock(&pipe->wait);
 
     pipe_free_endpoint(endpoint);
     if (should_free_pipe) {
         wait_queue_destroy(&pipe->wait);
         free(pipe);
     }
+    poll_notify_readiness_impl();
 }
 
 unsigned long long pipe_endpoint_id_impl(struct pipe_endpoint *endpoint) {
@@ -142,19 +145,19 @@ ssize_t pipe_read_endpoint_impl(struct pipe_endpoint *endpoint, void *buf, size_
     }
 
     pipe = endpoint->pipe;
-    kernel_mutex_lock(&pipe->wait.lock);
+    wait_queue_lock(&pipe->wait);
     while (pipe->len == 0) {
         if (pipe->writers == 0) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             return 0;
         }
         if (nonblock) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             errno = EAGAIN;
             return -1;
         }
         if (wait_queue_wait_locked_interruptible(&pipe->wait) != 0) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             errno = EINTR;
             return -1;
         }
@@ -172,7 +175,8 @@ ssize_t pipe_read_endpoint_impl(struct pipe_endpoint *endpoint, void *buf, size_
     pipe->head = (pipe->head + to_read) % PIPE_BUFFER_SIZE;
     pipe->len -= to_read;
     wait_queue_wake_all_locked(&pipe->wait);
-    kernel_mutex_unlock(&pipe->wait.lock);
+    wait_queue_unlock(&pipe->wait);
+    poll_notify_readiness_impl();
     return (ssize_t)to_read;
 }
 
@@ -196,9 +200,9 @@ ssize_t pipe_write_endpoint_impl(struct pipe_endpoint *endpoint, const void *buf
     }
 
     pipe = endpoint->pipe;
-    kernel_mutex_lock(&pipe->wait.lock);
+    wait_queue_lock(&pipe->wait);
     if (pipe->readers == 0) {
-        kernel_mutex_unlock(&pipe->wait.lock);
+        wait_queue_unlock(&pipe->wait);
         signal_generate_task(get_current(), SIGPIPE);
         errno = EPIPE;
         return -1;
@@ -207,18 +211,18 @@ ssize_t pipe_write_endpoint_impl(struct pipe_endpoint *endpoint, const void *buf
     space = pipe_space_locked(pipe);
     while (space == 0) {
         if (pipe->readers == 0) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             signal_generate_task(get_current(), SIGPIPE);
             errno = EPIPE;
             return -1;
         }
         if (nonblock) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             errno = EAGAIN;
             return -1;
         }
         if (wait_queue_wait_locked_interruptible(&pipe->wait) != 0) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             errno = EINTR;
             return -1;
         }
@@ -237,7 +241,8 @@ ssize_t pipe_write_endpoint_impl(struct pipe_endpoint *endpoint, const void *buf
     }
     pipe->len += to_write;
     wait_queue_wake_all_locked(&pipe->wait);
-    kernel_mutex_unlock(&pipe->wait.lock);
+    wait_queue_unlock(&pipe->wait);
+    poll_notify_readiness_impl();
     return (ssize_t)to_write;
 }
 
@@ -250,7 +255,7 @@ short pipe_poll_revents_impl(struct pipe_endpoint *endpoint, short events) {
     }
 
     pipe = endpoint->pipe;
-    kernel_mutex_lock(&pipe->wait.lock);
+    wait_queue_lock(&pipe->wait);
     if (endpoint->read_end) {
         if ((events & (POLLIN | POLLRDNORM)) && pipe->len > 0) {
             revents |= events & (POLLIN | POLLRDNORM);
@@ -265,7 +270,7 @@ short pipe_poll_revents_impl(struct pipe_endpoint *endpoint, short events) {
             revents |= events & (POLLOUT | POLLWRNORM);
         }
     }
-    kernel_mutex_unlock(&pipe->wait.lock);
+    wait_queue_unlock(&pipe->wait);
     return revents;
 }
 
@@ -278,7 +283,7 @@ short pipe_poll_wait_revents_impl(struct pipe_endpoint *endpoint, short events) 
     }
 
     pipe = endpoint->pipe;
-    kernel_mutex_lock(&pipe->wait.lock);
+    wait_queue_lock(&pipe->wait);
     for (;;) {
         revents = 0;
         if (endpoint->read_end) {
@@ -297,15 +302,25 @@ short pipe_poll_wait_revents_impl(struct pipe_endpoint *endpoint, short events) 
         }
 
         if (revents != 0) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             return revents;
         }
 
         if (wait_queue_wait_locked_interruptible(&pipe->wait) != 0) {
-            kernel_mutex_unlock(&pipe->wait.lock);
+            wait_queue_unlock(&pipe->wait);
             errno = EINTR;
             return -1;
         }
+    }
+}
+
+void pipe_poll_wait_queue_impl(struct pipe_endpoint *endpoint, struct wait_queue_head **queue_out) {
+    if (!queue_out) {
+        return;
+    }
+    *queue_out = NULL;
+    if (endpoint && endpoint->pipe) {
+        *queue_out = &endpoint->pipe->wait;
     }
 }
 

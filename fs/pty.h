@@ -50,6 +50,7 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
 ssize_t pty_write_slave_impl(unsigned int pty_index, const void *buf, size_t count, bool nonblock);
 
 short pty_poll_revents_impl(unsigned int pty_index, bool is_master, short events);
+void pty_poll_wake_impl(unsigned int pty_index);
 int pty_get_readable_bytes_impl(unsigned int pty_index, bool is_master, int *bytes);
 
 int pty_set_lock_impl(unsigned int pty_index, bool locked);

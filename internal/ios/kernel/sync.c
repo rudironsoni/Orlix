@@ -14,7 +14,9 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "sync.h"
 
@@ -118,6 +120,38 @@ int kernel_cond_wait(kernel_cond_t *cond, kernel_mutex_t *mutex) {
     pthread_cond_t *pcond = (pthread_cond_t *)cond->_storage;
     pthread_mutex_t *pmutex = (pthread_mutex_t *)mutex->_storage;
     return pthread_cond_wait(pcond, pmutex);
+}
+
+int kernel_cond_timedwait_ms(kernel_cond_t *cond, kernel_mutex_t *mutex, int timeout_ms) {
+    if (!cond || !mutex || timeout_ms < 0) {
+        return -EINVAL;
+    }
+    if (!cond->_initialized) {
+        int ret = kernel_cond_init(cond);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+    if (!mutex->_initialized) {
+        return -EINVAL;
+    }
+
+    struct timeval now;
+    if (gettimeofday(&now, NULL) != 0) {
+        return errno;
+    }
+
+    struct timespec deadline;
+    deadline.tv_sec = now.tv_sec + (timeout_ms / 1000);
+    deadline.tv_nsec = ((long)now.tv_usec * 1000L) + ((long)(timeout_ms % 1000) * 1000000L);
+    if (deadline.tv_nsec >= 1000000000L) {
+        deadline.tv_sec++;
+        deadline.tv_nsec -= 1000000000L;
+    }
+
+    pthread_cond_t *pcond = (pthread_cond_t *)cond->_storage;
+    pthread_mutex_t *pmutex = (pthread_mutex_t *)mutex->_storage;
+    return pthread_cond_timedwait(pcond, pmutex, &deadline);
 }
 
 int kernel_cond_broadcast(kernel_cond_t *cond) {
@@ -274,6 +308,16 @@ int kernel_sigismember(const kernel_sigset_t *set, int signo) {
     (void)set;
     (void)signo;
     return 0;
+}
+
+int kernel_sleep_ms(int timeout_ms) {
+    if (timeout_ms < 0) {
+        return -EINVAL;
+    }
+    if (timeout_ms == 0) {
+        return 0;
+    }
+    return usleep((useconds_t)timeout_ms * 1000U);
 }
 
 /* ============================================================================

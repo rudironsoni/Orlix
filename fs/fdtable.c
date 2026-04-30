@@ -16,6 +16,7 @@
 #define STDERR_FILENO 2
 #endif
 #include "internal/ios/fs/file_io_host.h"
+#include "eventpoll.h"
 #include "pipe.h"
 #include "pty.h"
 
@@ -295,7 +296,8 @@ enum fd_type {
     FD_TYPE_SYNTHETIC_DEV, /* Synthetic char device (no host backing) */
     FD_TYPE_SYNTHETIC_PROC_FILE, /* Synthetic proc file (no host backing) */
     FD_TYPE_SYNTHETIC_PTY, /* Synthetic PTY endpoint */
-    FD_TYPE_PIPE /* Virtual pipe endpoint */
+    FD_TYPE_PIPE, /* Virtual pipe endpoint */
+    FD_TYPE_EPOLL /* Virtual epoll instance */
 };
 
 typedef struct synthetic_dir_state {
@@ -319,6 +321,7 @@ typedef struct fd_description {
     unsigned int pty_index;
     bool pty_is_master;
     struct pipe_endpoint *pipe_endpoint;
+    struct epoll_instance *epoll_instance;
     atomic_int refs;
     fs_mutex_t lock;
 } fd_description_t;
@@ -523,6 +526,40 @@ static fd_description_t *alloc_pipe_fd_description(int flags, struct pipe_endpoi
     return desc;
 }
 
+static fd_description_t *alloc_epoll_fd_description(int flags, struct epoll_instance *instance) {
+    fd_description_t *desc;
+
+    if (!instance) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    desc->type = FD_TYPE_EPOLL;
+    desc->fd = -1;
+    desc->flags = flags;
+    desc->mode = 0;
+    desc->offset = 0;
+    desc->is_dir = false;
+    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
+    desc->pipe_endpoint = NULL;
+    desc->epoll_instance = instance;
+    desc->synthetic_state = NULL;
+    atomic_init(&desc->refs, 1);
+    fs_mutex_init(&desc->lock);
+    memcpy(desc->path, "anon_inode:[eventpoll]", sizeof("anon_inode:[eventpoll]"));
+    return desc;
+}
+
 static void retain_fd_description(fd_description_t *desc) {
     if (desc) {
         atomic_fetch_add(&desc->refs, 1);
@@ -540,6 +577,8 @@ static void release_fd_description(fd_description_t *desc) {
             pty_close_end_impl(desc->pty_index, desc->pty_is_master);
         } else if (desc->type == FD_TYPE_PIPE) {
             pipe_close_endpoint_impl(desc->pipe_endpoint);
+        } else if (desc->type == FD_TYPE_EPOLL) {
+            epoll_release_fd_impl(desc->epoll_instance);
         }
         if (desc->synthetic_state) {
             free(desc->synthetic_state);
@@ -934,6 +973,20 @@ int init_pipe_fd_entry_impl(int fd, int flags, struct pipe_endpoint *endpoint) {
     return 0;
 }
 
+int init_epoll_fd_entry_impl(int fd, int flags, struct epoll_instance *instance) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    fs_mutex_lock(&entry->lock);
+    entry->desc = alloc_epoll_fd_description(flags, instance);
+    if (!entry->desc) {
+        fs_mutex_unlock(&entry->lock);
+        return -1;
+    }
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    fs_mutex_unlock(&entry->lock);
+    return 0;
+}
+
 bool get_fd_is_synthetic_dev_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_DEV;
@@ -967,6 +1020,16 @@ bool get_fd_is_pipe_impl(void *entry) {
 struct pipe_endpoint *get_fd_pipe_endpoint_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->pipe_endpoint : NULL;
+}
+
+bool get_fd_is_epoll_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_EPOLL;
+}
+
+struct epoll_instance *get_fd_epoll_instance_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc ? fd_entry->desc->epoll_instance : NULL;
 }
 
 void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file) {

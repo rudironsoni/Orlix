@@ -66,6 +66,7 @@ int kernel_mutex_unlock(kernel_mutex_t *mutex);
 int kernel_cond_init(kernel_cond_t *cond);
 int kernel_cond_destroy(kernel_cond_t *cond);
 int kernel_cond_wait(kernel_cond_t *cond, kernel_mutex_t *mutex);
+int kernel_cond_timedwait_ms(kernel_cond_t *cond, kernel_mutex_t *mutex, int timeout_ms);
 int kernel_cond_broadcast(kernel_cond_t *cond);
 
 /* Thread operations */
@@ -86,6 +87,7 @@ int kernel_thread_sigmask(int how, const kernel_sigset_t *set, kernel_sigset_t *
 int kernel_sigemptyset(kernel_sigset_t *set);
 int kernel_sigaddset(kernel_sigset_t *set, int signo);
 int kernel_sigismember(const kernel_sigset_t *set, int signo);
+int kernel_sleep_ms(int timeout_ms);
 
 /* Clock operations */
 struct timespec;

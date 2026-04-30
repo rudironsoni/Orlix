@@ -1,0 +1,443 @@
+#include <asm/ioctls.h>
+#include <linux/fcntl.h>
+#include <linux/poll.h>
+
+#ifdef SIGUSR1
+#undef SIGUSR1
+#endif
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
+
+#include <errno.h>
+#include <stddef.h>
+#include <string.h>
+#include <poll.h>
+#include <sys/select.h>
+#include <sys/time.h>
+
+#include "fs/fdtable.h"
+#include "kernel/signal.h"
+#include "kernel/task.h"
+
+extern int ixland_test_ioctl(int fd, unsigned long request, ...);
+extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int pipe_impl(int pipefd[2]);
+extern int poll_impl(struct pollfd *fds, nfds_t nfds, int timeout);
+extern int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);
+extern long read_impl(int fd, void *buf, size_t count);
+extern long write_impl(int fd, const void *buf, size_t count);
+extern int signal_generate_task(struct task_struct *target, int32_t sig);
+
+static int close_if_open(int fd) {
+    return fd >= 0 ? close_impl(fd) : 0;
+}
+
+static int append_decimal(char *buf, size_t buf_size, int value) {
+    char digits[16];
+    size_t count = 0;
+    if (value < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    do {
+        digits[count++] = (char)('0' + (value % 10));
+        value /= 10;
+    } while (value > 0 && count < sizeof(digits));
+    if (value > 0 || count + 1 > buf_size) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    for (size_t i = 0; i < count; i++) {
+        buf[i] = digits[count - 1 - i];
+    }
+    buf[count] = '\0';
+    return 0;
+}
+
+static int alloc_pty_pair(int *master_fd_out, int *slave_fd_out) {
+    int master_fd = -1;
+    int slave_fd = -1;
+    unsigned int pty_index = 0;
+    int unlock = 0;
+    char slave_path[64];
+
+    master_fd = open_impl("/dev/ptmx", O_RDWR, 0);
+    if (master_fd < 0) {
+        return -1;
+    }
+    if (ixland_test_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
+        close_impl(master_fd);
+        return -1;
+    }
+    if (ixland_test_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
+        close_impl(master_fd);
+        return -1;
+    }
+    memcpy(slave_path, "/dev/pts/", 9);
+    if (append_decimal(slave_path + 9, sizeof(slave_path) - 9, (int)pty_index) != 0) {
+        close_impl(master_fd);
+        return -1;
+    }
+    slave_fd = open_impl(slave_path, O_RDWR, 0);
+    if (slave_fd < 0) {
+        close_impl(master_fd);
+        return -1;
+    }
+    *master_fd_out = master_fd;
+    *slave_fd_out = slave_fd;
+    return 0;
+}
+
+struct readiness_thread_case {
+    int fd;
+    int mode;
+    kernel_mutex_t lock;
+    kernel_cond_t cond;
+    int started;
+    int done;
+    int result;
+    struct task_struct *task;
+};
+
+static void case_init(struct readiness_thread_case *ctx, int fd, int mode) {
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->fd = fd;
+    ctx->mode = mode;
+    kernel_mutex_init(&ctx->lock);
+    kernel_cond_init(&ctx->cond);
+}
+
+static void case_destroy(struct readiness_thread_case *ctx) {
+    kernel_cond_destroy(&ctx->cond);
+    kernel_mutex_destroy(&ctx->lock);
+}
+
+static void case_mark_started(struct readiness_thread_case *ctx) {
+    kernel_mutex_lock(&ctx->lock);
+    ctx->started = 1;
+    kernel_cond_broadcast(&ctx->cond);
+    kernel_mutex_unlock(&ctx->lock);
+}
+
+static void case_mark_done(struct readiness_thread_case *ctx, int result) {
+    kernel_mutex_lock(&ctx->lock);
+    ctx->result = result;
+    ctx->done = 1;
+    kernel_cond_broadcast(&ctx->cond);
+    kernel_mutex_unlock(&ctx->lock);
+}
+
+static void case_wait_started(struct readiness_thread_case *ctx) {
+    kernel_mutex_lock(&ctx->lock);
+    while (!ctx->started) {
+        kernel_cond_wait(&ctx->cond, &ctx->lock);
+    }
+    kernel_mutex_unlock(&ctx->lock);
+}
+
+static int case_wait_done(struct readiness_thread_case *ctx) {
+    int result;
+    kernel_mutex_lock(&ctx->lock);
+    while (!ctx->done) {
+        kernel_cond_wait(&ctx->cond, &ctx->lock);
+    }
+    result = ctx->result;
+    kernel_mutex_unlock(&ctx->lock);
+    return result;
+}
+
+static void *poll_thread(void *arg) {
+    struct readiness_thread_case *ctx = arg;
+    struct pollfd pfd = {.fd = ctx->fd, .events = POLLIN, .revents = 0};
+    int ret;
+    if (ctx->task) {
+        set_current(ctx->task);
+    }
+    case_mark_started(ctx);
+    ret = poll_impl(&pfd, 1, -1);
+    if (ret == 1 && (pfd.revents & POLLIN)) {
+        case_mark_done(ctx, 0);
+    } else if (ret == -1 && errno == EINTR) {
+        case_mark_done(ctx, EINTR);
+    } else {
+        case_mark_done(ctx, errno ? errno : EIO);
+    }
+    return NULL;
+}
+
+static void *select_thread(void *arg) {
+    struct readiness_thread_case *ctx = arg;
+    fd_set readfds;
+    int ret;
+    if (ctx->task) {
+        set_current(ctx->task);
+    }
+    FD_ZERO(&readfds);
+    FD_SET(ctx->fd, &readfds);
+    case_mark_started(ctx);
+    ret = select_impl(ctx->fd + 1, &readfds, NULL, NULL, NULL);
+    if (ret == 1 && FD_ISSET(ctx->fd, &readfds)) {
+        case_mark_done(ctx, 0);
+    } else if (ret == -1 && errno == EINTR) {
+        case_mark_done(ctx, EINTR);
+    } else {
+        case_mark_done(ctx, errno ? errno : EIO);
+    }
+    return NULL;
+}
+
+static int run_pipe_wake_case(void *(*thread_main)(void *), int write_second_pipe) {
+    int first[2] = {-1, -1};
+    int second[2] = {-1, -1};
+    struct readiness_thread_case ctx;
+    kernel_thread_t thread;
+    int ret = 0;
+
+    if (pipe_impl(first) != 0 || pipe_impl(second) != 0) {
+        ret = errno;
+        goto out;
+    }
+    case_init(&ctx, write_second_pipe ? second[0] : first[0], 0);
+    if (kernel_thread_create(&thread, NULL, thread_main, &ctx) != 0) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    kernel_thread_detach(thread);
+    case_wait_started(&ctx);
+    if (write_impl(write_second_pipe ? second[1] : first[1], "x", 1) != 1) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    ret = case_wait_done(&ctx);
+out_destroy:
+    case_destroy(&ctx);
+out:
+    close_if_open(first[0]);
+    close_if_open(first[1]);
+    close_if_open(second[0]);
+    close_if_open(second[1]);
+    return ret;
+}
+
+int readiness_contract_poll_pipe_blocks_until_writer_writes(void) {
+    return run_pipe_wake_case(poll_thread, 0);
+}
+
+int readiness_contract_poll_pipe_timeout_returns_zero(void) {
+    int fds[2] = {-1, -1};
+    struct pollfd pfd;
+    int ret = 0;
+    if (pipe_impl(fds) != 0) return errno;
+    pfd.fd = fds[0];
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    if (poll_impl(&pfd, 1, 5) != 0 || pfd.revents != 0) ret = errno ? errno : EIO;
+    close_if_open(fds[0]);
+    close_if_open(fds[1]);
+    return ret;
+}
+
+int readiness_contract_poll_pipe_signal_interrupt_returns_intr(void) {
+    int fds[2] = {-1, -1};
+    struct readiness_thread_case ctx;
+    kernel_thread_t thread;
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    int ret = 0;
+    if (pipe_impl(fds) != 0) return errno;
+    child = task_create_child_impl(parent);
+    if (!child) {
+        ret = errno ? errno : ENOMEM;
+        goto out;
+    }
+    case_init(&ctx, fds[0], 0);
+    ctx.task = child;
+    if (kernel_thread_create(&thread, NULL, poll_thread, &ctx) != 0) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    kernel_thread_detach(thread);
+    case_wait_started(&ctx);
+    if (signal_generate_task(child, SIGUSR1) != 0) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    ret = case_wait_done(&ctx);
+    if (ret == EINTR) ret = 0;
+out_destroy:
+    case_destroy(&ctx);
+    task_unlink_child_impl(parent, child);
+    free_task(child);
+out:
+    close_if_open(fds[0]);
+    close_if_open(fds[1]);
+    return ret;
+}
+
+int readiness_contract_poll_multiple_fds_returns_first_ready_pipe(void) {
+    int a[2] = {-1, -1};
+    int b[2] = {-1, -1};
+    struct pollfd pfds[2];
+    int ret = 0;
+    if (pipe_impl(a) != 0 || pipe_impl(b) != 0) return errno;
+    if (write_impl(a[1], "x", 1) != 1) {
+        ret = errno ? errno : EIO;
+        goto out;
+    }
+    pfds[0].fd = a[0]; pfds[0].events = POLLIN; pfds[0].revents = 0;
+    pfds[1].fd = b[0]; pfds[1].events = POLLIN; pfds[1].revents = 0;
+    if (poll_impl(pfds, 2, -1) != 1 || (pfds[0].revents & POLLIN) == 0 || pfds[1].revents != 0) {
+        ret = errno ? errno : EIO;
+    }
+out:
+    close_if_open(a[0]); close_if_open(a[1]); close_if_open(b[0]); close_if_open(b[1]);
+    return ret;
+}
+
+int readiness_contract_poll_multiple_fds_wakes_when_second_pipe_becomes_ready(void) {
+    return run_pipe_wake_case(poll_thread, 1);
+}
+
+int readiness_contract_poll_pipe_hup_after_writer_close(void) {
+    int fds[2] = {-1, -1};
+    struct pollfd pfd;
+    int ret = 0;
+    if (pipe_impl(fds) != 0) return errno;
+    close_if_open(fds[1]); fds[1] = -1;
+    pfd.fd = fds[0]; pfd.events = POLLIN; pfd.revents = 0;
+    if (poll_impl(&pfd, 1, 0) != 1 || (pfd.revents & POLLHUP) == 0) ret = errno ? errno : EIO;
+    close_if_open(fds[0]);
+    return ret;
+}
+
+int readiness_contract_poll_pipe_write_end_err_after_reader_close(void) {
+    int fds[2] = {-1, -1};
+    struct pollfd pfd;
+    int ret = 0;
+    if (pipe_impl(fds) != 0) return errno;
+    close_if_open(fds[0]); fds[0] = -1;
+    pfd.fd = fds[1]; pfd.events = POLLOUT; pfd.revents = 0;
+    if (poll_impl(&pfd, 1, 0) != 1 || (pfd.revents & POLLERR) == 0) ret = errno ? errno : EIO;
+    close_if_open(fds[1]);
+    return ret;
+}
+
+static int run_pty_wake_case(int wait_fd_is_master, int select_mode) {
+    int master = -1;
+    int slave = -1;
+    struct readiness_thread_case ctx;
+    kernel_thread_t thread;
+    int ret = 0;
+    if (alloc_pty_pair(&master, &slave) != 0) return errno;
+    case_init(&ctx, wait_fd_is_master ? master : slave, 0);
+    if (kernel_thread_create(&thread, NULL, select_mode ? select_thread : poll_thread, &ctx) != 0) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    kernel_thread_detach(thread);
+    case_wait_started(&ctx);
+    if (write_impl(wait_fd_is_master ? slave : master, "x\n", 2) < 1) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    ret = case_wait_done(&ctx);
+out_destroy:
+    case_destroy(&ctx);
+    close_if_open(master);
+    close_if_open(slave);
+    return ret;
+}
+
+int readiness_contract_poll_pty_master_blocks_until_slave_writes(void) {
+    return run_pty_wake_case(1, 0);
+}
+
+int readiness_contract_poll_pty_slave_blocks_until_master_writes(void) {
+    return run_pty_wake_case(0, 0);
+}
+
+int readiness_contract_poll_pty_hup_after_peer_close(void) {
+    int master = -1;
+    int slave = -1;
+    struct pollfd pfd;
+    int ret = 0;
+    if (alloc_pty_pair(&master, &slave) != 0) return errno;
+    close_if_open(slave); slave = -1;
+    pfd.fd = master; pfd.events = POLLIN; pfd.revents = 0;
+    if (poll_impl(&pfd, 1, 0) != 1 || (pfd.revents & POLLHUP) == 0) ret = errno ? errno : EIO;
+    close_if_open(master);
+    return ret;
+}
+
+int readiness_contract_select_pipe_read_blocks_until_writer_writes(void) {
+    return run_pipe_wake_case(select_thread, 0);
+}
+
+int readiness_contract_select_pipe_write_reports_writable(void) {
+    int fds[2] = {-1, -1};
+    fd_set writefds;
+    int ret = 0;
+    if (pipe_impl(fds) != 0) return errno;
+    FD_ZERO(&writefds);
+    FD_SET(fds[1], &writefds);
+    if (select_impl(fds[1] + 1, NULL, &writefds, NULL, NULL) != 1 || !FD_ISSET(fds[1], &writefds)) ret = errno ? errno : EIO;
+    close_if_open(fds[0]);
+    close_if_open(fds[1]);
+    return ret;
+}
+
+int readiness_contract_select_timeout_returns_zero(void) {
+    int fds[2] = {-1, -1};
+    fd_set readfds;
+    struct timeval tv = {.tv_sec = 0, .tv_usec = 5000};
+    int ret = 0;
+    if (pipe_impl(fds) != 0) return errno;
+    FD_ZERO(&readfds);
+    FD_SET(fds[0], &readfds);
+    if (select_impl(fds[0] + 1, &readfds, NULL, NULL, &tv) != 0 || FD_ISSET(fds[0], &readfds)) ret = errno ? errno : EIO;
+    close_if_open(fds[0]);
+    close_if_open(fds[1]);
+    return ret;
+}
+
+int readiness_contract_select_signal_interrupt_returns_intr(void) {
+    int fds[2] = {-1, -1};
+    struct readiness_thread_case ctx;
+    kernel_thread_t thread;
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    int ret = 0;
+    if (pipe_impl(fds) != 0) return errno;
+    child = task_create_child_impl(parent);
+    if (!child) {
+        ret = errno ? errno : ENOMEM;
+        goto out;
+    }
+    case_init(&ctx, fds[0], 0);
+    ctx.task = child;
+    if (kernel_thread_create(&thread, NULL, select_thread, &ctx) != 0) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    kernel_thread_detach(thread);
+    case_wait_started(&ctx);
+    if (signal_generate_task(child, SIGUSR1) != 0) {
+        ret = errno ? errno : EIO;
+        goto out_destroy;
+    }
+    ret = case_wait_done(&ctx);
+    if (ret == EINTR) ret = 0;
+out_destroy:
+    case_destroy(&ctx);
+    task_unlink_child_impl(parent, child);
+    free_task(child);
+out:
+    close_if_open(fds[0]);
+    close_if_open(fds[1]);
+    return ret;
+}
+
+int readiness_contract_select_pty_read_wakes_on_peer_write(void) {
+    return run_pty_wake_case(1, 1);
+}

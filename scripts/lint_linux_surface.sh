@@ -564,4 +564,24 @@ fi
 echo "   ✓ No host pipe ownership vocabulary"
 
 echo ""
+echo "=== Check 34: wait queue owner header is host-mediation clean ==="
+WAIT_QUEUE_IOS_INCLUDE=$(rg -n 'internal/ios' kernel/wait_queue.h 2>/dev/null || true)
+if [ -n "$WAIT_QUEUE_IOS_INCLUDE" ]; then
+    echo "FAIL: kernel/wait_queue.h includes host mediation:"
+    echo "$WAIT_QUEUE_IOS_INCLUDE"
+    exit 1
+fi
+echo "   ✓ wait queue header does not expose host mediation"
+
+echo ""
+echo "=== Check 35: virtual readiness is not host event owned ==="
+HOST_EVENT_OWNER=$(rg -n 'host_epoll|kqueue|dispatch_source|host_pipe|Darwin.*pipe' fs kernel internal/ios 2>/dev/null || true)
+if [ -n "$HOST_EVENT_OWNER" ]; then
+    echo "FAIL: Host event ownership vocabulary found:"
+    echo "$HOST_EVENT_OWNER"
+    exit 1
+fi
+echo "   ✓ No host event ownership vocabulary"
+
+echo ""
 echo "=== All checks passed ==="

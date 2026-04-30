@@ -12,6 +12,7 @@
 extern "C" {
 #endif
 
+struct wait_queue_head;
 struct pipe_endpoint;
 
 int pipe_impl(int pipefd[2]);
@@ -25,6 +26,7 @@ ssize_t pipe_read_endpoint_impl(struct pipe_endpoint *endpoint, void *buf, size_
 ssize_t pipe_write_endpoint_impl(struct pipe_endpoint *endpoint, const void *buf, size_t count, bool nonblock);
 short pipe_poll_revents_impl(struct pipe_endpoint *endpoint, short events);
 short pipe_poll_wait_revents_impl(struct pipe_endpoint *endpoint, short events);
+void pipe_poll_wait_queue_impl(struct pipe_endpoint *endpoint, struct wait_queue_head **queue_out);
 
 #ifdef __cplusplus
 }

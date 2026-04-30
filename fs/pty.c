@@ -72,7 +72,10 @@
 
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
+#include "../kernel/wait_queue.h"
 #include "internal/ios/fs/sync.h"
+
+void poll_notify_readiness_impl(void);
 
 #define PTY_MAX 128
 #define PTY_BUFFER_CAPACITY 4096
@@ -111,6 +114,7 @@ typedef struct pty_pair {
     pty_ring_buffer_t slave_to_master;
     unsigned char canonical_pending[PTY_BUFFER_CAPACITY];
     size_t canonical_pending_len;
+    struct wait_queue_head wait;
 } pty_pair_t;
 
 static pty_pair_t pty_table[PTY_MAX];
@@ -461,6 +465,7 @@ int pty_allocate_pair_impl(unsigned int *pty_index) {
         pair->slave_open_count = 0;
         pair->slave_locked = true;
         pty_init_defaults(pair);
+        wait_queue_init(&pair->wait);
 
         atomic_store(&pty_next_hint, idx + 1);
         *pty_index = idx;
@@ -631,11 +636,15 @@ int pty_close_end_impl(unsigned int pty_index, bool is_master) {
         }
     }
 
+    wait_queue_wake_all(&pair->wait);
+
     if (pair->master_open_count == 0 && pair->slave_open_count == 0) {
+        wait_queue_destroy(&pair->wait);
         memset(pair, 0, sizeof(*pair));
     }
 
     fs_mutex_unlock(&pty_lock);
+    poll_notify_readiness_impl();
 
     if (clear_task_tty_refs) {
         pty_clear_task_tty_refs_impl(pty_index);
@@ -697,7 +706,13 @@ ssize_t pty_read_master_impl(unsigned int pty_index, void *buf, size_t count, bo
     }
 
     ssize_t ret = pty_read_from_ring(&pair->slave_to_master, pair->slave_open_count > 0, buf, count, nonblock);
+    if (ret > 0) {
+        wait_queue_wake_all(&pair->wait);
+    }
     fs_mutex_unlock(&pty_lock);
+    if (ret > 0) {
+        poll_notify_readiness_impl();
+    }
     return ret;
 }
 
@@ -725,7 +740,13 @@ ssize_t pty_write_master_impl(unsigned int pty_index, const void *buf, size_t co
     if (ret < 0 && !nonblock && errno == EAGAIN) {
         errno = EAGAIN;
     }
+    if (ret > 0) {
+        wait_queue_wake_all(&pair->wait);
+    }
     fs_mutex_unlock(&pty_lock);
+    if (ret > 0) {
+        poll_notify_readiness_impl();
+    }
     return ret;
 }
 
@@ -772,7 +793,13 @@ ssize_t pty_read_slave_impl(unsigned int pty_index, void *buf, size_t count, boo
     }
 
     ssize_t ret = pty_read_from_ring(&pair->master_to_slave, pair->master_open_count > 0, buf, count, nonblock);
+    if (ret > 0) {
+        wait_queue_wake_all(&pair->wait);
+    }
     fs_mutex_unlock(&pty_lock);
+    if (ret > 0) {
+        poll_notify_readiness_impl();
+    }
     return ret;
 }
 
@@ -798,7 +825,13 @@ ssize_t pty_write_slave_impl(unsigned int pty_index, const void *buf, size_t cou
     }
 
     ssize_t ret = pty_write_to_ring(&pair->slave_to_master, pair->master_open_count > 0, buf, count, nonblock);
+    if (ret > 0) {
+        wait_queue_wake_all(&pair->wait);
+    }
     fs_mutex_unlock(&pty_lock);
+    if (ret > 0) {
+        poll_notify_readiness_impl();
+    }
     return ret;
 }
 
@@ -864,6 +897,20 @@ short pty_poll_revents_impl(unsigned int pty_index, bool is_master, short events
 
     fs_mutex_unlock(&pty_lock);
     return revents;
+}
+
+void pty_poll_wake_impl(unsigned int pty_index) {
+    if (!pty_valid_index(pty_index)) {
+        return;
+    }
+
+    fs_mutex_lock(&pty_lock);
+    pty_pair_t *pair = &pty_table[pty_index];
+    if (pair->allocated) {
+        wait_queue_wake_all(&pair->wait);
+    }
+    fs_mutex_unlock(&pty_lock);
+    poll_notify_readiness_impl();
 }
 
 int pty_set_lock_impl(unsigned int pty_index, bool locked) {
@@ -950,7 +997,9 @@ int pty_set_termios_with_action_impl(unsigned int pty_index, const pty_linux_ter
     }
 
     pair->termios = *termios;
+    wait_queue_wake_all(&pair->wait);
     fs_mutex_unlock(&pty_lock);
+    poll_notify_readiness_impl();
     return 0;
 }
 
@@ -1002,6 +1051,9 @@ int pty_set_winsize_impl(unsigned int pty_index, const pty_linux_winsize_t *wins
 
     if (changed && foreground_pgrp > 0) {
         signal_generate_pgrp(foreground_pgrp, SIGWINCH);
+    }
+    if (changed) {
+        pty_poll_wake_impl(pty_index);
     }
 
     return 0;

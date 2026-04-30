@@ -1,0 +1,20 @@
+#ifndef READINESS_CONTRACT_H
+#define READINESS_CONTRACT_H
+
+int readiness_contract_poll_pipe_blocks_until_writer_writes(void);
+int readiness_contract_poll_pipe_timeout_returns_zero(void);
+int readiness_contract_poll_pipe_signal_interrupt_returns_intr(void);
+int readiness_contract_poll_multiple_fds_returns_first_ready_pipe(void);
+int readiness_contract_poll_multiple_fds_wakes_when_second_pipe_becomes_ready(void);
+int readiness_contract_poll_pipe_hup_after_writer_close(void);
+int readiness_contract_poll_pipe_write_end_err_after_reader_close(void);
+int readiness_contract_poll_pty_master_blocks_until_slave_writes(void);
+int readiness_contract_poll_pty_slave_blocks_until_master_writes(void);
+int readiness_contract_poll_pty_hup_after_peer_close(void);
+int readiness_contract_select_pipe_read_blocks_until_writer_writes(void);
+int readiness_contract_select_pipe_write_reports_writable(void);
+int readiness_contract_select_timeout_returns_zero(void);
+int readiness_contract_select_signal_interrupt_returns_intr(void);
+int readiness_contract_select_pty_read_wakes_on_peer_write(void);
+
+#endif

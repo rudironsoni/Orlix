@@ -69,8 +69,6 @@ targets:
       group: fs
     - path: fs/readdir.c
       group: fs
-    - path: internal/ios/fs/wait.c
-      group: internal/ios/fs
     - path: internal/ios/fs/epoll_bridge.c
       group: internal/ios/fs
     - path: fs/stat.c
@@ -139,6 +137,8 @@ targets:
     - IXLandSystemLinuxKernelTests/PTYJobControlTests.m
     - IXLandSystemLinuxKernelTests/WaitJobControlTests.m
     - IXLandSystemLinuxKernelTests/PipeTests.m
+    - IXLandSystemLinuxKernelTests/ReadinessTests.m
+    - IXLandSystemLinuxKernelTests/EpollTests.m
     - IXLandSystemLinuxKernelTests/FcntlTests.m
     - IXLandSystemLinuxKernelTests/ExecFdTests.m
     - IXLandSystemLinuxKernelTests/ExecSyscallTests.m
@@ -171,10 +171,20 @@ targets:
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/ReadinessContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - path: IXLandSystemLinuxKernelTests/EpollContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/PTYSessionContract.h
     - IXLandSystemLinuxKernelTests/PTYJobControlContract.h
     - IXLandSystemLinuxKernelTests/WaitJobControlContract.h
     - IXLandSystemLinuxKernelTests/PipeContract.h
+    - IXLandSystemLinuxKernelTests/ReadinessContract.h
+    - IXLandSystemLinuxKernelTests/EpollContract.h
     - IXLandSystemLinuxKernelTests/PTYSessionIoctlShim.c
     - path: IXLandSystemLinuxKernelTests/FutexUAPICompileSmoke.c
       compilerFlags:
