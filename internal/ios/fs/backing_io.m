@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "errno_host.h"
-#include "include/ixland/stat_types.h"
+#include "fs/stat_types.h"
 
 /* Private host mediation via direct syscalls
  *

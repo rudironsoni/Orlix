@@ -3,169 +3,156 @@
  */
 #include <errno.h>
 #include <stdlib.h>
-#include <sys/resource.h>
+#include <sys/types.h>
 
+#include "signal.h"
 #include "task.h"
 
-/* SIGCONT value for wait status - from Linux signal.h */
-#define LINUX_SIGCONT 18
+enum wait_report_kind {
+    WAIT_REPORT_NONE = 0,
+    WAIT_REPORT_EXITED,
+    WAIT_REPORT_SIGNALED,
+    WAIT_REPORT_STOPPED,
+    WAIT_REPORT_CONTINUED,
+};
 
-static int task_to_status(struct task_struct *task) {
-    int status = 0;
-
-    if (atomic_load(&task->signaled)) {
-        /* Child was terminated by signal */
-        status = task->termsig;
-    } else if (atomic_load(&task->stopped)) {
-        /* Child is stopped */
-        status = (task->stopsig << 8) | 0x7f;
-    } else if (atomic_load(&task->continued)) {
-        /* Child continued (reported via wait with WCONTINUED) */
-        status = (LINUX_SIGCONT << 8) | 0x7f;
-    } else {
-        /* Normal exit */
-        status = (task->exit_status & 0xFF) << 8;
+static bool wait_child_matches_selector(const struct task_struct *parent, const struct task_struct *child, int32_t pid) {
+    if (!parent || !child) {
+        return false;
     }
 
-    return status;
+    if (pid > 0) {
+        return child->pid == pid;
+    }
+    if (pid == -1) {
+        return true;
+    }
+    if (pid == 0) {
+        return child->pgid == parent->pgid;
+    }
+    return child->pgid == -pid;
 }
 
-/* Status check helpers */
-#define W_STOPPED(status) (((status) & 0xff) == 0x7f)
-#define W_CONTINUED(status) ((status) == 0xffff)
+static enum wait_report_kind wait_child_report_kind(const struct task_struct *child, int options) {
+    if (atomic_load(&child->exited)) {
+        if (atomic_load(&child->signaled)) {
+            return WAIT_REPORT_SIGNALED;
+        }
+        return WAIT_REPORT_EXITED;
+    }
+
+    if ((options & 0x00000002) && atomic_load(&child->stop_report_pending)) {
+        return WAIT_REPORT_STOPPED;
+    }
+
+    if ((options & 0x00000008) && atomic_load(&child->continue_report_pending)) {
+        return WAIT_REPORT_CONTINUED;
+    }
+
+    return WAIT_REPORT_NONE;
+}
+
+static int wait_report_status(const struct task_struct *child, enum wait_report_kind report_kind) {
+    switch (report_kind) {
+    case WAIT_REPORT_EXITED:
+        return (child->exit_status & 0xff) << 8;
+    case WAIT_REPORT_SIGNALED:
+        return atomic_load(&child->termsig) & 0x7f;
+    case WAIT_REPORT_STOPPED:
+        return (atomic_load(&child->stopsig) << 8) | 0x7f;
+    case WAIT_REPORT_CONTINUED:
+        return 0xffff;
+    case WAIT_REPORT_NONE:
+    default:
+        return 0;
+    }
+}
 
 int32_t waitpid_impl(int32_t pid, int *wstatus, int options) {
     struct task_struct *parent = get_current();
+    struct task_struct *child;
+    struct task_struct *matched_child;
+    enum wait_report_kind report_kind;
+    bool matched_any_child;
     if (!parent) {
         errno = ESRCH;
         return -1;
     }
 
-    struct task_struct *child = NULL;
-
     kernel_mutex_lock(&parent->lock);
     parent->waiters++;
 
     while (1) {
-        /* Find matching child based on pid selector */
-        if (pid > 0) {
-            /* Wait for specific child */
-            child = parent->children;
-            while (child && child->pid != pid) {
-                child = child->next_sibling;
-            }
-        } else if (pid == -1) {
-            /* Wait for any child - iterate to find one matching state criteria */
-            child = parent->children;
-            while (child) {
-                if (atomic_load(&child->exited) ||
-                    ((options & WUNTRACED) && atomic_load(&child->stopped)) ||
-                    ((options & WCONTINUED) && atomic_load(&child->continued))) {
+        matched_child = NULL;
+        report_kind = WAIT_REPORT_NONE;
+        matched_any_child = false;
+
+        child = parent->children;
+        while (child) {
+            if (wait_child_matches_selector(parent, child, pid)) {
+                matched_any_child = true;
+                report_kind = wait_child_report_kind(child, options);
+                if (report_kind != WAIT_REPORT_NONE) {
+                    matched_child = child;
                     break;
                 }
-                child = child->next_sibling;
             }
-        } else if (pid == 0) {
-            /* Wait for any child in same process group */
-            child = parent->children;
-            while (child) {
-                if (child->pgid == parent->pgid &&
-                    (atomic_load(&child->exited) ||
-                     ((options & WUNTRACED) && atomic_load(&child->stopped)) ||
-                     ((options & WCONTINUED) && atomic_load(&child->continued)))) {
-                    break;
-                }
-                child = child->next_sibling;
-            }
-        } else {
-            /* pid < -1: Wait for any child in process group |pid| */
-            int32_t pgid = -pid;
-            child = parent->children;
-            while (child) {
-                if (child->pgid == pgid &&
-                    (atomic_load(&child->exited) ||
-                     ((options & WUNTRACED) && atomic_load(&child->stopped)) ||
-                     ((options & WCONTINUED) && atomic_load(&child->continued)))) {
-                    break;
-                }
-                child = child->next_sibling;
-            }
+            child = child->next_sibling;
         }
 
-        /* Check if we found a matching child */
-        if (child) {
-            /* Check for exited child */
-            if (atomic_load(&child->exited)) {
-                break;
-            }
-
-            /* Check for stopped child (WUNTRACED) */
-            if ((options & WUNTRACED) && atomic_load(&child->stopped) &&
-                !atomic_load(&child->exited)) {
-                break;
-            }
-
-            /* Check for continued child (WCONTINUED) */
-            if ((options & WCONTINUED) && atomic_load(&child->continued) &&
-                !atomic_load(&child->exited) && !atomic_load(&child->stopped)) {
-                break;
-            }
+        if (matched_child) {
+            break;
         }
 
-        /* No matching exited child */
-        if (options & WNOHANG) {
-            parent->waiters--;
-            kernel_mutex_unlock(&parent->lock);
-            return 0;
-        }
-
-        if (!parent->children) {
-            /* No children at all */
+        if (!matched_any_child) {
             parent->waiters--;
             kernel_mutex_unlock(&parent->lock);
             errno = ECHILD;
             return -1;
         }
 
-        /* Wait for child to exit */
-        if (options & WNOHANG) {
-            /* Non-blocking: just check once */
+        if (options & 0x00000001) {
             parent->waiters--;
             kernel_mutex_unlock(&parent->lock);
             return 0;
         }
 
-        /* Block waiting for child */
         kernel_cond_wait(&parent->wait_cond, &parent->lock);
     }
 
-    /* Determine if child should be reaped (exited/signaled) or just reported (stopped/continued) */
-    int should_reap = atomic_load(&child->exited) || atomic_load(&child->signaled);
+    if (report_kind == WAIT_REPORT_STOPPED) {
+        atomic_store(&matched_child->stop_report_pending, false);
+    } else if (report_kind == WAIT_REPORT_CONTINUED) {
+        atomic_store(&matched_child->continued, false);
+        atomic_store(&matched_child->continue_report_pending, false);
+    }
 
-    /* Only unlink and free terminated children */
-    if (should_reap) {
-        struct task_struct **pp = &parent->children;
-        while (*pp && *pp != child) {
-            pp = &(*pp)->next_sibling;
+    if (report_kind == WAIT_REPORT_EXITED || report_kind == WAIT_REPORT_SIGNALED) {
+        struct task_struct **link = &parent->children;
+        while (*link && *link != matched_child) {
+            link = &(*link)->next_sibling;
         }
-        if (*pp) {
-            *pp = child->next_sibling;
+        if (*link == matched_child) {
+            *link = matched_child->next_sibling;
+        }
+        matched_child->next_sibling = NULL;
+        if (matched_child->parent == parent) {
+            matched_child->parent = NULL;
+            matched_child->ppid = 0;
         }
     }
 
     parent->waiters--;
     kernel_mutex_unlock(&parent->lock);
 
-    /* Return status */
     if (wstatus) {
-        *wstatus = task_to_status(child);
+        *wstatus = wait_report_status(matched_child, report_kind);
     }
 
-    int32_t child_pid = child->pid;
+    pid_t child_pid = matched_child->pid;
 
-    /* Only free terminated children */
-    if (should_reap) {
-        free_task(child);
+    if (report_kind == WAIT_REPORT_EXITED || report_kind == WAIT_REPORT_SIGNALED) {
+        free_task(matched_child);
     }
 
     return child_pid;

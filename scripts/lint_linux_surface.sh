@@ -34,7 +34,7 @@ echo "   ✓ No forbidden host headers"
 
 echo ""
 echo "=== Check 4: Forbidden host APIs/tokens in Linux-owner paths ==="
-FORBIDDEN_TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|pthread_[a-z_]+|objc_[a-z_]+|mach_[a-z_]+|os_log)\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_[A-Z0-9_]+\b' -g '!include/ixland/clangd_owner_policy.h' $OWNER_PATHS 2>/dev/null || true)
+FORBIDDEN_TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|pthread_[a-z_]+|objc_[a-z_]+|mach_[a-z_]+|os_log)\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_[A-Z0-9_]+\b' $OWNER_PATHS 2>/dev/null || true)
 if [ -n "$FORBIDDEN_TOKENS" ]; then
     echo "FAIL: Forbidden host APIs/tokens in Linux-owner paths:"
     echo "$FORBIDDEN_TOKENS"

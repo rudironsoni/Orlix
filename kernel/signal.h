@@ -22,7 +22,6 @@
 #include <stdint.h>
 #include <stdatomic.h>
 
-#include "../include/ixland/linux_abi_constants.h"
 #include "../internal/ios/kernel/sync.h"
 
 #ifdef SIGHUP
@@ -39,6 +38,9 @@
 #endif
 #ifdef SIGTERM
 #undef SIGTERM
+#endif
+#ifdef SIGCHLD
+#undef SIGCHLD
 #endif
 #ifdef SIGCONT
 #undef SIGCONT
@@ -57,6 +59,15 @@
 #endif
 #ifdef SIGWINCH
 #undef SIGWINCH
+#endif
+#ifdef SIG_BLOCK
+#undef SIG_BLOCK
+#endif
+#ifdef SIG_UNBLOCK
+#undef SIG_UNBLOCK
+#endif
+#ifdef SIG_SETMASK
+#undef SIG_SETMASK
 #endif
 #ifdef SIG_DFL
 #undef SIG_DFL
@@ -80,17 +91,24 @@ struct task_struct;
 typedef void (*sighandler_t)(int);
 
 enum {
-    SIGHUP = IX_SIGHUP,
-    SIGINT = IX_SIGINT,
-    SIGQUIT = IX_SIGQUIT,
-    SIGKILL = IX_SIGKILL,
-    SIGTERM = IX_SIGTERM,
-    SIGCONT = IX_SIGCONT,
-    SIGSTOP = IX_SIGSTOP,
-    SIGTSTP = IX_SIGTSTP,
-    SIGTTIN = IX_SIGTTIN,
-    SIGTTOU = IX_SIGTTOU,
-    SIGWINCH = IX_SIGWINCH,
+    SIG_BLOCK = 0,
+    SIG_UNBLOCK = 1,
+    SIG_SETMASK = 2,
+};
+
+enum {
+    SIGHUP = 1,
+    SIGINT = 2,
+    SIGQUIT = 3,
+    SIGKILL = 9,
+    SIGTERM = 15,
+    SIGCHLD = 17,
+    SIGCONT = 18,
+    SIGSTOP = 19,
+    SIGTSTP = 20,
+    SIGTTIN = 21,
+    SIGTTOU = 22,
+    SIGWINCH = 28,
 };
 
 static const sighandler_t SIG_DFL = (sighandler_t)0;

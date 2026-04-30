@@ -90,3 +90,5 @@ bin/ixland-cc
 .old-backup/
 
 compile_commands.json
+# CocoIndex Code (ccc)
+/.cocoindex_code/

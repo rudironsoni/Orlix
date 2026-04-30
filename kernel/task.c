@@ -50,6 +50,12 @@ struct task_struct *alloc_task(void) {
     atomic_init(&task->refs, 1);
     atomic_init(&task->exited, false);
     atomic_init(&task->signaled, false);
+    atomic_init(&task->stopped, false);
+    atomic_init(&task->stopsig, 0);
+    atomic_init(&task->continued, false);
+    atomic_init(&task->stop_report_pending, false);
+    atomic_init(&task->continue_report_pending, false);
+    atomic_init(&task->execed, false);
 
     kernel_mutex_init(&task->lock);
     kernel_cond_init(&task->wait_cond);
@@ -66,6 +72,173 @@ struct task_struct *alloc_task(void) {
     kernel_mutex_unlock(&task_table_lock);
 
     return task;
+}
+
+struct task_struct *task_create_child_impl(struct task_struct *parent) {
+    struct task_struct *child;
+
+    if (!parent) {
+        errno = ESRCH;
+        return NULL;
+    }
+
+    child = alloc_task();
+    if (!child) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    child->ppid = parent->pid;
+    child->pgid = parent->pgid;
+    child->sid = parent->sid;
+
+    if (parent->fs) {
+        child->fs = dup_fs_struct(parent->fs);
+        if (!child->fs) {
+            free_task(child);
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+
+    if (parent->files) {
+        child->files = dup_files(parent->files);
+        if (!child->files) {
+            free_task(child);
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+
+    if (parent->signal) {
+        child->signal = dup_signal_struct(parent->signal);
+        if (!child->signal) {
+            free_task(child);
+            errno = ENOMEM;
+            return NULL;
+        }
+    } else if (signal_init_task(child) != 0) {
+        free_task(child);
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    if (parent->tty) {
+        child->tty = parent->tty;
+        atomic_fetch_add(&child->tty->refs, 1);
+    }
+
+    kernel_mutex_lock(&parent->lock);
+    child->parent = parent;
+    child->next_sibling = parent->children;
+    parent->children = child;
+    kernel_mutex_unlock(&parent->lock);
+
+    return child;
+}
+
+void task_unlink_child_impl(struct task_struct *parent, struct task_struct *child) {
+    struct task_struct **link;
+
+    if (!parent || !child) {
+        return;
+    }
+
+    kernel_mutex_lock(&parent->lock);
+    link = &parent->children;
+    while (*link && *link != child) {
+        link = &(*link)->next_sibling;
+    }
+    if (*link == child) {
+        *link = child->next_sibling;
+    }
+    child->next_sibling = NULL;
+    if (child->parent == parent) {
+        child->parent = NULL;
+        child->ppid = 0;
+    }
+    kernel_mutex_unlock(&parent->lock);
+}
+
+void task_mark_stopped_by_signal(struct task_struct *task, int32_t sig) {
+    if (!task) {
+        return;
+    }
+
+    atomic_store(&task->termsig, 0);
+    atomic_store(&task->state, TASK_STOPPED);
+    atomic_store(&task->stopped, true);
+    atomic_store(&task->stopsig, sig);
+    atomic_store(&task->continued, false);
+    atomic_store(&task->stop_report_pending, true);
+    atomic_store(&task->continue_report_pending, false);
+}
+
+void task_mark_continued_by_signal(struct task_struct *task) {
+    if (!task) {
+        return;
+    }
+
+    atomic_store(&task->state, TASK_RUNNING);
+    atomic_store(&task->stopped, false);
+    atomic_store(&task->stopsig, 0);
+    atomic_store(&task->continued, true);
+    atomic_store(&task->stop_report_pending, false);
+    atomic_store(&task->continue_report_pending, true);
+}
+
+void task_mark_signaled_exit(struct task_struct *task, int32_t sig) {
+    if (!task) {
+        return;
+    }
+
+    atomic_store(&task->signaled, true);
+    atomic_store(&task->termsig, sig);
+    atomic_store(&task->exited, true);
+    atomic_store(&task->state, TASK_ZOMBIE);
+    atomic_store(&task->stopped, false);
+    atomic_store(&task->stopsig, 0);
+    atomic_store(&task->continued, false);
+    atomic_store(&task->stop_report_pending, false);
+    atomic_store(&task->continue_report_pending, false);
+}
+
+void task_mark_exited(struct task_struct *task, int status) {
+    if (!task) {
+        return;
+    }
+
+    task->exit_status = status;
+    atomic_store(&task->signaled, false);
+    atomic_store(&task->termsig, 0);
+    atomic_store(&task->exited, true);
+    atomic_store(&task->state, TASK_ZOMBIE);
+    atomic_store(&task->stopped, false);
+    atomic_store(&task->stopsig, 0);
+    atomic_store(&task->continued, false);
+    atomic_store(&task->stop_report_pending, false);
+    atomic_store(&task->continue_report_pending, false);
+}
+
+void task_notify_parent_state_change(struct task_struct *task) {
+    struct task_struct *parent;
+
+    if (!task || !task->parent) {
+        return;
+    }
+
+    parent = task->parent;
+    atomic_fetch_add(&parent->refs, 1);
+
+    (void)signal_generate_task(parent, SIGCHLD);
+
+    kernel_mutex_lock(&parent->lock);
+    if (parent->waiters > 0) {
+        kernel_cond_broadcast(&parent->wait_cond);
+    }
+    kernel_mutex_unlock(&parent->lock);
+
+    free_task(parent);
 }
 
 void free_task(struct task_struct *task) {

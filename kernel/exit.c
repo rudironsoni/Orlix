@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "signal.h"
 #include "task.h"
 
 /* External declaration for init task */
@@ -14,10 +15,7 @@ void exit_impl(int status) {
 
     kernel_mutex_lock(&task->lock);
 
-    /* Set exit status */
-    task->exit_status = status;
-    atomic_store(&task->exited, true);
-    atomic_store(&task->state, TASK_ZOMBIE);
+    task_mark_exited(task, status);
 
     /* Reparent children to init (orphan adoption) */
     if (task->children && init_task && init_task != task) {
@@ -80,15 +78,7 @@ void exit_impl(int status) {
         vfork_exit_notify();
     }
 
-    /* Notify parent via SIGCHLD */
-    if (task->parent) {
-        /* In real implementation: kill(task->parent->pid, SIGCHLD); */
-        kernel_mutex_lock(&task->parent->lock);
-        if (task->parent->waiters > 0) {
-            kernel_cond_broadcast(&task->parent->wait_cond);
-        }
-        kernel_mutex_unlock(&task->parent->lock);
-    }
+    task_notify_parent_state_change(task);
 
     /* Terminate thread but keep task until parent waits */
 }

@@ -127,6 +127,8 @@ struct task_struct {
     atomic_bool stopped;
     atomic_int stopsig;
     atomic_bool continued;
+    atomic_bool stop_report_pending;
+    atomic_bool continue_report_pending;
     atomic_bool execed;     /* Set after execve() - blocks setpgid per Linux semantics */
 
     /* Host thread backing for this virtual task */
@@ -196,6 +198,13 @@ int task_init(void);
 void task_deinit(void);
 struct task_struct *task_lookup(int32_t pid);
 int task_hash(int32_t pid);
+struct task_struct *task_create_child_impl(struct task_struct *parent);
+void task_unlink_child_impl(struct task_struct *parent, struct task_struct *child);
+void task_mark_stopped_by_signal(struct task_struct *task, int32_t sig);
+void task_mark_continued_by_signal(struct task_struct *task);
+void task_mark_signaled_exit(struct task_struct *task, int32_t sig);
+void task_mark_exited(struct task_struct *task, int status);
+void task_notify_parent_state_change(struct task_struct *task);
 
 /* Virtual process identity syscalls (internal helpers) */
 int32_t getpid_impl(void);

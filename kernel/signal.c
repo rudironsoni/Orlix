@@ -12,12 +12,6 @@
 #include "signal.h"
 #include "task.h"
 
-enum {
-    LINUX_SIG_BLOCK = 0,
-    LINUX_SIG_UNBLOCK = 1,
-    LINUX_SIG_SETMASK = 2,
-};
-
 struct signal_struct *alloc_signal_struct(void) {
     struct signal_struct *sig = calloc(1, sizeof(struct signal_struct));
     if (!sig)
@@ -90,31 +84,15 @@ static void apply_signal_to_task(struct task_struct *task, int32_t sig) {
         task->signal->pending.sig[idx] |= (1ULL << bit);
     }
 
-    /* Handle job-control and forced stop signals */
     if (sig == SIGSTOP || sig == SIGTSTP || sig == SIGTTIN || sig == SIGTTOU) {
-        atomic_store(&task->state, TASK_STOPPED);
-    }
-
-    /* Handle SIGCONT: transition back to RUNNING */
-    if (sig == SIGCONT) {
-        atomic_store(&task->state, TASK_RUNNING);
-    }
-
-    /* Handle terminating signals */
-    if (sig == SIGTERM || sig == SIGKILL || sig == SIGINT) {
-        atomic_store(&task->signaled, true);
-        atomic_store(&task->termsig, sig);
-        atomic_store(&task->exited, true);
-        atomic_store(&task->state, TASK_ZOMBIE);
-    }
-
-    /* Notify parent */
-    if (task->parent) {
-        kernel_mutex_lock(&task->parent->lock);
-        if (task->parent->waiters > 0) {
-            kernel_cond_broadcast(&task->parent->wait_cond);
-        }
-        kernel_mutex_unlock(&task->parent->lock);
+        task_mark_stopped_by_signal(task, sig);
+        task_notify_parent_state_change(task);
+    } else if (sig == SIGCONT) {
+        task_mark_continued_by_signal(task);
+        task_notify_parent_state_change(task);
+    } else if (sig == SIGTERM || sig == SIGKILL || sig == SIGINT || sig == SIGQUIT) {
+        task_mark_signaled_exit(task, sig);
+        task_notify_parent_state_change(task);
     }
 
     /* Wake up this task if waiting */
@@ -337,17 +315,17 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
 
 	if (set) {
 		switch (how) {
-		case LINUX_SIG_BLOCK: /* Block signals in set */
+        case SIG_BLOCK: /* Block signals in set */
 			for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] |= set->sig[i];
 			}
 			break;
-		case LINUX_SIG_UNBLOCK: /* Unblock signals in set */
+        case SIG_UNBLOCK: /* Unblock signals in set */
 			for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
 				sig->blocked.sig[i] &= ~set->sig[i];
 			}
 			break;
-		case LINUX_SIG_SETMASK: /* Replace blocked set with set */
+        case SIG_SETMASK: /* Replace blocked set with set */
 			sig->blocked = *set;
 			break;
 		default:
@@ -535,4 +513,3 @@ int do_killpg(int32_t pgrp, int32_t sig) {
     }
     return result;
 }
-
