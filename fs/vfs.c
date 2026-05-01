@@ -31,6 +31,8 @@ static const char *vfs_virtual_root_path = "/";
 static int vfs_ensure_backing_initialized(void);
 static int vfs_join_virtual_path(const char *base_path, const char *suffix, char *joined_path,
                                  size_t joined_path_len);
+static int vfs_stat_virtual_backed_path(const char *resolved_vpath, const char *translated_path,
+                                        struct linux_stat *st);
 
 /* Backing storage class roots - discovered at runtime from host container */
 static char vfs_persistent_root[MAX_PATH] = {0};
@@ -248,6 +250,36 @@ void vfs_record_created_path(const char *resolved_vpath, linux_mode_t mode) {
     fs_mutex_unlock(&vfs_metadata_lock);
 }
 
+static int vfs_record_metadata_for_stat(const char *resolved_vpath, const struct linux_stat *st) {
+    int idx;
+    int free_slot = -1;
+
+    if (!resolved_vpath || !st) {
+        return -EINVAL;
+    }
+
+    idx = vfs_metadata_find_locked(resolved_vpath);
+    if (idx < 0) {
+        for (size_t i = 0; i < VFS_METADATA_MAX; i++) {
+            if (!vfs_metadata_table[i].active) {
+                free_slot = (int)i;
+                break;
+            }
+        }
+        idx = free_slot;
+    }
+    if (idx < 0) {
+        return -ENOSPC;
+    }
+
+    vfs_metadata_table[idx].active = true;
+    vfs_copy_string(resolved_vpath, vfs_metadata_table[idx].path, sizeof(vfs_metadata_table[idx].path));
+    vfs_metadata_table[idx].uid = st->st_uid;
+    vfs_metadata_table[idx].gid = st->st_gid;
+    vfs_metadata_table[idx].mode = st->st_mode & 07777U;
+    return 0;
+}
+
 void vfs_forget_path_metadata(const char *resolved_vpath) {
     int idx;
 
@@ -311,6 +343,71 @@ static bool vfs_cred_has_mode_permission(const struct cred *cred, const struct l
     }
 
     return (perm & mask) == mask;
+}
+
+int vfs_chmod_metadata(const char *resolved_vpath, linux_mode_t mode) {
+    char translated_path[MAX_PATH];
+    struct linux_stat st;
+    struct cred *cred = get_current_cred();
+    int ret;
+
+    if (!resolved_vpath || !cred) {
+        return -EINVAL;
+    }
+
+    ret = vfs_translate_path(resolved_vpath, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        return ret;
+    }
+    ret = vfs_stat_virtual_backed_path(resolved_vpath, translated_path, &st);
+    if (ret != 0) {
+        return ret;
+    }
+    if (cred->euid != 0 && cred->euid != st.st_uid) {
+        return -EPERM;
+    }
+
+    st.st_mode = (st.st_mode & ~07777U) | (mode & 07777U);
+
+    fs_mutex_lock(&vfs_metadata_lock);
+    ret = vfs_record_metadata_for_stat(resolved_vpath, &st);
+    fs_mutex_unlock(&vfs_metadata_lock);
+    return ret;
+}
+
+int vfs_chown_metadata(const char *resolved_vpath, linux_uid_t owner, linux_gid_t group) {
+    char translated_path[MAX_PATH];
+    struct linux_stat st;
+    struct cred *cred = get_current_cred();
+    int ret;
+
+    if (!resolved_vpath || !cred) {
+        return -EINVAL;
+    }
+    if (cred->euid != 0) {
+        return -EPERM;
+    }
+
+    ret = vfs_translate_path(resolved_vpath, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        return ret;
+    }
+    ret = vfs_stat_virtual_backed_path(resolved_vpath, translated_path, &st);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (owner != (linux_uid_t)-1) {
+        st.st_uid = owner;
+    }
+    if (group != (linux_gid_t)-1) {
+        st.st_gid = group;
+    }
+
+    fs_mutex_lock(&vfs_metadata_lock);
+    ret = vfs_record_metadata_for_stat(resolved_vpath, &st);
+    fs_mutex_unlock(&vfs_metadata_lock);
+    return ret;
 }
 
 static int vfs_stat_virtual_backed_path(const char *resolved_vpath, const char *translated_path,

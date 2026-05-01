@@ -35,6 +35,10 @@ extern int rmdir_impl(const char *pathname);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
 extern int setuid_impl(uid_t uid);
 extern void cred_reset_to_defaults(void);
+extern int chmod(const char *pathname, linux_mode_t mode);
+extern int fchmod(int fd, linux_mode_t mode);
+extern int chown(const char *pathname, uid_t owner, gid_t group);
+extern int fchown(int fd, uid_t owner, gid_t group);
 
 static int vfs_contract_ignore_exists(int result) {
     if (result == 0 || errno == EEXIST) {
@@ -805,5 +809,176 @@ out:
     cred_reset_to_defaults();
     unlink_impl("/tmp/vfs-cred-private-dir/file");
     rmdir_impl("/tmp/vfs-cred-private-dir");
+    return ret;
+}
+
+int vfs_contract_root_chown_updates_virtual_owner(void) {
+    struct linux_stat st;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-chown-file");
+    if (vfs_contract_write_file("/tmp/vfs-cred-chown-file", "owned") != 0) {
+        goto out;
+    }
+    if (chown("/tmp/vfs-cred-chown-file", 1000, 1000) != 0) {
+        goto out;
+    }
+    if (vfs_fstatat(AT_FDCWD, "/tmp/vfs-cred-chown-file", &st, 0) != 0) {
+        goto out;
+    }
+    if (st.st_uid != 1000 || st.st_gid != 1000) {
+        errno = EIO;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-chown-file");
+    return ret;
+}
+
+int vfs_contract_nonroot_cannot_chown_owned_file(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-user-chown-file");
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-cred-user-chown-file", "owned") != 0) {
+        goto out;
+    }
+    errno = 0;
+    if (chown("/tmp/vfs-cred-user-chown-file", 1001, 1000) != -1 || errno != EPERM) {
+        errno = EPERM;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-user-chown-file");
+    return ret;
+}
+
+int vfs_contract_owner_chmod_updates_virtual_mode(void) {
+    struct linux_stat st;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-chmod-file");
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-cred-chmod-file", "owned") != 0) {
+        goto out;
+    }
+    if (chmod("/tmp/vfs-cred-chmod-file", 0644) != 0) {
+        goto out;
+    }
+    if (vfs_fstatat(AT_FDCWD, "/tmp/vfs-cred-chmod-file", &st, 0) != 0) {
+        goto out;
+    }
+    if ((st.st_mode & 0777) != 0644) {
+        errno = EIO;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-chmod-file");
+    return ret;
+}
+
+int vfs_contract_nonowner_cannot_chmod_file(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-root-chmod-file");
+    if (vfs_contract_write_file("/tmp/vfs-cred-root-chmod-file", "owned") != 0) {
+        goto out;
+    }
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+    errno = 0;
+    if (chmod("/tmp/vfs-cred-root-chmod-file", 0644) != -1 || errno != EPERM) {
+        errno = EPERM;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-root-chmod-file");
+    return ret;
+}
+
+int vfs_contract_fchmod_updates_virtual_mode(void) {
+    struct linux_stat st;
+    int fd = -1;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-fchmod-file");
+    fd = open_impl("/tmp/vfs-cred-fchmod-file", O_RDWR | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) {
+        goto out;
+    }
+    if (fchmod(fd, 0640) != 0) {
+        goto out;
+    }
+    if (fstat_impl(fd, &st) != 0) {
+        goto out;
+    }
+    if ((st.st_mode & 0777) != 0640) {
+        errno = EIO;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_impl(fd);
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-fchmod-file");
+    return ret;
+}
+
+int vfs_contract_fchown_updates_virtual_owner(void) {
+    struct linux_stat st;
+    int fd = -1;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-fchown-file");
+    fd = open_impl("/tmp/vfs-cred-fchown-file", O_RDWR | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) {
+        goto out;
+    }
+    if (fchown(fd, 1000, 1001) != 0) {
+        goto out;
+    }
+    if (fstat_impl(fd, &st) != 0) {
+        goto out;
+    }
+    if (st.st_uid != 1000 || st.st_gid != 1001) {
+        errno = EIO;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_impl(fd);
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-fchown-file");
     return ret;
 }

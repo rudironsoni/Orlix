@@ -1,131 +1,236 @@
-/* iXland - Inode Operations
- * Canonical owner for inode-level operations:
- * - chmod(), fchmod(), fchmodat()
- * - chown(), fchown(), lchown(), fchownat()
- * - umask()
- * - truncate(), ftruncate()
+/* IXLandSystem/fs/inode.c
+ * Linux-shaped inode metadata operations.
  *
- * Linux-shaped canonical owner - iOS mediation as implementation detail
+ * Ownership and mode changes are virtual IXLandSystem metadata. Host uid/gid
+ * ownership is not the semantic source of truth.
  */
 
 #include <errno.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include <linux/fcntl.h>
 
-#include "internal/ios/fs/file_io_host.h"
-#include "internal/ios/fs/sync.h"
+#include "fdtable.h"
+#include "vfs.h"
+#include "../kernel/task.h"
 
-/* ============================================================================
- * CHMOD - Change file mode
- * ============================================================================ */
+static int inode_resolve_path_at(int dirfd, const char *pathname, char *resolved_path,
+                                 size_t resolved_path_len) {
+    int ret;
 
-static int chmod_impl(const char *pathname, mode_t mode) {
-    return chmod(pathname, mode);
+    if (!pathname) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (pathname[0] == '\0') {
+        errno = ENOENT;
+        return -1;
+    }
+
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_path, resolved_path_len);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
-static int fchmod_impl(int fd, mode_t mode) {
-    return fchmod(fd, mode);
+static int inode_resolve_fd_path(int fd, char *resolved_path, size_t resolved_path_len) {
+    fd_entry_t *entry;
+    int ret;
+
+    if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
+        errno = EBADF;
+        return -1;
+    }
+
+    entry = get_fd_entry_impl(fd);
+    if (!entry) {
+        errno = EBADF;
+        return -1;
+    }
+
+    ret = get_fd_path_impl(entry, resolved_path, resolved_path_len);
+    put_fd_entry_impl(entry);
+    if (ret != 0) {
+        errno = ENOENT;
+        return -1;
+    }
+    return 0;
 }
 
-static int fchmodat_impl(int dirfd, const char *pathname, mode_t mode, int flags) {
-    return fchmodat(dirfd, pathname, mode, flags);
+static int chmod_impl(const char *pathname, linux_mode_t mode) {
+    char resolved_path[MAX_PATH];
+    int ret;
+
+    if (inode_resolve_path_at(AT_FDCWD, pathname, resolved_path, sizeof(resolved_path)) != 0) {
+        return -1;
+    }
+
+    ret = vfs_chmod_metadata(resolved_path, mode);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
-/* ============================================================================
- * CHOWN - Change file owner
- * ============================================================================ */
+static int fchmod_impl(int fd, linux_mode_t mode) {
+    char resolved_path[MAX_PATH];
+    int ret;
 
-static int chown_impl(const char *pathname, uid_t owner, gid_t group) {
-    /* iOS restriction: changing ownership not allowed */
-    (void)pathname;
-    (void)owner;
-    (void)group;
-    errno = EPERM;
-    return -1;
+    if (inode_resolve_fd_path(fd, resolved_path, sizeof(resolved_path)) != 0) {
+        return -1;
+    }
+
+    ret = vfs_chmod_metadata(resolved_path, mode);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
-static int fchown_impl(int fd, uid_t owner, gid_t group) {
-    (void)fd;
-    (void)owner;
-    (void)group;
-    errno = EPERM;
-    return -1;
+static int fchmodat_impl(int dirfd, const char *pathname, linux_mode_t mode, int flags) {
+    char resolved_path[MAX_PATH];
+    int ret;
+
+    if (flags & ~AT_SYMLINK_NOFOLLOW) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (inode_resolve_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path)) != 0) {
+        return -1;
+    }
+
+    ret = vfs_chmod_metadata(resolved_path, mode);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
-static int lchown_impl(const char *pathname, uid_t owner, gid_t group) {
+static int chown_impl(const char *pathname, linux_uid_t owner, linux_gid_t group) {
+    char resolved_path[MAX_PATH];
+    int ret;
+
+    if (inode_resolve_path_at(AT_FDCWD, pathname, resolved_path, sizeof(resolved_path)) != 0) {
+        return -1;
+    }
+
+    ret = vfs_chown_metadata(resolved_path, owner, group);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
+}
+
+static int fchown_impl(int fd, linux_uid_t owner, linux_gid_t group) {
+    char resolved_path[MAX_PATH];
+    int ret;
+
+    if (inode_resolve_fd_path(fd, resolved_path, sizeof(resolved_path)) != 0) {
+        return -1;
+    }
+
+    ret = vfs_chown_metadata(resolved_path, owner, group);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
+}
+
+static int lchown_impl(const char *pathname, linux_uid_t owner, linux_gid_t group) {
     return chown_impl(pathname, owner, group);
 }
 
-static int fchownat_impl(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) {
-    (void)dirfd;
-    (void)pathname;
-    (void)owner;
-    (void)group;
-    (void)flags;
-    errno = EPERM;
+static int fchownat_impl(int dirfd, const char *pathname, linux_uid_t owner, linux_gid_t group, int flags) {
+    char resolved_path[MAX_PATH];
+    int ret;
+
+    if (flags & ~(AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if ((flags & AT_EMPTY_PATH) && pathname && pathname[0] == '\0') {
+        return fchown_impl(dirfd, owner, group);
+    }
+    if (inode_resolve_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path)) != 0) {
+        return -1;
+    }
+
+    ret = vfs_chown_metadata(resolved_path, owner, group);
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
+}
+
+static linux_mode_t umask_impl(linux_mode_t mask) {
+    struct task_struct *task = get_current();
+    linux_mode_t old;
+
+    if (!task || !task->fs) {
+        return 0;
+    }
+
+    old = task->fs->umask;
+    task->fs->umask = (linux_mode_t)(mask & 0777U);
+    return old;
+}
+
+static int truncate_impl(const char *path, linux_off_t length) {
+    (void)path;
+    (void)length;
+    errno = ENOSYS;
     return -1;
 }
 
-/* ============================================================================
- * UMASK - Set file creation mask
- * ============================================================================ */
-
-static mode_t umask_impl(mode_t mask) {
-    return umask(mask);
+static int ftruncate_impl(int fd, linux_off_t length) {
+    (void)fd;
+    (void)length;
+    errno = ENOSYS;
+    return -1;
 }
 
-/* ============================================================================
- * TRUNCATE - Change file size
- * ============================================================================ */
-
-static int truncate_impl(const char *path, off_t length) {
-    return host_truncate_impl(path, length);
-}
-
-static int ftruncate_impl(int fd, off_t length) {
-    return host_ftruncate_impl(fd, length);
-}
-
-/* ============================================================================
- * Public Canonical Syscalls
- * ============================================================================ */
-
-__attribute__((visibility("default"))) int chmod(const char *pathname, mode_t mode) {
+__attribute__((visibility("default"))) int chmod(const char *pathname, linux_mode_t mode) {
     return chmod_impl(pathname, mode);
 }
 
-__attribute__((visibility("default"))) int fchmod(int fd, mode_t mode) {
+__attribute__((visibility("default"))) int fchmod(int fd, linux_mode_t mode) {
     return fchmod_impl(fd, mode);
 }
 
-__attribute__((visibility("default"))) int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags) {
+__attribute__((visibility("default"))) int fchmodat(int dirfd, const char *pathname, linux_mode_t mode, int flags) {
     return fchmodat_impl(dirfd, pathname, mode, flags);
 }
 
-__attribute__((visibility("default"))) int chown(const char *pathname, uid_t owner, gid_t group) {
+__attribute__((visibility("default"))) int chown(const char *pathname, linux_uid_t owner, linux_gid_t group) {
     return chown_impl(pathname, owner, group);
 }
 
-__attribute__((visibility("default"))) int fchown(int fd, uid_t owner, gid_t group) {
+__attribute__((visibility("default"))) int fchown(int fd, linux_uid_t owner, linux_gid_t group) {
     return fchown_impl(fd, owner, group);
 }
 
-__attribute__((visibility("default"))) int lchown(const char *pathname, uid_t owner, gid_t group) {
+__attribute__((visibility("default"))) int lchown(const char *pathname, linux_uid_t owner, linux_gid_t group) {
     return lchown_impl(pathname, owner, group);
 }
 
-__attribute__((visibility("default"))) int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) {
+__attribute__((visibility("default"))) int fchownat(int dirfd, const char *pathname, linux_uid_t owner, linux_gid_t group, int flags) {
     return fchownat_impl(dirfd, pathname, owner, group, flags);
 }
 
-__attribute__((visibility("default"))) mode_t umask(mode_t mask) {
+__attribute__((visibility("default"))) linux_mode_t umask(linux_mode_t mask) {
     return umask_impl(mask);
 }
 
-__attribute__((visibility("default"))) int truncate(const char *path, off_t length) {
+__attribute__((visibility("default"))) int truncate(const char *path, linux_off_t length) {
     return truncate_impl(path, length);
 }
 
-__attribute__((visibility("default"))) int ftruncate(int fd, off_t length) {
+__attribute__((visibility("default"))) int ftruncate(int fd, linux_off_t length) {
     return ftruncate_impl(fd, length);
 }

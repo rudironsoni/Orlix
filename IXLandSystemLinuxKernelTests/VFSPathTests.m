@@ -1224,6 +1224,42 @@ extern void cred_reset_to_defaults(void);
                    @"non-root virtual credentials should not unlink inside root-private directories, errno %d", errno);
 }
 
+- (void)testRootChownUpdatesVirtualOwner {
+    extern int vfs_contract_root_chown_updates_virtual_owner(void);
+    XCTAssertEqual(vfs_contract_root_chown_updates_virtual_owner(), 0,
+                   @"root chown should update virtual owner metadata, errno %d", errno);
+}
+
+- (void)testNonrootCannotChownOwnedFile {
+    extern int vfs_contract_nonroot_cannot_chown_owned_file(void);
+    XCTAssertEqual(vfs_contract_nonroot_cannot_chown_owned_file(), 0,
+                   @"non-root chown should fail through virtual credential checks, errno %d", errno);
+}
+
+- (void)testOwnerChmodUpdatesVirtualMode {
+    extern int vfs_contract_owner_chmod_updates_virtual_mode(void);
+    XCTAssertEqual(vfs_contract_owner_chmod_updates_virtual_mode(), 0,
+                   @"file owner chmod should update virtual mode metadata, errno %d", errno);
+}
+
+- (void)testNonownerCannotChmodFile {
+    extern int vfs_contract_nonowner_cannot_chmod_file(void);
+    XCTAssertEqual(vfs_contract_nonowner_cannot_chmod_file(), 0,
+                   @"non-owner chmod should fail through virtual credential checks, errno %d", errno);
+}
+
+- (void)testFchmodUpdatesVirtualMode {
+    extern int vfs_contract_fchmod_updates_virtual_mode(void);
+    XCTAssertEqual(vfs_contract_fchmod_updates_virtual_mode(), 0,
+                   @"fchmod should update virtual mode metadata, errno %d", errno);
+}
+
+- (void)testFchownUpdatesVirtualOwner {
+    extern int vfs_contract_fchown_updates_virtual_owner(void);
+    XCTAssertEqual(vfs_contract_fchown_updates_virtual_owner(), 0,
+                   @"fchown should update virtual owner metadata, errno %d", errno);
+}
+
 /* ============================================================================
  * SIGNAL-FAMILY SEMANTICS TESTS
  * ============================================================================ */
