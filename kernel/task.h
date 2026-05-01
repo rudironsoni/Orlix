@@ -119,6 +119,8 @@ struct task_struct {
     int32_t ppid;
     int32_t pgid;
     int32_t sid;
+    int32_t ns_pid;
+    int32_t pid_ns_level;
 
     /* Virtual task lifecycle state */
     atomic_int state;
@@ -132,6 +134,8 @@ struct task_struct {
     atomic_bool stop_report_pending;
     atomic_bool continue_report_pending;
     atomic_bool execed;     /* Set after execve() - blocks setpgid per Linux semantics */
+    uint64_t clone_flags;
+    atomic_bool new_pid_namespace_pending;
 
     /* Host thread backing for this virtual task */
     kernel_thread_t thread;
@@ -203,6 +207,7 @@ void task_deinit(void);
 struct task_struct *task_lookup(int32_t pid);
 int task_hash(int32_t pid);
 struct task_struct *task_create_child_impl(struct task_struct *parent);
+struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent, uint64_t flags);
 void task_unlink_child_impl(struct task_struct *parent, struct task_struct *child);
 void task_mark_stopped_by_signal(struct task_struct *task, int32_t sig);
 void task_mark_continued_by_signal(struct task_struct *task);
@@ -223,6 +228,8 @@ int task_session_has_pgrp_impl(int32_t sid, int32_t pgid);
 /* Virtual fork/exec - internal helpers */
 int32_t fork_impl(void);
 int32_t vfork_impl(void);
+int32_t clone_impl(uint64_t flags);
+int unshare_impl(uint64_t flags);
 int task_exec_transition_impl(const char *path, const char *argv0);
 
 /* Virtual exit/wait - internal helpers */

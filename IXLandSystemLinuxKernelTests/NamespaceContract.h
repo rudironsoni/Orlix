@@ -1,0 +1,22 @@
+#ifndef IXLANDSYSTEMLINUXKERNELTESTS_NAMESPACECONTRACT_H
+#define IXLANDSYSTEMLINUXKERNELTESTS_NAMESPACECONTRACT_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int namespace_contract_clone_newuts_isolates_child_hostname(void);
+int namespace_contract_clone_without_newuts_shares_hostname(void);
+int namespace_contract_unshare_newuts_isolates_current_task(void);
+int namespace_contract_clone_newns_isolates_child_mounts(void);
+int namespace_contract_clone_without_newns_shares_mounts(void);
+int namespace_contract_unshare_newns_isolates_current_mounts(void);
+int namespace_contract_clone_newns_with_clone_fs_rejected(void);
+int namespace_contract_clone_newpid_records_child_namespace_metadata(void);
+int namespace_contract_unshare_newpid_applies_to_next_child_metadata(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* IXLANDSYSTEMLINUXKERNELTESTS_NAMESPACECONTRACT_H */

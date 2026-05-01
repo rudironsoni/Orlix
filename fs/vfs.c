@@ -881,6 +881,14 @@ struct fs_struct *alloc_fs_struct(void) {
     return fs;
 }
 
+struct fs_struct *get_fs_struct(struct fs_struct *fs) {
+    if (!fs) {
+        return NULL;
+    }
+    atomic_fetch_add(&fs->users, 1);
+    return fs;
+}
+
 void free_fs_struct(struct fs_struct *fs) {
     if (!fs)
         return;

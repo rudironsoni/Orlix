@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <linux/sched.h>
+
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
 #include "signal.h"
@@ -43,6 +45,65 @@ typedef struct {
 
 /* Global fork context (only valid during fork) */
 static __thread fork_ctx_t *active_fork_ctx = NULL;
+
+static unsigned long clone_namespace_flags(void) {
+    return CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWPID;
+}
+
+static unsigned long clone_supported_flags(void) {
+    return clone_namespace_flags() | CLONE_FS;
+}
+
+static int validate_clone_namespace_flags(uint64_t flags) {
+    uint64_t masked = flags & ~0xffULL;
+
+    if ((masked & ~clone_supported_flags()) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if ((masked & CLONE_NEWNS) != 0 && (masked & CLONE_FS) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+static int task_apply_clone_namespace_flags(struct task_struct *task, uint64_t flags) {
+    uint64_t masked = flags & ~0xffULL;
+    struct uts_namespace *new_uts;
+
+    if ((masked & CLONE_NEWNS) != 0) {
+        int ret;
+        if (!task->fs) {
+            errno = ESRCH;
+            return -1;
+        }
+        ret = fs_unshare_mount_namespace(task->fs);
+        if (ret < 0) {
+            errno = -ret;
+            return -1;
+        }
+    }
+
+    if ((masked & CLONE_NEWUTS) != 0) {
+        new_uts = uts_dup(task->uts_ns);
+        if (!new_uts) {
+            errno = ENOMEM;
+            return -1;
+        }
+        if (task->uts_ns) {
+            uts_put(task->uts_ns);
+        }
+        task->uts_ns = new_uts;
+    }
+
+    if ((masked & CLONE_NEWPID) != 0) {
+        task->pid_ns_level += 1;
+        task->ns_pid = 1;
+    }
+
+    return 0;
+}
 
 /* Child thread entry point */
 static void *fork_child_trampoline(void *arg) {
@@ -109,6 +170,13 @@ pid_t fork_impl(void) {
     child->ppid = parent->pid;
     child->pgid = parent->pgid;
     child->sid = parent->sid;
+    if (atomic_load(&parent->new_pid_namespace_pending)) {
+        child->pid_ns_level = parent->pid_ns_level + 1;
+        child->ns_pid = 1;
+    } else {
+        child->pid_ns_level = parent->pid_ns_level;
+        child->ns_pid = child->pid;
+    }
     if (parent->uts_ns) {
         uts_put(child->uts_ns);
         child->uts_ns = uts_get(parent->uts_ns);
@@ -228,6 +296,65 @@ pid_t fork_impl(void) {
     return 0;
 }
 
+int32_t clone_impl(uint64_t flags) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    if (validate_clone_namespace_flags(flags) != 0) {
+        return -1;
+    }
+
+    child = task_create_child_with_flags_impl(parent, flags);
+    if (!child) {
+        return -1;
+    }
+
+    if ((flags & CLONE_FS) != 0 && parent->fs) {
+        free_fs_struct(child->fs);
+        child->fs = get_fs_struct(parent->fs);
+        if (!child->fs) {
+            task_unlink_child_impl(parent, child);
+            free_task(child);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+
+    if (task_apply_clone_namespace_flags(child, flags & ~(uint64_t)CLONE_NEWPID) != 0) {
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+        return -1;
+    }
+
+    return child->pid;
+}
+
+int unshare_impl(uint64_t flags) {
+    struct task_struct *task = get_current();
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    if (validate_clone_namespace_flags(flags) != 0) {
+        return -1;
+    }
+    if ((flags & CLONE_FS) != 0) {
+        errno = ENOSYS;
+        return -1;
+    }
+    if ((flags & CLONE_NEWPID) != 0) {
+        atomic_store(&task->new_pid_namespace_pending, true);
+        flags &= ~(uint64_t)CLONE_NEWPID;
+    }
+
+    return task_apply_clone_namespace_flags(task, flags);
+}
+
 /* ============================================================================
  * VFORK IMPLEMENTATION
  * ============================================================================
@@ -314,6 +441,13 @@ int vfork_impl(void) {
     child->pgid = parent->pgid;
     child->sid = parent->sid;
     child->vfork_parent = parent; /* Mark as vfork child */
+    if (atomic_load(&parent->new_pid_namespace_pending)) {
+        child->pid_ns_level = parent->pid_ns_level + 1;
+        child->ns_pid = 1;
+    } else {
+        child->pid_ns_level = parent->pid_ns_level;
+        child->ns_pid = child->pid;
+    }
     if (parent->uts_ns) {
         uts_put(child->uts_ns);
         child->uts_ns = uts_get(parent->uts_ns);
@@ -477,4 +611,15 @@ __attribute__((visibility("default"))) pid_t fork(void) {
 
 __attribute__((visibility("default"))) int vfork(void) {
     return vfork_impl();
+}
+
+__attribute__((visibility("default"))) int clone(int (*fn)(void *), void *child_stack, int flags, void *arg) {
+    (void)fn;
+    (void)child_stack;
+    (void)arg;
+    return clone_impl((uint64_t)(unsigned int)flags);
+}
+
+__attribute__((visibility("default"))) int unshare(int flags) {
+    return unshare_impl((uint64_t)(unsigned int)flags);
 }

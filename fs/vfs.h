@@ -221,6 +221,7 @@ struct fs_struct {
 
 /* VFS context API */
 struct fs_struct *alloc_fs_struct(void);
+struct fs_struct *get_fs_struct(struct fs_struct *fs);
 void free_fs_struct(struct fs_struct *fs);
 struct fs_struct *dup_fs_struct(struct fs_struct *old);
 int fs_init_root(struct fs_struct *fs, const char *root_path);

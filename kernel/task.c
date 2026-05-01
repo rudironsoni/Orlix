@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include <linux/fcntl.h>
+#include <linux/sched.h>
 
 #ifdef SIGCHLD
 #undef SIGCHLD
@@ -85,6 +86,8 @@ struct task_struct *alloc_task(void) {
     /* A new task starts without pgid/sid; fork_impl will inherit from parent */
     task->pgid = 0;
     task->sid = 0;
+    task->ns_pid = task->pid;
+    task->pid_ns_level = 0;
     task->vfork_parent = NULL;
 
     atomic_init(&task->state, TASK_RUNNING);
@@ -97,6 +100,8 @@ struct task_struct *alloc_task(void) {
     atomic_init(&task->stop_report_pending, false);
     atomic_init(&task->continue_report_pending, false);
     atomic_init(&task->execed, false);
+    atomic_init(&task->new_pid_namespace_pending, false);
+    task->clone_flags = 0;
 
     kernel_mutex_init(&task->lock);
     kernel_cond_init(&task->wait_cond);
@@ -117,6 +122,10 @@ struct task_struct *alloc_task(void) {
 }
 
 struct task_struct *task_create_child_impl(struct task_struct *parent) {
+    return task_create_child_with_flags_impl(parent, 0);
+}
+
+struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent, uint64_t flags) {
     struct task_struct *child;
 
     if (!parent) {
@@ -133,6 +142,14 @@ struct task_struct *task_create_child_impl(struct task_struct *parent) {
     child->ppid = parent->pid;
     child->pgid = parent->pgid;
     child->sid = parent->sid;
+    child->clone_flags = flags;
+    if ((flags & CLONE_NEWPID) != 0 || atomic_load(&parent->new_pid_namespace_pending)) {
+        child->pid_ns_level = parent->pid_ns_level + 1;
+        child->ns_pid = 1;
+    } else {
+        child->pid_ns_level = parent->pid_ns_level;
+        child->ns_pid = child->pid;
+    }
     if (parent->uts_ns) {
         uts_put(child->uts_ns);
         child->uts_ns = uts_get(parent->uts_ns);
@@ -365,6 +382,8 @@ int task_init(void) {
         init_task->ppid = 0;
         init_task->pgid = init_task->pid;
         init_task->sid = init_task->pid;
+        init_task->ns_pid = 1;
+        init_task->pid_ns_level = 0;
         strncpy(init_task->comm, "init", sizeof(init_task->comm));
         init_task->comm[sizeof(init_task->comm) - 1] = '\0';
 

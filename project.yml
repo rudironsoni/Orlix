@@ -146,6 +146,7 @@ targets:
     - IXLandSystemLinuxKernelTests/ExecSyscallTests.m
     - IXLandSystemLinuxKernelTests/TaskExecTests.m
     - IXLandSystemLinuxKernelTests/UTSTests.m
+    - IXLandSystemLinuxKernelTests/NamespaceTests.m
     - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
@@ -223,6 +224,11 @@ targets:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/UTSContract.h
+    - path: IXLandSystemLinuxKernelTests/NamespaceContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - IXLandSystemLinuxKernelTests/NamespaceContract.h
     dependencies:
     - target: IXLandSystem
     settings:
