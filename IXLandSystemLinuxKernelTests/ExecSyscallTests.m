@@ -15,6 +15,8 @@ extern int exec_syscall_contract_missing_script_interpreter_preserves_state(void
 extern int exec_syscall_contract_fexecve_uses_fd_path(void);
 extern int exec_syscall_contract_fexecve_rejects_invalid_fd(void);
 extern int exec_syscall_contract_elf64_aarch64_exec_loads_virtual_image(void);
+extern int exec_syscall_contract_elf_program_headers_create_virtual_segments(void);
+extern int exec_syscall_contract_elf_bad_load_segment_returns_enoexec_without_transition(void);
 extern int exec_syscall_contract_elf_wrong_machine_returns_enoexec_without_transition(void);
 extern int exec_syscall_contract_truncated_elf_returns_enoexec_without_transition(void);
 
@@ -77,6 +79,14 @@ extern int exec_syscall_contract_truncated_elf_returns_enoexec_without_transitio
 
 - (void)testElf64Aarch64ExecLoadsVirtualImage {
     XCTAssertEqual(exec_syscall_contract_elf64_aarch64_exec_loads_virtual_image(), 0, @"errno %d", errno);
+}
+
+- (void)testElfProgramHeadersCreateVirtualSegments {
+    XCTAssertEqual(exec_syscall_contract_elf_program_headers_create_virtual_segments(), 0, @"errno %d", errno);
+}
+
+- (void)testElfBadLoadSegmentReturnsEnoexecWithoutTransition {
+    XCTAssertEqual(exec_syscall_contract_elf_bad_load_segment_returns_enoexec_without_transition(), 0, @"errno %d", errno);
 }
 
 - (void)testElfWrongMachineReturnsEnoexecWithoutTransition {

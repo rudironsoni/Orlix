@@ -54,6 +54,19 @@ int exec_build_script_argv_from_line(const char *shebang_line, const char *path,
                                       char *interpreter_path, size_t interpreter_path_len,
                                       char **script_argv, int *script_argc);
 
+struct exec_elf_load_plan {
+    Elf64_Ehdr ehdr;
+    uint32_t segment_count;
+    struct {
+        uint64_t vaddr;
+        uint64_t memsz;
+        uint64_t filesz;
+        uint64_t offset;
+        uint32_t flags;
+    } segments[TASK_EXEC_MAX_LOAD_SEGMENTS];
+    char interpreter[MAX_PATH];
+};
+
 /* Deep copy argv array */
 static char **exec_copy_argv(char *const argv[]) {
     if (!argv) {
@@ -160,37 +173,6 @@ static void exec_record_script_image(struct task_struct *task, const char *path,
     task->exec_image->type = EXEC_IMAGE_SCRIPT;
 }
 
-static int exec_read_elf_header(const char *path, Elf64_Ehdr *ehdr) {
-    int fd;
-    ssize_t nread;
-    int saved_errno;
-
-    if (!path || !ehdr) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    fd = open_impl(path, O_RDONLY, 0);
-    if (fd < 0) {
-        return -1;
-    }
-
-    nread = read_impl(fd, ehdr, sizeof(*ehdr));
-    saved_errno = errno;
-    close_impl(fd);
-    errno = saved_errno;
-
-    if (nread < 0) {
-        return -1;
-    }
-    if ((size_t)nread < sizeof(*ehdr)) {
-        errno = ENOEXEC;
-        return -1;
-    }
-
-    return 0;
-}
-
 static int exec_elf_header_is_magic(const Elf64_Ehdr *ehdr) {
     return ehdr &&
            ehdr->e_ident[EI_MAG0] == ELFMAG0 &&
@@ -214,6 +196,144 @@ static int exec_validate_elf64_aarch64(const Elf64_Ehdr *ehdr) {
         errno = ENOEXEC;
         return -1;
     }
+    return 0;
+}
+
+static int exec_elf_range_in_image(uint64_t offset, uint64_t size, size_t image_size) {
+    if (offset > (uint64_t)image_size) {
+        return 0;
+    }
+    if (size > (uint64_t)image_size - offset) {
+        return 0;
+    }
+    return 1;
+}
+
+static int exec_build_elf_load_plan(const void *image, size_t image_size, struct exec_elf_load_plan *plan) {
+    const unsigned char *bytes = image;
+
+    if (!image || !plan || image_size < sizeof(Elf64_Ehdr)) {
+        errno = ENOEXEC;
+        return -1;
+    }
+
+    memset(plan, 0, sizeof(*plan));
+    memcpy(&plan->ehdr, image, sizeof(plan->ehdr));
+    if (exec_validate_elf64_aarch64(&plan->ehdr) != 0) {
+        return -1;
+    }
+
+    if (plan->ehdr.e_phnum > 0) {
+        uint64_t ph_size;
+
+        if (plan->ehdr.e_phentsize != sizeof(Elf64_Phdr)) {
+            errno = ENOEXEC;
+            return -1;
+        }
+        ph_size = (uint64_t)plan->ehdr.e_phentsize * (uint64_t)plan->ehdr.e_phnum;
+        if (!exec_elf_range_in_image(plan->ehdr.e_phoff, ph_size, image_size)) {
+            errno = ENOEXEC;
+            return -1;
+        }
+    }
+
+    for (uint16_t i = 0; i < plan->ehdr.e_phnum; i++) {
+        Elf64_Phdr phdr;
+        uint64_t phoff = plan->ehdr.e_phoff + ((uint64_t)i * (uint64_t)plan->ehdr.e_phentsize);
+
+        memcpy(&phdr, bytes + phoff, sizeof(phdr));
+        if (phdr.p_type == PT_LOAD) {
+            if (plan->segment_count >= TASK_EXEC_MAX_LOAD_SEGMENTS ||
+                phdr.p_filesz > phdr.p_memsz ||
+                !exec_elf_range_in_image(phdr.p_offset, phdr.p_filesz, image_size)) {
+                errno = ENOEXEC;
+                return -1;
+            }
+
+            plan->segments[plan->segment_count].vaddr = phdr.p_vaddr;
+            plan->segments[plan->segment_count].memsz = phdr.p_memsz;
+            plan->segments[plan->segment_count].filesz = phdr.p_filesz;
+            plan->segments[plan->segment_count].offset = phdr.p_offset;
+            plan->segments[plan->segment_count].flags = phdr.p_flags;
+            plan->segment_count++;
+        } else if (phdr.p_type == PT_INTERP) {
+            size_t interp_len;
+
+            if (phdr.p_filesz == 0 ||
+                phdr.p_filesz >= sizeof(plan->interpreter) ||
+                !exec_elf_range_in_image(phdr.p_offset, phdr.p_filesz, image_size)) {
+                errno = ENOEXEC;
+                return -1;
+            }
+            interp_len = (size_t)phdr.p_filesz;
+            memcpy(plan->interpreter, bytes + phdr.p_offset, interp_len);
+            plan->interpreter[sizeof(plan->interpreter) - 1] = '\0';
+            if (plan->interpreter[interp_len - 1] != '\0') {
+                errno = ENOEXEC;
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int exec_read_image_file(const char *path, void **out_image, size_t *out_size) {
+    int fd;
+    void *image;
+    size_t image_capacity = 4096;
+    size_t offset = 0;
+
+    if (!path || !out_image || !out_size) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    fd = open_impl(path, O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    image = malloc(image_capacity);
+    if (!image) {
+        close_impl(fd);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    for (;;) {
+        ssize_t nread;
+
+        if (offset == image_capacity) {
+            size_t new_capacity = image_capacity * 2;
+            void *new_image = realloc(image, new_capacity);
+            if (!new_image) {
+                free(image);
+                close_impl(fd);
+                errno = ENOMEM;
+                return -1;
+            }
+            image = new_image;
+            image_capacity = new_capacity;
+        }
+
+        nread = read_impl(fd, (char *)image + offset, image_capacity - offset);
+        if (nread < 0) {
+            int saved_errno = errno;
+            free(image);
+            close_impl(fd);
+            errno = saved_errno;
+            return -1;
+        }
+        if (nread == 0) {
+            break;
+        }
+        offset += (size_t)nread;
+    }
+
+    close_impl(fd);
+    *out_image = image;
+    *out_size = offset;
     return 0;
 }
 
@@ -372,13 +492,15 @@ enum exec_image_type exec_classify(const char *path) {
 
     if (n >= 4 && magic[0] == ELFMAG0 && magic[1] == ELFMAG1 &&
         magic[2] == ELFMAG2 && magic[3] == ELFMAG3) {
-        Elf64_Ehdr ehdr;
-        if (exec_read_elf_header(resolved_path, &ehdr) != 0) {
+        void *image = NULL;
+        size_t image_size = 0;
+        struct exec_elf_load_plan plan;
+        if (exec_read_image_file(resolved_path, &image, &image_size) != 0 ||
+            exec_build_elf_load_plan(image, image_size, &plan) != 0) {
+            free(image);
             return EXEC_IMAGE_INVALID;
         }
-        if (exec_validate_elf64_aarch64(&ehdr) != 0) {
-            return EXEC_IMAGE_INVALID;
-        }
+        free(image);
         return EXEC_IMAGE_ELF;
     }
 
@@ -614,12 +736,9 @@ int exec_native(struct task_struct *task, const char *path, int argc, char **arg
 }
 
 int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, char **envp) {
-    Elf64_Ehdr ehdr;
-    int fd = -1;
     void *image = NULL;
     size_t image_size = 0;
-    size_t image_capacity = 4096;
-    size_t offset = 0;
+    struct exec_elf_load_plan plan;
 
     (void)argc;
     (void)argv;
@@ -630,58 +749,12 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
         return -1;
     }
 
-    if (exec_read_elf_header(path, &ehdr) != 0 ||
-        exec_validate_elf64_aarch64(&ehdr) != 0) {
+    if (exec_read_image_file(path, &image, &image_size) != 0) {
         return -1;
     }
 
-    fd = open_impl(path, O_RDONLY, 0);
-    if (fd < 0) {
-        return -1;
-    }
-
-    image = malloc(image_capacity);
-    if (!image) {
-        close_impl(fd);
-        errno = ENOMEM;
-        return -1;
-    }
-
-    for (;;) {
-        ssize_t nread;
-
-        if (offset == image_capacity) {
-            size_t new_capacity = image_capacity * 2;
-            void *new_image = realloc(image, new_capacity);
-            if (!new_image) {
-                free(image);
-                close_impl(fd);
-                errno = ENOMEM;
-                return -1;
-            }
-            image = new_image;
-            image_capacity = new_capacity;
-        }
-
-        nread = read_impl(fd, (char *)image + offset, image_capacity - offset);
-        if (nread < 0) {
-            int saved_errno = errno;
-            free(image);
-            close_impl(fd);
-            errno = saved_errno;
-            return -1;
-        }
-        if (nread == 0) {
-            break;
-        }
-        offset += (size_t)nread;
-    }
-
-    close_impl(fd);
-    image_size = offset;
-    if (image_size < sizeof(Elf64_Ehdr)) {
+    if (exec_build_elf_load_plan(image, image_size, &plan) != 0) {
         free(image);
-        errno = ENOEXEC;
         return -1;
     }
 
@@ -697,14 +770,25 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
     free(task->mm->exec_image_base);
     task->mm->exec_image_base = image;
     task->mm->exec_image_size = image_size;
+    task->mm->exec_entry = plan.ehdr.e_entry;
+    task->mm->exec_segment_count = plan.segment_count;
+    memset(task->mm->exec_segments, 0, sizeof(task->mm->exec_segments));
+    for (uint32_t i = 0; i < plan.segment_count; i++) {
+        task->mm->exec_segments[i].vaddr = plan.segments[i].vaddr;
+        task->mm->exec_segments[i].memsz = plan.segments[i].memsz;
+        task->mm->exec_segments[i].filesz = plan.segments[i].filesz;
+        task->mm->exec_segments[i].offset = plan.segments[i].offset;
+        task->mm->exec_segments[i].flags = plan.segments[i].flags;
+    }
 
     strncpy(task->exec_image->path, path, sizeof(task->exec_image->path) - 1);
     task->exec_image->path[sizeof(task->exec_image->path) - 1] = '\0';
-    task->exec_image->interpreter[0] = '\0';
+    strncpy(task->exec_image->interpreter, plan.interpreter, sizeof(task->exec_image->interpreter) - 1);
+    task->exec_image->interpreter[sizeof(task->exec_image->interpreter) - 1] = '\0';
     task->exec_image->type = EXEC_IMAGE_ELF;
-    task->exec_image->u.elf.entry = ehdr.e_entry;
-    task->exec_image->u.elf.type = ehdr.e_type;
-    task->exec_image->u.elf.machine = ehdr.e_machine;
+    task->exec_image->u.elf.entry = plan.ehdr.e_entry;
+    task->exec_image->u.elf.type = plan.ehdr.e_type;
+    task->exec_image->u.elf.machine = plan.ehdr.e_machine;
 
     return 0;
 }

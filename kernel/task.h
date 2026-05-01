@@ -31,6 +31,7 @@ extern "C" {
 #define TASK_COMM_LEN 16
 #define TASK_MAX_ARGS 256
 #define TASK_MAX_TASKS 1024
+#define TASK_EXEC_MAX_LOAD_SEGMENTS 16
 
 /* Forward declarations for private subsystem state */
 struct task_struct;
@@ -74,6 +75,15 @@ struct tty_struct {
 struct mm_struct {
     void *exec_image_base;
     size_t exec_image_size;
+    uint64_t exec_entry;
+    uint32_t exec_segment_count;
+    struct {
+        uint64_t vaddr;
+        uint64_t memsz;
+        uint64_t filesz;
+        uint64_t offset;
+        uint32_t flags;
+    } exec_segments[TASK_EXEC_MAX_LOAD_SEGMENTS];
     struct address_space *vma_addr_space;
 };
 

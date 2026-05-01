@@ -122,6 +122,39 @@ static void build_minimal_elf64_aarch64(Elf64_Ehdr *ehdr) {
     ehdr->e_ehsize = sizeof(*ehdr);
 }
 
+static void build_loadable_elf64_aarch64(unsigned char *image, size_t image_len) {
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    Elf64_Phdr *load;
+    Elf64_Phdr *interp;
+    const char interp_path[] = "/lib/ld-linux-aarch64.so.1";
+    size_t interp_offset = sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr));
+    size_t text_offset = interp_offset + sizeof(interp_path);
+
+    memset(image, 0, image_len);
+    build_minimal_elf64_aarch64(ehdr);
+    ehdr->e_phoff = sizeof(Elf64_Ehdr);
+    ehdr->e_phentsize = sizeof(Elf64_Phdr);
+    ehdr->e_phnum = 2;
+
+    interp = (Elf64_Phdr *)(image + ehdr->e_phoff);
+    interp->p_type = PT_INTERP;
+    interp->p_offset = interp_offset;
+    interp->p_filesz = sizeof(interp_path);
+    interp->p_memsz = sizeof(interp_path);
+    memcpy(image + interp_offset, interp_path, sizeof(interp_path));
+
+    load = interp + 1;
+    load->p_type = PT_LOAD;
+    load->p_flags = PF_R | PF_X;
+    load->p_offset = text_offset;
+    load->p_vaddr = 0x400000;
+    load->p_filesz = image_len - text_offset;
+    load->p_memsz = load->p_filesz + 16;
+    load->p_align = 0x1000;
+    image[text_offset] = 0xaa;
+    image[text_offset + 1] = 0xbb;
+}
+
 static int verify_state_unchanged(struct task_struct *task,
                                   const char *expected_exe,
                                   const char *expected_comm,
@@ -612,6 +645,105 @@ int exec_syscall_contract_elf64_aarch64_exec_loads_virtual_image(void) {
 
 out:
     unlink_impl("/tmp/exec-elf64");
+    return result;
+}
+
+int exec_syscall_contract_elf_program_headers_create_virtual_segments(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)) + 64];
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    Elf64_Phdr *load;
+    int status;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    native_registry_clear();
+    unlink_impl("/tmp/exec-elf-loadable");
+    build_loadable_elf64_aarch64(image, sizeof(image));
+    load = ((Elf64_Phdr *)(image + ehdr->e_phoff)) + 1;
+    if (create_exec_bytes("/tmp/exec-elf-loadable", image, sizeof(image)) != 0) {
+        goto out;
+    }
+
+    status = execve("/tmp/exec-elf-loadable", NULL, NULL);
+    if (status != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!task->mm ||
+        task->mm->exec_entry != ehdr->e_entry ||
+        task->mm->exec_segment_count != 1 ||
+        task->mm->exec_segments[0].vaddr != load->p_vaddr ||
+        task->mm->exec_segments[0].filesz != load->p_filesz ||
+        task->mm->exec_segments[0].memsz != load->p_memsz ||
+        task->mm->exec_segments[0].offset != load->p_offset ||
+        task->mm->exec_segments[0].flags != load->p_flags) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!task->exec_image ||
+        strcmp(task->exec_image->interpreter, "/lib/ld-linux-aarch64.so.1") != 0 ||
+        task->exec_image->u.elf.type != ET_EXEC) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-loadable");
+    return result;
+}
+
+int exec_syscall_contract_elf_bad_load_segment_returns_enoexec_without_transition(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) + 8];
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    Elf64_Phdr *load;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    native_registry_clear();
+    unlink_impl("/tmp/exec-elf-bad-segment");
+    memset(image, 0, sizeof(image));
+    build_minimal_elf64_aarch64(ehdr);
+    ehdr->e_phoff = sizeof(Elf64_Ehdr);
+    ehdr->e_phentsize = sizeof(Elf64_Phdr);
+    ehdr->e_phnum = 1;
+    load = (Elf64_Phdr *)(image + ehdr->e_phoff);
+    load->p_type = PT_LOAD;
+    load->p_offset = sizeof(image) - 4;
+    load->p_filesz = 8;
+    load->p_memsz = 8;
+    load->p_flags = PF_R;
+    if (create_exec_bytes("/tmp/exec-elf-bad-segment", image, sizeof(image)) != 0) {
+        goto out;
+    }
+
+    memcpy(task->exe, "/before", 8);
+    memset(task->comm, 0, sizeof(task->comm));
+    memcpy(task->comm, "before", 7);
+    atomic_store(&task->execed, false);
+
+    errno = 0;
+    if (execve("/tmp/exec-elf-bad-segment", NULL, NULL) != -1 ||
+        expect_errno(ENOEXEC) != 0 ||
+        verify_state_unchanged(task, "/before", "before", false, -1, -1) != 0) {
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-bad-segment");
     return result;
 }
 
