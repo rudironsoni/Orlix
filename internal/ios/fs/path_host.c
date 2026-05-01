@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <string.h>
 
 #include "errno_host.h"
@@ -80,6 +81,26 @@ int host_access_impl(const char *path, int mode)
         return 0;
     }
     return -host_errno_to_linux_errno(errno);
+}
+
+int host_directory_is_empty_impl(const char *path)
+{
+    DIR *dir = opendir(path);
+    struct dirent *entry;
+
+    if (!dir) {
+        return -host_errno_to_linux_errno(errno);
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+            closedir(dir);
+            return 0;
+        }
+    }
+
+    closedir(dir);
+    return 1;
 }
 
 /* Host rename operation (Darwin renameatx_np) */

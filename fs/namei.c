@@ -155,11 +155,10 @@ static int rename_apply_host_exchange(const char *old_virtual_path, const char *
     return 0;
 }
 
-static int rename_require_host_entry(const char *host_path) {
-    struct linux_stat st;
+static int rename_lstat_host_entry(const char *host_path, struct linux_stat *st) {
     int ret;
 
-    ret = host_lstat_impl(host_path, &st);
+    ret = host_lstat_impl(host_path, st);
     if (ret != 0) {
         errno = -ret;
         return -1;
@@ -167,18 +166,75 @@ static int rename_require_host_entry(const char *host_path) {
     return 0;
 }
 
-static int rename_require_absent_host_entry(const char *host_path) {
-    struct linux_stat st;
+static int rename_lstat_optional_host_entry(const char *host_path, struct linux_stat *st, bool *exists) {
     int ret;
 
-    ret = host_lstat_impl(host_path, &st);
+    ret = host_lstat_impl(host_path, st);
     if (ret == 0) {
-        errno = EEXIST;
-        return -1;
+        *exists = true;
+        return 0;
     }
     if (ret != -ENOENT) {
         errno = -ret;
         return -1;
+    }
+    *exists = false;
+    return 0;
+}
+
+static int rename_validate_target_shape(const char *old_virtual_path, const char *new_virtual_path,
+                                        const char *old_host_path, const char *new_host_path,
+                                        unsigned int flags) {
+    struct linux_stat old_st;
+    struct linux_stat new_st;
+    bool new_exists = false;
+    bool old_is_dir;
+    bool new_is_dir;
+    int empty;
+
+    if (rename_lstat_host_entry(old_host_path, &old_st) != 0) {
+        return -1;
+    }
+    if (rename_lstat_optional_host_entry(new_host_path, &new_st, &new_exists) != 0) {
+        return -1;
+    }
+
+    if ((flags & AT_RENAME_EXCHANGE) != 0) {
+        if (!new_exists) {
+            errno = ENOENT;
+            return -1;
+        }
+        return 0;
+    }
+
+    if ((flags & AT_RENAME_NOREPLACE) != 0 && new_exists) {
+        errno = EEXIST;
+        return -1;
+    }
+    if (!new_exists || strcmp(old_virtual_path, new_virtual_path) == 0) {
+        return 0;
+    }
+
+    old_is_dir = S_ISDIR(old_st.st_mode);
+    new_is_dir = S_ISDIR(new_st.st_mode);
+    if (old_is_dir && !new_is_dir) {
+        errno = ENOTDIR;
+        return -1;
+    }
+    if (!old_is_dir && new_is_dir) {
+        errno = EISDIR;
+        return -1;
+    }
+    if (old_is_dir && new_is_dir) {
+        empty = host_directory_is_empty_impl(new_host_path);
+        if (empty < 0) {
+            errno = -empty;
+            return -1;
+        }
+        if (empty == 0) {
+            errno = ENOTEMPTY;
+            return -1;
+        }
     }
     return 0;
 }
@@ -227,17 +283,8 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
         host_flags |= RENAME_EXCL;
     }
 
-    if (rename_require_host_entry(translated_old) != 0) {
+    if (rename_validate_target_shape(resolved_old, resolved_new, translated_old, translated_new, flags) != 0) {
         return -1;
-    }
-    if ((flags & AT_RENAME_EXCHANGE) != 0) {
-        if (rename_require_host_entry(translated_new) != 0) {
-            return -1;
-        }
-    } else if ((flags & AT_RENAME_NOREPLACE) != 0) {
-        if (rename_require_absent_host_entry(translated_new) != 0) {
-            return -1;
-        }
     }
 
     ret = vfs_check_parent_mutation_permission(resolved_old);

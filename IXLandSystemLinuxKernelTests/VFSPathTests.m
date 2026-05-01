@@ -1320,6 +1320,24 @@ extern void cred_reset_to_defaults(void);
                    @"rename overwrite should move source virtual metadata to target, errno %d", errno);
 }
 
+- (void)testRenameDirectoryOverNonemptyDirectoryReturnsNotempty {
+    extern int vfs_contract_rename_directory_over_nonempty_directory_returns_notempty(void);
+    XCTAssertEqual(vfs_contract_rename_directory_over_nonempty_directory_returns_notempty(), 0,
+                   @"rename directory over non-empty directory should return ENOTEMPTY, errno %d", errno);
+}
+
+- (void)testRenameFileOverDirectoryReturnsIsdir {
+    extern int vfs_contract_rename_file_over_directory_returns_isdir(void);
+    XCTAssertEqual(vfs_contract_rename_file_over_directory_returns_isdir(), 0,
+                   @"rename file over directory should return EISDIR, errno %d", errno);
+}
+
+- (void)testRenameDirectoryOverFileReturnsNotdir {
+    extern int vfs_contract_rename_directory_over_file_returns_notdir(void);
+    XCTAssertEqual(vfs_contract_rename_directory_over_file_returns_notdir(), 0,
+                   @"rename directory over file should return ENOTDIR, errno %d", errno);
+}
+
 - (void)testRootChownUpdatesVirtualOwner {
     extern int vfs_contract_root_chown_updates_virtual_owner(void);
     XCTAssertEqual(vfs_contract_root_chown_updates_virtual_owner(), 0,

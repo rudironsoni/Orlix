@@ -23,6 +23,7 @@ extern "C" {
 int host_stat_impl(const char *path, struct linux_stat *statbuf);
 int host_lstat_impl(const char *path, struct linux_stat *statbuf);
 int host_access_impl(const char *path, int mode);
+int host_directory_is_empty_impl(const char *path);
 
 /* Host rename operation (Darwin renameatx_np) */
 int host_renameatx_np_impl(int fromfd, const char *from, int tofd, const char *to, unsigned int flags);

@@ -1443,6 +1443,97 @@ out:
     return ret;
 }
 
+int vfs_contract_rename_directory_over_nonempty_directory_returns_notempty(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-rename-dst/child");
+    rmdir_impl("/tmp/vfs-rename-src");
+    rmdir_impl("/tmp/vfs-rename-dst");
+    if (mkdir_impl("/tmp/vfs-rename-src", 0700) != 0 ||
+        mkdir_impl("/tmp/vfs-rename-dst", 0700) != 0 ||
+        vfs_contract_write_file("/tmp/vfs-rename-dst/child", "child") != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (renameat2(AT_FDCWD, "/tmp/vfs-rename-src", AT_FDCWD, "/tmp/vfs-rename-dst", 0) != -1 ||
+        errno != ENOTEMPTY) {
+        errno = ENOTEMPTY;
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-rename-src/probe", "probe") != 0) {
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    unlink_impl("/tmp/vfs-rename-src/probe");
+    unlink_impl("/tmp/vfs-rename-dst/child");
+    rmdir_impl("/tmp/vfs-rename-src");
+    rmdir_impl("/tmp/vfs-rename-dst");
+    return ret;
+}
+
+int vfs_contract_rename_file_over_directory_returns_isdir(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-rename-file");
+    rmdir_impl("/tmp/vfs-rename-dir");
+    if (vfs_contract_write_file("/tmp/vfs-rename-file", "file") != 0 ||
+        mkdir_impl("/tmp/vfs-rename-dir", 0700) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (renameat2(AT_FDCWD, "/tmp/vfs-rename-file", AT_FDCWD, "/tmp/vfs-rename-dir", 0) != -1 ||
+        errno != EISDIR) {
+        errno = EISDIR;
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-rename-file", "file") != 0) {
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    unlink_impl("/tmp/vfs-rename-file");
+    rmdir_impl("/tmp/vfs-rename-dir");
+    return ret;
+}
+
+int vfs_contract_rename_directory_over_file_returns_notdir(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    rmdir_impl("/tmp/vfs-rename-dir");
+    unlink_impl("/tmp/vfs-rename-file");
+    if (mkdir_impl("/tmp/vfs-rename-dir", 0700) != 0 ||
+        vfs_contract_write_file("/tmp/vfs-rename-file", "file") != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (renameat2(AT_FDCWD, "/tmp/vfs-rename-dir", AT_FDCWD, "/tmp/vfs-rename-file", 0) != -1 ||
+        errno != ENOTDIR) {
+        errno = ENOTDIR;
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-rename-file", "file") != 0) {
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    rmdir_impl("/tmp/vfs-rename-dir");
+    unlink_impl("/tmp/vfs-rename-file");
+    return ret;
+}
+
 int vfs_contract_root_chown_updates_virtual_owner(void) {
     struct linux_stat st;
     int ret = -1;
