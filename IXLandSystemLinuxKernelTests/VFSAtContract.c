@@ -712,6 +712,101 @@ out:
     return ret;
 }
 
+int vfs_contract_nonroot_cannot_create_bind_mount(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0) {
+        goto out;
+    }
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != -1 ||
+        errno != EPERM) {
+        errno = EPERM;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    cred_reset_to_defaults();
+    vfs_contract_cleanup_mount_namespace_paths();
+    return ret;
+}
+
+int vfs_contract_root_without_sys_admin_cannot_create_bind_mount(void) {
+    struct __user_cap_header_struct header = {
+        .version = _LINUX_CAPABILITY_VERSION_3,
+        .pid = 0,
+    };
+    struct __user_cap_data_struct data[_LINUX_CAPABILITY_U32S_3];
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0) {
+        goto out;
+    }
+    if (capget(&header, data) != 0) {
+        goto out;
+    }
+    data[CAP_SYS_ADMIN / 32].effective &= ~(1U << (CAP_SYS_ADMIN % 32));
+    if (capset(&header, data) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != -1 ||
+        errno != EPERM) {
+        errno = EPERM;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    cred_reset_to_defaults();
+    vfs_contract_cleanup_mount_namespace_paths();
+    return ret;
+}
+
+int vfs_contract_nonroot_cannot_unmount_bind_mount(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0) {
+        goto out;
+    }
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (umount("/tmp/vfs-mntns-target") != -1 || errno != EPERM) {
+        errno = EPERM;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    cred_reset_to_defaults();
+    vfs_contract_cleanup_mount_namespace_paths();
+    return ret;
+}
+
 int vfs_contract_proc_self_mountinfo_uses_current_mount_namespace(void) {
     struct task_struct *parent = get_current();
     struct task_struct *child = NULL;

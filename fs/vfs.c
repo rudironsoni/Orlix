@@ -1201,6 +1201,9 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
     if (!mnt_ns) {
         return -ESRCH;
     }
+    if (!cred_has_cap(get_current_cred(), CAP_SYS_ADMIN)) {
+        return -EPERM;
+    }
     if (fstype && fstype[0] != '\0' && strcmp(fstype, "bind") != 0) {
         return -EINVAL;
     }
@@ -1298,6 +1301,9 @@ int vfs_umount(const char *target) {
     }
     if (!mnt_ns) {
         return -ESRCH;
+    }
+    if (!cred_has_cap(get_current_cred(), CAP_SYS_ADMIN)) {
+        return -EPERM;
     }
 
     ret = vfs_resolve_virtual_path_at(AT_FDCWD, target, resolved_target, sizeof(resolved_target));

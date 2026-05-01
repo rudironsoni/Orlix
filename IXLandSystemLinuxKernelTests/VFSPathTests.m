@@ -1206,6 +1206,24 @@ extern void cred_reset_to_defaults(void);
                    @"/proc/self/mountinfo should report read-only remounted bind mounts, errno %d", errno);
 }
 
+- (void)testNonrootCannotCreateBindMount {
+    extern int vfs_contract_nonroot_cannot_create_bind_mount(void);
+    XCTAssertEqual(vfs_contract_nonroot_cannot_create_bind_mount(), 0,
+                   @"non-root virtual credentials should not create bind mounts, errno %d", errno);
+}
+
+- (void)testRootWithoutSysAdminCannotCreateBindMount {
+    extern int vfs_contract_root_without_sys_admin_cannot_create_bind_mount(void);
+    XCTAssertEqual(vfs_contract_root_without_sys_admin_cannot_create_bind_mount(), 0,
+                   @"root without CAP_SYS_ADMIN should not create bind mounts, errno %d", errno);
+}
+
+- (void)testNonrootCannotUnmountBindMount {
+    extern int vfs_contract_nonroot_cannot_unmount_bind_mount(void);
+    XCTAssertEqual(vfs_contract_nonroot_cannot_unmount_bind_mount(), 0,
+                   @"non-root virtual credentials should not unmount bind mounts, errno %d", errno);
+}
+
 - (void)testProcSelfMountinfoUsesCurrentMountNamespace {
     extern int vfs_contract_proc_self_mountinfo_uses_current_mount_namespace(void);
     XCTAssertEqual(vfs_contract_proc_self_mountinfo_uses_current_mount_namespace(), 0,
