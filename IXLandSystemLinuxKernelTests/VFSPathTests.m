@@ -519,6 +519,24 @@ extern void cred_reset_to_defaults(void);
                    @"vfs_fstatat with Linux AT_SYMLINK_NOFOLLOW should succeed");
 }
 
+- (void)testOpenNoFollowRejectsSymlinkWithEloop {
+    extern int vfs_contract_open_nofollow_rejects_symlink_with_eloop(void);
+    XCTAssertEqual(vfs_contract_open_nofollow_rejects_symlink_with_eloop(), 0,
+                   @"open with O_NOFOLLOW should reject final symlink with ELOOP, errno %d", errno);
+}
+
+- (void)testOpenatNoFollowRejectsDirfdSymlinkWithEloop {
+    extern int vfs_contract_openat_nofollow_rejects_dirfd_symlink_with_eloop(void);
+    XCTAssertEqual(vfs_contract_openat_nofollow_rejects_dirfd_symlink_with_eloop(), 0,
+                   @"openat with O_NOFOLLOW should reject dirfd-relative final symlink with ELOOP, errno %d", errno);
+}
+
+- (void)testOpenFollowsSymlinkToFileWithoutNoFollow {
+    extern int vfs_contract_open_follows_symlink_to_file(void);
+    XCTAssertEqual(vfs_contract_open_follows_symlink_to_file(), 0,
+                   @"open without O_NOFOLLOW should follow relative symlink to file, errno %d", errno);
+}
+
 - (void)testVfsFstatatRejectsInvalidFlags {
     struct linux_stat st;
     int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, INVALID_FLAG_TEST_VALUE);

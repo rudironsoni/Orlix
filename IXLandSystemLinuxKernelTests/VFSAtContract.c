@@ -28,6 +28,7 @@ extern int mount(const char *source, const char *target, const char *filesystemt
 extern int umount(const char *target);
 extern int mkdir_impl(const char *pathname, linux_mode_t mode);
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int openat_impl(int dirfd, const char *pathname, int flags, linux_mode_t mode);
 extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
@@ -217,6 +218,130 @@ int vfs_contract_faccessat_eaccess_returns_enotsup(void) {
 /* Contract: vfs_faccessat reports ENOTSUP for AT_SYMLINK_NOFOLLOW */
 int vfs_contract_faccessat_symlink_nofollow_returns_enotsup(void) {
     return vfs_faccessat(AT_FDCWD, "/etc", X_OK, AT_SYMLINK_NOFOLLOW);
+}
+
+int vfs_contract_open_nofollow_rejects_symlink_with_eloop(void) {
+    int fd;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-open-nofollow/link");
+    unlink_impl("/tmp/vfs-open-nofollow/target");
+    rmdir_impl("/tmp/vfs-open-nofollow");
+    if (mkdir_impl("/tmp/vfs-open-nofollow", 0700) != 0) {
+        return -1;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-open-nofollow/target", "target") != 0) {
+        goto fail;
+    }
+    if (symlinkat("target", AT_FDCWD, "/tmp/vfs-open-nofollow/link") != 0) {
+        goto fail;
+    }
+
+    errno = 0;
+    fd = open_impl("/tmp/vfs-open-nofollow/link", O_RDONLY | O_NOFOLLOW, 0);
+    if (fd >= 0) {
+        close_impl(fd);
+        errno = EIO;
+        goto fail;
+    }
+    if (errno != ELOOP) {
+        goto fail;
+    }
+
+    unlink_impl("/tmp/vfs-open-nofollow/link");
+    unlink_impl("/tmp/vfs-open-nofollow/target");
+    rmdir_impl("/tmp/vfs-open-nofollow");
+    return 0;
+
+fail:
+    {
+        int saved_errno = errno;
+        unlink_impl("/tmp/vfs-open-nofollow/link");
+        unlink_impl("/tmp/vfs-open-nofollow/target");
+        rmdir_impl("/tmp/vfs-open-nofollow");
+        errno = saved_errno;
+    }
+    return -1;
+}
+
+int vfs_contract_openat_nofollow_rejects_dirfd_symlink_with_eloop(void) {
+    int dirfd = -1;
+    int fd;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-openat-nofollow/link");
+    unlink_impl("/tmp/vfs-openat-nofollow/target");
+    rmdir_impl("/tmp/vfs-openat-nofollow");
+    if (mkdir_impl("/tmp/vfs-openat-nofollow", 0700) != 0) {
+        return -1;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-openat-nofollow/target", "target") != 0) {
+        goto fail;
+    }
+    dirfd = open_impl("/tmp/vfs-openat-nofollow", O_RDONLY | O_DIRECTORY, 0);
+    if (dirfd < 0) {
+        goto fail;
+    }
+    if (symlinkat("target", dirfd, "link") != 0) {
+        goto fail;
+    }
+
+    errno = 0;
+    fd = openat_impl(dirfd, "link", O_RDONLY | O_NOFOLLOW, 0);
+    if (fd >= 0) {
+        close_impl(fd);
+        errno = EIO;
+        goto fail;
+    }
+    if (errno != ELOOP) {
+        goto fail;
+    }
+
+    close_impl(dirfd);
+    unlink_impl("/tmp/vfs-openat-nofollow/link");
+    unlink_impl("/tmp/vfs-openat-nofollow/target");
+    rmdir_impl("/tmp/vfs-openat-nofollow");
+    return 0;
+
+fail:
+    {
+        int saved_errno = errno;
+        close_impl(dirfd);
+        unlink_impl("/tmp/vfs-openat-nofollow/link");
+        unlink_impl("/tmp/vfs-openat-nofollow/target");
+        rmdir_impl("/tmp/vfs-openat-nofollow");
+        errno = saved_errno;
+    }
+    return -1;
+}
+
+int vfs_contract_open_follows_symlink_to_file(void) {
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-open-follow/link");
+    unlink_impl("/tmp/vfs-open-follow/target");
+    rmdir_impl("/tmp/vfs-open-follow");
+    if (mkdir_impl("/tmp/vfs-open-follow", 0700) != 0) {
+        return -1;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-open-follow/target", "followed") != 0) {
+        goto out;
+    }
+    if (symlinkat("target", AT_FDCWD, "/tmp/vfs-open-follow/link") != 0) {
+        goto out;
+    }
+    ret = vfs_contract_read_file_exact("/tmp/vfs-open-follow/link", "followed");
+
+out:
+    {
+        int saved_errno = errno;
+        unlink_impl("/tmp/vfs-open-follow/link");
+        unlink_impl("/tmp/vfs-open-follow/target");
+        rmdir_impl("/tmp/vfs-open-follow");
+        errno = saved_errno;
+    }
+    return ret;
 }
 
 int vfs_contract_chroot_rebases_absolute_paths_and_getcwd(void) {

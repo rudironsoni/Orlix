@@ -542,6 +542,16 @@ int vfs_check_open_permission(const char *resolved_vpath, const char *translated
         return -EROFS;
     }
 
+    if ((flags & O_NOFOLLOW) != 0) {
+        ret = vfs_lstat(translated_path, &st);
+        if (ret == 0 && S_ISLNK(st.st_mode)) {
+            return -ELOOP;
+        }
+        if (ret != 0 && ret != -ENOENT) {
+            return ret;
+        }
+    }
+
     ret = vfs_stat_virtual_backed_path(resolved_vpath, translated_path, &st);
     exists = ret == 0;
     if (!exists && ret != -ENOENT) {
