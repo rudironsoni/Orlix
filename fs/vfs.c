@@ -1,6 +1,7 @@
 #include "vfs.h"
 
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1268,6 +1269,12 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strcmp(vpath, "/proc/self/status") == 0) {
         return PROC_SELF_STATUS_FILE;
     }
+    if (strcmp(vpath, "/proc/self/mountinfo") == 0) {
+        return PROC_SELF_MOUNTINFO_FILE;
+    }
+    if (strcmp(vpath, "/proc/self/mounts") == 0) {
+        return PROC_SELF_MOUNTS_FILE;
+    }
     return PROC_SELF_NONE;
 }
 
@@ -1558,6 +1565,104 @@ int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len) {
     return ret;
 }
 
+static int vfs_proc_append(char *buf, size_t buf_len, size_t *pos, const char *fmt, ...) {
+    va_list ap;
+    int ret;
+    size_t available;
+
+    if (!buf || !pos || *pos >= buf_len) {
+        return -ENOSPC;
+    }
+
+    available = buf_len - *pos;
+    va_start(ap, fmt);
+    ret = vsnprintf(buf + *pos, available, fmt, ap);
+    va_end(ap);
+
+    if (ret < 0) {
+        return -EINVAL;
+    }
+    if ((size_t)ret >= available) {
+        *pos = buf_len - 1;
+        return -ENOSPC;
+    }
+
+    *pos += (size_t)ret;
+    return 0;
+}
+
+int vfs_proc_self_mountinfo_content(char *buf, size_t buf_len) {
+    struct vfs_mount_namespace *mnt_ns;
+    size_t pos = 0;
+    int mount_id = 2;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    mnt_ns = vfs_task_mount_namespace();
+    if (!mnt_ns) {
+        return -ESRCH;
+    }
+
+    if (vfs_proc_append(buf, buf_len, &pos, "1 0 0:1 / / rw - ixland-root ixland-root rw\n") != 0) {
+        return (int)pos;
+    }
+
+    fs_mutex_lock(&mnt_ns->lock);
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount_entry *entry = &mnt_ns->entries[i];
+
+        if (!entry->active) {
+            continue;
+        }
+
+        if (vfs_proc_append(buf, buf_len, &pos, "%d 1 0:%d %s %s rw - none %s rw,bind\n",
+                            mount_id, mount_id, entry->source, entry->target, entry->source) != 0) {
+            break;
+        }
+        mount_id++;
+    }
+    fs_mutex_unlock(&mnt_ns->lock);
+
+    return (int)pos;
+}
+
+int vfs_proc_self_mounts_content(char *buf, size_t buf_len) {
+    struct vfs_mount_namespace *mnt_ns;
+    size_t pos = 0;
+
+    if (!buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    mnt_ns = vfs_task_mount_namespace();
+    if (!mnt_ns) {
+        return -ESRCH;
+    }
+
+    if (vfs_proc_append(buf, buf_len, &pos, "ixland-root / ixland-root rw 0 0\n") != 0) {
+        return (int)pos;
+    }
+
+    fs_mutex_lock(&mnt_ns->lock);
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount_entry *entry = &mnt_ns->entries[i];
+
+        if (!entry->active) {
+            continue;
+        }
+
+        if (vfs_proc_append(buf, buf_len, &pos, "%s %s none rw,bind 0 0\n",
+                            entry->source, entry->target) != 0) {
+            break;
+        }
+    }
+    fs_mutex_unlock(&mnt_ns->lock);
+
+    return (int)pos;
+}
+
 int vfs_proc_self_status_content(char *buf, size_t buf_len) {
     struct task_struct *task;
     struct cred *cred;
@@ -1784,7 +1889,9 @@ int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int
             statbuf->st_blocks = 0;
             return 0;
         } else if (proc_class == PROC_SELF_CMDLINE_FILE || proc_class == PROC_SELF_COMM_FILE ||
-                   proc_class == PROC_SELF_STAT_FILE || proc_class == PROC_SELF_STATM_FILE || proc_class == PROC_SELF_STATUS_FILE) {
+                   proc_class == PROC_SELF_STAT_FILE || proc_class == PROC_SELF_STATM_FILE ||
+                   proc_class == PROC_SELF_STATUS_FILE || proc_class == PROC_SELF_MOUNTINFO_FILE ||
+                   proc_class == PROC_SELF_MOUNTS_FILE) {
             memset(statbuf, 0, sizeof(*statbuf));
             statbuf->st_mode = S_IFREG | 0444;
             statbuf->st_nlink = 1;

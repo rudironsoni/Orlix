@@ -12,6 +12,80 @@
 
 #define MAX_PATH 4096
 
+static synthetic_proc_file_t proc_self_file_for_class(proc_self_path_class_t proc_class) {
+    switch (proc_class) {
+    case PROC_SELF_CMDLINE_FILE:
+        return SYNTHETIC_PROC_FILE_CMDLINE;
+    case PROC_SELF_COMM_FILE:
+        return SYNTHETIC_PROC_FILE_COMM;
+    case PROC_SELF_STAT_FILE:
+        return SYNTHETIC_PROC_FILE_STAT;
+    case PROC_SELF_STATM_FILE:
+        return SYNTHETIC_PROC_FILE_STATM;
+    case PROC_SELF_STATUS_FILE:
+        return SYNTHETIC_PROC_FILE_STATUS;
+    case PROC_SELF_MOUNTINFO_FILE:
+        return SYNTHETIC_PROC_FILE_MOUNTINFO;
+    case PROC_SELF_MOUNTS_FILE:
+        return SYNTHETIC_PROC_FILE_MOUNTS;
+    default:
+        return SYNTHETIC_PROC_FILE_NONE;
+    }
+}
+
+static int try_open_proc_self_file(const char *resolved_path, int flags, mode_t mode,
+                                   proc_self_path_class_t proc_class, int *out_fd) {
+    synthetic_proc_file_t proc_file = proc_self_file_for_class(proc_class);
+    int fd;
+
+    if (!out_fd) {
+        errno = EINVAL;
+        return -1;
+    }
+    *out_fd = -1;
+
+    if (proc_file == SYNTHETIC_PROC_FILE_NONE && proc_class != PROC_SELF_FDINFO_FILE) {
+        return 0;
+    }
+
+    if ((flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR) {
+        errno = EACCES;
+        return -1;
+    }
+
+    if (proc_class == PROC_SELF_FDINFO_FILE) {
+        const char *fd_str = resolved_path + 18;
+        char *endptr;
+        long fd_num = strtol(fd_str, &endptr, 10);
+
+        if (*endptr != '\0' || fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
+            errno = ENOENT;
+            return -1;
+        }
+        if (!fdtable_is_used_impl((int)fd_num)) {
+            errno = ENOENT;
+            return -1;
+        }
+
+        fd = alloc_fd_impl();
+        if (fd < 0) {
+            return -1;
+        }
+        init_synthetic_proc_file_fd_entry_with_fdnum_impl(fd, flags, mode, resolved_path,
+                                                          SYNTHETIC_PROC_FILE_FDINFO, (int)fd_num);
+        *out_fd = fd;
+        return 1;
+    }
+
+    fd = alloc_fd_impl();
+    if (fd < 0) {
+        return -1;
+    }
+    init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, proc_file);
+    *out_fd = fd;
+    return 1;
+}
+
 int open_impl(const char *pathname, int flags, mode_t mode) {
     char translated_path[MAX_PATH];
     char resolved_path[MAX_PATH];
@@ -56,69 +130,12 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
             init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
             return fd;
         }
-    if (proc_class == PROC_SELF_CMDLINE_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
-        }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_CMDLINE);
-        return fd;
-    }
-    if (proc_class == PROC_SELF_COMM_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
-        }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_COMM);
-        return fd;
-    }
-    if (proc_class == PROC_SELF_STAT_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
-        }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STAT);
-        return fd;
-    }
-        if (proc_class == PROC_SELF_STATM_FILE) {
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
+        {
+            int proc_fd;
+            int proc_ret = try_open_proc_self_file(resolved_path, flags, mode, proc_class, &proc_fd);
+            if (proc_ret != 0) {
+                return (proc_ret < 0) ? -1 : proc_fd;
             }
-            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
-            return fd;
-        }
-        if (proc_class == PROC_SELF_STATUS_FILE) {
-int fd = alloc_fd_impl();
-if (fd < 0) {
-return -1;
-}
-init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATUS);
-return fd;
-}
-        if (proc_class == PROC_SELF_FDINFO_FILE) {
-            /* Proc files are read-only; reject write-only or read-write open attempts */
-            if ((flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR) {
-                errno = EACCES;
-                return -1;
-            }
-            const char *fd_str = resolved_path + 18;
-            char *endptr;
-            long fd_num = strtol(fd_str, &endptr, 10);
-            if (*endptr != '\0' || fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
-                errno = ENOENT;
-                return -1;
-            }
-            if (!fdtable_is_used_impl((int)fd_num)) {
-                errno = ENOENT;
-                return -1;
-            }
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
-            }
-            init_synthetic_proc_file_fd_entry_with_fdnum_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_FDINFO, (int)fd_num);
-            return fd;
         }
     }
 
@@ -250,61 +267,12 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
             init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, dir_class);
             return fd;
         }
-    if (proc_class == PROC_SELF_CMDLINE_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
-        }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_CMDLINE);
-        return fd;
-    }
-    if (proc_class == PROC_SELF_COMM_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
-        }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_COMM);
-        return fd;
-    }
-    if (proc_class == PROC_SELF_STAT_FILE) {
-        int fd = alloc_fd_impl();
-        if (fd < 0) {
-            return -1;
-        }
-        init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STAT);
-        return fd;
-    }
-        if (proc_class == PROC_SELF_STATM_FILE) {
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
+        {
+            int proc_fd;
+            int proc_ret = try_open_proc_self_file(resolved_path, flags, mode, proc_class, &proc_fd);
+            if (proc_ret != 0) {
+                return (proc_ret < 0) ? -1 : proc_fd;
             }
-            init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_STATM);
-            return fd;
-        }
-        if (proc_class == PROC_SELF_FDINFO_FILE) {
-            /* Proc files are read-only; reject write-only or read-write open attempts */
-            if ((flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR) {
-                errno = EACCES;
-                return -1;
-            }
-            const char *fd_str = resolved_path + 18;
-            char *endptr;
-            long fd_num = strtol(fd_str, &endptr, 10);
-            if (*endptr != '\0' || fd_num < 0 || fd_num >= NR_OPEN_DEFAULT) {
-                errno = ENOENT;
-                return -1;
-            }
-            if (!fdtable_is_used_impl((int)fd_num)) {
-                errno = ENOENT;
-                return -1;
-            }
-            int fd = alloc_fd_impl();
-            if (fd < 0) {
-                return -1;
-            }
-            init_synthetic_proc_file_fd_entry_with_fdnum_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_FDINFO, (int)fd_num);
-            return fd;
         }
     }
 

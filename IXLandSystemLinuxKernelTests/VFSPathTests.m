@@ -1172,6 +1172,30 @@ extern int lstat_impl(const char *path, struct linux_stat *statbuf);
                    @"unshared task mount namespace should isolate child bind mounts, errno %d", errno);
 }
 
+- (void)testProcSelfMountinfoListsBindMount {
+    extern int vfs_contract_proc_self_mountinfo_lists_bind_mount(void);
+    XCTAssertEqual(vfs_contract_proc_self_mountinfo_lists_bind_mount(), 0,
+                   @"/proc/self/mountinfo should expose virtual bind mounts, errno %d", errno);
+}
+
+- (void)testProcSelfMountsListsBindMount {
+    extern int vfs_contract_proc_self_mounts_lists_bind_mount(void);
+    XCTAssertEqual(vfs_contract_proc_self_mounts_lists_bind_mount(), 0,
+                   @"/proc/self/mounts should expose virtual bind mounts, errno %d", errno);
+}
+
+- (void)testProcSelfMountinfoUsesCurrentMountNamespace {
+    extern int vfs_contract_proc_self_mountinfo_uses_current_mount_namespace(void);
+    XCTAssertEqual(vfs_contract_proc_self_mountinfo_uses_current_mount_namespace(), 0,
+                   @"/proc/self/mountinfo should follow current task mount namespace, errno %d", errno);
+}
+
+- (void)testProcSelfMountViewsDoNotExposeHostPaths {
+    extern int vfs_contract_proc_self_mount_views_do_not_expose_host_paths(void);
+    XCTAssertEqual(vfs_contract_proc_self_mount_views_do_not_expose_host_paths(), 0,
+                   @"proc mount views should not expose host backing paths, errno %d", errno);
+}
+
 /* ============================================================================
  * SIGNAL-FAMILY SEMANTICS TESTS
  * ============================================================================ */

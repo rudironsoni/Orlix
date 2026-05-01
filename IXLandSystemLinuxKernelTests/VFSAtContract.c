@@ -100,6 +100,59 @@ static int vfs_contract_read_file_exact(const char *path, const char *expected) 
     return 0;
 }
 
+static int vfs_contract_read_proc_file(const char *path, char *buf, size_t buf_len) {
+    int fd;
+    long nread;
+
+    if (!path || !buf || buf_len == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    fd = open_impl(path, O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    nread = read_impl(fd, buf, buf_len - 1);
+    {
+        int saved_errno = errno;
+        close_impl(fd);
+        errno = saved_errno;
+    }
+    if (nread < 0) {
+        return -1;
+    }
+    buf[nread] = '\0';
+    return 0;
+}
+
+static int vfs_contract_content_contains(const char *content, const char *needle) {
+    size_t content_len;
+    size_t needle_len;
+
+    if (!content || !needle) {
+        return 0;
+    }
+
+    content_len = __builtin_strlen(content);
+    needle_len = __builtin_strlen(needle);
+    if (needle_len == 0) {
+        return 1;
+    }
+    if (needle_len > content_len) {
+        return 0;
+    }
+
+    for (size_t i = 0; i <= content_len - needle_len; i++) {
+        if (__builtin_memcmp(content + i, needle, needle_len) == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void vfs_contract_cleanup_mount_paths(void) {
     umount("/tmp/vfs-bind-target");
     unlink_impl("/tmp/vfs-bind-source/file");
@@ -465,4 +518,156 @@ out:
     }
     vfs_contract_cleanup_mount_namespace_paths();
     return ret;
+}
+
+int vfs_contract_proc_self_mountinfo_lists_bind_mount(void) {
+    char content[4096];
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-mntns-parent-source/file", "parent") != 0 ||
+        vfs_contract_write_file("/tmp/vfs-mntns-target/file", "target") != 0) {
+        goto out;
+    }
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0) {
+        goto out;
+    }
+    if (!vfs_contract_content_contains(content, "/tmp/vfs-mntns-parent-source") ||
+        !vfs_contract_content_contains(content, "/tmp/vfs-mntns-target") ||
+        !vfs_contract_content_contains(content, " rw,bind\n")) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    vfs_contract_cleanup_mount_namespace_paths();
+    return ret;
+}
+
+int vfs_contract_proc_self_mounts_lists_bind_mount(void) {
+    char content[4096];
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-mntns-parent-source/file", "parent") != 0 ||
+        vfs_contract_write_file("/tmp/vfs-mntns-target/file", "target") != 0) {
+        goto out;
+    }
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_proc_file("/proc/self/mounts", content, sizeof(content)) != 0) {
+        goto out;
+    }
+    if (!vfs_contract_content_contains(content, "/tmp/vfs-mntns-parent-source /tmp/vfs-mntns-target none rw,bind 0 0\n")) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    vfs_contract_cleanup_mount_namespace_paths();
+    return ret;
+}
+
+int vfs_contract_proc_self_mountinfo_uses_current_mount_namespace(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    char content[4096];
+    int ret = -1;
+
+    if (!parent || !parent->fs) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-child-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-mntns-child-source/file", "child") != 0 ||
+        vfs_contract_write_file("/tmp/vfs-mntns-target/file", "target") != 0) {
+        goto out;
+    }
+
+    child = task_create_child_impl(parent);
+    if (!child) {
+        goto out;
+    }
+    if (fs_unshare_mount_namespace(child->fs) != 0) {
+        goto out;
+    }
+
+    set_current(child);
+    if (mount("/tmp/vfs-mntns-child-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0 ||
+        !vfs_contract_content_contains(content, "/tmp/vfs-mntns-child-source")) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    set_current(parent);
+    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0 ||
+        vfs_contract_content_contains(content, "/tmp/vfs-mntns-child-source")) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    if (child) {
+        set_current(child);
+        umount("/tmp/vfs-mntns-target");
+        set_current(parent);
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+    } else {
+        set_current(parent);
+    }
+    vfs_contract_cleanup_mount_namespace_paths();
+    return ret;
+}
+
+int vfs_contract_proc_self_mount_views_do_not_expose_host_paths(void) {
+    char content[4096];
+    const char *persistent_root = vfs_persistent_backing_root();
+
+    if (!persistent_root) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0) {
+        return -1;
+    }
+    if (vfs_contract_content_contains(content, persistent_root)) {
+        errno = EXDEV;
+        return -1;
+    }
+    if (vfs_contract_read_proc_file("/proc/self/mounts", content, sizeof(content)) != 0) {
+        return -1;
+    }
+    if (vfs_contract_content_contains(content, persistent_root)) {
+        errno = EXDEV;
+        return -1;
+    }
+
+    return 0;
 }
