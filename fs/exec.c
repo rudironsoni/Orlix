@@ -231,6 +231,7 @@ static void exec_clear_segment_images(struct mm_struct *mm) {
         mm->interp_segments[i].image = NULL;
         mm->interp_segments[i].image_size = 0;
     }
+    task_clear_vmas_impl(mm);
 }
 
 static int exec_materialize_segment_image(const unsigned char *image,
@@ -276,6 +277,9 @@ static int exec_materialize_segment_image(const unsigned char *image,
 static int exec_add_vma(struct mm_struct *mm, uint64_t start, uint64_t size,
                         uint32_t flags, enum task_vma_kind kind,
                         void *image, size_t image_size) {
+    uint32_t *page_flags;
+    uint64_t page_count;
+
     if (!mm || size == 0) {
         return 0;
     }
@@ -291,14 +295,129 @@ static int exec_add_vma(struct mm_struct *mm, uint64_t start, uint64_t size,
             return -1;
         }
     }
+    page_count = size / TASK_VMA_PAGE_SIZE;
+    if ((size % TASK_VMA_PAGE_SIZE) != 0) {
+        page_count++;
+    }
+    if (page_count == 0 || page_count > SIZE_MAX / sizeof(*page_flags)) {
+        errno = ENOEXEC;
+        return -1;
+    }
+    page_flags = calloc((size_t)page_count, sizeof(*page_flags));
+    if (!page_flags) {
+        errno = ENOMEM;
+        return -1;
+    }
+    for (uint64_t i = 0; i < page_count; i++) {
+        page_flags[i] = flags;
+    }
     mm->vmas[mm->vma_count].start = start;
     mm->vmas[mm->vma_count].end = start + size;
     mm->vmas[mm->vma_count].flags = flags;
     mm->vmas[mm->vma_count].kind = kind;
     mm->vmas[mm->vma_count].image = image;
     mm->vmas[mm->vma_count].image_size = image_size;
+    mm->vmas[mm->vma_count].page_count = page_count;
+    mm->vmas[mm->vma_count].page_flags = page_flags;
     mm->vma_count++;
     return 0;
+}
+
+static int exec_dynamic_bytes(struct task_struct *task, uint64_t vaddr, uint64_t size,
+                              const Elf64_Dyn **out_entries, uint64_t *out_count) {
+    const struct task_vma *vma;
+    uint64_t offset;
+
+    if (!task || !task->mm || !out_entries || !out_count || size == 0 ||
+        size % sizeof(Elf64_Dyn) != 0 || size > UINT64_MAX - vaddr) {
+        errno = ENOEXEC;
+        return -1;
+    }
+
+    vma = task_find_vma_impl(task, vaddr);
+    if (!vma || vaddr + size > vma->end || !vma->image) {
+        errno = ENOEXEC;
+        return -1;
+    }
+    offset = vaddr - vma->start;
+    if (offset > vma->image_size || size > vma->image_size - offset) {
+        errno = ENOEXEC;
+        return -1;
+    }
+
+    *out_entries = (const Elf64_Dyn *)((const unsigned char *)vma->image + offset);
+    *out_count = size / sizeof(Elf64_Dyn);
+    return 0;
+}
+
+static int exec_parse_dynamic_info(struct task_struct *task,
+                                   uint64_t vaddr,
+                                   uint64_t size,
+                                   struct task_dynamic_info *info) {
+    const Elf64_Dyn *entries;
+    uint64_t entry_count;
+
+    if (!info) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    memset(info, 0, sizeof(*info));
+    info->vaddr = vaddr;
+    info->size = size;
+    if (size == 0) {
+        return 0;
+    }
+
+    if (exec_dynamic_bytes(task, vaddr, size, &entries, &entry_count) != 0) {
+        return -1;
+    }
+
+    for (uint64_t i = 0; i < entry_count; i++) {
+        switch (entries[i].d_tag) {
+        case DT_NULL:
+            return 0;
+        case DT_NEEDED:
+            if (info->needed_count >= TASK_EXEC_MAX_DYNAMIC_NEEDED) {
+                errno = ENOEXEC;
+                return -1;
+            }
+            info->needed_offsets[info->needed_count++] = entries[i].d_un.d_val;
+            break;
+        case DT_STRTAB:
+            info->strtab_vaddr = entries[i].d_un.d_ptr;
+            break;
+        case DT_STRSZ:
+            info->strtab_size = entries[i].d_un.d_val;
+            break;
+        case DT_SYMTAB:
+            info->symtab_vaddr = entries[i].d_un.d_ptr;
+            break;
+        case DT_RELA:
+            info->rela_vaddr = entries[i].d_un.d_ptr;
+            break;
+        case DT_RELASZ:
+            info->rela_size = entries[i].d_un.d_val;
+            break;
+        case DT_RELAENT:
+            info->rela_entry_size = entries[i].d_un.d_val;
+            break;
+        case DT_JMPREL:
+            info->plt_rela_vaddr = entries[i].d_un.d_ptr;
+            break;
+        case DT_PLTRELSZ:
+            info->plt_rela_size = entries[i].d_un.d_val;
+            break;
+        case DT_PLTREL:
+            info->plt_rela_type = entries[i].d_un.d_val;
+            break;
+        default:
+            break;
+        }
+    }
+
+    errno = ENOEXEC;
+    return -1;
 }
 
 static int exec_build_initial_elf_stack(struct task_struct *task,
@@ -1289,10 +1408,9 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
     task->mm->exec_entry = plan.ehdr.e_entry;
     task->mm->exec_dynamic_vaddr = plan.dynamic_vaddr;
     task->mm->exec_dynamic_size = plan.dynamic_size;
+    memset(&task->mm->exec_dynamic, 0, sizeof(task->mm->exec_dynamic));
     task->mm->exec_segment_count = plan.segment_count;
     memset(task->mm->exec_segments, 0, sizeof(task->mm->exec_segments));
-    memset(task->mm->vmas, 0, sizeof(task->mm->vmas));
-    task->mm->vma_count = 0;
     for (uint32_t i = 0; i < plan.segment_count; i++) {
         task->mm->exec_segments[i].vaddr = plan.segments[i].vaddr;
         task->mm->exec_segments[i].memsz = plan.segments[i].memsz;
@@ -1321,6 +1439,7 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
     task->mm->interp_entry = 0;
     task->mm->interp_dynamic_vaddr = 0;
     task->mm->interp_dynamic_size = 0;
+    memset(&task->mm->interp_dynamic, 0, sizeof(task->mm->interp_dynamic));
     task->mm->interp_segment_count = 0;
     task->mm->interp_path[0] = '\0';
     memset(task->mm->interp_segments, 0, sizeof(task->mm->interp_segments));
@@ -1357,6 +1476,20 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
         task->mm->entry_point = interp_plan.ehdr.e_entry;
     }
 
+    if (exec_parse_dynamic_info(task,
+                                task->mm->exec_dynamic_vaddr,
+                                task->mm->exec_dynamic_size,
+                                &task->mm->exec_dynamic) != 0) {
+        return -1;
+    }
+    if (interp_image &&
+        exec_parse_dynamic_info(task,
+                                task->mm->interp_dynamic_vaddr,
+                                task->mm->interp_dynamic_size,
+                                &task->mm->interp_dynamic) != 0) {
+        return -1;
+    }
+
     if (exec_build_initial_elf_stack(task, &plan, interp_image ? &interp_plan : NULL) != 0) {
         return -1;
     }
@@ -1371,6 +1504,8 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
     }
     task->mm->handoff.entry_point = task->mm->entry_point;
     task->mm->handoff.initial_stack_pointer = task->mm->initial_stack_pointer;
+    task->mm->handoff.aarch64_pc = task->mm->entry_point;
+    task->mm->handoff.aarch64_sp = task->mm->initial_stack_pointer;
     task->mm->handoff.read_memory = task_read_virtual_memory_impl;
     task->mm->handoff.write_memory = task_write_virtual_memory_impl;
 

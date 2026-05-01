@@ -119,6 +119,8 @@ targets:
       group: kernel
     - path: observability/ixland_observability.c
       group: observability
+    - path: runtime/aarch64/exec_context.c
+      group: runtime/aarch64
     - path: runtime/native/registry.c
       group: runtime/native
   IXLandSystemLinuxKernelTests:

@@ -29,6 +29,9 @@ extern int exec_syscall_contract_elf_virtual_memory_fault_policy(void);
 extern int exec_syscall_contract_elf_vma_metadata_covers_exec_loader_and_stack(void);
 extern int exec_syscall_contract_elf_dynamic_metadata_records_exec_and_loader(void);
 extern int exec_syscall_contract_elf_exec_handoff_exposes_entry_stack_and_memory_access(void);
+extern int exec_syscall_contract_elf_vma_page_permissions_are_page_granular(void);
+extern int exec_syscall_contract_elf_dynamic_relocation_metadata_is_discovered(void);
+extern int exec_syscall_contract_aarch64_exec_context_uses_exec_handoff(void);
 extern int exec_syscall_contract_elf_missing_interp_returns_enoent_without_transition(void);
 extern int exec_syscall_contract_elf_invalid_interp_returns_enoexec_without_transition(void);
 extern int exec_syscall_contract_elf_dyn_image_is_accepted(void);
@@ -153,6 +156,18 @@ extern int exec_syscall_contract_truncated_elf_returns_enoexec_without_transitio
 
 - (void)testElfExecHandoffExposesEntryStackAndMemoryAccess {
     XCTAssertEqual(exec_syscall_contract_elf_exec_handoff_exposes_entry_stack_and_memory_access(), 0, @"errno %d", errno);
+}
+
+- (void)testElfVmaPagePermissionsArePageGranular {
+    XCTAssertEqual(exec_syscall_contract_elf_vma_page_permissions_are_page_granular(), 0, @"errno %d", errno);
+}
+
+- (void)testElfDynamicRelocationMetadataIsDiscovered {
+    XCTAssertEqual(exec_syscall_contract_elf_dynamic_relocation_metadata_is_discovered(), 0, @"errno %d", errno);
+}
+
+- (void)testAarch64ExecContextUsesExecHandoff {
+    XCTAssertEqual(exec_syscall_contract_aarch64_exec_context_uses_exec_handoff(), 0, @"errno %d", errno);
 }
 
 - (void)testElfMissingInterpReturnsEnoentWithoutTransition {

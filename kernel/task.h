@@ -35,6 +35,8 @@ extern "C" {
 #define TASK_EXEC_MAX_LOAD_SEGMENTS 16
 #define TASK_EXEC_MAX_AUXV 32
 #define TASK_EXEC_MAX_VMAS ((TASK_EXEC_MAX_LOAD_SEGMENTS * 2) + 1)
+#define TASK_EXEC_MAX_DYNAMIC_NEEDED 16
+#define TASK_VMA_PAGE_SIZE 4096ULL
 
 /* Forward declarations for private subsystem state */
 struct task_struct;
@@ -63,11 +65,31 @@ struct task_vma {
     enum task_vma_kind kind;
     void *image;
     size_t image_size;
+    uint64_t page_count;
+    uint32_t *page_flags;
+};
+
+struct task_dynamic_info {
+    uint64_t vaddr;
+    uint64_t size;
+    uint64_t rela_vaddr;
+    uint64_t rela_size;
+    uint64_t rela_entry_size;
+    uint64_t plt_rela_vaddr;
+    uint64_t plt_rela_size;
+    uint64_t plt_rela_type;
+    uint64_t strtab_vaddr;
+    uint64_t strtab_size;
+    uint64_t symtab_vaddr;
+    uint64_t needed_offsets[TASK_EXEC_MAX_DYNAMIC_NEEDED];
+    uint32_t needed_count;
 };
 
 struct task_exec_handoff {
     uint64_t entry_point;
     uint64_t initial_stack_pointer;
+    uint64_t aarch64_pc;
+    uint64_t aarch64_sp;
     long (*read_memory)(struct task_struct *task, uint64_t addr, void *buf, size_t count);
     long (*write_memory)(struct task_struct *task, uint64_t addr, const void *buf, size_t count);
 };
@@ -103,6 +125,7 @@ struct mm_struct {
     uint64_t exec_entry;
     uint64_t exec_dynamic_vaddr;
     uint64_t exec_dynamic_size;
+    struct task_dynamic_info exec_dynamic;
     uint32_t exec_segment_count;
     struct {
         uint64_t vaddr;
@@ -118,6 +141,7 @@ struct mm_struct {
     uint64_t interp_entry;
     uint64_t interp_dynamic_vaddr;
     uint64_t interp_dynamic_size;
+    struct task_dynamic_info interp_dynamic;
     uint32_t interp_segment_count;
     char interp_path[MAX_PATH];
     struct {
@@ -302,7 +326,10 @@ void task_notify_parent_state_change(struct task_struct *task);
 long task_read_virtual_memory_impl(struct task_struct *task, uint64_t addr, void *buf, size_t count);
 long task_write_virtual_memory_impl(struct task_struct *task, uint64_t addr, const void *buf, size_t count);
 const struct task_vma *task_find_vma_impl(struct task_struct *task, uint64_t addr);
+uint32_t task_vma_page_flags_impl(const struct task_vma *vma, uint64_t addr);
+int task_set_vma_page_flags_impl(struct task_struct *task, uint64_t addr, uint64_t size, uint32_t flags);
 const struct task_exec_handoff *task_get_exec_handoff_impl(struct task_struct *task);
+void task_clear_vmas_impl(struct mm_struct *mm);
 
 /* Virtual process identity syscalls (internal helpers) */
 int32_t getpid_impl(void);

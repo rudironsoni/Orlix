@@ -177,11 +177,77 @@ const struct task_vma *task_find_vma_impl(struct task_struct *task, uint64_t add
     return NULL;
 }
 
+uint32_t task_vma_page_flags_impl(const struct task_vma *vma, uint64_t addr) {
+    uint64_t page_index;
+
+    if (!vma || addr < vma->start || addr >= vma->end) {
+        return 0;
+    }
+    page_index = (addr - vma->start) / TASK_VMA_PAGE_SIZE;
+    if (page_index >= vma->page_count) {
+        return 0;
+    }
+    if (!vma->page_flags) {
+        return vma->flags;
+    }
+    return vma->page_flags[page_index];
+}
+
+int task_set_vma_page_flags_impl(struct task_struct *task, uint64_t addr, uint64_t size, uint32_t flags) {
+    const struct task_vma *found;
+    struct task_vma *vma;
+    uint64_t start_page;
+    uint64_t end_page;
+
+    if (!task || !task->mm || size == 0 || size > UINT64_MAX - addr) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    found = task_find_vma_impl(task, addr);
+    if (!found || addr + size > found->end) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    vma = &task->mm->vmas[found - task->mm->vmas];
+    if (!vma->page_flags || vma->page_count == 0) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    start_page = (addr - vma->start) / TASK_VMA_PAGE_SIZE;
+    end_page = ((addr + size - 1) - vma->start) / TASK_VMA_PAGE_SIZE;
+    if (end_page >= vma->page_count) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    for (uint64_t i = start_page; i <= end_page; i++) {
+        vma->page_flags[i] = flags;
+    }
+    return 0;
+}
+
+void task_clear_vmas_impl(struct mm_struct *mm) {
+    if (!mm) {
+        return;
+    }
+    for (uint32_t i = 0; i < mm->vma_count; i++) {
+        free(mm->vmas[i].page_flags);
+        mm->vmas[i].page_flags = NULL;
+        mm->vmas[i].page_count = 0;
+    }
+    memset(mm->vmas, 0, sizeof(mm->vmas));
+    mm->vma_count = 0;
+}
+
 static long task_read_vma(const struct task_vma *vma, uint64_t addr, void *buf, size_t count) {
-    uint64_t end;
     size_t offset;
     size_t available;
+    uint64_t page_remaining;
     size_t to_copy;
+    uint32_t flags;
 
     if (!vma || !vma->image || vma->image_size == 0 || addr < vma->start) {
         return 0;
@@ -190,27 +256,32 @@ static long task_read_vma(const struct task_vma *vma, uint64_t addr, void *buf, 
         errno = EFAULT;
         return -1;
     }
-    end = vma->start + (uint64_t)vma->image_size;
-    if (addr >= end) {
+    if (addr >= vma->end) {
         return 0;
     }
-    if ((vma->flags & PF_R) == 0) {
+    flags = task_vma_page_flags_impl(vma, addr);
+    if ((flags & PF_R) == 0) {
         errno = EACCES;
         return -1;
     }
 
     offset = (size_t)(addr - vma->start);
     available = vma->image_size - offset;
+    page_remaining = TASK_VMA_PAGE_SIZE - ((addr - vma->start) % TASK_VMA_PAGE_SIZE);
     to_copy = count < available ? count : available;
+    if ((uint64_t)to_copy > page_remaining) {
+        to_copy = (size_t)page_remaining;
+    }
     memcpy(buf, (const unsigned char *)vma->image + offset, to_copy);
     return (long)to_copy;
 }
 
 static long task_write_vma(const struct task_vma *vma, uint64_t addr, const void *buf, size_t count) {
-    uint64_t end;
     size_t offset;
     size_t available;
+    uint64_t page_remaining;
     size_t to_copy;
+    uint32_t flags;
 
     if (!vma || !vma->image || vma->image_size == 0 || addr < vma->start) {
         return 0;
@@ -219,18 +290,22 @@ static long task_write_vma(const struct task_vma *vma, uint64_t addr, const void
         errno = EFAULT;
         return -1;
     }
-    end = vma->start + (uint64_t)vma->image_size;
-    if (addr >= end) {
+    if (addr >= vma->end) {
         return 0;
     }
-    if ((vma->flags & PF_W) == 0) {
+    flags = task_vma_page_flags_impl(vma, addr);
+    if ((flags & PF_W) == 0) {
         errno = EACCES;
         return -1;
     }
 
     offset = (size_t)(addr - vma->start);
     available = vma->image_size - offset;
+    page_remaining = TASK_VMA_PAGE_SIZE - ((addr - vma->start) % TASK_VMA_PAGE_SIZE);
     to_copy = count < available ? count : available;
+    if ((uint64_t)to_copy > page_remaining) {
+        to_copy = (size_t)page_remaining;
+    }
     memcpy((unsigned char *)vma->image + offset, buf, to_copy);
     return (long)to_copy;
 }
@@ -252,15 +327,34 @@ long task_read_virtual_memory_impl(struct task_struct *task, uint64_t addr, void
     }
 
     mm = task->mm;
-    for (uint32_t i = 0; i < mm->vma_count; i++) {
-        copied = task_read_vma(&mm->vmas[i], addr, buf, count);
-        if (copied != 0) {
-            return copied;
+    for (size_t total = 0; total < count;) {
+        if ((uint64_t)total > UINT64_MAX - addr) {
+            if (total > 0) {
+                return (long)total;
+            }
+            errno = EFAULT;
+            return -1;
         }
+        copied = 0;
+        for (uint32_t i = 0; i < mm->vma_count; i++) {
+            copied = task_read_vma(&mm->vmas[i], addr + total, (unsigned char *)buf + total, count - total);
+            if (copied != 0) {
+                break;
+            }
+        }
+        if (copied < 0) {
+            return total > 0 ? (long)total : -1;
+        }
+        if (copied == 0) {
+            if (total > 0) {
+                return (long)total;
+            }
+            errno = EFAULT;
+            return -1;
+        }
+        total += (size_t)copied;
     }
-
-    errno = EFAULT;
-    return -1;
+    return (long)count;
 }
 
 long task_write_virtual_memory_impl(struct task_struct *task, uint64_t addr, const void *buf, size_t count) {
@@ -280,15 +374,34 @@ long task_write_virtual_memory_impl(struct task_struct *task, uint64_t addr, con
     }
 
     mm = task->mm;
-    for (uint32_t i = 0; i < mm->vma_count; i++) {
-        copied = task_write_vma(&mm->vmas[i], addr, buf, count);
-        if (copied != 0) {
-            return copied;
+    for (size_t total = 0; total < count;) {
+        if ((uint64_t)total > UINT64_MAX - addr) {
+            if (total > 0) {
+                return (long)total;
+            }
+            errno = EFAULT;
+            return -1;
         }
+        copied = 0;
+        for (uint32_t i = 0; i < mm->vma_count; i++) {
+            copied = task_write_vma(&mm->vmas[i], addr + total, (const unsigned char *)buf + total, count - total);
+            if (copied != 0) {
+                break;
+            }
+        }
+        if (copied < 0) {
+            return total > 0 ? (long)total : -1;
+        }
+        if (copied == 0) {
+            if (total > 0) {
+                return (long)total;
+            }
+            errno = EFAULT;
+            return -1;
+        }
+        total += (size_t)copied;
     }
-
-    errno = EFAULT;
-    return -1;
+    return (long)count;
 }
 
 const struct task_exec_handoff *task_get_exec_handoff_impl(struct task_struct *task) {
@@ -560,6 +673,7 @@ void free_task(struct task_struct *task) {
         for (uint32_t i = 0; i < task->mm->interp_segment_count; i++) {
             free(task->mm->interp_segments[i].image);
         }
+        task_clear_vmas_impl(task->mm);
         free(task->mm->exec_image_base);
         free(task->mm->interp_image_base);
         free(task->mm->initial_stack_image);
