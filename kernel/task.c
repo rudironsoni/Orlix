@@ -4,6 +4,7 @@
 
 #include "task.h"
 #include "signal.h"
+#include "cred_internal.h"
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
@@ -14,6 +15,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <linux/fcntl.h>
 
 #ifdef SIGCHLD
 #undef SIGCHLD
@@ -642,6 +645,7 @@ static const char *task_exec_basename(const char *name) {
 int task_exec_transition_impl(const char *path, const char *argv0) {
     struct task_struct *task;
     char normalized_path[MAX_PATH];
+    struct linux_stat st;
     const char *comm_source;
     size_t comm_len;
     int closed;
@@ -661,6 +665,10 @@ int task_exec_transition_impl(const char *path, const char *argv0) {
     if (closed < 0) {
         errno = -closed;
         return -1;
+    }
+
+    if (vfs_fstatat(AT_FDCWD, normalized_path, &st, 0) == 0) {
+        cred_apply_exec_metadata(get_current_cred(), st.st_uid, st.st_gid, st.st_mode);
     }
 
     closed = close_on_exec_impl();

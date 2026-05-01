@@ -1,4 +1,5 @@
 #include <linux/fcntl.h>
+#include <linux/stat.h>
 
 #include <errno.h>
 #include <stdbool.h>
@@ -7,11 +8,18 @@
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
+#include "kernel/cred_internal.h"
 #include "kernel/task.h"
 
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
+extern int unlink_impl(const char *pathname);
+extern int chmod(const char *pathname, linux_mode_t mode);
+extern int chown(const char *pathname, uid_t owner, gid_t group);
+extern int setuid_impl(uid_t uid);
+extern int setgid_impl(gid_t gid);
+extern void cred_reset_to_defaults(void);
 
 static int close_if_open(int fd) {
     if (fd >= 0 && fdtable_is_used_impl(fd)) {
@@ -241,4 +249,93 @@ int task_exec_contract_preserves_task_identity_and_non_exec_state(void) {
     }
 
     return 0;
+}
+
+int task_exec_contract_setuid_mode_updates_virtual_effective_uid(void) {
+    struct cred *cred;
+    int fd = -1;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/task-exec-suid-file");
+
+    fd = open_impl("/tmp/task-exec-suid-file", O_RDWR | O_CREAT | O_TRUNC, 0755);
+    if (fd < 0) {
+        goto out;
+    }
+    close_if_open(fd);
+    fd = -1;
+
+    if (chown("/tmp/task-exec-suid-file", 2000, 3000) != 0) {
+        goto out;
+    }
+    if (chmod("/tmp/task-exec-suid-file", S_ISUID | 0755) != 0) {
+        goto out;
+    }
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+    if (task_exec_transition_impl("/tmp/task-exec-suid-file", "suid-file") != 0) {
+        goto out;
+    }
+
+    cred = get_current_cred();
+    if (!cred || cred->uid != 1000 || cred->euid != 2000 || cred->suid != 2000) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_if_open(fd);
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/task-exec-suid-file");
+    return ret;
+}
+
+int task_exec_contract_setgid_mode_updates_virtual_effective_gid(void) {
+    struct cred *cred;
+    int fd = -1;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/task-exec-sgid-file");
+
+    fd = open_impl("/tmp/task-exec-sgid-file", O_RDWR | O_CREAT | O_TRUNC, 0755);
+    if (fd < 0) {
+        goto out;
+    }
+    close_if_open(fd);
+    fd = -1;
+
+    if (chown("/tmp/task-exec-sgid-file", 2000, 3000) != 0) {
+        goto out;
+    }
+    if (chmod("/tmp/task-exec-sgid-file", S_ISGID | 0755) != 0) {
+        goto out;
+    }
+    if (setgid_impl(1000) != 0) {
+        goto out;
+    }
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+    if (task_exec_transition_impl("/tmp/task-exec-sgid-file", "sgid-file") != 0) {
+        goto out;
+    }
+
+    cred = get_current_cred();
+    if (!cred || cred->gid != 1000 || cred->egid != 3000 || cred->sgid != 3000) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_if_open(fd);
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/task-exec-sgid-file");
+    return ret;
 }

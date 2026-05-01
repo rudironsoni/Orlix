@@ -124,6 +124,9 @@ bool cred_has_group(const struct cred *cred, gid_t gid);
 /* Virtual setgroups implementation */
 int cred_setgroups(struct cred *cred, size_t size, const gid_t *list);
 
+/* Apply executable owner and mode metadata during exec */
+void cred_apply_exec_metadata(struct cred *cred, uid_t file_uid, gid_t file_gid, uint32_t mode);
+
 /* ============================================================================
  * INTERNAL IMPLEMENTATION ENTRY POINTS
  * ============================================================================

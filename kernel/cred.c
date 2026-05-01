@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include <linux/limits.h>
+#include <linux/stat.h>
 
 #include "cred_internal.h"
 
@@ -460,6 +461,22 @@ int cred_setgroups(struct cred *cred, size_t size, const gid_t *list) {
     cred->groups = new_groups;
     cred->group_count = size;
     return 0;
+}
+
+void cred_apply_exec_metadata(struct cred *cred, uid_t file_uid, gid_t file_gid, uint32_t mode) {
+    if (!cred) {
+        return;
+    }
+
+    if ((mode & S_ISUID) != 0) {
+        cred->euid = file_uid;
+    }
+    if ((mode & S_ISGID) != 0) {
+        cred->egid = file_gid;
+    }
+
+    cred->suid = cred->euid;
+    cred->sgid = cred->egid;
 }
 
 /* ============================================================================
