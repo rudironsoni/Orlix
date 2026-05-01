@@ -17,6 +17,7 @@
 /* Linux UAPI headers for ABI constants and types */
 #include <linux/fcntl.h>
 #include <linux/elf.h>
+#include <linux/auxvec.h>
 #include <linux/stat.h>
 #include <asm-generic/stat.h>
 #ifdef SIG_DFL
@@ -37,6 +38,7 @@
 #define environ (*_NSGetEnviron())
 
 #include "../kernel/signal.h"
+#include "../kernel/cred_internal.h"
 #include "../runtime/native/registry.h"
 #include "fdtable.h"
 #include "vfs.h"
@@ -67,6 +69,173 @@ struct exec_elf_load_plan {
     } segments[TASK_EXEC_MAX_LOAD_SEGMENTS];
     char interpreter[MAX_PATH];
 };
+
+#define EXEC_INITIAL_STACK_SIZE (8ULL * 1024ULL * 1024ULL)
+#define EXEC_INITIAL_STACK_TOP 0x0000fffffff00000ULL
+#define EXEC_INITIAL_STACK_ALIGN 16ULL
+#define EXEC_PAGE_SIZE 4096ULL
+
+static uint64_t exec_align_down(uint64_t value, uint64_t align) {
+    return value & ~(align - 1);
+}
+
+static int exec_string_count(char *const strings[]) {
+    int count = 0;
+
+    if (!strings) {
+        return 0;
+    }
+    while (strings[count]) {
+        count++;
+    }
+    return count;
+}
+
+static int exec_stack_place_string(uint64_t *cursor, const char *value, uint64_t *out_addr) {
+    size_t len;
+
+    if (!cursor || !value || !out_addr) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    len = strlen(value) + 1;
+    if (*cursor < EXEC_INITIAL_STACK_TOP - EXEC_INITIAL_STACK_SIZE + len) {
+        errno = E2BIG;
+        return -1;
+    }
+
+    *cursor -= len;
+    *out_addr = *cursor;
+    return 0;
+}
+
+static int exec_auxv_append(struct mm_struct *mm, uint64_t type, uint64_t value) {
+    if (!mm || mm->auxv_count >= TASK_EXEC_MAX_AUXV) {
+        errno = E2BIG;
+        return -1;
+    }
+
+    mm->auxv[mm->auxv_count].type = type;
+    mm->auxv[mm->auxv_count].value = value;
+    mm->auxv_count++;
+    return 0;
+}
+
+static uint64_t exec_first_load_vaddr(const struct exec_elf_load_plan *plan) {
+    if (!plan || plan->segment_count == 0) {
+        return 0;
+    }
+    return plan->segments[0].vaddr;
+}
+
+static uint64_t exec_phdr_vaddr(const struct exec_elf_load_plan *plan) {
+    if (!plan || plan->ehdr.e_phnum == 0) {
+        return 0;
+    }
+
+    for (uint32_t i = 0; i < plan->segment_count; i++) {
+        uint64_t offset = plan->segments[i].offset;
+        uint64_t filesz = plan->segments[i].filesz;
+
+        if (plan->ehdr.e_phoff >= offset &&
+            plan->ehdr.e_phoff < offset + filesz) {
+            return plan->segments[i].vaddr + (plan->ehdr.e_phoff - offset);
+        }
+    }
+
+    return plan->ehdr.e_phoff;
+}
+
+static int exec_build_initial_elf_stack(struct task_struct *task,
+                                        const struct exec_elf_load_plan *plan,
+                                        const struct exec_elf_load_plan *interp_plan) {
+    struct mm_struct *mm;
+    const struct cred *cred;
+    uint64_t cursor = EXEC_INITIAL_STACK_TOP;
+    uint64_t random_addr;
+    uint64_t pointer_slots;
+
+    if (!task || !task->mm || !plan) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    mm = task->mm;
+    memset(mm->initial_argv, 0, sizeof(mm->initial_argv));
+    memset(mm->initial_envp, 0, sizeof(mm->initial_envp));
+    memset(mm->auxv, 0, sizeof(mm->auxv));
+
+    mm->initial_stack_base = EXEC_INITIAL_STACK_TOP - EXEC_INITIAL_STACK_SIZE;
+    mm->initial_stack_size = EXEC_INITIAL_STACK_SIZE;
+    mm->initial_argc = exec_string_count(task->argv);
+    mm->initial_envc = exec_string_count(task->envp);
+    mm->auxv_count = 0;
+
+    if (exec_stack_place_string(&cursor, "aarch64", &mm->auxv_platform_addr) != 0 ||
+        exec_stack_place_string(&cursor, task->exe, &mm->auxv_execfn_addr) != 0) {
+        return -1;
+    }
+
+    if (cursor < mm->initial_stack_base + 16) {
+        errno = E2BIG;
+        return -1;
+    }
+    cursor -= 16;
+    random_addr = cursor;
+    mm->auxv_random_addr = random_addr;
+
+    for (int i = mm->initial_envc - 1; i >= 0; i--) {
+        if (exec_stack_place_string(&cursor, task->envp[i], &mm->initial_envp[i]) != 0) {
+            return -1;
+        }
+    }
+    for (int i = mm->initial_argc - 1; i >= 0; i--) {
+        if (exec_stack_place_string(&cursor, task->argv[i], &mm->initial_argv[i]) != 0) {
+            return -1;
+        }
+    }
+
+    cursor = exec_align_down(cursor, EXEC_INITIAL_STACK_ALIGN);
+
+    cred = get_current_cred();
+    if (exec_auxv_append(mm, AT_PHDR, exec_phdr_vaddr(plan)) != 0 ||
+        exec_auxv_append(mm, AT_PHENT, sizeof(Elf64_Phdr)) != 0 ||
+        exec_auxv_append(mm, AT_PHNUM, plan->ehdr.e_phnum) != 0 ||
+        exec_auxv_append(mm, AT_PAGESZ, EXEC_PAGE_SIZE) != 0 ||
+        exec_auxv_append(mm, AT_BASE, interp_plan ? exec_first_load_vaddr(interp_plan) : 0) != 0 ||
+        exec_auxv_append(mm, AT_FLAGS, 0) != 0 ||
+        exec_auxv_append(mm, AT_ENTRY, plan->ehdr.e_entry) != 0 ||
+        exec_auxv_append(mm, AT_UID, cred ? cred->uid : 0) != 0 ||
+        exec_auxv_append(mm, AT_EUID, cred ? cred->euid : 0) != 0 ||
+        exec_auxv_append(mm, AT_GID, cred ? cred->gid : 0) != 0 ||
+        exec_auxv_append(mm, AT_EGID, cred ? cred->egid : 0) != 0 ||
+        exec_auxv_append(mm, AT_SECURE, 0) != 0 ||
+        exec_auxv_append(mm, AT_RANDOM, mm->auxv_random_addr) != 0 ||
+        exec_auxv_append(mm, AT_PLATFORM, mm->auxv_platform_addr) != 0 ||
+        exec_auxv_append(mm, AT_EXECFN, mm->auxv_execfn_addr) != 0 ||
+        exec_auxv_append(mm, AT_NULL, 0) != 0) {
+        return -1;
+    }
+
+    pointer_slots = 1ULL +
+                    (uint64_t)mm->initial_argc + 1ULL +
+                    (uint64_t)mm->initial_envc + 1ULL +
+                    ((uint64_t)mm->auxv_count * 2ULL);
+    if (cursor < mm->initial_stack_base + (pointer_slots * sizeof(uint64_t))) {
+        errno = E2BIG;
+        return -1;
+    }
+    cursor -= pointer_slots * sizeof(uint64_t);
+    mm->initial_stack_pointer = exec_align_down(cursor, EXEC_INITIAL_STACK_ALIGN);
+    if (mm->initial_stack_pointer < mm->initial_stack_base ||
+        mm->initial_stack_pointer >= EXEC_INITIAL_STACK_TOP) {
+        errno = E2BIG;
+        return -1;
+    }
+
+    return 0;
+}
 
 /* Deep copy argv array */
 static char **exec_copy_argv(char *const argv[]) {
@@ -922,6 +1091,10 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
         strncpy(task->mm->interp_path, resolved_interp, sizeof(task->mm->interp_path) - 1);
         task->mm->interp_path[sizeof(task->mm->interp_path) - 1] = '\0';
         task->mm->entry_point = interp_plan.ehdr.e_entry;
+    }
+
+    if (exec_build_initial_elf_stack(task, &plan, interp_image ? &interp_plan : NULL) != 0) {
+        return -1;
     }
 
     strncpy(task->exec_image->path, path, sizeof(task->exec_image->path) - 1);

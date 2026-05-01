@@ -1,5 +1,6 @@
 #include <linux/fcntl.h>
 #include <linux/elf.h>
+#include <linux/auxvec.h>
 
 #include <errno.h>
 #include <stdbool.h>
@@ -9,6 +10,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
+#include "kernel/cred_internal.h"
 #include "kernel/task.h"
 #include "runtime/native/registry.h"
 
@@ -83,6 +85,103 @@ static int expect_nul_vector(const char *buf, ssize_t len, const char *const exp
         errno = EPROTO;
         return -1;
     }
+    return 0;
+}
+
+static int find_auxv_value(const struct task_struct *task, uint64_t type, uint64_t *out_value) {
+    if (!task || !task->mm || !out_value) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < task->mm->auxv_count; i++) {
+        if (task->mm->auxv[i].type == type) {
+            *out_value = task->mm->auxv[i].value;
+            return 0;
+        }
+    }
+
+    errno = ENOENT;
+    return -1;
+}
+
+static int expect_stack_addr(const struct task_struct *task, uint64_t addr) {
+    if (!task || !task->mm) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (addr < task->mm->initial_stack_base ||
+        addr >= task->mm->initial_stack_base + task->mm->initial_stack_size) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+static int expect_auxv_value(const struct task_struct *task, uint64_t type, uint64_t expected) {
+    uint64_t value = 0;
+
+    if (find_auxv_value(task, type, &value) != 0) {
+        return -1;
+    }
+    if (value != expected) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+static int expect_common_elf_initial_stack(const struct task_struct *task,
+                                           const Elf64_Ehdr *ehdr,
+                                           int expected_argc,
+                                           int expected_envc) {
+    if (!task || !task->mm || !ehdr) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (task->mm->initial_stack_base == 0 ||
+        task->mm->initial_stack_size == 0 ||
+        task->mm->initial_stack_pointer < task->mm->initial_stack_base ||
+        task->mm->initial_stack_pointer >= task->mm->initial_stack_base + task->mm->initial_stack_size ||
+        (task->mm->initial_stack_pointer & 15) != 0 ||
+        task->mm->initial_argc != expected_argc ||
+        task->mm->initial_envc != expected_envc ||
+        task->mm->auxv_count == 0 ||
+        task->mm->auxv[task->mm->auxv_count - 1].type != AT_NULL ||
+        task->mm->auxv[task->mm->auxv_count - 1].value != 0) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (expect_auxv_value(task, AT_PHENT, sizeof(Elf64_Phdr)) != 0 ||
+        expect_auxv_value(task, AT_PHNUM, ehdr->e_phnum) != 0 ||
+        expect_auxv_value(task, AT_PAGESZ, 4096) != 0 ||
+        expect_auxv_value(task, AT_FLAGS, 0) != 0 ||
+        expect_auxv_value(task, AT_ENTRY, ehdr->e_entry) != 0 ||
+        expect_auxv_value(task, AT_RANDOM, task->mm->auxv_random_addr) != 0 ||
+        expect_auxv_value(task, AT_PLATFORM, task->mm->auxv_platform_addr) != 0 ||
+        expect_auxv_value(task, AT_EXECFN, task->mm->auxv_execfn_addr) != 0) {
+        return -1;
+    }
+
+    if (expect_stack_addr(task, task->mm->auxv_random_addr) != 0 ||
+        expect_stack_addr(task, task->mm->auxv_platform_addr) != 0 ||
+        expect_stack_addr(task, task->mm->auxv_execfn_addr) != 0) {
+        return -1;
+    }
+
+    for (int i = 0; i < expected_argc; i++) {
+        if (expect_stack_addr(task, task->mm->initial_argv[i]) != 0) {
+            return -1;
+        }
+    }
+    for (int i = 0; i < expected_envc; i++) {
+        if (expect_stack_addr(task, task->mm->initial_envp[i]) != 0) {
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -990,6 +1089,130 @@ int exec_syscall_contract_elf_interp_loads_virtual_loader_image(void) {
 out:
     unlink_impl("/tmp/exec-elf-dynamic");
     unlink_impl(interp_path);
+    return result;
+}
+
+int exec_syscall_contract_elf_static_builds_initial_stack_and_auxv(void) {
+    struct task_struct *task = get_current();
+    char *argv[] = {"elf-static", "one", NULL};
+    char *envp[] = {"A=B", NULL};
+    unsigned char image[sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) + 64];
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-stack-static");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x402000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-stack-static", image, sizeof(image)) != 0) {
+        goto out;
+    }
+
+    if (execve("/tmp/exec-elf-stack-static", argv, envp) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    if (expect_common_elf_initial_stack(task, ehdr, 2, 1) != 0 ||
+        expect_auxv_value(task, AT_BASE, 0) != 0 ||
+        expect_auxv_value(task, AT_PHDR, ehdr->e_phoff) != 0) {
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-stack-static");
+    return result;
+}
+
+int exec_syscall_contract_elf_dynamic_auxv_points_to_loader_base(void) {
+    struct task_struct *task = get_current();
+    const char interp_path[] = "/tmp/exec-elf-aux-loader";
+    char *argv[] = {"elf-dynamic", NULL};
+    unsigned char image[sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)) + 96];
+    unsigned char loader[sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) + 64];
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    Elf64_Ehdr *loader_ehdr = (Elf64_Ehdr *)loader;
+    Elf64_Phdr *loader_load;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-aux-dynamic");
+    unlink_impl(interp_path);
+    build_exec_elf64_with_interp(image, sizeof(image), interp_path, 0x403000, 0x400000);
+    build_exec_elf64_without_interp(loader, sizeof(loader), 0x703000, 0x700000);
+    loader_load = (Elf64_Phdr *)(loader + loader_ehdr->e_phoff);
+    if (create_exec_bytes("/tmp/exec-elf-aux-dynamic", image, sizeof(image)) != 0 ||
+        create_exec_bytes(interp_path, loader, sizeof(loader)) != 0) {
+        goto out;
+    }
+
+    if (execve("/tmp/exec-elf-aux-dynamic", argv, NULL) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    if (expect_common_elf_initial_stack(task, ehdr, 1, 0) != 0 ||
+        expect_auxv_value(task, AT_BASE, loader_load->p_vaddr) != 0 ||
+        task->mm->entry_point != loader_ehdr->e_entry ||
+        task->mm->exec_entry != ehdr->e_entry ||
+        task->mm->interp_entry != loader_ehdr->e_entry) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-aux-dynamic");
+    unlink_impl(interp_path);
+    return result;
+}
+
+int exec_syscall_contract_elf_auxv_records_virtual_credentials(void) {
+    struct task_struct *task = get_current();
+    const struct cred *cred;
+    unsigned char image[sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) + 64];
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-aux-cred");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x404000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-aux-cred", image, sizeof(image)) != 0) {
+        goto out;
+    }
+
+    if (execve("/tmp/exec-elf-aux-cred", NULL, NULL) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    cred = get_current_cred();
+    if (!cred ||
+        expect_auxv_value(task, AT_UID, cred->uid) != 0 ||
+        expect_auxv_value(task, AT_EUID, cred->euid) != 0 ||
+        expect_auxv_value(task, AT_GID, cred->gid) != 0 ||
+        expect_auxv_value(task, AT_EGID, cred->egid) != 0 ||
+        expect_auxv_value(task, AT_SECURE, 0) != 0) {
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-aux-cred");
     return result;
 }
 

@@ -32,6 +32,7 @@ extern "C" {
 #define TASK_MAX_ARGS 256
 #define TASK_MAX_TASKS 1024
 #define TASK_EXEC_MAX_LOAD_SEGMENTS 16
+#define TASK_EXEC_MAX_AUXV 32
 
 /* Forward declarations for private subsystem state */
 struct task_struct;
@@ -97,6 +98,21 @@ struct mm_struct {
         uint32_t flags;
     } interp_segments[TASK_EXEC_MAX_LOAD_SEGMENTS];
     uint64_t entry_point;
+    uint64_t initial_stack_base;
+    uint64_t initial_stack_size;
+    uint64_t initial_stack_pointer;
+    int initial_argc;
+    int initial_envc;
+    uint64_t initial_argv[TASK_MAX_ARGS];
+    uint64_t initial_envp[TASK_MAX_ARGS];
+    uint64_t auxv_random_addr;
+    uint64_t auxv_platform_addr;
+    uint64_t auxv_execfn_addr;
+    struct {
+        uint64_t type;
+        uint64_t value;
+    } auxv[TASK_EXEC_MAX_AUXV];
+    uint32_t auxv_count;
     struct address_space *vma_addr_space;
 };
 

@@ -20,6 +20,9 @@ extern int exec_syscall_contract_fexecve_rejects_invalid_fd(void);
 extern int exec_syscall_contract_elf64_aarch64_exec_loads_virtual_image(void);
 extern int exec_syscall_contract_elf_program_headers_create_virtual_segments(void);
 extern int exec_syscall_contract_elf_interp_loads_virtual_loader_image(void);
+extern int exec_syscall_contract_elf_static_builds_initial_stack_and_auxv(void);
+extern int exec_syscall_contract_elf_dynamic_auxv_points_to_loader_base(void);
+extern int exec_syscall_contract_elf_auxv_records_virtual_credentials(void);
 extern int exec_syscall_contract_elf_missing_interp_returns_enoent_without_transition(void);
 extern int exec_syscall_contract_elf_invalid_interp_returns_enoexec_without_transition(void);
 extern int exec_syscall_contract_elf_dyn_image_is_accepted(void);
@@ -108,6 +111,18 @@ extern int exec_syscall_contract_truncated_elf_returns_enoexec_without_transitio
 
 - (void)testElfInterpLoadsVirtualLoaderImage {
     XCTAssertEqual(exec_syscall_contract_elf_interp_loads_virtual_loader_image(), 0, @"errno %d", errno);
+}
+
+- (void)testElfStaticBuildsInitialStackAndAuxv {
+    XCTAssertEqual(exec_syscall_contract_elf_static_builds_initial_stack_and_auxv(), 0, @"errno %d", errno);
+}
+
+- (void)testElfDynamicAuxvPointsToLoaderBase {
+    XCTAssertEqual(exec_syscall_contract_elf_dynamic_auxv_points_to_loader_base(), 0, @"errno %d", errno);
+}
+
+- (void)testElfAuxvRecordsVirtualCredentials {
+    XCTAssertEqual(exec_syscall_contract_elf_auxv_records_virtual_credentials(), 0, @"errno %d", errno);
 }
 
 - (void)testElfMissingInterpReturnsEnoentWithoutTransition {
