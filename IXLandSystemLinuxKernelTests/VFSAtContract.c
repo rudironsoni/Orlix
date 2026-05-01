@@ -36,6 +36,8 @@ extern int rmdir_impl(const char *pathname);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
 extern int setuid_impl(uid_t uid);
 extern int setgroups_impl(int size, const gid_t *list);
+extern int mkdirat(int dirfd, const char *pathname, linux_mode_t mode);
+extern int unlinkat(int dirfd, const char *pathname, int flags);
 extern void cred_reset_to_defaults(void);
 extern int chmod(const char *pathname, linux_mode_t mode);
 extern int fchmod(int fd, linux_mode_t mode);
@@ -1113,6 +1115,77 @@ out:
     cred_reset_to_defaults();
     unlink_impl("/tmp/vfs-cred-private-dir/file");
     rmdir_impl("/tmp/vfs-cred-private-dir");
+    return ret;
+}
+
+int vfs_contract_nonroot_cannot_mkdirat_inside_root_private_dir(void) {
+    int dirfd = -1;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    rmdir_impl("/tmp/vfs-cred-at-private-dir/child");
+    rmdir_impl("/tmp/vfs-cred-at-private-dir");
+    if (mkdir_impl("/tmp/vfs-cred-at-private-dir", 0700) != 0) {
+        goto out;
+    }
+    dirfd = open_impl("/tmp/vfs-cred-at-private-dir", O_RDONLY | O_DIRECTORY, 0);
+    if (dirfd < 0) {
+        goto out;
+    }
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (mkdirat(dirfd, "child", 0700) != -1 || errno != EACCES) {
+        errno = EACCES;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_impl(dirfd);
+    cred_reset_to_defaults();
+    rmdir_impl("/tmp/vfs-cred-at-private-dir/child");
+    rmdir_impl("/tmp/vfs-cred-at-private-dir");
+    return ret;
+}
+
+int vfs_contract_nonroot_cannot_unlinkat_inside_root_private_dir(void) {
+    int dirfd = -1;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-at-private-dir/file");
+    rmdir_impl("/tmp/vfs-cred-at-private-dir");
+    if (mkdir_impl("/tmp/vfs-cred-at-private-dir", 0700) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-cred-at-private-dir/file", "owned") != 0) {
+        goto out;
+    }
+    dirfd = open_impl("/tmp/vfs-cred-at-private-dir", O_RDONLY | O_DIRECTORY, 0);
+    if (dirfd < 0) {
+        goto out;
+    }
+    if (setuid_impl(1000) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (unlinkat(dirfd, "file", 0) != -1 || errno != EACCES) {
+        errno = EACCES;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_impl(dirfd);
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/vfs-cred-at-private-dir/file");
+    rmdir_impl("/tmp/vfs-cred-at-private-dir");
     return ret;
 }
 

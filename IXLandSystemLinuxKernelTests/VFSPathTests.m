@@ -1272,6 +1272,18 @@ extern void cred_reset_to_defaults(void);
                    @"non-root virtual credentials should not unlink inside root-private directories, errno %d", errno);
 }
 
+- (void)testNonrootCannotMkdiratInsideRootPrivateDir {
+    extern int vfs_contract_nonroot_cannot_mkdirat_inside_root_private_dir(void);
+    XCTAssertEqual(vfs_contract_nonroot_cannot_mkdirat_inside_root_private_dir(), 0,
+                   @"mkdirat should enforce virtual parent permissions after credential changes, errno %d", errno);
+}
+
+- (void)testNonrootCannotUnlinkatInsideRootPrivateDir {
+    extern int vfs_contract_nonroot_cannot_unlinkat_inside_root_private_dir(void);
+    XCTAssertEqual(vfs_contract_nonroot_cannot_unlinkat_inside_root_private_dir(), 0,
+                   @"unlinkat should enforce virtual parent permissions after credential changes, errno %d", errno);
+}
+
 - (void)testRootChownUpdatesVirtualOwner {
     extern int vfs_contract_root_chown_updates_virtual_owner(void);
     XCTAssertEqual(vfs_contract_root_chown_updates_virtual_owner(), 0,

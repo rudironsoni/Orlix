@@ -358,7 +358,7 @@ char *getcwd_impl(char *buf, size_t size) {
     return buf;
 }
 
-int mkdir_impl(const char *pathname, mode_t mode) {
+static int mkdirat_impl(int dirfd, const char *pathname, mode_t mode) {
     char translated_path[MAX_PATH];
     char resolved_path[MAX_PATH];
     int ret;
@@ -367,7 +367,7 @@ int mkdir_impl(const char *pathname, mode_t mode) {
         return -1;
     }
 
-    ret = vfs_resolve_virtual_path_task(pathname, resolved_path, sizeof(resolved_path), NULL);
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path));
     if (ret != 0) {
         errno = -ret;
         return -1;
@@ -378,7 +378,9 @@ int mkdir_impl(const char *pathname, mode_t mode) {
         return -1;
     }
 
-    if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {
+    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        errno = -ret;
         return -1;
     }
 
@@ -389,16 +391,27 @@ int mkdir_impl(const char *pathname, mode_t mode) {
     return ret;
 }
 
-int rmdir_impl(const char *pathname) {
+int mkdir_impl(const char *pathname, mode_t mode) {
+    return mkdirat_impl(AT_FDCWD, pathname, mode);
+}
+
+static int unlinkat_impl(int dirfd, const char *pathname, int flags) {
     char translated_path[MAX_PATH];
     char resolved_path[MAX_PATH];
+    struct linux_stat st;
+    bool remove_dir;
     int ret;
+
+    if ((flags & ~AT_REMOVEDIR) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
 
     if (directory_validate_path(pathname) != 0) {
         return -1;
     }
 
-    ret = vfs_resolve_virtual_path_task(pathname, resolved_path, sizeof(resolved_path), NULL);
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path));
     if (ret != 0) {
         errno = -ret;
         return -1;
@@ -409,62 +422,39 @@ int rmdir_impl(const char *pathname) {
         return -1;
     }
 
-    if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {
+    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    if (ret != 0) {
+        errno = -ret;
         return -1;
     }
 
-    struct linux_stat st;
     if (host_stat_impl(translated_path, &st) != 0) {
         return -1;
     }
 
-    if (!S_ISDIR(st.st_mode)) {
+    remove_dir = (flags & AT_REMOVEDIR) != 0;
+    if (remove_dir && !S_ISDIR(st.st_mode)) {
         errno = ENOTDIR;
         return -1;
     }
+    if (!remove_dir && S_ISDIR(st.st_mode)) {
+        errno = EISDIR;
+        return -1;
+    }
 
-    ret = host_rmdir_impl(translated_path);
+    ret = remove_dir ? host_rmdir_impl(translated_path) : host_unlink_impl(translated_path);
     if (ret == 0) {
         vfs_forget_path_metadata(resolved_path);
     }
     return ret;
 }
 
+int rmdir_impl(const char *pathname) {
+    return unlinkat_impl(AT_FDCWD, pathname, AT_REMOVEDIR);
+}
+
 int unlink_impl(const char *pathname) {
-    char translated_path[MAX_PATH];
-    char resolved_path[MAX_PATH];
-    int ret;
-
-    if (directory_validate_path(pathname) != 0) {
-        return -1;
-    }
-
-    ret = vfs_resolve_virtual_path_task(pathname, resolved_path, sizeof(resolved_path), NULL);
-    if (ret != 0) {
-        errno = -ret;
-        return -1;
-    }
-    ret = vfs_check_parent_mutation_permission(resolved_path);
-    if (ret != 0) {
-        errno = -ret;
-        return -1;
-    }
-
-    if (directory_translate_task_path(pathname, translated_path, sizeof(translated_path), NULL) != 0) {
-        return -1;
-    }
-
-    struct linux_stat st;
-    if (host_stat_impl(translated_path, &st) == 0 && S_ISDIR(st.st_mode)) {
-        errno = EISDIR;
-        return -1;
-    }
-
-    ret = host_unlink_impl(translated_path);
-    if (ret == 0) {
-        vfs_forget_path_metadata(resolved_path);
-    }
-    return ret;
+    return unlinkat_impl(AT_FDCWD, pathname, 0);
 }
 
 int link_impl(const char *oldpath, const char *newpath) {
@@ -714,21 +704,7 @@ __attribute__((visibility("default"))) int mkdir(const char *pathname, mode_t mo
 }
 
 __attribute__((visibility("default"))) int mkdirat(int dirfd, const char *pathname, mode_t mode) {
-  char translated_path[MAX_PATH];
-  int ret;
-
-  if (pathname == NULL) {
-    errno = EFAULT;
-    return -1;
-  }
-
-  ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
-  if (ret != 0) {
-    errno = -ret;
-    return -1;
-  }
-
-  return mkdir(translated_path, mode);
+  return mkdirat_impl(dirfd, pathname, mode);
 }
 
 __attribute__((visibility("default"))) int rmdir(const char *pathname) {
@@ -740,24 +716,7 @@ __attribute__((visibility("default"))) int unlink(const char *pathname) {
 }
 
 __attribute__((visibility("default"))) int unlinkat(int dirfd, const char *pathname, int flags) {
-  char translated_path[MAX_PATH];
-  int ret;
-
-  if (pathname == NULL) {
-    errno = EFAULT;
-    return -1;
-  }
-
-  ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
-  if (ret != 0) {
-    errno = -ret;
-    return -1;
-  }
-
-  if ((flags & AT_REMOVEDIR) != 0) {
-    return rmdir(translated_path);
-  }
-  return unlink(translated_path);
+  return unlinkat_impl(dirfd, pathname, flags);
 }
 
 __attribute__((visibility("default"))) int link(const char *oldpath, const char *newpath) {
