@@ -17,6 +17,7 @@ extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int unlink_impl(const char *pathname);
+extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
 
 static int close_if_open(int fd) {
     if (fd >= 0 && fdtable_is_used_impl(fd)) {
@@ -354,6 +355,69 @@ int exec_syscall_contract_script_uses_virtual_path_and_native_interpreter(void) 
 out:
     native_registry_clear();
     unlink_impl("/tmp/exec-script-launch");
+    return result;
+}
+
+int exec_syscall_contract_script_symlink_records_resolved_target(void) {
+    struct task_struct *task = get_current();
+    char *argv[] = {"script-link", "arg1", NULL};
+    char *envp[] = {"LINK=1", NULL};
+    int status;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    native_registry_clear();
+    clear_captured_exec();
+    unlink_impl("/tmp/exec-script-link");
+    unlink_impl("/tmp/exec-script-real");
+
+    if (create_exec_file("/tmp/exec-script-real", "#!/usr/bin/interp\n") != 0) {
+        goto out;
+    }
+    if (symlinkat("/tmp/exec-script-real", AT_FDCWD, "/tmp/exec-script-link") != 0) {
+        goto out;
+    }
+    if (native_register("/usr/bin/interp", native_capture_exec) != 0) {
+        goto out;
+    }
+
+    status = execve("/tmp/exec-script-link", argv, envp);
+    if (status != 37) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!atomic_load(&task->execed) ||
+        strcmp(task->exe, "/tmp/exec-script-real") != 0 ||
+        strcmp(task->comm, "script-link") != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!task->exec_image ||
+        strcmp(task->exec_image->path, "/tmp/exec-script-real") != 0 ||
+        strcmp(task->exec_image->interpreter, "/usr/bin/interp") != 0 ||
+        task->exec_image->type != EXEC_IMAGE_SCRIPT) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (captured_argc != 3 ||
+        strcmp(captured_argv[0], "/usr/bin/interp") != 0 ||
+        strcmp(captured_argv[1], "/tmp/exec-script-real") != 0 ||
+        strcmp(captured_argv[2], "arg1") != 0 ||
+        strcmp(captured_env0, "LINK=1") != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    native_registry_clear();
+    unlink_impl("/tmp/exec-script-link");
+    unlink_impl("/tmp/exec-script-real");
     return result;
 }
 

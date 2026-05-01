@@ -20,11 +20,15 @@
 #ifndef X_OK
 #define X_OK 1
 #endif
+#ifndef F_OK
+#define F_OK 0
+#endif
 
 extern int chroot(const char *path);
 extern int chdir(const char *path);
 extern int fchdir(int fd);
 extern char *getcwd(char *buf, size_t size);
+extern int access(const char *pathname, int mode);
 extern int mount(const char *source, const char *target, const char *filesystemtype,
                  unsigned long mountflags, const void *data);
 extern int umount(const char *target);
@@ -220,6 +224,76 @@ int vfs_contract_faccessat_eaccess_returns_enotsup(void) {
 /* Contract: vfs_faccessat reports ENOTSUP for AT_SYMLINK_NOFOLLOW */
 int vfs_contract_faccessat_symlink_nofollow_returns_enotsup(void) {
     return vfs_faccessat(AT_FDCWD, "/etc", X_OK, AT_SYMLINK_NOFOLLOW);
+}
+
+int vfs_contract_faccessat_follows_absolute_symlink_as_virtual_path(void) {
+    int ret = -1;
+
+    unlink_impl("/tmp/vfs-access-absolute-link/link");
+    unlink_impl("/tmp/vfs-access-absolute-link/target");
+    rmdir_impl("/tmp/vfs-access-absolute-link");
+    if (mkdir_impl("/tmp/vfs-access-absolute-link", 0700) != 0) {
+        return -1;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-access-absolute-link/target", "access") != 0) {
+        goto out;
+    }
+    if (symlinkat("/tmp/vfs-access-absolute-link/target", AT_FDCWD,
+                  "/tmp/vfs-access-absolute-link/link") != 0) {
+        goto out;
+    }
+    if (vfs_faccessat(AT_FDCWD, "/tmp/vfs-access-absolute-link/link", F_OK, 0) != 0 ||
+        access("/tmp/vfs-access-absolute-link/link", F_OK) != 0) {
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        unlink_impl("/tmp/vfs-access-absolute-link/link");
+        unlink_impl("/tmp/vfs-access-absolute-link/target");
+        rmdir_impl("/tmp/vfs-access-absolute-link");
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int vfs_contract_faccessat_symlink_loop_returns_eloop(void) {
+    int ret = -1;
+
+    unlink_impl("/tmp/vfs-access-loop/a");
+    unlink_impl("/tmp/vfs-access-loop/b");
+    rmdir_impl("/tmp/vfs-access-loop");
+    if (mkdir_impl("/tmp/vfs-access-loop", 0700) != 0) {
+        return -1;
+    }
+    if (symlinkat("b", AT_FDCWD, "/tmp/vfs-access-loop/a") != 0 ||
+        symlinkat("a", AT_FDCWD, "/tmp/vfs-access-loop/b") != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (vfs_faccessat(AT_FDCWD, "/tmp/vfs-access-loop/a", F_OK, 0) != -ELOOP) {
+        errno = EIO;
+        goto out;
+    }
+    errno = 0;
+    if (access("/tmp/vfs-access-loop/a", F_OK) != -1 || errno != ELOOP) {
+        errno = EIO;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        unlink_impl("/tmp/vfs-access-loop/a");
+        unlink_impl("/tmp/vfs-access-loop/b");
+        rmdir_impl("/tmp/vfs-access-loop");
+        errno = saved_errno;
+    }
+    return ret;
 }
 
 int vfs_contract_open_nofollow_rejects_symlink_with_eloop(void) {

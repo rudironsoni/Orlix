@@ -1194,6 +1194,18 @@ extern void cred_reset_to_defaults(void);
                    @"vfs_faccessat Linux AT_SYMLINK_NOFOLLOW should return ENOTSUP");
 }
 
+- (void)testFaccessatFollowsAbsoluteSymlinkAsVirtualPath {
+    extern int vfs_contract_faccessat_follows_absolute_symlink_as_virtual_path(void);
+    XCTAssertEqual(vfs_contract_faccessat_follows_absolute_symlink_as_virtual_path(), 0,
+                   @"faccessat/access should follow absolute symlink targets through the virtual root, errno %d", errno);
+}
+
+- (void)testFaccessatSymlinkLoopReturnsEloop {
+    extern int vfs_contract_faccessat_symlink_loop_returns_eloop(void);
+    XCTAssertEqual(vfs_contract_faccessat_symlink_loop_returns_eloop(), 0,
+                   @"faccessat/access should reject symlink loops with ELOOP, errno %d", errno);
+}
+
 - (void)testChrootRebasesAbsolutePathsAndGetcwd {
     extern int vfs_contract_chroot_rebases_absolute_paths_and_getcwd(void);
     XCTAssertEqual(vfs_contract_chroot_rebases_absolute_paths_and_getcwd(), 0,

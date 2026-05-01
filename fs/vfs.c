@@ -2653,25 +2653,8 @@ int vfs_access(const char *pathname, int mode) {
     if (!pathname) {
         return -EFAULT;
     }
-    if (vfs_path_is_synthetic_root(pathname)) {
-        return 0;
-    }
-    if (vfs_path_is_synthetic_dev_node(pathname) != SYNTHETIC_DEV_NONE) {
-        return 0;
-    }
-    if (strcmp(pathname, "/dev/tty") == 0 || vfs_path_is_synthetic_dev_dir(pathname)) {
-        return 0;
-    }
-    if (pty_is_virtual_slave_path_impl(pathname)) {
-        return 0;
-    }
-    if (vfs_classify_proc_self_path(pathname) != PROC_SELF_NONE) {
-        return 0;
-    }
-    if (vfs_path_is_synthetic(pathname)) {
-        return -ENOENT;
-    }
-    return host_access_impl(pathname, mode);
+
+    return vfs_faccessat(AT_FDCWD, pathname, mode, 0);
 }
 
 int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
@@ -2928,7 +2911,12 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
         return -ENOTSUP;
     }
 
-    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_virtual, sizeof(resolved_virtual));
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        return -ENOTSUP;
+    }
+
+    ret = vfs_resolve_virtual_path_at_follow(dirfd, pathname, resolved_virtual,
+                                             sizeof(resolved_virtual), true);
     if (ret != 0) {
         return ret;
     }
@@ -2957,13 +2945,9 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
         return -ENOENT;
     }
 
-    ret = vfs_translate_path_at(dirfd, pathname, translated_path, sizeof(translated_path));
+    ret = vfs_translate_path(resolved_virtual, translated_path, sizeof(translated_path));
     if (ret != 0) {
         return ret;
-    }
-
-    if (flags & AT_SYMLINK_NOFOLLOW) {
-        return -ENOTSUP;
     }
 
     {

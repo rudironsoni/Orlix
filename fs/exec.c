@@ -164,7 +164,7 @@ static int exec_read_shebang_line(const char *path, char *buffer, size_t buffer_
         return -1;
     }
 
-    int ret = vfs_resolve_virtual_path_task(path, resolved_path, sizeof(resolved_path), NULL);
+    int ret = vfs_resolve_virtual_path_task_follow(path, resolved_path, sizeof(resolved_path), NULL, true);
     if (ret != 0) {
         errno = -ret;
         return -1;
@@ -288,7 +288,7 @@ enum exec_image_type exec_classify(const char *path) {
         return EXEC_IMAGE_NONE;
     }
 
-    ret = vfs_resolve_virtual_path_task(path, resolved_path, sizeof(resolved_path), NULL);
+    ret = vfs_resolve_virtual_path_task_follow(path, resolved_path, sizeof(resolved_path), NULL, true);
     if (ret != 0) {
         return EXEC_IMAGE_NONE;
     }
@@ -354,7 +354,7 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
         return -1;
     }
 
-    int ret = vfs_resolve_virtual_path_task(pathname, resolved_path, sizeof(resolved_path), task->fs);
+    int ret = vfs_resolve_virtual_path_task_follow(pathname, resolved_path, sizeof(resolved_path), task->fs, true);
     if (ret != 0) {
         errno = -ret;
         return -1;

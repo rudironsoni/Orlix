@@ -10,6 +10,7 @@ extern int exec_syscall_contract_rejects_empty_path_without_transition(void);
 extern int exec_syscall_contract_missing_path_preserves_state_and_cloexec_fds(void);
 extern int exec_syscall_contract_native_success_applies_transition_and_returns_entry_status(void);
 extern int exec_syscall_contract_script_uses_virtual_path_and_native_interpreter(void);
+extern int exec_syscall_contract_script_symlink_records_resolved_target(void);
 extern int exec_syscall_contract_missing_script_interpreter_preserves_state(void);
 extern int exec_syscall_contract_fexecve_uses_fd_path(void);
 extern int exec_syscall_contract_fexecve_rejects_invalid_fd(void);
@@ -53,6 +54,10 @@ extern int exec_syscall_contract_fexecve_rejects_invalid_fd(void);
 
 - (void)testScriptUsesVirtualPathAndNativeInterpreter {
     XCTAssertEqual(exec_syscall_contract_script_uses_virtual_path_and_native_interpreter(), 0, @"errno %d", errno);
+}
+
+- (void)testScriptSymlinkRecordsResolvedTarget {
+    XCTAssertEqual(exec_syscall_contract_script_symlink_records_resolved_target(), 0, @"errno %d", errno);
 }
 
 - (void)testMissingScriptInterpreterPreservesState {
