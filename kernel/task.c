@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include <linux/fcntl.h>
+#include <linux/elf.h>
 #include <linux/sched.h>
 
 #ifdef SIGCHLD
@@ -189,6 +190,36 @@ static long task_read_virtual_region(uint64_t base, size_t region_size, const vo
     return (long)to_copy;
 }
 
+static long task_write_virtual_region(uint64_t base, size_t region_size, void *image,
+                                      uint32_t flags, bool require_writable,
+                                      uint64_t addr, const void *buf, size_t count) {
+    uint64_t end;
+    size_t offset;
+    size_t available;
+    size_t to_copy;
+
+    if (!image || region_size == 0 || addr < base) {
+        return 0;
+    }
+    if ((uint64_t)region_size > UINT64_MAX - base) {
+        return 0;
+    }
+    end = base + (uint64_t)region_size;
+    if (addr >= end) {
+        return 0;
+    }
+    if (require_writable && (flags & PF_W) == 0) {
+        errno = EACCES;
+        return -1;
+    }
+
+    offset = (size_t)(addr - base);
+    available = region_size - offset;
+    to_copy = count < available ? count : available;
+    memcpy((unsigned char *)image + offset, buf, to_copy);
+    return (long)to_copy;
+}
+
 long task_read_virtual_memory_impl(struct task_struct *task, uint64_t addr, void *buf, size_t count) {
     struct mm_struct *mm;
     long copied;
@@ -230,6 +261,60 @@ long task_read_virtual_memory_impl(struct task_struct *task, uint64_t addr, void
                                       mm->initial_stack_image,
                                       addr, buf, count);
     if (copied > 0) {
+        return copied;
+    }
+
+    errno = EFAULT;
+    return -1;
+}
+
+long task_write_virtual_memory_impl(struct task_struct *task, uint64_t addr, const void *buf, size_t count) {
+    struct mm_struct *mm;
+    long copied;
+
+    if (!buf && count > 0) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (count == 0) {
+        return 0;
+    }
+    if (!task || !task->mm) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    mm = task->mm;
+    for (uint32_t i = 0; i < mm->exec_segment_count; i++) {
+        copied = task_write_virtual_region(mm->exec_segments[i].vaddr,
+                                           mm->exec_segments[i].image_size,
+                                           mm->exec_segments[i].image,
+                                           mm->exec_segments[i].flags,
+                                           true,
+                                           addr, buf, count);
+        if (copied != 0) {
+            return copied;
+        }
+    }
+    for (uint32_t i = 0; i < mm->interp_segment_count; i++) {
+        copied = task_write_virtual_region(mm->interp_segments[i].vaddr,
+                                           mm->interp_segments[i].image_size,
+                                           mm->interp_segments[i].image,
+                                           mm->interp_segments[i].flags,
+                                           true,
+                                           addr, buf, count);
+        if (copied != 0) {
+            return copied;
+        }
+    }
+
+    copied = task_write_virtual_region(mm->initial_stack_base,
+                                       mm->initial_stack_image_size,
+                                       mm->initial_stack_image,
+                                       PF_W,
+                                       false,
+                                       addr, buf, count);
+    if (copied != 0) {
         return copied;
     }
 

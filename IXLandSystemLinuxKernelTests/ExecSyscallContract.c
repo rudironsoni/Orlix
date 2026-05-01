@@ -393,6 +393,22 @@ static int expect_task_vm_zeroes(struct task_struct *task, uint64_t addr, size_t
     return 0;
 }
 
+static int expect_task_vm_write(struct task_struct *task, uint64_t addr, const void *bytes, size_t len) {
+    long nwritten;
+
+    if (!task || !bytes) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    nwritten = task_write_virtual_memory_impl(task, addr, bytes, len);
+    if (nwritten != (long)len) {
+        errno = EPROTO;
+        return -1;
+    }
+    return expect_task_vm_bytes(task, addr, bytes, len);
+}
+
 static int native_exec_status(int argc, char **argv, char **envp) {
     (void)argc;
     (void)argv;
@@ -554,6 +570,17 @@ static void build_exec_elf64_without_interp_with_bss(unsigned char *image, size_
     load->p_memsz = load->p_filesz + 16;
     image[text_offset] = 0xee;
     image[text_offset + 1] = 0xff;
+}
+
+static void build_exec_elf64_writable_load(unsigned char *image, size_t image_len,
+                                           uint64_t entry,
+                                           uint64_t load_vaddr) {
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    Elf64_Phdr *load;
+
+    build_exec_elf64_without_interp_with_bss(image, image_len, entry, load_vaddr);
+    load = (Elf64_Phdr *)(image + ehdr->e_phoff);
+    load->p_flags = PF_R | PF_W;
 }
 
 static int verify_state_unchanged(struct task_struct *task,
@@ -1464,6 +1491,133 @@ int exec_syscall_contract_elf_auxv_records_virtual_credentials(void) {
 
 out:
     unlink_impl("/tmp/exec-elf-aux-cred");
+    return result;
+}
+
+int exec_syscall_contract_elf_virtual_memory_writes_writable_segment(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) + 64];
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    Elf64_Phdr *load;
+    const unsigned char patch[] = {0x12, 0x34, 0x56, 0x78};
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-vm-write");
+    build_exec_elf64_writable_load(image, sizeof(image), 0x405000, 0x500000);
+    load = (Elf64_Phdr *)(image + ehdr->e_phoff);
+    if (create_exec_bytes("/tmp/exec-elf-vm-write", image, sizeof(image)) != 0) {
+        goto out;
+    }
+
+    if (execve("/tmp/exec-elf-vm-write", NULL, NULL) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    if (task->mm->exec_segments[0].flags != (PF_R | PF_W) ||
+        expect_task_vm_write(task, load->p_vaddr + 1, patch, sizeof(patch)) != 0) {
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-vm-write");
+    return result;
+}
+
+int exec_syscall_contract_elf_virtual_memory_writes_initial_stack(void) {
+    struct task_struct *task = get_current();
+    char *argv[] = {"elf-stack-write", NULL};
+    unsigned char image[sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) + 64];
+    const char replacement[] = "stack-mutated";
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-vm-stack");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x406000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-vm-stack", image, sizeof(image)) != 0) {
+        goto out;
+    }
+
+    if (execve("/tmp/exec-elf-vm-stack", argv, NULL) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    if (expect_task_vm_write(task, task->mm->initial_argv[0], replacement, sizeof(replacement)) != 0 ||
+        expect_stack_string(task, task->mm->initial_argv[0], replacement) != 0) {
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-vm-stack");
+    return result;
+}
+
+int exec_syscall_contract_elf_virtual_memory_fault_policy(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr) + 64];
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)image;
+    Elf64_Phdr *load;
+    const unsigned char patch[] = {0x90, 0x91};
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-vm-faults");
+    build_exec_elf64_without_interp_with_bss(image, sizeof(image), 0x407000, 0x600000);
+    load = (Elf64_Phdr *)(image + ehdr->e_phoff);
+    if (create_exec_bytes("/tmp/exec-elf-vm-faults", image, sizeof(image)) != 0) {
+        goto out;
+    }
+
+    if (execve("/tmp/exec-elf-vm-faults", NULL, NULL) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    errno = 0;
+    if (task_write_virtual_memory_impl(task, load->p_vaddr, patch, sizeof(patch)) != -1 ||
+        expect_errno(EACCES) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (task_write_virtual_memory_impl(task, 0x1000, patch, sizeof(patch)) != -1 ||
+        expect_errno(EFAULT) != 0) {
+        goto out;
+    }
+
+    errno = 0;
+    if (task_write_virtual_memory_impl(task, task->mm->initial_stack_pointer, NULL, 1) != -1 ||
+        expect_errno(EFAULT) != 0) {
+        goto out;
+    }
+
+    if (task_write_virtual_memory_impl(task, task->mm->initial_stack_pointer, NULL, 0) != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-vm-faults");
     return result;
 }
 

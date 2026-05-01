@@ -23,6 +23,9 @@ extern int exec_syscall_contract_elf_interp_loads_virtual_loader_image(void);
 extern int exec_syscall_contract_elf_static_builds_initial_stack_and_auxv(void);
 extern int exec_syscall_contract_elf_dynamic_auxv_points_to_loader_base(void);
 extern int exec_syscall_contract_elf_auxv_records_virtual_credentials(void);
+extern int exec_syscall_contract_elf_virtual_memory_writes_writable_segment(void);
+extern int exec_syscall_contract_elf_virtual_memory_writes_initial_stack(void);
+extern int exec_syscall_contract_elf_virtual_memory_fault_policy(void);
 extern int exec_syscall_contract_elf_missing_interp_returns_enoent_without_transition(void);
 extern int exec_syscall_contract_elf_invalid_interp_returns_enoexec_without_transition(void);
 extern int exec_syscall_contract_elf_dyn_image_is_accepted(void);
@@ -123,6 +126,18 @@ extern int exec_syscall_contract_truncated_elf_returns_enoexec_without_transitio
 
 - (void)testElfAuxvRecordsVirtualCredentials {
     XCTAssertEqual(exec_syscall_contract_elf_auxv_records_virtual_credentials(), 0, @"errno %d", errno);
+}
+
+- (void)testElfVirtualMemoryWritesWritableSegment {
+    XCTAssertEqual(exec_syscall_contract_elf_virtual_memory_writes_writable_segment(), 0, @"errno %d", errno);
+}
+
+- (void)testElfVirtualMemoryWritesInitialStack {
+    XCTAssertEqual(exec_syscall_contract_elf_virtual_memory_writes_initial_stack(), 0, @"errno %d", errno);
+}
+
+- (void)testElfVirtualMemoryFaultPolicy {
+    XCTAssertEqual(exec_syscall_contract_elf_virtual_memory_fault_policy(), 0, @"errno %d", errno);
 }
 
 - (void)testElfMissingInterpReturnsEnoentWithoutTransition {
