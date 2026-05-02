@@ -228,11 +228,14 @@ static linux_atomic_int vfs_next_mount_peer_group_id = 1;
 
 struct vfs_detached_mount_ref {
     bool active;
+    uint64_t mount_ns_id;
     char target[MAX_PATH];
 };
 
 static struct vfs_detached_mount_ref vfs_detached_mount_refs[VFS_DETACHED_MOUNT_MAX];
 static fs_mutex_t vfs_detached_mount_lock = FS_MUTEX_INITIALIZER;
+
+static uint64_t vfs_mount_next_peer_group_id(void);
 
 static struct vfs_mount_namespace *vfs_alloc_mount_namespace(void) {
     struct vfs_mount_namespace *mnt_ns = calloc(1, sizeof(struct vfs_mount_namespace));
@@ -271,6 +274,11 @@ static void vfs_put_mount_namespace(struct vfs_mount_namespace *mnt_ns) {
 
 static struct vfs_mount_namespace *vfs_dup_mount_namespace(struct vfs_mount_namespace *old) {
     struct vfs_mount_namespace *new_ns;
+    struct {
+        uint64_t old_id;
+        uint64_t new_id;
+    } group_map[MAX_MOUNTS];
+    size_t group_count = 0;
 
     if (!old) {
         return vfs_alloc_mount_namespace();
@@ -283,6 +291,42 @@ static struct vfs_mount_namespace *vfs_dup_mount_namespace(struct vfs_mount_name
 
     fs_mutex_lock(&old->lock);
     memcpy(new_ns->entries, old->entries, sizeof(new_ns->entries));
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount_entry *entry = &new_ns->entries[i];
+
+        if (!entry->active || entry->propagation != MS_SHARED || entry->peer_group_id == 0) {
+            continue;
+        }
+        bool found = false;
+        for (size_t map = 0; map < group_count; map++) {
+            if (group_map[map].old_id == entry->peer_group_id) {
+                entry->peer_group_id = group_map[map].new_id;
+                found = true;
+                break;
+            }
+        }
+        if (!found && group_count < MAX_MOUNTS) {
+            uint64_t old_id = entry->peer_group_id;
+            uint64_t new_id = vfs_mount_next_peer_group_id();
+            group_map[group_count].old_id = old_id;
+            group_map[group_count].new_id = new_id;
+            group_count++;
+            entry->peer_group_id = new_id;
+        }
+    }
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount_entry *entry = &new_ns->entries[i];
+
+        if (!entry->active || entry->propagation != MS_SLAVE || entry->master_group_id == 0) {
+            continue;
+        }
+        for (size_t map = 0; map < group_count; map++) {
+            if (group_map[map].old_id == entry->master_group_id) {
+                entry->master_group_id = group_map[map].new_id;
+                break;
+            }
+        }
+    }
     fs_mutex_unlock(&old->lock);
 
     return new_ns;
@@ -611,10 +655,10 @@ static bool vfs_task_fs_path_pins_mount(const struct task_struct *task, const ch
     return pins;
 }
 
-static bool vfs_any_task_fs_pins_mount_tree(const char *target) {
+static bool vfs_any_task_fs_pins_mount_tree(uint64_t mount_ns_id, const char *target) {
     bool pins = false;
 
-    if (!target) {
+    if (mount_ns_id == 0 || !target) {
         return false;
     }
     kernel_mutex_lock(&task_table_lock);
@@ -622,7 +666,8 @@ static bool vfs_any_task_fs_pins_mount_tree(const char *target) {
         struct task_struct *task = task_table[i];
 
         while (task) {
-            if (vfs_task_fs_path_pins_mount(task, target)) {
+            if (task->fs && fs_mount_namespace_id(task->fs) == mount_ns_id &&
+                vfs_task_fs_path_pins_mount(task, target)) {
                 pins = true;
                 break;
             }
@@ -633,15 +678,16 @@ static bool vfs_any_task_fs_pins_mount_tree(const char *target) {
     return pins;
 }
 
-static int vfs_detached_mount_record(const char *target) {
+static int vfs_detached_mount_record(uint64_t mount_ns_id, const char *target) {
     int free_slot = -1;
 
-    if (!target) {
+    if (mount_ns_id == 0 || !target) {
         return -EINVAL;
     }
     fs_mutex_lock(&vfs_detached_mount_lock);
     for (size_t i = 0; i < VFS_DETACHED_MOUNT_MAX; i++) {
         if (vfs_detached_mount_refs[i].active &&
+            vfs_detached_mount_refs[i].mount_ns_id == mount_ns_id &&
             strcmp(vfs_detached_mount_refs[i].target, target) == 0) {
             fs_mutex_unlock(&vfs_detached_mount_lock);
             return 0;
@@ -655,6 +701,7 @@ static int vfs_detached_mount_record(const char *target) {
         return -ENOSPC;
     }
     vfs_detached_mount_refs[free_slot].active = true;
+    vfs_detached_mount_refs[free_slot].mount_ns_id = mount_ns_id;
     vfs_copy_string(target, vfs_detached_mount_refs[free_slot].target,
                     sizeof(vfs_detached_mount_refs[free_slot].target));
     fs_mutex_unlock(&vfs_detached_mount_lock);
@@ -679,6 +726,7 @@ int vfs_reap_detached_mount_refs(void) {
 
     for (size_t i = 0; i < VFS_DETACHED_MOUNT_MAX; i++) {
         char target[MAX_PATH];
+        uint64_t mount_ns_id;
         bool active;
 
         fs_mutex_lock(&vfs_detached_mount_lock);
@@ -687,13 +735,15 @@ int vfs_reap_detached_mount_refs(void) {
             fs_mutex_unlock(&vfs_detached_mount_lock);
             continue;
         }
+        mount_ns_id = vfs_detached_mount_refs[i].mount_ns_id;
         vfs_copy_string(vfs_detached_mount_refs[i].target, target, sizeof(target));
         fs_mutex_unlock(&vfs_detached_mount_lock);
 
-        if (!fdtable_has_open_path_under_impl(target) &&
-            !vfs_any_task_fs_pins_mount_tree(target)) {
+        if (!fdtable_has_open_path_under_mount_namespace_impl(mount_ns_id, target) &&
+            !vfs_any_task_fs_pins_mount_tree(mount_ns_id, target)) {
             fs_mutex_lock(&vfs_detached_mount_lock);
             if (active && vfs_detached_mount_refs[i].active &&
+                vfs_detached_mount_refs[i].mount_ns_id == mount_ns_id &&
                 strcmp(vfs_detached_mount_refs[i].target, target) == 0) {
                 memset(&vfs_detached_mount_refs[i], 0, sizeof(vfs_detached_mount_refs[i]));
                 reaped++;
@@ -3381,8 +3431,9 @@ static int vfs_umount_with_operation(const char *target, enum vfs_umount_operati
     fs_mutex_lock(&mnt_ns->lock);
     for (size_t i = 0; i < MAX_MOUNTS; i++) {
         if (mnt_ns->entries[i].active && strcmp(mnt_ns->entries[i].target, resolved_target) == 0) {
-            bool pinned = fdtable_has_open_path_under_impl(resolved_target) ||
-                          vfs_any_task_fs_pins_mount_tree(resolved_target);
+            bool pinned = fdtable_has_open_path_under_mount_namespace_impl(mnt_ns->ns_id,
+                                                                           resolved_target) ||
+                          vfs_any_task_fs_pins_mount_tree(mnt_ns->ns_id, resolved_target);
 
             if (operation == VFS_UMOUNT_NORMAL && pinned) {
                 fs_mutex_unlock(&mnt_ns->lock);
@@ -3400,7 +3451,7 @@ static int vfs_umount_with_operation(const char *target, enum vfs_umount_operati
             }
 
             if ((operation == VFS_UMOUNT_DETACH || operation == VFS_UMOUNT_FORCE) && pinned) {
-                ret = vfs_detached_mount_record(resolved_target);
+                ret = vfs_detached_mount_record(mnt_ns->ns_id, resolved_target);
                 if (ret != 0) {
                     fs_mutex_unlock(&mnt_ns->lock);
                     return ret;

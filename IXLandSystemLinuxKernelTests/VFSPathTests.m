@@ -1312,6 +1312,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"mount should reject multiple propagation flags, errno %d", errno);
 }
 
+- (void)testUnprivilegedMountOperationsFailWithoutNamespaceMutation {
+    extern int vfs_contract_unprivileged_mount_operations_fail_without_namespace_mutation(void);
+    XCTAssertEqual(vfs_contract_unprivileged_mount_operations_fail_without_namespace_mutation(), 0,
+                   @"unprivileged mount operations should fail without mutating the virtual mount namespace, errno %d", errno);
+}
+
 - (void)testSharedMountPropagatesChildBindToPeer {
     extern int vfs_contract_shared_mount_propagates_child_bind_to_peer(void);
     XCTAssertEqual(vfs_contract_shared_mount_propagates_child_bind_to_peer(), 0,
@@ -1370,6 +1376,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
     extern int vfs_contract_mount_namespace_refs_track_task_lifecycle(void);
     XCTAssertEqual(vfs_contract_mount_namespace_refs_track_task_lifecycle(), 0,
                    @"mount namespace refs should track cloned task lifetime, errno %d", errno);
+}
+
+- (void)testCloneNewnsRebasesSharedPeerGroups {
+    extern int vfs_contract_clone_newns_rebases_shared_peer_groups(void);
+    XCTAssertEqual(vfs_contract_clone_newns_rebases_shared_peer_groups(), 0,
+                   @"CLONE_NEWNS should rebase shared peer group ids inside the cloned mount namespace, errno %d", errno);
 }
 
 - (void)testUnmountBusyWhenOpenFdPinsMountTree {
@@ -1502,6 +1514,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
     extern int vfs_contract_umount2_force_detaches_busy_mount_and_reaps_after_pin_release(void);
     XCTAssertEqual(vfs_contract_umount2_force_detaches_busy_mount_and_reaps_after_pin_release(), 0,
                    @"umount2 MNT_FORCE should detach busy virtual mounts and reap after pins release, errno %d", errno);
+}
+
+- (void)testForceUmountDetachedRefsAreMountNamespaceScoped {
+    extern int vfs_contract_force_umount_detached_refs_are_mount_namespace_scoped(void);
+    XCTAssertEqual(vfs_contract_force_umount_detached_refs_are_mount_namespace_scoped(), 0,
+                   @"detached mount refs should be scoped to the mount namespace that was detached, errno %d", errno);
 }
 
 - (void)testForceUmountPropagatesSharedSlaveSubtreeTeardown {

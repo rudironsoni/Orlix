@@ -200,6 +200,7 @@ int get_fd_proc_file_target_pid_impl(void *entry);
 
 bool fdtable_is_used_impl(int fd);
 bool fdtable_has_open_path_under_impl(const char *root);
+bool fdtable_has_open_path_under_mount_namespace_impl(uint64_t mount_ns_id, const char *root);
 void fdtable_mark_path_deleted_impl(const char *path);
 void fdtable_rename_path_impl(const char *old_path, const char *new_path);
 void fdtable_exchange_paths_impl(const char *left_path, const char *right_path);

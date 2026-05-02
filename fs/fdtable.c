@@ -344,6 +344,7 @@ typedef struct fd_description {
     off_t offset;
     char path[MAX_PATH];
     uint64_t file_identity;
+    uint64_t mount_ns_id;
     bool path_deleted;
     bool is_dir;
     void *synthetic_state;
@@ -378,6 +379,15 @@ static bool fdtable_task_has_file(struct task_struct *task, int fd) {
     used = task->files->fd[fd] != NULL;
     fs_mutex_unlock(&task->files->lock);
     return used;
+}
+
+static uint64_t fdtable_current_mount_namespace_id(void) {
+    struct task_struct *task = get_current();
+
+    if (!task || !task->fs) {
+        return 0;
+    }
+    return fs_mount_namespace_id(task->fs);
 }
 
 static bool fdtable_any_task_uses_fd(int fd) {
@@ -540,6 +550,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, linux_mode
     desc->mode = mode;
     desc->offset = 0;
     desc->file_identity = 0;
+    desc->mount_ns_id = fdtable_current_mount_namespace_id();
     desc->is_dir = (flags & O_DIRECTORY) != 0;
     desc->synthetic_state = NULL;
     desc->dev_node = SYNTHETIC_DEV_NONE;
@@ -1662,6 +1673,10 @@ static bool fdtable_path_matches_tree(const char *path, const char *root) {
 }
 
 bool fdtable_has_open_path_under_impl(const char *root) {
+    return fdtable_has_open_path_under_mount_namespace_impl(0, root);
+}
+
+bool fdtable_has_open_path_under_mount_namespace_impl(uint64_t mount_ns_id, const char *root) {
     bool found = false;
 
     if (!root) {
@@ -1672,7 +1687,9 @@ bool fdtable_has_open_path_under_impl(const char *root) {
     for (int fd = 0; fd < NR_OPEN_DEFAULT; fd++) {
         fd_description_t *desc = fd_table[fd].desc;
 
-        if (fd_table[fd].used && desc && fdtable_path_matches_tree(desc->path, root)) {
+        if (fd_table[fd].used && desc &&
+            (mount_ns_id == 0 || desc->mount_ns_id == 0 || desc->mount_ns_id == mount_ns_id) &&
+            fdtable_path_matches_tree(desc->path, root)) {
             found = true;
             break;
         }
