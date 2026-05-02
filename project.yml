@@ -86,6 +86,8 @@ targets:
       group: fs
     - path: fs/xattr.c
       group: fs
+    - path: kernel/cgroup.c
+      group: kernel
     - path: kernel/cred.c
       group: kernel
     - path: kernel/exit.c
@@ -148,6 +150,7 @@ targets:
     sources:
     - IXLandSystemLinuxKernelTests/SignalTests.m
     - IXLandSystemLinuxKernelTests/TaskGroupTests.m
+    - IXLandSystemLinuxKernelTests/CgroupTests.m
     - IXLandSystemLinuxKernelTests/CredentialTests.m
     - IXLandSystemLinuxKernelTests/VFSPathTests.m
     - IXLandSystemLinuxKernelTests/FutexTests.m
@@ -211,6 +214,11 @@ targets:
     - IXLandSystemLinuxKernelTests/PipeContract.h
     - IXLandSystemLinuxKernelTests/ReadinessContract.h
     - IXLandSystemLinuxKernelTests/EpollContract.h
+    - path: IXLandSystemLinuxKernelTests/CgroupContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - IXLandSystemLinuxKernelTests/CgroupContract.h
     - IXLandSystemLinuxKernelTests/PTYSessionIoctlShim.c
     - path: IXLandSystemLinuxKernelTests/FutexUAPICompileSmoke.c
       compilerFlags:

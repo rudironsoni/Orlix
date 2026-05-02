@@ -1,0 +1,8 @@
+#ifndef IXLAND_SYSTEM_LINUX_KERNEL_TESTS_CGROUP_CONTRACT_H
+#define IXLAND_SYSTEM_LINUX_KERNEL_TESTS_CGROUP_CONTRACT_H
+
+int cgroup_contract_current_task_starts_in_root(void);
+int cgroup_contract_child_inherits_parent_cgroup(void);
+int cgroup_contract_proc_self_cgroup_reports_root(void);
+
+#endif /* IXLAND_SYSTEM_LINUX_KERNEL_TESTS_CGROUP_CONTRACT_H */

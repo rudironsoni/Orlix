@@ -319,6 +319,7 @@ enum proc_self_path_class {
     PROC_SELF_SMAPS_FILE,
     PROC_SELF_FDINFO_FILE,
     PROC_SELF_STATUS_FILE,
+    PROC_SELF_CGROUP_FILE,
     PROC_SELF_MOUNTINFO_FILE,
     PROC_SELF_MOUNTS_FILE,
     PROC_ROOT_FILESYSTEMS_FILE,
@@ -359,6 +360,7 @@ int vfs_proc_self_fdinfo_content(int fd_num, char *buf, size_t buf_len);
 int vfs_proc_task_fdinfo_content(int32_t pid, int fd_num, char *buf, size_t buf_len);
 int vfs_proc_self_status_content(char *buf, size_t buf_len);
 int vfs_proc_task_status_content(int32_t pid, char *buf, size_t buf_len);
+int vfs_proc_task_cgroup_content(int32_t pid, char *buf, size_t buf_len);
 int vfs_proc_self_mountinfo_content(char *buf, size_t buf_len);
 int vfs_proc_task_mountinfo_content(int32_t pid, char *buf, size_t buf_len);
 int vfs_proc_self_mounts_content(char *buf, size_t buf_len);

@@ -1498,6 +1498,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"mount namespace teardown should account active mounts and detached refs, errno %d", errno);
 }
 
+- (void)testMountNamespaceDropReclaimsChildDetachedRefs {
+    extern int vfs_contract_mount_namespace_drop_reclaims_child_detached_refs(void);
+    XCTAssertEqual(vfs_contract_mount_namespace_drop_reclaims_child_detached_refs(), 0,
+                   @"dropping a child mount namespace should reclaim its detached refs, errno %d", errno);
+}
+
 - (void)testUmount2DetachDetachesBusyMountFromNamespace {
     extern int vfs_contract_umount2_detach_detaches_busy_mount_from_namespace(void);
     XCTAssertEqual(vfs_contract_umount2_detach_detaches_busy_mount_from_namespace(), 0,

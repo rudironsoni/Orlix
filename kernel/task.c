@@ -4,6 +4,7 @@
 
 #include "task.h"
 #include "signal.h"
+#include "cgroup.h"
 #include "cred_internal.h"
 #include "uts.h"
 
@@ -841,8 +842,32 @@ struct task_struct *alloc_task(void) {
     kernel_cond_init(&task->wait_cond);
     kernel_mutex_init(&task->wait_lock);
     task->uts_ns = uts_get_initial_namespace();
+    {
+        struct cgroup *root = cgroup_root();
+        if (!root || task_attach_cgroup(task, root) != 0) {
+            if (root) {
+                cgroup_put(root);
+            }
+            kernel_cond_destroy(&task->wait_cond);
+            kernel_mutex_destroy(&task->wait_lock);
+            kernel_mutex_destroy(&task->lock);
+            free_pid(task->pid);
+            free(task);
+            return NULL;
+        }
+        cgroup_put(root);
+    }
+    if (!task->cgroup) {
+        kernel_cond_destroy(&task->wait_cond);
+        kernel_mutex_destroy(&task->wait_lock);
+        kernel_mutex_destroy(&task->lock);
+        free_pid(task->pid);
+        free(task);
+        return NULL;
+    }
     task->cred = alloc_cred();
     if (!task->cred) {
+        task_detach_cgroup(task);
         uts_put(task->uts_ns);
         kernel_cond_destroy(&task->wait_cond);
         kernel_mutex_destroy(&task->wait_lock);
@@ -906,6 +931,13 @@ struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent
         put_cred(child->cred);
         child->cred = dup_cred(parent->cred);
         if (!child->cred) {
+            free_task(child);
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+    if (parent->cgroup) {
+        if (task_attach_cgroup(child, parent->cgroup) != 0) {
             free_task(child);
             errno = ENOMEM;
             return NULL;
@@ -1105,6 +1137,8 @@ void free_task(struct task_struct *task) {
         free_signal_struct(task->signal);
     if (task->cred)
         put_cred(task->cred);
+    if (task->cgroup)
+        task_detach_cgroup(task);
     if (task->tty)
         atomic_fetch_sub(&task->tty->refs, 1);
     if (task->mm)
@@ -1156,6 +1190,9 @@ int task_init(void) {
     if (!init_task) {
         /* Re-initialize from scratch */
         pid_init();
+        if (cgroup_init() != 0) {
+            return -1;
+        }
 
         init_task = alloc_task();
         if (!init_task)
@@ -1206,6 +1243,7 @@ void task_deinit(void) {
         free_task(init_task);
         init_task = NULL;
     }
+    cgroup_deinit();
     current_task = NULL;
     atomic_store(&task_initialized, false);
 }

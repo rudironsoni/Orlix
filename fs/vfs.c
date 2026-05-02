@@ -139,6 +139,7 @@
 #include "fdtable.h"
 #include "eventpoll.h"
 #include "pty.h"
+#include "../kernel/cgroup.h"
 #include "../kernel/task.h"
 #include "../kernel/cred_internal.h"
 #include "../kernel/uts.h"
@@ -162,6 +163,7 @@ static int vfs_proc_append(char *buf, size_t buf_len, size_t *pos, const char *f
 static int vfs_copy_string(const char *src, char *dst, size_t dst_len);
 static bool vfs_path_matches_prefix(const char *vpath, const char *prefix);
 static uint64_t vfs_vma_resident_page_count(const struct task_vma *vma);
+static void vfs_detached_mount_drop_namespace_refs(uint64_t mount_ns_id);
 
 /* Backing storage class roots - discovered at runtime from host container */
 static char vfs_persistent_root[MAX_PATH] = {0};
@@ -265,6 +267,7 @@ static void vfs_put_mount_namespace(struct vfs_mount_namespace *mnt_ns) {
         return;
     }
 
+    vfs_detached_mount_drop_namespace_refs(mnt_ns->ns_id);
     fs_mutex_lock(&mnt_ns->lock);
     memset(mnt_ns->entries, 0, sizeof(mnt_ns->entries));
     fs_mutex_unlock(&mnt_ns->lock);
@@ -719,6 +722,17 @@ unsigned int vfs_detached_mount_ref_count(void) {
     }
     fs_mutex_unlock(&vfs_detached_mount_lock);
     return count;
+}
+
+static void vfs_detached_mount_drop_namespace_refs(uint64_t mount_ns_id) {
+    fs_mutex_lock(&vfs_detached_mount_lock);
+    for (size_t i = 0; i < VFS_DETACHED_MOUNT_MAX; i++) {
+        if (vfs_detached_mount_refs[i].active &&
+            vfs_detached_mount_refs[i].mount_ns_id == mount_ns_id) {
+            memset(&vfs_detached_mount_refs[i], 0, sizeof(vfs_detached_mount_refs[i]));
+        }
+    }
+    fs_mutex_unlock(&vfs_detached_mount_lock);
 }
 
 int vfs_reap_detached_mount_refs(void) {
@@ -2699,6 +2713,9 @@ long vfs_listmount(const struct mnt_id_req *req, uint64_t *mnt_ids, size_t nr_mn
     if (!mnt_ns) {
         return -ESRCH;
     }
+    if (!cred_has_cap(get_current_cred(), CAP_SYS_ADMIN)) {
+        return -EPERM;
+    }
     if (req->size < MNT_ID_REQ_SIZE_VER0 || (flags & ~LISTMOUNT_REVERSE) != 0 ||
         (req->mnt_id != LSMT_ROOT && req->mnt_id != 1)) {
         return -EINVAL;
@@ -2735,6 +2752,9 @@ int vfs_statmount(const struct mnt_id_req *req, struct statmount *buf, size_t bu
     }
     if (!mnt_ns) {
         return -ESRCH;
+    }
+    if (!cred_has_cap(get_current_cred(), CAP_SYS_ADMIN)) {
+        return -EPERM;
     }
     if (req->size < MNT_ID_REQ_SIZE_VER0 || bufsize < sizeof(*buf) || flags != 0) {
         return -EINVAL;
@@ -4310,6 +4330,9 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     if (strcmp(suffix, "/status") == 0) {
         return PROC_SELF_STATUS_FILE;
     }
+    if (strcmp(suffix, "/cgroup") == 0) {
+        return PROC_SELF_CGROUP_FILE;
+    }
     if (strcmp(suffix, "/mountinfo") == 0) {
         return PROC_SELF_MOUNTINFO_FILE;
     }
@@ -5545,6 +5568,10 @@ int vfs_proc_self_mounts_content(char *buf, size_t buf_len) {
     return vfs_proc_task_mounts_content(task ? task->pid : -1, buf, buf_len);
 }
 
+int vfs_proc_task_cgroup_content(int32_t pid, char *buf, size_t buf_len) {
+    return cgroup_proc_task_content(pid, buf, buf_len);
+}
+
 int vfs_proc_filesystems_content(char *buf, size_t buf_len) {
     size_t pos = 0;
 
@@ -5927,7 +5954,8 @@ int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int
                    proc_class == PROC_SELF_COMM_FILE ||
                    proc_class == PROC_SELF_STAT_FILE || proc_class == PROC_SELF_STATM_FILE ||
                    proc_class == PROC_SELF_MAPS_FILE || proc_class == PROC_SELF_SMAPS_FILE ||
-                   proc_class == PROC_SELF_STATUS_FILE || proc_class == PROC_SELF_MOUNTINFO_FILE ||
+                   proc_class == PROC_SELF_STATUS_FILE || proc_class == PROC_SELF_CGROUP_FILE ||
+                   proc_class == PROC_SELF_MOUNTINFO_FILE ||
                    proc_class == PROC_SELF_MOUNTS_FILE || proc_class == PROC_ROOT_FILESYSTEMS_FILE ||
                    proc_class == PROC_ROOT_MEMINFO_FILE || proc_class == PROC_ROOT_CPUINFO_FILE) {
             memset(statbuf, 0, sizeof(*statbuf));
