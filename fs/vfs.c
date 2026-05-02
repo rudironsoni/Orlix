@@ -321,6 +321,70 @@ static int vfs_mount_propagate_shared_child_locked(struct vfs_mount_namespace *m
     return 0;
 }
 
+static bool vfs_mount_target_matches_tree(const char *target, const char *root) {
+    return target && root && (strcmp(target, root) == 0 || vfs_path_matches_prefix(target, root));
+}
+
+static void vfs_umount_remove_tree_locked(struct vfs_mount_namespace *mnt_ns, const char *target) {
+    if (!mnt_ns || !target) {
+        return;
+    }
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        if (mnt_ns->entries[i].active && vfs_mount_target_matches_tree(mnt_ns->entries[i].target, target)) {
+            memset(&mnt_ns->entries[i], 0, sizeof(mnt_ns->entries[i]));
+        }
+    }
+}
+
+static void vfs_umount_propagate_shared_child_locked(struct vfs_mount_namespace *mnt_ns,
+                                                     const char *target) {
+    struct vfs_mount_entry *parent = NULL;
+    size_t parent_len = 0;
+    const char *suffix;
+
+    if (!mnt_ns || !target) {
+        return;
+    }
+
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount_entry *entry = &mnt_ns->entries[i];
+        size_t entry_len;
+
+        if (!entry->active || entry->propagation != MS_SHARED ||
+            !vfs_path_matches_prefix(target, entry->target) ||
+            strcmp(target, entry->target) == 0) {
+            continue;
+        }
+        entry_len = strlen(entry->target);
+        if (!parent || entry_len > parent_len) {
+            parent = entry;
+            parent_len = entry_len;
+        }
+    }
+
+    if (!parent) {
+        return;
+    }
+
+    suffix = target + parent_len;
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount_entry *peer = &mnt_ns->entries[i];
+        char peer_target[MAX_PATH];
+        int ret;
+
+        if (!peer->active || peer == parent || peer->propagation != MS_SHARED ||
+            strcmp(peer->source, parent->source) != 0) {
+            continue;
+        }
+
+        ret = snprintf(peer_target, sizeof(peer_target), "%s%s", peer->target, suffix);
+        if (ret < 0 || (size_t)ret >= sizeof(peer_target)) {
+            continue;
+        }
+        vfs_umount_remove_tree_locked(mnt_ns, peer_target);
+    }
+}
+
 struct vfs_route_entry {
     enum vfs_route_identity route_id;
     const char *linux_prefix;
@@ -1651,7 +1715,8 @@ int vfs_umount(const char *target) {
     fs_mutex_lock(&mnt_ns->lock);
     for (size_t i = 0; i < MAX_MOUNTS; i++) {
         if (mnt_ns->entries[i].active && strcmp(mnt_ns->entries[i].target, resolved_target) == 0) {
-            memset(&mnt_ns->entries[i], 0, sizeof(mnt_ns->entries[i]));
+            vfs_umount_propagate_shared_child_locked(mnt_ns, resolved_target);
+            vfs_umount_remove_tree_locked(mnt_ns, resolved_target);
             fs_mutex_unlock(&mnt_ns->lock);
             return 0;
         }
@@ -3193,6 +3258,47 @@ static uint64_t vfs_vma_dirty_page_count(const struct task_vma *vma) {
     return dirty;
 }
 
+static int vfs_vma_vmflags(const struct task_vma *vma, char *buf, size_t buf_len) {
+    uint32_t flags;
+    size_t pos = 0;
+    int ret;
+
+    if (!vma || !buf || buf_len == 0) {
+        return -EINVAL;
+    }
+
+    flags = task_vma_page_flags_impl(vma, vma->start);
+    buf[0] = '\0';
+
+    if ((flags & PF_R) != 0) {
+        ret = snprintf(buf + pos, buf_len - pos, "%srd", pos ? " " : "");
+        if (ret < 0 || (size_t)ret >= buf_len - pos) {
+            return -ENAMETOOLONG;
+        }
+        pos += (size_t)ret;
+    }
+    if ((flags & PF_W) != 0) {
+        ret = snprintf(buf + pos, buf_len - pos, "%swr", pos ? " " : "");
+        if (ret < 0 || (size_t)ret >= buf_len - pos) {
+            return -ENAMETOOLONG;
+        }
+        pos += (size_t)ret;
+    }
+    if ((flags & PF_X) != 0) {
+        ret = snprintf(buf + pos, buf_len - pos, "%sex", pos ? " " : "");
+        if (ret < 0 || (size_t)ret >= buf_len - pos) {
+            return -ENAMETOOLONG;
+        }
+        pos += (size_t)ret;
+    }
+    ret = snprintf(buf + pos, buf_len - pos, "%s%smr mw me ac",
+                   pos ? " " : "", vma->shared ? "sh " : "");
+    if (ret < 0 || (size_t)ret >= buf_len - pos) {
+        return -ENAMETOOLONG;
+    }
+    return 0;
+}
+
 static int vfs_proc_task_smaps_content_for_task(struct task_struct *task, char *buf, size_t buf_len) {
     size_t pos = 0;
 
@@ -3213,8 +3319,13 @@ static int vfs_proc_task_smaps_content_for_task(struct task_struct *task, char *
         uint64_t private_clean_kb = vma->shared ? 0 : (size_kb > dirty_kb ? size_kb - dirty_kb : 0);
         uint64_t shared_dirty_kb = vma->shared ? dirty_kb : 0;
         uint64_t private_dirty_kb = vma->shared ? 0 : dirty_kb;
+        uint64_t anonymous_kb = (vma->kind == TASK_VMA_ANON || vma->kind == TASK_VMA_STACK) ? size_kb : 0;
+        char vmflags[64];
 
         vfs_maps_permissions(task_vma_page_flags_impl(vma, vma->start), vma->shared, perms);
+        if (vfs_vma_vmflags(vma, vmflags, sizeof(vmflags)) != 0) {
+            vmflags[0] = '\0';
+        }
         if (vfs_maps_path_for_vma(vma, path, sizeof(path)) != 0 || path[0] == '\0') {
             const char *kind = vfs_maps_kind_name(vma);
             size_t kind_len = strlen(kind);
@@ -3241,7 +3352,21 @@ static int vfs_proc_task_smaps_content_for_task(struct task_struct *task, char *
             vfs_proc_append(buf, buf_len, &pos, "Shared_Clean:   %8llu kB\n", (unsigned long long)shared_clean_kb) != 0 ||
             vfs_proc_append(buf, buf_len, &pos, "Shared_Dirty:   %8llu kB\n", (unsigned long long)shared_dirty_kb) != 0 ||
             vfs_proc_append(buf, buf_len, &pos, "Private_Clean:  %8llu kB\n", (unsigned long long)private_clean_kb) != 0 ||
-            vfs_proc_append(buf, buf_len, &pos, "Private_Dirty:  %8llu kB\n", (unsigned long long)private_dirty_kb) != 0) {
+            vfs_proc_append(buf, buf_len, &pos, "Private_Dirty:  %8llu kB\n", (unsigned long long)private_dirty_kb) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "Referenced:     %8llu kB\n", (unsigned long long)size_kb) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "Anonymous:      %8llu kB\n", (unsigned long long)anonymous_kb) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "LazyFree:       %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "AnonHugePages:  %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "ShmemPmdMapped: %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "FilePmdMapped:  %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "Shared_Hugetlb: %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "Private_Hugetlb:%8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "Swap:           %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "SwapPss:        %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "Locked:         %8llu kB\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "THPeligible:    %8llu\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "ProtectionKey:  %8llu\n", 0ULL) != 0 ||
+            vfs_proc_append(buf, buf_len, &pos, "VmFlags: %s\n", vmflags) != 0) {
             return (int)pos;
         }
     }
@@ -3389,6 +3514,7 @@ static int vfs_proc_append_mount_optional_fields(struct vfs_mount_namespace *mnt
 static int vfs_proc_mountinfo_content_for_namespace(struct vfs_mount_namespace *mnt_ns, char *buf, size_t buf_len) {
     size_t pos = 0;
     int mount_id = 2;
+    int mount_ids[MAX_MOUNTS] = {0};
 
     if (!buf || buf_len == 0) {
         return -EINVAL;
@@ -3404,22 +3530,45 @@ static int vfs_proc_mountinfo_content_for_namespace(struct vfs_mount_namespace *
 
     fs_mutex_lock(&mnt_ns->lock);
     for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        if (mnt_ns->entries[i].active) {
+            mount_ids[i] = mount_id++;
+        }
+    }
+
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
         struct vfs_mount_entry *entry = &mnt_ns->entries[i];
+        int parent_id = 1;
+        size_t parent_len = 0;
 
         if (!entry->active) {
             continue;
         }
 
+        for (size_t j = 0; j < MAX_MOUNTS; j++) {
+            const struct vfs_mount_entry *candidate = &mnt_ns->entries[j];
+            size_t candidate_len;
+
+            if (i == j || !candidate->active || mount_ids[j] == 0 ||
+                !vfs_path_matches_prefix(entry->target, candidate->target) ||
+                strcmp(entry->target, candidate->target) == 0) {
+                continue;
+            }
+            candidate_len = strlen(candidate->target);
+            if (candidate_len > parent_len) {
+                parent_len = candidate_len;
+                parent_id = mount_ids[j];
+            }
+        }
+
         const char *mode = (entry->flags & MS_RDONLY) ? "ro" : "rw";
         const char *fstype = entry->fstype[0] ? entry->fstype : "none";
-        if (vfs_proc_append(buf, buf_len, &pos, "%d 1 0:%d / %s %s,relatime",
-                            mount_id, mount_id, entry->target, mode) != 0 ||
+        if (vfs_proc_append(buf, buf_len, &pos, "%d %d 0:%d / %s %s,relatime",
+                            mount_ids[i], parent_id, mount_ids[i], entry->target, mode) != 0 ||
             vfs_proc_append_mount_optional_fields(mnt_ns, entry, buf, buf_len, &pos) != 0 ||
             vfs_proc_append(buf, buf_len, &pos, " - %s %s %s,bind\n",
                             fstype, entry->source, mode) != 0) {
             break;
         }
-        mount_id++;
     }
     fs_mutex_unlock(&mnt_ns->lock);
 

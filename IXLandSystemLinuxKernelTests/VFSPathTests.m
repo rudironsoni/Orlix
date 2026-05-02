@@ -1318,6 +1318,18 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"shared mount peers should recursively receive nested bind propagation, errno %d", errno);
 }
 
+- (void)testSharedMountUnmountPropagatesNestedChildFromPeer {
+    extern int vfs_contract_shared_mount_unmount_propagates_nested_child_from_peer(void);
+    XCTAssertEqual(vfs_contract_shared_mount_unmount_propagates_nested_child_from_peer(), 0,
+                   @"shared mount peers should receive nested unmount propagation, errno %d", errno);
+}
+
+- (void)testMountinfoReportsNestedParentMountId {
+    extern int vfs_contract_mountinfo_reports_nested_parent_mount_id(void);
+    XCTAssertEqual(vfs_contract_mountinfo_reports_nested_parent_mount_id(), 0,
+                   @"/proc/self/mountinfo should report nested parent mount ids, errno %d", errno);
+}
+
 - (void)testProcSelfMountsListsBindMount {
     extern int vfs_contract_proc_self_mounts_lists_bind_mount(void);
     XCTAssertEqual(vfs_contract_proc_self_mounts_lists_bind_mount(), 0,

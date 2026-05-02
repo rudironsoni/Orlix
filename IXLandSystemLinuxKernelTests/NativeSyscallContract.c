@@ -1891,3 +1891,45 @@ out:
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 8192, 0, 0, 0, 0);
     return result;
 }
+
+int native_syscall_contract_proc_self_smaps_dirty_clears_after_madvise(void) {
+    void *mapped = (void *)-1;
+    char smaps[8192];
+    int result = -1;
+
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 8192,
+                                                      PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+
+    if (task_write_virtual_memory_impl(get_current(), (uint64_t)(uintptr_t)mapped, "D", 1) != 1) {
+        goto out;
+    }
+    if (read_file_into_buffer("/proc/self/smaps", smaps, sizeof(smaps)) != 0 ||
+        !strstr(smaps, "Private_Dirty:         4 kB") ||
+        !strstr(smaps, "Referenced:            8 kB") ||
+        !strstr(smaps, "Anonymous:             8 kB") ||
+        !strstr(smaps, "VmFlags:")) {
+        result = errno ? errno : ENODATA;
+        goto out;
+    }
+
+    if (syscall_dispatch_impl(__NR_madvise, (long)(uintptr_t)mapped, 4096, MADV_DONTNEED,
+                              0, 0, 0) != 0) {
+        goto out;
+    }
+    if (read_file_into_buffer("/proc/self/smaps", smaps, sizeof(smaps)) != 0 ||
+        !strstr(smaps, "Private_Dirty:         0 kB")) {
+        result = errno ? errno : ENODATA;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 8192, 0, 0, 0, 0);
+    return result;
+}

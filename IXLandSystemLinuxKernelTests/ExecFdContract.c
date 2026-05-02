@@ -9,6 +9,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
+#include "kernel/task.h"
 
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern int dup_impl(int oldfd);
@@ -531,6 +532,63 @@ int exec_fd_contract_close_on_exec_does_not_mutate_status_flags_on_survivors(voi
 
 out:
     close_if_open(dupfd);
+    close_if_open(fd);
+    return result;
+}
+
+int exec_fd_contract_child_close_on_exec_does_not_close_parent_descriptor(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    struct task_struct *saved = parent;
+    int fd = -1;
+    int child_closed = -1;
+    int result = -1;
+    long nread;
+    char byte = 1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    fd = open_impl("/dev/zero", O_RDONLY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    if (fcntl_impl(fd, F_SETFD, FD_CLOEXEC) != 0) {
+        goto out;
+    }
+
+    child = task_create_child_impl(parent);
+    if (!child) {
+        errno = ENOMEM;
+        goto out;
+    }
+
+    set_current(child);
+    child_closed = close_on_exec_impl();
+    set_current(saved);
+
+    if (child_closed != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    nread = read_impl(fd, &byte, 1);
+    if (nread != 1 || byte != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    if (child) {
+        set_current(saved);
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+    }
+    set_current(saved);
     close_if_open(fd);
     return result;
 }

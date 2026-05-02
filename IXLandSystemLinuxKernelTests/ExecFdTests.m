@@ -17,6 +17,7 @@ extern int exec_fd_contract_close_on_exec_works_for_synthetic_proc_file_fd(void)
 extern int exec_fd_contract_close_on_exec_is_idempotent_when_no_cloexec_fds_remain(void);
 extern int exec_fd_contract_close_on_exec_keeps_fd_allocation_deterministic(void);
 extern int exec_fd_contract_close_on_exec_does_not_mutate_status_flags_on_survivors(void);
+extern int exec_fd_contract_child_close_on_exec_does_not_close_parent_descriptor(void);
 
 @interface ExecFdTests : XCTestCase
 @end
@@ -93,6 +94,10 @@ extern int exec_fd_contract_close_on_exec_does_not_mutate_status_flags_on_surviv
 
 - (void)testCloseOnExecDoesNotMutateStatusFlagsOnSurvivors {
     XCTAssertEqual(exec_fd_contract_close_on_exec_does_not_mutate_status_flags_on_survivors(), 0, @"errno %d", errno);
+}
+
+- (void)testChildCloseOnExecDoesNotCloseParentDescriptor {
+    XCTAssertEqual(exec_fd_contract_child_close_on_exec_does_not_close_parent_descriptor(), 0, @"errno %d", errno);
 }
 
 @end
