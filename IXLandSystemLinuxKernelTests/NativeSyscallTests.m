@@ -137,6 +137,18 @@
     XCTAssertEqual(native_syscall_contract_private_file_cow_smaps_survives_munmap_gap(), 0, @"errno %d", errno);
 }
 
+- (void)testRenameUpdatesOpenFdAndMappingIdentity {
+    XCTAssertEqual(native_syscall_contract_rename_updates_open_fd_and_mapping_identity(), 0, @"errno %d", errno);
+}
+
+- (void)testMremapFixedPreservesPrivateFileCowSmaps {
+    XCTAssertEqual(native_syscall_contract_mremap_fixed_preserves_private_file_cow_smaps(), 0, @"errno %d", errno);
+}
+
+- (void)testMadviseSplitVmaClearsEachPermissionRun {
+    XCTAssertEqual(native_syscall_contract_madvise_split_vma_clears_each_permission_run(), 0, @"errno %d", errno);
+}
+
 - (void)testCloneWithoutVmPreservesSharedFileMappings {
     XCTAssertEqual(native_syscall_contract_clone_without_vm_preserves_shared_file_mappings(), 0, @"errno %d", errno);
 }

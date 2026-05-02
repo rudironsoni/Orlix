@@ -2061,6 +2061,77 @@ out_cleanup:
     return ret;
 }
 
+int vfs_contract_mount_namespace_refs_track_task_lifecycle(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *shared_child = NULL;
+    struct task_struct *private_child = NULL;
+    unsigned int initial_refs;
+    uint64_t parent_ns;
+    int shared_pid;
+    int private_pid;
+    int ret = -1;
+
+    if (!parent || !parent->fs) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    initial_refs = fs_mount_namespace_refs(parent->fs);
+    parent_ns = fs_mount_namespace_id(parent->fs);
+    if (initial_refs == 0 || parent_ns == 0) {
+        errno = ENODATA;
+        return -1;
+    }
+
+    shared_pid = clone_impl(0);
+    if (shared_pid < 0) {
+        return -1;
+    }
+    shared_child = task_lookup(shared_pid);
+    if (!shared_child || !shared_child->fs) {
+        errno = ESRCH;
+        goto out;
+    }
+    if (fs_mount_namespace_id(shared_child->fs) != parent_ns ||
+        fs_mount_namespace_refs(parent->fs) != initial_refs + 1) {
+        errno = ENOMSG;
+        goto out;
+    }
+
+    private_pid = clone_impl(CLONE_NEWNS);
+    if (private_pid < 0) {
+        goto out;
+    }
+    private_child = task_lookup(private_pid);
+    if (!private_child || !private_child->fs) {
+        errno = ESRCH;
+        goto out;
+    }
+    if (fs_mount_namespace_id(private_child->fs) == parent_ns ||
+        fs_mount_namespace_refs(private_child->fs) != 1 ||
+        fs_mount_namespace_refs(parent->fs) != initial_refs + 1) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    vfs_contract_release_lookup_child(parent, shared_child);
+    shared_child = NULL;
+    if (fs_mount_namespace_refs(parent->fs) != initial_refs) {
+        errno = EBUSY;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    if (shared_child) {
+        vfs_contract_release_lookup_child(parent, shared_child);
+    }
+    if (private_child) {
+        vfs_contract_release_lookup_child(parent, private_child);
+    }
+    return ret;
+}
+
 int vfs_contract_private_child_unmount_does_not_propagate_to_shared_peer(void) {
     int ret = -1;
 

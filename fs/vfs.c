@@ -2876,6 +2876,19 @@ uint64_t fs_mount_namespace_id(struct fs_struct *fs) {
     return id;
 }
 
+unsigned int fs_mount_namespace_refs(struct fs_struct *fs) {
+    unsigned int refs;
+
+    if (!fs || !fs->mnt_ns) {
+        return 0;
+    }
+
+    fs_mutex_lock(&fs->lock);
+    refs = fs->mnt_ns ? (unsigned int)atomic_load(&fs->mnt_ns->refs) : 0;
+    fs_mutex_unlock(&fs->lock);
+    return refs;
+}
+
 /* Initialize fs_struct with virtual root path */
 int fs_init_root(struct fs_struct *fs, const char *root_path) {
     if (!fs || !root_path)

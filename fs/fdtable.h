@@ -201,6 +201,8 @@ int get_fd_proc_file_target_pid_impl(void *entry);
 bool fdtable_is_used_impl(int fd);
 bool fdtable_has_open_path_under_impl(const char *root);
 void fdtable_mark_path_deleted_impl(const char *path);
+void fdtable_rename_path_impl(const char *old_path, const char *new_path);
+void fdtable_exchange_paths_impl(const char *left_path, const char *right_path);
 bool fdtable_task_is_used_impl(struct task_struct *task, int fd);
 int fdtable_task_fd_path_impl(struct task_struct *task, int fd, char *path, size_t path_len);
 int fdtable_task_fdinfo_content_impl(struct task_struct *task, int fd, char *buf, size_t buf_len);

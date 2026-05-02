@@ -1125,6 +1125,43 @@ static int mm_replace_vma_with_slices(struct mm_struct *mm, uint32_t index,
     return 0;
 }
 
+static int mm_insert_vma_sorted(struct mm_struct *mm, const struct task_vma *vma) {
+    uint32_t index = 0;
+
+    if (!mm || !vma || vma->start >= vma->end) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (mm->vma_count >= TASK_EXEC_MAX_VMAS) {
+        errno = ENOMEM;
+        return -1;
+    }
+    while (index < mm->vma_count && mm->vmas[index].start < vma->start) {
+        index++;
+    }
+    for (uint32_t i = mm->vma_count; i > index; i--) {
+        mm->vmas[i] = mm->vmas[i - 1];
+    }
+    mm->vmas[index] = *vma;
+    mm->vma_count++;
+    return 0;
+}
+
+static int mm_remove_exact_vma(struct mm_struct *mm, uint64_t start, uint64_t end) {
+    if (!mm) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (uint32_t i = 0; i < mm->vma_count; i++) {
+        if (mm->vmas[i].start == start && mm->vmas[i].end == end) {
+            mm_remove_vma_at(mm, i);
+            return 0;
+        }
+    }
+    errno = ENOENT;
+    return -1;
+}
+
 static int mm_unmap_vma_range(struct mm_struct *mm, uint32_t index,
                               uint64_t start, uint64_t end) {
     struct task_vma source;
@@ -1524,6 +1561,43 @@ void *mremap_impl(void *old_address, size_t old_size, size_t new_size, int flags
         errno = EFAULT;
         return (void *)-1;
     }
+    if ((flags & MREMAP_FIXED) != 0 && (new_start % TASK_VMA_PAGE_SIZE) != 0) {
+        errno = EINVAL;
+        return (void *)-1;
+    }
+    if ((flags & MREMAP_FIXED) != 0 && old_len == new_len) {
+        struct task_vma moved_vma;
+
+        if (new_len > UINT64_MAX - new_start ||
+            (new_start < old_start + old_len && new_start + new_len > old_start)) {
+            errno = EINVAL;
+            return (void *)-1;
+        }
+        if (mm_copy_vma_slice((struct task_vma *)found, old_start, old_start + old_len, &moved_vma) != 0) {
+            return (void *)-1;
+        }
+        moved_vma.start = new_start;
+        moved_vma.end = new_start + new_len;
+        if (munmap_impl(new_address, (size_t)new_len) != 0) {
+            int saved_errno = errno;
+            mm_free_vma_contents(&moved_vma);
+            errno = saved_errno;
+            return (void *)-1;
+        }
+        if (mm_insert_vma_sorted(task->mm, &moved_vma) != 0) {
+            int saved_errno = errno;
+            mm_free_vma_contents(&moved_vma);
+            errno = saved_errno;
+            return (void *)-1;
+        }
+        if (munmap_impl(old_address, (size_t)old_len) != 0) {
+            int saved_errno = errno;
+            mm_remove_exact_vma(task->mm, new_start, new_start + new_len);
+            errno = saved_errno;
+            return (void *)-1;
+        }
+        return new_address;
+    }
     if (new_len <= old_len) {
         if (new_len < old_len &&
             munmap_impl((void *)(uintptr_t)(old_start + new_len), (size_t)(old_len - new_len)) != 0) {
@@ -1655,10 +1729,6 @@ void *mremap_impl(void *old_address, size_t old_size, size_t new_size, int flags
     }
     if ((flags & MREMAP_MAYMOVE) == 0) {
         errno = ENOMEM;
-        return (void *)-1;
-    }
-    if ((flags & MREMAP_FIXED) != 0 && (new_start % TASK_VMA_PAGE_SIZE) != 0) {
-        errno = EINVAL;
         return (void *)-1;
     }
     vma_flags = found->flags;

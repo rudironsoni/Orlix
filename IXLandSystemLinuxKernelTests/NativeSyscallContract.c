@@ -95,6 +95,7 @@ extern int unlink_impl(const char *pathname);
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
+extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
 extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
                      unsigned int flags);
@@ -181,6 +182,40 @@ static int format_maps_range(char *buf, size_t buf_len, uint64_t start, uint64_t
     buf[pos++] = '-';
     for (int shift = 44; shift >= 0; shift -= 4) {
         buf[pos++] = hex[(end >> shift) & 0xfU];
+    }
+    buf[pos] = '\0';
+    return 0;
+}
+
+static int format_proc_fd_path(char *buf, size_t buf_len, int fd) {
+    const char prefix[] = "/proc/self/fd/";
+    char digits[16];
+    size_t pos = 0;
+    int value = fd;
+    int digit_count = 0;
+
+    if (!buf || buf_len == 0 || fd < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    while (prefix[pos] != '\0') {
+        if (pos + 1 >= buf_len) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        buf[pos] = prefix[pos];
+        pos++;
+    }
+    do {
+        digits[digit_count++] = (char)('0' + (value % 10));
+        value /= 10;
+    } while (value > 0 && digit_count < (int)sizeof(digits));
+    if (value > 0 || pos + (size_t)digit_count + 1 > buf_len) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    while (digit_count > 0) {
+        buf[pos++] = digits[--digit_count];
     }
     buf[pos] = '\0';
     return 0;
@@ -2065,7 +2100,7 @@ int native_syscall_contract_smaps_splits_mprotect_runs_and_preserves_dirty_count
     struct task_struct *task = get_current();
     void *mapped = (void *)-1;
     uint64_t base;
-    char smaps[16384];
+    char smaps[32768];
     char left[32];
     char middle[32];
     char right[32];
@@ -2212,6 +2247,269 @@ out:
         int saved_errno = errno;
         close_if_open(fd);
         unlink_impl(path);
+        errno = saved_errno;
+    }
+    return result;
+}
+
+int native_syscall_contract_rename_updates_open_fd_and_mapping_identity(void) {
+    struct task_struct *task = get_current();
+    const char old_path[] = "/tmp/native-rename-open-map-old";
+    const char new_path[] = "/tmp/native-rename-open-map-new";
+    char proc_fd_path[64];
+    char link_target[512];
+    char page[4096];
+    char smaps[16384];
+    char range[32];
+    void *mapped = (void *)-1;
+    uint64_t base;
+    int fd = -1;
+    long ret;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(page, 'N', sizeof(page));
+    unlink_impl(old_path);
+    unlink_impl(new_path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)old_path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    if (syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)page, sizeof(page), 0, 0, 0) !=
+        (long)sizeof(page)) {
+        errno = EIO;
+        goto out;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(page),
+                                                      PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    base = (uint64_t)(uintptr_t)mapped;
+    if (task_write_virtual_memory_impl(task, base, "R", 1) != 1) {
+        goto out_mapped;
+    }
+    if (renameat2(AT_FDCWD, old_path, AT_FDCWD, new_path, 0) != 0 ||
+        format_proc_fd_path(proc_fd_path, sizeof(proc_fd_path), fd) != 0) {
+        goto out_mapped;
+    }
+    ret = readlink_impl(proc_fd_path, link_target, sizeof(link_target) - 1);
+    if (ret < 0) {
+        goto out_mapped;
+    }
+    link_target[ret] = '\0';
+    if (!strstr(link_target, new_path) || strstr(link_target, old_path)) {
+        errno = ENODATA;
+        goto out_mapped;
+    }
+    if (format_maps_range(range, sizeof(range), base, base + 4096) != 0 ||
+        read_file_into_buffer("/proc/self/smaps", smaps, sizeof(smaps)) != 0) {
+        goto out_mapped;
+    }
+    if (!smaps_block_contains(smaps, range, new_path) ||
+        smaps_block_contains(smaps, range, old_path) ||
+        !smaps_block_contains(smaps, range, "Private_Dirty:         4 kB")) {
+        errno = ENOMSG;
+        goto out_mapped;
+    }
+    result = 0;
+
+out_mapped:
+    {
+        int saved_errno = errno;
+        if ((long)(uintptr_t)mapped >= 0) {
+            syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(page), 0, 0, 0, 0);
+        }
+        errno = saved_errno;
+    }
+out:
+    {
+        int saved_errno = errno;
+        close_if_open(fd);
+        unlink_impl(old_path);
+        unlink_impl(new_path);
+        errno = saved_errno;
+    }
+    return result;
+}
+
+int native_syscall_contract_mremap_fixed_preserves_private_file_cow_smaps(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-mremap-fixed-cow";
+    char page[4096];
+    char smaps[16384];
+    char range[32];
+    void *mapped = (void *)-1;
+    void *target = (void *)-1;
+    void *moved;
+    uint64_t old_base;
+    uint64_t new_base;
+    char byte = 0;
+    int fd = -1;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(page, 'M', sizeof(page));
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    if (syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)page, sizeof(page), 0, 0, 0) !=
+        (long)sizeof(page)) {
+        errno = EIO;
+        goto out;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(page),
+                                                      PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    old_base = (uint64_t)(uintptr_t)mapped;
+    if (task_write_virtual_memory_impl(task, old_base, "D", 1) != 1) {
+        goto out_mapped;
+    }
+    target = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(page),
+                                                      PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)target < 0) {
+        errno = -(int)(long)(uintptr_t)target;
+        goto out_mapped;
+    }
+    moved = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mremap, (long)(uintptr_t)mapped,
+                                                     sizeof(page), sizeof(page),
+                                                     MREMAP_MAYMOVE | MREMAP_FIXED,
+                                                     (long)(uintptr_t)target, 0);
+    if (moved != target) {
+        errno = (long)(uintptr_t)moved < 0 ? ENETDOWN : EPROTO;
+        goto out_mapped;
+    }
+    mapped = (void *)-1;
+    new_base = (uint64_t)(uintptr_t)moved;
+    if (task_read_virtual_memory_impl(task, old_base, &byte, 1) >= 0 || errno != EFAULT) {
+        errno = EBUSY;
+        goto out_target;
+    }
+    if (task_read_virtual_memory_impl(task, new_base, &byte, 1) != 1 || byte != 'D') {
+        errno = ENODATA;
+        goto out_target;
+    }
+    if (format_maps_range(range, sizeof(range), new_base, new_base + 4096) != 0) {
+        errno = EDOM;
+        goto out_target;
+    }
+    {
+        int smaps_fd = open_impl("/proc/self/smaps", O_RDONLY, 0);
+        long smaps_read;
+        if (smaps_fd < 0) {
+            goto out_target;
+        }
+        smaps_read = pread_impl(smaps_fd, smaps, sizeof(smaps) - 1, 0);
+        close_if_open(smaps_fd);
+        if (smaps_read <= 0) {
+            errno = ENOMSG;
+            goto out_target;
+        }
+        smaps[smaps_read] = '\0';
+    }
+    if (!smaps_block_contains(smaps, range, path) ||
+        !smaps_block_contains(smaps, range, "Private_Dirty:         4 kB") ||
+        !smaps_block_contains(smaps, range, "Anonymous:             4 kB")) {
+        errno = ENOMSG;
+        goto out_target;
+    }
+    result = 0;
+
+out_target:
+    {
+        int saved_errno = errno;
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)target, sizeof(page), 0, 0, 0, 0);
+        errno = saved_errno;
+    }
+out_mapped:
+    {
+        int saved_errno = errno;
+        if ((long)(uintptr_t)mapped >= 0) {
+            syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(page), 0, 0, 0, 0);
+        }
+        errno = saved_errno;
+    }
+out:
+    {
+        int saved_errno = errno;
+        close_if_open(fd);
+        unlink_impl(path);
+        errno = saved_errno;
+    }
+    return result;
+}
+
+int native_syscall_contract_madvise_split_vma_clears_each_permission_run(void) {
+    struct task_struct *task = get_current();
+    void *mapped = (void *)-1;
+    uint64_t base;
+    char smaps[16384];
+    char left[32];
+    char middle[32];
+    char right[32];
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 12288,
+                                                      PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+    base = (uint64_t)(uintptr_t)mapped;
+    if (task_write_virtual_memory_impl(task, base, "A", 1) != 1 ||
+        task_write_virtual_memory_impl(task, base + 4096, "B", 1) != 1 ||
+        task_write_virtual_memory_impl(task, base + 8192, "C", 1) != 1) {
+        goto out;
+    }
+    if (syscall_dispatch_impl(__NR_mprotect, (long)(uintptr_t)(base + 4096),
+                              4096, PROT_READ, 0, 0, 0) != 0 ||
+        syscall_dispatch_impl(__NR_madvise, (long)(uintptr_t)base, 12288,
+                              MADV_DONTNEED, 0, 0, 0) != 0) {
+        goto out;
+    }
+    if (format_maps_range(left, sizeof(left), base, base + 4096) != 0 ||
+        format_maps_range(middle, sizeof(middle), base + 4096, base + 8192) != 0 ||
+        format_maps_range(right, sizeof(right), base + 8192, base + 12288) != 0 ||
+        read_file_into_buffer("/proc/self/smaps", smaps, sizeof(smaps)) != 0) {
+        goto out;
+    }
+    if (!smaps_block_contains(smaps, left, "Private_Dirty:         0 kB") ||
+        !smaps_block_contains(smaps, left, "Rss:                   0 kB") ||
+        !smaps_block_contains(smaps, middle, "Private_Dirty:         0 kB") ||
+        !smaps_block_contains(smaps, middle, "Rss:                   0 kB") ||
+        !smaps_block_contains(smaps, right, "Private_Dirty:         0 kB") ||
+        !smaps_block_contains(smaps, right, "Rss:                   0 kB")) {
+        errno = ENODATA;
+        goto out;
+    }
+    result = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 12288, 0, 0, 0, 0);
         errno = saved_errno;
     }
     return result;

@@ -438,6 +438,40 @@ static void fdtable_mark_desc_deleted_if_path_matches(fd_description_t *desc, co
     fs_mutex_unlock(&desc->lock);
 }
 
+static void fdtable_rename_desc_path_if_matches(fd_description_t *desc,
+                                                const char *old_path,
+                                                const char *new_path) {
+    if (!desc || !old_path || !new_path || desc->path[0] == '\0') {
+        return;
+    }
+    fs_mutex_lock(&desc->lock);
+    if (strcmp(desc->path, old_path) == 0) {
+        strncpy(desc->path, new_path, sizeof(desc->path) - 1);
+        desc->path[sizeof(desc->path) - 1] = '\0';
+        desc->path_deleted = false;
+    }
+    fs_mutex_unlock(&desc->lock);
+}
+
+static void fdtable_exchange_desc_path_if_matches(fd_description_t *desc,
+                                                  const char *left_path,
+                                                  const char *right_path) {
+    if (!desc || !left_path || !right_path || desc->path[0] == '\0') {
+        return;
+    }
+    fs_mutex_lock(&desc->lock);
+    if (strcmp(desc->path, left_path) == 0) {
+        strncpy(desc->path, right_path, sizeof(desc->path) - 1);
+        desc->path[sizeof(desc->path) - 1] = '\0';
+        desc->path_deleted = false;
+    } else if (strcmp(desc->path, right_path) == 0) {
+        strncpy(desc->path, left_path, sizeof(desc->path) - 1);
+        desc->path[sizeof(desc->path) - 1] = '\0';
+        desc->path_deleted = false;
+    }
+    fs_mutex_unlock(&desc->lock);
+}
+
 static void fdtable_sync_task_file_locked(int fd, fd_entry_t *entry) {
     struct task_struct *task = get_current();
     struct file *file;
@@ -1670,6 +1704,85 @@ void fdtable_mark_path_deleted_impl(const char *path) {
                     struct file *file = task->files->fd[fd];
                     if (file) {
                         fdtable_mark_desc_deleted_if_path_matches((fd_description_t *)file->private_data, path);
+                    }
+                }
+                fs_mutex_unlock(&task->files->lock);
+            }
+            task = task->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+}
+
+void fdtable_rename_path_impl(const char *old_path, const char *new_path) {
+    if (!old_path || !new_path) {
+        return;
+    }
+    file_init_impl();
+    fs_mutex_lock(&fd_table_lock);
+    for (int fd = 0; fd < NR_OPEN_DEFAULT; fd++) {
+        if (fd_table[fd].used) {
+            fdtable_rename_desc_path_if_matches(fd_table[fd].desc, old_path, new_path);
+        }
+    }
+    fs_mutex_unlock(&fd_table_lock);
+
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
+        while (task) {
+            if (task->files) {
+                fs_mutex_lock(&task->files->lock);
+                for (size_t fd = 0; fd < task->files->max_fds; fd++) {
+                    struct file *file = task->files->fd[fd];
+                    if (file) {
+                        fdtable_rename_desc_path_if_matches((fd_description_t *)file->private_data,
+                                                            old_path, new_path);
+                        if (strcmp(file->path, old_path) == 0) {
+                            strncpy(file->path, new_path, sizeof(file->path) - 1);
+                            file->path[sizeof(file->path) - 1] = '\0';
+                        }
+                    }
+                }
+                fs_mutex_unlock(&task->files->lock);
+            }
+            task = task->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+}
+
+void fdtable_exchange_paths_impl(const char *left_path, const char *right_path) {
+    if (!left_path || !right_path) {
+        return;
+    }
+    file_init_impl();
+    fs_mutex_lock(&fd_table_lock);
+    for (int fd = 0; fd < NR_OPEN_DEFAULT; fd++) {
+        if (fd_table[fd].used) {
+            fdtable_exchange_desc_path_if_matches(fd_table[fd].desc, left_path, right_path);
+        }
+    }
+    fs_mutex_unlock(&fd_table_lock);
+
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
+        while (task) {
+            if (task->files) {
+                fs_mutex_lock(&task->files->lock);
+                for (size_t fd = 0; fd < task->files->max_fds; fd++) {
+                    struct file *file = task->files->fd[fd];
+                    if (file) {
+                        fdtable_exchange_desc_path_if_matches((fd_description_t *)file->private_data,
+                                                              left_path, right_path);
+                        if (strcmp(file->path, left_path) == 0) {
+                            strncpy(file->path, right_path, sizeof(file->path) - 1);
+                            file->path[sizeof(file->path) - 1] = '\0';
+                        } else if (strcmp(file->path, right_path) == 0) {
+                            strncpy(file->path, left_path, sizeof(file->path) - 1);
+                            file->path[sizeof(file->path) - 1] = '\0';
+                        }
                     }
                 }
                 fs_mutex_unlock(&task->files->lock);

@@ -1366,6 +1366,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"CLONE_NEWNS propagation should stay within the child mount namespace, errno %d", errno);
 }
 
+- (void)testMountNamespaceRefsTrackTaskLifecycle {
+    extern int vfs_contract_mount_namespace_refs_track_task_lifecycle(void);
+    XCTAssertEqual(vfs_contract_mount_namespace_refs_track_task_lifecycle(), 0,
+                   @"mount namespace refs should track cloned task lifetime, errno %d", errno);
+}
+
 - (void)testUnmountBusyWhenOpenFdPinsMountTree {
     extern int vfs_contract_umount_busy_when_open_fd_pins_mount_tree(void);
     XCTAssertEqual(vfs_contract_umount_busy_when_open_fd_pins_mount_tree(), 0,

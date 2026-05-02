@@ -233,6 +233,7 @@ int fs_set_pwd(struct fs_struct *fs, const char *new_pwd);
 int fs_set_root(struct fs_struct *fs, const char *new_root);
 int fs_unshare_mount_namespace(struct fs_struct *fs);
 uint64_t fs_mount_namespace_id(struct fs_struct *fs);
+unsigned int fs_mount_namespace_refs(struct fs_struct *fs);
 
 /* VFS initialization */
 int vfs_init(void);

@@ -314,6 +314,8 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
     if ((flags & AT_RENAME_EXCHANGE) != 0) {
         ret = rename_apply_host_exchange(resolved_old, resolved_new, translated_old, translated_new);
         if (ret == 0) {
+            fdtable_exchange_paths_impl(resolved_old, resolved_new);
+            task_exchange_vma_backing_paths_impl(resolved_old, resolved_new);
             vfs_exchange_path_metadata(resolved_old, resolved_new);
         }
         return ret;
@@ -321,6 +323,8 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
 
     ret = rename_apply_host_operation(resolved_old, resolved_new, translated_old, translated_new, host_flags);
     if (ret == 0) {
+        fdtable_rename_path_impl(resolved_old, resolved_new);
+        task_rename_vma_backing_path_impl(resolved_old, resolved_new);
         vfs_rename_path_metadata(resolved_old, resolved_new);
     }
     return ret;

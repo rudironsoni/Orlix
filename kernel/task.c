@@ -278,6 +278,61 @@ int task_set_vma_page_flags_impl(struct task_struct *task, uint64_t addr, uint64
     return 0;
 }
 
+void task_rename_vma_backing_path_impl(const char *old_path, const char *new_path) {
+    if (!old_path || !new_path) {
+        return;
+    }
+
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
+        while (task) {
+            if (task->mm) {
+                for (uint32_t v = 0; v < task->mm->vma_count; v++) {
+                    struct task_vma *vma = &task->mm->vmas[v];
+                    if (vma->backing_path[0] != '\0' &&
+                        strcmp(vma->backing_path, old_path) == 0) {
+                        strncpy(vma->backing_path, new_path, sizeof(vma->backing_path) - 1);
+                        vma->backing_path[sizeof(vma->backing_path) - 1] = '\0';
+                    }
+                }
+            }
+            task = task->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+}
+
+void task_exchange_vma_backing_paths_impl(const char *left_path, const char *right_path) {
+    if (!left_path || !right_path) {
+        return;
+    }
+
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
+        while (task) {
+            if (task->mm) {
+                for (uint32_t v = 0; v < task->mm->vma_count; v++) {
+                    struct task_vma *vma = &task->mm->vmas[v];
+                    if (vma->backing_path[0] == '\0') {
+                        continue;
+                    }
+                    if (strcmp(vma->backing_path, left_path) == 0) {
+                        strncpy(vma->backing_path, right_path, sizeof(vma->backing_path) - 1);
+                        vma->backing_path[sizeof(vma->backing_path) - 1] = '\0';
+                    } else if (strcmp(vma->backing_path, right_path) == 0) {
+                        strncpy(vma->backing_path, left_path, sizeof(vma->backing_path) - 1);
+                        vma->backing_path[sizeof(vma->backing_path) - 1] = '\0';
+                    }
+                }
+            }
+            task = task->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+}
+
 void task_note_memory_fault_impl(struct task_struct *task, uint64_t addr, int32_t code) {
     task_note_memory_signal_fault_impl(task, SIGSEGV, code, addr);
 }
@@ -1045,7 +1100,7 @@ void free_task(struct task_struct *task) {
     if (task->files)
         free_files(task->files);
     if (task->fs)
-        free(task->fs);
+        free_fs_struct(task->fs);
     if (task->signal)
         free_signal_struct(task->signal);
     if (task->cred)
