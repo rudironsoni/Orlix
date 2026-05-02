@@ -88,6 +88,10 @@
     XCTAssertEqual(procfs_namespace_contract_proc_pid_stat_reports_tty_start_rss_and_exit_signal(), 0, @"errno %d", errno);
 }
 
+- (void)testProcPidViewsRemainConsistentAcrossLifecycle {
+    XCTAssertEqual(procfs_namespace_contract_proc_pid_views_remain_consistent_across_lifecycle(), 0, @"errno %d", errno);
+}
+
 - (void)testProcPidMountinfoUsesTargetMountNamespace {
     XCTAssertEqual(procfs_namespace_contract_proc_pid_mountinfo_uses_target_mount_namespace(), 0, @"errno %d", errno);
 }

@@ -262,6 +262,9 @@ static void vfs_put_mount_namespace(struct vfs_mount_namespace *mnt_ns) {
         return;
     }
 
+    fs_mutex_lock(&mnt_ns->lock);
+    memset(mnt_ns->entries, 0, sizeof(mnt_ns->entries));
+    fs_mutex_unlock(&mnt_ns->lock);
     fs_mutex_destroy(&mnt_ns->lock);
     free(mnt_ns);
 }
@@ -3026,6 +3029,29 @@ unsigned int fs_mount_namespace_refs(struct fs_struct *fs) {
     return refs;
 }
 
+unsigned int fs_mount_namespace_active_mounts(struct fs_struct *fs) {
+    struct vfs_mount_namespace *mnt_ns;
+    unsigned int count = 0;
+
+    if (!fs || !fs->mnt_ns) {
+        return 0;
+    }
+
+    fs_mutex_lock(&fs->lock);
+    mnt_ns = fs->mnt_ns;
+    if (mnt_ns) {
+        fs_mutex_lock(&mnt_ns->lock);
+        for (size_t i = 0; i < MAX_MOUNTS; i++) {
+            if (mnt_ns->entries[i].active) {
+                count++;
+            }
+        }
+        fs_mutex_unlock(&mnt_ns->lock);
+    }
+    fs_mutex_unlock(&fs->lock);
+    return count;
+}
+
 /* Initialize fs_struct with virtual root path */
 int fs_init_root(struct fs_struct *fs, const char *root_path) {
     if (!fs || !root_path)
@@ -3158,7 +3184,11 @@ void vfs_deinit(void) {
     /* Reset VFS initialization state for cold boot/reboot */
     vfs_backing_initialized = 0;
     vfs_etc_bootstrapped = 0;
+    atomic_store(&vfs_next_mount_id, 2);
     atomic_store(&vfs_next_mount_peer_group_id, 1);
+    fs_mutex_lock(&vfs_detached_mount_lock);
+    memset(vfs_detached_mount_refs, 0, sizeof(vfs_detached_mount_refs));
+    fs_mutex_unlock(&vfs_detached_mount_lock);
     fs_mutex_lock(&vfs_metadata_lock);
     memset(vfs_metadata_table, 0, sizeof(vfs_metadata_table));
     fs_mutex_unlock(&vfs_metadata_lock);
@@ -4711,6 +4741,7 @@ struct vfs_vm_accounting {
     uint64_t resident_shared_pages;
     uint64_t text_pages;
     uint64_t data_pages;
+    uint64_t stack_pages;
     uint64_t dirty_pages;
 };
 
@@ -4730,6 +4761,9 @@ static void vfs_vm_account_task(const struct task_struct *task, struct vfs_vm_ac
         }
         if (vma->kind == TASK_VMA_EXEC || vma->kind == TASK_VMA_INTERP) {
             acct->text_pages += pages;
+        } else if (vma->kind == TASK_VMA_STACK) {
+            acct->stack_pages += pages;
+            acct->data_pages += pages;
         } else {
             acct->data_pages += pages;
         }
@@ -5664,6 +5698,8 @@ int vfs_proc_task_status_content(int32_t pid, char *buf, size_t buf_len) {
         "RssAnon:\t%llu kB\n"
         "RssFile:\t%llu kB\n"
         "VmData:\t%llu kB\n"
+        "VmStk:\t%llu kB\n"
+        "VmExe:\t%llu kB\n"
         "VmDirty:\t%llu kB\n",
         task->ns_pid,
         task->ns_pid,
@@ -5680,6 +5716,8 @@ int vfs_proc_task_status_content(int32_t pid, char *buf, size_t buf_len) {
         (unsigned long long)((acct.resident_pages - acct.resident_shared_pages) * 4ULL),
         (unsigned long long)(acct.resident_shared_pages * 4ULL),
         (unsigned long long)(acct.data_pages * 4ULL),
+        (unsigned long long)(acct.stack_pages * 4ULL),
+        (unsigned long long)(acct.text_pages * 4ULL),
         (unsigned long long)(acct.dirty_pages * 4ULL)) != 0) {
         vfs_put_proc_task(task);
         return (int)pos;

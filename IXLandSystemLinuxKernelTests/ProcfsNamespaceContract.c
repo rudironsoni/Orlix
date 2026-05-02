@@ -255,6 +255,60 @@ static int proc_stat_numeric_field(const char *stat, int field, long long *value
     return parse_signed_decimal_token(cursor, value_out);
 }
 
+static int proc_status_kb_field(const char *status, const char *name, long long *value_out) {
+    const char *line;
+    const char *cursor;
+    size_t name_len;
+
+    if (!status || !name || !value_out) {
+        errno = EINVAL;
+        return -1;
+    }
+    name_len = strlen(name);
+    line = status;
+    while (*line) {
+        const char *next = strchr(line, '\n');
+        const char *end = next ? next : line + strlen(line);
+
+        if ((size_t)(end - line) > name_len + 1 &&
+            memcmp(line, name, name_len) == 0 &&
+            line[name_len] == ':' && line[name_len + 1] == '\t') {
+            cursor = line + name_len + 2;
+            return parse_signed_decimal_token(cursor, value_out);
+        }
+        if (!next) {
+            break;
+        }
+        line = next + 1;
+    }
+    errno = ENODATA;
+    return -1;
+}
+
+static int decimal_token_field(const char *content, int field, long long *value_out) {
+    const char *cursor = content;
+    int current = 1;
+
+    if (!content || !value_out || field < 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    while (current < field) {
+        while (*cursor && *cursor != ' ' && *cursor != '\n' && *cursor != '\t') {
+            cursor++;
+        }
+        while (*cursor == ' ' || *cursor == '\t') {
+            cursor++;
+        }
+        if (*cursor == '\0' || *cursor == '\n') {
+            errno = ENODATA;
+            return -1;
+        }
+        current++;
+    }
+    return parse_signed_decimal_token(cursor, value_out);
+}
+
 static bool procfs_dirents_contain_name(char *buf, long nread, const char *name) {
     long offset = 0;
 
@@ -1307,6 +1361,135 @@ out:
         set_current(child);
         if (mapping != (void *)-1) {
             munmap_impl(mapping, TASK_VMA_PAGE_SIZE * 2);
+        }
+        set_current(saved);
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+    }
+    reset_procfs_namespace_state();
+    return ret;
+}
+
+int procfs_namespace_contract_proc_pid_views_remain_consistent_across_lifecycle(void) {
+    struct task_struct *parent;
+    struct task_struct *child = NULL;
+    struct task_struct *saved;
+    void *mapping = (void *)-1;
+    char path[96] = {0};
+    char stat_content[2048];
+    char status_content[2048];
+    char statm_content[128];
+    long long stat_rss = 0;
+    long long statm_resident = 0;
+    long long status_rss_kb = 0;
+    int ret = -1;
+
+    reset_procfs_namespace_state();
+    parent = get_current();
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+
+    saved = get_current();
+    set_current(child);
+    memset(child->comm, 0, sizeof(child->comm));
+    memcpy(child->comm, "proc-life", 10);
+    mapping = mmap_impl(NULL, TASK_VMA_PAGE_SIZE * 3, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    set_current(saved);
+    if (mapping == (void *)-1) {
+        goto out;
+    }
+
+    proc_pid_file_path(path, sizeof(path), child->pid, "/stat");
+    if (read_file_content(path, stat_content, sizeof(stat_content)) != 0 ||
+        !contains(stat_content, "(proc-life)") ||
+        !contains(stat_content, " R ") ||
+        proc_stat_numeric_field(stat_content, 24, &stat_rss) != 0) {
+        errno = ENODATA;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), child->pid, "/status");
+    if (read_file_content(path, status_content, sizeof(status_content)) != 0 ||
+        !contains(status_content, "Name:\tproc-life\n") ||
+        !contains(status_content, "State:\tR (running)\n") ||
+        !contains(status_content, "VmStk:\t") ||
+        !contains(status_content, "VmExe:\t") ||
+        proc_status_kb_field(status_content, "VmRSS", &status_rss_kb) != 0) {
+        errno = ENOMSG;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), child->pid, "/statm");
+    if (read_file_content(path, statm_content, sizeof(statm_content)) != 0 ||
+        decimal_token_field(statm_content, 2, &statm_resident) != 0) {
+        goto out;
+    }
+    if (stat_rss != statm_resident || status_rss_kb != statm_resident * 4) {
+        errno = ERANGE;
+        goto out;
+    }
+
+    task_mark_stopped_by_signal(child, SIGSTOP);
+    proc_pid_file_path(path, sizeof(path), child->pid, "/stat");
+    if (read_file_content(path, stat_content, sizeof(stat_content)) != 0 ||
+        !contains(stat_content, " T ")) {
+        errno = ENOTRECOVERABLE;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), child->pid, "/status");
+    if (read_file_content(path, status_content, sizeof(status_content)) != 0 ||
+        !contains(status_content, "State:\tT (stopped)\n")) {
+        errno = ENOTSUP;
+        goto out;
+    }
+
+    saved = get_current();
+    set_current(child);
+    if (task_exec_transition_impl("/proc/self/status", "/bin/proc-exec") != 0) {
+        set_current(saved);
+        goto out;
+    }
+    set_current(saved);
+    proc_pid_file_path(path, sizeof(path), child->pid, "/stat");
+    if (read_file_content(path, stat_content, sizeof(stat_content)) != 0 ||
+        !contains(stat_content, "(proc-exec)")) {
+        errno = ENOEXEC;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), child->pid, "/status");
+    if (read_file_content(path, status_content, sizeof(status_content)) != 0 ||
+        !contains(status_content, "Name:\tproc-exec\n")) {
+        errno = ENOENT;
+        goto out;
+    }
+
+    task_mark_exited(child, 0);
+    proc_pid_file_path(path, sizeof(path), child->pid, "/stat");
+    if (read_file_content(path, stat_content, sizeof(stat_content)) != 0 ||
+        !contains(stat_content, " Z ")) {
+        errno = ECHILD;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), child->pid, "/status");
+    if (read_file_content(path, status_content, sizeof(status_content)) != 0 ||
+        !contains(status_content, "State:\tZ (zombie)\n")) {
+        errno = ESRCH;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    if (child) {
+        saved = get_current();
+        set_current(child);
+        if (mapping != (void *)-1) {
+            munmap_impl(mapping, TASK_VMA_PAGE_SIZE * 3);
         }
         set_current(saved);
         task_unlink_child_impl(parent, child);

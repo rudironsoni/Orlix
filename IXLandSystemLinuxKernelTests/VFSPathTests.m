@@ -1480,6 +1480,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"virtual mount ids should survive move, sibling unmount, and namespace clone, errno %d", errno);
 }
 
+- (void)testMountNamespaceTeardownAccountsMountsAndDetachedRefs {
+    extern int vfs_contract_mount_namespace_teardown_accounts_mounts_and_detached_refs(void);
+    XCTAssertEqual(vfs_contract_mount_namespace_teardown_accounts_mounts_and_detached_refs(), 0,
+                   @"mount namespace teardown should account active mounts and detached refs, errno %d", errno);
+}
+
 - (void)testProcSelfMountsListsBindMount {
     extern int vfs_contract_proc_self_mounts_lists_bind_mount(void);
     XCTAssertEqual(vfs_contract_proc_self_mounts_lists_bind_mount(), 0,
