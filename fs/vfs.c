@@ -62,6 +62,7 @@ struct vfs_mount_entry {
     unsigned long propagation;
     uint64_t peer_group_id;
     uint64_t master_group_id;
+    bool expiry_candidate;
 };
 
 struct vfs_mount_namespace {
@@ -103,6 +104,16 @@ static fs_mutex_t vfs_metadata_lock = FS_MUTEX_INITIALIZER;
 static linux_atomic_int vfs_next_mount_ns_id = 1;
 static linux_atomic_int vfs_next_file_identity = 1;
 static linux_atomic_int vfs_next_mount_peer_group_id = 1;
+
+#define VFS_DETACHED_MOUNT_MAX 64
+
+struct vfs_detached_mount_ref {
+    bool active;
+    char target[MAX_PATH];
+};
+
+static struct vfs_detached_mount_ref vfs_detached_mount_refs[VFS_DETACHED_MOUNT_MAX];
+static fs_mutex_t vfs_detached_mount_lock = FS_MUTEX_INITIALIZER;
 
 static struct vfs_mount_namespace *vfs_alloc_mount_namespace(void) {
     struct vfs_mount_namespace *mnt_ns = calloc(1, sizeof(struct vfs_mount_namespace));
@@ -206,6 +217,7 @@ static int vfs_mount_copy_entry(struct vfs_mount_entry *entry, const char *sourc
     entry->propagation = propagation;
     entry->peer_group_id = 0;
     entry->master_group_id = 0;
+    entry->expiry_candidate = false;
     return 0;
 }
 
@@ -484,6 +496,77 @@ static bool vfs_any_task_fs_pins_mount_tree(const char *target) {
     }
     kernel_mutex_unlock(&task_table_lock);
     return pins;
+}
+
+static int vfs_detached_mount_record(const char *target) {
+    int free_slot = -1;
+
+    if (!target) {
+        return -EINVAL;
+    }
+    fs_mutex_lock(&vfs_detached_mount_lock);
+    for (size_t i = 0; i < VFS_DETACHED_MOUNT_MAX; i++) {
+        if (vfs_detached_mount_refs[i].active &&
+            strcmp(vfs_detached_mount_refs[i].target, target) == 0) {
+            fs_mutex_unlock(&vfs_detached_mount_lock);
+            return 0;
+        }
+        if (!vfs_detached_mount_refs[i].active && free_slot < 0) {
+            free_slot = (int)i;
+        }
+    }
+    if (free_slot < 0) {
+        fs_mutex_unlock(&vfs_detached_mount_lock);
+        return -ENOSPC;
+    }
+    vfs_detached_mount_refs[free_slot].active = true;
+    vfs_copy_string(target, vfs_detached_mount_refs[free_slot].target,
+                    sizeof(vfs_detached_mount_refs[free_slot].target));
+    fs_mutex_unlock(&vfs_detached_mount_lock);
+    return 0;
+}
+
+unsigned int vfs_detached_mount_ref_count(void) {
+    unsigned int count = 0;
+
+    fs_mutex_lock(&vfs_detached_mount_lock);
+    for (size_t i = 0; i < VFS_DETACHED_MOUNT_MAX; i++) {
+        if (vfs_detached_mount_refs[i].active) {
+            count++;
+        }
+    }
+    fs_mutex_unlock(&vfs_detached_mount_lock);
+    return count;
+}
+
+int vfs_reap_detached_mount_refs(void) {
+    int reaped = 0;
+
+    for (size_t i = 0; i < VFS_DETACHED_MOUNT_MAX; i++) {
+        char target[MAX_PATH];
+        bool active;
+
+        fs_mutex_lock(&vfs_detached_mount_lock);
+        active = vfs_detached_mount_refs[i].active;
+        if (!vfs_detached_mount_refs[i].active) {
+            fs_mutex_unlock(&vfs_detached_mount_lock);
+            continue;
+        }
+        vfs_copy_string(vfs_detached_mount_refs[i].target, target, sizeof(target));
+        fs_mutex_unlock(&vfs_detached_mount_lock);
+
+        if (!fdtable_has_open_path_under_impl(target) &&
+            !vfs_any_task_fs_pins_mount_tree(target)) {
+            fs_mutex_lock(&vfs_detached_mount_lock);
+            if (active && vfs_detached_mount_refs[i].active &&
+                strcmp(vfs_detached_mount_refs[i].target, target) == 0) {
+                memset(&vfs_detached_mount_refs[i], 0, sizeof(vfs_detached_mount_refs[i]));
+                reaped++;
+            }
+            fs_mutex_unlock(&vfs_detached_mount_lock);
+        }
+    }
+    return reaped;
 }
 
 static int vfs_mount_clone_recursive_children_locked(struct vfs_mount_namespace *mnt_ns,
@@ -1474,16 +1557,15 @@ void vfs_exchange_path_metadata(const char *left_resolved_vpath, const char *rig
     right_idx = vfs_metadata_find_locked(right_resolved_vpath);
 
     if (left_idx >= 0 && right_idx >= 0) {
-        linux_uid_t uid = vfs_metadata_table[left_idx].uid;
-        linux_gid_t gid = vfs_metadata_table[left_idx].gid;
-        linux_mode_t mode = vfs_metadata_table[left_idx].mode;
+        struct vfs_metadata_entry left = vfs_metadata_table[left_idx];
+        struct vfs_metadata_entry right = vfs_metadata_table[right_idx];
 
-        vfs_metadata_table[left_idx].uid = vfs_metadata_table[right_idx].uid;
-        vfs_metadata_table[left_idx].gid = vfs_metadata_table[right_idx].gid;
-        vfs_metadata_table[left_idx].mode = vfs_metadata_table[right_idx].mode;
-        vfs_metadata_table[right_idx].uid = uid;
-        vfs_metadata_table[right_idx].gid = gid;
-        vfs_metadata_table[right_idx].mode = mode;
+        vfs_metadata_table[left_idx] = right;
+        vfs_copy_string(left_resolved_vpath, vfs_metadata_table[left_idx].path,
+                        sizeof(vfs_metadata_table[left_idx].path));
+        vfs_metadata_table[right_idx] = left;
+        vfs_copy_string(right_resolved_vpath, vfs_metadata_table[right_idx].path,
+                        sizeof(vfs_metadata_table[right_idx].path));
     } else if (left_idx >= 0) {
         vfs_copy_string(right_resolved_vpath, vfs_metadata_table[left_idx].path,
                         sizeof(vfs_metadata_table[left_idx].path));
@@ -3090,6 +3172,53 @@ int vfs_umount(const char *target) {
     return -EINVAL;
 }
 
+int vfs_umount_expire(const char *target) {
+    char resolved_target[MAX_PATH];
+    int ret;
+    struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
+
+    if (!target) {
+        return -EFAULT;
+    }
+    if (target[0] == '\0') {
+        return -ENOENT;
+    }
+    if (!mnt_ns) {
+        return -ESRCH;
+    }
+    if (!cred_has_cap(get_current_cred(), CAP_SYS_ADMIN)) {
+        return -EPERM;
+    }
+
+    ret = vfs_resolve_virtual_path_at(AT_FDCWD, target, resolved_target, sizeof(resolved_target));
+    if (ret != 0) {
+        return ret;
+    }
+
+    fs_mutex_lock(&mnt_ns->lock);
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        if (mnt_ns->entries[i].active && strcmp(mnt_ns->entries[i].target, resolved_target) == 0) {
+            if (fdtable_has_open_path_under_impl(resolved_target) ||
+                vfs_any_task_fs_pins_mount_tree(resolved_target)) {
+                fs_mutex_unlock(&mnt_ns->lock);
+                return -EBUSY;
+            }
+            if (!mnt_ns->entries[i].expiry_candidate) {
+                mnt_ns->entries[i].expiry_candidate = true;
+                fs_mutex_unlock(&mnt_ns->lock);
+                return -EAGAIN;
+            }
+            vfs_umount_propagate_tree_locked(mnt_ns, resolved_target);
+            vfs_umount_remove_tree_locked(mnt_ns, resolved_target);
+            fs_mutex_unlock(&mnt_ns->lock);
+            return 0;
+        }
+    }
+    fs_mutex_unlock(&mnt_ns->lock);
+
+    return -EINVAL;
+}
+
 int vfs_umount_lazy(const char *target) {
     char resolved_target[MAX_PATH];
     int ret;
@@ -3116,6 +3245,14 @@ int vfs_umount_lazy(const char *target) {
     fs_mutex_lock(&mnt_ns->lock);
     for (size_t i = 0; i < MAX_MOUNTS; i++) {
         if (mnt_ns->entries[i].active && strcmp(mnt_ns->entries[i].target, resolved_target) == 0) {
+            if (fdtable_has_open_path_under_impl(resolved_target) ||
+                vfs_any_task_fs_pins_mount_tree(resolved_target)) {
+                ret = vfs_detached_mount_record(resolved_target);
+                if (ret != 0) {
+                    fs_mutex_unlock(&mnt_ns->lock);
+                    return ret;
+                }
+            }
             vfs_umount_propagate_tree_locked(mnt_ns, resolved_target);
             vfs_umount_remove_tree_locked(mnt_ns, resolved_target);
             fs_mutex_unlock(&mnt_ns->lock);
@@ -4742,8 +4879,14 @@ static int vfs_proc_task_smaps_content_for_task(struct task_struct *task, char *
         uint64_t private_clean_kb = vma->shared ? 0 : (size_kb > dirty_kb ? size_kb - dirty_kb : 0);
         uint64_t shared_dirty_kb = vma->shared ? dirty_kb : 0;
         uint64_t private_dirty_kb = vma->shared ? 0 : dirty_kb;
-        uint64_t anonymous_kb = (vma->kind == TASK_VMA_ANON || vma->kind == TASK_VMA_STACK) ? size_kb : 0;
+        uint64_t anonymous_kb = 0;
         char vmflags[64];
+
+        if (vma->kind == TASK_VMA_ANON || vma->kind == TASK_VMA_STACK) {
+            anonymous_kb = size_kb;
+        } else if (vma->kind == TASK_VMA_FILE && !vma->shared) {
+            anonymous_kb = dirty_kb;
+        }
 
         vfs_maps_permissions(task_vma_page_flags_impl(vma, vma->start), vma->shared, perms);
         if (vfs_vma_vmflags(vma, vmflags, sizeof(vmflags)) != 0) {

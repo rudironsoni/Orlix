@@ -95,6 +95,8 @@ extern int unlink_impl(const char *pathname);
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern long read_impl(int fd, void *buf, size_t count);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
+extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
+                     unsigned int flags);
 #include "runtime/native/registry.h"
 #include "runtime/syscall.h"
 
@@ -111,6 +113,7 @@ struct native_syscall_dirent64 {
 static int init_entry_seen;
 
 static int latest_signal_info_matches(struct task_struct *task, int signo, int code, uint64_t addr);
+static int read_file_into_buffer(const char *path, char *buf, size_t buf_len);
 
 static int close_if_open(int fd) {
     if (fd >= 0 && fdtable_is_used_impl(fd)) {
@@ -1354,6 +1357,112 @@ out:
     return result;
 }
 
+int native_syscall_contract_xattr_lifetime_tracks_rename_exchange_and_symlink_unlink(void) {
+    const char left[] = "/tmp/native-xattr-life-left";
+    const char right[] = "/tmp/native-xattr-life-right";
+    const char renamed[] = "/tmp/native-xattr-life-renamed";
+    const char symlink[] = "/tmp/native-xattr-life-link";
+    const char left_name[] = "user.life-left";
+    const char right_name[] = "user.life-right";
+    const char link_name[] = "user.life-link";
+    const char left_value[] = "left-value";
+    const char right_value[] = "right-value";
+    const char link_value[] = "link-value";
+    char readback[32];
+    int fd;
+    long ret;
+    int result = -1;
+
+    unlink_impl(symlink);
+    unlink_impl(renamed);
+    unlink_impl(right);
+    unlink_impl(left);
+    fd = open_impl(left, O_CREAT | O_RDWR | O_TRUNC, 0600);
+    if (fd < 0) {
+        return -1;
+    }
+    close_if_open(fd);
+    fd = open_impl(right, O_CREAT | O_RDWR | O_TRUNC, 0600);
+    if (fd < 0) {
+        goto out;
+    }
+    close_if_open(fd);
+
+    ret = syscall_dispatch_impl(__NR_setxattr, (long)(uintptr_t)left, (long)(uintptr_t)left_name,
+                                (long)(uintptr_t)left_value, sizeof(left_value), XATTR_CREATE, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    if (renameat2(AT_FDCWD, left, AT_FDCWD, renamed, 0) != 0) {
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_getxattr, (long)(uintptr_t)renamed, (long)(uintptr_t)left_name,
+                                (long)(uintptr_t)readback, sizeof(readback), 0, 0);
+    if (ret != (long)sizeof(left_value) || memcmp(readback, left_value, sizeof(left_value)) != 0) {
+        errno = ret < 0 ? (int)-ret : ENODATA;
+        goto out;
+    }
+
+    ret = syscall_dispatch_impl(__NR_setxattr, (long)(uintptr_t)right, (long)(uintptr_t)right_name,
+                                (long)(uintptr_t)right_value, sizeof(right_value), XATTR_CREATE, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    if (renameat2(AT_FDCWD, renamed, AT_FDCWD, right, AT_RENAME_EXCHANGE) != 0) {
+        goto out;
+    }
+    memset(readback, 0, sizeof(readback));
+    ret = syscall_dispatch_impl(__NR_getxattr, (long)(uintptr_t)right, (long)(uintptr_t)left_name,
+                                (long)(uintptr_t)readback, sizeof(readback), 0, 0);
+    if (ret != (long)sizeof(left_value) || memcmp(readback, left_value, sizeof(left_value)) != 0) {
+        errno = ret < 0 ? (int)-ret : ENOMSG;
+        goto out;
+    }
+    memset(readback, 0, sizeof(readback));
+    ret = syscall_dispatch_impl(__NR_getxattr, (long)(uintptr_t)renamed, (long)(uintptr_t)right_name,
+                                (long)(uintptr_t)readback, sizeof(readback), 0, 0);
+    if (ret != (long)sizeof(right_value) || memcmp(readback, right_value, sizeof(right_value)) != 0) {
+        errno = ret < 0 ? (int)-ret : ERANGE;
+        goto out;
+    }
+
+    if (symlinkat(right, AT_FDCWD, symlink) != 0) {
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_lsetxattr, (long)(uintptr_t)symlink, (long)(uintptr_t)link_name,
+                                (long)(uintptr_t)link_value, sizeof(link_value), XATTR_CREATE, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    if (unlink_impl(symlink) != 0) {
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_getxattr, (long)(uintptr_t)right, (long)(uintptr_t)left_name,
+                                (long)(uintptr_t)readback, sizeof(readback), 0, 0);
+    if (ret != (long)sizeof(left_value)) {
+        errno = ret < 0 ? (int)-ret : ENODATA;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_lgetxattr, (long)(uintptr_t)symlink, (long)(uintptr_t)link_name,
+                                (long)(uintptr_t)readback, sizeof(readback), 0, 0);
+    if (ret != -ENOENT) {
+        errno = EBUSY;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl(symlink);
+    unlink_impl(renamed);
+    unlink_impl(right);
+    unlink_impl(left);
+    return result;
+}
+
 int native_syscall_contract_shared_mapping_fault_policy_tracks_truncate_after_fd_close(void) {
     struct task_struct *task = get_current();
     const char path[] = "/tmp/native-shared-map-truncate-after-close";
@@ -1871,6 +1980,60 @@ out_child:
     free_task(child);
 out_mapped:
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(page), 0, 0, 0, 0);
+out:
+    close_if_open(fd);
+    unlink_impl(path);
+    return result;
+}
+
+int native_syscall_contract_private_file_cow_smaps_reports_anonymous_dirty_page(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-private-file-cow-smaps";
+    char pages[8192];
+    char smaps[8192];
+    void *mapped;
+    int fd = -1;
+    long ret;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(pages, 'S', sizeof(pages));
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    ret = syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)pages, sizeof(pages), 0, 0, 0);
+    if (ret != (long)sizeof(pages)) {
+        errno = ret < 0 ? (int)-ret : EIO;
+        goto out;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(pages),
+                                                      PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    if (task_write_virtual_memory_impl(task, (uint64_t)(uintptr_t)mapped, "D", 1) != 1) {
+        goto out_mapped;
+    }
+    if (read_file_into_buffer("/proc/self/smaps", smaps, sizeof(smaps)) != 0 ||
+        !strstr(smaps, path) ||
+        !strstr(smaps, "Private_Clean:         4 kB") ||
+        !strstr(smaps, "Private_Dirty:         4 kB") ||
+        !strstr(smaps, "Anonymous:             4 kB")) {
+        errno = errno ? errno : ENODATA;
+        goto out_mapped;
+    }
+    result = 0;
+
+out_mapped:
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(pages), 0, 0, 0, 0);
 out:
     close_if_open(fd);
     unlink_impl(path);

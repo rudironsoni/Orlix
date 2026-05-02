@@ -244,6 +244,9 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
               const void *data);
 int vfs_umount(const char *target);
 int vfs_umount_lazy(const char *target);
+int vfs_umount_expire(const char *target);
+int vfs_reap_detached_mount_refs(void);
+unsigned int vfs_detached_mount_ref_count(void);
 unsigned long vfs_mount_flags_for_path(const char *resolved_vpath);
 int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
                       const struct mount_attr *attr, size_t size);

@@ -92,6 +92,10 @@
     XCTAssertEqual(native_syscall_contract_lxattr_targets_symlink_inode(), 0, @"errno %d", errno);
 }
 
+- (void)testXattrLifetimeTracksRenameExchangeAndSymlinkUnlink {
+    XCTAssertEqual(native_syscall_contract_xattr_lifetime_tracks_rename_exchange_and_symlink_unlink(), 0, @"errno %d", errno);
+}
+
 - (void)testSharedMappingFaultPolicyTracksTruncateAfterFdClose {
     XCTAssertEqual(native_syscall_contract_shared_mapping_fault_policy_tracks_truncate_after_fd_close(), 0, @"errno %d", errno);
 }
@@ -119,6 +123,10 @@
 
 - (void)testCloneWithoutVmCowsPrivateFileMapping {
     XCTAssertEqual(native_syscall_contract_clone_without_vm_cows_private_file_mapping(), 0, @"errno %d", errno);
+}
+
+- (void)testPrivateFileCowSmapsReportsAnonymousDirtyPage {
+    XCTAssertEqual(native_syscall_contract_private_file_cow_smaps_reports_anonymous_dirty_page(), 0, @"errno %d", errno);
 }
 
 - (void)testCloneWithoutVmPreservesSharedFileMappings {

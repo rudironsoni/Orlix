@@ -1360,6 +1360,18 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"lazy unmount should remove a busy detached mount from proc mountinfo, errno %d", errno);
 }
 
+- (void)testUnmountExpireRequiresMarkThenUnmount {
+    extern int vfs_contract_umount_expire_requires_mark_then_unmount(void);
+    XCTAssertEqual(vfs_contract_umount_expire_requires_mark_then_unmount(), 0,
+                   @"expiry unmount should require one mark pass before detaching, errno %d", errno);
+}
+
+- (void)testLazyUnmountReclaimsDetachedRefAfterPinRelease {
+    extern int vfs_contract_lazy_umount_reclaims_detached_ref_after_pin_release(void);
+    XCTAssertEqual(vfs_contract_lazy_umount_reclaims_detached_ref_after_pin_release(), 0,
+                   @"lazy unmount should retain and later reclaim detached mount refs, errno %d", errno);
+}
+
 - (void)testUnmountBusyWhenPwdPinsMountTree {
     extern int vfs_contract_umount_busy_when_pwd_pins_mount_tree(void);
     XCTAssertEqual(vfs_contract_umount_busy_when_pwd_pins_mount_tree(), 0,

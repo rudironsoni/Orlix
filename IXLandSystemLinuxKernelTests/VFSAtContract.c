@@ -78,6 +78,9 @@ extern int capset(cap_user_header_t header, const cap_user_data_t data);
 extern int statfs(const char *path, struct statfs *buf);
 extern int fstatfs(int fd, struct statfs *buf);
 extern int vfs_umount_lazy(const char *target);
+extern int vfs_umount_expire(const char *target);
+extern int vfs_reap_detached_mount_refs(void);
+extern unsigned int vfs_detached_mount_ref_count(void);
 
 static int vfs_contract_ignore_exists(int result) {
     if (result == 0 || errno == EEXIST) {
@@ -270,6 +273,8 @@ static void vfs_contract_cleanup_mount_namespace_paths(void) {
     unlink_impl("/tmp/vfs-mntns-target/file");
     unlink_impl("/tmp/vfs-mntns-target/newfile");
     unlink_impl("/tmp/vfs-mntns-target/child/file");
+    unlink_impl("/tmp/vfs-mntns-source/file");
+    unlink_impl("/tmp/vfs-mntns-source/dir/file");
     rmdir_impl("/tmp/vfs-mntns-parent-source/child/grand");
     rmdir_impl("/tmp/vfs-mntns-parent-source/child");
     rmdir_impl("/tmp/vfs-mntns-child-source/grand");
@@ -288,6 +293,8 @@ static void vfs_contract_cleanup_mount_namespace_paths(void) {
     rmdir_impl("/tmp/vfs-mntns-child-source");
     rmdir_impl("/tmp/vfs-mntns-grandchild-source");
     rmdir_impl("/tmp/vfs-mntns-target");
+    rmdir_impl("/tmp/vfs-mntns-source/dir");
+    rmdir_impl("/tmp/vfs-mntns-source");
 }
 
 /* Contract: vfs_fstatat supports AT_FDCWD */
@@ -1962,6 +1969,89 @@ int vfs_contract_lazy_umount_removes_busy_mount_from_proc_mountinfo(void) {
     if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0 ||
         vfs_contract_content_contains(content, " /tmp/vfs-mntns-target ")) {
         errno = ENOMSG;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if (fd >= 0) {
+            close_impl(fd);
+        }
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int vfs_contract_umount_expire_requires_mark_then_unmount(void) {
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0 ||
+        vfs_contract_write_file("/tmp/vfs-mntns-source/file", "expire") != 0 ||
+        mount("/tmp/vfs-mntns-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    if (vfs_umount_expire("/tmp/vfs-mntns-target") != -EAGAIN) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-mntns-target/file", "expire") != 0) {
+        goto out;
+    }
+    if (vfs_umount_expire("/tmp/vfs-mntns-target") != 0) {
+        goto out;
+    }
+    if (open_impl("/tmp/vfs-mntns-target/file", O_RDONLY, 0) != -1 || errno != ENOENT) {
+        errno = ENOMSG;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int vfs_contract_lazy_umount_reclaims_detached_ref_after_pin_release(void) {
+    int fd = -1;
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-source/dir", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0 ||
+        vfs_contract_write_file("/tmp/vfs-mntns-source/dir/file", "detached-ref") != 0 ||
+        mount("/tmp/vfs-mntns-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+    fd = open_impl("/tmp/vfs-mntns-target/dir/file", O_RDONLY, 0);
+    if (fd < 0) {
+        goto out;
+    }
+    if (vfs_umount_lazy("/tmp/vfs-mntns-target") != 0 ||
+        vfs_detached_mount_ref_count() == 0) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (vfs_reap_detached_mount_refs() != 0 || vfs_detached_mount_ref_count() == 0) {
+        errno = ENOMSG;
+        goto out;
+    }
+    if (close_impl(fd) != 0) {
+        fd = -1;
+        goto out;
+    }
+    fd = -1;
+    if (vfs_reap_detached_mount_refs() != 1 || vfs_detached_mount_ref_count() != 0) {
+        errno = EBUSY;
         goto out;
     }
     ret = 0;
