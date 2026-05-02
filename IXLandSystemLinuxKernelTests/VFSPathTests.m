@@ -1360,6 +1360,18 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"MS_MOVE should relocate a virtual mount subtree, errno %d", errno);
 }
 
+- (void)testOpenTreeCloneReturnsMountFdVisibleInProc {
+    extern int vfs_contract_open_tree_clone_returns_mount_fd_visible_in_proc(void);
+    XCTAssertEqual(vfs_contract_open_tree_clone_returns_mount_fd_visible_in_proc(), 0,
+                   @"open_tree should return a virtual mount fd visible through /proc/self/fd, errno %d", errno);
+}
+
+- (void)testMoveMountAttachesOpenTreeClone {
+    extern int vfs_contract_move_mount_attaches_open_tree_clone(void);
+    XCTAssertEqual(vfs_contract_move_mount_attaches_open_tree_clone(), 0,
+                   @"move_mount should attach an open_tree clone fd into the virtual mount namespace, errno %d", errno);
+}
+
 - (void)testProcSelfMountsListsBindMount {
     extern int vfs_contract_proc_self_mounts_lists_bind_mount(void);
     XCTAssertEqual(vfs_contract_proc_self_mounts_lists_bind_mount(), 0,

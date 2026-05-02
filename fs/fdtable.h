@@ -68,6 +68,21 @@ typedef struct fd_description fd_description_t;
 struct pipe_endpoint;
 struct epoll_instance;
 
+#define VFS_MOUNT_FD_MAX_ENTRIES 64
+
+struct vfs_mount_fd_entry {
+    char source[MAX_PATH];
+    char target[MAX_PATH];
+    char fstype[32];
+    unsigned long flags;
+    unsigned long propagation;
+};
+
+struct vfs_mount_fd {
+    size_t entry_count;
+    struct vfs_mount_fd_entry entries[VFS_MOUNT_FD_MAX_ENTRIES];
+};
+
 struct fd_entry {
 	fd_description_t *desc;
 	int fd_flags;
@@ -139,6 +154,7 @@ void init_synthetic_dev_fd_entry_impl(int fd, int flags, linux_mode_t mode, cons
 void init_synthetic_pty_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, unsigned int pty_index, bool is_master);
 int init_pipe_fd_entry_impl(int fd, int flags, struct pipe_endpoint *endpoint);
 int init_epoll_fd_entry_impl(int fd, int flags, struct epoll_instance *instance);
+int init_mount_fd_entry_impl(int fd, int flags, const struct vfs_mount_fd *mount_fd);
 
 bool get_fd_is_synthetic_dev_impl(void *entry);
 synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry);
@@ -149,6 +165,8 @@ bool get_fd_is_pipe_impl(void *entry);
 struct pipe_endpoint *get_fd_pipe_endpoint_impl(void *entry);
 bool get_fd_is_epoll_impl(void *entry);
 struct epoll_instance *get_fd_epoll_instance_impl(void *entry);
+bool get_fd_is_mount_impl(void *entry);
+int get_fd_mount_impl(void *entry, struct vfs_mount_fd *mount_fd);
 
 enum synthetic_proc_file {
     SYNTHETIC_PROC_FILE_NONE = 0,

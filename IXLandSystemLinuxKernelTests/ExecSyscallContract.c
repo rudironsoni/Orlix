@@ -3,6 +3,7 @@
 #include <linux/auxvec.h>
 #include <linux/mman.h>
 #include <asm-generic/siginfo.h>
+#include <asm-generic/resource.h>
 
 #include <errno.h>
 #include <stdbool.h>
@@ -1897,7 +1898,7 @@ out:
     return result;
 }
 
-int exec_syscall_contract_elf_stack_guard_faults_with_sigsegv_accerr(void) {
+int exec_syscall_contract_elf_below_stack_guard_faults_with_sigsegv_maperr(void) {
     struct task_struct *task = get_current();
     unsigned char image[4096];
     char byte = 'g';
@@ -1916,11 +1917,12 @@ int exec_syscall_contract_elf_stack_guard_faults_with_sigsegv_accerr(void) {
     if (execve("/tmp/exec-elf-stack-guard", NULL, NULL) != 0) {
         goto out;
     }
-    if (task_write_virtual_memory_impl(task, task->mm->initial_stack_base - 1, &byte, 1) != -1 ||
-        errno != EACCES ||
+    if (task_write_virtual_memory_impl(task, task->mm->initial_stack_base - TASK_VMA_PAGE_SIZE - 1,
+                                       &byte, 1) != -1 ||
+        errno != EFAULT ||
         task->last_fault_signal != SIGSEGV ||
-        task->last_fault_code != SEGV_ACCERR ||
-        task->last_fault_addr != task->mm->initial_stack_base - 1) {
+        task->last_fault_code != SEGV_MAPERR ||
+        task->last_fault_addr != task->mm->initial_stack_base - TASK_VMA_PAGE_SIZE - 1) {
         errno = EPROTO;
         goto out;
     }
@@ -1929,6 +1931,119 @@ int exec_syscall_contract_elf_stack_guard_faults_with_sigsegv_accerr(void) {
 
 out:
     unlink_impl("/tmp/exec-elf-stack-guard");
+    return result;
+}
+
+int exec_syscall_contract_elf_stack_grows_down_within_rlimit(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[4096];
+    char byte = 's';
+    uint64_t old_base;
+    uint64_t old_size;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-stack-grow");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x401000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-stack-grow", image, sizeof(image)) != 0) {
+        goto out;
+    }
+    if (execve("/tmp/exec-elf-stack-grow", NULL, NULL) != 0) {
+        goto out;
+    }
+    task->rlimits[RLIMIT_STACK].cur = 16ULL * 1024ULL * 1024ULL;
+
+    old_base = task->mm->initial_stack_base;
+    old_size = task->mm->initial_stack_image_size;
+    if (task->rlimits[RLIMIT_STACK].cur != 16ULL * 1024ULL * 1024ULL ||
+        old_size + TASK_VMA_PAGE_SIZE > task->rlimits[RLIMIT_STACK].cur) {
+        errno = ENOSPC;
+        goto out;
+    }
+    {
+        const struct task_vma *guard = task_find_vma_impl(task, old_base - 1);
+        const struct task_vma *stack = task_find_vma_impl(task, old_base);
+        if (!guard || guard->kind != TASK_VMA_GUARD) {
+            errno = ENXIO;
+            goto out;
+        }
+        if (!stack || stack->kind != TASK_VMA_STACK) {
+            errno = ENODEV;
+            goto out;
+        }
+        if (guard->end != stack->start || !stack->image || stack->image_size == 0) {
+            errno = ENOTCONN;
+            goto out;
+        }
+    }
+    if (task_write_virtual_memory_impl(task, old_base - 1, &byte, 1) != 1) {
+        if (errno == EACCES) {
+            errno = ENOLCK;
+        }
+        goto out;
+    }
+    if (task->mm->initial_stack_base != old_base - TASK_VMA_PAGE_SIZE ||
+        task->mm->initial_stack_image_size != old_size + TASK_VMA_PAGE_SIZE ||
+        task_find_vma_impl(task, old_base - 1)->kind != TASK_VMA_STACK ||
+        task_find_vma_impl(task, task->mm->initial_stack_base - 1)->kind != TASK_VMA_GUARD) {
+        errno = EPROTO;
+        goto out;
+    }
+    byte = 0;
+    if (task_read_virtual_memory_impl(task, old_base - 1, &byte, 1) != 1 || byte != 's') {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-stack-grow");
+    return result;
+}
+
+int exec_syscall_contract_elf_stack_growth_respects_rlimit(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[4096];
+    char byte = 'l';
+    uint64_t old_base;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-stack-rlimit");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x401000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-stack-rlimit", image, sizeof(image)) != 0) {
+        goto out;
+    }
+    task->rlimits[RLIMIT_STACK].cur = 8ULL * 1024ULL * 1024ULL;
+    if (execve("/tmp/exec-elf-stack-rlimit", NULL, NULL) != 0) {
+        goto out;
+    }
+
+    old_base = task->mm->initial_stack_base;
+    errno = 0;
+    if (task_write_virtual_memory_impl(task, old_base - 1, &byte, 1) != -1 ||
+        errno != EACCES ||
+        task->mm->initial_stack_base != old_base ||
+        task->last_fault_signal != SIGSEGV ||
+        task->last_fault_code != SEGV_ACCERR ||
+        task->last_fault_addr != old_base - 1) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-stack-rlimit");
     return result;
 }
 

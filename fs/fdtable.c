@@ -326,7 +326,8 @@ enum fd_type {
     FD_TYPE_SYNTHETIC_PROC_FILE, /* Synthetic proc file (no host backing) */
     FD_TYPE_SYNTHETIC_PTY, /* Synthetic PTY endpoint */
     FD_TYPE_PIPE, /* Virtual pipe endpoint */
-    FD_TYPE_EPOLL /* Virtual epoll instance */
+    FD_TYPE_EPOLL, /* Virtual epoll instance */
+    FD_TYPE_MOUNT /* Virtual detached mount tree */
 };
 
 typedef struct synthetic_dir_state {
@@ -353,6 +354,7 @@ typedef struct fd_description {
     bool pty_is_master;
     struct pipe_endpoint *pipe_endpoint;
     struct epoll_instance *epoll_instance;
+    struct vfs_mount_fd mount_fd;
     atomic_int refs;
     fs_mutex_t lock;
 } fd_description_t;
@@ -501,6 +503,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, linux_mode
     desc->pty_index = 0;
     desc->pty_is_master = false;
     desc->pipe_endpoint = NULL;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
     desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
 
     if (!desc->synthetic_state) {
@@ -547,6 +550,7 @@ static fd_description_t *alloc_synthetic_subdir_fd_description(int flags, linux_
     desc->pty_index = 0;
     desc->pty_is_master = false;
     desc->pipe_endpoint = NULL;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
     desc->synthetic_state = calloc(1, sizeof(synthetic_dir_state_t));
     if (!desc->synthetic_state) {
         free(desc);
@@ -582,6 +586,7 @@ static fd_description_t *alloc_synthetic_dev_fd_description(int flags, linux_mod
     desc->pty_index = 0;
     desc->pty_is_master = false;
     desc->pipe_endpoint = NULL;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
@@ -611,6 +616,7 @@ static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, lin
     desc->pty_index = 0;
     desc->pty_is_master = false;
     desc->pipe_endpoint = NULL;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
@@ -641,6 +647,7 @@ static fd_description_t *alloc_synthetic_pty_fd_description(int flags, linux_mod
     desc->pty_index = pty_index;
     desc->pty_is_master = is_master;
     desc->pipe_endpoint = NULL;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
@@ -683,6 +690,7 @@ static fd_description_t *alloc_pipe_fd_description(int flags, struct pipe_endpoi
     desc->pty_index = 0;
     desc->pty_is_master = false;
     desc->pipe_endpoint = endpoint;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
@@ -718,10 +726,54 @@ static fd_description_t *alloc_epoll_fd_description(int flags, struct epoll_inst
     desc->pty_is_master = false;
     desc->pipe_endpoint = NULL;
     desc->epoll_instance = instance;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
     desc->synthetic_state = NULL;
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
     memcpy(desc->path, "anon_inode:[eventpoll]", sizeof("anon_inode:[eventpoll]"));
+    return desc;
+}
+
+static fd_description_t *alloc_mount_fd_description(int flags, const struct vfs_mount_fd *mount_fd) {
+    fd_description_t *desc;
+    int ret;
+
+    if (!mount_fd || mount_fd->entry_count == 0 || mount_fd->entries[0].target[0] == '\0') {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    desc->type = FD_TYPE_MOUNT;
+    desc->fd = -1;
+    desc->flags = flags;
+    desc->mode = 0;
+    desc->offset = 0;
+    desc->is_dir = true;
+    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->proc_file_target_pid = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
+    desc->pipe_endpoint = NULL;
+    desc->epoll_instance = NULL;
+    memcpy(&desc->mount_fd, mount_fd, sizeof(desc->mount_fd));
+    desc->synthetic_state = NULL;
+    atomic_init(&desc->refs, 1);
+    fs_mutex_init(&desc->lock);
+    ret = snprintf(desc->path, sizeof(desc->path), "mnt:[%s]", mount_fd->entries[0].target);
+    if (ret < 0 || (size_t)ret >= sizeof(desc->path)) {
+        fs_mutex_destroy(&desc->lock);
+        free(desc);
+        errno = ENAMETOOLONG;
+        return NULL;
+    }
     return desc;
 }
 
@@ -1369,6 +1421,21 @@ int init_epoll_fd_entry_impl(int fd, int flags, struct epoll_instance *instance)
     return 0;
 }
 
+int init_mount_fd_entry_impl(int fd, int flags, const struct vfs_mount_fd *mount_fd) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    fs_mutex_lock(&entry->lock);
+    entry->desc = alloc_mount_fd_description(flags, mount_fd);
+    if (!entry->desc) {
+        fs_mutex_unlock(&entry->lock);
+        return -1;
+    }
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    fdtable_sync_task_file_locked(fd, entry);
+    fs_mutex_unlock(&entry->lock);
+    return 0;
+}
+
 bool get_fd_is_synthetic_dev_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_DEV;
@@ -1412,6 +1479,23 @@ bool get_fd_is_epoll_impl(void *entry) {
 struct epoll_instance *get_fd_epoll_instance_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->epoll_instance : NULL;
+}
+
+bool get_fd_is_mount_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_MOUNT;
+}
+
+int get_fd_mount_impl(void *entry, struct vfs_mount_fd *mount_fd) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+
+    if (!fd_entry || !fd_entry->desc || fd_entry->desc->type != FD_TYPE_MOUNT || !mount_fd) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    memcpy(mount_fd, &fd_entry->desc->mount_fd, sizeof(*mount_fd));
+    return 0;
 }
 
 void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file) {

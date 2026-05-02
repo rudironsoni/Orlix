@@ -198,6 +198,9 @@ extern int execve(const char *pathname, char *const argv[], char *const envp[]);
 extern int clock_gettime_impl(clockid_t clk_id, struct timespec *tp);
 extern int mount_setattr(int dirfd, const char *pathname, unsigned int flags,
                          struct mount_attr *attr, size_t size);
+extern int open_tree(int dirfd, const char *pathname, unsigned int flags);
+extern int move_mount(int from_dirfd, const char *from_pathname, int to_dirfd,
+                      const char *to_pathname, unsigned int flags);
 
 static int syscall_copy_sigset_to_mask(const uint64_t *sigset, size_t sigsetsize,
                                        struct signal_mask_bits *mask) {
@@ -626,6 +629,13 @@ long syscall_dispatch_impl(long number,
                                                   (unsigned int)arg2,
                                                   (struct mount_attr *)(uintptr_t)arg3,
                                                   (size_t)arg4));
+    case __NR_open_tree:
+        return syscall_result((long)open_tree((int)arg0, (const char *)(uintptr_t)arg1,
+                                              (unsigned int)arg2));
+    case __NR_move_mount:
+        return syscall_result((long)move_mount((int)arg0, (const char *)(uintptr_t)arg1,
+                                               (int)arg2, (const char *)(uintptr_t)arg3,
+                                               (unsigned int)arg4));
     case __NR_listmount:
         return syscall_result(vfs_listmount((const struct mnt_id_req *)(uintptr_t)arg0,
                                             (uint64_t *)(uintptr_t)arg1,

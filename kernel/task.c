@@ -21,6 +21,10 @@
 #include <linux/mount.h>
 #include <linux/sched.h>
 #include <linux/stat.h>
+#ifdef RLIM_NLIMITS
+#undef RLIM_NLIMITS
+#endif
+#include <asm-generic/resource.h>
 
 #ifdef SIGCHLD
 #undef SIGCHLD
@@ -446,6 +450,93 @@ static long task_write_vma(struct task_vma *vma, uint64_t addr, const void *buf,
     return (long)to_copy;
 }
 
+static int task_grow_stack_down_impl(struct task_struct *task, uint64_t fault_addr) {
+    struct mm_struct *mm;
+    struct task_vma *stack = NULL;
+    struct task_vma *guard = NULL;
+    void *new_image = NULL;
+    uint32_t *new_page_flags = NULL;
+    void *old_image;
+    uint64_t old_size;
+    uint64_t new_size;
+    uint64_t new_base;
+    uint64_t new_pages;
+
+    if (!task || !task->mm) {
+        errno = EFAULT;
+        return -1;
+    }
+    mm = task->mm;
+    for (uint32_t i = 0; i < mm->vma_count; i++) {
+        if (mm->vmas[i].kind == TASK_VMA_STACK) {
+            stack = &mm->vmas[i];
+        } else if (mm->vmas[i].kind == TASK_VMA_GUARD &&
+                   fault_addr >= mm->vmas[i].start && fault_addr < mm->vmas[i].end) {
+            guard = &mm->vmas[i];
+        }
+    }
+    if (!stack || !guard || guard->end != stack->start ||
+        !stack->image || stack->image_size == 0) {
+        return 0;
+    }
+
+    old_image = stack->image;
+    old_size = stack->image_size;
+    if (old_size > UINT64_MAX - TASK_VMA_PAGE_SIZE) {
+        errno = ENOMEM;
+        return -1;
+    }
+    new_size = old_size + TASK_VMA_PAGE_SIZE;
+    if (new_size > task->rlimits[RLIMIT_STACK].cur) {
+        errno = EACCES;
+        return -1;
+    }
+    if (mm->initial_stack_base < TASK_VMA_PAGE_SIZE) {
+        errno = ENOMEM;
+        return -1;
+    }
+    new_base = mm->initial_stack_base - TASK_VMA_PAGE_SIZE;
+    new_pages = new_size / TASK_VMA_PAGE_SIZE;
+    if (new_pages == 0 || new_pages > SIZE_MAX / sizeof(*new_page_flags)) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    new_image = calloc(1, (size_t)new_size);
+    new_page_flags = calloc((size_t)new_pages, sizeof(*new_page_flags));
+    if (!new_image || !new_page_flags) {
+        free(new_image);
+        free(new_page_flags);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    memcpy((unsigned char *)new_image + TASK_VMA_PAGE_SIZE, old_image, (size_t)old_size);
+    for (uint64_t i = 0; i < new_pages; i++) {
+        new_page_flags[i] = PF_R | PF_W;
+    }
+
+    free(old_image);
+    mm->initial_stack_image = new_image;
+    mm->initial_stack_image_size = (size_t)new_size;
+    mm->initial_stack_base = new_base;
+    mm->initial_stack_size = new_size;
+
+    free(stack->page_flags);
+    stack->start = new_base;
+    stack->end = new_base + new_size;
+    stack->image = mm->initial_stack_image;
+    stack->image_size = mm->initial_stack_image_size;
+    stack->page_count = new_pages;
+    stack->page_flags = new_page_flags;
+    stack->resident_pages = NULL;
+    stack->dirty_pages = NULL;
+
+    guard->start -= TASK_VMA_PAGE_SIZE;
+    guard->end -= TASK_VMA_PAGE_SIZE;
+    return 1;
+}
+
 static void task_propagate_shared_file_write(struct mm_struct *mm, struct task_vma *source,
                                              uint64_t addr, const void *buf, size_t count) {
     if (!mm || !source || source->shared_pages || source->kind != TASK_VMA_FILE || !source->shared ||
@@ -560,6 +651,12 @@ long task_write_virtual_memory_impl(struct task_struct *task, uint64_t addr, con
             errno = EFAULT;
             return -1;
         }
+        {
+            int grow_ret = task_grow_stack_down_impl(task, addr + total);
+            if (grow_ret > 0) {
+                continue;
+            }
+        }
         copied = 0;
         for (uint32_t i = 0; i < mm->vma_count; i++) {
             struct task_vma *vma = &mm->vmas[i];
@@ -620,12 +717,12 @@ struct task_struct *alloc_task(void) {
         task->rlimits[i].cur = UINT64_MAX;
         task->rlimits[i].max = UINT64_MAX;
     }
-    task->rlimits[3].cur = 8ULL * 1024ULL * 1024ULL;
-    task->rlimits[3].max = 64ULL * 1024ULL * 1024ULL;
-    task->rlimits[6].cur = TASK_MAX_TASKS;
-    task->rlimits[6].max = TASK_MAX_TASKS;
-    task->rlimits[7].cur = NR_OPEN_DEFAULT;
-    task->rlimits[7].max = NR_OPEN_DEFAULT;
+    task->rlimits[RLIMIT_STACK].cur = 8ULL * 1024ULL * 1024ULL;
+    task->rlimits[RLIMIT_STACK].max = 64ULL * 1024ULL * 1024ULL;
+    task->rlimits[RLIMIT_NPROC].cur = TASK_MAX_TASKS;
+    task->rlimits[RLIMIT_NPROC].max = TASK_MAX_TASKS;
+    task->rlimits[RLIMIT_NOFILE].cur = NR_OPEN_DEFAULT;
+    task->rlimits[RLIMIT_NOFILE].max = NR_OPEN_DEFAULT;
 
     atomic_init(&task->state, TASK_RUNNING);
     atomic_init(&task->refs, 1);

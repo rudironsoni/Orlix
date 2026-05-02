@@ -27,7 +27,9 @@ extern int exec_syscall_contract_elf_virtual_memory_writes_writable_segment(void
 extern int exec_syscall_contract_elf_virtual_memory_writes_initial_stack(void);
 extern int exec_syscall_contract_elf_virtual_memory_fault_policy(void);
 extern int exec_syscall_contract_elf_vma_metadata_covers_exec_loader_and_stack(void);
-extern int exec_syscall_contract_elf_stack_guard_faults_with_sigsegv_accerr(void);
+extern int exec_syscall_contract_elf_below_stack_guard_faults_with_sigsegv_maperr(void);
+extern int exec_syscall_contract_elf_stack_grows_down_within_rlimit(void);
+extern int exec_syscall_contract_elf_stack_growth_respects_rlimit(void);
 extern int exec_syscall_contract_elf_dynamic_metadata_records_exec_and_loader(void);
 extern int exec_syscall_contract_elf_exec_handoff_exposes_entry_stack_and_memory_access(void);
 extern int exec_syscall_contract_elf_vma_page_permissions_are_page_granular(void);
@@ -154,8 +156,16 @@ extern int exec_syscall_contract_truncated_elf_returns_enoexec_without_transitio
     XCTAssertEqual(exec_syscall_contract_elf_vma_metadata_covers_exec_loader_and_stack(), 0, @"errno %d", errno);
 }
 
-- (void)testElfStackGuardFaultsWithSigsegvAccerr {
-    XCTAssertEqual(exec_syscall_contract_elf_stack_guard_faults_with_sigsegv_accerr(), 0, @"errno %d", errno);
+- (void)testElfBelowStackGuardFaultsWithSigsegvMaperr {
+    XCTAssertEqual(exec_syscall_contract_elf_below_stack_guard_faults_with_sigsegv_maperr(), 0, @"errno %d", errno);
+}
+
+- (void)testElfStackGrowsDownWithinRlimit {
+    XCTAssertEqual(exec_syscall_contract_elf_stack_grows_down_within_rlimit(), 0, @"errno %d", errno);
+}
+
+- (void)testElfStackGrowthRespectsRlimit {
+    XCTAssertEqual(exec_syscall_contract_elf_stack_growth_respects_rlimit(), 0, @"errno %d", errno);
 }
 
 - (void)testElfDynamicMetadataRecordsExecAndLoader {

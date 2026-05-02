@@ -19,6 +19,9 @@ extern int vfs_mount(const char *source, const char *target,
 extern int vfs_umount(const char *target);
 extern int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
                              const struct mount_attr *attr, size_t size);
+extern int vfs_open_tree(int dirfd, const char *pathname, unsigned int flags);
+extern int vfs_move_mount(int from_dirfd, const char *from_pathname, int to_dirfd,
+                          const char *to_pathname, unsigned int flags);
 
 /* ============================================================================
  * MOUNT - Virtual mount in IXLand namespace
@@ -122,6 +125,27 @@ __attribute__((visibility("default"))) int mount_setattr(int dirfd, const char *
                                                          struct mount_attr *attr,
                                                          size_t size) {
     int ret = vfs_mount_setattr(dirfd, pathname, flags, attr, size);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+__attribute__((visibility("default"))) int open_tree(int dirfd, const char *pathname,
+                                                     unsigned int flags) {
+    int ret = vfs_open_tree(dirfd, pathname, flags);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+__attribute__((visibility("default"))) int move_mount(int from_dirfd, const char *from_pathname,
+                                                      int to_dirfd, const char *to_pathname,
+                                                      unsigned int flags) {
+    int ret = vfs_move_mount(from_dirfd, from_pathname, to_dirfd, to_pathname, flags);
     if (ret < 0) {
         errno = -ret;
         return -1;

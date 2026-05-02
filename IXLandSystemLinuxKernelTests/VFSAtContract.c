@@ -48,9 +48,11 @@ int vfs_path_contract_open_tmp_fd_symlink_file(void) {
 }
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern int openat_impl(int dirfd, const char *pathname, int flags, linux_mode_t mode);
+extern int fcntl_impl(int fd, int cmd, ...);
 extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
+extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
@@ -190,6 +192,40 @@ static int vfs_contract_content_contains(const char *content, const char *needle
         }
     }
 
+    return 0;
+}
+
+static int vfs_contract_proc_fd_path(int fd, char *buf, size_t buf_len) {
+    const char prefix[] = "/proc/self/fd/";
+    char digits[16];
+    size_t pos = 0;
+    int value = fd;
+
+    if (!buf || buf_len == 0 || fd < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    while (prefix[pos] != '\0') {
+        if (pos + 1 >= buf_len) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        buf[pos] = prefix[pos];
+        pos++;
+    }
+    size_t digit_count = 0;
+    do {
+        digits[digit_count++] = (char)('0' + (value % 10));
+        value /= 10;
+    } while (value > 0 && digit_count < sizeof(digits));
+    if (value > 0 || pos + digit_count + 1 > buf_len) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    while (digit_count > 0) {
+        buf[pos++] = digits[--digit_count];
+    }
+    buf[pos] = '\0';
     return 0;
 }
 
@@ -1881,6 +1917,113 @@ int vfs_contract_move_mount_relocates_bind_subtree(void) {
 out:
     {
         int saved_errno = errno;
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int vfs_contract_open_tree_clone_returns_mount_fd_visible_in_proc(void) {
+    char proc_path[64];
+    char link_target[MAX_PATH];
+    long link_len;
+    int tree_fd = -1;
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-mntns-parent-source/file", "tree") != 0 ||
+        mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+
+    tree_fd = (int)syscall_dispatch_impl(__NR_open_tree, AT_FDCWD,
+                                         (long)(uintptr_t)"/tmp/vfs-mntns-target",
+                                         OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC, 0, 0, 0);
+    if (tree_fd < 0) {
+        errno = (int)-tree_fd;
+        goto out;
+    }
+    if ((fcntl_impl(tree_fd, F_GETFD) & FD_CLOEXEC) == 0) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (vfs_contract_proc_fd_path(tree_fd, proc_path, sizeof(proc_path)) != 0) {
+        goto out;
+    }
+    link_len = readlink_impl(proc_path, link_target, sizeof(link_target) - 1);
+    if (link_len < 0) {
+        goto out;
+    }
+    link_target[link_len] = '\0';
+    if (!vfs_contract_content_contains(link_target, "mnt:[") ||
+        vfs_contract_content_contains(link_target, vfs_persistent_backing_root()) ||
+        vfs_contract_content_contains(link_target, vfs_temp_backing_root())) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if (tree_fd >= 0) {
+            close_impl(tree_fd);
+        }
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int vfs_contract_move_mount_attaches_open_tree_clone(void) {
+    int tree_fd = -1;
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-mntns-parent-source/file", "tree") != 0 ||
+        mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+
+    tree_fd = (int)syscall_dispatch_impl(__NR_open_tree, AT_FDCWD,
+                                         (long)(uintptr_t)"/tmp/vfs-mntns-target",
+                                         OPEN_TREE_CLONE, 0, 0, 0);
+    if (tree_fd < 0) {
+        errno = (int)-tree_fd;
+        goto out;
+    }
+    {
+        long move_ret = syscall_dispatch_impl(__NR_move_mount, tree_fd, (long)(uintptr_t)"",
+                                              AT_FDCWD, (long)(uintptr_t)"/tmp/vfs-mntns-peer-a",
+                                              MOVE_MOUNT_F_EMPTY_PATH, 0);
+        if (move_ret != 0) {
+            errno = move_ret < 0 ? (int)-move_ret : EPROTO;
+            goto out;
+        }
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-mntns-peer-a/file", "tree") != 0 ||
+        vfs_contract_read_file_exact("/tmp/vfs-mntns-target/file", "tree") != 0) {
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if (tree_fd >= 0) {
+            close_impl(tree_fd);
+        }
         vfs_contract_cleanup_mount_namespace_paths();
         errno = saved_errno;
     }

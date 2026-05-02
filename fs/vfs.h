@@ -246,6 +246,9 @@ int vfs_umount(const char *target);
 unsigned long vfs_mount_flags_for_path(const char *resolved_vpath);
 int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
                       const struct mount_attr *attr, size_t size);
+int vfs_open_tree(int dirfd, const char *pathname, unsigned int flags);
+int vfs_move_mount(int from_dirfd, const char *from_pathname, int to_dirfd,
+                   const char *to_pathname, unsigned int flags);
 long vfs_listmount(const struct mnt_id_req *req, uint64_t *mnt_ids, size_t nr_mnt_ids,
                    unsigned int flags);
 int vfs_statmount(const struct mnt_id_req *req, struct statmount *buf, size_t bufsize,
