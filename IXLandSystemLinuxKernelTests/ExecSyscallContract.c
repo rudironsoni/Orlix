@@ -2342,6 +2342,55 @@ out:
     return result;
 }
 
+int exec_syscall_contract_elf_stack_growth_keeps_lower_guard_faulting(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[4096];
+    char byte = 'g';
+    uint64_t old_base;
+    uint64_t lower_guard_addr;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-stack-lower-guard");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x401000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-stack-lower-guard", image, sizeof(image)) != 0) {
+        goto out;
+    }
+    if (execve("/tmp/exec-elf-stack-lower-guard", NULL, NULL) != 0) {
+        goto out;
+    }
+    task->rlimits[RLIMIT_STACK].cur = 16ULL * 1024ULL * 1024ULL;
+
+    old_base = task->mm->initial_stack_base;
+    if (task_write_virtual_memory_impl(task, old_base - 1, &byte, 1) != 1 ||
+        task->mm->initial_stack_base != old_base - TASK_VMA_PAGE_SIZE ||
+        task_find_vma_impl(task, old_base - 1)->kind != TASK_VMA_STACK ||
+        task_find_vma_impl(task, task->mm->initial_stack_base - 1)->kind != TASK_VMA_GUARD) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    lower_guard_addr = task->mm->initial_stack_base - TASK_VMA_PAGE_SIZE - 1;
+    if (task_write_virtual_memory_impl(task, lower_guard_addr, &byte, 1) != -1 ||
+        errno != EFAULT ||
+        task->last_fault_signal != SIGSEGV ||
+        task->last_fault_code != SEGV_MAPERR ||
+        task->last_fault_addr != lower_guard_addr) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-stack-lower-guard");
+    return result;
+}
+
 int exec_syscall_contract_elf_dynamic_metadata_records_exec_and_loader(void) {
     struct task_struct *task = get_current();
     const char interp_path[] = "/tmp/exec-elf-dynamic-loader";

@@ -378,6 +378,7 @@ static void vfs_umount_remove_tree_locked(struct vfs_mount_namespace *mnt_ns, co
 static void vfs_umount_propagate_shared_child_locked(struct vfs_mount_namespace *mnt_ns,
                                                      const char *target) {
     struct vfs_mount_entry *parent = NULL;
+    struct vfs_mount_entry *target_entry = NULL;
     size_t parent_len = 0;
     const char *suffix;
 
@@ -389,6 +390,9 @@ static void vfs_umount_propagate_shared_child_locked(struct vfs_mount_namespace 
         struct vfs_mount_entry *entry = &mnt_ns->entries[i];
         size_t entry_len;
 
+        if (entry->active && strcmp(entry->target, target) == 0) {
+            target_entry = entry;
+        }
         if (!entry->active || entry->propagation != MS_SHARED ||
             !vfs_path_matches_prefix(target, entry->target) ||
             strcmp(target, entry->target) == 0) {
@@ -402,6 +406,10 @@ static void vfs_umount_propagate_shared_child_locked(struct vfs_mount_namespace 
     }
 
     if (!parent) {
+        return;
+    }
+    if (target_entry &&
+        (target_entry->propagation == MS_PRIVATE || target_entry->propagation == MS_UNBINDABLE)) {
         return;
     }
 
@@ -1106,6 +1114,26 @@ static void vfs_user_xattr_remove_identity_locked(uint64_t identity, const char 
     }
 }
 
+static void vfs_metadata_sync_identity_attrs_locked(uint64_t identity,
+                                                    linux_uid_t uid,
+                                                    linux_gid_t gid,
+                                                    linux_mode_t mode) {
+    if (identity == 0) {
+        return;
+    }
+    for (size_t i = 0; i < VFS_METADATA_MAX; i++) {
+        struct vfs_metadata_entry *entry = &vfs_metadata_table[i];
+
+        if (!entry->active || entry->file_identity != identity) {
+            continue;
+        }
+        entry->has_attrs = true;
+        entry->uid = uid;
+        entry->gid = gid;
+        entry->mode = mode & 07777U;
+    }
+}
+
 int vfs_set_user_xattr_follow(const char *path, const char *name, const void *value, size_t size,
                               int flags, int follow_final_symlink) {
     char resolved[MAX_PATH];
@@ -1610,6 +1638,7 @@ int vfs_chmod_metadata(const char *resolved_vpath, linux_mode_t mode) {
     char translated_path[MAX_PATH];
     struct linux_stat st;
     struct cred *cred = get_current_cred();
+    uint64_t identity;
     int ret;
 
     if (!resolved_vpath || !cred) {
@@ -1629,9 +1658,13 @@ int vfs_chmod_metadata(const char *resolved_vpath, linux_mode_t mode) {
     }
 
     st.st_mode = (st.st_mode & ~07777U) | (mode & 07777U);
+    identity = vfs_file_identity_for_path(resolved_vpath);
 
     fs_mutex_lock(&vfs_metadata_lock);
     ret = vfs_record_metadata_for_stat(resolved_vpath, &st);
+    if (ret == 0) {
+        vfs_metadata_sync_identity_attrs_locked(identity, st.st_uid, st.st_gid, st.st_mode);
+    }
     fs_mutex_unlock(&vfs_metadata_lock);
     return ret;
 }
@@ -1640,6 +1673,7 @@ int vfs_chown_metadata(const char *resolved_vpath, linux_uid_t owner, linux_gid_
     char translated_path[MAX_PATH];
     struct linux_stat st;
     struct cred *cred = get_current_cred();
+    uint64_t identity;
     int ret;
 
     if (!resolved_vpath || !cred) {
@@ -1664,9 +1698,13 @@ int vfs_chown_metadata(const char *resolved_vpath, linux_uid_t owner, linux_gid_
     if (group != (linux_gid_t)-1) {
         st.st_gid = group;
     }
+    identity = vfs_file_identity_for_path(resolved_vpath);
 
     fs_mutex_lock(&vfs_metadata_lock);
     ret = vfs_record_metadata_for_stat(resolved_vpath, &st);
+    if (ret == 0) {
+        vfs_metadata_sync_identity_attrs_locked(identity, st.st_uid, st.st_gid, st.st_mode);
+    }
     fs_mutex_unlock(&vfs_metadata_lock);
     return ret;
 }

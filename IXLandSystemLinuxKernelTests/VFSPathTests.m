@@ -1342,6 +1342,18 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"recursive unmount should propagate nested child unmounts from shared peer trees, errno %d", errno);
 }
 
+- (void)testHardlinkInodeMetadataSurvivesUnlink {
+    extern int vfs_contract_hardlink_inode_metadata_survives_unlink(void);
+    XCTAssertEqual(vfs_contract_hardlink_inode_metadata_survives_unlink(), 0,
+                   @"hardlink inode metadata should sync across aliases and survive unlink, errno %d", errno);
+}
+
+- (void)testPrivateChildUnmountDoesNotPropagateToSharedPeer {
+    extern int vfs_contract_private_child_unmount_does_not_propagate_to_shared_peer(void);
+    XCTAssertEqual(vfs_contract_private_child_unmount_does_not_propagate_to_shared_peer(), 0,
+                   @"private child unmount should not propagate to shared peer trees, errno %d", errno);
+}
+
 - (void)testUnmountBusyWhenOpenFdPinsMountTree {
     extern int vfs_contract_umount_busy_when_open_fd_pins_mount_tree(void);
     XCTAssertEqual(vfs_contract_umount_busy_when_open_fd_pins_mount_tree(), 0,

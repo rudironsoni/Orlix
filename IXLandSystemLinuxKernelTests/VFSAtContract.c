@@ -10,6 +10,7 @@
 #include <linux/magic.h>
 #include <linux/mount.h>
 #include <linux/stat.h>
+#include <linux/xattr.h>
 #include <asm/unistd.h>
 #include <asm/statfs.h>
 
@@ -1839,6 +1840,132 @@ int vfs_contract_recursive_umount_propagates_nested_children_from_shared_peer(vo
     }
     if (open_impl("/tmp/vfs-mntns-peer-b/child/file", O_RDONLY, 0) != -1 || errno != ENOENT) {
         errno = ENOMSG;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int vfs_contract_hardlink_inode_metadata_survives_unlink(void) {
+    const char path[] = "/tmp/vfs-hardlink-inode-metadata";
+    const char alias[] = "/tmp/vfs-hardlink-inode-metadata-alias";
+    const char name[] = "user.hardlink-life";
+    const char value[] = "hardlink-value";
+    char readback[32];
+    struct linux_stat st;
+    int fd = -1;
+    long ret;
+    int result = -1;
+
+    unlink_impl(alias);
+    unlink_impl(path);
+    fd = open_impl(path, O_CREAT | O_RDWR | O_TRUNC, 0600);
+    if (fd < 0) {
+        return -1;
+    }
+    close_impl(fd);
+    fd = -1;
+    if (linkat(AT_FDCWD, path, AT_FDCWD, alias, 0) != 0) {
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_setxattr, (long)(uintptr_t)path, (long)(uintptr_t)name,
+                                (long)(uintptr_t)value, sizeof(value), XATTR_CREATE, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    if (chmod(path, 0640) != 0 || chown(path, 42, 84) != 0) {
+        goto out;
+    }
+    fd = open_impl(alias, O_RDONLY, 0);
+    if (fd < 0) {
+        goto out;
+    }
+    if (fstat_impl(fd, &st) != 0) {
+        goto out;
+    }
+    close_impl(fd);
+    fd = -1;
+    if ((st.st_mode & 07777U) != 0640 || st.st_uid != 42 || st.st_gid != 84) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (unlink_impl(path) != 0) {
+        goto out;
+    }
+    memset(readback, 0, sizeof(readback));
+    ret = syscall_dispatch_impl(__NR_getxattr, (long)(uintptr_t)alias, (long)(uintptr_t)name,
+                                (long)(uintptr_t)readback, sizeof(readback), 0, 0);
+    if (ret != (long)sizeof(value) || memcmp(readback, value, sizeof(value)) != 0) {
+        errno = ret < 0 ? (int)-ret : ENOMSG;
+        goto out;
+    }
+    fd = open_impl(alias, O_RDONLY, 0);
+    if (fd < 0) {
+        goto out;
+    }
+    if (fstat_impl(fd, &st) != 0) {
+        goto out;
+    }
+    close_impl(fd);
+    fd = -1;
+    if ((st.st_mode & 07777U) != 0640 || st.st_uid != 42 || st.st_gid != 84) {
+        errno = ERANGE;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    if (fd >= 0) {
+        close_impl(fd);
+    }
+    unlink_impl(alias);
+    unlink_impl(path);
+    return result;
+}
+
+int vfs_contract_private_child_unmount_does_not_propagate_to_shared_peer(void) {
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source/child", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-child-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-b", 0700)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_write_file("/tmp/vfs-mntns-child-source/file", "private-child") != 0) {
+        goto out;
+    }
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-a", NULL, MS_BIND | MS_SHARED, NULL) != 0 ||
+        mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-b", NULL, MS_BIND | MS_SHARED, NULL) != 0 ||
+        mount("/tmp/vfs-mntns-child-source", "/tmp/vfs-mntns-peer-a/child", NULL, MS_BIND | MS_SHARED, NULL) != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-mntns-peer-b/child/file", "private-child") != 0) {
+        goto out;
+    }
+    if (mount(NULL, "/tmp/vfs-mntns-peer-a/child", NULL, MS_BIND | MS_REMOUNT | MS_PRIVATE, NULL) != 0) {
+        goto out;
+    }
+    if (umount("/tmp/vfs-mntns-peer-a/child") != 0) {
+        goto out;
+    }
+    if (open_impl("/tmp/vfs-mntns-peer-a/child/file", O_RDONLY, 0) != -1 || errno != ENOENT) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/tmp/vfs-mntns-peer-b/child/file", "private-child") != 0) {
         goto out;
     }
 

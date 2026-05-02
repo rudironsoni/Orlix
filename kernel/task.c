@@ -537,6 +537,35 @@ static int task_grow_stack_down_impl(struct task_struct *task, uint64_t fault_ad
     return 1;
 }
 
+static bool task_addr_is_below_stack_guard(const struct task_struct *task, uint64_t addr) {
+    const struct mm_struct *mm;
+
+    if (!task || !task->mm) {
+        return false;
+    }
+    mm = task->mm;
+    for (uint32_t i = 0; i < mm->vma_count; i++) {
+        const struct task_vma *guard = &mm->vmas[i];
+
+        if (guard->kind != TASK_VMA_GUARD || guard->start < TASK_VMA_PAGE_SIZE) {
+            continue;
+        }
+        for (uint32_t j = 0; j < mm->vma_count; j++) {
+            const struct task_vma *stack = &mm->vmas[j];
+
+            if (stack->kind != TASK_VMA_STACK || guard->end != stack->start ||
+                stack->start < (2ULL * TASK_VMA_PAGE_SIZE)) {
+                continue;
+            }
+            if (addr >= stack->start - (2ULL * TASK_VMA_PAGE_SIZE) &&
+                addr < guard->start) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static void task_propagate_shared_file_write(struct mm_struct *mm, struct task_vma *source,
                                              uint64_t addr, const void *buf, size_t count) {
     if (!mm || !source || source->shared_pages || source->kind != TASK_VMA_FILE || !source->shared ||
@@ -594,6 +623,14 @@ long task_read_virtual_memory_impl(struct task_struct *task, uint64_t addr, void
                 return (long)total;
             }
             errno = EFAULT;
+            return -1;
+        }
+        if (task_addr_is_below_stack_guard(task, addr + total)) {
+            if (total > 0) {
+                return (long)total;
+            }
+            errno = EFAULT;
+            task_note_memory_fault_impl(task, addr + total, SEGV_MAPERR);
             return -1;
         }
         copied = 0;
@@ -656,6 +693,14 @@ long task_write_virtual_memory_impl(struct task_struct *task, uint64_t addr, con
             if (grow_ret > 0) {
                 continue;
             }
+        }
+        if (task_addr_is_below_stack_guard(task, addr + total)) {
+            if (total > 0) {
+                return (long)total;
+            }
+            errno = EFAULT;
+            task_note_memory_fault_impl(task, addr + total, SEGV_MAPERR);
+            return -1;
         }
         copied = 0;
         for (uint32_t i = 0; i < mm->vma_count; i++) {
