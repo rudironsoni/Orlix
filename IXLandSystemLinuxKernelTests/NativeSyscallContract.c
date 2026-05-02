@@ -591,6 +591,68 @@ out:
     return result;
 }
 
+int native_syscall_contract_shared_file_mappings_are_coherent(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-shared-map-coherent";
+    const char initial[] = "coherent-page";
+    const char patch[] = "SEEN";
+    char verify[sizeof(patch)];
+    void *first;
+    void *second;
+    int fd = -1;
+    long ret;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    ret = syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)initial, sizeof(initial), 0, 0, 0);
+    if (ret != (long)sizeof(initial)) {
+        errno = ret < 0 ? (int)-ret : EIO;
+        goto out;
+    }
+    first = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 4096, PROT_READ | PROT_WRITE,
+                                                     MAP_SHARED, fd, 0);
+    if ((long)(uintptr_t)first < 0) {
+        errno = -(int)(long)(uintptr_t)first;
+        goto out;
+    }
+    second = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 4096, PROT_READ | PROT_WRITE,
+                                                      MAP_SHARED, fd, 0);
+    if ((long)(uintptr_t)second < 0) {
+        errno = -(int)(long)(uintptr_t)second;
+        goto out_first;
+    }
+    if (task_write_virtual_memory_impl(task, (uint64_t)(uintptr_t)first, patch, sizeof(patch) - 1) !=
+        (long)sizeof(patch) - 1) {
+        errno = EPROTO;
+        goto out_second;
+    }
+    memset(verify, 0, sizeof(verify));
+    if (task_read_virtual_memory_impl(task, (uint64_t)(uintptr_t)second, verify, sizeof(patch) - 1) !=
+            (long)sizeof(patch) - 1 ||
+        memcmp(verify, patch, sizeof(patch) - 1) != 0) {
+        errno = ENODATA;
+        goto out_second;
+    }
+    result = 0;
+
+out_second:
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)second, 4096, 0, 0, 0, 0);
+out_first:
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)first, 4096, 0, 0, 0, 0);
+out:
+    close_if_open(fd);
+    return result;
+}
+
 int native_syscall_contract_dispatches_process_startup_syscalls(void) {
     struct task_struct *task = get_current();
     uint64_t block_set = 1ULL << (2 - 1);

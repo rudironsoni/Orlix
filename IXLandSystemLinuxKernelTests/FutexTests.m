@@ -47,4 +47,8 @@ extern int library_is_initialized(void);
     XCTAssertEqual(futex_contract_exit_clears_child_tid_and_marks_robust_futex(), 0, @"errno %d", errno);
 }
 
+- (void)testCloneThreadSharesVmAndThreadGroup {
+    XCTAssertEqual(futex_contract_clone_thread_shares_vm_and_thread_group(), 0, @"errno %d", errno);
+}
+
 @end

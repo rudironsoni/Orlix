@@ -138,3 +138,47 @@ int signal_syscall_contract_frame_writes_virtual_record(void) {
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
     return 0;
 }
+
+int signal_syscall_contract_frame_records_handler_handoff(void) {
+    struct task_struct *task = get_current();
+    struct sigaction act;
+    stack_t stack;
+    uint64_t frame_sp = 0;
+    void *mapped;
+    long ret;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = (__sighandler_t)(uintptr_t)0x9000;
+    act.sa_flags = SA_RESTART | SA_ONSTACK;
+    ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGUSR1, (long)(uintptr_t)&act,
+                                0, sizeof(act.sa_mask), 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        return -1;
+    }
+
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 16384, PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+    memset(&stack, 0, sizeof(stack));
+    stack.ss_sp = mapped;
+    stack.ss_size = 16384;
+    if (syscall_dispatch_impl(__NR_sigaltstack, (long)(uintptr_t)&stack, 0, 0, 0, 0, 0) != 0 ||
+        signal_prepare_frame_impl(task, SIGUSR1, 0xaaaa, 0x80000000, &frame_sp) != 0 ||
+        task->mm->signal_handler_pc != 0x9000 ||
+        task->mm->signal_frame_flags != (SA_RESTART | SA_ONSTACK)) {
+        errno = EPROTO;
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+        return -1;
+    }
+
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+    return 0;
+}

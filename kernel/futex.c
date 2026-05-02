@@ -194,6 +194,7 @@ int set_robust_list_impl(void *head, unsigned long len) {
             errno = ENOMEM;
             return -1;
         }
+        atomic_init(&task->mm->refs, 1);
     }
     if (!head || len == 0) {
         errno = EINVAL;

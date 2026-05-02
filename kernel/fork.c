@@ -51,7 +51,7 @@ static unsigned long clone_namespace_flags(void) {
 }
 
 static unsigned long clone_supported_flags(void) {
-    return clone_namespace_flags() | CLONE_FS;
+    return clone_namespace_flags() | CLONE_FS | CLONE_VM | CLONE_SIGHAND | CLONE_THREAD;
 }
 
 static int validate_clone_namespace_flags(uint64_t flags) {
@@ -62,6 +62,15 @@ static int validate_clone_namespace_flags(uint64_t flags) {
         return -1;
     }
     if ((masked & CLONE_NEWNS) != 0 && (masked & CLONE_FS) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if ((masked & CLONE_SIGHAND) != 0 && (masked & CLONE_VM) == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if ((masked & CLONE_THREAD) != 0 &&
+        ((masked & CLONE_VM) == 0 || (masked & CLONE_SIGHAND) == 0)) {
         errno = EINVAL;
         return -1;
     }

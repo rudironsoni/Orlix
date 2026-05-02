@@ -126,6 +126,7 @@ struct tty_struct {
 
 /* MM structure - virtual kernel internal */
 struct mm_struct {
+    atomic_int refs;
     void *exec_image_base;
     size_t exec_image_size;
     uint64_t exec_entry;
@@ -189,6 +190,8 @@ struct mm_struct {
     uint64_t signal_frame_sp;
     uint64_t signal_frame_signo;
     uint64_t signal_frame_return_pc;
+    uint64_t signal_handler_pc;
+    uint64_t signal_frame_flags;
 };
 
 /* Exec image types - virtual kernel internal */
@@ -345,6 +348,8 @@ uint32_t task_vma_page_flags_impl(const struct task_vma *vma, uint64_t addr);
 int task_set_vma_page_flags_impl(struct task_struct *task, uint64_t addr, uint64_t size, uint32_t flags);
 const struct task_exec_handoff *task_get_exec_handoff_impl(struct task_struct *task);
 void task_clear_vmas_impl(struct mm_struct *mm);
+struct mm_struct *task_mm_get_impl(struct mm_struct *mm);
+void task_mm_put_impl(struct mm_struct *mm);
 
 /* Virtual process identity syscalls (internal helpers) */
 int32_t getpid_impl(void);

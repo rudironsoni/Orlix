@@ -2,6 +2,8 @@
 
 #include <asm/unistd.h>
 #include <linux/futex.h>
+#include <linux/mman.h>
+#include <linux/sched.h>
 #include <linux/time_types.h>
 
 #include <errno.h>
@@ -196,4 +198,55 @@ int futex_contract_exit_clears_child_tid_and_marks_robust_futex(void) {
     }
     free_task(child);
     return 0;
+}
+
+int futex_contract_clone_thread_shares_vm_and_thread_group(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    int32_t child_pid;
+    void *mapped;
+    const char byte = 'T';
+    char readback = 0;
+    int result = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 4096, PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+
+    child_pid = clone_impl(CLONE_VM | CLONE_THREAD | CLONE_SIGHAND);
+    if (child_pid < 0) {
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
+        return -1;
+    }
+    child = task_lookup(child_pid);
+    if (!child) {
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
+        errno = ESRCH;
+        return -1;
+    }
+    if (child->tgid != parent->tgid || child->mm != parent->mm || child->signal != parent->signal) {
+        errno = EPROTO;
+        goto out_child;
+    }
+    if (task_write_virtual_memory_impl(child, (uint64_t)(uintptr_t)mapped, &byte, 1) != 1 ||
+        task_read_virtual_memory_impl(parent, (uint64_t)(uintptr_t)mapped, &readback, 1) != 1 ||
+        readback != byte) {
+        errno = ENODATA;
+        goto out_child;
+    }
+    result = 0;
+
+out_child:
+    task_unlink_child_impl(parent, child);
+    free_task(child);
+    free_task(child);
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
+    return result;
 }

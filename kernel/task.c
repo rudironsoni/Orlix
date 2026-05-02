@@ -274,6 +274,37 @@ void task_clear_vmas_impl(struct mm_struct *mm) {
     mm->vma_count = 0;
 }
 
+struct mm_struct *task_mm_get_impl(struct mm_struct *mm) {
+    if (!mm) {
+        return NULL;
+    }
+    if (atomic_load(&mm->refs) <= 0) {
+        atomic_store(&mm->refs, 1);
+    }
+    atomic_fetch_add(&mm->refs, 1);
+    return mm;
+}
+
+void task_mm_put_impl(struct mm_struct *mm) {
+    if (!mm) {
+        return;
+    }
+    if (atomic_load(&mm->refs) > 1 && atomic_fetch_sub(&mm->refs, 1) > 1) {
+        return;
+    }
+    for (uint32_t i = 0; i < mm->exec_segment_count; i++) {
+        free(mm->exec_segments[i].image);
+    }
+    for (uint32_t i = 0; i < mm->interp_segment_count; i++) {
+        free(mm->interp_segments[i].image);
+    }
+    task_clear_vmas_impl(mm);
+    free(mm->exec_image_base);
+    free(mm->interp_image_base);
+    free(mm->initial_stack_image);
+    free(mm);
+}
+
 static long task_read_vma(const struct task_vma *vma, uint64_t addr, void *buf, size_t count) {
     size_t offset;
     size_t available;
@@ -346,6 +377,40 @@ static long task_write_vma(struct task_vma *vma, uint64_t addr, const void *buf,
         }
     }
     return (long)to_copy;
+}
+
+static void task_propagate_shared_file_write(struct mm_struct *mm, struct task_vma *source,
+                                             uint64_t addr, const void *buf, size_t count) {
+    if (!mm || !source || source->kind != TASK_VMA_FILE || !source->shared ||
+        source->backing_fd < 0 || count == 0) {
+        return;
+    }
+    for (uint32_t i = 0; i < mm->vma_count; i++) {
+        struct task_vma *vma = &mm->vmas[i];
+        uint64_t source_file_start;
+        uint64_t source_file_end;
+        uint64_t target_file_start;
+        uint64_t target_file_end;
+        uint64_t overlap_start;
+        uint64_t overlap_end;
+
+        if (vma == source || vma->kind != TASK_VMA_FILE || !vma->shared ||
+            vma->backing_fd != source->backing_fd || !vma->image) {
+            continue;
+        }
+        source_file_start = source->backing_offset + (addr - source->start);
+        source_file_end = source_file_start + count;
+        target_file_start = vma->backing_offset;
+        target_file_end = target_file_start + vma->image_size;
+        if (source_file_end <= target_file_start || source_file_start >= target_file_end) {
+            continue;
+        }
+        overlap_start = source_file_start > target_file_start ? source_file_start : target_file_start;
+        overlap_end = source_file_end < target_file_end ? source_file_end : target_file_end;
+        memcpy((unsigned char *)vma->image + (overlap_start - target_file_start),
+               (const unsigned char *)buf + (overlap_start - source_file_start),
+               (size_t)(overlap_end - overlap_start));
+    }
 }
 
 long task_read_virtual_memory_impl(struct task_struct *task, uint64_t addr, void *buf, size_t count) {
@@ -422,7 +487,12 @@ long task_write_virtual_memory_impl(struct task_struct *task, uint64_t addr, con
         }
         copied = 0;
         for (uint32_t i = 0; i < mm->vma_count; i++) {
-            copied = task_write_vma(&mm->vmas[i], addr + total, (const unsigned char *)buf + total, count - total);
+            struct task_vma *vma = &mm->vmas[i];
+            copied = task_write_vma(vma, addr + total, (const unsigned char *)buf + total, count - total);
+            if (copied > 0) {
+                task_propagate_shared_file_write(mm, vma, addr + total,
+                                                 (const unsigned char *)buf + total, (size_t)copied);
+            }
             if (copied != 0) {
                 break;
             }
@@ -527,6 +597,10 @@ struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent
     child->pgid = parent->pgid;
     child->sid = parent->sid;
     child->clone_flags = flags;
+    if ((flags & CLONE_THREAD) != 0) {
+        child->tgid = parent->tgid;
+        child->ppid = parent->ppid;
+    }
     if ((flags & CLONE_NEWPID) != 0 || atomic_load(&parent->new_pid_namespace_pending)) {
         child->pid_ns_level = parent->pid_ns_level + 1;
         child->ns_pid = 1;
@@ -557,7 +631,14 @@ struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent
         }
     }
 
-    if (parent->signal) {
+    if ((flags & CLONE_VM) != 0 && parent->mm) {
+        child->mm = task_mm_get_impl(parent->mm);
+    }
+
+    if ((flags & CLONE_SIGHAND) != 0 && parent->signal) {
+        child->signal = parent->signal;
+        atomic_fetch_add(&child->signal->refs, 1);
+    } else if (parent->signal) {
         child->signal = dup_signal_struct(parent->signal);
         if (!child->signal) {
             free_task(child);
@@ -714,19 +795,8 @@ void free_task(struct task_struct *task) {
         free_signal_struct(task->signal);
     if (task->tty)
         atomic_fetch_sub(&task->tty->refs, 1);
-    if (task->mm) {
-        for (uint32_t i = 0; i < task->mm->exec_segment_count; i++) {
-            free(task->mm->exec_segments[i].image);
-        }
-        for (uint32_t i = 0; i < task->mm->interp_segment_count; i++) {
-            free(task->mm->interp_segments[i].image);
-        }
-        task_clear_vmas_impl(task->mm);
-        free(task->mm->exec_image_base);
-        free(task->mm->interp_image_base);
-        free(task->mm->initial_stack_image);
-        free(task->mm);
-    }
+    if (task->mm)
+        task_mm_put_impl(task->mm);
     if (task->exec_image)
         free(task->exec_image);
     if (task->uts_ns)

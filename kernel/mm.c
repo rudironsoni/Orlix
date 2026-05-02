@@ -446,6 +446,7 @@ void *mmap_impl(void *addr, size_t length, int prot, int flags, int fd, int64_t 
             errno = ENOMEM;
             return (void *)-1;
         }
+        atomic_init(&task->mm->refs, 1);
     }
     if (length == 0 || mm_validate_prot(prot) != 0) {
         if (length == 0) {
@@ -685,6 +686,7 @@ void *brk_impl(void *addr) {
             errno = ENOMEM;
             return (void *)-1;
         }
+        atomic_init(&task->mm->refs, 1);
     }
     if (task->mm->brk_start == 0) {
         task->mm->brk_start = MM_BRK_BASE;

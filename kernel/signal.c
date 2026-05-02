@@ -726,6 +726,8 @@ int signal_prepare_frame_impl(struct task_struct *task, int32_t sig, uint64_t re
     task->mm->signal_frame_sp = frame_sp;
     task->mm->signal_frame_signo = (uint64_t)sig;
     task->mm->signal_frame_return_pc = return_pc;
+    task->mm->signal_handler_pc = (uint64_t)(uintptr_t)task->signal->actions[sig - 1].handler;
+    task->mm->signal_frame_flags = (uint64_t)(uint32_t)task->signal->actions[sig - 1].flags;
     *frame_sp_out = frame_sp;
     return 0;
 }
