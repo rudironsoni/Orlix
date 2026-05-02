@@ -214,7 +214,7 @@ echo "   ✓ No TEST_* raw constants in tests"
 
 echo ""
 echo "=== Check 15b: Test ABI contamination - at constant helpers ==="
-UAPI_AT_HELPERS=$(rg -n '\bixland_test_uapi[_]at_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+UAPI_AT_HELPERS=$(rg -n '\bi[x]land_test_uapi[_]at_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
 if [ -n "$UAPI_AT_HELPERS" ]; then
     echo "FAIL: at constant helper soup found in test files:"
     echo "$UAPI_AT_HELPERS"
@@ -225,7 +225,7 @@ echo "   ✓ No at constant helper soup in tests"
 
 echo ""
 echo "=== Check 15c: Test ABI contamination - fcntl constant helpers ==="
-UAPI_F_HELPERS=$(rg -n '\bixland_test_uapi[_]f_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+UAPI_F_HELPERS=$(rg -n '\bi[x]land_test_uapi[_]f_' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
 if [ -n "$UAPI_F_HELPERS" ]; then
     echo "FAIL: fcntl constant helper soup found in test files:"
     echo "$UAPI_F_HELPERS"
@@ -275,7 +275,7 @@ echo "   ✓ execve() routes through task_exec_transition_impl"
 
 echo ""
 echo "=== Check 17b: Test Linux UAPI contamination aliases ==="
-TEST_UAPI_CONTAMINATION=$(rg -n 'include/ixland/linux_uapi_constants[.]h|\bI[X]_(AT_|F_)|\bTES[T]_(AT_|F_)|\bixland_test_uapi[_](at_|f_)' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
+TEST_UAPI_CONTAMINATION=$(rg -n 'include/ixland/linux_uapi_constants[.]h|\bI[X]_(AT_|F_)|\bTES[T]_(AT_|F_)|\bi[x]land_test_uapi[_](at_|f_)' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
 if [ -n "$TEST_UAPI_CONTAMINATION" ]; then
     echo "FAIL: Test Linux UAPI contamination aliases found:"
     echo "$TEST_UAPI_CONTAMINATION"
@@ -375,14 +375,14 @@ echo "   ✓ No internal/ios includes from Linux kernel tests"
 
 echo ""
 echo "=== Check 23: Test ABI contamination - branded wrapper functions ==="
-BRANDED_WRAPPERS=$(rg -n '^\s*int\s+ixland_test_host_(open|close|open_readonly)\s*\(' IXLandSystemLinuxKernelTests/*.m IXLandSystemLinuxKernelTests/*.c IXLandSystemHostBridgeTests/*.m IXLandSystemHostBridgeTests/*.c 2>/dev/null || true)
+BRANDED_WRAPPERS=$(rg -n '\bi[x]land_test_[A-Za-z0-9_]*\b' IXLandSystemLinuxKernelTests IXLandSystemHostBridgeTests 2>/dev/null || true)
 if [ -n "$BRANDED_WRAPPERS" ]; then
     echo "FAIL: Branded wrapper functions found in test files:"
     echo "$BRANDED_WRAPPERS"
-    echo "Remove fake wrapper vocabulary; use direct target-correct includes/calls."
+    echo "Remove branded test-helper vocabulary; use Linux C contracts or HostBridge fixtures with plain host names."
     exit 1
 fi
-echo "   ✓ No branded wrapper functions in tests"
+echo "   ✓ No branded test-helper vocabulary in tests"
 
 echo ""
 echo "=== Check 24: Test ABI contamination - Linux-named accessor soup ==="

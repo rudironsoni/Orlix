@@ -255,19 +255,8 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
     unsigned int host_flags = 0;
     int ret;
 
-    if (rename_resolve_virtual_path_at(olddirfd, oldpath, resolved_old, sizeof(resolved_old)) != 0) {
-        return -1;
-    }
-
-    if (rename_resolve_virtual_path_at(newdirfd, newpath, resolved_new, sizeof(resolved_new)) != 0) {
-        return -1;
-    }
-
-    if (rename_translate_path_at(olddirfd, oldpath, translated_old, sizeof(translated_old)) != 0) {
-        return -1;
-    }
-
-    if (rename_translate_path_at(newdirfd, newpath, translated_new, sizeof(translated_new)) != 0) {
+    if (oldpath == NULL || newpath == NULL) {
+        errno = EFAULT;
         return -1;
     }
 
@@ -283,6 +272,22 @@ static int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const
 
     if ((flags & AT_RENAME_EXCHANGE) != 0 && (flags & AT_RENAME_NOREPLACE) != 0) {
         errno = EINVAL;
+        return -1;
+    }
+
+    if (rename_resolve_virtual_path_at(olddirfd, oldpath, resolved_old, sizeof(resolved_old)) != 0) {
+        return -1;
+    }
+
+    if (rename_resolve_virtual_path_at(newdirfd, newpath, resolved_new, sizeof(resolved_new)) != 0) {
+        return -1;
+    }
+
+    if (rename_translate_path_at(olddirfd, oldpath, translated_old, sizeof(translated_old)) != 0) {
+        return -1;
+    }
+
+    if (rename_translate_path_at(newdirfd, newpath, translated_new, sizeof(translated_new)) != 0) {
         return -1;
     }
 

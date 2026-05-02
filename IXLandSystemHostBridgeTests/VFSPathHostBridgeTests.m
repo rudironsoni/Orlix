@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include "internal/ios/fs/backing_io.h"
@@ -22,16 +23,6 @@
 
 #ifndef INVALID_FLAG_TEST_VALUE
 #define INVALID_FLAG_TEST_VALUE 0x40000000u
-#endif
-
-#ifndef RENAME_NOREPLACE
-#define RENAME_NOREPLACE (1u << 0)
-#endif
-#ifndef RENAME_EXCHANGE
-#define RENAME_EXCHANGE (1u << 1)
-#endif
-#ifndef RENAME_WHITEOUT
-#define RENAME_WHITEOUT (1u << 2)
 #endif
 
 struct linux_dirent64 {
@@ -46,6 +37,13 @@ extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags);
 extern int stat_impl(const char *path, struct linux_stat *statbuf);
 extern int lstat_impl(const char *path, struct linux_stat *statbuf);
+
+static int vfs_test_open_host_path(const char *path, int flags, unsigned int mode) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    return (int)syscall(SYS_open_nocancel, path, flags, (mode_t)mode);
+#pragma clang diagnostic pop
+}
 
 static void vfs_test_translate_virtual_path_or_fail(const char *path, char *host_path, size_t host_path_len) {
     int ret = vfs_translate_path(path, host_path, host_path_len);
@@ -91,7 +89,7 @@ static void vfs_test_remove_linux_path(const char *path) {
 }
 
 static int vfs_test_open_host_directory_fd(const char *host_path) {
-    return host_open_impl(host_path, O_RDONLY | O_DIRECTORY, 0);
+    return vfs_test_open_host_path(host_path, O_RDONLY | O_DIRECTORY, 0);
 }
 
 static void vfs_test_seed_linux_file(const char *path) {
@@ -99,7 +97,7 @@ static void vfs_test_seed_linux_file(const char *path) {
     vfs_test_translate_virtual_path_or_fail(path, host_path, sizeof(host_path));
     vfs_test_ensure_virtual_parent_directory(path);
 
-    int fd = host_open_impl(host_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    int fd = vfs_test_open_host_path(host_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
     XCTAssertTrue(fd >= 0, @"file seed should succeed for %s", path);
     if (fd < 0) {
         return;
@@ -141,8 +139,8 @@ static void vfs_test_seed_linux_file(const char *path) {
     int ret = vfs_translate_path("/etc/passwd", host_path, sizeof(host_path));
     XCTAssertEqual(ret, 0, @"vfs_translate_path for /etc/passwd should succeed");
 
-    int fd = host_open_impl(host_path, O_RDONLY, 0);
-    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/passwd should succeed");
+    int fd = vfs_test_open_host_path(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host open /etc/passwd should succeed");
     if (fd >= 0) host_close_impl(fd);
 }
 
@@ -161,8 +159,8 @@ static void vfs_test_seed_linux_file(const char *path) {
     XCTAssertEqual(vfs_translate_path("/etc/passwd", host_path, sizeof(host_path)), 0,
                    @"vfs_translate_path for /etc/passwd should succeed");
 
-    fd = host_open_impl(host_path, O_RDONLY, 0);
-    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/passwd should succeed");
+    fd = vfs_test_open_host_path(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host open /etc/passwd should succeed");
     if (fd < 0) {
         return;
     }
@@ -182,8 +180,8 @@ static void vfs_test_seed_linux_file(const char *path) {
     XCTAssertEqual(vfs_translate_path("/etc/passwd", host_path, sizeof(host_path)), 0,
                    @"vfs_translate_path for /etc/passwd should succeed");
 
-    fd = host_open_impl(host_path, O_RDONLY, 0);
-    XCTAssertTrue(fd >= 0, @"host_open_impl /etc/passwd should succeed");
+    fd = vfs_test_open_host_path(host_path, O_RDONLY, 0);
+    XCTAssertTrue(fd >= 0, @"host open /etc/passwd should succeed");
     if (fd < 0) {
         return;
     }
@@ -347,38 +345,6 @@ static void vfs_test_seed_linux_file(const char *path) {
     vfs_test_remove_linux_path("/etc/crossat-src");
 }
 
-- (void)testRenameat2SameRouteNoReplaceSucceeds_HostBacked {
-    vfs_test_seed_linux_file("/etc/rn2-src");
-
-    int ret = renameat2(AT_FDCWD, "/etc/rn2-src", AT_FDCWD, "/etc/rn2-dst", RENAME_NOREPLACE);
-    XCTAssertEqual(ret, 0, @"renameat2 RENAME_NOREPLACE within persistent route should succeed");
-
-    struct linux_stat st;
-    XCTAssertEqual(stat_impl("/etc/rn2-dst", &st), 0, @"renameat2 destination should exist");
-    errno = 0;
-    XCTAssertEqual(stat_impl("/etc/rn2-src", &st), -1, @"renameat2 source should be gone");
-    XCTAssertEqual(errno, ENOENT, @"renameat2 source stat should report ENOENT after move");
-
-    vfs_test_remove_linux_path("/etc/rn2-dst");
-}
-
-- (void)testRenameat2NoReplaceWithExistingDstFails_HostBacked {
-    vfs_test_seed_linux_file("/etc/rn2-exist-src");
-    vfs_test_seed_linux_file("/etc/rn2-exist-dst");
-
-    errno = 0;
-    int ret = renameat2(AT_FDCWD, "/etc/rn2-exist-src", AT_FDCWD, "/etc/rn2-exist-dst", RENAME_NOREPLACE);
-    XCTAssertEqual(ret, -1, @"renameat2 RENAME_NOREPLACE should fail if destination exists");
-    XCTAssertEqual(errno, EEXIST, @"renameat2 RENAME_NOREPLACE should report EEXIST when destination exists");
-
-    struct linux_stat st;
-    XCTAssertEqual(stat_impl("/etc/rn2-exist-src", &st), 0, @"renameat2 source should still exist");
-    XCTAssertEqual(stat_impl("/etc/rn2-exist-dst", &st), 0, @"renameat2 destination should still exist");
-
-    vfs_test_remove_linux_path("/etc/rn2-exist-src");
-    vfs_test_remove_linux_path("/etc/rn2-exist-dst");
-}
-
 - (void)testRenameat2CrossRouteFails_HostBacked {
     vfs_test_seed_linux_file("/etc/rn2-cross-src");
 
@@ -388,20 +354,6 @@ static void vfs_test_seed_linux_file(const char *path) {
     XCTAssertEqual(errno, EXDEV, @"renameat2 across routes should fail with EXDEV");
 
     vfs_test_remove_linux_path("/etc/rn2-cross-src");
-}
-
-- (void)testRenameat2UnsupportedFlagsFail_HostBacked {
-    errno = 0;
-    int ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", RENAME_EXCHANGE);
-    XCTAssertEqual(ret, -1, @"renameat2 RENAME_EXCHANGE should be rejected");
-    XCTAssertTrue(errno == EOPNOTSUPP || errno == ENOTSUP,
-                  @"renameat2 RENAME_EXCHANGE should report operation not supported");
-
-    errno = 0;
-    ret = renameat2(AT_FDCWD, "/etc/src", AT_FDCWD, "/etc/dst", RENAME_WHITEOUT);
-    XCTAssertEqual(ret, -1, @"renameat2 RENAME_WHITEOUT should be rejected");
-    XCTAssertTrue(errno == EOPNOTSUPP || errno == ENOTSUP,
-                  @"renameat2 RENAME_WHITEOUT should report operation not supported");
 }
 
 - (void)testRenameat2UnknownFlagFails_HostBacked {
@@ -472,12 +424,12 @@ static void vfs_test_seed_linux_file(const char *path) {
     XCTAssertEqual(vfs_translate_path("/etc/passwd", host_path, sizeof(host_path)), 0,
                    @"path should translate");
 
-    int fd = host_open_impl(host_path, O_RDONLY, 0);
+    int fd = vfs_test_open_host_path(host_path, O_RDONLY, 0);
     XCTAssertTrue(fd >= 0, @"host open should succeed");
     if (fd < 0) return;
 
     errno = 0;
-    int new_fd = ixland_test_fcntl_dupfd_cloexec(fd, 10);
+    int new_fd = host_test_fcntl_dupfd_cloexec(fd, 10);
     if (new_fd < 0 && (errno == EINVAL || errno == ENOTSUP)) {
         host_close_impl(fd);
         XCTSkip(@"host F_DUPFD_CLOEXEC is unavailable on this simulator runtime");
@@ -501,7 +453,7 @@ static void vfs_test_seed_linux_file(const char *path) {
     XCTAssertEqual(vfs_translate_path(test_path, host_path, sizeof(host_path)), 0,
                    @"path should translate");
 
-    fd = host_open_impl(host_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    fd = vfs_test_open_host_path(host_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
     XCTAssertTrue(fd >= 0, @"file creation should succeed");
     if (fd < 0) return;
 

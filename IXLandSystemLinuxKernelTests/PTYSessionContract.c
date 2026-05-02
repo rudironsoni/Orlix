@@ -31,7 +31,7 @@ extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int32_t getpgrp_impl(void);
 extern int32_t getsid_impl(int32_t pid);
 
-extern int ixland_test_ioctl(int fd, unsigned long request, ...);
+extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 
 struct linux_dirent64 {
     uint64_t d_ino;
@@ -162,7 +162,7 @@ static int detach_controlling_tty_if_present(void) {
         return -1;
     }
 
-    if (ixland_test_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
+    if (pty_contract_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
         close_impl(tty_fd);
         return -1;
     }
@@ -242,13 +242,13 @@ static int alloc_pty_pair(int cloexec, int nonblock, int *master_fd_out, int *sl
         return -1;
     }
 
-    if (ixland_test_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
         close_impl(master_fd);
         return -1;
     }
 
     unlock = 0;
-    if (ixland_test_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
         close_impl(master_fd);
         return -1;
     }
@@ -558,7 +558,7 @@ int pty_session_contract_controlling_tty_attach_makes_dev_tty_usable(void) {
         return -1;
     }
 
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         close_if_open(master_fd);
         close_if_open(slave_fd);
         return -1;
@@ -591,7 +591,7 @@ int pty_session_contract_controlling_tty_attach_makes_dev_tty_usable(void) {
         return -1;
     }
 
-    if (ixland_test_ioctl(tty_fd, TIOCGPGRP, &foreground_pgrp) != 0 || foreground_pgrp != 1) {
+    if (pty_contract_ioctl(tty_fd, TIOCGPGRP, &foreground_pgrp) != 0 || foreground_pgrp != 1) {
         close_if_open(tty_fd);
         close_if_open(master_fd);
         close_if_open(slave_fd);
@@ -621,7 +621,7 @@ int pty_session_contract_controlling_tty_survives_dup_of_slave_descriptor(void) 
     if (alloc_pty_pair(0, 0, &master_fd, &slave_fd, &pty_index) != 0) {
         return -1;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         close_if_open(master_fd);
         close_if_open(slave_fd);
         return -1;
@@ -671,7 +671,7 @@ int pty_session_contract_controlling_tty_clears_or_fails_predictably_after_close
     if (alloc_pty_pair(0, 0, &master_fd, &slave_fd, &pty_index) != 0) {
         return -1;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         close_if_open(master_fd);
         close_if_open(slave_fd);
         return -1;

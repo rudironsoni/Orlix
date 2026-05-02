@@ -21,7 +21,7 @@
 #include "kernel/task.h"
 #include "runtime/syscall.h"
 
-extern int ixland_test_ioctl(int fd, unsigned long request, ...);
+extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern int pipe_impl(int pipefd[2]);
 extern int fcntl_impl(int fd, int cmd, ...);
@@ -109,11 +109,11 @@ static int alloc_pty_pair(int *master_fd_out, int *slave_fd_out) {
     char slave_path[64];
     master_fd = open_impl("/dev/ptmx", O_RDWR, 0);
     if (master_fd < 0) return -1;
-    if (ixland_test_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
         close_impl(master_fd);
         return -1;
     }
-    if (ixland_test_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
         close_impl(master_fd);
         return -1;
     }

@@ -25,7 +25,7 @@ static struct {
     struct sigaction old_sa;
 } sigint_state = {0};
 
-int ixland_test_signal_install_sigint_ign(void) {
+int host_test_signal_install_sigint_ign(void) {
     struct sigaction new_sa;
 
     memset(&new_sa, 0, sizeof(new_sa));
@@ -40,7 +40,7 @@ int ixland_test_signal_install_sigint_ign(void) {
     return 0;
 }
 
-int ixland_test_signal_restore_sigint(void) {
+int host_test_signal_restore_sigint(void) {
     if (!sigint_state.valid) {
         return -1;
     }
@@ -48,7 +48,7 @@ int ixland_test_signal_restore_sigint(void) {
     return sigaction(SIGINT, &sigint_state.old_sa, NULL);
 }
 
-int ixland_test_signal_block_sigint(void) {
+int host_test_signal_block_sigint(void) {
     sigset_t set;
 
     sigemptyset(&set);
@@ -57,7 +57,7 @@ int ixland_test_signal_block_sigint(void) {
     return sigprocmask(SIG_BLOCK, &set, NULL);
 }
 
-int ixland_test_signal_restore_mask(void) {
+int host_test_signal_restore_mask(void) {
     /* Note: This is a simplified implementation */
     return 0;
 }
@@ -66,30 +66,30 @@ int ixland_test_signal_restore_mask(void) {
  * fcntl semantic test helpers (Darwin implementation)
  * ============================================================================ */
 
-int ixland_test_fcntl_dupfd(int fd, int min_fd) {
+int host_test_fcntl_dupfd(int fd, int min_fd) {
     return fcntl(fd, F_DUPFD, min_fd);
 }
 
-int ixland_test_fcntl_dupfd_cloexec(int fd, int min_fd) {
+int host_test_fcntl_dupfd_cloexec(int fd, int min_fd) {
     return fcntl(fd, F_DUPFD_CLOEXEC, min_fd);
 }
 
-int ixland_test_fcntl_getfd(int fd) {
+int host_test_fcntl_getfd(int fd) {
     return fcntl(fd, F_GETFD);
 }
 
-int ixland_test_fcntl_setfd(int fd, int flags) {
+int host_test_fcntl_setfd(int fd, int flags) {
     return fcntl(fd, F_SETFD, flags);
 }
 
-int ixland_test_fcntl_getfl(int fd) {
+int host_test_fcntl_getfl(int fd) {
     return fcntl(fd, F_GETFL);
 }
 
-int ixland_test_fcntl_has_cloexec(int flags) {
+int host_test_fcntl_has_cloexec(int flags) {
     return (flags & FD_CLOEXEC) != 0;
 }
 
-int ixland_test_fcntl_has_rdonly(int flags) {
+int host_test_fcntl_has_rdonly(int flags) {
     return (flags & O_ACCMODE) == O_RDONLY;
 }

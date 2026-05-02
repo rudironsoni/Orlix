@@ -14,10 +14,10 @@ extern "C" {
 #endif
 
 /* PTY test helpers - currently stubbed due to snprintf prohibition */
-int ixland_test_pty_get_number(int master_fd, unsigned int *pty_number);
-int ixland_test_pty_unlock_slave(int master_fd);
-int ixland_test_pty_open_pair(int *master_fd, int *slave_fd);
-int ixland_test_tty_disassociate(int fd);
+int host_test_pty_get_number(int master_fd, unsigned int *pty_number);
+int host_test_pty_unlock_slave(int master_fd);
+int host_test_pty_open_pair(int *master_fd, int *slave_fd);
+int host_test_tty_disassociate(int fd);
 
 #ifdef __cplusplus
 }

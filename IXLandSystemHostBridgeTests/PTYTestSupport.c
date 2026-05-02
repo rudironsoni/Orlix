@@ -25,7 +25,7 @@
  * pair without manual path formatting. This avoids manual host path formatting
  * and is the portable host approach for PTYs on Darwin/Unix platforms. */
 
-int ixland_test_pty_get_number(int master_fd, unsigned int *pty_number) {
+int host_test_pty_get_number(int master_fd, unsigned int *pty_number) {
     if (!pty_number) {
         errno = EINVAL;
         return -1;
@@ -58,11 +58,11 @@ int ixland_test_pty_get_number(int master_fd, unsigned int *pty_number) {
     return 0;
 }
 
-int ixland_test_pty_unlock_slave(int master_fd) {
+int host_test_pty_unlock_slave(int master_fd) {
     return (unlockpt(master_fd) == 0) ? 0 : -1;
 }
 
-int ixland_test_pty_open_pair(int *master_fd, int *slave_fd) {
+int host_test_pty_open_pair(int *master_fd, int *slave_fd) {
     if (!master_fd || !slave_fd) {
         errno = EINVAL;
         return -1;
@@ -100,7 +100,7 @@ int ixland_test_pty_open_pair(int *master_fd, int *slave_fd) {
     return 0;
 }
 
-int ixland_test_tty_disassociate(int fd) {
+int host_test_tty_disassociate(int fd) {
     /* Best-effort: create a new session to disassociate controlling tty.
      * If the platform provides a TIOCNOTTY ioctl, attempt it; otherwise rely on
      * setsid(). This is a host helper and used only by HostBridge tests. */

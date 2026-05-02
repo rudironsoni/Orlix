@@ -19,7 +19,7 @@ extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
-extern int ixland_test_ioctl(int fd, unsigned long request, ...);
+extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 
 static int close_if_open(int fd) {
     if (fd >= 0) {
@@ -72,12 +72,12 @@ static int alloc_pty_pair(int *master_fd_out, int *slave_fd_out, unsigned int *p
         return -1;
     }
 
-    if (ixland_test_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
         close_impl(master_fd);
         return -1;
     }
 
-    if (ixland_test_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
         close_impl(master_fd);
         return -1;
     }
@@ -110,7 +110,7 @@ static int detach_controlling_tty_if_present(void) {
         return -1;
     }
 
-    if (ixland_test_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
+    if (pty_contract_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
         close_impl(tty_fd);
         return -1;
     }
@@ -172,13 +172,13 @@ int pty_job_control_contract_tiocspgrp_round_trip(void) {
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &peer->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &peer->pgid) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCGPGRP, &foreground_pgrp) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCGPGRP, &foreground_pgrp) != 0) {
         goto out;
     }
     if (foreground_pgrp != peer->pgid) {
@@ -229,10 +229,10 @@ int pty_job_control_contract_background_tiocspgrp_delivers_sigttou(void) {
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &foreground_peer->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &foreground_peer->pgid) != 0) {
         goto out;
     }
 
@@ -240,7 +240,7 @@ int pty_job_control_contract_background_tiocspgrp_delivers_sigttou(void) {
     requested_pgrp = target_peer->pgid;
     clear_pending_signal(task, SIGTTOU);
     errno = 0;
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &requested_pgrp) == 0 || errno != EINTR) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &requested_pgrp) == 0 || errno != EINTR) {
         errno = EPROTO;
         goto out;
     }
@@ -301,10 +301,10 @@ int pty_job_control_contract_background_read_delivers_sigttin(void) {
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &foreground_peer->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &foreground_peer->pgid) != 0) {
         goto out;
     }
 
@@ -382,10 +382,10 @@ int pty_job_control_contract_background_write_delivers_sigttou(void) {
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &foreground_peer->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &foreground_peer->pgid) != 0) {
         goto out;
     }
     if (pty_get_termios_impl(pty_index, &termios) != 0) {
@@ -465,11 +465,11 @@ int pty_job_control_contract_signal_chars_target_foreground_pgrp(void) {
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
 
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &sigint_peer->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &sigint_peer->pgid) != 0) {
         goto out;
     }
     if (pty_write_master_impl(pty_index, &vintr, 1, false) != 1) {
@@ -480,7 +480,7 @@ int pty_job_control_contract_signal_chars_target_foreground_pgrp(void) {
         goto out;
     }
 
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &sigquit_peer->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &sigquit_peer->pgid) != 0) {
         goto out;
     }
     if (pty_write_master_impl(pty_index, &vquit, 1, false) != 1) {
@@ -491,7 +491,7 @@ int pty_job_control_contract_signal_chars_target_foreground_pgrp(void) {
         goto out;
     }
 
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &sigtstp_peer->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &sigtstp_peer->pgid) != 0) {
         goto out;
     }
     if (pty_write_master_impl(pty_index, &vsusp, 1, false) != 1) {
@@ -537,7 +537,7 @@ int pty_job_control_contract_detach_clears_dev_tty_policy(void) {
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         return -1;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
 
@@ -545,7 +545,7 @@ int pty_job_control_contract_detach_clears_dev_tty_policy(void) {
     if (tty_fd < 0) {
         goto out;
     }
-    if (ixland_test_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
+    if (pty_contract_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
         goto out;
     }
     close_if_open(tty_fd);
@@ -563,7 +563,7 @@ int pty_job_control_contract_detach_clears_dev_tty_policy(void) {
     }
 
     errno = 0;
-    if (ixland_test_ioctl(slave_fd, TIOCGPGRP, &foreground_pgrp) == 0 || errno != ENOTTY) {
+    if (pty_contract_ioctl(slave_fd, TIOCGPGRP, &foreground_pgrp) == 0 || errno != ENOTTY) {
         errno = EPROTO;
         goto out;
     }

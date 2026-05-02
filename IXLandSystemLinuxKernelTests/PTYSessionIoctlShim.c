@@ -1,7 +1,7 @@
 #include <stdarg.h>
 #include <sys/ioctl.h>
 
-int ixland_test_ioctl(int fd, unsigned long request, ...) {
+int pty_contract_ioctl(int fd, unsigned long request, ...) {
     va_list args;
     void *arg;
 

@@ -19,7 +19,7 @@ extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
-extern int ixland_test_ioctl(int fd, unsigned long request, ...);
+extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 
 #ifndef WIFEXITED
 #define WIFEXITED(status) (((status) & 0x7f) == 0)
@@ -101,12 +101,12 @@ static int alloc_pty_pair(int *master_fd_out, int *slave_fd_out, unsigned int *p
         return -1;
     }
 
-    if (ixland_test_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCGPTN, &pty_index) != 0) {
         close_impl(master_fd);
         return -1;
     }
 
-    if (ixland_test_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
+    if (pty_contract_ioctl(master_fd, TIOCSPTLCK, &unlock) != 0) {
         close_impl(master_fd);
         return -1;
     }
@@ -139,7 +139,7 @@ static int detach_controlling_tty_if_present(void) {
         return -1;
     }
 
-    if (ixland_test_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
+    if (pty_contract_ioctl(tty_fd, TIOCNOTTY, 0) != 0) {
         close_impl(tty_fd);
         return -1;
     }
@@ -692,7 +692,7 @@ int wait_job_control_contract_pty_background_read_stop_is_waitpid_visible(void) 
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         return -1;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
     child = create_child_task(parent, 1);
@@ -739,7 +739,7 @@ int wait_job_control_contract_pty_background_write_tostop_stop_is_waitpid_visibl
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         return -1;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
     if (pty_get_termios_impl(pty_index, &termios) != 0) {
@@ -792,14 +792,14 @@ int wait_job_control_contract_pty_vsusp_stop_is_waitpid_visible(void) {
     if (alloc_pty_pair(&master_fd, &slave_fd, &pty_index) != 0) {
         return -1;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
         goto out;
     }
     child = create_child_task(parent, 1);
     if (!child) {
         goto out;
     }
-    if (ixland_test_ioctl(slave_fd, TIOCSPGRP, &child->pgid) != 0) {
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &child->pgid) != 0) {
         goto out;
     }
 

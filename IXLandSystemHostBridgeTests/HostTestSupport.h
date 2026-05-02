@@ -19,43 +19,41 @@ extern "C" {
  * ============================================================================ */
 
 /* Install SIG_IGN handler for SIGINT, returns 0 on success, -1 on error */
-int ixland_test_signal_install_sigint_ign(void);
+int host_test_signal_install_sigint_ign(void);
 
 /* Restore SIGINT handler to previous disposition, returns 0 on success */
-int ixland_test_signal_restore_sigint(void);
+int host_test_signal_restore_sigint(void);
 
 /* Block SIGINT, returns 0 on success, -1 on error */
-int ixland_test_signal_block_sigint(void);
+int host_test_signal_block_sigint(void);
 
 /* Restore signal mask from previous blocked state, returns 0 on success */
-int ixland_test_signal_restore_mask(void);
+int host_test_signal_restore_mask(void);
 
 /* ============================================================================
  * fcntl semantic test helpers (Darwin implementation)
  * ============================================================================ */
 
 /* Duplicate fd to min_fd or higher, returns new fd or -1 on error */
-int ixland_test_fcntl_dupfd(int fd, int min_fd);
+int host_test_fcntl_dupfd(int fd, int min_fd);
 
 /* Duplicate fd with FD_CLOEXEC set, returns new fd or -1 on error */
-int ixland_test_fcntl_dupfd_cloexec(int fd, int min_fd);
+int host_test_fcntl_dupfd_cloexec(int fd, int min_fd);
 
 /* Get fd flags, returns flags or -1 on error */
-int ixland_test_fcntl_getfd(int fd);
+int host_test_fcntl_getfd(int fd);
 
 /* Set fd flags, returns 0 on success, -1 on error */
-int ixland_test_fcntl_setfd(int fd, int flags);
+int host_test_fcntl_setfd(int fd, int flags);
 
 /* Get file status flags, returns flags or -1 on error */
-int ixland_test_fcntl_getfl(int fd);
+int host_test_fcntl_getfl(int fd);
 
 /* Returns non-zero if FD_CLOEXEC is set in flags */
-int ixland_test_fcntl_has_cloexec(int flags);
+int host_test_fcntl_has_cloexec(int flags);
 
 /* Returns non-zero if O_RDONLY is set in flags */
-int ixland_test_fcntl_has_rdonly(int flags);
-
-
+int host_test_fcntl_has_rdonly(int flags);
 
 #ifdef __cplusplus
 }

@@ -48,7 +48,7 @@
 
 - (void)testHostTestSupportIsAvailable {
     // Verify HostTestSupport.h helpers are available
-    int result = ixland_test_fcntl_getfd(0);
+    int result = host_test_fcntl_getfd(0);
     // fd 0 (stdin) should exist and return valid flags or -1 on error
     // The important thing is that the function is linked
     (void)result;
@@ -57,7 +57,7 @@
 
 - (void)testSignalHelpersAreAvailable {
     // Verify signal helpers from HostTestSupport are available
-    int result = ixland_test_signal_block_sigint();
+    int result = host_test_signal_block_sigint();
     // Result depends on current signal state, but function should be callable
     (void)result;
     XCTAssertTrue(YES, @"Signal helpers are available in bridge target");
@@ -67,10 +67,10 @@
     // Open a file to test fcntl helpers
     int fd = open("/etc/passwd", O_RDONLY);
     if (fd >= 0) {
-        int flags = ixland_test_fcntl_getfd(fd);
+        int flags = host_test_fcntl_getfd(fd);
         XCTAssertTrue(flags >= 0 || flags == -1, @"fcntl helpers should be callable");
 
-        int fl_flags = ixland_test_fcntl_getfl(fd);
+        int fl_flags = host_test_fcntl_getfl(fd);
         XCTAssertTrue(fl_flags >= 0 || fl_flags == -1, @"F_GETFL should be callable");
 
         close(fd);
@@ -82,7 +82,7 @@
 - (void)testFcntlDupfdWorks {
     int fd = open("/etc/passwd", O_RDONLY);
     if (fd >= 0) {
-        int new_fd = ixland_test_fcntl_dupfd(fd, 10);
+        int new_fd = host_test_fcntl_dupfd(fd, 10);
         if (new_fd >= 0) {
             XCTAssertTrue(new_fd >= 10, @"F_DUPFD should return fd >= min_fd");
             close(new_fd);
@@ -96,12 +96,12 @@
 - (void)testFcntlDupfdCloexecWorks {
     int fd = open("/etc/passwd", O_RDONLY);
     if (fd >= 0) {
-        int new_fd = ixland_test_fcntl_dupfd_cloexec(fd, 10);
+        int new_fd = host_test_fcntl_dupfd_cloexec(fd, 10);
         if (new_fd >= 0) {
             XCTAssertTrue(new_fd >= 10, @"F_DUPFD_CLOEXEC should return fd >= min_fd");
 
-            int flags = ixland_test_fcntl_getfd(new_fd);
-            XCTAssertTrue(ixland_test_fcntl_has_cloexec(flags), @"duped fd should have FD_CLOEXEC");
+            int flags = host_test_fcntl_getfd(new_fd);
+            XCTAssertTrue(host_test_fcntl_has_cloexec(flags), @"duped fd should have FD_CLOEXEC");
 
             close(new_fd);
         }
@@ -112,13 +112,13 @@
 }
 
 - (void)testFcntlCloexecFlagWorks {
-    XCTAssertTrue(ixland_test_fcntl_has_cloexec(FD_CLOEXEC), @"has_cloexec should detect FD_CLOEXEC");
-    XCTAssertFalse(ixland_test_fcntl_has_cloexec(0), @"has_cloexec should not detect without flag");
+    XCTAssertTrue(host_test_fcntl_has_cloexec(FD_CLOEXEC), @"has_cloexec should detect FD_CLOEXEC");
+    XCTAssertFalse(host_test_fcntl_has_cloexec(0), @"has_cloexec should not detect without flag");
 }
 
 - (void)testFcntlRdonlyFlagWorks {
     // O_RDONLY is typically 0, so we need to test with O_ACCMODE
-    XCTAssertTrue(ixland_test_fcntl_has_rdonly(O_RDONLY), @"has_rdonly should detect O_RDONLY");
+    XCTAssertTrue(host_test_fcntl_has_rdonly(O_RDONLY), @"has_rdonly should detect O_RDONLY");
 }
 
 @end

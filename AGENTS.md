@@ -71,7 +71,37 @@ Category rule: banning one prefix and reintroducing the same leakage with a new 
 - Darwin/BSD header behavior must not define Linux-facing contracts.
 - Keep internal implementation behind private `*_impl()` helpers and preserve clean public wrapper boundaries.
 
-## 6) Proof Discipline (Required)
+## 6) Test Target Ownership
+
+`IXLandSystemLinuxKernelTests` proves Linux-facing IXLandSystem behavior.
+
+Rules for LinuxKernel tests:
+- Exercise syscall-facing IXLandSystem functions and Linux-visible runtime behavior.
+- Use C contract files for Linux UAPI constants, macros, structs, and ioctl payloads.
+- Objective-C test files must not include Linux UAPI headers.
+- Do not include `internal/ios/**`.
+- Do not depend on HostBridge helpers or Darwin host behavior as Linux proof.
+- Do not introduce branded helper vocabularies such as `ixland_test_*`, `IX_*`, `TEST_*`, or Linux constant accessor wrappers.
+
+`IXLandSystemHostBridgeTests` proves private iOS host mediation seams only.
+
+Rules for HostBridge tests:
+- May include `internal/ios/**` and may use Darwin/Foundation/POSIX host APIs when testing host mechanics.
+- Must verify bridge contracts such as host path discovery, host errno translation, backing storage setup, security-scoped access, and host fd mediation.
+- Must not be cited as proof that Linux semantics are correct.
+- Must not define Linux-facing ABI, Linux UAPI aliases, or Linux-looking compatibility helpers.
+- HostBridge helpers should be host-test fixtures with plain, non-branded names, or direct host calls where clearer.
+
+The test target split is intentional:
+
+```text
+IXLandSystemLinuxKernelTests -> Linux surface proof
+IXLandSystemHostBridgeTests  -> internal/ios seam proof
+```
+
+HostBridge failures can block a full repo-green milestone, but they do not replace LinuxKernel proof.
+
+## 7) Proof Discipline (Required)
 
 Lint green is necessary but insufficient.
 Build green is necessary but insufficient.
@@ -85,14 +115,14 @@ Authoritative proof target is iOS Simulator:
 Catalyst may be secondary smoke only.
 No commit/push before required proof is green.
 
-## 7) Tranche Discipline
+## 8) Tranche Discipline
 
 Changes must be bounded by subsystem tranche with explicit ownership and proof.
 
 Do not mix unrelated architecture migrations into one tranche.
 Do not “fix lint” by weakening checks or broadening allowlists.
 
-## 8) No Policy Theater
+## 9) No Policy Theater
 
 Forbidden:
 - incident-specific blacklist hacks (single test/helper name grudges)
