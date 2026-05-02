@@ -76,6 +76,7 @@ struct task_vma {
     uint64_t backing_offset;
     int shared;
     struct vm_shared_mapping *shared_mapping;
+    struct vm_shared_mapping **shared_pages;
     uint64_t shared_mapping_offset;
 };
 
@@ -188,9 +189,6 @@ struct mm_struct {
     struct address_space *vma_addr_space;
     uint64_t brk_start;
     uint64_t brk_current;
-    uint64_t clear_child_tid;
-    uint64_t robust_list_head;
-    uint64_t robust_list_len;
     uint64_t signal_frame_sp;
     uint64_t signal_frame_signo;
     uint64_t signal_frame_return_pc;
@@ -287,6 +285,9 @@ struct task_struct {
     struct mm_struct *mm;
     struct exec_image *exec_image;
     struct uts_namespace *uts_ns;
+    uint64_t clear_child_tid;
+    uint64_t robust_list_head;
+    uint64_t robust_list_len;
 
     /* Virtual process hierarchy relationships */
     struct task_struct *parent;
@@ -361,6 +362,8 @@ struct mm_struct *task_mm_get_impl(struct mm_struct *mm);
 void task_mm_put_impl(struct mm_struct *mm);
 void mm_shared_mapping_get_impl(struct vm_shared_mapping *mapping);
 void mm_shared_mapping_put_impl(struct vm_shared_mapping *mapping);
+long mm_shared_vma_read_impl(const struct task_vma *vma, uint64_t addr, void *buf, size_t count);
+long mm_shared_vma_write_impl(struct task_vma *vma, uint64_t addr, const void *buf, size_t count);
 
 /* Virtual process identity syscalls (internal helpers) */
 int32_t getpid_impl(void);

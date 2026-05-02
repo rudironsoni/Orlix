@@ -84,6 +84,7 @@ int get_fd_descriptor_flags_impl(void *entry);
 bool get_fd_is_synthetic_dir_impl(void *entry);
 bool get_fd_is_dir_impl(void *entry);
 int get_fd_path_impl(fd_entry_t *entry, char *path, size_t path_len);
+uint64_t get_fd_file_identity_impl(void *entry);
 void set_fd_flags_impl(fd_entry_t *entry, int flags);
 void set_fd_descriptor_flags_impl(fd_entry_t *entry, int flags);
 linux_off_t get_fd_offset_impl(fd_entry_t *entry);
@@ -96,6 +97,8 @@ int replace_fd_entry_impl(int newfd, int oldfd, bool cloexec);
 
 /* Initialize/clone fd entries */
 void init_fd_entry_impl(int fd, int real_fd, int flags, linux_mode_t mode, const char *path);
+void init_fd_entry_with_identity_impl(int fd, int real_fd, int flags, linux_mode_t mode,
+                                      const char *path, uint64_t file_identity);
 void init_host_dirfd_entry_impl(int fd, int real_fd, linux_mode_t mode, const char *path);
 
 enum synthetic_dir_class {

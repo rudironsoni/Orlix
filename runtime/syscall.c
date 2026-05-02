@@ -355,10 +355,10 @@ long syscall_dispatch_impl(long number,
         return syscall_result((long)(uintptr_t)brk_impl((void *)(uintptr_t)arg0));
     case __NR_set_tid_address: {
         struct task_struct *task = get_current();
-        if (!task || !task->mm) {
+        if (!task) {
             return -ESRCH;
         }
-        task->mm->clear_child_tid = (uint64_t)(uintptr_t)arg0;
+        task->clear_child_tid = (uint64_t)(uintptr_t)arg0;
         return (long)task->pid;
     }
     case __NR_futex: {
@@ -437,6 +437,7 @@ long syscall_dispatch_impl(long number,
             return -ESRCH;
         }
         if (task->signal) {
+            task->signal->blocked.sig[0] = task->mm->signal_frame_mask;
             task->signal->altstack.ss_flags &= ~1;
         }
         return (long)task->mm->signal_frame_return_pc;

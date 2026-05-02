@@ -65,7 +65,9 @@ struct vfs_mount_namespace {
 
 struct vfs_metadata_entry {
     bool active;
+    bool has_attrs;
     char path[MAX_PATH];
+    uint64_t file_identity;
     linux_uid_t uid;
     linux_gid_t gid;
     linux_mode_t mode;
@@ -74,6 +76,7 @@ struct vfs_metadata_entry {
 static struct vfs_metadata_entry vfs_metadata_table[VFS_METADATA_MAX];
 static fs_mutex_t vfs_metadata_lock = FS_MUTEX_INITIALIZER;
 static linux_atomic_int vfs_next_mount_ns_id = 1;
+static linux_atomic_int vfs_next_file_identity = 1;
 
 static struct vfs_mount_namespace *vfs_alloc_mount_namespace(void) {
     struct vfs_mount_namespace *mnt_ns = calloc(1, sizeof(struct vfs_mount_namespace));
@@ -219,7 +222,7 @@ void vfs_apply_stat_metadata(const char *resolved_vpath, struct linux_stat *stat
 
     fs_mutex_lock(&vfs_metadata_lock);
     idx = vfs_metadata_find_locked(resolved_vpath);
-    if (idx >= 0) {
+    if (idx >= 0 && vfs_metadata_table[idx].has_attrs) {
         linux_mode_t file_type = statbuf->st_mode & ~07777U;
         statbuf->st_uid = vfs_metadata_table[idx].uid;
         statbuf->st_gid = vfs_metadata_table[idx].gid;
@@ -252,6 +255,10 @@ void vfs_record_created_path(const char *resolved_vpath, linux_mode_t mode) {
     if (idx >= 0) {
         vfs_metadata_table[idx].active = true;
         vfs_copy_string(resolved_vpath, vfs_metadata_table[idx].path, sizeof(vfs_metadata_table[idx].path));
+        if (vfs_metadata_table[idx].file_identity == 0) {
+            vfs_metadata_table[idx].file_identity = (uint64_t)atomic_fetch_add(&vfs_next_file_identity, 1);
+        }
+        vfs_metadata_table[idx].has_attrs = true;
         vfs_metadata_table[idx].uid = cred->euid;
         vfs_metadata_table[idx].gid = cred->egid;
         vfs_metadata_table[idx].mode = mode & 07777U;
@@ -283,10 +290,52 @@ static int vfs_record_metadata_for_stat(const char *resolved_vpath, const struct
 
     vfs_metadata_table[idx].active = true;
     vfs_copy_string(resolved_vpath, vfs_metadata_table[idx].path, sizeof(vfs_metadata_table[idx].path));
+    if (vfs_metadata_table[idx].file_identity == 0) {
+        vfs_metadata_table[idx].file_identity = (uint64_t)atomic_fetch_add(&vfs_next_file_identity, 1);
+    }
+    vfs_metadata_table[idx].has_attrs = true;
     vfs_metadata_table[idx].uid = st->st_uid;
     vfs_metadata_table[idx].gid = st->st_gid;
     vfs_metadata_table[idx].mode = st->st_mode & 07777U;
     return 0;
+}
+
+uint64_t vfs_file_identity_for_path(const char *resolved_vpath) {
+    int idx;
+    int free_slot = -1;
+    uint64_t identity = 0;
+
+    if (!resolved_vpath) {
+        return 0;
+    }
+
+    fs_mutex_lock(&vfs_metadata_lock);
+    idx = vfs_metadata_find_locked(resolved_vpath);
+    if (idx < 0) {
+        for (size_t i = 0; i < VFS_METADATA_MAX; i++) {
+            if (!vfs_metadata_table[i].active) {
+                free_slot = (int)i;
+                break;
+            }
+        }
+        idx = free_slot;
+        if (idx >= 0) {
+            vfs_metadata_table[idx].active = true;
+            vfs_copy_string(resolved_vpath, vfs_metadata_table[idx].path,
+                            sizeof(vfs_metadata_table[idx].path));
+            vfs_metadata_table[idx].file_identity =
+                (uint64_t)atomic_fetch_add(&vfs_next_file_identity, 1);
+        }
+    }
+    if (idx >= 0) {
+        if (vfs_metadata_table[idx].file_identity == 0) {
+            vfs_metadata_table[idx].file_identity =
+                (uint64_t)atomic_fetch_add(&vfs_next_file_identity, 1);
+        }
+        identity = vfs_metadata_table[idx].file_identity;
+    }
+    fs_mutex_unlock(&vfs_metadata_lock);
+    return identity;
 }
 
 void vfs_forget_path_metadata(const char *resolved_vpath) {
@@ -300,6 +349,58 @@ void vfs_forget_path_metadata(const char *resolved_vpath) {
     idx = vfs_metadata_find_locked(resolved_vpath);
     if (idx >= 0) {
         memset(&vfs_metadata_table[idx], 0, sizeof(vfs_metadata_table[idx]));
+    }
+    fs_mutex_unlock(&vfs_metadata_lock);
+}
+
+void vfs_link_path_metadata(const char *old_resolved_vpath, const char *new_resolved_vpath) {
+    int old_idx;
+    int new_idx;
+    int free_slot = -1;
+    uint64_t identity;
+
+    if (!old_resolved_vpath || !new_resolved_vpath) {
+        return;
+    }
+
+    fs_mutex_lock(&vfs_metadata_lock);
+    old_idx = vfs_metadata_find_locked(old_resolved_vpath);
+    if (old_idx < 0) {
+        fs_mutex_unlock(&vfs_metadata_lock);
+        identity = vfs_file_identity_for_path(old_resolved_vpath);
+        fs_mutex_lock(&vfs_metadata_lock);
+        old_idx = vfs_metadata_find_locked(old_resolved_vpath);
+    } else {
+        identity = vfs_metadata_table[old_idx].file_identity;
+    }
+    if (identity == 0) {
+        identity = (uint64_t)atomic_fetch_add(&vfs_next_file_identity, 1);
+        if (old_idx >= 0) {
+            vfs_metadata_table[old_idx].file_identity = identity;
+        }
+    }
+
+    new_idx = vfs_metadata_find_locked(new_resolved_vpath);
+    if (new_idx < 0) {
+        for (size_t i = 0; i < VFS_METADATA_MAX; i++) {
+            if (!vfs_metadata_table[i].active) {
+                free_slot = (int)i;
+                break;
+            }
+        }
+        new_idx = free_slot;
+    }
+    if (new_idx >= 0) {
+        vfs_metadata_table[new_idx].active = true;
+        vfs_copy_string(new_resolved_vpath, vfs_metadata_table[new_idx].path,
+                        sizeof(vfs_metadata_table[new_idx].path));
+        vfs_metadata_table[new_idx].file_identity = identity;
+        if (old_idx >= 0) {
+            vfs_metadata_table[new_idx].has_attrs = vfs_metadata_table[old_idx].has_attrs;
+            vfs_metadata_table[new_idx].uid = vfs_metadata_table[old_idx].uid;
+            vfs_metadata_table[new_idx].gid = vfs_metadata_table[old_idx].gid;
+            vfs_metadata_table[new_idx].mode = vfs_metadata_table[old_idx].mode;
+        }
     }
     fs_mutex_unlock(&vfs_metadata_lock);
 }

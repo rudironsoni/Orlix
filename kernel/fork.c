@@ -393,12 +393,12 @@ int32_t clone3_impl(const struct clone_args *args, size_t size) {
         *child_tid = child->pid;
     }
     if ((args->flags & CLONE_CHILD_CLEARTID) != 0) {
-        if (!args->child_tid || !child->mm) {
+        if (!args->child_tid) {
             free_task(child);
             errno = EFAULT;
             return -1;
         }
-        child->mm->clear_child_tid = args->child_tid;
+        child->clear_child_tid = args->child_tid;
     }
 
     free_task(child);

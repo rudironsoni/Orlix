@@ -13,6 +13,14 @@
 #include "kernel/signal.h"
 #include "kernel/task.h"
 
+static void signal_contract_disable_altstack(void) {
+    stack_t disabled;
+
+    memset(&disabled, 0, sizeof(disabled));
+    disabled.ss_flags = SS_DISABLE;
+    syscall_dispatch_impl(__NR_sigaltstack, (long)(uintptr_t)&disabled, 0, 0, 0, 0, 0);
+}
+
 int signal_syscall_contract_rt_sigaction_uses_linux_uapi_layout(void) {
     struct sigaction act;
     struct sigaction oldact;
@@ -65,6 +73,7 @@ int signal_syscall_contract_sigaltstack_and_frame_policy(void) {
         errno = ESRCH;
         return -1;
     }
+    signal_contract_disable_altstack();
     mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 16384, PROT_READ | PROT_WRITE,
                                                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if ((long)(uintptr_t)mapped < 0) {
@@ -81,6 +90,7 @@ int signal_syscall_contract_sigaltstack_and_frame_policy(void) {
                                 (long)(uintptr_t)&old_stack, 0, 0, 0, 0);
     if (ret != 0 || (old_stack.ss_flags & SS_DISABLE) == 0) {
         errno = ret < 0 ? (int)-ret : EPROTO;
+        signal_contract_disable_altstack();
         syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
         return -1;
     }
@@ -90,15 +100,18 @@ int signal_syscall_contract_sigaltstack_and_frame_policy(void) {
         task->mm->signal_frame_signo != SIGINT ||
         task->mm->signal_frame_return_pc != 0x1234) {
         errno = EPROTO;
+        signal_contract_disable_altstack();
         syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
         return -1;
     }
     ret = syscall_dispatch_impl(__NR_rt_sigreturn, 0, 0, 0, 0, 0, 0);
     if (ret != 0x1234) {
         errno = EPROTO;
+        signal_contract_disable_altstack();
         syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
         return -1;
     }
+    signal_contract_disable_altstack();
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
     return 0;
 }
@@ -114,6 +127,7 @@ int signal_syscall_contract_frame_writes_virtual_record(void) {
         errno = ESRCH;
         return -1;
     }
+    signal_contract_disable_altstack();
     mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 16384, PROT_READ | PROT_WRITE,
                                                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if ((long)(uintptr_t)mapped < 0) {
@@ -131,10 +145,12 @@ int signal_syscall_contract_frame_writes_virtual_record(void) {
         frame_words[0] != SIGTERM ||
         frame_words[1] != 0x5678) {
         errno = EPROTO;
+        signal_contract_disable_altstack();
         syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
         return -1;
     }
 
+    signal_contract_disable_altstack();
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
     return 0;
 }
@@ -151,6 +167,7 @@ int signal_syscall_contract_frame_records_handler_handoff(void) {
         errno = ESRCH;
         return -1;
     }
+    signal_contract_disable_altstack();
     memset(&act, 0, sizeof(act));
     act.sa_handler = (__sighandler_t)(uintptr_t)0x9000;
     act.sa_flags = SA_RESTART | SA_ONSTACK;
@@ -175,10 +192,12 @@ int signal_syscall_contract_frame_records_handler_handoff(void) {
         task->mm->signal_handler_pc != 0x9000 ||
         task->mm->signal_frame_flags != (SA_RESTART | SA_ONSTACK)) {
         errno = EPROTO;
+        signal_contract_disable_altstack();
         syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
         return -1;
     }
 
+    signal_contract_disable_altstack();
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
     return 0;
 }
@@ -197,6 +216,7 @@ int signal_syscall_contract_frame_records_mask_restorer_and_context(void) {
         errno = ESRCH;
         return -1;
     }
+    signal_contract_disable_altstack();
     memset(&act, 0, sizeof(act));
     act.sa_handler = (__sighandler_t)(uintptr_t)0x9100;
     act.sa_restorer = (__sigrestore_t)(uintptr_t)0x9200;
@@ -239,10 +259,81 @@ int signal_syscall_contract_frame_records_mask_restorer_and_context(void) {
         task->mm->signal_frame_restorer_pc != 0x9200 ||
         task->mm->signal_frame_mask != block_set) {
         errno = EPROTO;
+        signal_contract_disable_altstack();
+        syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
+                              0, sizeof(block_set), 0, 0);
         syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
         return -1;
     }
 
+    signal_contract_disable_altstack();
+    syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
+                          0, sizeof(block_set), 0, 0);
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+    return 0;
+}
+
+int signal_syscall_contract_rt_sigreturn_restores_mask_and_altstack(void) {
+    struct task_struct *task = get_current();
+    stack_t stack;
+    uint64_t frame_sp = 0;
+    uint64_t block_set = 1ULL << (SIGTERM - 1);
+    uint64_t unblock_set = block_set;
+    uint64_t queried = 0;
+    void *mapped;
+    long ret;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    signal_contract_disable_altstack();
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 16384, PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+    memset(&stack, 0, sizeof(stack));
+    stack.ss_sp = mapped;
+    stack.ss_size = 16384;
+    if (syscall_dispatch_impl(__NR_sigaltstack, (long)(uintptr_t)&stack, 0, 0, 0, 0, 0) != 0 ||
+        syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, (long)(uintptr_t)&block_set,
+                              0, sizeof(block_set), 0, 0) != 0 ||
+        signal_prepare_frame_impl(task, SIGUSR1, 0x7777, 0x80000000, &frame_sp) != 0 ||
+        syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&unblock_set,
+                              0, sizeof(unblock_set), 0, 0) != 0) {
+        errno = EPROTO;
+        signal_contract_disable_altstack();
+        syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
+                              0, sizeof(block_set), 0, 0);
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+        return -1;
+    }
+
+    ret = syscall_dispatch_impl(__NR_rt_sigreturn, 0, 0, 0, 0, 0, 0);
+    if (ret != 0x7777) {
+        errno = EPROTO;
+        signal_contract_disable_altstack();
+        syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
+                              0, sizeof(block_set), 0, 0);
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+        return -1;
+    }
+    ret = syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, 0,
+                                (long)(uintptr_t)&queried, sizeof(queried), 0, 0);
+    if (ret != 0 || (queried & block_set) == 0 || (task->signal->altstack.ss_flags & SS_ONSTACK) != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        signal_contract_disable_altstack();
+        syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
+                              0, sizeof(block_set), 0, 0);
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+        return -1;
+    }
+
+    signal_contract_disable_altstack();
+    syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
+                          0, sizeof(block_set), 0, 0);
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
     return 0;
 }

@@ -661,7 +661,11 @@ static int linkat_impl(int olddirfd, const char *oldpath, int newdirfd, const ch
         return -1;
     }
 
-    return host_linkat_impl(translated_old, translated_new, (flags & AT_SYMLINK_FOLLOW) != 0);
+    ret = host_linkat_impl(translated_old, translated_new, (flags & AT_SYMLINK_FOLLOW) != 0);
+    if (ret == 0) {
+        vfs_link_path_metadata(resolved_old, resolved_new);
+    }
+    return ret;
 }
 
 int link_impl(const char *oldpath, const char *newpath) {

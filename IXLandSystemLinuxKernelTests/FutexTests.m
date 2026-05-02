@@ -55,4 +55,8 @@ extern int library_is_initialized(void);
     XCTAssertEqual(futex_contract_clone3_sets_parent_child_and_clear_tid(), 0, @"errno %d", errno);
 }
 
+- (void)testClearChildTidIsPerThreadNotMmShared {
+    XCTAssertEqual(futex_contract_clear_child_tid_is_per_thread_not_mm_shared(), 0, @"errno %d", errno);
+}
+
 @end

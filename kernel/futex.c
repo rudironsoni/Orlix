@@ -184,24 +184,16 @@ int set_robust_list_impl(void *head, unsigned long len) {
     if (!task && task_init() == 0) {
         task = get_current();
     }
-    if (!task || !task->mm) {
-        if (!task) {
-            errno = ESRCH;
-            return -1;
-        }
-        task->mm = calloc(1, sizeof(*task->mm));
-        if (!task->mm) {
-            errno = ENOMEM;
-            return -1;
-        }
-        atomic_init(&task->mm->refs, 1);
+    if (!task) {
+        errno = ESRCH;
+        return -1;
     }
     if (!head || len == 0) {
         errno = EINVAL;
         return -1;
     }
-    task->mm->robust_list_head = (uint64_t)(uintptr_t)head;
-    task->mm->robust_list_len = (uint64_t)len;
+    task->robust_list_head = (uint64_t)(uintptr_t)head;
+    task->robust_list_len = (uint64_t)len;
     return 0;
 }
 
@@ -214,18 +206,22 @@ int get_robust_list_impl(int pid, void **head, unsigned long *len) {
     }
     if (pid == 0) {
         task = get_current();
-        if (!task && task_init() == 0) {
+        if (!task) {
+            task_init();
             task = get_current();
         }
     } else {
         task = task_lookup(pid);
     }
-    if (!task || !task->mm) {
+    if (!task) {
         errno = ESRCH;
         return -1;
     }
-    *head = (void *)(uintptr_t)task->mm->robust_list_head;
-    *len = (unsigned long)task->mm->robust_list_len;
+    *head = (void *)(uintptr_t)task->robust_list_head;
+    *len = (unsigned long)task->robust_list_len;
+    if (pid != 0) {
+        free_task(task);
+    }
     return 0;
 }
 
@@ -247,10 +243,10 @@ static void futex_walk_robust_list(struct task_struct *task) {
     struct robust_list_head *head;
     struct robust_list *entry;
 
-    if (!task || !task->mm || task->mm->robust_list_head == 0) {
+    if (!task || task->robust_list_head == 0) {
         return;
     }
-    head = (struct robust_list_head *)(uintptr_t)task->mm->robust_list_head;
+    head = (struct robust_list_head *)(uintptr_t)task->robust_list_head;
     entry = head->list.next;
     for (int i = 0; entry && entry != &head->list && i < 2048; i++) {
         struct robust_list *next = entry->next;
@@ -267,15 +263,15 @@ static void futex_walk_robust_list(struct task_struct *task) {
 void futex_task_exit_impl(struct task_struct *task) {
     int *clear_child_tid;
 
-    if (!task || !task->mm) {
+    if (!task) {
         return;
     }
     futex_walk_robust_list(task);
-    if (task->mm->clear_child_tid == 0) {
+    if (task->clear_child_tid == 0) {
         return;
     }
-    clear_child_tid = (int *)(uintptr_t)task->mm->clear_child_tid;
+    clear_child_tid = (int *)(uintptr_t)task->clear_child_tid;
     atomic_store((_Atomic int *)clear_child_tid, 0);
     futex_wake_impl(clear_child_tid, 1);
-    task->mm->clear_child_tid = 0;
+    task->clear_child_tid = 0;
 }

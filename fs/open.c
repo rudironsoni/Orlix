@@ -247,10 +247,11 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    init_fd_entry_impl(fd, real_fd, flags, mode, resolved_path);
     if (record_created) {
         vfs_record_created_path(resolved_path, mode);
     }
+    init_fd_entry_with_identity_impl(fd, real_fd, flags, mode, resolved_path,
+                                     vfs_file_identity_for_path(resolved_path));
     return fd;
 }
 
@@ -411,10 +412,11 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    init_fd_entry_impl(fd, real_fd, flags, mode, resolved_path);
     if (record_created) {
         vfs_record_created_path(resolved_path, mode);
     }
+    init_fd_entry_with_identity_impl(fd, real_fd, flags, mode, resolved_path,
+                                     vfs_file_identity_for_path(resolved_path));
     return fd;
 }
 

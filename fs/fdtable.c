@@ -313,6 +313,7 @@ typedef struct fd_description {
     linux_mode_t mode;
     off_t offset;
     char path[MAX_PATH];
+    uint64_t file_identity;
     bool is_dir;
     void *synthetic_state;
     synthetic_dev_node_t dev_node;
@@ -344,6 +345,7 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, linux_mode
     desc->flags = flags;
     desc->mode = mode;
     desc->offset = 0;
+    desc->file_identity = 0;
     desc->is_dir = (flags & O_DIRECTORY) != 0;
     desc->synthetic_state = NULL;
     desc->dev_node = SYNTHETIC_DEV_NONE;
@@ -365,6 +367,16 @@ static fd_description_t *alloc_fd_description(int real_fd, int flags, linux_mode
     if (path) {
         strncpy(desc->path, path, MAX_PATH - 1);
         desc->path[MAX_PATH - 1] = '\0';
+    }
+    return desc;
+}
+
+static fd_description_t *alloc_fd_description_with_identity(int real_fd, int flags, linux_mode_t mode,
+                                                            const char *path,
+                                                            uint64_t file_identity) {
+    fd_description_t *desc = alloc_fd_description(real_fd, flags, mode, path);
+    if (desc) {
+        desc->file_identity = file_identity;
     }
     return desc;
 }
@@ -760,6 +772,11 @@ int get_fd_path_impl(fd_entry_t *entry, char *path, size_t path_len) {
     return 0;
 }
 
+uint64_t get_fd_file_identity_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry && fd_entry->desc ? fd_entry->desc->file_identity : 0;
+}
+
 void set_fd_flags_impl(fd_entry_t *entry, int flags) {
     if (entry && entry->desc) {
         entry->desc->flags = flags;
@@ -805,10 +822,15 @@ bool get_fd_is_writable_impl(void *entry) {
 }
 
 void init_fd_entry_impl(int fd, int real_fd, int flags, linux_mode_t mode, const char *path) {
+    init_fd_entry_with_identity_impl(fd, real_fd, flags, mode, path, 0);
+}
+
+void init_fd_entry_with_identity_impl(int fd, int real_fd, int flags, linux_mode_t mode,
+                                      const char *path, uint64_t file_identity) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
     fs_mutex_lock(&entry->lock);
-    entry->desc = alloc_fd_description(real_fd, flags, mode, path);
+    entry->desc = alloc_fd_description_with_identity(real_fd, flags, mode, path, file_identity);
     entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
     fs_mutex_unlock(&entry->lock);
 }

@@ -261,12 +261,18 @@ void task_clear_vmas_impl(struct mm_struct *mm) {
     }
     for (uint32_t i = 0; i < mm->vma_count; i++) {
         if (mm->vmas[i].kind == TASK_VMA_ANON || mm->vmas[i].kind == TASK_VMA_FILE) {
-            if (mm->vmas[i].shared_mapping) {
+            if (mm->vmas[i].shared_pages) {
+                for (uint64_t page = 0; page < mm->vmas[i].page_count; page++) {
+                    mm_shared_mapping_put_impl(mm->vmas[i].shared_pages[page]);
+                }
+                free(mm->vmas[i].shared_pages);
+            } else if (mm->vmas[i].shared_mapping) {
                 mm_shared_mapping_put_impl(mm->vmas[i].shared_mapping);
             } else {
                 free(mm->vmas[i].image);
             }
             mm->vmas[i].image = NULL;
+            mm->vmas[i].shared_pages = NULL;
         }
         free(mm->vmas[i].page_flags);
         mm->vmas[i].page_flags = NULL;
@@ -316,7 +322,7 @@ static long task_read_vma(const struct task_vma *vma, uint64_t addr, void *buf, 
     size_t to_copy;
     uint32_t flags;
 
-    if (!vma || !vma->image || vma->image_size == 0 || addr < vma->start) {
+    if (!vma || (!vma->image && !vma->shared_pages) || vma->image_size == 0 || addr < vma->start) {
         return 0;
     }
     if ((uint64_t)vma->image_size > UINT64_MAX - vma->start) {
@@ -330,6 +336,9 @@ static long task_read_vma(const struct task_vma *vma, uint64_t addr, void *buf, 
     if ((flags & PF_R) == 0) {
         errno = EACCES;
         return -1;
+    }
+    if (vma->shared_pages) {
+        return mm_shared_vma_read_impl(vma, addr, buf, count);
     }
 
     offset = (size_t)(addr - vma->start);
@@ -350,7 +359,7 @@ static long task_write_vma(struct task_vma *vma, uint64_t addr, const void *buf,
     size_t to_copy;
     uint32_t flags;
 
-    if (!vma || !vma->image || vma->image_size == 0 || addr < vma->start) {
+    if (!vma || (!vma->image && !vma->shared_pages) || vma->image_size == 0 || addr < vma->start) {
         return 0;
     }
     if ((uint64_t)vma->image_size > UINT64_MAX - vma->start) {
@@ -364,6 +373,9 @@ static long task_write_vma(struct task_vma *vma, uint64_t addr, const void *buf,
     if ((flags & PF_W) == 0) {
         errno = EACCES;
         return -1;
+    }
+    if (vma->shared_pages) {
+        return mm_shared_vma_write_impl(vma, addr, buf, count);
     }
 
     offset = (size_t)(addr - vma->start);
@@ -385,7 +397,7 @@ static long task_write_vma(struct task_vma *vma, uint64_t addr, const void *buf,
 
 static void task_propagate_shared_file_write(struct mm_struct *mm, struct task_vma *source,
                                              uint64_t addr, const void *buf, size_t count) {
-    if (!mm || !source || source->kind != TASK_VMA_FILE || !source->shared ||
+    if (!mm || !source || source->shared_pages || source->kind != TASK_VMA_FILE || !source->shared ||
         source->backing_fd < 0 || count == 0) {
         return;
     }
@@ -756,6 +768,9 @@ void task_notify_parent_state_change(struct task_struct *task) {
     struct task_struct *parent;
 
     if (!task || !task->parent) {
+        return;
+    }
+    if ((task->clone_flags & CLONE_THREAD) != 0) {
         return;
     }
 

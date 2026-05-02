@@ -291,8 +291,7 @@ int futex_contract_clone3_sets_parent_child_and_clear_tid(void) {
     }
     if (parent_tid != child->pid ||
         child_tid != child->pid ||
-        !child->mm ||
-        child->mm->clear_child_tid != (uint64_t)(uintptr_t)&child_tid) {
+        child->clear_child_tid != (uint64_t)(uintptr_t)&child_tid) {
         errno = EPROTO;
         goto out_child;
     }
@@ -303,5 +302,67 @@ out_child:
     free_task(child);
     free_task(child);
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
+    return result;
+}
+
+int futex_contract_clear_child_tid_is_per_thread_not_mm_shared(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    struct task_struct *restore;
+    struct clone_args args;
+    int child_tid = 0;
+    int parent_clear = 11;
+    long ret;
+    int result = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    ret = syscall_dispatch_impl(__NR_set_tid_address, (long)(uintptr_t)&parent_clear, 0, 0, 0, 0, 0);
+    if (ret != parent->pid || parent->clear_child_tid != (uint64_t)(uintptr_t)&parent_clear) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    memset(&args, 0, sizeof(args));
+    args.flags = CLONE_VM | CLONE_THREAD | CLONE_SIGHAND |
+                 CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID;
+    args.child_tid = (uint64_t)(uintptr_t)&child_tid;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = (int)-ret;
+        return -1;
+    }
+    child = task_lookup((int32_t)ret);
+    if (!child) {
+        errno = ESRCH;
+        return -1;
+    }
+    if (child->mm != parent->mm ||
+        parent->clear_child_tid != (uint64_t)(uintptr_t)&parent_clear ||
+        child->clear_child_tid != (uint64_t)(uintptr_t)&child_tid ||
+        child_tid != child->pid) {
+        errno = EPROTO;
+        goto out_child;
+    }
+
+    restore = get_current();
+    set_current(child);
+    exit_impl(0);
+    set_current(restore);
+    if (child_tid != 0 ||
+        parent_clear != 11 ||
+        parent->clear_child_tid != (uint64_t)(uintptr_t)&parent_clear) {
+        errno = ENODATA;
+        goto out_child;
+    }
+    result = 0;
+
+out_child:
+    task_unlink_child_impl(parent, child);
+    free_task(child);
+    free_task(child);
+    parent->clear_child_tid = 0;
     return result;
 }

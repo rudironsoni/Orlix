@@ -10,6 +10,7 @@ int signal_syscall_contract_sigaltstack_and_frame_policy(void);
 int signal_syscall_contract_frame_writes_virtual_record(void);
 int signal_syscall_contract_frame_records_handler_handoff(void);
 int signal_syscall_contract_frame_records_mask_restorer_and_context(void);
+int signal_syscall_contract_rt_sigreturn_restores_mask_and_altstack(void);
 
 #ifdef __cplusplus
 }
