@@ -16,6 +16,8 @@ extern long write_impl(int fd, const void *buf, unsigned long count);
 extern int close_impl(int fd);
 extern int mkdir_impl(const char *pathname, unsigned int mode);
 extern int unshare_impl(uint64_t flags);
+extern int mount_impl(const char *source, const char *target, const char *filesystemtype,
+                      unsigned long mountflags, const void *data);
 
 static void cgroup_contract_format_pid(int32_t pid, char *buf, unsigned long size);
 
@@ -316,6 +318,254 @@ int cgroup_contract_cgroup_namespace_rebases_proc_and_cgroupfs_visibility(void) 
     if (cgroup_contract_read_file("/proc/self/cgroup", buf, sizeof(buf)) != 0 ||
         strcmp(buf, "0::/inner\n") != 0) {
         errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_pids_controller_tracks_current_and_max(void) {
+    char buf[128];
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/pids-a", 0755)) != 0 ||
+        cgroup_contract_write_current_pid("/sys/fs/cgroup/pids-a/cgroup.procs") != 0) {
+        goto out;
+    }
+    if (cgroup_contract_read_file("/sys/fs/cgroup/pids-a/pids.current", buf, sizeof(buf)) != 0 ||
+        strcmp(buf, "1\n") != 0) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (cgroup_contract_read_file("/sys/fs/cgroup/pids-a/pids.max", buf, sizeof(buf)) != 0 ||
+        strcmp(buf, "max\n") != 0) {
+        errno = ENOMSG;
+        goto out;
+    }
+    if (cgroup_contract_write_file("/sys/fs/cgroup/pids-a/pids.max", "2\n") != 0 ||
+        cgroup_contract_read_file("/sys/fs/cgroup/pids-a/pids.max", buf, sizeof(buf)) != 0 ||
+        strcmp(buf, "2\n") != 0) {
+        errno = ERANGE;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_pids_max_rejects_extra_migration(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    char pidbuf[32];
+    int ret = -1;
+
+    if (!parent || cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/pids-limit", 0755)) != 0) {
+        goto out_no_child;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        goto out_no_child;
+    }
+    if (cgroup_contract_write_file("/sys/fs/cgroup/pids-limit/pids.max", "1\n") != 0 ||
+        cgroup_contract_write_current_pid("/sys/fs/cgroup/pids-limit/cgroup.procs") != 0) {
+        goto out;
+    }
+    cgroup_contract_format_pid(child->pid, pidbuf, sizeof(pidbuf));
+    if (cgroup_contract_write_file("/sys/fs/cgroup/pids-limit/cgroup.procs", pidbuf) == 0 ||
+        errno != EAGAIN) {
+        errno = EBUSY;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+        errno = saved_errno;
+    }
+out_no_child:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_freezer_blocks_and_releases_migration(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    char pidbuf[32];
+    int ret = -1;
+
+    if (!parent || cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/frozen-target", 0755)) != 0 ||
+        cgroup_contract_write_file("/sys/fs/cgroup/frozen-target/cgroup.freeze", "1\n") != 0) {
+        goto out_no_child;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        goto out_no_child;
+    }
+    cgroup_contract_format_pid(child->pid, pidbuf, sizeof(pidbuf));
+    if (cgroup_contract_write_file("/sys/fs/cgroup/frozen-target/cgroup.procs", pidbuf) == 0 ||
+        errno != EBUSY) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (cgroup_contract_write_file("/sys/fs/cgroup/frozen-target/cgroup.freeze", "0\n") != 0 ||
+        cgroup_contract_write_file("/sys/fs/cgroup/frozen-target/cgroup.procs", pidbuf) != 0) {
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+        errno = saved_errno;
+    }
+out_no_child:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_subtree_control_accepts_pids_and_freezer(void) {
+    char buf[128];
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_read_file("/sys/fs/cgroup/cgroup.controllers", buf, sizeof(buf)) != 0 ||
+        !strstr(buf, "pids") || !strstr(buf, "freezer")) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (cgroup_contract_write_file("/sys/fs/cgroup/cgroup.subtree_control", "+pids +freezer\n") != 0 ||
+        cgroup_contract_read_file("/sys/fs/cgroup/cgroup.subtree_control", buf, sizeof(buf)) != 0 ||
+        !strstr(buf, "pids") || !strstr(buf, "freezer")) {
+        errno = ENOMSG;
+        goto out;
+    }
+    if (cgroup_contract_write_file("/sys/fs/cgroup/cgroup.subtree_control", "-pids\n") != 0 ||
+        cgroup_contract_read_file("/sys/fs/cgroup/cgroup.subtree_control", buf, sizeof(buf)) != 0 ||
+        strstr(buf, "pids") || !strstr(buf, "freezer")) {
+        errno = ERANGE;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_cgroup_namespace_open_fd_survives_reset_until_closed(void) {
+    char buf[128];
+    int fd;
+    long nread;
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/session-fd", 0755)) != 0 ||
+        cgroup_contract_write_current_pid("/sys/fs/cgroup/session-fd/cgroup.procs") != 0 ||
+        unshare_impl(CLONE_NEWCGROUP) != 0) {
+        goto out;
+    }
+    fd = open_impl("/sys/fs/cgroup/cgroup.procs", O_RDONLY, 0);
+    if (fd < 0) {
+        goto out;
+    }
+    if (task_reset_cgroup_namespace(get_current()) != 0) {
+        errno = ENOMEM;
+        goto out_fd;
+    }
+    memset(buf, 0, sizeof(buf));
+    nread = read_impl(fd, buf, sizeof(buf) - 1);
+    if (nread <= 0 || !strstr(buf, "\n")) {
+        errno = ENODATA;
+        goto out_fd;
+    }
+    ret = 0;
+
+out_fd:
+    {
+        int saved_errno = errno;
+        close_impl(fd);
+        errno = saved_errno;
+    }
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_mount_cgroup2_exposes_cgroupfs_view(void) {
+    char buf[128];
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    cgroup_contract_ignore_exists(mkdir_impl("/tmp", 0777));
+    if (cgroup_contract_ignore_exists(mkdir_impl("/tmp/cgroup2", 0755)) != 0) {
+        goto out;
+    }
+    if (mount_impl("none", "/tmp/cgroup2", "cgroup2", 0, 0) != 0) {
+        goto out;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/tmp/cgroup2/mounted", 0755)) != 0) {
+        goto out;
+    }
+    if (cgroup_contract_write_current_pid("/tmp/cgroup2/mounted/cgroup.procs") != 0) {
+        goto out;
+    }
+    if (cgroup_contract_read_file("/proc/self/cgroup", buf, sizeof(buf)) != 0 ||
+        strcmp(buf, "0::/mounted\n") != 0) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (cgroup_contract_read_file("/tmp/cgroup2/mounted/pids.current", buf, sizeof(buf)) != 0 ||
+        strcmp(buf, "1\n") != 0) {
+        errno = ENOMSG;
         goto out;
     }
     ret = 0;

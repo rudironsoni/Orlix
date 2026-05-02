@@ -8,6 +8,7 @@
 
 #include <errno.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,10 @@ struct cgroup {
     char path[MAX_PATH];
     atomic_int refs;
     unsigned int members;
+    int pids_max;
+    bool freezer_frozen;
+    bool subtree_pids;
+    bool subtree_freezer;
     kernel_mutex_t lock;
     struct cgroup *parent;
     struct cgroup *children;
@@ -167,6 +172,7 @@ int cgroup_init(void) {
 
     memcpy(root_cgroup->path, "/", 2);
     atomic_init(&root_cgroup->refs, 1);
+    root_cgroup->pids_max = -1;
     kernel_mutex_init(&root_cgroup->lock);
     kernel_mutex_unlock(&cgroup_lock);
     return 0;
@@ -213,6 +219,7 @@ struct cgroup *cgroup_root(void) {
 
 int task_attach_cgroup(struct task_struct *task, struct cgroup *cgrp) {
     struct cgroup *old;
+    int blocked = 0;
 
     if (!task || !cgrp) {
         return -EINVAL;
@@ -223,10 +230,20 @@ int task_attach_cgroup(struct task_struct *task, struct cgroup *cgrp) {
         return 0;
     }
 
-    cgroup_get(cgrp);
     kernel_mutex_lock(&cgrp->lock);
+    if (cgrp->freezer_frozen) {
+        blocked = EBUSY;
+    } else if (cgrp->pids_max >= 0 && cgrp->members >= (unsigned int)cgrp->pids_max) {
+        blocked = EAGAIN;
+    }
+    if (blocked != 0) {
+        kernel_mutex_unlock(&cgrp->lock);
+        return -blocked;
+    }
     cgrp->members++;
     kernel_mutex_unlock(&cgrp->lock);
+
+    cgroup_get(cgrp);
 
     task->cgroup = cgrp;
 
@@ -388,7 +405,10 @@ static int cgroupfs_visible_path(const char *path, char *visible, size_t visible
     if (last_slash && file_name &&
         (strcmp(last_slash + 1, "cgroup.procs") == 0 ||
          strcmp(last_slash + 1, "cgroup.controllers") == 0 ||
-         strcmp(last_slash + 1, "cgroup.subtree_control") == 0)) {
+         strcmp(last_slash + 1, "cgroup.subtree_control") == 0 ||
+         strcmp(last_slash + 1, "pids.max") == 0 ||
+         strcmp(last_slash + 1, "pids.current") == 0 ||
+         strcmp(last_slash + 1, "cgroup.freeze") == 0)) {
         *file_name = path + prefix_len + (last_slash - tmp) + 1;
         if (last_slash == tmp) {
             memcpy(visible, "/", 2);
@@ -408,36 +428,62 @@ static int cgroupfs_visible_path(const char *path, char *visible, size_t visible
     return 0;
 }
 
-enum cgroupfs_node_type cgroupfs_classify_path(const char *path) {
+int cgroupfs_resolve_path(const char *path, char *cgroup_path, size_t cgroup_path_len,
+                          enum cgroupfs_node_type *type_out) {
     struct task_struct *task = get_current();
     char visible[MAX_PATH];
     char absolute[MAX_PATH];
     const char *file_name = NULL;
     struct cgroup *cgrp;
+    enum cgroupfs_node_type type = CGROUPFS_NODE_NONE;
 
     if (!task || cgroupfs_visible_path(path, visible, sizeof(visible), &file_name) != 0 ||
         cgroup_absolute_from_visible(task, visible, absolute, sizeof(absolute)) != 0) {
-        return CGROUPFS_NODE_NONE;
+        return -ENOENT;
     }
     kernel_mutex_lock(&cgroup_lock);
     cgrp = cgroup_find_absolute_locked(absolute);
     kernel_mutex_unlock(&cgroup_lock);
     if (!cgrp) {
-        return CGROUPFS_NODE_NONE;
+        return -ENOENT;
     }
     if (!file_name) {
-        return CGROUPFS_NODE_DIR;
+        type = CGROUPFS_NODE_DIR;
+    } else if (strcmp(file_name, "cgroup.procs") == 0) {
+        type = CGROUPFS_NODE_PROCS;
+    } else if (strcmp(file_name, "cgroup.controllers") == 0) {
+        type = CGROUPFS_NODE_CONTROLLERS;
+    } else if (strcmp(file_name, "cgroup.subtree_control") == 0) {
+        type = CGROUPFS_NODE_SUBTREE_CONTROL;
+    } else if (strcmp(file_name, "pids.max") == 0) {
+        type = CGROUPFS_NODE_PIDS_MAX;
+    } else if (strcmp(file_name, "pids.current") == 0) {
+        type = CGROUPFS_NODE_PIDS_CURRENT;
+    } else if (strcmp(file_name, "cgroup.freeze") == 0) {
+        type = CGROUPFS_NODE_FREEZE;
     }
-    if (strcmp(file_name, "cgroup.procs") == 0) {
-        return CGROUPFS_NODE_PROCS;
+    if (type == CGROUPFS_NODE_NONE) {
+        return -ENOENT;
     }
-    if (strcmp(file_name, "cgroup.controllers") == 0) {
-        return CGROUPFS_NODE_CONTROLLERS;
+    if (cgroup_path) {
+        if (strlen(absolute) >= cgroup_path_len) {
+            return -ENAMETOOLONG;
+        }
+        memcpy(cgroup_path, absolute, strlen(absolute) + 1);
     }
-    if (strcmp(file_name, "cgroup.subtree_control") == 0) {
-        return CGROUPFS_NODE_SUBTREE_CONTROL;
+    if (type_out) {
+        *type_out = type;
     }
-    return CGROUPFS_NODE_NONE;
+    return 0;
+}
+
+enum cgroupfs_node_type cgroupfs_classify_path(const char *path) {
+    enum cgroupfs_node_type type = CGROUPFS_NODE_NONE;
+
+    if (cgroupfs_resolve_path(path, NULL, 0, &type) != 0) {
+        return CGROUPFS_NODE_NONE;
+    }
+    return type;
 }
 
 int cgroupfs_mkdir(const char *path) {
@@ -468,7 +514,10 @@ int cgroupfs_mkdir(const char *path) {
     }
     if (strcmp(slash + 1, "cgroup.procs") == 0 ||
         strcmp(slash + 1, "cgroup.controllers") == 0 ||
-        strcmp(slash + 1, "cgroup.subtree_control") == 0) {
+        strcmp(slash + 1, "cgroup.subtree_control") == 0 ||
+        strcmp(slash + 1, "pids.max") == 0 ||
+        strcmp(slash + 1, "pids.current") == 0 ||
+        strcmp(slash + 1, "cgroup.freeze") == 0) {
         return -EEXIST;
     }
     if (slash == parent_path) {
@@ -499,6 +548,7 @@ int cgroupfs_mkdir(const char *path) {
     }
     memcpy(child->path, absolute, strlen(absolute) + 1);
     atomic_init(&child->refs, 1);
+    child->pids_max = -1;
     kernel_mutex_init(&child->lock);
     child->parent = parent;
     child->next_sibling = parent->children;
@@ -508,15 +558,11 @@ int cgroupfs_mkdir(const char *path) {
 }
 
 static int cgroupfs_cgroup_for_path(const char *path, struct cgroup **out, enum cgroupfs_node_type *type_out) {
-    struct task_struct *task = get_current();
-    char visible[MAX_PATH];
     char absolute[MAX_PATH];
-    const char *file_name = NULL;
     struct cgroup *cgrp;
+    enum cgroupfs_node_type type;
 
-    if (!out || !task ||
-        cgroupfs_visible_path(path, visible, sizeof(visible), &file_name) != 0 ||
-        cgroup_absolute_from_visible(task, visible, absolute, sizeof(absolute)) != 0) {
+    if (!out || cgroupfs_resolve_path(path, absolute, sizeof(absolute), &type) != 0) {
         return -EINVAL;
     }
     kernel_mutex_lock(&cgroup_lock);
@@ -530,8 +576,27 @@ static int cgroupfs_cgroup_for_path(const char *path, struct cgroup **out, enum 
     }
     *out = cgrp;
     if (type_out) {
-        *type_out = cgroupfs_classify_path(path);
+        *type_out = type;
     }
+    return 0;
+}
+
+static int cgroupfs_cgroup_for_absolute_path(const char *path, struct cgroup **out) {
+    struct cgroup *cgrp;
+
+    if (!path || !out || path[0] != '/') {
+        return -EINVAL;
+    }
+    kernel_mutex_lock(&cgroup_lock);
+    cgrp = cgroup_find_absolute_locked(path);
+    if (cgrp) {
+        cgroup_get(cgrp);
+    }
+    kernel_mutex_unlock(&cgroup_lock);
+    if (!cgrp) {
+        return -ENOENT;
+    }
+    *out = cgrp;
     return 0;
 }
 
@@ -569,25 +634,87 @@ static int cgroup_append_uint(char *buf, size_t buflen, size_t *pos, int32_t val
     return 0;
 }
 
-int cgroupfs_read_path(const char *path, char *buf, size_t buflen) {
+int cgroupfs_read_node(const char *cgroup_path, enum cgroupfs_node_type type,
+                       char *buf, size_t buflen) {
     struct cgroup *cgrp = NULL;
-    enum cgroupfs_node_type type;
     size_t pos = 0;
+    int pids_max;
+    bool frozen;
+    bool subtree_pids;
+    bool subtree_freezer;
+    unsigned int members;
 
     if (!buf || buflen == 0) {
         return -EINVAL;
     }
-    if (cgroupfs_cgroup_for_path(path, &cgrp, &type) != 0) {
+    if (cgroupfs_cgroup_for_absolute_path(cgroup_path, &cgrp) != 0) {
         return -ENOENT;
     }
     buf[0] = '\0';
     if (type == CGROUPFS_NODE_CONTROLLERS) {
+        if (cgroup_append(buf, buflen, &pos, "pids freezer\n") != 0) {
+            cgroup_put(cgrp);
+            return (int)pos;
+        }
         cgroup_put(cgrp);
-        return 0;
+        return (int)pos;
     }
     if (type == CGROUPFS_NODE_SUBTREE_CONTROL) {
+        kernel_mutex_lock(&cgrp->lock);
+        subtree_pids = cgrp->subtree_pids;
+        subtree_freezer = cgrp->subtree_freezer;
+        kernel_mutex_unlock(&cgrp->lock);
+        if (subtree_pids && cgroup_append(buf, buflen, &pos, "pids") != 0) {
+            cgroup_put(cgrp);
+            return (int)pos;
+        }
+        if (subtree_freezer) {
+            if (pos > 0 && cgroup_append(buf, buflen, &pos, " ") != 0) {
+                cgroup_put(cgrp);
+                return (int)pos;
+            }
+            if (cgroup_append(buf, buflen, &pos, "freezer") != 0) {
+                cgroup_put(cgrp);
+                return (int)pos;
+            }
+        }
+        if (pos > 0) {
+            cgroup_append(buf, buflen, &pos, "\n");
+        }
         cgroup_put(cgrp);
-        return 0;
+        return (int)pos;
+    }
+    if (type == CGROUPFS_NODE_PIDS_CURRENT) {
+        kernel_mutex_lock(&cgrp->lock);
+        members = cgrp->members;
+        kernel_mutex_unlock(&cgrp->lock);
+        if (cgroup_append_uint(buf, buflen, &pos, (int32_t)members) != 0 ||
+            cgroup_append(buf, buflen, &pos, "\n") != 0) {
+            cgroup_put(cgrp);
+            return (int)pos;
+        }
+        cgroup_put(cgrp);
+        return (int)pos;
+    }
+    if (type == CGROUPFS_NODE_PIDS_MAX) {
+        kernel_mutex_lock(&cgrp->lock);
+        pids_max = cgrp->pids_max;
+        kernel_mutex_unlock(&cgrp->lock);
+        if (pids_max < 0) {
+            cgroup_append(buf, buflen, &pos, "max\n");
+        } else if (cgroup_append_uint(buf, buflen, &pos, pids_max) == 0) {
+            cgroup_append(buf, buflen, &pos, "\n");
+        }
+        cgroup_put(cgrp);
+        return (int)pos;
+    }
+    if (type == CGROUPFS_NODE_FREEZE) {
+        kernel_mutex_lock(&cgrp->lock);
+        frozen = cgrp->freezer_frozen;
+        kernel_mutex_unlock(&cgrp->lock);
+        cgroup_append(buf, buflen, &pos, frozen ? "1\n" : "0\n");
+        cgroup_put(cgrp);
+        return (int)pos;
     }
     if (type != CGROUPFS_NODE_PROCS) {
         cgroup_put(cgrp);
@@ -611,18 +738,139 @@ int cgroupfs_read_path(const char *path, char *buf, size_t buflen) {
     return (int)pos;
 }
 
-long cgroupfs_write_path(const char *path, const char *buf, size_t count) {
-    struct cgroup *target = NULL;
+int cgroupfs_read_path(const char *path, char *buf, size_t buflen) {
+    char cgroup_path[MAX_PATH];
     enum cgroupfs_node_type type;
+
+    if (cgroupfs_resolve_path(path, cgroup_path, sizeof(cgroup_path), &type) != 0) {
+        return -ENOENT;
+    }
+    return cgroupfs_read_node(cgroup_path, type, buf, buflen);
+}
+
+static int cgroupfs_parse_nonnegative_int_or_max(const char *buf, size_t count, int *out) {
+    int value = 0;
+    bool saw_digit = false;
+
+    if (!buf || !out) {
+        return -EFAULT;
+    }
+    while (count > 0 && (*buf == ' ' || *buf == '\t' || *buf == '\n')) {
+        buf++;
+        count--;
+    }
+    if (count >= 3 && buf[0] == 'm' && buf[1] == 'a' && buf[2] == 'x') {
+        *out = -1;
+        return 0;
+    }
+    for (size_t i = 0; i < count; i++) {
+        if (buf[i] >= '0' && buf[i] <= '9') {
+            saw_digit = true;
+            value = (value * 10) + (buf[i] - '0');
+        } else if (buf[i] == '\n' || buf[i] == '\0' || buf[i] == ' ' || buf[i] == '\t') {
+            break;
+        } else {
+            return -EINVAL;
+        }
+    }
+    if (!saw_digit) {
+        return -EINVAL;
+    }
+    *out = value;
+    return 0;
+}
+
+static int cgroupfs_apply_subtree_control(struct cgroup *cgrp, const char *buf, size_t count) {
+    size_t pos = 0;
+
+    if (!cgrp || (!buf && count > 0)) {
+        return -EFAULT;
+    }
+    while (pos < count) {
+        bool enable;
+        const char *name;
+        size_t name_len;
+
+        while (pos < count && (buf[pos] == ' ' || buf[pos] == '\t' || buf[pos] == '\n')) {
+            pos++;
+        }
+        if (pos >= count) {
+            break;
+        }
+        if (buf[pos] == '+') {
+            enable = true;
+        } else if (buf[pos] == '-') {
+            enable = false;
+        } else {
+            return -EINVAL;
+        }
+        pos++;
+        name = buf + pos;
+        while (pos < count && buf[pos] != ' ' && buf[pos] != '\t' && buf[pos] != '\n' && buf[pos] != '\0') {
+            pos++;
+        }
+        name_len = (size_t)(buf + pos - name);
+        kernel_mutex_lock(&cgrp->lock);
+        if (name_len == 4 && strncmp(name, "pids", 4) == 0) {
+            cgrp->subtree_pids = enable;
+        } else if (name_len == 7 && strncmp(name, "freezer", 7) == 0) {
+            cgrp->subtree_freezer = enable;
+        } else {
+            kernel_mutex_unlock(&cgrp->lock);
+            return -EINVAL;
+        }
+        kernel_mutex_unlock(&cgrp->lock);
+    }
+    return 0;
+}
+
+long cgroupfs_write_node(const char *cgroup_path, enum cgroupfs_node_type type,
+                         const char *buf, size_t count) {
+    struct cgroup *target = NULL;
     int32_t pid = 0;
     struct task_struct *task;
     int ret;
+    int parsed;
 
     if (!buf && count > 0) {
         return -EFAULT;
     }
-    if (cgroupfs_cgroup_for_path(path, &target, &type) != 0) {
+    if (cgroupfs_cgroup_for_absolute_path(cgroup_path, &target) != 0) {
         return -ENOENT;
+    }
+    if (type == CGROUPFS_NODE_PIDS_MAX) {
+        ret = cgroupfs_parse_nonnegative_int_or_max(buf, count, &parsed);
+        if (ret != 0) {
+            cgroup_put(target);
+            return ret;
+        }
+        kernel_mutex_lock(&target->lock);
+        if (parsed >= 0 && target->members > (unsigned int)parsed) {
+            kernel_mutex_unlock(&target->lock);
+            cgroup_put(target);
+            return -EBUSY;
+        }
+        target->pids_max = parsed;
+        kernel_mutex_unlock(&target->lock);
+        cgroup_put(target);
+        return (long)count;
+    }
+    if (type == CGROUPFS_NODE_FREEZE) {
+        ret = cgroupfs_parse_nonnegative_int_or_max(buf, count, &parsed);
+        if (ret != 0 || (parsed != 0 && parsed != 1)) {
+            cgroup_put(target);
+            return ret != 0 ? ret : -EINVAL;
+        }
+        kernel_mutex_lock(&target->lock);
+        target->freezer_frozen = parsed == 1;
+        kernel_mutex_unlock(&target->lock);
+        cgroup_put(target);
+        return (long)count;
+    }
+    if (type == CGROUPFS_NODE_SUBTREE_CONTROL) {
+        ret = cgroupfs_apply_subtree_control(target, buf, count);
+        cgroup_put(target);
+        return ret == 0 ? (long)count : ret;
     }
     if (type != CGROUPFS_NODE_PROCS) {
         cgroup_put(target);
@@ -659,9 +907,20 @@ long cgroupfs_write_path(const char *path, const char *buf, size_t count) {
     return (long)count;
 }
 
+long cgroupfs_write_path(const char *path, const char *buf, size_t count) {
+    char cgroup_path[MAX_PATH];
+    enum cgroupfs_node_type type;
+
+    if (cgroupfs_resolve_path(path, cgroup_path, sizeof(cgroup_path), &type) != 0) {
+        return -ENOENT;
+    }
+    return cgroupfs_write_node(cgroup_path, type, buf, count);
+}
+
 size_t cgroupfs_child_count(const char *path) {
     struct cgroup *cgrp = NULL;
     size_t count = 0;
+    const size_t fixed_count = 6;
 
     if (cgroupfs_cgroup_for_path(path, &cgrp, NULL) != 0) {
         return 0;
@@ -672,12 +931,13 @@ size_t cgroupfs_child_count(const char *path) {
     }
     kernel_mutex_unlock(&cgroup_lock);
     cgroup_put(cgrp);
-    return count + 3;
+    return count + fixed_count;
 }
 
 int cgroupfs_child_at(const char *path, size_t index, char *name, size_t name_len) {
     struct cgroup *cgrp = NULL;
-    const char *fixed[] = {"cgroup.controllers", "cgroup.procs", "cgroup.subtree_control"};
+    const char *fixed[] = {"cgroup.controllers", "cgroup.freeze", "cgroup.procs",
+                           "cgroup.subtree_control", "pids.current", "pids.max"};
     const char *selected = NULL;
     size_t child_index;
 

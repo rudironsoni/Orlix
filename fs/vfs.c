@@ -2292,6 +2292,14 @@ static int vfs_apply_mounts(const char *normalized_virtual_path, char *mounted_p
     return ret;
 }
 
+int vfs_apply_mounts_to_path(const char *normalized_virtual_path, char *mounted_path,
+                             size_t mounted_path_len) {
+    if (!normalized_virtual_path || !mounted_path || mounted_path_len == 0) {
+        return -EINVAL;
+    }
+    return vfs_apply_mounts(normalized_virtual_path, mounted_path, mounted_path_len);
+}
+
 static const struct vfs_mount_entry *vfs_find_mount_for_path_locked(const char *normalized_virtual_path,
                                                                     struct vfs_mount_namespace *mnt_ns) {
     const struct vfs_mount_entry *best = NULL;
@@ -3281,6 +3289,7 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
     struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
     bool remount = (flags & MS_REMOUNT) != 0;
     bool move_mount = (flags & MS_MOVE) != 0;
+    bool cgroup2_mount = fstype && strcmp(fstype, "cgroup2") == 0;
 
     if ((!source && !remount) || !target) {
         return -EFAULT;
@@ -3297,7 +3306,7 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
     if (move_mount && (flags & ~MS_MOVE) != 0) {
         return -EINVAL;
     }
-    if (!remount && !move_mount && (flags & MS_BIND) == 0) {
+    if (!remount && !move_mount && (flags & MS_BIND) == 0 && !cgroup2_mount) {
         return -ENOSYS;
     }
     if (remount && (flags & MS_BIND) == 0) {
@@ -3309,7 +3318,7 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
     if (!cred_has_cap(get_current_cred(), CAP_SYS_ADMIN)) {
         return -EPERM;
     }
-    if (fstype && fstype[0] != '\0' && strcmp(fstype, "bind") != 0) {
+    if (fstype && fstype[0] != '\0' && strcmp(fstype, "bind") != 0 && !cgroup2_mount) {
         return -EINVAL;
     }
 
@@ -3338,9 +3347,13 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
         return -EINVAL;
     }
 
-    ret = vfs_resolve_virtual_path_at(AT_FDCWD, source, resolved_source, sizeof(resolved_source));
-    if (ret != 0) {
-        return ret;
+    if (cgroup2_mount) {
+        memcpy(resolved_source, "/sys/fs/cgroup", sizeof("/sys/fs/cgroup"));
+    } else {
+        ret = vfs_resolve_virtual_path_at(AT_FDCWD, source, resolved_source, sizeof(resolved_source));
+        if (ret != 0) {
+            return ret;
+        }
     }
 
     if (move_mount) {
@@ -3357,23 +3370,27 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
         return ret;
     }
 
-    ret = vfs_translate_path(resolved_source, host_source, sizeof(host_source));
-    if (ret != 0) {
-        return ret;
-    }
     ret = vfs_translate_path(resolved_target, host_target, sizeof(host_target));
     if (ret != 0) {
         return ret;
     }
 
-    if (host_stat_impl(host_source, &source_stat) != 0) {
-        return -errno;
-    }
     if (host_stat_impl(host_target, &target_stat) != 0) {
         return -errno;
     }
-    if ((S_ISDIR(source_stat.st_mode) && !S_ISDIR(target_stat.st_mode)) ||
-        (!S_ISDIR(source_stat.st_mode) && S_ISDIR(target_stat.st_mode))) {
+    if (!cgroup2_mount) {
+        ret = vfs_translate_path(resolved_source, host_source, sizeof(host_source));
+        if (ret != 0) {
+            return ret;
+        }
+        if (host_stat_impl(host_source, &source_stat) != 0) {
+            return -errno;
+        }
+        if ((S_ISDIR(source_stat.st_mode) && !S_ISDIR(target_stat.st_mode)) ||
+            (!S_ISDIR(source_stat.st_mode) && S_ISDIR(target_stat.st_mode))) {
+            return -ENOTDIR;
+        }
+    } else if (!S_ISDIR(target_stat.st_mode)) {
         return -ENOTDIR;
     }
 

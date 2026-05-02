@@ -47,4 +47,34 @@
                    @"cgroup namespace should rebase /proc cgroup paths and cgroupfs visibility, errno %d", errno);
 }
 
+- (void)testPidsControllerTracksCurrentAndMax {
+    XCTAssertEqual(cgroup_contract_pids_controller_tracks_current_and_max(), 0,
+                   @"pids controller should expose pids.current and pids.max, errno %d", errno);
+}
+
+- (void)testPidsMaxRejectsExtraMigration {
+    XCTAssertEqual(cgroup_contract_pids_max_rejects_extra_migration(), 0,
+                   @"pids.max should reject migrations beyond the limit, errno %d", errno);
+}
+
+- (void)testFreezerBlocksAndReleasesMigration {
+    XCTAssertEqual(cgroup_contract_freezer_blocks_and_releases_migration(), 0,
+                   @"cgroup.freeze should block and release task migration, errno %d", errno);
+}
+
+- (void)testSubtreeControlAcceptsPidsAndFreezer {
+    XCTAssertEqual(cgroup_contract_subtree_control_accepts_pids_and_freezer(), 0,
+                   @"cgroup.subtree_control should accept pids and freezer controllers, errno %d", errno);
+}
+
+- (void)testCgroupNamespaceOpenFdSurvivesResetUntilClosed {
+    XCTAssertEqual(cgroup_contract_cgroup_namespace_open_fd_survives_reset_until_closed(), 0,
+                   @"open cgroupfs fd should keep its cgroup identity across namespace reset, errno %d", errno);
+}
+
+- (void)testMountCgroup2ExposesCgroupfsView {
+    XCTAssertEqual(cgroup_contract_mount_cgroup2_exposes_cgroupfs_view(), 0,
+                   @"mounted cgroup2 should expose cgroupfs through the VFS mount graph, errno %d", errno);
+}
+
 @end

@@ -7,5 +7,11 @@ int cgroup_contract_proc_self_cgroup_reports_root(void);
 int cgroup_contract_cgroupfs_creates_group_and_moves_current_task(void);
 int cgroup_contract_cgroupfs_moves_child_and_proc_pid_reports_membership(void);
 int cgroup_contract_cgroup_namespace_rebases_proc_and_cgroupfs_visibility(void);
+int cgroup_contract_pids_controller_tracks_current_and_max(void);
+int cgroup_contract_pids_max_rejects_extra_migration(void);
+int cgroup_contract_freezer_blocks_and_releases_migration(void);
+int cgroup_contract_subtree_control_accepts_pids_and_freezer(void);
+int cgroup_contract_cgroup_namespace_open_fd_survives_reset_until_closed(void);
+int cgroup_contract_mount_cgroup2_exposes_cgroupfs_view(void);
 
 #endif /* IXLAND_SYSTEM_LINUX_KERNEL_TESTS_CGROUP_CONTRACT_H */

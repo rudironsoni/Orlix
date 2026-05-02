@@ -352,6 +352,8 @@ typedef struct fd_description {
     synthetic_proc_file_t proc_file;
     int proc_file_fd_num;
     int proc_file_target_pid;
+    char cgroupfs_path[MAX_PATH];
+    int cgroupfs_node;
     unsigned int pty_index;
     bool pty_is_master;
     struct pipe_endpoint *pipe_endpoint;
@@ -670,6 +672,7 @@ static fd_description_t *alloc_synthetic_proc_file_fd_description(int flags, lin
     desc->proc_file = proc_file;
     desc->proc_file_fd_num = -1;
     desc->proc_file_target_pid = -1;
+    desc->cgroupfs_node = 0;
     desc->pty_index = 0;
     desc->pty_is_master = false;
     desc->pipe_endpoint = NULL;
@@ -1570,6 +1573,23 @@ void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, linux_mode_t mode
     fs_mutex_unlock(&entry->lock);
 }
 
+void init_synthetic_cgroupfs_file_fd_entry_impl(int fd, int flags, linux_mode_t mode,
+                                                const char *path, const char *cgroup_path,
+                                                int cgroup_node) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    fs_mutex_lock(&entry->lock);
+    entry->desc = alloc_synthetic_proc_file_fd_description(flags, mode, path, SYNTHETIC_PROC_FILE_NONE);
+    if (entry->desc && cgroup_path) {
+        strncpy(entry->desc->cgroupfs_path, cgroup_path, MAX_PATH - 1);
+        entry->desc->cgroupfs_path[MAX_PATH - 1] = '\0';
+        entry->desc->cgroupfs_node = cgroup_node;
+    }
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    fdtable_sync_task_file_locked(fd, entry);
+    fs_mutex_unlock(&entry->lock);
+}
+
 void init_synthetic_proc_file_fd_entry_for_pid_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file, int target_pid) {
     file_init_impl();
     fd_entry_t *entry = &fd_table[fd];
@@ -1628,6 +1648,33 @@ int get_fd_proc_file_fd_num_impl(void *entry) {
 int get_fd_proc_file_target_pid_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc ? fd_entry->desc->proc_file_target_pid : -1;
+}
+
+bool get_fd_has_cgroupfs_path_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->cgroupfs_path[0] == '/';
+}
+
+int get_fd_cgroupfs_path_impl(void *entry, char *path, size_t path_len) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    size_t len;
+
+    if (!fd_entry->desc || !path || path_len == 0 || fd_entry->desc->cgroupfs_path[0] != '/') {
+        errno = EINVAL;
+        return -1;
+    }
+    len = strlen(fd_entry->desc->cgroupfs_path);
+    if (len >= path_len) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    memcpy(path, fd_entry->desc->cgroupfs_path, len + 1);
+    return 0;
+}
+
+int get_fd_cgroupfs_node_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc ? fd_entry->desc->cgroupfs_node : 0;
 }
 
 void init_synthetic_subdir_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_dir_class_t dir_class) {

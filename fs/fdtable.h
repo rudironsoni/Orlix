@@ -192,6 +192,9 @@ enum synthetic_proc_file {
 typedef enum synthetic_proc_file synthetic_proc_file_t;
 
 void init_synthetic_proc_file_fd_entry_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file);
+void init_synthetic_cgroupfs_file_fd_entry_impl(int fd, int flags, linux_mode_t mode,
+                                                const char *path, const char *cgroup_path,
+                                                int cgroup_node);
 void init_synthetic_proc_file_fd_entry_for_pid_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file, int target_pid);
 void init_synthetic_proc_file_fd_entry_with_fdnum_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file, int fd_num);
 void init_synthetic_proc_file_fd_entry_with_fdnum_for_pid_impl(int fd, int flags, linux_mode_t mode, const char *path, synthetic_proc_file_t proc_file, int fd_num, int target_pid);
@@ -199,6 +202,9 @@ bool get_fd_is_synthetic_proc_file_impl(void *entry);
 synthetic_proc_file_t get_fd_synthetic_proc_file_impl(void *entry);
 int get_fd_proc_file_fd_num_impl(void *entry);
 int get_fd_proc_file_target_pid_impl(void *entry);
+bool get_fd_has_cgroupfs_path_impl(void *entry);
+int get_fd_cgroupfs_path_impl(void *entry, char *path, size_t path_len);
+int get_fd_cgroupfs_node_impl(void *entry);
 
 bool fdtable_is_used_impl(int fd);
 bool fdtable_has_open_path_under_impl(const char *root);

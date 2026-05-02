@@ -101,6 +101,32 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         int content_len = -EINVAL;
         char path[MAX_PATH];
 
+        if (get_fd_has_cgroupfs_path_impl(entry) &&
+            get_fd_cgroupfs_path_impl(entry, path, sizeof(path)) == 0) {
+            content_len = cgroupfs_read_node(path,
+                                             (enum cgroupfs_node_type)get_fd_cgroupfs_node_impl(entry),
+                                             content, sizeof(content));
+            if (content_len < 0) {
+                put_fd_entry_impl(entry);
+                errno = -content_len;
+                return -1;
+            }
+            linux_off_t offset = (linux_off_t)get_fd_offset_impl(entry);
+            if (offset < 0) {
+                offset = 0;
+            }
+            if ((size_t)offset >= (size_t)content_len) {
+                put_fd_entry_impl(entry);
+                return 0;
+            }
+            size_t available = (size_t)content_len - (size_t)offset;
+            size_t to_copy = count < available ? count : available;
+            memcpy(buf, content + offset, to_copy);
+            set_fd_offset_impl((fd_entry_t *)entry, offset + (linux_off_t)to_copy);
+            put_fd_entry_impl(entry);
+            return (ssize_t)to_copy;
+        }
+
         if (get_fd_path_impl(entry, path, sizeof(path)) == 0 &&
             cgroupfs_classify_path(path) != CGROUPFS_NODE_NONE) {
             content_len = cgroupfs_read_path(path, content, sizeof(content));
@@ -280,6 +306,19 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
 
     if (get_fd_is_synthetic_proc_file_impl(entry)) {
         char path[MAX_PATH];
+        if (get_fd_has_cgroupfs_path_impl(entry) &&
+            get_fd_cgroupfs_path_impl(entry, path, sizeof(path)) == 0) {
+            long ret = cgroupfs_write_node(path,
+                                           (enum cgroupfs_node_type)get_fd_cgroupfs_node_impl(entry),
+                                           (const char *)buf, count);
+            put_fd_entry_impl(entry);
+            if (ret < 0) {
+                errno = -ret;
+                return -1;
+            }
+            return ret;
+        }
+
         if (get_fd_path_impl(entry, path, sizeof(path)) == 0 &&
             cgroupfs_classify_path(path) != CGROUPFS_NODE_NONE) {
             long ret = cgroupfs_write_path(path, (const char *)buf, count);

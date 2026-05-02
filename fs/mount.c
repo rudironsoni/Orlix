@@ -60,9 +60,9 @@ static int umount_target_is_symlink(const char *target, int *is_symlink) {
  * data: Filesystem-specific data
  */
 
-static int mount_impl(const char *source, const char *target,
-                      const char *filesystemtype, unsigned long mountflags,
-                      const void *data) {
+int mount_impl(const char *source, const char *target,
+               const char *filesystemtype, unsigned long mountflags,
+               const void *data) {
     if ((!source && (mountflags & MS_REMOUNT) == 0) || !target) {
         errno = EFAULT;
         return -1;

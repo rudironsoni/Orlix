@@ -508,10 +508,36 @@ static int mkdirat_impl(int dirfd, const char *pathname, mode_t mode) {
         return -1;
     }
 
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path));
+    if (ret == 0) {
+        char mounted_path[MAX_PATH];
+        ret = vfs_apply_mounts_to_path(resolved_path, mounted_path, sizeof(mounted_path));
+        if (ret == 0 && strncmp(mounted_path, "/sys/fs/cgroup/", 15) == 0) {
+            ret = cgroupfs_mkdir(mounted_path);
+            if (ret != 0) {
+                errno = -ret;
+                return -1;
+            }
+            return 0;
+        }
+    }
+
     ret = vfs_resolve_virtual_path_at_follow(dirfd, pathname, resolved_path, sizeof(resolved_path), false);
     if (ret != 0) {
         errno = -ret;
         return -1;
+    }
+    {
+        char mounted_path[MAX_PATH];
+        ret = vfs_apply_mounts_to_path(resolved_path, mounted_path, sizeof(mounted_path));
+        if (ret == 0 && strncmp(mounted_path, "/sys/fs/cgroup/", 15) == 0) {
+            ret = cgroupfs_mkdir(mounted_path);
+            if (ret != 0) {
+                errno = -ret;
+                return -1;
+            }
+            return 0;
+        }
     }
     if (strncmp(resolved_path, "/sys/fs/cgroup/", 15) == 0) {
         ret = cgroupfs_mkdir(resolved_path);

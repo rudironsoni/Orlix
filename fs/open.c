@@ -104,6 +104,8 @@ static int try_open_proc_self_file(const char *resolved_path, int flags, mode_t 
 
 static int try_open_cgroupfs(const char *resolved_path, int flags, mode_t mode, int *out_fd) {
     enum cgroupfs_node_type node_type;
+    char mounted_path[MAX_PATH];
+    char cgroup_path[MAX_PATH];
     int fd;
 
     if (!out_fd) {
@@ -112,7 +114,11 @@ static int try_open_cgroupfs(const char *resolved_path, int flags, mode_t mode, 
     }
     *out_fd = -1;
 
-    if (strcmp(resolved_path, "/sys/fs") == 0) {
+    if (vfs_apply_mounts_to_path(resolved_path, mounted_path, sizeof(mounted_path)) != 0) {
+        memcpy(mounted_path, resolved_path, strlen(resolved_path) + 1);
+    }
+
+    if (strcmp(mounted_path, "/sys/fs") == 0) {
         if ((flags & O_DIRECTORY) == 0 && (flags & O_PATH) != 0) {
             return 0;
         }
@@ -120,13 +126,12 @@ static int try_open_cgroupfs(const char *resolved_path, int flags, mode_t mode, 
         if (fd < 0) {
             return -1;
         }
-        init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_DIR_CGROUPFS);
+        init_synthetic_subdir_fd_entry_impl(fd, flags, mode, mounted_path, SYNTHETIC_DIR_CGROUPFS);
         *out_fd = fd;
         return 1;
     }
 
-    node_type = cgroupfs_classify_path(resolved_path);
-    if (node_type == CGROUPFS_NODE_NONE) {
+    if (cgroupfs_resolve_path(mounted_path, cgroup_path, sizeof(cgroup_path), &node_type) != 0) {
         return 0;
     }
     if (node_type == CGROUPFS_NODE_DIR) {
@@ -137,7 +142,7 @@ static int try_open_cgroupfs(const char *resolved_path, int flags, mode_t mode, 
         if (fd < 0) {
             return -1;
         }
-        init_synthetic_subdir_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_DIR_CGROUPFS);
+        init_synthetic_subdir_fd_entry_impl(fd, flags, mode, mounted_path, SYNTHETIC_DIR_CGROUPFS);
         *out_fd = fd;
         return 1;
     }
@@ -149,7 +154,7 @@ static int try_open_cgroupfs(const char *resolved_path, int flags, mode_t mode, 
     if (fd < 0) {
         return -1;
     }
-    init_synthetic_proc_file_fd_entry_impl(fd, flags, mode, resolved_path, SYNTHETIC_PROC_FILE_NONE);
+    init_synthetic_cgroupfs_file_fd_entry_impl(fd, flags, mode, resolved_path, cgroup_path, node_type);
     *out_fd = fd;
     return 1;
 }
@@ -162,6 +167,15 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
     if (!pathname) {
         errno = EFAULT;
         return -1;
+    }
+
+    ret = vfs_resolve_virtual_path_at(AT_FDCWD, pathname, resolved_path, sizeof(resolved_path));
+    if (ret == 0) {
+        int cgroup_fd;
+        int cgroup_ret = try_open_cgroupfs(resolved_path, flags, mode, &cgroup_fd);
+        if (cgroup_ret != 0) {
+            return (cgroup_ret < 0) ? -1 : cgroup_fd;
+        }
     }
 
     ret = vfs_resolve_virtual_path_task_follow(pathname, resolved_path, sizeof(resolved_path),
@@ -337,6 +351,15 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
     if (!pathname) {
         errno = EFAULT;
         return -1;
+    }
+
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_path, sizeof(resolved_path));
+    if (ret == 0) {
+        int cgroup_fd;
+        int cgroup_ret = try_open_cgroupfs(resolved_path, flags, mode, &cgroup_fd);
+        if (cgroup_ret != 0) {
+            return (cgroup_ret < 0) ? -1 : cgroup_fd;
+        }
     }
 
     ret = vfs_resolve_virtual_path_at_follow(dirfd, pathname, resolved_path, sizeof(resolved_path),

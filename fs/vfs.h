@@ -235,6 +235,8 @@ int fs_unshare_mount_namespace(struct fs_struct *fs);
 uint64_t fs_mount_namespace_id(struct fs_struct *fs);
 unsigned int fs_mount_namespace_refs(struct fs_struct *fs);
 unsigned int fs_mount_namespace_active_mounts(struct fs_struct *fs);
+int vfs_apply_mounts_to_path(const char *normalized_virtual_path, char *mounted_path,
+                             size_t mounted_path_len);
 
 /* VFS initialization */
 int vfs_init(void);

@@ -23,6 +23,9 @@ enum cgroupfs_node_type {
     CGROUPFS_NODE_PROCS,
     CGROUPFS_NODE_CONTROLLERS,
     CGROUPFS_NODE_SUBTREE_CONTROL,
+    CGROUPFS_NODE_PIDS_MAX,
+    CGROUPFS_NODE_PIDS_CURRENT,
+    CGROUPFS_NODE_FREEZE,
 };
 
 int cgroup_init(void);
@@ -40,9 +43,15 @@ unsigned int task_cgroup_member_count(const struct task_struct *task);
 int task_cgroup_proc_content(const struct task_struct *task, char *buf, size_t buflen);
 int cgroup_proc_task_content(int32_t pid, char *buf, size_t buflen);
 enum cgroupfs_node_type cgroupfs_classify_path(const char *path);
+int cgroupfs_resolve_path(const char *path, char *cgroup_path, size_t cgroup_path_len,
+                          enum cgroupfs_node_type *type_out);
 int cgroupfs_mkdir(const char *path);
 int cgroupfs_read_path(const char *path, char *buf, size_t buflen);
+int cgroupfs_read_node(const char *cgroup_path, enum cgroupfs_node_type type,
+                       char *buf, size_t buflen);
 long cgroupfs_write_path(const char *path, const char *buf, size_t count);
+long cgroupfs_write_node(const char *cgroup_path, enum cgroupfs_node_type type,
+                         const char *buf, size_t count);
 size_t cgroupfs_child_count(const char *path);
 int cgroupfs_child_at(const char *path, size_t index, char *name, size_t name_len);
 
