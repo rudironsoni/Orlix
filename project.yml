@@ -108,6 +108,8 @@ targets:
       group: kernel
     - path: kernel/resource.c
       group: kernel
+    - path: kernel/seccomp.c
+      group: kernel
     - path: kernel/signal.c
       group: kernel
     - path: internal/ios/kernel/signal_bridge.c
@@ -172,6 +174,7 @@ targets:
     - IXLandSystemLinuxKernelTests/NamespaceTests.m
     - IXLandSystemLinuxKernelTests/ProcfsNamespaceTests.m
     - IXLandSystemLinuxKernelTests/DevfsTests.m
+    - IXLandSystemLinuxKernelTests/SeccompTests.m
     - path: IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
@@ -285,6 +288,11 @@ targets:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/DevfsContract.h
+    - path: IXLandSystemLinuxKernelTests/SeccompContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - IXLandSystemLinuxKernelTests/SeccompContract.h
     dependencies:
     - target: IXLandSystem
     settings:

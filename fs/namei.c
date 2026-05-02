@@ -586,10 +586,24 @@ static int unlinkat_impl(int dirfd, const char *pathname, int flags) {
         return -1;
     }
 
+    remove_dir = (flags & AT_REMOVEDIR) != 0;
+
     ret = vfs_resolve_virtual_path_at_follow(dirfd, pathname, resolved_path, sizeof(resolved_path), false);
     if (ret != 0) {
         errno = -ret;
         return -1;
+    }
+    if (remove_dir) {
+        char mounted_path[MAX_PATH];
+        ret = vfs_apply_mounts_to_path(resolved_path, mounted_path, sizeof(mounted_path));
+        if (ret == 0 && strncmp(mounted_path, "/sys/fs/cgroup/", 15) == 0) {
+            ret = cgroupfs_rmdir(mounted_path);
+            if (ret != 0) {
+                errno = -ret;
+                return -1;
+            }
+            return 0;
+        }
     }
     ret = vfs_check_parent_mutation_permission(resolved_path);
     if (ret != 0) {
@@ -607,7 +621,6 @@ static int unlinkat_impl(int dirfd, const char *pathname, int flags) {
         return -1;
     }
 
-    remove_dir = (flags & AT_REMOVEDIR) != 0;
     if (remove_dir && !S_ISDIR(st.st_mode)) {
         errno = ENOTDIR;
         return -1;

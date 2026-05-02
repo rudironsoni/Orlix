@@ -15,6 +15,7 @@ extern long read_impl(int fd, void *buf, unsigned long count);
 extern long write_impl(int fd, const void *buf, unsigned long count);
 extern int close_impl(int fd);
 extern int mkdir_impl(const char *pathname, unsigned int mode);
+extern int rmdir_impl(const char *pathname);
 extern int unshare_impl(uint64_t flags);
 extern int mount_impl(const char *source, const char *target, const char *filesystemtype,
                       unsigned long mountflags, const void *data);
@@ -566,6 +567,85 @@ int cgroup_contract_mount_cgroup2_exposes_cgroupfs_view(void) {
     if (cgroup_contract_read_file("/tmp/cgroup2/mounted/pids.current", buf, sizeof(buf)) != 0 ||
         strcmp(buf, "1\n") != 0) {
         errno = ENOMSG;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_rmdir_empty_cgroup_removes_from_hierarchy(void) {
+    char buf[128];
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/remove-empty", 0755)) != 0) {
+        goto out;
+    }
+    if (rmdir_impl("/sys/fs/cgroup/remove-empty") != 0) {
+        goto out;
+    }
+    if (cgroup_contract_read_file("/sys/fs/cgroup/remove-empty/cgroup.procs", buf, sizeof(buf)) == 0 ||
+        errno != ENOENT) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_rmdir_busy_cgroup_fails(void) {
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/remove-busy", 0755)) != 0 ||
+        cgroup_contract_write_current_pid("/sys/fs/cgroup/remove-busy/cgroup.procs") != 0) {
+        goto out;
+    }
+    if (rmdir_impl("/sys/fs/cgroup/remove-busy") == 0 || errno != EBUSY) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int cgroup_contract_rmdir_parent_with_child_fails_notempty(void) {
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/remove-parent", 0755)) != 0 ||
+        cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/remove-parent/child", 0755)) != 0) {
+        goto out;
+    }
+    if (rmdir_impl("/sys/fs/cgroup/remove-parent") == 0 || errno != ENOTEMPTY) {
+        errno = ENODATA;
         goto out;
     }
     ret = 0;

@@ -132,6 +132,10 @@ static int try_open_cgroupfs(const char *resolved_path, int flags, mode_t mode, 
     }
 
     if (cgroupfs_resolve_path(mounted_path, cgroup_path, sizeof(cgroup_path), &node_type) != 0) {
+        if (strncmp(mounted_path, "/sys/fs/cgroup/", 15) == 0) {
+            errno = ENOENT;
+            return -1;
+        }
         return 0;
     }
     if (node_type == CGROUPFS_NODE_DIR) {

@@ -1591,3 +1591,47 @@ int procfs_namespace_contract_root_files_are_readable(void) {
 
     return 0;
 }
+
+int procfs_namespace_contract_ns_directory_lists_cgroup(void) {
+    char dirents[1024];
+    long nread;
+    int fd;
+
+    reset_procfs_namespace_state();
+
+    fd = open_impl("/proc/self/ns", O_RDONLY | O_DIRECTORY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    memset(dirents, 0, sizeof(dirents));
+    nread = getdents64(fd, dirents, sizeof(dirents));
+    close_impl(fd);
+    if (nread <= 0 || !procfs_dirents_contain_name(dirents, nread, "cgroup")) {
+        errno = ENODATA;
+        return -1;
+    }
+    return 0;
+}
+
+int procfs_namespace_contract_cgroup_namespace_link_changes_after_unshare(void) {
+    char before[64];
+    char after[64];
+
+    reset_procfs_namespace_state();
+
+    if (read_link_content("/proc/self/ns/cgroup", before, sizeof(before)) != 0) {
+        return -1;
+    }
+    if (unshare_impl(CLONE_NEWCGROUP) != 0) {
+        return -1;
+    }
+    if (read_link_content("/proc/self/ns/cgroup", after, sizeof(after)) != 0) {
+        return -1;
+    }
+    if (!contains(before, "cgroup:[") || !contains(after, "cgroup:[") ||
+        strcmp(before, after) == 0) {
+        errno = ENODATA;
+        return -1;
+    }
+    return 0;
+}

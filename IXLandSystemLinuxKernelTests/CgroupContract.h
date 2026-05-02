@@ -13,5 +13,8 @@ int cgroup_contract_freezer_blocks_and_releases_migration(void);
 int cgroup_contract_subtree_control_accepts_pids_and_freezer(void);
 int cgroup_contract_cgroup_namespace_open_fd_survives_reset_until_closed(void);
 int cgroup_contract_mount_cgroup2_exposes_cgroupfs_view(void);
+int cgroup_contract_rmdir_empty_cgroup_removes_from_hierarchy(void);
+int cgroup_contract_rmdir_busy_cgroup_fails(void);
+int cgroup_contract_rmdir_parent_with_child_fails_notempty(void);
 
 #endif /* IXLAND_SYSTEM_LINUX_KERNEL_TESTS_CGROUP_CONTRACT_H */

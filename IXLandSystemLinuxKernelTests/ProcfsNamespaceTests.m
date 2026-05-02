@@ -100,4 +100,12 @@
     XCTAssertEqual(procfs_namespace_contract_root_files_are_readable(), 0, @"errno %d", errno);
 }
 
+- (void)testNamespaceDirectoryListsCgroup {
+    XCTAssertEqual(procfs_namespace_contract_ns_directory_lists_cgroup(), 0, @"errno %d", errno);
+}
+
+- (void)testCgroupNamespaceLinkChangesAfterUnshare {
+    XCTAssertEqual(procfs_namespace_contract_cgroup_namespace_link_changes_after_unshare(), 0, @"errno %d", errno);
+}
+
 @end

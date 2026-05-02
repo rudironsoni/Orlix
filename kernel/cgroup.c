@@ -29,6 +29,7 @@ struct cgroup {
 
 static struct cgroup *root_cgroup;
 static kernel_mutex_t cgroup_lock = KERNEL_MUTEX_INITIALIZER;
+static atomic_ullong next_cgroup_ns_id = 2;
 
 static void cgroup_free_tree(struct cgroup *cgrp) {
     if (!cgrp) {
@@ -308,6 +309,7 @@ int task_unshare_cgroup_namespace(struct task_struct *task) {
     }
     old_root = task->cgroup_ns_root;
     task->cgroup_ns_root = cgroup_get(task->cgroup);
+    task->cgroup_ns_id = atomic_fetch_add(&next_cgroup_ns_id, 1);
     cgroup_put(old_root);
     return 0;
 }
@@ -325,8 +327,16 @@ int task_reset_cgroup_namespace(struct task_struct *task) {
     }
     old_root = task->cgroup_ns_root;
     task->cgroup_ns_root = root;
+    task->cgroup_ns_id = 1;
     cgroup_put(old_root);
     return 0;
+}
+
+uint64_t task_cgroup_namespace_id(const struct task_struct *task) {
+    if (!task) {
+        return 0;
+    }
+    return task->cgroup_ns_id == 0 ? 1 : task->cgroup_ns_id;
 }
 
 const char *task_cgroup_path(const struct task_struct *task) {
@@ -554,6 +564,60 @@ int cgroupfs_mkdir(const char *path) {
     child->next_sibling = parent->children;
     parent->children = child;
     kernel_mutex_unlock(&cgroup_lock);
+    return 0;
+}
+
+int cgroupfs_rmdir(const char *path) {
+    struct task_struct *task = get_current();
+    struct cgroup *cgrp;
+    struct cgroup *parent;
+    struct cgroup **link;
+    char visible[MAX_PATH];
+    char absolute[MAX_PATH];
+    unsigned int members;
+
+    if (!task || cgroupfs_visible_path(path, visible, sizeof(visible), NULL) != 0 ||
+        strcmp(visible, "/") == 0 ||
+        cgroup_absolute_from_visible(task, visible, absolute, sizeof(absolute)) != 0) {
+        return -EINVAL;
+    }
+
+    kernel_mutex_lock(&cgroup_lock);
+    cgrp = cgroup_find_absolute_locked(absolute);
+    if (!cgrp) {
+        kernel_mutex_unlock(&cgroup_lock);
+        return -ENOENT;
+    }
+    if (cgrp->children) {
+        kernel_mutex_unlock(&cgroup_lock);
+        return -ENOTEMPTY;
+    }
+    kernel_mutex_lock(&cgrp->lock);
+    members = cgrp->members;
+    kernel_mutex_unlock(&cgrp->lock);
+    if (members > 0) {
+        kernel_mutex_unlock(&cgroup_lock);
+        return -EBUSY;
+    }
+    parent = cgrp->parent;
+    if (!parent) {
+        kernel_mutex_unlock(&cgroup_lock);
+        return -EINVAL;
+    }
+    link = &parent->children;
+    while (*link && *link != cgrp) {
+        link = &(*link)->next_sibling;
+    }
+    if (*link != cgrp) {
+        kernel_mutex_unlock(&cgroup_lock);
+        return -ENOENT;
+    }
+    *link = cgrp->next_sibling;
+    cgrp->parent = NULL;
+    cgrp->next_sibling = NULL;
+    kernel_mutex_unlock(&cgroup_lock);
+
+    cgroup_put(cgrp);
     return 0;
 }
 

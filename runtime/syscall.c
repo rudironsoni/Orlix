@@ -179,6 +179,7 @@
 #include "../fs/vfs.h"
 #include "../kernel/futex.h"
 #include "../kernel/mm.h"
+#include "../kernel/seccomp.h"
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
 
@@ -405,6 +406,12 @@ long syscall_dispatch_impl(long number,
                            long arg3,
                            long arg4,
                            long arg5) {
+    long seccomp_ret = seccomp_check_current_syscall(number);
+
+    if (seccomp_ret < 0) {
+        return seccomp_ret;
+    }
+
     switch (number) {
     case __NR_read:
         return syscall_result((long)read_impl((int)arg0, (void *)(uintptr_t)arg1, (size_t)arg2));

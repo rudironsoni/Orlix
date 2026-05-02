@@ -222,6 +222,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             {"mnt", DT_LNK},
             {"uts", DT_LNK},
             {"pid", DT_LNK},
+            {"cgroup", DT_LNK},
         };
         size_t num_entries = sizeof(entries) / sizeof(entries[0]);
         size_t idx = (size_t)(cursor - 2);

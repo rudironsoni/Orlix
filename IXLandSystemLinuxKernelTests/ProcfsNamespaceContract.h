@@ -26,6 +26,8 @@ int procfs_namespace_contract_proc_pid_stat_reports_tty_start_rss_and_exit_signa
 int procfs_namespace_contract_proc_pid_views_remain_consistent_across_lifecycle(void);
 int procfs_namespace_contract_proc_pid_mountinfo_uses_target_mount_namespace(void);
 int procfs_namespace_contract_root_files_are_readable(void);
+int procfs_namespace_contract_ns_directory_lists_cgroup(void);
+int procfs_namespace_contract_cgroup_namespace_link_changes_after_unshare(void);
 
 #ifdef __cplusplus
 }

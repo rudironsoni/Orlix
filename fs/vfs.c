@@ -4361,7 +4361,8 @@ proc_self_path_class_t vfs_classify_proc_self_path(const char *vpath) {
     }
     if ((strcmp(suffix, "/ns/mnt") == 0) ||
         (strcmp(suffix, "/ns/uts") == 0) ||
-        (strcmp(suffix, "/ns/pid") == 0)) {
+        (strcmp(suffix, "/ns/pid") == 0) ||
+        (strcmp(suffix, "/ns/cgroup") == 0)) {
         return PROC_SELF_NS_LINK;
     }
     return PROC_SELF_NONE;
@@ -4586,6 +4587,8 @@ int vfs_proc_self_ns_link_target(const char *vpath, char *target, size_t target_
         id = uts_namespace_id(task->uts_ns);
     } else if (strcmp(name, "pid") == 0) {
         id = (uint64_t)(task->pid_ns_level + 1);
+    } else if (strcmp(name, "cgroup") == 0) {
+        id = task_cgroup_namespace_id(task);
     } else {
         return -ENOENT;
     }

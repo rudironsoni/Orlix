@@ -77,4 +77,19 @@
                    @"mounted cgroup2 should expose cgroupfs through the VFS mount graph, errno %d", errno);
 }
 
+- (void)testRmdirEmptyCgroupRemovesFromHierarchy {
+    XCTAssertEqual(cgroup_contract_rmdir_empty_cgroup_removes_from_hierarchy(), 0,
+                   @"rmdir should remove an empty cgroup from cgroupfs, errno %d", errno);
+}
+
+- (void)testRmdirBusyCgroupFails {
+    XCTAssertEqual(cgroup_contract_rmdir_busy_cgroup_fails(), 0,
+                   @"rmdir should reject cgroups with member tasks, errno %d", errno);
+}
+
+- (void)testRmdirParentWithChildFailsNotempty {
+    XCTAssertEqual(cgroup_contract_rmdir_parent_with_child_fails_notempty(), 0,
+                   @"rmdir should reject cgroups with child cgroups, errno %d", errno);
+}
+
 @end
