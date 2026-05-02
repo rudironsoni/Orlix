@@ -963,6 +963,10 @@ struct mm_struct *task_mm_dup_impl(const struct mm_struct *source) {
     if (source->interp_image_base && !copy->interp_image_base) {
         goto oom;
     }
+    copy->stack_guard_image = mm_dup_bytes(source->stack_guard_image, TASK_VMA_PAGE_SIZE);
+    if (source->stack_guard_image && !copy->stack_guard_image) {
+        goto oom;
+    }
     copy->initial_stack_image_size = source->initial_stack_image_size;
     copy->initial_stack_image = mm_dup_bytes(source->initial_stack_image,
                                             source->initial_stack_image_size);

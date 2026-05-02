@@ -1492,6 +1492,21 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
     if (exec_build_initial_elf_stack(task, &plan, interp_image ? &interp_plan : NULL) != 0) {
         return -1;
     }
+    free(task->mm->stack_guard_image);
+    task->mm->stack_guard_image = calloc(1, TASK_VMA_PAGE_SIZE);
+    if (!task->mm->stack_guard_image) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (exec_add_vma(task->mm,
+                     task->mm->initial_stack_base - TASK_VMA_PAGE_SIZE,
+                     TASK_VMA_PAGE_SIZE,
+                     0,
+                     TASK_VMA_GUARD,
+                     task->mm->stack_guard_image,
+                     TASK_VMA_PAGE_SIZE) != 0) {
+        return -1;
+    }
     if (exec_add_vma(task->mm,
                      task->mm->initial_stack_base,
                      task->mm->initial_stack_image_size,

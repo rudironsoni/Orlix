@@ -157,6 +157,7 @@
 #endif
 #include <linux/fcntl.h>
 #include <linux/futex.h>
+#include <linux/mount.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/time_types.h>
@@ -195,6 +196,8 @@ extern int ioctl_impl(int fd, unsigned long request, void *arg);
 extern ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz);
 extern int execve(const char *pathname, char *const argv[], char *const envp[]);
 extern int clock_gettime_impl(clockid_t clk_id, struct timespec *tp);
+extern int mount_setattr(int dirfd, const char *pathname, unsigned int flags,
+                         struct mount_attr *attr, size_t size);
 
 static int syscall_copy_sigset_to_mask(const uint64_t *sigset, size_t sigsetsize,
                                        struct signal_mask_bits *mask) {
@@ -618,6 +621,19 @@ long syscall_dispatch_impl(long number,
     case __NR_mincore:
         return syscall_result((long)mincore_impl((void *)(uintptr_t)arg0, (size_t)arg1,
                                                  (unsigned char *)(uintptr_t)arg2));
+    case __NR_mount_setattr:
+        return syscall_result((long)mount_setattr((int)arg0, (const char *)(uintptr_t)arg1,
+                                                  (unsigned int)arg2,
+                                                  (struct mount_attr *)(uintptr_t)arg3,
+                                                  (size_t)arg4));
+    case __NR_listmount:
+        return syscall_result(vfs_listmount((const struct mnt_id_req *)(uintptr_t)arg0,
+                                            (uint64_t *)(uintptr_t)arg1,
+                                            (size_t)arg2, (unsigned int)arg3));
+    case __NR_statmount:
+        return syscall_result((long)vfs_statmount((const struct mnt_id_req *)(uintptr_t)arg0,
+                                                  (struct statmount *)(uintptr_t)arg1,
+                                                  (size_t)arg2, (unsigned int)arg3));
     case __NR_msync:
         return syscall_result((long)msync_impl((void *)(uintptr_t)arg0, (size_t)arg1, (int)arg2));
     case __NR_ftruncate:

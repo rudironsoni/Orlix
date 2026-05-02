@@ -101,6 +101,9 @@ struct super_block;
 struct file_system_type;
 struct mount;
 struct vfs_mount_namespace;
+struct mount_attr;
+struct mnt_id_req;
+struct statmount;
 struct poll_table_struct;
 struct iattr;
 struct page;
@@ -241,6 +244,12 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
               const void *data);
 int vfs_umount(const char *target);
 unsigned long vfs_mount_flags_for_path(const char *resolved_vpath);
+int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
+                      const struct mount_attr *attr, size_t size);
+long vfs_listmount(const struct mnt_id_req *req, uint64_t *mnt_ids, size_t nr_mnt_ids,
+                   unsigned int flags);
+int vfs_statmount(const struct mnt_id_req *req, struct statmount *buf, size_t bufsize,
+                  unsigned int flags);
 int vfs_mount_basic(void);
 
 /* Path lookup and walk */

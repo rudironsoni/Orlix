@@ -17,6 +17,8 @@ extern int vfs_mount(const char *source, const char *target,
                       const char *fstype, unsigned long flags,
                       const void *data);
 extern int vfs_umount(const char *target);
+extern int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
+                             const struct mount_attr *attr, size_t size);
 
 /* ============================================================================
  * MOUNT - Virtual mount in IXLand namespace
@@ -113,4 +115,16 @@ __attribute__((visibility("default"))) int umount(const char *target) {
 
 __attribute__((visibility("default"))) int umount2(const char *target, int flags) {
     return umount2_impl(target, flags);
+}
+
+__attribute__((visibility("default"))) int mount_setattr(int dirfd, const char *pathname,
+                                                         unsigned int flags,
+                                                         struct mount_attr *attr,
+                                                         size_t size) {
+    int ret = vfs_mount_setattr(dirfd, pathname, flags, attr, size);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
 }

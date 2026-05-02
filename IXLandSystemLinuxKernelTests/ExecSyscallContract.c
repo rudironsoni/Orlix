@@ -2,12 +2,20 @@
 #include <linux/elf.h>
 #include <linux/auxvec.h>
 #include <linux/mman.h>
+#include <asm-generic/siginfo.h>
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdatomic.h>
 #include <string.h>
+
+#ifdef SIGSEGV
+#undef SIGSEGV
+#endif
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
@@ -1863,15 +1871,18 @@ int exec_syscall_contract_elf_vma_metadata_covers_exec_loader_and_stack(void) {
         goto out;
     }
 
-    if (task->mm->vma_count != 3 ||
+    if (task->mm->vma_count != 4 ||
         expect_vma(task, 0, exec_load->p_vaddr, exec_load->p_memsz, exec_load->p_flags,
                    TASK_VMA_EXEC, task->mm->exec_segments[0].image) != 0 ||
         expect_vma(task, 1, loader_load->p_vaddr, loader_load->p_memsz, loader_load->p_flags,
                    TASK_VMA_INTERP, task->mm->interp_segments[0].image) != 0 ||
-        expect_vma(task, 2, task->mm->initial_stack_base, task->mm->initial_stack_image_size,
+        expect_vma(task, 2, task->mm->initial_stack_base - TASK_VMA_PAGE_SIZE, TASK_VMA_PAGE_SIZE,
+                   0, TASK_VMA_GUARD, task->mm->stack_guard_image) != 0 ||
+        expect_vma(task, 3, task->mm->initial_stack_base, task->mm->initial_stack_image_size,
                    PF_R | PF_W, TASK_VMA_STACK, task->mm->initial_stack_image) != 0 ||
         task_find_vma_impl(task, exec_load->p_vaddr)->kind != TASK_VMA_EXEC ||
         task_find_vma_impl(task, loader_load->p_vaddr)->kind != TASK_VMA_INTERP ||
+        task_find_vma_impl(task, task->mm->initial_stack_base - 1)->kind != TASK_VMA_GUARD ||
         task_find_vma_impl(task, task->mm->initial_stack_pointer)->kind != TASK_VMA_STACK ||
         task_find_vma_impl(task, 0x2000) != NULL) {
         errno = EPROTO;
@@ -1883,6 +1894,41 @@ int exec_syscall_contract_elf_vma_metadata_covers_exec_loader_and_stack(void) {
 out:
     unlink_impl("/tmp/exec-elf-vma");
     unlink_impl(interp_path);
+    return result;
+}
+
+int exec_syscall_contract_elf_stack_guard_faults_with_sigsegv_accerr(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[4096];
+    char byte = 'g';
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-stack-guard");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x401000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-stack-guard", image, sizeof(image)) != 0) {
+        goto out;
+    }
+    if (execve("/tmp/exec-elf-stack-guard", NULL, NULL) != 0) {
+        goto out;
+    }
+    if (task_write_virtual_memory_impl(task, task->mm->initial_stack_base - 1, &byte, 1) != -1 ||
+        errno != EACCES ||
+        task->last_fault_signal != SIGSEGV ||
+        task->last_fault_code != SEGV_ACCERR ||
+        task->last_fault_addr != task->mm->initial_stack_base - 1) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-stack-guard");
     return result;
 }
 

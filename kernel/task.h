@@ -34,7 +34,7 @@ extern "C" {
 #define TASK_MAX_TASKS 1024
 #define TASK_EXEC_MAX_LOAD_SEGMENTS 16
 #define TASK_EXEC_MAX_AUXV 32
-#define TASK_EXEC_MAX_VMAS ((TASK_EXEC_MAX_LOAD_SEGMENTS * 2) + 1)
+#define TASK_EXEC_MAX_VMAS ((TASK_EXEC_MAX_LOAD_SEGMENTS * 2) + 2)
 #define TASK_EXEC_MAX_DYNAMIC_NEEDED 16
 #define TASK_VMA_PAGE_SIZE 4096ULL
 
@@ -61,6 +61,7 @@ enum task_vma_kind {
     TASK_VMA_STACK = 3,
     TASK_VMA_ANON = 4,
     TASK_VMA_FILE = 5,
+    TASK_VMA_GUARD = 6,
 };
 
 struct task_vma {
@@ -172,6 +173,7 @@ struct mm_struct {
     uint64_t initial_stack_base;
     uint64_t initial_stack_size;
     uint64_t initial_stack_pointer;
+    void *stack_guard_image;
     void *initial_stack_image;
     size_t initial_stack_image_size;
     int initial_argc;

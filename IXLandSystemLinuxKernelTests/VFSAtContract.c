@@ -10,6 +10,7 @@
 #include <linux/magic.h>
 #include <linux/mount.h>
 #include <linux/stat.h>
+#include <asm/unistd.h>
 #include <asm/statfs.h>
 
 #include <errno.h>
@@ -18,6 +19,7 @@
 #include "fs/vfs.h"
 #include "kernel/cred_internal.h"
 #include "kernel/task.h"
+#include "runtime/syscall.h"
 
 /* Access mode constants - defined locally to avoid Darwin <unistd.h> */
 #ifndef X_OK
@@ -36,6 +38,8 @@ extern int mount(const char *source, const char *target, const char *filesystemt
                  unsigned long mountflags, const void *data);
 extern int umount(const char *target);
 extern int umount2(const char *target, int flags);
+extern int mount_setattr(int dirfd, const char *pathname, unsigned int flags,
+                         struct mount_attr *attr, size_t size);
 extern int mkdir_impl(const char *pathname, linux_mode_t mode);
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
 
@@ -1654,6 +1658,113 @@ int vfs_contract_slave_mount_receives_nested_child_from_shared_master(void) {
     }
 
     ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int vfs_contract_mount_setattr_recursive_marks_child_private(void) {
+    struct mount_attr attr;
+    char content[4096];
+    int ret = -1;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source/child", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-child-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0) {
+        goto out;
+    }
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-a", NULL, MS_BIND | MS_SHARED, NULL) != 0 ||
+        mount("/tmp/vfs-mntns-child-source", "/tmp/vfs-mntns-peer-a/child", NULL, MS_BIND | MS_SHARED, NULL) != 0) {
+        goto out;
+    }
+    memset(&attr, 0, sizeof(attr));
+    attr.propagation = MS_PRIVATE;
+    if (mount_setattr(AT_FDCWD, "/tmp/vfs-mntns-peer-a", AT_RECURSIVE,
+                      &attr, sizeof(attr)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0) {
+        goto out;
+    }
+    if (vfs_contract_content_contains(content, " /tmp/vfs-mntns-peer-a rw,relatime shared:") ||
+        vfs_contract_content_contains(content, " /tmp/vfs-mntns-peer-a/child rw,relatime shared:")) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+static const char *vfs_contract_statmount_string(const struct statmount *st, __u32 off) {
+    return st && off < st->size ? st->str + off : NULL;
+}
+
+int vfs_contract_listmount_statmount_reports_slave_master(void) {
+    struct mnt_id_req req;
+    char statmount_storage[sizeof(struct statmount) + 512];
+    struct statmount *st = (struct statmount *)statmount_storage;
+    uint64_t ids[16];
+    int ret = -1;
+    long count;
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-b", 0700)) != 0) {
+        goto out;
+    }
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-a", NULL, MS_BIND | MS_SHARED, NULL) != 0 ||
+        mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-b", NULL, MS_BIND | MS_SLAVE, NULL) != 0) {
+        goto out;
+    }
+
+    memset(&req, 0, sizeof(req));
+    req.size = MNT_ID_REQ_SIZE_VER1;
+    req.mnt_id = LSMT_ROOT;
+    count = syscall_dispatch_impl(__NR_listmount, (long)(uintptr_t)&req,
+                                  (long)(uintptr_t)ids,
+                                  sizeof(ids) / sizeof(ids[0]), 0, 0, 0);
+    if (count <= 0) {
+        errno = count < 0 ? (int)-count : ENODATA;
+        goto out;
+    }
+
+    for (long i = 0; i < count; i++) {
+        memset(&req, 0, sizeof(req));
+        memset(statmount_storage, 0, sizeof(statmount_storage));
+        req.size = MNT_ID_REQ_SIZE_VER1;
+        req.mnt_id = ids[i];
+        req.param = STATMOUNT_MNT_BASIC | STATMOUNT_MNT_POINT | STATMOUNT_PROPAGATE_FROM;
+        if (syscall_dispatch_impl(__NR_statmount, (long)(uintptr_t)&req,
+                                  (long)(uintptr_t)st, sizeof(statmount_storage), 0, 0, 0) != 0) {
+            continue;
+        }
+        if (st->mnt_point != 0 &&
+            strcmp(vfs_contract_statmount_string(st, st->mnt_point), "/tmp/vfs-mntns-peer-b") == 0) {
+            if (st->mnt_propagation != MS_SLAVE || st->mnt_master == 0 || st->propagate_from == 0) {
+                errno = ENODATA;
+                goto out;
+            }
+            ret = 0;
+            goto out;
+        }
+    }
+    errno = ENOENT;
 
 out:
     {

@@ -352,6 +352,7 @@ void task_mm_put_impl(struct mm_struct *mm) {
     task_clear_vmas_impl(mm);
     free(mm->exec_image_base);
     free(mm->interp_image_base);
+    free(mm->stack_guard_image);
     free(mm->initial_stack_image);
     free(mm);
 }

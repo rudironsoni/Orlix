@@ -1330,6 +1330,18 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"slave mounts should receive nested propagation from their shared master, errno %d", errno);
 }
 
+- (void)testMountSetattrRecursiveMarksChildPrivate {
+    extern int vfs_contract_mount_setattr_recursive_marks_child_private(void);
+    XCTAssertEqual(vfs_contract_mount_setattr_recursive_marks_child_private(), 0,
+                   @"mount_setattr AT_RECURSIVE should update the virtual mount subtree, errno %d", errno);
+}
+
+- (void)testListmountStatmountReportsSlaveMaster {
+    extern int vfs_contract_listmount_statmount_reports_slave_master(void);
+    XCTAssertEqual(vfs_contract_listmount_statmount_reports_slave_master(), 0,
+                   @"listmount/statmount should expose slave master propagation metadata, errno %d", errno);
+}
+
 - (void)testMountinfoReportsNestedParentMountId {
     extern int vfs_contract_mountinfo_reports_nested_parent_mount_id(void);
     XCTAssertEqual(vfs_contract_mountinfo_reports_nested_parent_mount_id(), 0,

@@ -1377,6 +1377,224 @@ unsigned long vfs_mount_flags_for_path(const char *resolved_vpath) {
     return flags;
 }
 
+static uint64_t vfs_mount_id_for_index_locked(const struct vfs_mount_namespace *mnt_ns, size_t target_index) {
+    uint64_t id = 2;
+
+    if (!mnt_ns || target_index >= MAX_MOUNTS || !mnt_ns->entries[target_index].active) {
+        return 0;
+    }
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        if (!mnt_ns->entries[i].active) {
+            continue;
+        }
+        if (i == target_index) {
+            return id;
+        }
+        id++;
+    }
+    return 0;
+}
+
+static const struct vfs_mount_entry *vfs_mount_for_id_locked(const struct vfs_mount_namespace *mnt_ns,
+                                                             uint64_t id,
+                                                             size_t *index_out) {
+    uint64_t current = 2;
+
+    if (!mnt_ns || id < 2) {
+        return NULL;
+    }
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        if (!mnt_ns->entries[i].active) {
+            continue;
+        }
+        if (current == id) {
+            if (index_out) {
+                *index_out = i;
+            }
+            return &mnt_ns->entries[i];
+        }
+        current++;
+    }
+    return NULL;
+}
+
+static int vfs_statmount_store_string(struct statmount *buf, size_t bufsize,
+                                      size_t *str_pos, __u32 *offset_out,
+                                      const char *value) {
+    size_t base = sizeof(*buf);
+    size_t len;
+
+    if (!buf || !str_pos || !offset_out || !value || bufsize < base) {
+        return -EINVAL;
+    }
+    len = strlen(value) + 1;
+    if (*str_pos > UINT32_MAX || len > bufsize - base || *str_pos > (bufsize - base) - len) {
+        return -EOVERFLOW;
+    }
+    *offset_out = (__u32)*str_pos;
+    memcpy(buf->str + *str_pos, value, len);
+    *str_pos += len;
+    return 0;
+}
+
+int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
+                      const struct mount_attr *attr, size_t size) {
+    char resolved_target[MAX_PATH];
+    struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
+    uint64_t supported_attrs = MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID;
+    int recursive = (flags & AT_RECURSIVE) != 0;
+    int found = 0;
+    int ret;
+
+    if (!pathname || !attr) {
+        return -EFAULT;
+    }
+    if (!mnt_ns) {
+        return -ESRCH;
+    }
+    if (!cred_has_cap(get_current_cred(), CAP_SYS_ADMIN)) {
+        return -EPERM;
+    }
+    if (size < MOUNT_ATTR_SIZE_VER0 || (flags & ~AT_RECURSIVE) != 0) {
+        return -EINVAL;
+    }
+    if ((attr->attr_set & ~supported_attrs) != 0 ||
+        (attr->attr_clr & ~supported_attrs) != 0 ||
+        (attr->attr_set & attr->attr_clr) != 0 ||
+        vfs_mount_selected_propagation((unsigned long)attr->propagation) == (unsigned long)-1) {
+        return -EINVAL;
+    }
+
+    ret = vfs_resolve_virtual_path_at(dirfd, pathname, resolved_target, sizeof(resolved_target));
+    if (ret != 0) {
+        return ret;
+    }
+
+    fs_mutex_lock(&mnt_ns->lock);
+    for (size_t i = 0; i < MAX_MOUNTS; i++) {
+        struct vfs_mount_entry *entry = &mnt_ns->entries[i];
+
+        if (!entry->active ||
+            (recursive ? !vfs_mount_target_matches_tree(entry->target, resolved_target)
+                       : strcmp(entry->target, resolved_target) != 0)) {
+            continue;
+        }
+        if ((attr->attr_set & MOUNT_ATTR_RDONLY) != 0) {
+            entry->flags |= MS_RDONLY;
+        }
+        if ((attr->attr_clr & MOUNT_ATTR_RDONLY) != 0) {
+            entry->flags &= ~MS_RDONLY;
+        }
+        if ((attr->attr_set & MOUNT_ATTR_NOSUID) != 0) {
+            entry->flags |= MS_NOSUID;
+        }
+        if ((attr->attr_clr & MOUNT_ATTR_NOSUID) != 0) {
+            entry->flags &= ~MS_NOSUID;
+        }
+        if (attr->propagation != 0) {
+            entry->propagation = (unsigned long)attr->propagation;
+            entry->peer_group_id = 0;
+            entry->master_group_id = 0;
+            vfs_mount_assign_propagation_ids_locked(mnt_ns, entry);
+        }
+        found = 1;
+    }
+    fs_mutex_unlock(&mnt_ns->lock);
+    return found ? 0 : -EINVAL;
+}
+
+long vfs_listmount(const struct mnt_id_req *req, uint64_t *mnt_ids, size_t nr_mnt_ids,
+                   unsigned int flags) {
+    struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
+    uint64_t count = 0;
+
+    if (!req || (!mnt_ids && nr_mnt_ids > 0)) {
+        return -EFAULT;
+    }
+    if (!mnt_ns) {
+        return -ESRCH;
+    }
+    if (req->size < MNT_ID_REQ_SIZE_VER0 || (flags & ~LISTMOUNT_REVERSE) != 0 ||
+        (req->mnt_id != LSMT_ROOT && req->mnt_id != 1)) {
+        return -EINVAL;
+    }
+
+    fs_mutex_lock(&mnt_ns->lock);
+    for (size_t scan = 0; scan < MAX_MOUNTS; scan++) {
+        size_t i = (flags & LISTMOUNT_REVERSE) != 0 ? (MAX_MOUNTS - 1 - scan) : scan;
+        uint64_t id;
+
+        if (!mnt_ns->entries[i].active) {
+            continue;
+        }
+        id = vfs_mount_id_for_index_locked(mnt_ns, i);
+        if (count < nr_mnt_ids) {
+            mnt_ids[count] = id;
+        }
+        count++;
+    }
+    fs_mutex_unlock(&mnt_ns->lock);
+    return (long)count;
+}
+
+int vfs_statmount(const struct mnt_id_req *req, struct statmount *buf, size_t bufsize,
+                  unsigned int flags) {
+    struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
+    const struct vfs_mount_entry *entry;
+    size_t index = 0;
+    size_t str_pos = 0;
+    int ret;
+
+    if (!req || !buf) {
+        return -EFAULT;
+    }
+    if (!mnt_ns) {
+        return -ESRCH;
+    }
+    if (req->size < MNT_ID_REQ_SIZE_VER0 || bufsize < sizeof(*buf) || flags != 0) {
+        return -EINVAL;
+    }
+
+    memset(buf, 0, bufsize);
+    fs_mutex_lock(&mnt_ns->lock);
+    entry = vfs_mount_for_id_locked(mnt_ns, req->mnt_id, &index);
+    if (!entry) {
+        fs_mutex_unlock(&mnt_ns->lock);
+        return -ENOENT;
+    }
+
+    buf->mask = req->param;
+    buf->mnt_id = req->mnt_id;
+    buf->mnt_id_old = (__u32)req->mnt_id;
+    buf->mnt_parent_id = 1;
+    buf->mnt_parent_id_old = 1;
+    buf->mnt_attr = 0;
+    if ((entry->flags & MS_RDONLY) != 0) {
+        buf->mnt_attr |= MOUNT_ATTR_RDONLY;
+    }
+    if ((entry->flags & MS_NOSUID) != 0) {
+        buf->mnt_attr |= MOUNT_ATTR_NOSUID;
+    }
+    buf->mnt_propagation = entry->propagation;
+    buf->mnt_peer_group = entry->peer_group_id;
+    buf->mnt_master = entry->master_group_id;
+    buf->propagate_from = entry->master_group_id;
+    buf->mnt_ns_id = mnt_ns->ns_id;
+
+    ret = vfs_statmount_store_string(buf, bufsize, &str_pos, &buf->mnt_root, "/");
+    if (ret == 0) {
+        ret = vfs_statmount_store_string(buf, bufsize, &str_pos, &buf->mnt_point, entry->target);
+    }
+    if (ret != 0) {
+        fs_mutex_unlock(&mnt_ns->lock);
+        return ret;
+    }
+    (void)index;
+    buf->size = (__u32)(sizeof(*buf) + str_pos);
+    fs_mutex_unlock(&mnt_ns->lock);
+    return 0;
+}
+
 int vfs_describe_route_for_path(const char *vpath, enum vfs_route_identity *route_id,
                                 enum vfs_backing_class *backing_class, bool *reversible) {
     const struct vfs_route_entry *route = vfs_route_for_path(vpath);
