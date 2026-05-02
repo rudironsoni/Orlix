@@ -634,6 +634,28 @@ void cred_apply_exec_metadata(struct cred *cred, uid_t file_uid, gid_t file_gid,
     cred->securebits &= ~SECBIT_KEEP_CAPS;
 }
 
+void cred_apply_exec_file_capabilities(struct cred *cred, uint64_t permitted,
+                                       uint64_t inheritable, bool effective) {
+    uint64_t full;
+    uint64_t next_permitted;
+
+    if (!cred) {
+        return;
+    }
+    if (cred->no_new_privs) {
+        return;
+    }
+
+    full = cred_full_cap_mask();
+    permitted &= full;
+    inheritable &= full;
+    next_permitted = (permitted | (cred->cap_inheritable & inheritable)) & cred->cap_bounding;
+
+    cred->cap_permitted = next_permitted;
+    cred->cap_effective = effective ? next_permitted : 0;
+    cred->cap_ambient = 0;
+}
+
 bool cred_no_new_privs(const struct cred *cred) {
     return cred && cred->no_new_privs;
 }

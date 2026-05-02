@@ -364,6 +364,10 @@ int vfs_check_parent_mutation_permission(const char *resolved_vpath);
 int vfs_check_sticky_unlink_permission(const char *resolved_vpath);
 void vfs_record_created_path(const char *resolved_vpath, linux_mode_t mode);
 uint64_t vfs_file_identity_for_path(const char *resolved_vpath);
+int vfs_set_file_capabilities(const char *path, uint64_t permitted, uint64_t inheritable,
+                              bool effective);
+int vfs_get_file_capabilities(const char *path, uint64_t *permitted, uint64_t *inheritable,
+                              bool *effective);
 void vfs_forget_path_metadata(const char *resolved_vpath);
 void vfs_link_path_metadata(const char *old_resolved_vpath, const char *new_resolved_vpath);
 void vfs_rename_path_metadata(const char *old_resolved_vpath, const char *new_resolved_vpath);

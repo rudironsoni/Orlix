@@ -1379,10 +1379,19 @@ int task_exec_transition_impl(const char *path, const char *argv0) {
 
     if (vfs_fstatat(AT_FDCWD, normalized_path, &st, 0) == 0) {
         uint32_t exec_mode = st.st_mode;
+        uint64_t file_cap_permitted = 0;
+        uint64_t file_cap_inheritable = 0;
+        bool file_cap_effective = false;
         if ((vfs_mount_flags_for_path(normalized_path) & MS_NOSUID) != 0) {
             exec_mode &= ~(uint32_t)(S_ISUID | S_ISGID);
         }
         cred_apply_exec_metadata(get_current_cred(), st.st_uid, st.st_gid, exec_mode);
+        if ((vfs_mount_flags_for_path(normalized_path) & MS_NOSUID) == 0 &&
+            vfs_get_file_capabilities(normalized_path, &file_cap_permitted,
+                                      &file_cap_inheritable, &file_cap_effective) == 0) {
+            cred_apply_exec_file_capabilities(get_current_cred(), file_cap_permitted,
+                                              file_cap_inheritable, file_cap_effective);
+        }
     }
 
     closed = close_on_exec_impl();

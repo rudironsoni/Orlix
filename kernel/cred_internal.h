@@ -142,6 +142,8 @@ int cred_set_no_new_privs(struct cred *cred);
 
 /* Virtual capability state */
 bool cred_has_cap(const struct cred *cred, int cap);
+void cred_apply_exec_file_capabilities(struct cred *cred, uint64_t permitted,
+                                       uint64_t inheritable, bool effective);
 
 /* ============================================================================
  * INTERNAL IMPLEMENTATION ENTRY POINTS

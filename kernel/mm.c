@@ -624,12 +624,18 @@ static long long mm_vma_pwrite(struct task_vma *vma, const void *buf, size_t cou
         }
     }
     if (vma->backing_path[0] == '\0') {
+        if (vma->shared_pages) {
+            return (long long)count;
+        }
         errno = EBADF;
         return -1;
     }
 
     reopened = open_impl(vma->backing_path, O_RDWR, 0);
     if (reopened < 0) {
+        if (errno == ENOENT && vma->shared_pages) {
+            return (long long)count;
+        }
         return -1;
     }
     bytes = mm_fd_pwrite(reopened, buf, count, offset);

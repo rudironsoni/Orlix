@@ -198,6 +198,7 @@ int get_fd_proc_file_fd_num_impl(void *entry);
 int get_fd_proc_file_target_pid_impl(void *entry);
 
 bool fdtable_is_used_impl(int fd);
+bool fdtable_has_open_path_under_impl(const char *root);
 bool fdtable_task_is_used_impl(struct task_struct *task, int fd);
 int fdtable_task_fd_path_impl(struct task_struct *task, int fd, char *path, size_t path_len);
 int fdtable_task_fdinfo_content_impl(struct task_struct *task, int fd, char *buf, size_t buf_len);

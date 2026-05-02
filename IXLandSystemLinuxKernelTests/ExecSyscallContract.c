@@ -1,6 +1,7 @@
 #include <linux/fcntl.h>
 #include <linux/elf.h>
 #include <linux/auxvec.h>
+#include <linux/capability.h>
 #include <linux/mman.h>
 #include <linux/prctl.h>
 #include <linux/stat.h>
@@ -45,6 +46,7 @@ extern int setuid_impl(uid_t uid);
 extern int setgid_impl(gid_t gid);
 extern int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
 extern int ftruncate_impl(int fd, linux_off_t length);
+extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern bool signal_is_pending(const struct task_struct *task, int32_t sig);
 
 static int close_if_open(int fd) {
@@ -1171,6 +1173,108 @@ int exec_syscall_contract_native_execve_no_new_privs_blocks_setid_saved_ids(void
     }
     if (expect_current_ids(1000, 1000, 1000, 1000, 1000, 1000) != 0 ||
         prctl_impl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) != 1) {
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    native_registry_clear();
+    unlink_impl(path);
+    cred_reset_to_defaults();
+    return result;
+}
+
+int exec_syscall_contract_native_execve_applies_file_capability_metadata(void) {
+    char *argv[] = {"cap-native", NULL};
+    char *envp[] = {NULL};
+    const char *path = "/tmp/exec-native-file-cap";
+    struct __user_cap_header_struct header = {
+        .version = _LINUX_CAPABILITY_VERSION_3,
+        .pid = 0,
+    };
+    struct __user_cap_data_struct data[_LINUX_CAPABILITY_U32S_3];
+    uint64_t cap_mask = 1ULL << CAP_NET_BIND_SERVICE;
+    int status;
+    int result = -1;
+
+    cred_reset_to_defaults();
+    native_registry_clear();
+    unlink_impl(path);
+    if (native_register(path, native_exec_status) != 0 ||
+        write_file_exact(path, "native") != 0 ||
+        chmod(path, 0755) != 0 ||
+        vfs_set_file_capabilities(path, cap_mask, 0, true) != 0 ||
+        setgid_impl(1000) != 0 ||
+        setuid_impl(1000) != 0) {
+        goto out;
+    }
+
+    status = execve(path, argv, envp);
+    if (status != 23) {
+        errno = EPROTO;
+        goto out;
+    }
+    memset(data, 0, sizeof(data));
+    if (capget_impl(&header, data) != 0) {
+        goto out;
+    }
+    if ((data[0].permitted & (1U << CAP_NET_BIND_SERVICE)) == 0 ||
+        (data[0].effective & (1U << CAP_NET_BIND_SERVICE)) == 0 ||
+        get_current_cred()->euid != 1000 ||
+        get_current_cred()->suid != 1000) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    native_registry_clear();
+    unlink_impl(path);
+    cred_reset_to_defaults();
+    return result;
+}
+
+int exec_syscall_contract_native_execve_no_new_privs_blocks_file_capabilities(void) {
+    char *argv[] = {"cap-nnp-native", NULL};
+    char *envp[] = {NULL};
+    const char *path = "/tmp/exec-native-nnp-file-cap";
+    struct __user_cap_header_struct header = {
+        .version = _LINUX_CAPABILITY_VERSION_3,
+        .pid = 0,
+    };
+    struct __user_cap_data_struct data[_LINUX_CAPABILITY_U32S_3];
+    uint64_t cap_mask = 1ULL << CAP_NET_BIND_SERVICE;
+    int status;
+    int result = -1;
+
+    cred_reset_to_defaults();
+    native_registry_clear();
+    unlink_impl(path);
+    if (native_register(path, native_exec_status) != 0 ||
+        write_file_exact(path, "native") != 0 ||
+        chmod(path, 0755) != 0 ||
+        vfs_set_file_capabilities(path, cap_mask, 0, true) != 0 ||
+        prctl_impl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 ||
+        setgid_impl(1000) != 0 ||
+        setuid_impl(1000) != 0) {
+        goto out;
+    }
+
+    status = execve(path, argv, envp);
+    if (status != 23) {
+        errno = EPROTO;
+        goto out;
+    }
+    memset(data, 0, sizeof(data));
+    if (capget_impl(&header, data) != 0) {
+        goto out;
+    }
+    if ((data[0].permitted & (1U << CAP_NET_BIND_SERVICE)) != 0 ||
+        (data[0].effective & (1U << CAP_NET_BIND_SERVICE)) != 0 ||
+        prctl_impl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) != 1) {
+        errno = ENODATA;
         goto out;
     }
 

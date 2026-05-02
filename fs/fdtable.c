@@ -1597,6 +1597,39 @@ bool fdtable_is_used_impl(int fd) {
     return used;
 }
 
+static bool fdtable_path_matches_tree(const char *path, const char *root) {
+    size_t root_len;
+
+    if (!path || !root || root[0] == '\0') {
+        return false;
+    }
+    if (strcmp(root, "/") == 0) {
+        return path[0] == '/';
+    }
+    root_len = strlen(root);
+    return strcmp(path, root) == 0 || (strncmp(path, root, root_len) == 0 && path[root_len] == '/');
+}
+
+bool fdtable_has_open_path_under_impl(const char *root) {
+    bool found = false;
+
+    if (!root) {
+        return false;
+    }
+    file_init_impl();
+    fs_mutex_lock(&fd_table_lock);
+    for (int fd = 0; fd < NR_OPEN_DEFAULT; fd++) {
+        fd_description_t *desc = fd_table[fd].desc;
+
+        if (fd_table[fd].used && desc && fdtable_path_matches_tree(desc->path, root)) {
+            found = true;
+            break;
+        }
+    }
+    fs_mutex_unlock(&fd_table_lock);
+    return found;
+}
+
 bool fdtable_task_is_used_impl(struct task_struct *task, int fd) {
     bool used;
 

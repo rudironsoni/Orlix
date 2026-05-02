@@ -1342,6 +1342,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"recursive unmount should propagate nested child unmounts from shared peer trees, errno %d", errno);
 }
 
+- (void)testUnmountBusyWhenOpenFdPinsMountTree {
+    extern int vfs_contract_umount_busy_when_open_fd_pins_mount_tree(void);
+    XCTAssertEqual(vfs_contract_umount_busy_when_open_fd_pins_mount_tree(), 0,
+                   @"normal unmount should return EBUSY while an open fd pins the mount tree, errno %d", errno);
+}
+
 - (void)testSlaveMountReceivesNestedChildFromSharedMaster {
     extern int vfs_contract_slave_mount_receives_nested_child_from_shared_master(void);
     XCTAssertEqual(vfs_contract_slave_mount_receives_nested_child_from_shared_master(), 0,

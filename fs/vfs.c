@@ -80,6 +80,10 @@ struct vfs_metadata_entry {
     linux_uid_t uid;
     linux_gid_t gid;
     linux_mode_t mode;
+    bool has_file_caps;
+    uint64_t cap_permitted;
+    uint64_t cap_inheritable;
+    bool cap_effective;
 };
 
 static struct vfs_metadata_entry vfs_metadata_table[VFS_METADATA_MAX];
@@ -876,6 +880,100 @@ uint64_t vfs_file_identity_for_path(const char *resolved_vpath) {
     }
     fs_mutex_unlock(&vfs_metadata_lock);
     return identity;
+}
+
+static int vfs_resolve_existing_metadata_path(const char *path, char *resolved, size_t resolved_len) {
+    struct linux_stat st;
+    int ret;
+
+    if (!path || !resolved || resolved_len == 0) {
+        return -EFAULT;
+    }
+    ret = vfs_resolve_virtual_path_at(AT_FDCWD, path, resolved, resolved_len);
+    if (ret != 0) {
+        return ret;
+    }
+    if (vfs_fstatat(AT_FDCWD, resolved, &st, 0) != 0) {
+        return -errno;
+    }
+    return 0;
+}
+
+int vfs_set_file_capabilities(const char *path, uint64_t permitted, uint64_t inheritable,
+                              bool effective) {
+    char resolved[MAX_PATH];
+    int idx;
+    int free_slot = -1;
+    int ret;
+
+    ret = vfs_resolve_existing_metadata_path(path, resolved, sizeof(resolved));
+    if (ret != 0) {
+        errno = -ret;
+        return -1;
+    }
+    if (!cred_has_cap(get_current_cred(), CAP_SETFCAP)) {
+        errno = EPERM;
+        return -1;
+    }
+
+    fs_mutex_lock(&vfs_metadata_lock);
+    idx = vfs_metadata_find_locked(resolved);
+    if (idx < 0) {
+        for (size_t i = 0; i < VFS_METADATA_MAX; i++) {
+            if (!vfs_metadata_table[i].active) {
+                free_slot = (int)i;
+                break;
+            }
+        }
+        idx = free_slot;
+    }
+    if (idx < 0) {
+        fs_mutex_unlock(&vfs_metadata_lock);
+        errno = ENOSPC;
+        return -1;
+    }
+    vfs_metadata_table[idx].active = true;
+    vfs_copy_string(resolved, vfs_metadata_table[idx].path, sizeof(vfs_metadata_table[idx].path));
+    if (vfs_metadata_table[idx].file_identity == 0) {
+        vfs_metadata_table[idx].file_identity = (uint64_t)atomic_fetch_add(&vfs_next_file_identity, 1);
+    }
+    vfs_metadata_table[idx].has_file_caps = (permitted | inheritable) != 0 || effective;
+    vfs_metadata_table[idx].cap_permitted = permitted;
+    vfs_metadata_table[idx].cap_inheritable = inheritable;
+    vfs_metadata_table[idx].cap_effective = effective;
+    fs_mutex_unlock(&vfs_metadata_lock);
+    return 0;
+}
+
+int vfs_get_file_capabilities(const char *path, uint64_t *permitted, uint64_t *inheritable,
+                              bool *effective) {
+    char resolved[MAX_PATH];
+    int idx;
+    int ret;
+
+    if (!permitted || !inheritable || !effective) {
+        return -EFAULT;
+    }
+    *permitted = 0;
+    *inheritable = 0;
+    *effective = false;
+
+    ret = vfs_resolve_existing_metadata_path(path, resolved, sizeof(resolved));
+    if (ret != 0) {
+        return ret;
+    }
+
+    fs_mutex_lock(&vfs_metadata_lock);
+    idx = vfs_metadata_find_locked(resolved);
+    if (idx < 0 || !vfs_metadata_table[idx].has_file_caps) {
+        fs_mutex_unlock(&vfs_metadata_lock);
+        return -ENODATA;
+    }
+    *permitted = vfs_metadata_table[idx].cap_permitted;
+    *inheritable = vfs_metadata_table[idx].cap_inheritable;
+    *effective = vfs_metadata_table[idx].cap_effective;
+    fs_mutex_unlock(&vfs_metadata_lock);
+    return 0;
 }
 
 void vfs_forget_path_metadata(const char *resolved_vpath) {
@@ -2582,6 +2680,10 @@ int vfs_umount(const char *target) {
     fs_mutex_lock(&mnt_ns->lock);
     for (size_t i = 0; i < MAX_MOUNTS; i++) {
         if (mnt_ns->entries[i].active && strcmp(mnt_ns->entries[i].target, resolved_target) == 0) {
+            if (fdtable_has_open_path_under_impl(resolved_target)) {
+                fs_mutex_unlock(&mnt_ns->lock);
+                return -EBUSY;
+            }
             vfs_umount_propagate_tree_locked(mnt_ns, resolved_target);
             vfs_umount_remove_tree_locked(mnt_ns, resolved_target);
             fs_mutex_unlock(&mnt_ns->lock);
