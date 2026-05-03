@@ -80,6 +80,14 @@
     XCTAssertEqual(procfs_namespace_contract_process_signal_reports_shared_pending(), 0, @"errno %d", errno);
 }
 
+- (void)testThreadSignalPendingIsPerTid {
+    XCTAssertEqual(procfs_namespace_contract_thread_signal_pending_is_per_tid(), 0, @"errno %d", errno);
+}
+
+- (void)testThreadGroupStopContinueReportsOnce {
+    XCTAssertEqual(procfs_namespace_contract_thread_group_stop_continue_reports_once(), 0, @"errno %d", errno);
+}
+
 - (void)testProcPidStatCwdAndExeReportTargetTask {
     XCTAssertEqual(procfs_namespace_contract_proc_pid_stat_cwd_and_exe_report_target_task(), 0, @"errno %d", errno);
 }

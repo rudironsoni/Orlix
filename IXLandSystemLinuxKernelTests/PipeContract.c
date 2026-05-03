@@ -131,7 +131,8 @@ static void clear_pending_signal(struct task_struct *task, int sig) {
     if (!task || !task->signal || sig < 1 || sig > KERNEL_SIG_NUM) {
         return;
     }
-    task->signal->pending.sig[(sig - 1) >> 6] &= ~(1ULL << ((sig - 1) & 63));
+    task->thread_pending_signals &= ~(1ULL << ((sig - 1) & 63));
+    task->signal->shared_pending.sig[(sig - 1) >> 6] &= ~(1ULL << ((sig - 1) & 63));
 }
 
 struct pipe_thread_case {

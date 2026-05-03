@@ -5184,7 +5184,7 @@ static void vfs_proc_task_signal_status(const struct task_struct *task,
 
     if (task && task->signal) {
         kernel_mutex_lock(&task->signal->lock);
-        private_pending = task->signal->pending.sig[0];
+        private_pending = task->thread_pending_signals;
         shared_pending = task->signal->shared_pending.sig[0];
         blocked = task->signal->blocked.sig[0];
         queued = task->signal->queue.count < 0 ? 0U : (unsigned int)task->signal->queue.count;

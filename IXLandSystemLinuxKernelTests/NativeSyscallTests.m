@@ -149,6 +149,10 @@
     XCTAssertEqual(native_syscall_contract_partial_truncate_zero_fills_and_mincore_tracks_pages(), 0, @"errno %d", errno);
 }
 
+- (void)testPartialPageMsyncAndSharedGrowthWriteback {
+    XCTAssertEqual(native_syscall_contract_partial_page_msync_and_shared_growth_writeback(), 0, @"errno %d", errno);
+}
+
 - (void)testRenameUpdatesOpenFdAndMappingIdentity {
     XCTAssertEqual(native_syscall_contract_rename_updates_open_fd_and_mapping_identity(), 0, @"errno %d", errno);
 }

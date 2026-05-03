@@ -458,11 +458,14 @@ long mm_shared_vma_read_impl(const struct task_vma *vma, uint64_t addr, void *bu
     file_size = mm_vma_file_size_impl(vma);
     if (file_size >= 0) {
         size_t page_start = offset - (offset % TASK_VMA_PAGE_SIZE);
-        if ((uint64_t)page_start >= (uint64_t)file_size) {
+        uint64_t file_page_start = vma->backing_offset + (uint64_t)page_start;
+        uint64_t file_offset = vma->backing_offset + (uint64_t)offset;
+
+        if (file_page_start >= (uint64_t)file_size) {
             errno = ENXIO;
             return -1;
         }
-        if ((uint64_t)offset >= (uint64_t)file_size) {
+        if (file_offset >= (uint64_t)file_size) {
             page_offset = offset % TASK_VMA_PAGE_SIZE;
             to_copy = count;
             if (to_copy > TASK_VMA_PAGE_SIZE - page_offset) {
@@ -501,14 +504,31 @@ long mm_shared_vma_write_impl(struct task_vma *vma, uint64_t addr, const void *b
     size_t page_offset;
     size_t to_copy;
     long long file_remaining;
+    long long file_size;
 
     if (!vma || !vma->shared_pages || addr < vma->start || addr >= vma->end) {
         return 0;
     }
     offset = (size_t)(addr - vma->start);
-    file_remaining = mm_shared_file_remaining(vma, offset);
-    if (file_remaining < 0) {
-        return -1;
+    file_size = mm_vma_file_size_impl(vma);
+    file_remaining = -1;
+    if (file_size >= 0) {
+        size_t page_start = offset - (offset % TASK_VMA_PAGE_SIZE);
+        uint64_t file_page_start = vma->backing_offset + (uint64_t)page_start;
+        uint64_t file_offset = vma->backing_offset + (uint64_t)offset;
+
+        if (file_page_start >= (uint64_t)file_size) {
+            errno = ENXIO;
+            return -1;
+        }
+        if (file_offset < (uint64_t)file_size) {
+            file_remaining = (long long)((uint64_t)file_size - file_offset);
+        }
+    } else {
+        file_remaining = mm_shared_file_remaining(vma, offset);
+        if (file_remaining < 0) {
+            return -1;
+        }
     }
     page_index = offset / TASK_VMA_PAGE_SIZE;
     if (page_index >= vma->page_count || !vma->shared_pages[page_index]) {
@@ -522,8 +542,17 @@ long mm_shared_vma_write_impl(struct task_vma *vma, uint64_t addr, const void *b
     if (to_copy > vma->image_size - offset) {
         to_copy = vma->image_size - offset;
     }
-    if ((long long)to_copy > file_remaining) {
+    if (file_remaining >= 0 && (long long)to_copy > file_remaining) {
         to_copy = (size_t)file_remaining;
+    }
+    if (to_copy == 0) {
+        to_copy = count;
+        if (to_copy > TASK_VMA_PAGE_SIZE - page_offset) {
+            to_copy = TASK_VMA_PAGE_SIZE - page_offset;
+        }
+        if (to_copy > vma->image_size - offset) {
+            to_copy = vma->image_size - offset;
+        }
     }
     memcpy(vma->shared_pages[page_index]->image + page_offset, buf, to_copy);
     if (vma->resident_pages && page_index < vma->page_count) {
@@ -2164,6 +2193,7 @@ int msync_impl(void *addr, size_t len, int flags) {
         uint64_t overlap_end;
         uint64_t start_page;
         uint64_t end_page;
+        long long file_size;
 
         if (end <= vma->start || start >= vma->end) {
             continue;
@@ -2176,6 +2206,7 @@ int msync_impl(void *addr, size_t len, int flags) {
         }
         start_page = (overlap_start - vma->start) / TASK_VMA_PAGE_SIZE;
         end_page = ((overlap_end - 1) - vma->start) / TASK_VMA_PAGE_SIZE;
+        file_size = mm_vma_file_size_impl(vma);
         for (uint64_t page = start_page; page <= end_page && page < vma->page_count; page++) {
             uint64_t page_start = vma->start + (page * TASK_VMA_PAGE_SIZE);
             uint64_t page_end = page_start + TASK_VMA_PAGE_SIZE;
@@ -2183,6 +2214,7 @@ int msync_impl(void *addr, size_t len, int flags) {
             uint64_t write_end = overlap_end < page_end ? overlap_end : page_end;
             size_t image_offset;
             size_t to_write;
+            int full_page_writeback;
             long long written;
 
             if (vma->dirty_pages && vma->dirty_pages[page] == 0) {
@@ -2190,6 +2222,21 @@ int msync_impl(void *addr, size_t len, int flags) {
             }
             image_offset = (size_t)(write_start - vma->start);
             to_write = (size_t)(write_end - write_start);
+            full_page_writeback = write_start == page_start && write_end == page_end;
+            if (file_size >= 0) {
+                uint64_t file_write_start = vma->backing_offset + (uint64_t)image_offset;
+
+                if (file_write_start >= (uint64_t)file_size) {
+                    continue;
+                }
+                if ((uint64_t)to_write > (uint64_t)file_size - file_write_start) {
+                    to_write = (size_t)((uint64_t)file_size - file_write_start);
+                    full_page_writeback = 0;
+                }
+            }
+            if (to_write == 0) {
+                continue;
+            }
             const unsigned char *source = vma->shared_pages && vma->shared_pages[page]
                 ? vma->shared_pages[page]->image + (image_offset % TASK_VMA_PAGE_SIZE)
                 : (const unsigned char *)vma->image + image_offset;
@@ -2202,7 +2249,7 @@ int msync_impl(void *addr, size_t len, int flags) {
                 errno = EIO;
                 return -1;
             }
-            if (vma->dirty_pages) {
+            if (vma->dirty_pages && full_page_writeback) {
                 vma->dirty_pages[page] = 0;
             }
         }

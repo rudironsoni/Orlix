@@ -276,6 +276,7 @@ struct task_struct {
     atomic_bool continue_report_pending;
     atomic_bool execed;     /* Set after execve() - blocks setpgid per Linux semantics */
     uint64_t clone_flags;
+    uint64_t thread_pending_signals;
     atomic_bool new_pid_namespace_pending;
 
     /* Host thread backing for this virtual task */

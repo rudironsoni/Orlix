@@ -143,7 +143,8 @@ static void clear_pending_signal(struct task_struct *task, int32_t sig) {
         return;
     }
 
-    task->signal->pending.sig[(sig - 1) >> 6] &= ~(1ULL << ((sig - 1) & 63));
+    task->thread_pending_signals &= ~(1ULL << ((sig - 1) & 63));
+    task->signal->shared_pending.sig[(sig - 1) >> 6] &= ~(1ULL << ((sig - 1) & 63));
 }
 
 int pty_job_control_contract_tiocspgrp_round_trip(void) {

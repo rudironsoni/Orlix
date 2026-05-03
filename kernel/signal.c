@@ -181,6 +181,7 @@ struct signal_struct *alloc_signal_struct(void) {
 
     memset(&sig->blocked, 0, sizeof(struct signal_mask_bits));
     memset(&sig->pending, 0, sizeof(struct signal_mask_bits));
+    memset(&sig->shared_pending, 0, sizeof(struct signal_mask_bits));
     sig->altstack.ss_sp = NULL;
     sig->altstack.ss_size = 0;
     sig->altstack.ss_flags = 2;
@@ -224,6 +225,7 @@ struct signal_struct *dup_signal_struct(struct signal_struct *parent) {
 
     /* But pending signals are cleared */
     memset(&child->pending, 0, sizeof(struct signal_mask_bits));
+    memset(&child->shared_pending, 0, sizeof(struct signal_mask_bits));
 
     return child;
 }
@@ -309,7 +311,7 @@ static int apply_signal_to_task_pending(struct task_struct *task, int32_t sig, i
         if (shared) {
             task->signal->shared_pending.sig[idx] |= (1ULL << bit);
         } else {
-            task->signal->pending.sig[idx] |= (1ULL << bit);
+            task->thread_pending_signals |= (1ULL << bit);
         }
     }
 
@@ -384,6 +386,9 @@ int signal_generate_process(struct task_struct *target, int32_t sig) {
 }
 
 int signal_generate_pgrp(int32_t pgid, int32_t sig) {
+    struct task_struct *targets[TASK_MAX_TASKS];
+    int target_count = 0;
+
     if (sig < 0 || sig > KERNEL_SIG_NUM)
         return -EINVAL;
 
@@ -394,25 +399,18 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig) {
     if (pgid <= 0)
         return -ESRCH;
 
-    int found = 0;
-
     kernel_mutex_lock(&task_table_lock);
 
     for (int i = 0; i < TASK_MAX_TASKS; i++) {
         struct task_struct *task = task_table[i];
         while (task) {
             if (task->pgid == pgid) {
-                found = 1;
                 atomic_fetch_add(&task->refs, 1);
-                kernel_mutex_lock(&task->lock);
-                int result = apply_signal_to_task_pending(task, sig, 0, 0, true);
-                kernel_mutex_unlock(&task->lock);
-                if (result != 0) {
+                if (target_count < TASK_MAX_TASKS) {
+                    targets[target_count++] = task;
+                } else {
                     free_task(task);
-                    kernel_mutex_unlock(&task_table_lock);
-                    return result;
                 }
-                free_task(task);
             }
             task = task->hash_next;
         }
@@ -420,8 +418,23 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig) {
 
     kernel_mutex_unlock(&task_table_lock);
 
-    if (!found)
+    if (target_count == 0)
         return -ESRCH;
+
+    for (int i = 0; i < target_count; i++) {
+        int result;
+
+        kernel_mutex_lock(&targets[i]->lock);
+        result = apply_signal_to_task_pending(targets[i], sig, 0, 0, true);
+        kernel_mutex_unlock(&targets[i]->lock);
+        free_task(targets[i]);
+        if (result != 0) {
+            for (int j = i + 1; j < target_count; j++) {
+                free_task(targets[j]);
+            }
+            return result;
+        }
+    }
 
     return 0;
 }
@@ -448,7 +461,7 @@ int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int3
             continue;
 
         /* Check if pending and not blocked */
-        if (((task->signal->pending.sig[idx] | task->signal->shared_pending.sig[idx]) & (1ULL << bit)) &&
+        if (((task->thread_pending_signals | task->signal->shared_pending.sig[idx]) & (1ULL << bit)) &&
             !(task->signal->blocked.sig[idx] & (1ULL << bit))) {
 
             /* Also check against provided mask if given */
@@ -457,7 +470,7 @@ int signal_dequeue(struct task_struct *task, struct signal_mask_bits *mask, int3
 
             *sig = i;
             /* Clear pending bit */
-            task->signal->pending.sig[idx] &= ~(1ULL << bit);
+            task->thread_pending_signals &= ~(1ULL << bit);
             task->signal->shared_pending.sig[idx] &= ~(1ULL << bit);
             signal_queue_remove_first(task->signal, i);
             return 1; /* Return 1 to indicate signal found */
@@ -521,7 +534,7 @@ bool signal_is_pending(const struct task_struct *task, int32_t sig) {
     if (idx >= KERNEL_SIG_NUM_WORDS)
         return false;
 
-    return ((task->signal->pending.sig[idx] | task->signal->shared_pending.sig[idx]) &
+    return ((task->thread_pending_signals | task->signal->shared_pending.sig[idx]) &
             (1ULL << bit)) != 0;
 }
 
@@ -538,7 +551,7 @@ bool signal_has_unblocked_pending(const struct task_struct *task) {
             continue;
         }
 
-        if (((task->signal->pending.sig[idx] | task->signal->shared_pending.sig[idx]) & (1ULL << bit)) &&
+        if (((task->thread_pending_signals | task->signal->shared_pending.sig[idx]) & (1ULL << bit)) &&
             !(task->signal->blocked.sig[idx] & (1ULL << bit))) {
             return true;
         }
@@ -555,6 +568,7 @@ void signal_reset_on_exec(struct task_struct *task) {
     /* For now, simplified: reset pending signals */
     memset(&task->signal->pending, 0, sizeof(struct signal_mask_bits));
     memset(&task->signal->shared_pending, 0, sizeof(struct signal_mask_bits));
+    task->thread_pending_signals = 0;
 }
 
 int signal_init_task(struct task_struct *task) {
@@ -657,7 +671,8 @@ int do_sigpending(struct signal_mask_bits *set) {
         return -1;
     }
 
-    *set = task->signal->pending;
+    memset(set, 0, sizeof(*set));
+    set->sig[0] = task->thread_pending_signals;
     for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
         set->sig[i] |= task->signal->shared_pending.sig[i];
     }
@@ -715,7 +730,7 @@ int do_pause(void) {
 
     kernel_mutex_lock(&task->wait_lock);
 
-    while (is_sigset_empty(&task->signal->pending)) {
+    while (task->thread_pending_signals == 0 && is_sigset_empty(&task->signal->shared_pending)) {
         task->waiters++;
         kernel_cond_wait(&task->wait_cond, &task->wait_lock);
         task->waiters--;

@@ -119,7 +119,8 @@ extern int library_is_initialized(void);
     XCTAssertEqual(result, 0, @"Block SIGUSR1 should succeed");
 
     // Clear pending first
-    memset(&task->signal->pending, 0, sizeof(task->signal->pending));
+    task->thread_pending_signals = 0;
+    memset(&task->signal->shared_pending, 0, sizeof(task->signal->shared_pending));
 
     // Raise signal 10 to self
     errno = 0;
@@ -152,7 +153,8 @@ extern int library_is_initialized(void);
     XCTAssertEqual(result, 0, @"Block SIGUSR1 should succeed");
 
     // Clear pending first
-    memset(&task->signal->pending, 0, sizeof(task->signal->pending));
+    task->thread_pending_signals = 0;
+    memset(&task->signal->shared_pending, 0, sizeof(task->signal->shared_pending));
 
     // Send signal 10 to current task via do_kill
     errno = 0;
@@ -232,7 +234,8 @@ extern int library_is_initialized(void);
     XCTAssertEqual(result, 0, @"Block SIGUSR2 should succeed");
 
     // Clear pending
-    memset(&task->signal->pending, 0, sizeof(task->signal->pending));
+    task->thread_pending_signals = 0;
+    memset(&task->signal->shared_pending, 0, sizeof(task->signal->shared_pending));
 
     // Check no pending
     struct signal_mask_bits pending = {0};

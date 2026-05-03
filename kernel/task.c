@@ -467,11 +467,14 @@ static long task_read_vma(const struct task_vma *vma, uint64_t addr, void *buf, 
         if ((!vma->dirty_pages || page_index >= vma->page_count || vma->dirty_pages[page_index] == 0) &&
             file_size >= 0) {
             size_t page_start = file_offset - (file_offset % TASK_VMA_PAGE_SIZE);
-            if ((uint64_t)page_start >= (uint64_t)file_size) {
+            uint64_t backing_page_start = vma->backing_offset + (uint64_t)page_start;
+            uint64_t backing_file_offset = vma->backing_offset + (uint64_t)file_offset;
+
+            if (backing_page_start >= (uint64_t)file_size) {
                 errno = ENXIO;
                 return -1;
             }
-            if ((uint64_t)file_offset >= (uint64_t)file_size) {
+            if (backing_file_offset >= (uint64_t)file_size) {
                 size_t page_offset = file_offset % TASK_VMA_PAGE_SIZE;
                 size_t to_zero = count;
                 if (to_zero > TASK_VMA_PAGE_SIZE - page_offset) {
@@ -526,9 +529,10 @@ static long task_write_vma(struct task_vma *vma, uint64_t addr, const void *buf,
         uint64_t page_index = (addr - vma->start) / TASK_VMA_PAGE_SIZE;
         size_t file_offset = (size_t)(addr - vma->start);
         long long file_size = mm_vma_file_size_impl(vma);
+        size_t page_start = file_offset - (file_offset % TASK_VMA_PAGE_SIZE);
         if ((!vma->dirty_pages || page_index >= vma->page_count || vma->dirty_pages[page_index] == 0) &&
             file_size >= 0 &&
-            (uint64_t)(file_offset - (file_offset % TASK_VMA_PAGE_SIZE)) >= (uint64_t)file_size) {
+            vma->backing_offset + (uint64_t)page_start >= (uint64_t)file_size) {
             errno = ENXIO;
             return -1;
         }
@@ -887,6 +891,7 @@ struct task_struct *alloc_task(void) {
     atomic_init(&task->stop_report_pending, false);
     atomic_init(&task->continue_report_pending, false);
     atomic_init(&task->execed, false);
+    task->thread_pending_signals = 0;
     atomic_init(&task->new_pid_namespace_pending, false);
     task->clone_flags = 0;
 
@@ -1103,13 +1108,23 @@ void task_mark_stopped_by_signal(struct task_struct *task, int32_t sig) {
         return;
     }
 
-    atomic_store(&task->termsig, 0);
-    atomic_store(&task->state, TASK_STOPPED);
-    atomic_store(&task->stopped, true);
-    atomic_store(&task->stopsig, sig);
-    atomic_store(&task->continued, false);
-    atomic_store(&task->stop_report_pending, true);
-    atomic_store(&task->continue_report_pending, false);
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *peer = task_table[i];
+        while (peer) {
+            if (peer->tgid == task->tgid) {
+                atomic_store(&peer->termsig, 0);
+                atomic_store(&peer->state, TASK_STOPPED);
+                atomic_store(&peer->stopped, true);
+                atomic_store(&peer->stopsig, sig);
+                atomic_store(&peer->continued, false);
+                atomic_store(&peer->stop_report_pending, peer->pid == peer->tgid);
+                atomic_store(&peer->continue_report_pending, false);
+            }
+            peer = peer->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
 }
 
 void task_mark_continued_by_signal(struct task_struct *task) {
@@ -1117,12 +1132,22 @@ void task_mark_continued_by_signal(struct task_struct *task) {
         return;
     }
 
-    atomic_store(&task->state, TASK_RUNNING);
-    atomic_store(&task->stopped, false);
-    atomic_store(&task->stopsig, 0);
-    atomic_store(&task->continued, true);
-    atomic_store(&task->stop_report_pending, false);
-    atomic_store(&task->continue_report_pending, true);
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *peer = task_table[i];
+        while (peer) {
+            if (peer->tgid == task->tgid) {
+                atomic_store(&peer->state, TASK_RUNNING);
+                atomic_store(&peer->stopped, false);
+                atomic_store(&peer->stopsig, 0);
+                atomic_store(&peer->continued, true);
+                atomic_store(&peer->stop_report_pending, false);
+                atomic_store(&peer->continue_report_pending, peer->pid == peer->tgid);
+            }
+            peer = peer->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
 }
 
 void task_mark_signaled_exit(struct task_struct *task, int32_t sig) {

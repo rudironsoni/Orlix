@@ -4,6 +4,7 @@
 #include <linux/mount.h>
 #include <linux/sched.h>
 #include <linux/stat.h>
+#include <linux/wait.h>
 #define __ASSEMBLY__ 1
 #include <asm-generic/signal.h>
 #undef __ASSEMBLY__
@@ -36,6 +37,7 @@ extern long read_impl(int fd, void *buf, size_t count);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int signal_generate_process(struct task_struct *target, int32_t sig);
+extern int32_t waitpid_impl(int32_t pid, int *wstatus, int options);
 extern void cred_reset_to_defaults(void);
 extern void set_current_cred(struct cred *cred);
 
@@ -52,6 +54,7 @@ static void reset_procfs_namespace_state(void) {
     uts_reset_current_namespace();
     if (get_current()) {
         atomic_store(&get_current()->new_pid_namespace_pending, false);
+        get_current()->thread_pending_signals = 0;
         if (get_current()->signal) {
             memset(&get_current()->signal->pending, 0, sizeof(get_current()->signal->pending));
             memset(&get_current()->signal->shared_pending, 0,
@@ -1040,7 +1043,7 @@ out:
     {
         int saved_errno = errno;
         if (thread && thread->signal) {
-            thread->signal->pending.sig[(SIGUSR1 - 1) >> 6] &= ~(1ULL << ((SIGUSR1 - 1) & 63));
+            thread->thread_pending_signals &= ~(1ULL << ((SIGUSR1 - 1) & 63));
         }
         if (thread) {
             task_unlink_child_impl(parent, thread);
@@ -1174,6 +1177,136 @@ out:
         if (thread) {
             task_unlink_child_impl(parent, thread);
             free_task(thread);
+        }
+        reset_procfs_namespace_state();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int procfs_namespace_contract_thread_signal_pending_is_per_tid(void) {
+    struct task_struct *parent;
+    struct task_struct *thread = NULL;
+    char thread_path[160] = {0};
+    char parent_status[4096];
+    char thread_status[4096];
+    int ret = -1;
+
+    reset_procfs_namespace_state();
+    parent = get_current();
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    thread = task_create_child_with_flags_impl(parent, CLONE_THREAD | CLONE_VM | CLONE_SIGHAND);
+    if (!thread) {
+        return -1;
+    }
+    if (signal_generate_task(thread, SIGUSR1) != 0) {
+        goto out;
+    }
+    if (read_file_content("/proc/self/status", parent_status, sizeof(parent_status)) != 0) {
+        goto out;
+    }
+    proc_pid_file_path(thread_path, sizeof(thread_path), parent->pid, "/task/");
+    append_positive_decimal(thread_path, sizeof(thread_path), thread->pid);
+    if (strlen(thread_path) + 8 >= sizeof(thread_path)) {
+        errno = ENAMETOOLONG;
+        goto out;
+    }
+    memcpy(thread_path + strlen(thread_path), "/status", 8);
+    if (read_file_content(thread_path, thread_status, sizeof(thread_status)) != 0) {
+        goto out;
+    }
+    if (!contains(parent_status, "SigPnd:\t0000000000000000\n") ||
+        !contains(thread_status, "SigPnd:\t0000000000000200\n") ||
+        !contains(thread_status, "ShdPnd:\t0000000000000000\n")) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if (thread) {
+            thread->thread_pending_signals &= ~(1ULL << ((SIGUSR1 - 1) & 63));
+            task_unlink_child_impl(parent, thread);
+            free_task(thread);
+        }
+        reset_procfs_namespace_state();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int procfs_namespace_contract_thread_group_stop_continue_reports_once(void) {
+    struct task_struct *parent;
+    struct task_struct *child = NULL;
+    struct task_struct *thread = NULL;
+    int status = 0;
+    int ret = -1;
+
+    reset_procfs_namespace_state();
+    parent = get_current();
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    set_current(child);
+    thread = task_create_child_with_flags_impl(child, CLONE_THREAD | CLONE_VM | CLONE_SIGHAND);
+    set_current(parent);
+    if (!thread) {
+        goto out;
+    }
+    if (signal_generate_task(thread, SIGSTOP) != 0 ||
+        !atomic_load(&child->stopped) ||
+        !atomic_load(&thread->stopped)) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (waitpid_impl(child->pid, &status, WUNTRACED) != child->pid ||
+        (status & 0xff) != 0x7f ||
+        ((status >> 8) & 0xff) != SIGSTOP) {
+        errno = ENOMSG;
+        goto out;
+    }
+    if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != 0) {
+        errno = EALREADY;
+        goto out;
+    }
+    if (signal_generate_task(child, SIGCONT) != 0 ||
+        atomic_load(&child->stopped) ||
+        atomic_load(&thread->stopped)) {
+        errno = ERANGE;
+        goto out;
+    }
+    if (waitpid_impl(child->pid, &status, WCONTINUED) != child->pid ||
+        status != 0xffff) {
+        errno = ENOTRECOVERABLE;
+        goto out;
+    }
+    if (waitpid_impl(child->pid, &status, WCONTINUED | WNOHANG) != 0) {
+        errno = EBUSY;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        set_current(parent);
+        if (thread) {
+            task_unlink_child_impl(child, thread);
+            free_task(thread);
+        }
+        if (child) {
+            task_unlink_child_impl(parent, child);
+            free_task(child);
         }
         reset_procfs_namespace_state();
         errno = saved_errno;

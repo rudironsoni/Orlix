@@ -2563,6 +2563,86 @@ out:
     return result;
 }
 
+int native_syscall_contract_partial_page_msync_and_shared_growth_writeback(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-partial-msync-grow";
+    char pages[8192];
+    char verify = 0;
+    void *mapped = (void *)-1;
+    uint64_t base;
+    int fd = -1;
+    long ret;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(pages, 'M', sizeof(pages));
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    ret = syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)pages, sizeof(pages), 0, 0, 0);
+    if (ret != (long)sizeof(pages)) {
+        errno = ret < 0 ? (int)-ret : EIO;
+        goto out;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(pages),
+                                                      PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    base = (uint64_t)(uintptr_t)mapped;
+    ret = syscall_dispatch_impl(__NR_ftruncate, fd, 5000, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out_mapped;
+    }
+    if (task_write_virtual_memory_impl(task, base + 4999, "A", 1) != 1 ||
+        task_write_virtual_memory_impl(task, base + 5000, "B", 1) != 1 ||
+        syscall_dispatch_impl(__NR_msync, (long)(uintptr_t)mapped, 8192, MS_SYNC, 0, 0, 0) != 0) {
+        errno = EIO;
+        goto out_mapped;
+    }
+    if (pread_impl(fd, &verify, 1, 4999) != 1 || verify != 'A' ||
+        pread_impl(fd, &verify, 1, 5000) != 0) {
+        errno = ENODATA;
+        goto out_mapped;
+    }
+    ret = syscall_dispatch_impl(__NR_ftruncate, fd, 8192, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out_mapped;
+    }
+    if (task_write_virtual_memory_impl(task, base + 7000, "G", 1) != 1 ||
+        syscall_dispatch_impl(__NR_msync, (long)(uintptr_t)mapped, 8192, MS_SYNC, 0, 0, 0) != 0 ||
+        pread_impl(fd, &verify, 1, 7000) != 1 || verify != 'G') {
+        errno = ENOMSG;
+        goto out_mapped;
+    }
+    result = 0;
+
+out_mapped:
+    {
+        int saved_errno = errno;
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(pages), 0, 0, 0, 0);
+        errno = saved_errno;
+    }
+out:
+    {
+        int saved_errno = errno;
+        close_if_open(fd);
+        unlink_impl(path);
+        errno = saved_errno;
+    }
+    return result;
+}
+
 int native_syscall_contract_rename_updates_open_fd_and_mapping_identity(void) {
     struct task_struct *task = get_current();
     const char old_path[] = "/tmp/native-rename-open-map-old";
