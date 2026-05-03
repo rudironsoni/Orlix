@@ -1876,6 +1876,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"statfs/fstatfs should report IXLand virtual filesystem state, errno %d", errno);
 }
 
+- (void)testStatfsReportsMountAttributeFlags {
+    extern int vfs_contract_statfs_reports_mount_attribute_flags(void);
+    XCTAssertEqual(vfs_contract_statfs_reports_mount_attribute_flags(), 0,
+                   @"statfs should report Linux mount attribute flags, errno %d", errno);
+}
+
 /* ============================================================================
  * SIGNAL-FAMILY SEMANTICS TESTS
  * ============================================================================ */

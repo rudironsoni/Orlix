@@ -401,6 +401,76 @@ static void syscall_restore_sigmask(const struct signal_mask_bits *old_mask, int
     }
 }
 
+int syscall_is_implemented_impl(long number) {
+    switch (number) {
+    case __NR_read:
+    case __NR_write:
+    case __NR_pread64:
+    case __NR_pwrite64:
+    case __NR_openat:
+    case __NR_close:
+    case __NR_pipe2:
+    case __NR_fcntl:
+    case __NR_brk:
+    case __NR_set_tid_address:
+    case __NR_futex:
+    case __NR_set_robust_list:
+    case __NR_get_robust_list:
+    case __NR_rt_sigaction:
+    case __NR_sigaltstack:
+    case __NR_rt_sigreturn:
+    case __NR_restart_syscall:
+    case __NR_rt_sigprocmask:
+    case __NR_ioctl:
+    case __NR_getdents64:
+    case __NR_ppoll:
+    case __NR_pselect6:
+    case __NR_epoll_create1:
+    case __NR_epoll_ctl:
+    case __NR_epoll_pwait:
+    case __NR_readlinkat:
+    case __NR_newfstatat:
+    case __NR_fstat:
+    case __NR_getcwd:
+    case __NR_getpid:
+    case __NR_getppid:
+    case __NR_mmap:
+    case __NR_mprotect:
+    case __NR_munmap:
+    case __NR_mremap:
+    case __NR_madvise:
+    case __NR_mincore:
+    case __NR_mount_setattr:
+    case __NR_open_tree:
+    case __NR_move_mount:
+    case __NR_pivot_root:
+    case __NR_listmount:
+    case __NR_statmount:
+    case __NR_msync:
+    case __NR_ftruncate:
+    case __NR_setxattr:
+    case __NR_lsetxattr:
+    case __NR_fsetxattr:
+    case __NR_getxattr:
+    case __NR_lgetxattr:
+    case __NR_fgetxattr:
+    case __NR_listxattr:
+    case __NR_llistxattr:
+    case __NR_flistxattr:
+    case __NR_removexattr:
+    case __NR_lremovexattr:
+    case __NR_fremovexattr:
+    case __NR_prlimit64:
+    case __NR_clock_gettime:
+    case __NR_execve:
+    case __NR_wait4:
+    case __NR_clone3:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 long syscall_dispatch_impl(long number,
                            long arg0,
                            long arg1,

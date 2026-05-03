@@ -37,6 +37,8 @@ struct pty_linux_winsize {
 
 typedef struct pty_linux_winsize pty_linux_winsize_t;
 
+struct task_struct;
+
 int pty_allocate_pair_impl(unsigned int *pty_index);
 int pty_open_slave_by_path_impl(const char *path, unsigned int *pty_index);
 int pty_open_controlling_slave_impl(unsigned int *pty_index);
@@ -69,6 +71,7 @@ int pty_get_foreground_pgrp_impl(unsigned int pty_index, int32_t *pgrp);
 int pty_set_foreground_pgrp_impl(unsigned int pty_index, int32_t pgrp);
 int pty_set_controlling_tty_impl(unsigned int pty_index, int arg);
 int pty_detach_controlling_tty_impl(void);
+void pty_session_leader_exit_impl(struct task_struct *task);
 
 int pty_format_slave_path_impl(unsigned int pty_index, char *buf, size_t buf_len);
 

@@ -68,4 +68,8 @@
     XCTAssertEqual(pty_session_contract_pty_fdinfo_reflects_flags_and_paths(), 0, @"errno %d", errno);
 }
 
+- (void)testSessionLeaderExitHangsUpForegroundPgrp {
+    XCTAssertEqual(pty_session_contract_session_leader_exit_hangs_up_foreground_pgrp(), 0, @"errno %d", errno);
+}
+
 @end

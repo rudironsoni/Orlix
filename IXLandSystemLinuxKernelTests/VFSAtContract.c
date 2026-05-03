@@ -6437,3 +6437,54 @@ int vfs_contract_statfs_reports_virtual_proc_and_tmpfs(void) {
     close_impl(fd);
     return ret;
 }
+
+int vfs_contract_statfs_reports_mount_attribute_flags(void) {
+    static const char source[] = "/tmp/vfs-statfs-attrs-source";
+    static const char target[] = "/tmp/vfs-statfs-attrs-target";
+    struct mount_attr attr;
+    struct statfs st;
+    int ret = -1;
+
+    (void)umount2(target, MNT_DETACH);
+    (void)rmdir_impl(target);
+    (void)rmdir_impl(source);
+
+    if (vfs_contract_ignore_exists(mkdir_impl(source, 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl(target, 0700)) != 0) {
+        goto out;
+    }
+
+    if (mount(source, target, "bind", MS_BIND | MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL) != 0) {
+        goto out;
+    }
+
+    memset(&st, 0, sizeof(st));
+    if (statfs(target, &st) != 0 ||
+        (st.f_flags & (ST_VALID | ST_RDONLY | ST_NOSUID | ST_NODEV | ST_NOEXEC)) !=
+            (ST_VALID | ST_RDONLY | ST_NOSUID | ST_NODEV | ST_NOEXEC)) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    memset(&attr, 0, sizeof(attr));
+    attr.attr_clr = MOUNT_ATTR_NODEV | MOUNT_ATTR_NOEXEC;
+    if (mount_setattr(AT_FDCWD, target, 0, &attr, MOUNT_ATTR_SIZE_VER0) != 0) {
+        goto out;
+    }
+
+    memset(&st, 0, sizeof(st));
+    if (statfs(target, &st) != 0 ||
+        (st.f_flags & (ST_VALID | ST_RDONLY | ST_NOSUID)) != (ST_VALID | ST_RDONLY | ST_NOSUID) ||
+        (st.f_flags & (ST_NODEV | ST_NOEXEC)) != 0) {
+        errno = ENOMSG;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    (void)umount2(target, MNT_DETACH);
+    (void)rmdir_impl(target);
+    (void)rmdir_impl(source);
+    return ret;
+}

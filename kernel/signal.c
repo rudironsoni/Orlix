@@ -347,10 +347,12 @@ static bool signal_action_is_ignored(const struct task_struct *task, int32_t sig
 
 static bool signal_default_action_is_terminate(int32_t sig) {
     switch (sig) {
+    case SIGHUP:
     case SIGTERM:
     case SIGKILL:
     case SIGINT:
     case SIGQUIT:
+    case SIGPIPE:
         return true;
     default:
         return false;

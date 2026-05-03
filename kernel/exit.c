@@ -4,6 +4,7 @@
 #include "futex.h"
 #include "signal.h"
 #include "task.h"
+#include "../fs/pty.h"
 
 /* External declaration for init task */
 extern struct task_struct *init_task;
@@ -194,6 +195,8 @@ void exit_impl(int status) {
     if (task->vfork_parent) {
         vfork_exit_notify();
     }
+
+    pty_session_leader_exit_impl(task);
 
     if (orphaned_candidate_count > 0) {
         task_signal_newly_orphaned_stopped_groups(orphaned_candidates, orphaned_candidate_count);

@@ -358,6 +358,27 @@ static void pty_clear_task_tty_refs_impl(unsigned int pty_index) {
     kernel_mutex_unlock(&task_table_lock);
 }
 
+static void pty_clear_session_tty_refs_impl(unsigned int pty_index, int32_t sid) {
+    if (sid <= 0) {
+        return;
+    }
+
+    kernel_mutex_lock(&task_table_lock);
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *task = task_table[i];
+        while (task) {
+            kernel_mutex_lock(&task->lock);
+            if (task->sid == sid && task->tty && task->tty->index == (int)pty_index) {
+                atomic_fetch_sub(&task->tty->refs, 1);
+                task->tty = NULL;
+            }
+            kernel_mutex_unlock(&task->lock);
+            task = task->hash_next;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+}
+
 static int pty_check_background_read_access(pty_pair_t *pair) {
     struct task_struct *task = get_current();
     if (!task || !task->signal || !pair->has_controlling_session || pair->controlling_sid != task->sid) {
@@ -1296,4 +1317,47 @@ int pty_detach_controlling_tty_impl(void) {
 
     kernel_mutex_unlock(&task->lock);
     return 0;
+}
+
+void pty_session_leader_exit_impl(struct task_struct *task) {
+    unsigned int pty_index;
+    int32_t sid;
+    int32_t foreground_pgrp = 0;
+    bool has_tty = false;
+
+    if (!task) {
+        return;
+    }
+
+    kernel_mutex_lock(&task->lock);
+    if (task->sid <= 0 || task->pid != task->sid || !task->tty) {
+        kernel_mutex_unlock(&task->lock);
+        return;
+    }
+    pty_index = (unsigned int)task->tty->index;
+    sid = task->sid;
+    has_tty = true;
+    kernel_mutex_unlock(&task->lock);
+
+    if (!has_tty || !pty_valid_index(pty_index)) {
+        return;
+    }
+
+    fs_mutex_lock(&pty_lock);
+    pty_pair_t *pair = &pty_table[pty_index];
+    if (pair->allocated && pair->has_controlling_session && pair->controlling_sid == sid) {
+        foreground_pgrp = pair->foreground_pgrp;
+        pair->has_controlling_session = false;
+        pair->controlling_sid = 0;
+        pair->foreground_pgrp = 0;
+        wait_queue_wake_all(&pair->wait);
+    }
+    fs_mutex_unlock(&pty_lock);
+
+    pty_clear_session_tty_refs_impl(pty_index, sid);
+
+    if (foreground_pgrp > 0) {
+        (void)signal_generate_pgrp(foreground_pgrp, SIGHUP);
+    }
+    poll_notify_readiness_impl();
 }

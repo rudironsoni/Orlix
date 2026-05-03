@@ -351,6 +351,10 @@ static unsigned long vfs_mount_propagation_flags(void) {
     return MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE;
 }
 
+static unsigned long vfs_mount_attribute_flags(void) {
+    return MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC;
+}
+
 static unsigned long vfs_mount_selected_propagation(unsigned long flags) {
     unsigned long propagation = flags & vfs_mount_propagation_flags();
     if ((propagation & (propagation - 1UL)) != 0) {
@@ -2652,7 +2656,7 @@ int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
                       const struct mount_attr *attr, size_t size) {
     char resolved_target[MAX_PATH];
     struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
-    uint64_t supported_attrs = MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID;
+    uint64_t supported_attrs = MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID | MOUNT_ATTR_NODEV | MOUNT_ATTR_NOEXEC;
     int recursive = (flags & AT_RECURSIVE) != 0;
     int found = 0;
     int ret;
@@ -2701,6 +2705,18 @@ int vfs_mount_setattr(int dirfd, const char *pathname, unsigned int flags,
         }
         if ((attr->attr_clr & MOUNT_ATTR_NOSUID) != 0) {
             entry->flags &= ~MS_NOSUID;
+        }
+        if ((attr->attr_set & MOUNT_ATTR_NODEV) != 0) {
+            entry->flags |= MS_NODEV;
+        }
+        if ((attr->attr_clr & MOUNT_ATTR_NODEV) != 0) {
+            entry->flags &= ~MS_NODEV;
+        }
+        if ((attr->attr_set & MOUNT_ATTR_NOEXEC) != 0) {
+            entry->flags |= MS_NOEXEC;
+        }
+        if ((attr->attr_clr & MOUNT_ATTR_NOEXEC) != 0) {
+            entry->flags &= ~MS_NOEXEC;
         }
         if (attr->propagation != 0) {
             vfs_mount_set_propagation_locked(mnt_ns, entry, (unsigned long)attr->propagation);
@@ -3597,7 +3613,7 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
     struct linux_stat target_stat;
     int ret;
     int slot = -1;
-    unsigned long supported_flags = MS_BIND | MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_REC | MS_MOVE |
+    unsigned long supported_flags = MS_BIND | MS_REMOUNT | vfs_mount_attribute_flags() | MS_REC | MS_MOVE |
                                     vfs_mount_propagation_flags();
     unsigned long propagation = vfs_mount_selected_propagation(flags);
     struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
@@ -3648,7 +3664,8 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
         fs_mutex_lock(&mnt_ns->lock);
         for (size_t i = 0; i < MAX_MOUNTS; i++) {
             if (mnt_ns->entries[i].active && strcmp(mnt_ns->entries[i].target, resolved_target) == 0) {
-                mnt_ns->entries[i].flags = (mnt_ns->entries[i].flags & ~MS_RDONLY) | (flags & MS_RDONLY) | MS_BIND;
+                mnt_ns->entries[i].flags = (mnt_ns->entries[i].flags & ~vfs_mount_attribute_flags()) |
+                                            (flags & vfs_mount_attribute_flags()) | MS_BIND;
                 if (propagation != 0) {
                     if ((flags & MS_REC) != 0) {
                         vfs_mount_set_tree_propagation_locked(mnt_ns, resolved_target, propagation);

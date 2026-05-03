@@ -4058,6 +4058,82 @@ int native_syscall_contract_dispatches_process_startup_syscalls(void) {
     return 0;
 }
 
+int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) {
+    static const long required_syscalls[] = {
+        __NR_read,
+        __NR_write,
+        __NR_pread64,
+        __NR_pwrite64,
+        __NR_openat,
+        __NR_close,
+        __NR_pipe2,
+        __NR_fcntl,
+        __NR_brk,
+        __NR_set_tid_address,
+        __NR_futex,
+        __NR_set_robust_list,
+        __NR_get_robust_list,
+        __NR_rt_sigaction,
+        __NR_sigaltstack,
+        __NR_rt_sigreturn,
+        __NR_restart_syscall,
+        __NR_rt_sigprocmask,
+        __NR_ioctl,
+        __NR_getdents64,
+        __NR_ppoll,
+        __NR_pselect6,
+        __NR_epoll_create1,
+        __NR_epoll_ctl,
+        __NR_epoll_pwait,
+        __NR_readlinkat,
+        __NR_newfstatat,
+        __NR_fstat,
+        __NR_getcwd,
+        __NR_getpid,
+        __NR_getppid,
+        __NR_mmap,
+        __NR_mprotect,
+        __NR_munmap,
+        __NR_mremap,
+        __NR_madvise,
+        __NR_mincore,
+        __NR_mount_setattr,
+        __NR_open_tree,
+        __NR_move_mount,
+        __NR_pivot_root,
+        __NR_listmount,
+        __NR_statmount,
+        __NR_msync,
+        __NR_ftruncate,
+        __NR_setxattr,
+        __NR_lsetxattr,
+        __NR_fsetxattr,
+        __NR_getxattr,
+        __NR_lgetxattr,
+        __NR_fgetxattr,
+        __NR_listxattr,
+        __NR_llistxattr,
+        __NR_flistxattr,
+        __NR_removexattr,
+        __NR_lremovexattr,
+        __NR_fremovexattr,
+        __NR_prlimit64,
+        __NR_clock_gettime,
+        __NR_execve,
+        __NR_wait4,
+        __NR_clone3,
+    };
+
+    for (size_t i = 0; i < sizeof(required_syscalls) / sizeof(required_syscalls[0]); i++) {
+        if (!syscall_is_implemented_impl(required_syscalls[i])) {
+            errno = ENOSYS;
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 int native_syscall_contract_registers_native_artifact_descriptor(void) {
     native_program_t program;
 

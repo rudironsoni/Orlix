@@ -12,6 +12,7 @@ long syscall_dispatch_impl(long number,
                            long arg3,
                            long arg4,
                            long arg5);
+int syscall_is_implemented_impl(long number);
 
 #ifdef __cplusplus
 }

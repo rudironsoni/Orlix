@@ -1,5 +1,9 @@
 #include <asm/ioctls.h>
 #include <linux/fcntl.h>
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
+#include <asm-generic/signal-defs.h>
 
 #include <errno.h>
 #include <stddef.h>
@@ -16,6 +20,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
+#include "kernel/signal.h"
 #include "kernel/task.h"
 
 extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
@@ -30,6 +35,8 @@ extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int32_t getpgrp_impl(void);
 extern int32_t getsid_impl(int32_t pid);
+extern int32_t setsid_impl(void);
+extern void exit_impl(int status);
 
 extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 
@@ -46,6 +53,14 @@ static int close_if_open(int fd) {
         return close_impl(fd);
     }
     return 0;
+}
+
+static void clear_pending_signal(struct task_struct *task, int32_t sig) {
+    if (!task || !task->signal || sig <= 0 || sig > KERNEL_SIG_NUM) {
+        return;
+    }
+    task->thread_pending_signals &= ~(1ULL << ((sig - 1) & 63));
+    task->signal->shared_pending.sig[(sig - 1) >> 6] &= ~(1ULL << ((sig - 1) & 63));
 }
 
 static int append_decimal(char *buf, size_t buf_size, int value) {
@@ -739,4 +754,88 @@ int pty_session_contract_pty_fdinfo_reflects_flags_and_paths(void) {
     close_if_open(master_fd);
     close_if_open(slave_fd);
     return 0;
+}
+
+int pty_session_contract_session_leader_exit_hangs_up_foreground_pgrp(void) {
+    struct task_struct *saved = get_current();
+    struct task_struct *session = NULL;
+    struct task_struct *foreground = NULL;
+    struct task_struct *foreground_parent = NULL;
+    int master_fd = -1;
+    int slave_fd = -1;
+    unsigned int pty_index = 0;
+    int32_t foreground_pgrp;
+    int ret = -1;
+
+    if (!saved) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    session = task_create_child_impl(saved);
+    if (!session) {
+        return -1;
+    }
+
+    set_current(session);
+    if (setsid_impl() != session->pid) {
+        goto out;
+    }
+
+    if (alloc_pty_pair(0, 0, &master_fd, &slave_fd, &pty_index) != 0) {
+        goto out;
+    }
+    if (pty_contract_ioctl(slave_fd, TIOCSCTTY, 0) != 0) {
+        goto out;
+    }
+
+    foreground = task_create_child_impl(session);
+    if (!foreground) {
+        goto out;
+    }
+    if (setpgid_impl(foreground->pid, foreground->pid) != 0) {
+        goto out;
+    }
+    foreground_pgrp = foreground->pid;
+    if (pty_contract_ioctl(slave_fd, TIOCSPGRP, &foreground_pgrp) != 0) {
+        goto out;
+    }
+
+    clear_pending_signal(foreground, SIGHUP);
+    exit_impl(0);
+    set_current(saved);
+
+    if (!signal_is_pending(foreground, SIGHUP) ||
+        !atomic_load(&foreground->signaled) ||
+        atomic_load(&foreground->termsig) != SIGHUP) {
+        errno = ENOMSG;
+        goto out;
+    }
+
+    kernel_mutex_lock(&foreground->lock);
+    if (foreground->tty != NULL) {
+        kernel_mutex_unlock(&foreground->lock);
+        errno = ENOTRECOVERABLE;
+        goto out;
+    }
+    kernel_mutex_unlock(&foreground->lock);
+
+    ret = 0;
+
+out:
+    if (get_current() != saved) {
+        set_current(saved);
+    }
+    close_if_open(slave_fd);
+    close_if_open(master_fd);
+    if (foreground) {
+        foreground_parent = foreground->parent;
+        task_unlink_child_impl(foreground_parent, foreground);
+        free_task(foreground);
+    }
+    if (session) {
+        task_unlink_child_impl(saved, session);
+        free_task(session);
+    }
+    return ret;
 }
