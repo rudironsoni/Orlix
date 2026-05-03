@@ -3643,6 +3643,67 @@ out:
     return result;
 }
 
+int native_syscall_contract_truncated_file_mapping_write_fault_queues_sigbus(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-shared-map-write-sigbus";
+    char page[8192];
+    void *mapped = (void *)-1;
+    uint64_t fault_addr;
+    int fd = -1;
+    long ret;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(page, 'W', sizeof(page));
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    ret = syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)page, sizeof(page), 0, 0, 0);
+    if (ret != (long)sizeof(page)) {
+        errno = ret < 0 ? (int)-ret : EIO;
+        goto out;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(page),
+                                                      PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    if (syscall_dispatch_impl(__NR_ftruncate, fd, 4096, 0, 0, 0, 0) != 0) {
+        goto out_mapped;
+    }
+    fault_addr = (uint64_t)(uintptr_t)mapped + 4096;
+    if (task_write_virtual_memory_impl(task, fault_addr, "x", 1) != -1 ||
+        errno != EFAULT) {
+        errno = EFAULT;
+        goto out_mapped;
+    }
+    if (!signal_is_pending(task, SIGBUS) ||
+        task->last_fault_signal != SIGBUS ||
+        task->last_fault_code != BUS_ADRERR ||
+        task->last_fault_addr != fault_addr ||
+        !latest_signal_info_matches(task, SIGBUS, BUS_ADRERR, fault_addr)) {
+        errno = EPROTO;
+        goto out_mapped;
+    }
+
+    result = 0;
+
+out_mapped:
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(page), 0, 0, 0, 0);
+out:
+    close_if_open(fd);
+    unlink_impl(path);
+    return result;
+}
+
 int native_syscall_contract_dispatches_process_startup_syscalls(void) {
     struct task_struct *task = get_current();
     uint64_t block_set = 1ULL << (2 - 1);

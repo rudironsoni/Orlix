@@ -245,6 +245,10 @@
     XCTAssertEqual(native_syscall_contract_truncated_file_mapping_fault_queues_sigbus(), 0, @"errno %d", errno);
 }
 
+- (void)testTruncatedFileMappingWriteFaultQueuesSigbus {
+    XCTAssertEqual(native_syscall_contract_truncated_file_mapping_write_fault_queues_sigbus(), 0, @"errno %d", errno);
+}
+
 - (void)testDispatchesProcessStartupSyscalls {
     XCTAssertEqual(native_syscall_contract_dispatches_process_startup_syscalls(), 0, @"errno %d", errno);
 }
@@ -279,6 +283,10 @@
 
 - (void)testSignalFrameContainsLinuxUcontext {
     XCTAssertEqual(signal_syscall_contract_frame_contains_linux_ucontext(), 0, @"errno %d", errno);
+}
+
+- (void)testIgnoredSignalDispositionsDoNotQueueOrTerminate {
+    XCTAssertEqual(signal_syscall_contract_ignored_dispositions_do_not_queue_or_terminate(), 0, @"errno %d", errno);
 }
 
 - (void)testRegistersNativeArtifactDescriptor {

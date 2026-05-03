@@ -292,12 +292,61 @@ static void signal_queue_remove_first(struct signal_struct *signal, int32_t sig)
     kernel_mutex_unlock(&signal->queue.lock);
 }
 
+static bool signal_default_action_is_ignore(int32_t sig) {
+    switch (sig) {
+    case SIGURG:
+    case SIGWINCH:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool signal_action_is_ignored(const struct task_struct *task, int32_t sig) {
+    sighandler_t handler;
+
+    if (!task || !task->signal || sig < 1 || sig > KERNEL_SIG_NUM) {
+        return false;
+    }
+    handler = task->signal->actions[sig - 1].handler;
+    if (handler == SIG_IGN) {
+        return true;
+    }
+    if (handler == SIG_DFL && signal_default_action_is_ignore(sig)) {
+        return true;
+    }
+    return false;
+}
+
+static bool signal_default_action_is_terminate(int32_t sig) {
+    switch (sig) {
+    case SIGTERM:
+    case SIGKILL:
+    case SIGINT:
+    case SIGQUIT:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool signal_action_is_default(const struct task_struct *task, int32_t sig) {
+    if (!task || !task->signal || sig < 1 || sig > KERNEL_SIG_NUM) {
+        return true;
+    }
+    return task->signal->actions[sig - 1].handler == SIG_DFL;
+}
+
 static int apply_signal_to_task_pending(struct task_struct *task, int32_t sig, int32_t code,
                                         uint64_t addr, bool shared) {
     int queued;
 
     if (!task || !task->signal)
         return -EINVAL;
+
+    if (signal_action_is_ignored(task, sig) && sig != SIGCONT) {
+        return 0;
+    }
 
     queued = signal_queue_append(task->signal, sig, code, addr);
     if (queued != 0) {
@@ -321,7 +370,8 @@ static int apply_signal_to_task_pending(struct task_struct *task, int32_t sig, i
     } else if (sig == SIGCONT) {
         task_mark_continued_by_signal(task);
         task_notify_parent_state_change(task);
-    } else if (sig == SIGTERM || sig == SIGKILL || sig == SIGINT || sig == SIGQUIT) {
+    } else if (signal_default_action_is_terminate(sig) &&
+               (sig == SIGKILL || signal_action_is_default(task, sig))) {
         task_mark_signaled_exit(task, sig);
         task_notify_parent_state_change(task);
     }

@@ -23,6 +23,14 @@ static void signal_contract_disable_altstack(void) {
     syscall_dispatch_impl(__NR_sigaltstack, (long)(uintptr_t)&disabled, 0, 0, 0, 0, 0);
 }
 
+static void signal_contract_clear_pending(struct task_struct *task, int signo) {
+    if (!task || !task->signal || signo < 1 || signo > KERNEL_SIG_NUM) {
+        return;
+    }
+    task->thread_pending_signals &= ~(1ULL << ((signo - 1) & 63));
+    task->signal->shared_pending.sig[(signo - 1) >> 6] &= ~(1ULL << ((signo - 1) & 63));
+}
+
 int signal_syscall_contract_rt_sigaction_uses_linux_uapi_layout(void) {
     struct sigaction act;
     struct sigaction oldact;
@@ -484,5 +492,70 @@ int signal_syscall_contract_frame_contains_linux_ucontext(void) {
     syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
                           0, sizeof(block_set), 0, 0);
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+    return 0;
+}
+
+int signal_syscall_contract_ignored_dispositions_do_not_queue_or_terminate(void) {
+    struct task_struct *task = get_current();
+    struct sigaction act;
+    struct sigaction dfl;
+    struct sigaction old_term;
+    long ret;
+
+    if (!task || !task->signal) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    memset(&act, 0, sizeof(act));
+    memset(&dfl, 0, sizeof(dfl));
+    memset(&old_term, 0, sizeof(old_term));
+    dfl.sa_handler = SIG_DFL;
+
+    signal_contract_clear_pending(task, SIGWINCH);
+    ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGWINCH, (long)(uintptr_t)&dfl,
+                                0, sizeof(dfl.sa_mask), 0, 0);
+    if (ret != 0 ||
+        signal_generate_task(task, SIGWINCH) != 0 ||
+        signal_is_pending(task, SIGWINCH)) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        return -1;
+    }
+
+    signal_contract_clear_pending(task, SIGTERM);
+    act.sa_handler = SIG_IGN;
+    ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&act,
+                                (long)(uintptr_t)&old_term, sizeof(act.sa_mask), 0, 0);
+    if (ret != 0 ||
+        signal_generate_task(task, SIGTERM) != 0 ||
+        signal_is_pending(task, SIGTERM) ||
+        atomic_load(&task->exited) ||
+        atomic_load(&task->signaled)) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&old_term,
+                              0, sizeof(old_term.sa_mask), 0, 0);
+        return -1;
+    }
+
+    act.sa_handler = (__sighandler_t)(uintptr_t)0x7000;
+    ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&act,
+                                0, sizeof(act.sa_mask), 0, 0);
+    signal_contract_clear_pending(task, SIGTERM);
+    atomic_store(&task->exited, false);
+    atomic_store(&task->signaled, false);
+    if (ret != 0 ||
+        signal_generate_task(task, SIGTERM) != 0 ||
+        !signal_is_pending(task, SIGTERM) ||
+        atomic_load(&task->exited) ||
+        atomic_load(&task->signaled)) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&old_term,
+                              0, sizeof(old_term.sa_mask), 0, 0);
+        return -1;
+    }
+
+    signal_contract_clear_pending(task, SIGTERM);
+    syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&old_term,
+                          0, sizeof(old_term.sa_mask), 0, 0);
     return 0;
 }
