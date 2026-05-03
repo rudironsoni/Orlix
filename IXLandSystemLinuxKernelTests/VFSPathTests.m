@@ -1372,6 +1372,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"private child unmount should not propagate to shared peer trees, errno %d", errno);
 }
 
+- (void)testSlaveChildUnmountDoesNotPropagateToSharedPeer {
+    extern int vfs_contract_slave_child_unmount_does_not_propagate_to_shared_peer(void);
+    XCTAssertEqual(vfs_contract_slave_child_unmount_does_not_propagate_to_shared_peer(), 0,
+                   @"slave child unmount should not propagate back to shared peer trees, errno %d", errno);
+}
+
 - (void)testCloneNewnsSharedPropagationStaysInsideChildNamespace {
     extern int vfs_contract_clone_newns_shared_propagation_stays_inside_child_namespace(void);
     XCTAssertEqual(vfs_contract_clone_newns_shared_propagation_stays_inside_child_namespace(), 0,

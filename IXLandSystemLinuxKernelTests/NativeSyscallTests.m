@@ -222,6 +222,10 @@
     XCTAssertEqual(native_syscall_contract_virtual_memory_faults_queue_sigsegv_codes(), 0, @"errno %d", errno);
 }
 
+- (void)testProtNoneReadFaultQueuesSigsegvAccerr {
+    XCTAssertEqual(native_syscall_contract_prot_none_read_fault_queues_sigsegv_accerr(), 0, @"errno %d", errno);
+}
+
 - (void)testPartialCopyRecordsSigbusFaultAddress {
     XCTAssertEqual(native_syscall_contract_partial_copy_records_sigbus_fault_address(), 0, @"errno %d", errno);
 }

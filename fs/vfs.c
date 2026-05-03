@@ -729,7 +729,9 @@ static void vfs_umount_propagate_shared_child_locked(struct vfs_mount_namespace 
         return;
     }
     if (target_entry &&
-        (target_entry->propagation == MS_PRIVATE || target_entry->propagation == MS_UNBINDABLE)) {
+        (target_entry->propagation == MS_PRIVATE ||
+         target_entry->propagation == MS_SLAVE ||
+         target_entry->propagation == MS_UNBINDABLE)) {
         return;
     }
 

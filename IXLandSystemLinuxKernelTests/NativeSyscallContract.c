@@ -4876,6 +4876,43 @@ out:
     return result;
 }
 
+int native_syscall_contract_prot_none_read_fault_queues_sigsegv_accerr(void) {
+    struct task_struct *task = get_current();
+    void *mapped;
+    char byte = 0;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 4096,
+                                                      PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+    clear_pending_task_signal(task, SIGSEGV);
+    if (syscall_dispatch_impl(__NR_mprotect, (long)(uintptr_t)mapped, 4096,
+                              PROT_NONE, 0, 0, 0) != 0 ||
+        task_read_virtual_memory_impl(task, (uint64_t)(uintptr_t)mapped, &byte, 1) != -1 ||
+        errno != EACCES ||
+        !signal_is_pending(task, SIGSEGV) ||
+        task->last_fault_signal != SIGSEGV ||
+        task->last_fault_code != SEGV_ACCERR ||
+        task->last_fault_addr != (uint64_t)(uintptr_t)mapped ||
+        !latest_signal_info_matches(task, SIGSEGV, SEGV_ACCERR, (uint64_t)(uintptr_t)mapped)) {
+        result = errno ? errno : EPROTO;
+        goto out;
+    }
+    result = 0;
+
+out:
+    syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
+    return result;
+}
+
 int native_syscall_contract_partial_copy_records_sigbus_fault_address(void) {
     struct task_struct *task = get_current();
     const char path[] = "/tmp/native-partial-sigbus-copy";
