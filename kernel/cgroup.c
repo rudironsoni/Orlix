@@ -172,6 +172,19 @@ static int cgroup_visible_path_for_task(const struct task_struct *task, char *ou
     return 0;
 }
 
+static bool cgroup_task_is_visible_to_task(const struct task_struct *viewer,
+                                           const struct task_struct *target) {
+    const char *root_path;
+    const char *target_path;
+
+    if (!viewer || !target) {
+        return false;
+    }
+    root_path = viewer->cgroup_ns_root ? viewer->cgroup_ns_root->path : "/";
+    target_path = target->cgroup ? target->cgroup->path : "/";
+    return cgroup_path_is_prefix(root_path, target_path);
+}
+
 int cgroup_init(void) {
     kernel_mutex_lock(&cgroup_lock);
     if (root_cgroup) {
@@ -922,6 +935,7 @@ static int cgroupfs_apply_subtree_control(struct cgroup *cgrp, const char *buf, 
 
 long cgroupfs_write_node(const char *cgroup_path, enum cgroupfs_node_type type,
                          const char *buf, size_t count) {
+    struct task_struct *writer = get_current();
     struct cgroup *target = NULL;
     int32_t pid = 0;
     struct task_struct *task;
@@ -931,7 +945,7 @@ long cgroupfs_write_node(const char *cgroup_path, enum cgroupfs_node_type type,
     if (!buf && count > 0) {
         return -EFAULT;
     }
-    if (!cgroupfs_current_can_control()) {
+    if (!writer || !cgroupfs_current_can_control()) {
         return -EPERM;
     }
     if (cgroupfs_cgroup_for_absolute_path(cgroup_path, &target) != 0) {
@@ -996,6 +1010,11 @@ long cgroupfs_write_node(const char *cgroup_path, enum cgroupfs_node_type type,
     if (!task) {
         cgroup_put(target);
         return -ESRCH;
+    }
+    if (!cgroup_task_is_visible_to_task(writer, task)) {
+        free_task(task);
+        cgroup_put(target);
+        return -EPERM;
     }
     ret = task_attach_cgroup(task, target);
     free_task(task);

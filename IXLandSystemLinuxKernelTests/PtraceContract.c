@@ -1,21 +1,44 @@
 #include "PtraceContract.h"
 
+#include <asm/ptrace.h>
+#include <asm/unistd.h>
+#ifdef SIGUSR1
+#undef SIGUSR1
+#endif
+#define __ASSEMBLY__ 1
+#include <asm-generic/signal.h>
+#undef __ASSEMBLY__
+#include <linux/elf.h>
 #include <linux/ptrace.h>
 #include <linux/sched.h>
+#include <linux/uio.h>
 
 #include <errno.h>
 #include <stdint.h>
+#include <string.h>
 
+#include "kernel/signal.h"
 #include "kernel/task.h"
 
 extern int clone_impl(uint64_t flags);
-extern long ptrace_impl(long request, int32_t pid, void *addr, void *data);
+extern long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data);
+extern long syscall_dispatch_impl(long number, long arg0, long arg1, long arg2,
+                                  long arg3, long arg4, long arg5);
 
 static void ptrace_release_child(struct task_struct *parent, struct task_struct *child) {
     if (!parent || !child) {
         return;
     }
     task_unlink_child_impl(parent, child);
+    free_task(child);
+}
+
+static void ptrace_release_lookup_child(struct task_struct *parent, struct task_struct *child) {
+    if (!parent || !child) {
+        return;
+    }
+    task_unlink_child_impl(parent, child);
+    free_task(child);
     free_task(child);
 }
 
@@ -69,7 +92,7 @@ int ptrace_contract_newuser_child_cannot_attach_parent_namespace_task(void) {
         errno = EPROTO;
     }
     set_current(parent);
-    ptrace_release_child(parent, child);
+    ptrace_release_lookup_child(parent, child);
     return ret;
 }
 
@@ -99,7 +122,7 @@ int ptrace_contract_newuser_child_can_attach_same_namespace_task(void) {
     target = target_pid < 0 ? NULL : task_lookup(target_pid);
     if (!target) {
         set_current(parent);
-        ptrace_release_child(parent, tracer);
+        ptrace_release_lookup_child(parent, tracer);
         errno = ESRCH;
         return -1;
     }
@@ -108,7 +131,134 @@ int ptrace_contract_newuser_child_can_attach_same_namespace_task(void) {
         ret = 0;
     }
     set_current(parent);
-    ptrace_release_child(tracer, target);
-    ptrace_release_child(parent, tracer);
+    ptrace_release_lookup_child(tracer, target);
+    ptrace_release_lookup_child(parent, tracer);
+    return ret;
+}
+
+int ptrace_contract_regset_round_trips_general_registers(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    struct user_pt_regs in_regs;
+    struct user_pt_regs out_regs;
+    struct iovec iov;
+    int ret = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    memset(&in_regs, 0, sizeof(in_regs));
+    memset(&out_regs, 0, sizeof(out_regs));
+    in_regs.regs[0] = 0x1234;
+    in_regs.regs[30] = 0x5678;
+    in_regs.sp = 0x700000;
+    in_regs.pc = 0x400000;
+    in_regs.pstate = 0;
+    iov.iov_base = &in_regs;
+    iov.iov_len = sizeof(in_regs);
+    if (ptrace_impl(PTRACE_ATTACH, child->pid, NULL, NULL) != 0 ||
+        ptrace_impl(PTRACE_SETREGSET, child->pid, (void *)(uintptr_t)NT_PRSTATUS, &iov) != 0) {
+        goto out;
+    }
+    iov.iov_base = &out_regs;
+    iov.iov_len = sizeof(out_regs);
+    if (ptrace_impl(PTRACE_GETREGSET, child->pid, (void *)(uintptr_t)NT_PRSTATUS, &iov) != 0 ||
+        iov.iov_len != sizeof(out_regs) ||
+        out_regs.regs[0] != in_regs.regs[0] ||
+        out_regs.regs[30] != in_regs.regs[30] ||
+        out_regs.sp != in_regs.sp ||
+        out_regs.pc != in_regs.pc) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        ptrace_impl(PTRACE_DETACH, child->pid, NULL, NULL);
+        ptrace_release_child(parent, child);
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int ptrace_contract_syscall_trace_records_entry_and_exit(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    struct ptrace_syscall_info info;
+    int ret = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    if (ptrace_impl(PTRACE_ATTACH, child->pid, NULL, NULL) != 0 ||
+        ptrace_impl(PTRACE_SYSCALL, child->pid, NULL, NULL) != 0) {
+        goto out;
+    }
+    set_current(child);
+    syscall_dispatch_impl(__NR_getpid, 0, 0, 0, 0, 0, 0);
+    set_current(parent);
+    memset(&info, 0, sizeof(info));
+    if (ptrace_impl(PTRACE_GET_SYSCALL_INFO, child->pid, (void *)(uintptr_t)sizeof(info), &info) <= 0 ||
+        info.op != PTRACE_SYSCALL_INFO_EXIT ||
+        info.exit.rval != child->pid ||
+        info.exit.is_error != 0) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        set_current(parent);
+        ptrace_impl(PTRACE_DETACH, child->pid, NULL, NULL);
+        ptrace_release_child(parent, child);
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int ptrace_contract_cont_injects_pending_signal(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    int ret = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    if (ptrace_impl(PTRACE_ATTACH, child->pid, NULL, NULL) != 0 ||
+        ptrace_impl(PTRACE_CONT, child->pid, NULL, (void *)(uintptr_t)SIGUSR1) != 0) {
+        goto out;
+    }
+    if (!signal_is_pending(child, SIGUSR1)) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        ptrace_impl(PTRACE_DETACH, child->pid, NULL, NULL);
+        ptrace_release_child(parent, child);
+        errno = saved_errno;
+    }
     return ret;
 }

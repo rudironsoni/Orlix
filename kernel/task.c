@@ -1018,6 +1018,19 @@ struct task_struct *alloc_task(void) {
     task->clone_flags = 0;
     task->exec_secure = 0;
     task->exec_dumpable = 1;
+    task->ptracer_pid = 0;
+    task->ptrace_attached = false;
+    task->ptrace_syscall_trace = false;
+    task->ptrace_signal = 0;
+    task->ptrace_syscall_op = 0;
+    task->ptrace_syscall_nr = 0;
+    memset(task->ptrace_syscall_args, 0, sizeof(task->ptrace_syscall_args));
+    task->ptrace_syscall_retval = 0;
+    task->ptrace_syscall_is_error = false;
+    memset(task->ptrace_regs, 0, sizeof(task->ptrace_regs));
+    task->ptrace_sp = 0;
+    task->ptrace_pc = 0;
+    task->ptrace_pstate = 0;
 
     kernel_mutex_init(&task->lock);
     kernel_cond_init(&task->wait_cond);

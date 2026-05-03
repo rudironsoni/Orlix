@@ -29,4 +29,16 @@
     XCTAssertEqual(ptrace_contract_newuser_child_can_attach_same_namespace_task(), 0, @"errno %d", errno);
 }
 
+- (void)testRegsetRoundTripsGeneralRegisters {
+    XCTAssertEqual(ptrace_contract_regset_round_trips_general_registers(), 0, @"errno %d", errno);
+}
+
+- (void)testSyscallTraceRecordsEntryAndExit {
+    XCTAssertEqual(ptrace_contract_syscall_trace_records_entry_and_exit(), 0, @"errno %d", errno);
+}
+
+- (void)testContInjectsPendingSignal {
+    XCTAssertEqual(ptrace_contract_cont_injects_pending_signal(), 0, @"errno %d", errno);
+}
+
 @end

@@ -14,6 +14,9 @@ extern "C" {
 #endif
 
 long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data);
+void ptrace_note_syscall_entry(long number, long arg0, long arg1, long arg2,
+                               long arg3, long arg4, long arg5);
+void ptrace_note_syscall_exit(long retval);
 
 #ifdef __cplusplus
 }

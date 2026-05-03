@@ -97,4 +97,9 @@
                    @"cgroup control should require CAP_SYS_ADMIN in cgroup namespace owner user namespace, errno %d", errno);
 }
 
+- (void)testCgroupNamespaceRejectsMigrationOfHiddenTask {
+    XCTAssertEqual(cgroup_contract_cgroup_namespace_rejects_migration_of_hidden_task(), 0,
+                   @"cgroup namespace should reject migration of tasks outside its visible subtree, errno %d", errno);
+}
+
 @end

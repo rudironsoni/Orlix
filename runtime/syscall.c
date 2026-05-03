@@ -542,13 +542,13 @@ enum syscall_gap_priority syscall_gap_priority_impl(long number) {
     }
 }
 
-long syscall_dispatch_impl(long number,
-                           long arg0,
-                           long arg1,
-                           long arg2,
-                           long arg3,
-                           long arg4,
-                           long arg5) {
+static long syscall_dispatch_inner_impl(long number,
+                                        long arg0,
+                                        long arg1,
+                                        long arg2,
+                                        long arg3,
+                                        long arg4,
+                                        long arg5) {
     long seccomp_ret = seccomp_check_current_syscall(number);
 
     if (seccomp_ret < 0) {
@@ -991,4 +991,19 @@ long syscall_dispatch_impl(long number,
     default:
         return -ENOSYS;
     }
+}
+
+long syscall_dispatch_impl(long number,
+                           long arg0,
+                           long arg1,
+                           long arg2,
+                           long arg3,
+                           long arg4,
+                           long arg5) {
+    long ret;
+
+    ptrace_note_syscall_entry(number, arg0, arg1, arg2, arg3, arg4, arg5);
+    ret = syscall_dispatch_inner_impl(number, arg0, arg1, arg2, arg3, arg4, arg5);
+    ptrace_note_syscall_exit(ret);
+    return ret;
 }

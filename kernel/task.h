@@ -329,6 +329,17 @@ struct task_struct {
     uint64_t exec_dumpable;
     int32_t ptracer_pid;
     bool ptrace_attached;
+    bool ptrace_syscall_trace;
+    int32_t ptrace_signal;
+    uint8_t ptrace_syscall_op;
+    uint64_t ptrace_syscall_nr;
+    uint64_t ptrace_syscall_args[6];
+    int64_t ptrace_syscall_retval;
+    bool ptrace_syscall_is_error;
+    uint64_t ptrace_regs[31];
+    uint64_t ptrace_sp;
+    uint64_t ptrace_pc;
+    uint64_t ptrace_pstate;
     uint64_t clear_child_tid;
     uint64_t robust_list_head;
     uint64_t robust_list_len;
