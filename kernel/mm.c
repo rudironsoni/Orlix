@@ -1254,6 +1254,10 @@ struct mm_struct *task_mm_dup_impl(const struct mm_struct *source) {
     copy->signal_frame_current_sp = source->signal_frame_current_sp;
     copy->signal_frame_size = source->signal_frame_size;
     copy->signal_frame_ucontext_flags = source->signal_frame_ucontext_flags;
+    copy->signal_frame_restartable = source->signal_frame_restartable;
+    copy->signal_frame_restart_return_pc = source->signal_frame_restart_return_pc;
+    copy->signal_frame_restart_sp = source->signal_frame_restart_sp;
+    copy->signal_frame_restart_signo = source->signal_frame_restart_signo;
 
     copy->exec_image_size = source->exec_image_size;
     copy->exec_image_base = mm_dup_bytes(source->exec_image_base, source->exec_image_size);

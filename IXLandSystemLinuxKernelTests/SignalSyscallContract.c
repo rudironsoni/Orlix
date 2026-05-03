@@ -772,3 +772,79 @@ out:
     }
     return ret == 0 ? 0 : -1;
 }
+
+int signal_syscall_contract_restart_metadata_follows_sa_restart(void) {
+    struct task_struct *task = get_current();
+    struct sigaction act;
+    struct sigaction old_usr1;
+    struct signal_mask_bits old_blocked;
+    void *mapped;
+    uint64_t frame_sp = 0;
+    long ret;
+
+    if (!task || !task->signal) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    memset(&act, 0, sizeof(act));
+    memset(&old_usr1, 0, sizeof(old_usr1));
+    old_blocked = task->signal->blocked;
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 16384, PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+    if (!task->mm) {
+        errno = ESRCH;
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+        return -1;
+    }
+
+    act.sa_handler = (__sighandler_t)(uintptr_t)0x7300;
+    act.sa_flags = SA_RESTART;
+    ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGUSR1, (long)(uintptr_t)&act,
+                                (long)(uintptr_t)&old_usr1, sizeof(act.sa_mask), 0, 0);
+    if (ret != 0 ||
+        signal_prepare_frame_impl(task, SIGUSR1, 0x3333,
+                                  (uint64_t)(uintptr_t)mapped + 16384, &frame_sp) != 0 ||
+        task->mm->signal_frame_restartable != 1 ||
+        task->mm->signal_frame_restart_return_pc != 0x3333 ||
+        task->mm->signal_frame_restart_sp != (uint64_t)(uintptr_t)mapped + 16384 ||
+        task->mm->signal_frame_restart_signo != SIGUSR1 ||
+        syscall_dispatch_impl(__NR_restart_syscall, 0, 0, 0, 0, 0, 0) != 0x3333 ||
+        task->mm->signal_frame_restartable != 0 ||
+        syscall_dispatch_impl(__NR_restart_syscall, 0, 0, 0, 0, 0, 0) != -EINTR) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = (__sighandler_t)(uintptr_t)0x7400;
+    ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGUSR1, (long)(uintptr_t)&act,
+                                0, sizeof(act.sa_mask), 0, 0);
+    if (ret != 0 ||
+        signal_prepare_frame_impl(task, SIGUSR1, 0x4444,
+                                  (uint64_t)(uintptr_t)mapped + 16384, &frame_sp) != 0 ||
+        task->mm->signal_frame_restartable != 0 ||
+        task->mm->signal_frame_restart_return_pc != 0x4444 ||
+        syscall_dispatch_impl(__NR_restart_syscall, 0, 0, 0, 0, 0, 0) != -EINTR) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        syscall_dispatch_impl(__NR_rt_sigaction, SIGUSR1, (long)(uintptr_t)&old_usr1,
+                              0, sizeof(old_usr1.sa_mask), 0, 0);
+        task->signal->blocked = old_blocked;
+        task->mm->signal_frame_restartable = 0;
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 16384, 0, 0, 0, 0);
+        errno = saved_errno;
+    }
+    return ret == 0 ? 0 : -1;
+}

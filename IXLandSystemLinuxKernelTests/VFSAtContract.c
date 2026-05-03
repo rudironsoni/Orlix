@@ -3851,6 +3851,73 @@ out:
     return ret;
 }
 
+int vfs_contract_open_tree_clone_survives_source_namespace_teardown(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    int tree_fd = -1;
+    int ret = -1;
+
+    if (!parent || !parent->fs) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    vfs_contract_cleanup_mount_namespace_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-target", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0 ||
+        vfs_contract_write_file("/tmp/vfs-mntns-parent-source/file", "source-ns-detached") != 0) {
+        goto out;
+    }
+
+    child = task_create_child_impl(parent);
+    if (!child || fs_unshare_mount_namespace(child->fs) != 0) {
+        goto out;
+    }
+
+    set_current(child);
+    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-target", NULL, MS_BIND, NULL) != 0) {
+        set_current(parent);
+        goto out;
+    }
+    tree_fd = open_tree(AT_FDCWD, "/tmp/vfs-mntns-target", OPEN_TREE_CLONE);
+    if (tree_fd < 0) {
+        set_current(parent);
+        goto out;
+    }
+
+    if (fs_unshare_mount_namespace(child->fs) != 0) {
+        set_current(parent);
+        goto out;
+    }
+    if (syscall_dispatch_impl(__NR_move_mount, tree_fd, (long)(uintptr_t)"",
+                              AT_FDCWD, (long)(uintptr_t)"/tmp/vfs-mntns-peer-a",
+                              MOVE_MOUNT_F_EMPTY_PATH, 0) != 0 ||
+        vfs_contract_read_file_exact("/tmp/vfs-mntns-peer-a/file", "source-ns-detached") != 0) {
+        set_current(parent);
+        goto out;
+    }
+    set_current(parent);
+
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        set_current(parent);
+        if (tree_fd >= 0) {
+            close_impl(tree_fd);
+        }
+        if (child) {
+            task_unlink_child_impl(parent, child);
+            free_task(child);
+        }
+        vfs_contract_cleanup_mount_namespace_paths();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
 int vfs_contract_shared_mount_move_propagates_to_peer(void) {
     int ret = -1;
 

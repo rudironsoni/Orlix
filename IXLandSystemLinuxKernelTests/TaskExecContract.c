@@ -354,6 +354,74 @@ out:
     return ret;
 }
 
+int task_exec_contract_setid_exec_saved_ids_allow_drop_and_reacquire(void) {
+    uid_t ruid = 0;
+    uid_t euid = 0;
+    uid_t suid = 0;
+    gid_t rgid = 0;
+    gid_t egid = 0;
+    gid_t sgid = 0;
+    int fd = -1;
+    int ret = -1;
+
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/task-exec-saved-id-file");
+
+    fd = open_impl("/tmp/task-exec-saved-id-file", O_RDWR | O_CREAT | O_TRUNC, 0755);
+    if (fd < 0) {
+        goto out;
+    }
+    close_if_open(fd);
+    fd = -1;
+
+    if (chown("/tmp/task-exec-saved-id-file", 2000, 3000) != 0 ||
+        chmod("/tmp/task-exec-saved-id-file", S_ISUID | S_ISGID | 0755) != 0 ||
+        setgid_impl(1000) != 0 ||
+        setuid_impl(1000) != 0 ||
+        task_exec_transition_impl("/tmp/task-exec-saved-id-file", "saved-id-file") != 0 ||
+        getresuid_impl(&ruid, &euid, &suid) != 0 ||
+        getresgid_impl(&rgid, &egid, &sgid) != 0) {
+        goto out;
+    }
+    if (ruid != 1000 || euid != 2000 || suid != 2000 ||
+        rgid != 1000 || egid != 3000 || sgid != 3000) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    if (seteuid_impl(1000) != 0 ||
+        setegid_impl(1000) != 0 ||
+        getresuid_impl(&ruid, &euid, &suid) != 0 ||
+        getresgid_impl(&rgid, &egid, &sgid) != 0) {
+        goto out;
+    }
+    if (ruid != 1000 || euid != 1000 || suid != 2000 ||
+        rgid != 1000 || egid != 1000 || sgid != 3000) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    if (seteuid_impl(2000) != 0 ||
+        setegid_impl(3000) != 0 ||
+        getresuid_impl(&ruid, &euid, &suid) != 0 ||
+        getresgid_impl(&rgid, &egid, &sgid) != 0) {
+        goto out;
+    }
+    if (ruid != 1000 || euid != 2000 || suid != 2000 ||
+        rgid != 1000 || egid != 3000 || sgid != 3000) {
+        errno = ENOMSG;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_if_open(fd);
+    cred_reset_to_defaults();
+    unlink_impl("/tmp/task-exec-saved-id-file");
+    return ret;
+}
+
 int task_exec_contract_no_new_privs_blocks_setuid_exec_gain(void) {
     struct cred *cred;
     int fd = -1;

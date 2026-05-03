@@ -297,6 +297,10 @@
     XCTAssertEqual(signal_syscall_contract_frame_applies_handler_mask_nodefer_and_resethand(), 0, @"errno %d", errno);
 }
 
+- (void)testRestartMetadataFollowsSaRestart {
+    XCTAssertEqual(signal_syscall_contract_restart_metadata_follows_sa_restart(), 0, @"errno %d", errno);
+}
+
 - (void)testRegistersNativeArtifactDescriptor {
     XCTAssertEqual(native_syscall_contract_registers_native_artifact_descriptor(), 0, @"errno %d", errno);
 }

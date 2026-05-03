@@ -524,8 +524,20 @@ long syscall_dispatch_impl(long number,
         }
         return (long)task->mm->signal_frame_return_pc;
     }
-    case __NR_restart_syscall:
-        return -EINTR;
+    case __NR_restart_syscall: {
+        struct task_struct *task = get_current();
+        long restart_pc;
+
+        if (!task || !task->mm) {
+            return -ESRCH;
+        }
+        if (!task->mm->signal_frame_restartable) {
+            return -EINTR;
+        }
+        restart_pc = (long)task->mm->signal_frame_restart_return_pc;
+        task->mm->signal_frame_restartable = 0;
+        return restart_pc;
+    }
     case __NR_rt_sigprocmask: {
         struct signal_mask_bits set;
         struct signal_mask_bits oldset;

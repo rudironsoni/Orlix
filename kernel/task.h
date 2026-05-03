@@ -209,6 +209,10 @@ struct mm_struct {
     uint64_t signal_frame_current_sp;
     uint64_t signal_frame_size;
     uint64_t signal_frame_ucontext_flags;
+    uint64_t signal_frame_restartable;
+    uint64_t signal_frame_restart_return_pc;
+    uint64_t signal_frame_restart_sp;
+    uint64_t signal_frame_restart_signo;
 };
 
 /* Exec image types - virtual kernel internal */

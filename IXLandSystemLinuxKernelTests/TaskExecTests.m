@@ -15,6 +15,7 @@ extern int task_exec_contract_truncates_comm_to_task_comm_len_minus_one(void);
 extern int task_exec_contract_preserves_task_identity_and_non_exec_state(void);
 extern int task_exec_contract_setuid_mode_updates_virtual_effective_uid(void);
 extern int task_exec_contract_setgid_mode_updates_virtual_effective_gid(void);
+extern int task_exec_contract_setid_exec_saved_ids_allow_drop_and_reacquire(void);
 extern int task_exec_contract_no_new_privs_blocks_setuid_exec_gain(void);
 extern int task_exec_contract_no_new_privs_blocks_setgid_exec_gain(void);
 extern int task_exec_contract_no_new_privs_is_irreversible(void);
@@ -85,6 +86,10 @@ extern int task_exec_contract_capability_bounding_drop_blocks_inheritable_and_cl
 
 - (void)testSetgidModeUpdatesVirtualEffectiveGid {
     XCTAssertEqual(task_exec_contract_setgid_mode_updates_virtual_effective_gid(), 0, @"errno %d", errno);
+}
+
+- (void)testSetidExecSavedIdsAllowDropAndReacquire {
+    XCTAssertEqual(task_exec_contract_setid_exec_saved_ids_allow_drop_and_reacquire(), 0, @"errno %d", errno);
 }
 
 - (void)testNoNewPrivsBlocksSetuidExecGain {

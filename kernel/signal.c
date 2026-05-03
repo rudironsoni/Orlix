@@ -1011,6 +1011,10 @@ int signal_prepare_frame_impl(struct task_struct *task, int32_t sig, uint64_t re
     task->mm->signal_frame_current_sp = current_sp;
     task->mm->signal_frame_size = frame_size;
     task->mm->signal_frame_ucontext_flags = 1;
+    task->mm->signal_frame_restartable = (action->flags & SA_RESTART) != 0 ? 1 : 0;
+    task->mm->signal_frame_restart_return_pc = return_pc;
+    task->mm->signal_frame_restart_sp = current_sp;
+    task->mm->signal_frame_restart_signo = (uint64_t)sig;
     for (int i = 0; i < KERNEL_SIG_NUM_WORDS; i++) {
         task->signal->blocked.sig[i] |= action->mask.sig[i];
     }
