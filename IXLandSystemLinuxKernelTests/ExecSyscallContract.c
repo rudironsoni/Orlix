@@ -96,6 +96,46 @@ static int read_proc_file(const char *path, char *buf, size_t buf_len, ssize_t *
     return 0;
 }
 
+static int format_maps_range(char *buf, size_t buf_len, uint64_t start, uint64_t end) {
+    static const char hex[] = "0123456789abcdef";
+    size_t pos = 0;
+
+    if (!buf || buf_len < 27) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (int shift = 44; shift >= 0; shift -= 4) {
+        buf[pos++] = hex[(start >> shift) & 0xfU];
+    }
+    buf[pos++] = '-';
+    for (int shift = 44; shift >= 0; shift -= 4) {
+        buf[pos++] = hex[(end >> shift) & 0xfU];
+    }
+    buf[pos] = '\0';
+    return 0;
+}
+
+static int smaps_block_contains(const char *content, const char *range, const char *needle) {
+    const char *block;
+    const char *next;
+    const char *found;
+
+    if (!content || !range || !needle) {
+        errno = EINVAL;
+        return 0;
+    }
+    block = strstr(content, range);
+    if (!block) {
+        return 0;
+    }
+    next = strstr(block + 1, "\n000");
+    if (!next) {
+        next = block + strlen(block);
+    }
+    found = strstr(block, needle);
+    return found && found < next;
+}
+
 static int write_file_exact(const char *path, const char *content) {
     int fd;
     size_t len;
@@ -2773,6 +2813,67 @@ int exec_syscall_contract_elf_stack_growth_keeps_lower_guard_faulting(void) {
 out:
     clear_pending_signal(task, SIGSEGV);
     unlink_impl("/tmp/exec-elf-stack-lower-guard");
+    return result;
+}
+
+int exec_syscall_contract_elf_stack_growth_tracks_smaps_dirty_page(void) {
+    struct task_struct *task = get_current();
+    unsigned char image[4096];
+    char byte = 'd';
+    char smaps[16384];
+    char stack_range[32];
+    ssize_t smaps_len = 0;
+    uint64_t old_base;
+    uint64_t old_size;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    unlink_impl("/tmp/exec-elf-stack-smaps");
+    build_exec_elf64_without_interp(image, sizeof(image), 0x401000, 0x400000);
+    if (create_exec_bytes("/tmp/exec-elf-stack-smaps", image, sizeof(image)) != 0) {
+        goto out;
+    }
+    if (execve("/tmp/exec-elf-stack-smaps", NULL, NULL) != 0) {
+        goto out;
+    }
+    task->rlimits[RLIMIT_STACK].cur = 16ULL * 1024ULL * 1024ULL;
+
+    old_base = task->mm->initial_stack_base;
+    old_size = task->mm->initial_stack_image_size;
+    if (task_write_virtual_memory_impl(task, old_base - 1, &byte, 1) != 1 ||
+        task->mm->initial_stack_base != old_base - TASK_VMA_PAGE_SIZE ||
+        task->mm->initial_stack_image_size != old_size + TASK_VMA_PAGE_SIZE) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    if (format_maps_range(stack_range, sizeof(stack_range), task->mm->initial_stack_base,
+                          task->mm->initial_stack_base + task->mm->initial_stack_image_size) != 0 ||
+        read_proc_file("/proc/self/smaps", smaps, sizeof(smaps) - 1, &smaps_len) != 0) {
+        goto out;
+    }
+    smaps[smaps_len] = '\0';
+    if (!smaps_block_contains(smaps, stack_range, "[stack]")) {
+        errno = ENOENT;
+        goto out;
+    }
+    if (!smaps_block_contains(smaps, stack_range, "Private_Dirty:         4 kB")) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (!smaps_block_contains(smaps, stack_range, "Anonymous:")) {
+        errno = ENOMSG;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    unlink_impl("/tmp/exec-elf-stack-smaps");
     return result;
 }
 

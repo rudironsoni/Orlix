@@ -43,6 +43,7 @@ extern int exec_syscall_contract_elf_below_stack_guard_faults_with_sigsegv_maper
 extern int exec_syscall_contract_elf_stack_grows_down_within_rlimit(void);
 extern int exec_syscall_contract_elf_stack_growth_respects_rlimit(void);
 extern int exec_syscall_contract_elf_stack_growth_keeps_lower_guard_faulting(void);
+extern int exec_syscall_contract_elf_stack_growth_tracks_smaps_dirty_page(void);
 extern int exec_syscall_contract_elf_dynamic_metadata_records_exec_and_loader(void);
 extern int exec_syscall_contract_elf_exec_handoff_exposes_entry_stack_and_memory_access(void);
 extern int exec_syscall_contract_elf_vma_page_permissions_are_page_granular(void);
@@ -233,6 +234,10 @@ extern int exec_syscall_contract_truncated_elf_returns_enoexec_without_transitio
 
 - (void)testElfStackGrowthKeepsLowerGuardFaulting {
     XCTAssertEqual(exec_syscall_contract_elf_stack_growth_keeps_lower_guard_faulting(), 0, @"errno %d", errno);
+}
+
+- (void)testElfStackGrowthTracksSmapsDirtyPage {
+    XCTAssertEqual(exec_syscall_contract_elf_stack_growth_tracks_smaps_dirty_page(), 0, @"errno %d", errno);
 }
 
 - (void)testElfDynamicMetadataRecordsExecAndLoader {

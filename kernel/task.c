@@ -606,6 +606,8 @@ static int task_grow_stack_down_impl(struct task_struct *task, uint64_t fault_ad
     struct task_vma *guard = NULL;
     void *new_image = NULL;
     uint32_t *new_page_flags = NULL;
+    uint8_t *new_resident_pages = NULL;
+    uint8_t *new_dirty_pages = NULL;
     void *old_image;
     uint64_t old_size;
     uint64_t new_size;
@@ -647,16 +649,23 @@ static int task_grow_stack_down_impl(struct task_struct *task, uint64_t fault_ad
     }
     new_base = mm->initial_stack_base - TASK_VMA_PAGE_SIZE;
     new_pages = new_size / TASK_VMA_PAGE_SIZE;
-    if (new_pages == 0 || new_pages > SIZE_MAX / sizeof(*new_page_flags)) {
+    if (new_pages == 0 ||
+        new_pages > SIZE_MAX / sizeof(*new_page_flags) ||
+        new_pages > SIZE_MAX / sizeof(*new_resident_pages) ||
+        new_pages > SIZE_MAX / sizeof(*new_dirty_pages)) {
         errno = ENOMEM;
         return -1;
     }
 
     new_image = calloc(1, (size_t)new_size);
     new_page_flags = calloc((size_t)new_pages, sizeof(*new_page_flags));
-    if (!new_image || !new_page_flags) {
+    new_resident_pages = calloc((size_t)new_pages, sizeof(*new_resident_pages));
+    new_dirty_pages = calloc((size_t)new_pages, sizeof(*new_dirty_pages));
+    if (!new_image || !new_page_flags || !new_resident_pages || !new_dirty_pages) {
         free(new_image);
         free(new_page_flags);
+        free(new_resident_pages);
+        free(new_dirty_pages);
         errno = ENOMEM;
         return -1;
     }
@@ -664,6 +673,15 @@ static int task_grow_stack_down_impl(struct task_struct *task, uint64_t fault_ad
     memcpy((unsigned char *)new_image + TASK_VMA_PAGE_SIZE, old_image, (size_t)old_size);
     for (uint64_t i = 0; i < new_pages; i++) {
         new_page_flags[i] = PF_R | PF_W;
+    }
+    for (uint64_t i = 1; i < new_pages; i++) {
+        uint64_t old_page = i - 1;
+        new_resident_pages[i] = stack->resident_pages && old_page < stack->page_count
+                                    ? stack->resident_pages[old_page]
+                                    : 1;
+        new_dirty_pages[i] = stack->dirty_pages && old_page < stack->page_count
+                                 ? stack->dirty_pages[old_page]
+                                 : 0;
     }
 
     free(old_image);
@@ -673,14 +691,16 @@ static int task_grow_stack_down_impl(struct task_struct *task, uint64_t fault_ad
     mm->initial_stack_size = new_size;
 
     free(stack->page_flags);
+    free(stack->resident_pages);
+    free(stack->dirty_pages);
     stack->start = new_base;
     stack->end = new_base + new_size;
     stack->image = mm->initial_stack_image;
     stack->image_size = mm->initial_stack_image_size;
     stack->page_count = new_pages;
     stack->page_flags = new_page_flags;
-    stack->resident_pages = NULL;
-    stack->dirty_pages = NULL;
+    stack->resident_pages = new_resident_pages;
+    stack->dirty_pages = new_dirty_pages;
 
     guard->start -= TASK_VMA_PAGE_SIZE;
     guard->end -= TASK_VMA_PAGE_SIZE;

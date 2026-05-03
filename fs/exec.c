@@ -277,7 +277,9 @@ static int exec_materialize_segment_image(const unsigned char *image,
 static int exec_add_vma(struct mm_struct *mm, uint64_t start, uint64_t size,
                         uint32_t flags, enum task_vma_kind kind,
                         void *image, size_t image_size) {
-    uint32_t *page_flags;
+    uint32_t *page_flags = NULL;
+    uint8_t *resident_pages = NULL;
+    uint8_t *dirty_pages = NULL;
     uint64_t page_count;
 
     if (!mm || size == 0) {
@@ -304,12 +306,18 @@ static int exec_add_vma(struct mm_struct *mm, uint64_t start, uint64_t size,
         return -1;
     }
     page_flags = calloc((size_t)page_count, sizeof(*page_flags));
-    if (!page_flags) {
+    resident_pages = calloc((size_t)page_count, sizeof(*resident_pages));
+    dirty_pages = calloc((size_t)page_count, sizeof(*dirty_pages));
+    if (!page_flags || !resident_pages || !dirty_pages) {
+        free(page_flags);
+        free(resident_pages);
+        free(dirty_pages);
         errno = ENOMEM;
         return -1;
     }
     for (uint64_t i = 0; i < page_count; i++) {
         page_flags[i] = flags;
+        resident_pages[i] = flags != 0 ? 1 : 0;
     }
     mm->vmas[mm->vma_count].start = start;
     mm->vmas[mm->vma_count].end = start + size;
@@ -319,6 +327,8 @@ static int exec_add_vma(struct mm_struct *mm, uint64_t start, uint64_t size,
     mm->vmas[mm->vma_count].image_size = image_size;
     mm->vmas[mm->vma_count].page_count = page_count;
     mm->vmas[mm->vma_count].page_flags = page_flags;
+    mm->vmas[mm->vma_count].resident_pages = resident_pages;
+    mm->vmas[mm->vma_count].dirty_pages = dirty_pages;
     mm->vma_count++;
     return 0;
 }
