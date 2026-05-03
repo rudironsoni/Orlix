@@ -72,6 +72,14 @@
     XCTAssertEqual(procfs_namespace_contract_proc_task_tid_status_reports_thread_signal_state(), 0, @"errno %d", errno);
 }
 
+- (void)testCloneVmThreadSharesProcMaps {
+    XCTAssertEqual(procfs_namespace_contract_clone_vm_thread_shares_proc_maps(), 0, @"errno %d", errno);
+}
+
+- (void)testProcessSignalReportsSharedPending {
+    XCTAssertEqual(procfs_namespace_contract_process_signal_reports_shared_pending(), 0, @"errno %d", errno);
+}
+
 - (void)testProcPidStatCwdAndExeReportTargetTask {
     XCTAssertEqual(procfs_namespace_contract_proc_pid_stat_cwd_and_exe_report_target_task(), 0, @"errno %d", errno);
 }

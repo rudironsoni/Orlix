@@ -35,6 +35,7 @@ extern long long lseek_impl(int fd, long long offset, int whence);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
+extern int signal_generate_process(struct task_struct *target, int32_t sig);
 extern void cred_reset_to_defaults(void);
 extern void set_current_cred(struct cred *cred);
 
@@ -51,6 +52,11 @@ static void reset_procfs_namespace_state(void) {
     uts_reset_current_namespace();
     if (get_current()) {
         atomic_store(&get_current()->new_pid_namespace_pending, false);
+        if (get_current()->signal) {
+            memset(&get_current()->signal->pending, 0, sizeof(get_current()->signal->pending));
+            memset(&get_current()->signal->shared_pending, 0,
+                   sizeof(get_current()->signal->shared_pending));
+        }
     }
 }
 
@@ -1035,6 +1041,135 @@ out:
         int saved_errno = errno;
         if (thread && thread->signal) {
             thread->signal->pending.sig[(SIGUSR1 - 1) >> 6] &= ~(1ULL << ((SIGUSR1 - 1) & 63));
+        }
+        if (thread) {
+            task_unlink_child_impl(parent, thread);
+            free_task(thread);
+        }
+        reset_procfs_namespace_state();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int procfs_namespace_contract_clone_vm_thread_shares_proc_maps(void) {
+    struct task_struct *parent;
+    struct task_struct *thread = NULL;
+    void *mapped = (void *)-1;
+    uint64_t base;
+    char path[160] = {0};
+    char parent_maps[4096];
+    char thread_maps[4096];
+    char needle[32] = {0};
+    int ret = -1;
+
+    reset_procfs_namespace_state();
+    parent = get_current();
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    thread = task_create_child_with_flags_impl(parent, CLONE_THREAD | CLONE_VM | CLONE_SIGHAND);
+    if (!thread) {
+        return -1;
+    }
+    mapped = mmap_impl(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    base = (uint64_t)(uintptr_t)mapped;
+    needle[0] = '\0';
+    for (int shift = 60; shift >= 0; shift -= 4) {
+        char c = (char)((base >> shift) & 0xf);
+        size_t len = strlen(needle);
+        if (len + 1 >= sizeof(needle)) {
+            errno = ENAMETOOLONG;
+            goto out;
+        }
+        needle[len] = (char)(c < 10 ? '0' + c : 'a' + (c - 10));
+        needle[len + 1] = '\0';
+    }
+    while (needle[0] == '0' && needle[1] != '\0') {
+        memmove(needle, needle + 1, strlen(needle));
+    }
+    if (read_file_content("/proc/self/maps", parent_maps, sizeof(parent_maps)) != 0) {
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), parent->pid, "/task/");
+    append_positive_decimal(path, sizeof(path), thread->pid);
+    if (strlen(path) + 5 >= sizeof(path)) {
+        errno = ENAMETOOLONG;
+        goto out;
+    }
+    memcpy(path + strlen(path), "/maps", 6);
+    if (read_file_content(path, thread_maps, sizeof(thread_maps)) != 0) {
+        goto out;
+    }
+    if (!contains(parent_maps, needle) || !contains(thread_maps, needle)) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if ((long)(uintptr_t)mapped >= 0) {
+            munmap_impl(mapped, 4096);
+        }
+        if (thread) {
+            task_unlink_child_impl(parent, thread);
+            free_task(thread);
+        }
+        reset_procfs_namespace_state();
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int procfs_namespace_contract_process_signal_reports_shared_pending(void) {
+    struct task_struct *parent;
+    struct task_struct *thread = NULL;
+    char path[160] = {0};
+    char content[4096];
+    int ret = -1;
+
+    reset_procfs_namespace_state();
+    parent = get_current();
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    thread = task_create_child_with_flags_impl(parent, CLONE_THREAD | CLONE_VM | CLONE_SIGHAND);
+    if (!thread) {
+        return -1;
+    }
+    if (signal_generate_process(parent, SIGUSR2) != 0) {
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), parent->pid, "/task/");
+    append_positive_decimal(path, sizeof(path), thread->pid);
+    if (strlen(path) + 8 >= sizeof(path)) {
+        errno = ENAMETOOLONG;
+        goto out;
+    }
+    memcpy(path + strlen(path), "/status", 8);
+    if (read_file_content(path, content, sizeof(content)) != 0) {
+        goto out;
+    }
+    if (!contains(content, "SigPnd:\t0000000000000000\n") ||
+        !contains(content, "ShdPnd:\t0000000000000800\n")) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if (parent->signal) {
+            parent->signal->shared_pending.sig[(SIGUSR2 - 1) >> 6] &= ~(1ULL << ((SIGUSR2 - 1) & 63));
         }
         if (thread) {
             task_unlink_child_impl(parent, thread);

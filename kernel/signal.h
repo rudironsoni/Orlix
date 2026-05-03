@@ -84,6 +84,7 @@ struct signal_struct {
     struct signal_action_slot actions[KERNEL_SIG_NUM];
     struct signal_mask_bits blocked;
     struct signal_mask_bits pending;
+    struct signal_mask_bits shared_pending;
     struct signal_queue queue;
     struct signal_altstack altstack;
     kernel_mutex_t lock;
@@ -120,6 +121,7 @@ void signal_wake_task(struct task_struct *task, bool group_wide);
 /* Internal signal generation */
 int signal_generate_task(struct task_struct *target, int32_t sig);
 int signal_generate_task_info(struct task_struct *target, int32_t sig, int32_t code, uint64_t addr);
+int signal_generate_process(struct task_struct *target, int32_t sig);
 int signal_generate_pgrp(int32_t pgid, int32_t sig);
 
 /* Check if signal is blocked */

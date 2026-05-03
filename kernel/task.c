@@ -81,6 +81,22 @@ enum {
     BUS_ADRERR = 2,
 };
 
+static struct mm_struct *task_ensure_mm_impl(struct task_struct *task) {
+    if (!task) {
+        errno = ESRCH;
+        return NULL;
+    }
+    if (!task->mm) {
+        task->mm = calloc(1, sizeof(*task->mm));
+        if (!task->mm) {
+            errno = ENOMEM;
+            return NULL;
+        }
+        atomic_init(&task->mm->refs, 1);
+    }
+    return task->mm;
+}
+
 static __thread struct task_struct *current_task = NULL;
 struct task_struct *init_task = NULL;
 
@@ -446,9 +462,24 @@ static long task_read_vma(const struct task_vma *vma, uint64_t addr, void *buf, 
     }
     if (vma->kind == TASK_VMA_FILE && !vma->shared) {
         uint64_t page_index = (addr - vma->start) / TASK_VMA_PAGE_SIZE;
+        size_t file_offset = (size_t)(addr - vma->start);
+        long long file_size = mm_vma_file_size_impl(vma);
         if ((!vma->dirty_pages || page_index >= vma->page_count || vma->dirty_pages[page_index] == 0) &&
-            mm_vma_file_remaining_impl(vma, (size_t)(addr - vma->start)) < 0) {
-            return -1;
+            file_size >= 0) {
+            size_t page_start = file_offset - (file_offset % TASK_VMA_PAGE_SIZE);
+            if ((uint64_t)page_start >= (uint64_t)file_size) {
+                errno = ENXIO;
+                return -1;
+            }
+            if ((uint64_t)file_offset >= (uint64_t)file_size) {
+                size_t page_offset = file_offset % TASK_VMA_PAGE_SIZE;
+                size_t to_zero = count;
+                if (to_zero > TASK_VMA_PAGE_SIZE - page_offset) {
+                    to_zero = TASK_VMA_PAGE_SIZE - page_offset;
+                }
+                memset(buf, 0, to_zero);
+                return (long)to_zero;
+            }
         }
     }
     if (vma->private_pages) {
@@ -493,8 +524,12 @@ static long task_write_vma(struct task_vma *vma, uint64_t addr, const void *buf,
     }
     if (vma->kind == TASK_VMA_FILE && !vma->shared) {
         uint64_t page_index = (addr - vma->start) / TASK_VMA_PAGE_SIZE;
+        size_t file_offset = (size_t)(addr - vma->start);
+        long long file_size = mm_vma_file_size_impl(vma);
         if ((!vma->dirty_pages || page_index >= vma->page_count || vma->dirty_pages[page_index] == 0) &&
-            mm_vma_file_remaining_impl(vma, (size_t)(addr - vma->start)) < 0) {
+            file_size >= 0 &&
+            (uint64_t)(file_offset - (file_offset % TASK_VMA_PAGE_SIZE)) >= (uint64_t)file_size) {
+            errno = ENXIO;
             return -1;
         }
     }
@@ -990,6 +1025,12 @@ struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent
             errno = ENOMEM;
             return NULL;
         }
+    }
+
+    if ((flags & CLONE_VM) != 0 && !task_ensure_mm_impl(parent)) {
+        free_task(child);
+        errno = ENOMEM;
+        return NULL;
     }
 
     if ((flags & CLONE_VM) != 0 && parent->mm) {

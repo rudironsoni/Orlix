@@ -422,17 +422,56 @@ long long mm_vma_file_remaining_impl(const struct task_vma *vma, size_t offset) 
     return mm_shared_file_remaining(vma, offset);
 }
 
+long long mm_vma_file_size_impl(const struct task_vma *vma) {
+    uint64_t identity;
+
+    if (!vma) {
+        return -1;
+    }
+    identity = vma->backing_file_identity;
+    if (identity == 0 && vma->backing_fd >= 0) {
+        identity = mm_fd_file_identity(vma->backing_fd);
+    }
+    if (identity != 0) {
+        for (size_t i = 0; i < sizeof(mm_file_size_notes) / sizeof(mm_file_size_notes[0]); i++) {
+            if (mm_file_size_notes[i].file_identity != 0 &&
+                mm_file_size_notes[i].file_identity == identity) {
+                return (long long)mm_file_size_notes[i].size;
+            }
+        }
+    }
+    return (long long)vma->image_size;
+}
+
 long mm_shared_vma_read_impl(const struct task_vma *vma, uint64_t addr, void *buf, size_t count) {
     size_t offset;
     uint64_t page_index;
     size_t page_offset;
     size_t to_copy;
     long long file_remaining;
+    long long file_size;
 
     if (!vma || !vma->shared_pages || addr < vma->start || addr >= vma->end) {
         return 0;
     }
     offset = (size_t)(addr - vma->start);
+    file_size = mm_vma_file_size_impl(vma);
+    if (file_size >= 0) {
+        size_t page_start = offset - (offset % TASK_VMA_PAGE_SIZE);
+        if ((uint64_t)page_start >= (uint64_t)file_size) {
+            errno = ENXIO;
+            return -1;
+        }
+        if ((uint64_t)offset >= (uint64_t)file_size) {
+            page_offset = offset % TASK_VMA_PAGE_SIZE;
+            to_copy = count;
+            if (to_copy > TASK_VMA_PAGE_SIZE - page_offset) {
+                to_copy = TASK_VMA_PAGE_SIZE - page_offset;
+            }
+            memset(buf, 0, to_copy);
+            return (long)to_copy;
+        }
+    }
     file_remaining = mm_shared_file_remaining(vma, offset);
     if (file_remaining < 0) {
         return -1;
@@ -1796,12 +1835,14 @@ int mincore_impl(void *addr, size_t length, unsigned char *vec) {
             errno = ENOMEM;
             return -1;
         }
-        if (vma->kind == TASK_VMA_FILE &&
-            mm_shared_file_remaining(vma, (size_t)(page_index * TASK_VMA_PAGE_SIZE)) < 0 &&
-            errno == ENXIO) {
-            vec[page] = 0U;
-            errno = 0;
-            continue;
+        if (vma->kind == TASK_VMA_FILE) {
+            long long file_size = mm_vma_file_size_impl(vma);
+            uint64_t page_file_offset = page_index * TASK_VMA_PAGE_SIZE;
+            if (file_size >= 0 && page_file_offset >= (uint64_t)file_size) {
+                vec[page] = 0U;
+                errno = 0;
+                continue;
+            }
         }
         vec[page] = (!vma->resident_pages || vma->resident_pages[page_index]) ? 1U : 0U;
     }

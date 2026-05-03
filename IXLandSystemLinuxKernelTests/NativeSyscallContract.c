@@ -2470,6 +2470,99 @@ out:
     return result;
 }
 
+int native_syscall_contract_partial_truncate_zero_fills_and_mincore_tracks_pages(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-partial-truncate-map";
+    char pages[8192];
+    unsigned char vec[2] = {0};
+    char byte = 1;
+    void *mapped = (void *)-1;
+    uint64_t base;
+    int fd = -1;
+    long ret;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(pages, 'P', sizeof(pages));
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    ret = syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)pages, sizeof(pages), 0, 0, 0);
+    if (ret != (long)sizeof(pages)) {
+        errno = ret < 0 ? (int)-ret : EIO;
+        goto out;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(pages),
+                                                      PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    base = (uint64_t)(uintptr_t)mapped;
+    ret = syscall_dispatch_impl(__NR_ftruncate, fd, 5000, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out_mapped;
+    }
+    byte = 1;
+    if (task_read_virtual_memory_impl(task, base + 4999, &byte, 1) != 1 || byte != 'P') {
+        errno = ENODATA;
+        goto out_mapped;
+    }
+    byte = 1;
+    if (task_read_virtual_memory_impl(task, base + 5000, &byte, 1) != 1 || byte != 0) {
+        errno = ERANGE;
+        goto out_mapped;
+    }
+    if (task_read_virtual_memory_impl(task, base + 8192, &byte, 1) != -1 ||
+        errno != EFAULT ||
+        task->last_fault_signal != SIGSEGV ||
+        task->last_fault_code != SEGV_MAPERR) {
+        errno = EPROTO;
+        goto out_mapped;
+    }
+    if (syscall_dispatch_impl(__NR_mincore, (long)(uintptr_t)mapped, sizeof(pages),
+                              (long)(uintptr_t)vec, 0, 0, 0) != 0 ||
+        vec[0] != 1 || vec[1] != 1) {
+        errno = ENOMSG;
+        goto out_mapped;
+    }
+    ret = syscall_dispatch_impl(__NR_ftruncate, fd, 4096, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out_mapped;
+    }
+    if (syscall_dispatch_impl(__NR_mincore, (long)(uintptr_t)mapped, sizeof(pages),
+                              (long)(uintptr_t)vec, 0, 0, 0) != 0 ||
+        vec[0] != 1 || vec[1] != 0) {
+        errno = ENXIO;
+        goto out_mapped;
+    }
+    result = 0;
+
+out_mapped:
+    {
+        int saved_errno = errno;
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(pages), 0, 0, 0, 0);
+        errno = saved_errno;
+    }
+out:
+    {
+        int saved_errno = errno;
+        close_if_open(fd);
+        unlink_impl(path);
+        errno = saved_errno;
+    }
+    return result;
+}
+
 int native_syscall_contract_rename_updates_open_fd_and_mapping_identity(void) {
     struct task_struct *task = get_current();
     const char old_path[] = "/tmp/native-rename-open-map-old";
