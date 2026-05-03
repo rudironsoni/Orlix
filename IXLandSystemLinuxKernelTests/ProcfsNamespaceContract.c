@@ -2226,6 +2226,20 @@ int procfs_namespace_contract_proc_pid_mountinfo_uses_target_mount_namespace(voi
         goto out;
     }
 
+    proc_pid_file_path(path, sizeof(path), child->pid, "/mounts");
+    if (read_file_content(path, content, sizeof(content)) != 0 ||
+        !contains(content, "/tmp/proc-pid-mnt-source") ||
+        !contains(content, "/tmp/proc-pid-mnt-target")) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    if (read_file_content("/proc/self/mounts", content, sizeof(content)) != 0 ||
+        contains(content, "/tmp/proc-pid-mnt-source")) {
+        errno = ENODATA;
+        goto out;
+    }
+
     ret = 0;
 
 out:

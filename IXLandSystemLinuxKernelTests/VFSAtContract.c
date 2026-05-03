@@ -359,9 +359,38 @@ int vfs_contract_fstatat_synthetic_child_nofollow(void) {
     return vfs_fstatat(AT_FDCWD, "/sys/kernel", &st, AT_SYMLINK_NOFOLLOW);
 }
 
-/* Contract: vfs_faccessat reports ENOTSUP for AT_EACCESS */
-int vfs_contract_faccessat_eaccess_returns_enotsup(void) {
-    return vfs_faccessat(AT_FDCWD, "/etc", X_OK, AT_EACCESS);
+int vfs_contract_faccessat_eaccess_uses_effective_credentials(void) {
+    const char *path = "/tmp/vfs-faccessat-eaccess-effective";
+    int ret = -1;
+
+    unlink_impl(path);
+    cred_reset_to_defaults();
+    if (vfs_contract_write_file(path, "effective") != 0 ||
+        chown(path, 2000, 3000) != 0 ||
+        chmod(path, 0100) != 0 ||
+        setresuid_impl(1000, 2000, 2000) != 0 ||
+        setfsuid_impl(1000) != 2000) {
+        goto out;
+    }
+
+    errno = 0;
+    if (vfs_faccessat(AT_FDCWD, path, X_OK, 0) != -EACCES) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (vfs_faccessat(AT_FDCWD, path, X_OK, AT_EACCESS) != 0) {
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cred_reset_to_defaults();
+        unlink_impl(path);
+        errno = saved_errno;
+    }
+    return ret;
 }
 
 /* Contract: vfs_faccessat reports ENOTSUP for AT_SYMLINK_NOFOLLOW */

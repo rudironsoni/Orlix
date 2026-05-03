@@ -787,6 +787,39 @@ int kernel_init_contract_exec_init_updates_proc_self_exe_cmdline_comm(void) {
         goto out;
     }
 
+    fd = open_impl("/proc/1/stat", O_RDONLY, 0);
+    if (fd < 0) {
+        goto out;
+    }
+    nread = read_impl(fd, buf, sizeof(buf) - 1);
+    close_impl(fd);
+    if (nread <= 0 || !buffer_contains(buf, (size_t)nread, "1 (init)")) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    fd = open_impl("/proc/1/statm", O_RDONLY, 0);
+    if (fd < 0) {
+        goto out;
+    }
+    nread = read_impl(fd, buf, sizeof(buf) - 1);
+    close_impl(fd);
+    if (nread <= 0) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    fd = open_impl("/proc/1/mountinfo", O_RDONLY, 0);
+    if (fd < 0) {
+        goto out;
+    }
+    nread = read_impl(fd, buf, sizeof(buf) - 1);
+    close_impl(fd);
+    if (nread <= 0 || !buffer_contains(buf, (size_t)nread, " / ")) {
+        errno = EPROTO;
+        goto out;
+    }
+
     result = 0;
 
 out:

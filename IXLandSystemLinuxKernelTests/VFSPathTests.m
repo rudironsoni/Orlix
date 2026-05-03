@@ -1186,10 +1186,10 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
     XCTAssertEqual(ret, -EINVAL, @"vfs_faccessat should reject invalid flags");
 }
 
-- (void)testVfsFaccessatReportsUnsupportedAtEaccess {
-    extern int vfs_contract_faccessat_eaccess_returns_enotsup(void);
-    XCTAssertEqual(vfs_contract_faccessat_eaccess_returns_enotsup(), -ENOTSUP,
-                   @"vfs_faccessat Linux AT_EACCESS should return ENOTSUP");
+- (void)testVfsFaccessatAtEaccessUsesEffectiveCredentials {
+    extern int vfs_contract_faccessat_eaccess_uses_effective_credentials(void);
+    XCTAssertEqual(vfs_contract_faccessat_eaccess_uses_effective_credentials(), 0,
+                   @"vfs_faccessat Linux AT_EACCESS should use effective credentials, errno %d", errno);
 }
 
 - (void)testVfsFaccessatReportsUnsupportedSymlinkNoFollow {

@@ -1986,6 +1986,35 @@ static bool vfs_cred_has_mode_permission(const struct cred *cred, const struct l
     return (perm & mask) == mask;
 }
 
+static bool vfs_cred_has_mode_permission_as(const struct cred *cred, const struct linux_stat *st,
+                                            linux_mode_t mask, linux_uid_t uid, linux_gid_t gid) {
+    linux_mode_t perm;
+
+    if (!cred || !st) {
+        return false;
+    }
+
+    if (cred_has_cap(cred, CAP_DAC_OVERRIDE)) {
+        if ((mask & 0111U) != 0 && (st->st_mode & 0111U) == 0) {
+            return false;
+        }
+        return true;
+    }
+    if ((mask & 04U) != 0 && (mask & ~04U) == 0 && cred_has_cap(cred, CAP_DAC_READ_SEARCH)) {
+        return true;
+    }
+
+    if (uid == st->st_uid) {
+        perm = (st->st_mode >> 6) & 07U;
+    } else if (gid == st->st_gid || cred_has_group(cred, st->st_gid)) {
+        perm = (st->st_mode >> 3) & 07U;
+    } else {
+        perm = st->st_mode & 07U;
+    }
+
+    return (perm & mask) == mask;
+}
+
 int vfs_chmod_metadata(const char *resolved_vpath, linux_mode_t mode) {
     char translated_path[MAX_PATH];
     struct linux_stat st;
@@ -6541,10 +6570,6 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
         return -EINVAL;
     }
 
-    if (flags & AT_EACCESS) {
-        return -ENOTSUP;
-    }
-
     if (flags & AT_SYMLINK_NOFOLLOW) {
         return -ENOTSUP;
     }
@@ -6592,19 +6617,29 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
     {
         struct linux_stat st;
         struct cred *cred = get_current_cred();
+        linux_uid_t check_uid;
+        linux_gid_t check_gid;
 
         ret = vfs_stat_virtual_backed_path(resolved_virtual, translated_path, &st);
         if (ret != 0) {
             return ret;
         }
 
-        if ((mode & 4) != 0 && !vfs_cred_has_mode_permission(cred, &st, 04U)) {
+        if ((flags & AT_EACCESS) != 0) {
+            check_uid = cred ? cred->euid : (linux_uid_t)-1;
+            check_gid = cred ? cred->egid : (linux_gid_t)-1;
+        } else {
+            check_uid = cred ? cred->uid : (linux_uid_t)-1;
+            check_gid = cred ? cred->gid : (linux_gid_t)-1;
+        }
+
+        if ((mode & 4) != 0 && !vfs_cred_has_mode_permission_as(cred, &st, 04U, check_uid, check_gid)) {
             return -EACCES;
         }
-        if ((mode & 2) != 0 && !vfs_cred_has_mode_permission(cred, &st, 02U)) {
+        if ((mode & 2) != 0 && !vfs_cred_has_mode_permission_as(cred, &st, 02U, check_uid, check_gid)) {
             return -EACCES;
         }
-        if ((mode & 1) != 0 && !vfs_cred_has_mode_permission(cred, &st, 01U)) {
+        if ((mode & 1) != 0 && !vfs_cred_has_mode_permission_as(cred, &st, 01U, check_uid, check_gid)) {
             return -EACCES;
         }
     }
