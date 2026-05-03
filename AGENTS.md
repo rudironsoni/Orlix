@@ -39,6 +39,10 @@ Host mediation paths (host mechanics live here only):
 Wrong-direction changes are forbidden:
 - Do not move Linux semantic decisions into `internal/ios/**`.
 - Do not move host mechanics into Linux-owner paths.
+- Do not excuse Darwin/iOS leakage in Linux-owner code as an environmental fact.
+- If Darwin/iOS types, headers, macros, constants, process APIs, fd APIs, wait APIs, signal APIs, or filesystem semantics appear in Linux-owner code, treat that as an agent implementation error.
+- Fix such leakage by restoring the architecture boundary: Linux UAPI/ABI truth in Linux-owner code, private host mediation only under `internal/ios/**`.
+- Never describe Linux-owner files as “not needing Darwin” as if Darwin was a valid option there. Darwin is not a Linux-owner dependency.
 
 ## 3) Narrow Subsystem Seams Only
 
@@ -169,7 +173,32 @@ Changes must be bounded by subsystem tranche with explicit ownership and proof.
 Do not mix unrelated architecture migrations into one tranche.
 Do not “fix lint” by weakening checks or broadening allowlists.
 
-## 10) No Policy Theater
+## 10) Quality Bar: No Shortcuts
+
+IXLandSystem is a kernel/runtime substrate, not a test-passing exercise.
+
+Forbidden implementation behavior:
+- shallow compatibility stubs presented as completed kernel capability
+- compile-only hacks that weaken Linux source compatibility
+- local typedefs, aliases, wrappers, or renames that dodge ABI ownership
+- replacing Linux UAPI/libc-owned concepts with repo-local convenience types
+- using Darwin/POSIX host types because they are easier to compile
+- moving semantic problems into tests instead of fixing subsystem ownership
+- stopping at the smallest green test when the architecture is still wrong
+- narrowing behavior to one current test case instead of modeling the Linux-facing rule
+
+Required implementation behavior:
+- use vendored Linux UAPI or Linux ABI supplements for kernel/userspace ABI truth
+- keep libc-owned typedef/API surfaces out of IXLandSystem and in IXLandMLibC
+- model the real virtual-kernel behavior in the owning subsystem
+- make host mediation explicit under `internal/ios/**` only
+- prefer deleting a bad shortcut over preserving compatibility with it
+- verify the subsystem through syscall-facing LinuxKernel tests, not internal struct peeking
+- raise the implementation to the product contract before claiming completion
+
+If a quick fix conflicts with these rules, the quick fix is wrong.
+
+## 11) No Policy Theater
 
 Forbidden:
 - incident-specific blacklist hacks (single test/helper name grudges)

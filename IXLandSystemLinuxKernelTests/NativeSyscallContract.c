@@ -6,6 +6,7 @@
 #include <linux/futex.h>
 #include <linux/capability.h>
 #include <linux/mman.h>
+#include <linux/poll.h>
 #include <linux/stat.h>
 #include <linux/time_types.h>
 #include <linux/xattr.h>
@@ -16,7 +17,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/poll.h>
 
 #ifdef SIGBUS
 #undef SIGBUS
@@ -89,6 +89,19 @@
 #include "fs/vfs.h"
 #include "kernel/signal.h"
 #include "kernel/task.h"
+#ifdef WEXITED
+#undef WEXITED
+#endif
+#ifdef WSTOPPED
+#undef WSTOPPED
+#endif
+#ifdef WCONTINUED
+#undef WCONTINUED
+#endif
+#ifdef WNOWAIT
+#undef WNOWAIT
+#endif
+#include <linux/wait.h>
 
 #ifndef F_OK
 #define F_OK 0
@@ -4171,6 +4184,123 @@ out:
     return -1;
 }
 
+int native_syscall_contract_dispatches_statx_syscall(void) {
+    const char *path = "/tmp/native-statx-syscall-file";
+    struct statx stx;
+    int fd = -1;
+    long ret;
+
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0640, 0, 0);
+    if (fd < 0) {
+        errno = (int)-fd;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)"statx", 5, 0, 0, 0);
+    if (ret != 5) {
+        errno = ret < 0 ? (int)-ret : EIO;
+        goto out;
+    }
+    close_if_open(fd);
+    fd = -1;
+
+    memset(&stx, 0, sizeof(stx));
+    ret = syscall_dispatch_impl(__NR_statx, AT_FDCWD, (long)(uintptr_t)path,
+                                AT_STATX_SYNC_AS_STAT,
+                                STATX_BASIC_STATS | STATX_MNT_ID,
+                                (long)(uintptr_t)&stx, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    if ((stx.stx_mask & STATX_BASIC_STATS) != STATX_BASIC_STATS ||
+        (stx.stx_mask & STATX_MNT_ID) == 0 ||
+        (stx.stx_mode & S_IFMT) != S_IFREG ||
+        (stx.stx_mode & 0777) != 0640 ||
+        stx.stx_size != 5 ||
+        stx.stx_nlink == 0) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    ret = syscall_dispatch_impl(__NR_statx, AT_FDCWD, (long)(uintptr_t)path,
+                                AT_STATX_SYNC_AS_STAT, STATX__RESERVED,
+                                (long)(uintptr_t)&stx, 0);
+    if (ret != -EINVAL) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    unlink_impl(path);
+    return 0;
+
+out:
+    close_if_open(fd);
+    unlink_impl(path);
+    return -1;
+}
+
+int native_syscall_contract_dispatches_exit_and_waitid_syscalls(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    struct task_struct *restore;
+    struct siginfo info;
+    int child_pid;
+    long ret;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    child_pid = child->pid;
+
+    restore = get_current();
+    set_current(child);
+    ret = syscall_dispatch_impl(__NR_exit, 23, 0, 0, 0, 0, 0);
+    set_current(restore);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+        return -1;
+    }
+
+    memset(&info, 0, sizeof(info));
+    ret = syscall_dispatch_impl(__NR_waitid, P_PID, child_pid, (long)(uintptr_t)&info,
+                                WEXITED | WNOWAIT, 0, 0);
+    if (ret != 0 ||
+        info.si_signo != SIGCHLD ||
+        info.si_code != CLD_EXITED ||
+        info.si_pid != child_pid ||
+        info.si_status != 23) {
+        errno = ret < 0 ? (int)-ret : ENODATA;
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+        return -1;
+    }
+
+    memset(&info, 0, sizeof(info));
+    ret = syscall_dispatch_impl(__NR_waitid, P_PID, child_pid, (long)(uintptr_t)&info,
+                                WEXITED, 0, 0);
+    if (ret != 0 ||
+        info.si_signo != SIGCHLD ||
+        info.si_code != CLD_EXITED ||
+        info.si_status != 23) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        if (ret != 0) {
+            task_unlink_child_impl(parent, child);
+            free_task(child);
+        }
+        return -1;
+    }
+    return 0;
+}
+
 int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) {
     struct required_syscall_class {
         long number;
@@ -4183,6 +4313,8 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
     static const long required_syscalls[] = {
         __NR_read,
         __NR_write,
+        __NR_readv,
+        __NR_writev,
         __NR_pread64,
         __NR_pwrite64,
         __NR_openat,
@@ -4217,9 +4349,12 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         __NR_fstat,
         __NR_faccessat,
         __NR_faccessat2,
+        __NR_statx,
         __NR_getcwd,
         __NR_getpid,
         __NR_getppid,
+        __NR_exit,
+        __NR_exit_group,
         __NR_mmap,
         __NR_mprotect,
         __NR_munmap,
@@ -4250,9 +4385,12 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         __NR_clock_gettime,
         __NR_execve,
         __NR_wait4,
+        __NR_waitid,
         __NR_clone3,
     };
     static const struct required_syscall_class required_classes[] = {
+        {__NR_readv, SYSCALL_CAPABILITY_FD},
+        {__NR_writev, SYSCALL_CAPABILITY_FD},
         {__NR_openat, SYSCALL_CAPABILITY_FD},
         {__NR_dup, SYSCALL_CAPABILITY_FD},
         {__NR_dup3, SYSCALL_CAPABILITY_FD},
@@ -4263,8 +4401,12 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         {__NR_renameat2, SYSCALL_CAPABILITY_FD},
         {__NR_faccessat, SYSCALL_CAPABILITY_FD},
         {__NR_faccessat2, SYSCALL_CAPABILITY_FD},
+        {__NR_statx, SYSCALL_CAPABILITY_FD},
         {__NR_getpid, SYSCALL_CAPABILITY_PROCESS},
+        {__NR_exit, SYSCALL_CAPABILITY_PROCESS},
+        {__NR_exit_group, SYSCALL_CAPABILITY_PROCESS},
         {__NR_execve, SYSCALL_CAPABILITY_PROCESS},
+        {__NR_waitid, SYSCALL_CAPABILITY_PROCESS},
         {__NR_rt_sigaction, SYSCALL_CAPABILITY_SIGNAL},
         {__NR_mmap, SYSCALL_CAPABILITY_VM},
         {__NR_ppoll, SYSCALL_CAPABILITY_READINESS},
@@ -4276,19 +4418,13 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         {__NR_prlimit64, SYSCALL_CAPABILITY_RESOURCE},
     };
     static const struct planned_syscall_gap planned_gaps[] = {
-        {__NR_exit, SYSCALL_GAP_BOOT},
-        {__NR_exit_group, SYSCALL_GAP_BOOT},
         {__NR_gettid, SYSCALL_GAP_BOOT},
-        {__NR_waitid, SYSCALL_GAP_BOOT},
         {__NR_clone, SYSCALL_GAP_BOOT},
         {__NR_kill, SYSCALL_GAP_BOOT},
         {__NR_tgkill, SYSCALL_GAP_BOOT},
         {__NR_nanosleep, SYSCALL_GAP_BOOT},
         {__NR_clock_nanosleep, SYSCALL_GAP_BOOT},
         {__NR_uname, SYSCALL_GAP_BOOT},
-        {__NR_readv, SYSCALL_GAP_SHELL},
-        {__NR_writev, SYSCALL_GAP_SHELL},
-        {__NR_statx, SYSCALL_GAP_SHELL},
         {__NR_socket, SYSCALL_GAP_NETWORK},
         {__NR_socketpair, SYSCALL_GAP_NETWORK},
         {__NR_connect, SYSCALL_GAP_NETWORK},

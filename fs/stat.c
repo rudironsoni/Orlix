@@ -178,6 +178,71 @@ int faccessat_impl(int dirfd, const char *pathname, int mode, int flags) {
     return 0;
 }
 
+static void statx_timestamp_from_linux_stat(struct statx_timestamp *dst, long sec,
+                                            unsigned long nsec) {
+    if (!dst) {
+        return;
+    }
+    dst->tv_sec = sec;
+    dst->tv_nsec = (__u32)nsec;
+    dst->__reserved = 0;
+}
+
+static void statx_from_linux_stat(struct statx *dst, const struct linux_stat *src,
+                                  unsigned int mask) {
+    memset(dst, 0, sizeof(*dst));
+    dst->stx_mask = STATX_BASIC_STATS & ~STATX_BTIME;
+    if ((mask & STATX_MNT_ID) != 0) {
+        dst->stx_mask |= STATX_MNT_ID;
+    }
+    dst->stx_blksize = (__u32)src->st_blksize;
+    dst->stx_nlink = src->st_nlink;
+    dst->stx_uid = src->st_uid;
+    dst->stx_gid = src->st_gid;
+    dst->stx_mode = (__u16)src->st_mode;
+    dst->stx_ino = src->st_ino;
+    dst->stx_size = src->st_size;
+    dst->stx_blocks = src->st_blocks;
+    statx_timestamp_from_linux_stat(&dst->stx_atime, src->st_atime_sec, src->st_atime_nsec);
+    statx_timestamp_from_linux_stat(&dst->stx_mtime, src->st_mtime_sec, src->st_mtime_nsec);
+    statx_timestamp_from_linux_stat(&dst->stx_ctime, src->st_ctime_sec, src->st_ctime_nsec);
+    dst->stx_rdev_major = (__u32)((src->st_rdev >> 8) & 0xfffU);
+    dst->stx_rdev_minor = (__u32)((src->st_rdev & 0xffU) | ((src->st_rdev >> 12) & 0xfffff00U));
+    dst->stx_dev_major = (__u32)((src->st_dev >> 8) & 0xfffU);
+    dst->stx_dev_minor = (__u32)((src->st_dev & 0xffU) | ((src->st_dev >> 12) & 0xfffff00U));
+    if ((mask & STATX_MNT_ID) != 0) {
+        dst->stx_mnt_id = 1;
+    }
+}
+
+int statx_impl(int dirfd, const char *pathname, int flags, unsigned int mask,
+               struct statx *statxbuf) {
+    struct linux_stat st;
+    int stat_flags = flags & AT_SYMLINK_NOFOLLOW;
+    int ret;
+
+    if (!pathname || !statxbuf) {
+        errno = EFAULT;
+        return -1;
+    }
+    if ((mask & STATX__RESERVED) != 0 ||
+        (flags & ~(AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
+                   AT_STATX_SYNC_TYPE)) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if ((flags & AT_EMPTY_PATH) != 0 && pathname[0] == '\0') {
+        ret = fstat_impl(dirfd, &st);
+    } else {
+        ret = fstatat_impl(dirfd, pathname, &st, stat_flags);
+    }
+    if (ret != 0) {
+        return -1;
+    }
+    statx_from_linux_stat(statxbuf, &st, mask);
+    return 0;
+}
+
 __attribute__((visibility("default"))) int stat(const char *pathname, struct linux_stat *statbuf) {
     return stat_impl(pathname, statbuf);
 }
@@ -204,4 +269,9 @@ __attribute__((visibility("default"))) int fstatat(int dirfd, const char *pathna
 
 __attribute__((visibility("default"))) int newfstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
     return fstatat_impl(dirfd, pathname, statbuf, flags);
+}
+
+__attribute__((visibility("default"))) int statx(int dirfd, const char *pathname, int flags,
+                                                  unsigned int mask, struct statx *statxbuf) {
+    return statx_impl(dirfd, pathname, flags, mask, statxbuf);
 }

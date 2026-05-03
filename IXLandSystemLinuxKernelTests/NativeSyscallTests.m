@@ -6,6 +6,7 @@
 #include "kernel/init.h"
 #include "IXLandSystemLinuxKernelTests/NativeSyscallContract.h"
 #include "IXLandSystemLinuxKernelTests/SignalSyscallContract.h"
+#include "IXLandSystemLinuxKernelTests/SyscallUioContract.h"
 
 @interface NativeSyscallTests : XCTestCase
 @end
@@ -279,6 +280,22 @@
 
 - (void)testDispatchesShellFdVfsSyscalls {
     XCTAssertEqual(native_syscall_contract_dispatches_shell_fd_vfs_syscalls(), 0, @"errno %d", errno);
+}
+
+- (void)testDispatchesStatxSyscall {
+    XCTAssertEqual(native_syscall_contract_dispatches_statx_syscall(), 0, @"errno %d", errno);
+}
+
+- (void)testDispatchesExitAndWaitidSyscalls {
+    XCTAssertEqual(native_syscall_contract_dispatches_exit_and_waitid_syscalls(), 0, @"errno %d", errno);
+}
+
+- (void)testDispatchesReadvWritevSyscalls {
+    XCTAssertEqual(syscall_uio_contract_readv_writev_round_trip(), 0, @"errno %d", errno);
+}
+
+- (void)testReadvRejectsInvalidIovCount {
+    XCTAssertEqual(syscall_uio_contract_rejects_invalid_iov_count(), 0, @"errno %d", errno);
 }
 
 - (void)testMlibcLinuxSysdepsInventoryIsKernelOwned {

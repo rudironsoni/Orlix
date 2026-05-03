@@ -160,6 +160,7 @@
 #include <linux/mount.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/stat.h>
 #include <linux/time_types.h>
 #include <linux/xattr.h>
 
@@ -186,12 +187,17 @@
 extern int openat_impl(int dirfd, const char *pathname, int flags, linux_mode_t mode);
 extern ssize_t read_impl(int fd, void *buf, size_t count);
 extern ssize_t write_impl(int fd, const void *buf, size_t count);
+struct iovec;
+extern long readv_impl(int fd, const struct iovec *iov, int iovcnt);
+extern long writev_impl(int fd, const struct iovec *iov, int iovcnt);
 extern ssize_t pread_impl(int fd, void *buf, size_t count, long long offset);
 extern ssize_t pwrite_impl(int fd, const void *buf, size_t count, long long offset);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
 extern int fstatat_impl(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
 extern int faccessat_impl(int dirfd, const char *pathname, int mode, int flags);
+extern int statx_impl(int dirfd, const char *pathname, int flags, unsigned int mask,
+                      struct statx *statxbuf);
 extern int ftruncate_impl(int fd, linux_off_t length);
 extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
 extern char *getcwd_impl(char *buf, size_t size);
@@ -204,6 +210,7 @@ extern int unlinkat_impl(int dirfd, const char *pathname, int flags);
 extern int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd,
                           const char *newpath, unsigned int flags);
 extern int execve(const char *pathname, char *const argv[], char *const envp[]);
+extern void exit_impl(int status);
 extern int nanosleep_impl(const struct timespec *req, struct timespec *rem);
 extern int clock_gettime_impl(clockid_t clk_id, struct timespec *tp);
 extern int mount_setattr(int dirfd, const char *pathname, unsigned int flags,
@@ -414,6 +421,8 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_write:
     case __NR_pread64:
     case __NR_pwrite64:
+    case __NR_readv:
+    case __NR_writev:
     case __NR_openat:
     case __NR_close:
     case __NR_dup:
@@ -427,6 +436,7 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_fstat:
     case __NR_faccessat:
     case __NR_faccessat2:
+    case __NR_statx:
     case __NR_getcwd:
     case __NR_ftruncate:
     case __NR_mkdirat:
@@ -445,7 +455,10 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
         return SYSCALL_CAPABILITY_VM;
     case __NR_set_tid_address:
     case __NR_execve:
+    case __NR_exit:
+    case __NR_exit_group:
     case __NR_wait4:
+    case __NR_waitid:
     case __NR_clone3:
     case __NR_getpid:
     case __NR_getppid:
@@ -504,10 +517,7 @@ enum syscall_gap_priority syscall_gap_priority_impl(long number) {
     }
 
     switch (number) {
-    case __NR_exit:
-    case __NR_exit_group:
     case __NR_gettid:
-    case __NR_waitid:
     case __NR_clone:
     case __NR_kill:
     case __NR_tgkill:
@@ -515,10 +525,6 @@ enum syscall_gap_priority syscall_gap_priority_impl(long number) {
     case __NR_clock_nanosleep:
     case __NR_uname:
         return SYSCALL_GAP_BOOT;
-    case __NR_readv:
-    case __NR_writev:
-    case __NR_statx:
-        return SYSCALL_GAP_SHELL;
     case __NR_socket:
     case __NR_socketpair:
     case __NR_connect:
@@ -552,6 +558,10 @@ long syscall_dispatch_impl(long number,
         return syscall_result((long)read_impl((int)arg0, (void *)(uintptr_t)arg1, (size_t)arg2));
     case __NR_write:
         return syscall_result((long)write_impl((int)arg0, (const void *)(uintptr_t)arg1, (size_t)arg2));
+    case __NR_readv:
+        return syscall_result(readv_impl((int)arg0, (const struct iovec *)(uintptr_t)arg1, (int)arg2));
+    case __NR_writev:
+        return syscall_result(writev_impl((int)arg0, (const struct iovec *)(uintptr_t)arg1, (int)arg2));
     case __NR_pread64:
         return syscall_result((long)pread_impl((int)arg0, (void *)(uintptr_t)arg1, (size_t)arg2,
                                                (long long)arg3));
@@ -832,6 +842,10 @@ long syscall_dispatch_impl(long number,
     case __NR_faccessat2:
         return syscall_result((long)faccessat_impl((int)arg0, (const char *)(uintptr_t)arg1,
                                                    (int)arg2, (int)arg3));
+    case __NR_statx:
+        return syscall_result((long)statx_impl((int)arg0, (const char *)(uintptr_t)arg1,
+                                               (int)arg2, (unsigned int)arg3,
+                                               (struct statx *)(uintptr_t)arg4));
     case __NR_getcwd: {
         char *buf = (char *)(uintptr_t)arg0;
         size_t size = (size_t)arg1;
@@ -844,6 +858,10 @@ long syscall_dispatch_impl(long number,
         return (long)getpid_impl();
     case __NR_getppid:
         return (long)getppid_impl();
+    case __NR_exit:
+    case __NR_exit_group:
+        exit_impl((int)arg0);
+        return 0;
     case __NR_mmap:
         return syscall_result((long)(uintptr_t)mmap_impl((void *)(uintptr_t)arg0, (size_t)arg1,
                                                          (int)arg2, (int)arg3, (int)arg4,
@@ -957,6 +975,10 @@ long syscall_dispatch_impl(long number,
     case __NR_wait4:
         return syscall_result((long)wait4_impl((int32_t)arg0, (int *)(uintptr_t)arg1,
                                                (int)arg2, (void *)(uintptr_t)arg3));
+    case __NR_waitid:
+        return syscall_result((long)waitid_impl((int)arg0, (int32_t)arg1,
+                                                (void *)(uintptr_t)arg2, (int)arg3,
+                                                (void *)(uintptr_t)arg4));
     case __NR_clone3:
         return syscall_result((long)clone3_impl((const struct clone_args *)(uintptr_t)arg0,
                                                 (size_t)arg1));

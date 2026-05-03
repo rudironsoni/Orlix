@@ -448,6 +448,7 @@ void exit_impl(int status);
 int32_t wait_impl(int *wstatus);
 int32_t waitpid_impl(int32_t pid, int *wstatus, int options);
 int32_t wait4_impl(int32_t pid, int *wstatus, int options, void *rusage);
+int waitid_impl(int idtype, int32_t id, void *infop, int options, void *rusage);
 
 /* Virtual vfork notifications */
 void vfork_exec_notify(void);

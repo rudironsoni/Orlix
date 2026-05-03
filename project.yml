@@ -80,6 +80,11 @@ targets:
       group: internal/ios/fs
     - path: fs/stat.c
       group: fs
+    - path: fs/uio.c
+      group: fs
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - path: fs/super.c
       group: fs
       compilerFlags:
@@ -266,6 +271,11 @@ targets:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
       - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
     - IXLandSystemLinuxKernelTests/SignalSyscallContract.h
+    - path: IXLandSystemLinuxKernelTests/SyscallUioContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi
+    - IXLandSystemLinuxKernelTests/SyscallUioContract.h
     - path: IXLandSystemLinuxKernelTests/TaskExecContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
