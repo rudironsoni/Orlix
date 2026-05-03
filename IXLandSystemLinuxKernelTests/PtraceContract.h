@@ -10,5 +10,8 @@ int ptrace_contract_cont_injects_pending_signal(void);
 int ptrace_contract_attach_stop_is_waitpid_visible(void);
 int ptrace_contract_syscall_stop_is_waitpid_visible(void);
 int ptrace_contract_peek_poke_data_uses_virtual_memory(void);
+int ptrace_contract_traceclone_records_event_message(void);
+int ptrace_contract_traceexec_records_event_message(void);
+int ptrace_contract_traceexit_records_event_message(void);
 
 #endif /* IXLAND_SYSTEM_LINUX_KERNEL_TESTS_PTRACE_CONTRACT_H */

@@ -53,4 +53,16 @@
     XCTAssertEqual(ptrace_contract_peek_poke_data_uses_virtual_memory(), 0, @"errno %d", errno);
 }
 
+- (void)testTracecloneRecordsEventMessage {
+    XCTAssertEqual(ptrace_contract_traceclone_records_event_message(), 0, @"errno %d", errno);
+}
+
+- (void)testTraceexecRecordsEventMessage {
+    XCTAssertEqual(ptrace_contract_traceexec_records_event_message(), 0, @"errno %d", errno);
+}
+
+- (void)testTraceexitRecordsEventMessage {
+    XCTAssertEqual(ptrace_contract_traceexit_records_event_message(), 0, @"errno %d", errno);
+}
+
 @end

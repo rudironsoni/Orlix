@@ -32,7 +32,9 @@
 #include "kernel/task.h"
 
 extern int clone_impl(uint64_t flags);
+extern void exit_impl(int status);
 extern long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data);
+extern int task_exec_transition_impl(const char *path, const char *argv0);
 extern __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options);
 extern long syscall_dispatch_impl(long number, long arg0, long arg1, long arg2,
                                   long arg3, long arg4, long arg5);
@@ -244,8 +246,33 @@ int ptrace_contract_syscall_trace_records_entry_and_exit(void) {
         ptrace_impl(PTRACE_SYSCALL, child->pid, NULL, NULL) != 0) {
         goto out;
     }
+    if (waitpid_impl(child->pid, &ret, WUNTRACED | WNOHANG) != child->pid) {
+        errno = ENODATA;
+        goto out;
+    }
     set_current(child);
-    syscall_dispatch_impl(__NR_getpid, 0, 0, 0, 0, 0, 0);
+    if (syscall_dispatch_impl(__NR_getpid, 0, 0, 0, 0, 0, 0) != -EINTR) {
+        set_current(parent);
+        errno = ENODATA;
+        goto out;
+    }
+    set_current(parent);
+    memset(&info, 0, sizeof(info));
+    if (ptrace_impl(PTRACE_GET_SYSCALL_INFO, child->pid, (void *)(uintptr_t)sizeof(info), &info) <= 0 ||
+        info.op != PTRACE_SYSCALL_INFO_ENTRY ||
+        info.entry.nr != __NR_getpid) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (ptrace_impl(PTRACE_SYSCALL, child->pid, NULL, NULL) != 0) {
+        goto out;
+    }
+    set_current(child);
+    if (syscall_dispatch_impl(__NR_getpid, 0, 0, 0, 0, 0, 0) != child->pid) {
+        set_current(parent);
+        errno = ENOMSG;
+        goto out;
+    }
     set_current(parent);
     memset(&info, 0, sizeof(info));
     if (ptrace_impl(PTRACE_GET_SYSCALL_INFO, child->pid, (void *)(uintptr_t)sizeof(info), &info) <= 0 ||
@@ -426,6 +453,160 @@ out:
             syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
         }
         set_current(parent);
+        ptrace_release_child(parent, child);
+        ptrace_clear_pending_signal(parent, SIGCHLD);
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int ptrace_contract_traceclone_records_event_message(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    struct task_struct *grandchild = NULL;
+    unsigned long message = 0;
+    int grandchild_pid;
+    int status = 0;
+    int ret = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    if (ptrace_impl(PTRACE_ATTACH, child->pid, NULL, NULL) != 0 ||
+        waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
+        ptrace_impl(PTRACE_SETOPTIONS, child->pid, NULL, (void *)(uintptr_t)PTRACE_O_TRACEFORK) != 0) {
+        goto out;
+    }
+    set_current(child);
+    grandchild_pid = clone_impl(0);
+    set_current(parent);
+    if (grandchild_pid < 0) {
+        goto out;
+    }
+    grandchild = task_lookup(grandchild_pid);
+    if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
+        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP ||
+        ptrace_impl(PTRACE_GETEVENTMSG, child->pid, NULL, &message) != 0 ||
+        message != (unsigned long)grandchild_pid) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        set_current(parent);
+        if (grandchild) {
+            task_unlink_child_impl(child, grandchild);
+            free_task(grandchild);
+            free_task(grandchild);
+        }
+        ptrace_impl(PTRACE_DETACH, child->pid, NULL, NULL);
+        ptrace_release_child(parent, child);
+        ptrace_clear_pending_signal(parent, SIGCHLD);
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int ptrace_contract_traceexec_records_event_message(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    unsigned long message = 0;
+    int status = 0;
+    int ret = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    if (ptrace_impl(PTRACE_ATTACH, child->pid, NULL, NULL) != 0 ||
+        waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
+        ptrace_impl(PTRACE_SETOPTIONS, child->pid, NULL, (void *)(uintptr_t)PTRACE_O_TRACEEXEC) != 0) {
+        goto out;
+    }
+    set_current(child);
+    if (task_exec_transition_impl("/proc/self/status", "/proc/self/status") != 0) {
+        set_current(parent);
+        goto out;
+    }
+    set_current(parent);
+    if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
+        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP ||
+        ptrace_impl(PTRACE_GETEVENTMSG, child->pid, NULL, &message) != 0 ||
+        message != (unsigned long)child->pid) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        set_current(parent);
+        ptrace_impl(PTRACE_DETACH, child->pid, NULL, NULL);
+        ptrace_release_child(parent, child);
+        ptrace_clear_pending_signal(parent, SIGCHLD);
+        errno = saved_errno;
+    }
+    return ret;
+}
+
+int ptrace_contract_traceexit_records_event_message(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child;
+    unsigned long message = 0;
+    int status = 0;
+    int ret = -1;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    if (ptrace_impl(PTRACE_ATTACH, child->pid, NULL, NULL) != 0 ||
+        waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
+        ptrace_impl(PTRACE_SETOPTIONS, child->pid, NULL, (void *)(uintptr_t)PTRACE_O_TRACEEXIT) != 0) {
+        goto out;
+    }
+    set_current(child);
+    exit_impl(42);
+    set_current(parent);
+    if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid) {
+        errno = EBUSY;
+        goto out;
+    }
+    if (!WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (ptrace_impl(PTRACE_GETEVENTMSG, child->pid, NULL, &message) != 0) {
+        goto out;
+    }
+    if (message != 42UL) {
+        errno = ENODATA;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        set_current(parent);
+        ptrace_impl(PTRACE_DETACH, child->pid, NULL, NULL);
         ptrace_release_child(parent, child);
         ptrace_clear_pending_signal(parent, SIGCHLD);
         errno = saved_errno;

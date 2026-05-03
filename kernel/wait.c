@@ -43,6 +43,10 @@ static bool wait_child_matches_selector(const struct task_struct *parent, const 
 }
 
 static enum wait_report_kind wait_child_report_kind(const struct task_struct *child, int options) {
+    if ((options & WUNTRACED) && atomic_load(&child->stop_report_pending)) {
+        return WAIT_REPORT_STOPPED;
+    }
+
     if (atomic_load(&child->exited)) {
         if ((options & (WEXITED | WUNTRACED | WCONTINUED)) != 0 &&
             (options & WEXITED) == 0) {
@@ -52,10 +56,6 @@ static enum wait_report_kind wait_child_report_kind(const struct task_struct *ch
             return WAIT_REPORT_SIGNALED;
         }
         return WAIT_REPORT_EXITED;
-    }
-
-    if ((options & WUNTRACED) && atomic_load(&child->stop_report_pending)) {
-        return WAIT_REPORT_STOPPED;
     }
 
     if ((options & WCONTINUED) && atomic_load(&child->continue_report_pending)) {

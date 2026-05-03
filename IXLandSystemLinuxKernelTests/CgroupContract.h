@@ -19,5 +19,6 @@ int cgroup_contract_rmdir_parent_with_child_fails_notempty(void);
 int cgroup_contract_newuser_caps_are_scoped_to_cgroup_namespace_owner(void);
 int cgroup_contract_cgroup_namespace_rejects_migration_of_hidden_task(void);
 int cgroup_contract_proc_pid_cgroup_hides_tasks_outside_reader_namespace(void);
+int cgroup_contract_nested_cgroup_namespace_rebases_visibility(void);
 
 #endif /* IXLAND_SYSTEM_LINUX_KERNEL_TESTS_CGROUP_CONTRACT_H */

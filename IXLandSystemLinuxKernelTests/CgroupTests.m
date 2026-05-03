@@ -107,4 +107,9 @@
                    @"/proc/<pid>/cgroup should not leak cgroups outside the reader namespace, errno %d", errno);
 }
 
+- (void)testNestedCgroupNamespaceRebasesVisibility {
+    XCTAssertEqual(cgroup_contract_nested_cgroup_namespace_rebases_visibility(), 0,
+                   @"nested cgroup namespaces should rebase procfs and cgroupfs visibility at each root, errno %d", errno);
+}
+
 @end

@@ -330,7 +330,11 @@ struct task_struct {
     int32_t ptracer_pid;
     bool ptrace_attached;
     bool ptrace_syscall_trace;
+    bool ptrace_syscall_exit_next;
     int32_t ptrace_signal;
+    uint64_t ptrace_options;
+    uint64_t ptrace_event;
+    uint64_t ptrace_event_message;
     uint8_t ptrace_syscall_op;
     uint64_t ptrace_syscall_nr;
     uint64_t ptrace_syscall_args[6];

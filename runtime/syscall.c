@@ -1002,7 +1002,9 @@ long syscall_dispatch_impl(long number,
                            long arg5) {
     long ret;
 
-    ptrace_note_syscall_entry(number, arg0, arg1, arg2, arg3, arg4, arg5);
+    if (ptrace_note_syscall_entry(number, arg0, arg1, arg2, arg3, arg4, arg5) != 0) {
+        return -EINTR;
+    }
     ret = syscall_dispatch_inner_impl(number, arg0, arg1, arg2, arg3, arg4, arg5);
     ptrace_note_syscall_exit(ret);
     return ret;

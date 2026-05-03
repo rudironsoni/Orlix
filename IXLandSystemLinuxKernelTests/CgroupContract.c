@@ -848,3 +848,47 @@ out:
     }
     return ret;
 }
+
+int cgroup_contract_nested_cgroup_namespace_rebases_visibility(void) {
+    char buf[128];
+    int ret = -1;
+
+    if (cgroup_contract_restore_root() != 0) {
+        return -1;
+    }
+    if (cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/nested-outer", 0755)) != 0 ||
+        cgroup_contract_ignore_exists(mkdir_impl("/sys/fs/cgroup/nested-outer/nested-inner", 0755)) != 0 ||
+        cgroup_contract_write_current_pid("/sys/fs/cgroup/nested-outer/cgroup.procs") != 0 ||
+        unshare_impl(CLONE_NEWCGROUP) != 0) {
+        goto out;
+    }
+    if (cgroup_contract_read_file("/proc/self/cgroup", buf, sizeof(buf)) != 0 ||
+        strcmp(buf, "0::/\n") != 0) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (cgroup_contract_write_current_pid("/sys/fs/cgroup/nested-inner/cgroup.procs") != 0 ||
+        unshare_impl(CLONE_NEWCGROUP) != 0) {
+        goto out;
+    }
+    if (cgroup_contract_read_file("/proc/self/cgroup", buf, sizeof(buf)) != 0 ||
+        strcmp(buf, "0::/\n") != 0) {
+        errno = ENOMSG;
+        goto out;
+    }
+    errno = 0;
+    if (cgroup_contract_read_file("/sys/fs/cgroup/nested-inner/cgroup.procs", buf, sizeof(buf)) == 0 ||
+        errno != ENOENT) {
+        errno = EPROTO;
+        goto out;
+    }
+    ret = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        cgroup_contract_restore_root();
+        errno = saved_errno;
+    }
+    return ret;
+}

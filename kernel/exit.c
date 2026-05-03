@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "futex.h"
+#include "ptrace.h"
 #include "signal.h"
 #include "task.h"
 #include "../fs/pty.h"
@@ -122,10 +123,11 @@ void exit_impl(int status) {
         _Exit(status);
     }
 
-    kernel_mutex_lock(&task->lock);
-
     futex_task_exit_impl(task);
     task_mark_exited(task, status);
+    ptrace_note_exit_event(task, status);
+
+    kernel_mutex_lock(&task->lock);
 
     /* Reparent children to init (orphan adoption) */
     if (task->children && init_task && init_task != task) {

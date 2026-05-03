@@ -7,6 +7,7 @@
 #include "cgroup.h"
 #include "cred_internal.h"
 #include "mm.h"
+#include "ptrace.h"
 #include "seccomp.h"
 #include "uts.h"
 
@@ -1021,7 +1022,11 @@ struct task_struct *alloc_task(void) {
     task->ptracer_pid = 0;
     task->ptrace_attached = false;
     task->ptrace_syscall_trace = false;
+    task->ptrace_syscall_exit_next = false;
     task->ptrace_signal = 0;
+    task->ptrace_options = 0;
+    task->ptrace_event = 0;
+    task->ptrace_event_message = 0;
     task->ptrace_syscall_op = 0;
     task->ptrace_syscall_nr = 0;
     memset(task->ptrace_syscall_args, 0, sizeof(task->ptrace_syscall_args));
@@ -1215,6 +1220,8 @@ struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent
     child->next_sibling = parent->children;
     parent->children = child;
     kernel_mutex_unlock(&parent->lock);
+
+    ptrace_note_fork_event(parent, child->pid, (flags & CLONE_THREAD) != 0);
 
     return child;
 }
@@ -1797,6 +1804,7 @@ int task_exec_transition_impl(const char *path, const char *argv0) {
     }
     task->exec_secure = secure_exec ? 1 : 0;
     task->exec_dumpable = secure_exec ? 0 : 1;
+    ptrace_note_exec_event(task);
 
     closed = close_on_exec_impl();
     if (closed < 0) {

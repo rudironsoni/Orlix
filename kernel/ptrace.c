@@ -146,6 +146,17 @@ static void ptrace_report_stop(struct task_struct *target, int32_t sig) {
     task_notify_parent_state_change(target);
 }
 
+static void ptrace_record_event_stop(struct task_struct *target, uint64_t event, uint64_t message) {
+    if (!target || !target->ptrace_attached) {
+        return;
+    }
+    kernel_mutex_lock(&target->lock);
+    target->ptrace_event = event;
+    target->ptrace_event_message = message;
+    kernel_mutex_unlock(&target->lock);
+    ptrace_report_stop(target, SIGTRAP);
+}
+
 long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data) {
     struct task_struct *tracer = get_current();
     struct task_struct *target;
@@ -185,6 +196,8 @@ long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data) {
         target->ptracer_pid = tracer->pid;
         target->ptrace_attached = true;
         target->ptrace_signal = 0;
+        target->ptrace_event = 0;
+        target->ptrace_event_message = 0;
         kernel_mutex_unlock(&target->lock);
         ptrace_report_stop(target, SIGSTOP);
         free_task(target);
@@ -208,6 +221,10 @@ long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data) {
         target->ptracer_pid = 0;
         target->ptrace_attached = false;
         target->ptrace_syscall_trace = false;
+        target->ptrace_syscall_exit_next = false;
+        target->ptrace_options = 0;
+        target->ptrace_event = 0;
+        target->ptrace_event_message = 0;
         kernel_mutex_unlock(&target->lock);
         free_task(target);
         return 0;
@@ -226,6 +243,27 @@ long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data) {
             errno = saved_errno;
             return -1;
         }
+        free_task(target);
+        return 0;
+    case PTRACE_SETOPTIONS:
+        if (ptrace_get_target(pid, &target) != 0) {
+            return -1;
+        }
+        kernel_mutex_lock(&target->lock);
+        target->ptrace_options = (uint64_t)(uintptr_t)data;
+        kernel_mutex_unlock(&target->lock);
+        free_task(target);
+        return 0;
+    case PTRACE_GETEVENTMSG:
+        if (ptrace_get_target(pid, &target) != 0) {
+            return -1;
+        }
+        if (!data) {
+            free_task(target);
+            errno = EFAULT;
+            return -1;
+        }
+        *(unsigned long *)data = (unsigned long)target->ptrace_event_message;
         free_task(target);
         return 0;
     case PTRACE_PEEKDATA:
@@ -305,14 +343,18 @@ long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data) {
     }
 }
 
-void ptrace_note_syscall_entry(long number, long arg0, long arg1, long arg2,
-                               long arg3, long arg4, long arg5) {
+int ptrace_note_syscall_entry(long number, long arg0, long arg1, long arg2,
+                              long arg3, long arg4, long arg5) {
     struct task_struct *task = get_current();
 
     if (!task || !task->ptrace_attached || !task->ptrace_syscall_trace) {
-        return;
+        return 0;
     }
     kernel_mutex_lock(&task->lock);
+    if (task->ptrace_syscall_exit_next) {
+        kernel_mutex_unlock(&task->lock);
+        return 0;
+    }
     task->ptrace_syscall_op = PTRACE_SYSCALL_INFO_ENTRY;
     task->ptrace_syscall_nr = (uint64_t)number;
     task->ptrace_syscall_args[0] = (uint64_t)arg0;
@@ -321,8 +363,10 @@ void ptrace_note_syscall_entry(long number, long arg0, long arg1, long arg2,
     task->ptrace_syscall_args[3] = (uint64_t)arg3;
     task->ptrace_syscall_args[4] = (uint64_t)arg4;
     task->ptrace_syscall_args[5] = (uint64_t)arg5;
+    task->ptrace_syscall_exit_next = true;
     kernel_mutex_unlock(&task->lock);
     ptrace_report_stop(task, SIGTRAP);
+    return 1;
 }
 
 void ptrace_note_syscall_exit(long retval) {
@@ -335,6 +379,38 @@ void ptrace_note_syscall_exit(long retval) {
     task->ptrace_syscall_op = PTRACE_SYSCALL_INFO_EXIT;
     task->ptrace_syscall_retval = retval;
     task->ptrace_syscall_is_error = retval < 0;
+    task->ptrace_syscall_exit_next = false;
     kernel_mutex_unlock(&task->lock);
     ptrace_report_stop(task, SIGTRAP);
+}
+
+void ptrace_note_fork_event(struct task_struct *task, __kernel_pid_t child_pid, int clone_event) {
+    uint64_t option;
+    uint64_t event;
+
+    if (!task || !task->ptrace_attached) {
+        return;
+    }
+    event = clone_event ? PTRACE_EVENT_CLONE : PTRACE_EVENT_FORK;
+    option = clone_event ? PTRACE_O_TRACECLONE : PTRACE_O_TRACEFORK;
+    if ((task->ptrace_options & option) == 0) {
+        return;
+    }
+    ptrace_record_event_stop(task, event, (uint64_t)child_pid);
+}
+
+void ptrace_note_exec_event(struct task_struct *task) {
+    if (!task || !task->ptrace_attached ||
+        (task->ptrace_options & PTRACE_O_TRACEEXEC) == 0) {
+        return;
+    }
+    ptrace_record_event_stop(task, PTRACE_EVENT_EXEC, (uint64_t)task->pid);
+}
+
+void ptrace_note_exit_event(struct task_struct *task, int status) {
+    if (!task || !task->ptrace_attached ||
+        (task->ptrace_options & PTRACE_O_TRACEEXIT) == 0) {
+        return;
+    }
+    ptrace_record_event_stop(task, PTRACE_EVENT_EXIT, (uint64_t)(status & 0xff));
 }

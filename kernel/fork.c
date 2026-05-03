@@ -10,6 +10,7 @@
 #include "../fs/vfs.h"
 #include "cgroup.h"
 #include "cred_internal.h"
+#include "ptrace.h"
 #include "signal.h"
 #include "task.h"
 #include "uts.h"
@@ -261,6 +262,7 @@ pid_t fork_impl(void) {
     child->next_sibling = parent->children;
     parent->children = child;
     kernel_mutex_unlock(&parent->lock);
+    ptrace_note_fork_event(parent, child->pid, 0);
 
     /* Set up fork context on stack */
     fork_ctx_t ctx;
