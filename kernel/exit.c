@@ -8,8 +8,115 @@
 /* External declaration for init task */
 extern struct task_struct *init_task;
 
+struct orphaned_pgrp_candidate {
+    int32_t sid;
+    int32_t pgid;
+};
+
+static void task_record_orphaned_pgrp_candidate(struct orphaned_pgrp_candidate *candidates,
+                                                size_t *candidate_count,
+                                                int32_t sid,
+                                                int32_t pgid) {
+    if (!candidates || !candidate_count || sid <= 0 || pgid <= 0) {
+        return;
+    }
+
+    for (size_t i = 0; i < *candidate_count; i++) {
+        if (candidates[i].sid == sid && candidates[i].pgid == pgid) {
+            return;
+        }
+    }
+    if (*candidate_count < TASK_MAX_TASKS) {
+        candidates[*candidate_count].sid = sid;
+        candidates[*candidate_count].pgid = pgid;
+        (*candidate_count)++;
+    }
+}
+
+static bool task_process_group_is_orphaned_locked(int32_t sid, int32_t pgid) {
+    bool has_member = false;
+
+    if (sid <= 0 || pgid <= 0) {
+        return false;
+    }
+
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *member = task_table[i];
+        while (member) {
+            if (member->sid == sid && member->pgid == pgid) {
+                struct task_struct *parent = member->parent;
+                has_member = true;
+                if (parent && parent->sid == sid && parent->pgid != pgid) {
+                    return false;
+                }
+            }
+            member = member->hash_next;
+        }
+    }
+
+    return has_member;
+}
+
+static bool task_process_group_has_stopped_member_locked(int32_t sid, int32_t pgid) {
+    if (sid <= 0 || pgid <= 0) {
+        return false;
+    }
+
+    for (int i = 0; i < TASK_MAX_TASKS; i++) {
+        struct task_struct *member = task_table[i];
+        while (member) {
+            if (member->sid == sid && member->pgid == pgid && atomic_load(&member->stopped)) {
+                return true;
+            }
+            member = member->hash_next;
+        }
+    }
+
+    return false;
+}
+
+static void task_signal_newly_orphaned_stopped_groups(const struct orphaned_pgrp_candidate *candidates,
+                                                      size_t candidate_count) {
+    struct orphaned_pgrp_candidate notified[TASK_MAX_TASKS];
+    size_t notified_count = 0;
+
+    if (!candidates || candidate_count == 0) {
+        return;
+    }
+
+    kernel_mutex_lock(&task_table_lock);
+    for (size_t candidate = 0; candidate < candidate_count; candidate++) {
+        int32_t sid = candidates[candidate].sid;
+        int32_t pgid = candidates[candidate].pgid;
+        bool seen = false;
+
+        for (size_t i = 0; i < notified_count; i++) {
+            if (notified[i].sid == sid && notified[i].pgid == pgid) {
+                seen = true;
+                break;
+            }
+        }
+        if (seen || !task_process_group_is_orphaned_locked(sid, pgid) ||
+            !task_process_group_has_stopped_member_locked(sid, pgid)) {
+            continue;
+        }
+        if (notified_count < TASK_MAX_TASKS) {
+            notified[notified_count].sid = sid;
+            notified[notified_count].pgid = pgid;
+            notified_count++;
+        }
+    }
+    kernel_mutex_unlock(&task_table_lock);
+
+    for (size_t i = 0; i < notified_count; i++) {
+        (void)signal_generate_orphaned_pgrp(notified[i].pgid);
+    }
+}
+
 void exit_impl(int status) {
     struct task_struct *task = get_current();
+    struct orphaned_pgrp_candidate orphaned_candidates[TASK_MAX_TASKS];
+    size_t orphaned_candidate_count = 0;
     if (!task) {
         _Exit(status);
     }
@@ -30,6 +137,10 @@ void exit_impl(int status) {
             kernel_mutex_lock(&child->lock);
 
             /* Update parent pointer and ppid */
+            task_record_orphaned_pgrp_candidate(orphaned_candidates,
+                                                &orphaned_candidate_count,
+                                                child->sid,
+                                                child->pgid);
             child->parent = init_task;
             child->ppid = init_task->pid;
 
@@ -62,6 +173,10 @@ void exit_impl(int status) {
         struct task_struct *child = task->children;
         while (child) {
             kernel_mutex_lock(&child->lock);
+            task_record_orphaned_pgrp_candidate(orphaned_candidates,
+                                                &orphaned_candidate_count,
+                                                child->sid,
+                                                child->pgid);
             child->ppid = 1;
             kernel_mutex_unlock(&child->lock);
             child = child->next_sibling;
@@ -78,6 +193,10 @@ void exit_impl(int status) {
     /* Notify vfork parent if this is a vfork child */
     if (task->vfork_parent) {
         vfork_exit_notify();
+    }
+
+    if (orphaned_candidate_count > 0) {
+        task_signal_newly_orphaned_stopped_groups(orphaned_candidates, orphaned_candidate_count);
     }
 
     task_notify_parent_state_change(task);

@@ -27,6 +27,7 @@ extern int kernel_init_contract_exec_init_updates_proc_self_exe_cmdline_comm(voi
 extern int kernel_init_contract_exec_init_closes_cloexec_only(void);
 extern int kernel_init_contract_pid1_adopts_orphaned_children(void);
 extern int kernel_init_contract_pid1_reaps_adopted_child_exit(void);
+extern int kernel_init_contract_orphaned_stopped_group_gets_hup_and_cont(void);
 extern int kernel_init_contract_exec_script_init_uses_interpreter(void);
 
 @interface KernelInitTests : XCTestCase
@@ -130,6 +131,10 @@ extern int kernel_init_contract_exec_script_init_uses_interpreter(void);
 
 - (void)testPid1ReapsAdoptedChildExit {
     XCTAssertEqual(kernel_init_contract_pid1_reaps_adopted_child_exit(), 0, @"errno %d", errno);
+}
+
+- (void)testOrphanedStoppedGroupGetsHupAndCont {
+    XCTAssertEqual(kernel_init_contract_orphaned_stopped_group_gets_hup_and_cont(), 0, @"errno %d", errno);
 }
 
 - (void)testExecScriptInitUsesInterpreter {

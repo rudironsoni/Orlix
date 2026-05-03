@@ -1081,6 +1081,82 @@ out:
     return result;
 }
 
+int kernel_init_contract_orphaned_stopped_group_gets_hup_and_cont(void) {
+    struct task_struct *parent = NULL;
+    struct task_struct *child = NULL;
+    struct task_struct *saved;
+    int result = -1;
+
+    saved = get_current();
+    if (!init_task || saved != init_task) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    parent = task_create_child_impl(init_task);
+    if (!parent) {
+        return -1;
+    }
+
+    set_current(parent);
+    if (setsid_impl() != parent->pid) {
+        set_current(init_task);
+        goto out;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        set_current(init_task);
+        goto out;
+    }
+    child->pgid = child->pid;
+    set_current(init_task);
+
+    task_mark_stopped_by_signal(child, SIGSTOP);
+    child->signal->shared_pending.sig[(SIGHUP - 1) >> 6] &= ~(1ULL << ((SIGHUP - 1) & 63));
+    child->signal->shared_pending.sig[(SIGCONT - 1) >> 6] &= ~(1ULL << ((SIGCONT - 1) & 63));
+
+    set_current(parent);
+    exit_impl(0);
+    set_current(init_task);
+
+    if (child->parent != init_task || child->ppid != 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (!signal_is_pending(child, SIGHUP)) {
+        errno = ENODATA;
+        goto out;
+    }
+    if (!signal_is_pending(child, SIGCONT)) {
+        errno = ENOMSG;
+        goto out;
+    }
+    if (atomic_load(&child->stopped)) {
+        errno = ESTALE;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        set_current(init_task);
+        if (child) {
+            task_unlink_child_impl(init_task, child);
+            task_unlink_child_impl(parent, child);
+            free_task(child);
+        }
+        if (parent) {
+            task_unlink_child_impl(init_task, parent);
+            free_task(parent);
+        }
+        set_current(saved);
+        errno = saved_errno;
+    }
+    return result;
+}
+
 int kernel_init_contract_exec_script_init_uses_interpreter(void) {
     const char *const expected_cmdline[] = {"/usr/bin/init-interp", "/tmp/init-script", NULL};
     char buf[256];

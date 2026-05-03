@@ -101,7 +101,54 @@ IXLandSystemHostBridgeTests  -> internal/ios seam proof
 
 HostBridge failures can block a full repo-green milestone, but they do not replace LinuxKernel proof.
 
-## 7) Proof Discipline (Required)
+## 7) mlibc Reference Boundary
+
+mlibc is a design reference for Linux source compatibility, not code to paste into IXLandSystem.
+
+Use these mlibc surfaces deliberately:
+- `mlibc/abis/linux` is a Linux libc ABI surface checklist.
+- `mlibc/sysdeps/linux` is a libc syscall backend design reference.
+- `mlibc/options` is a libc feature/API organization reference.
+
+IXLandSystem ownership:
+- virtual kernel behavior that libc sysdeps call into
+- syscall/runtime ABI entry points
+- tasks, signals, wait, fdtable, VFS, mounts, pipes, PTY, poll/select/epoll, procfs/devfs, credentials, namespaces, cgroups, seccomp, ptrace, netlink
+- vendored Linux UAPI consumption
+- generated Linux-source ABI supplements under `third_party/linux-abi/6.12/arm64/include` only when the needed Linux-source ABI fragment is missing from vendored UAPI and used by IXLandSystem
+
+IXLandMLibC ownership:
+- libc ABI headers and typedef surfaces
+- libc `options` APIs
+- native iOS arm64/aarch64 sysdeps for recompiled Linux-oriented packages
+- errno exposure at the libc boundary
+- `_start`, libc startup, libc syscall stubs/wrappers, package-facing sysroot headers
+
+Correct native userspace path:
+
+```text
+native iOS arm64/aarch64 package code
+        ↓
+IXLandMLibC Linux ABI headers + IXLand sysdeps
+        ↓
+IXLandSystem syscall/runtime ABI
+        ↓
+IXLandSystem virtual kernel subsystems
+        ↓
+internal/ios host mediation
+```
+
+Do not vendor mlibc `abis`, `sysdeps`, or `options` into IXLandSystem.
+Do not implement libc sysdeps inside IXLandSystem.
+Do not create kernel-owned replacements for libc typedef headers such as `pid_t`, `uid_t`, `gid_t`, `mode_t`, `dev_t`, `ino_t`, `sigevent`, `sigval`, `socklen_t`, `statvfs`, or `suseconds_t`.
+
+`scripts/generate_linux_abi_supplement.sh` must treat mlibc `abis/linux` as a coverage reference:
+- map headers already present in vendored Linux UAPI to UAPI
+- generate Linux-source ABI supplement headers for kernel-owned gaps
+- classify libc-owned surfaces as IXLandMLibC-owned
+- fail on unclassified surfaces instead of silently inventing kernel headers
+
+## 8) Proof Discipline (Required)
 
 Lint green is necessary but insufficient.
 Build green is necessary but insufficient.
@@ -115,14 +162,14 @@ Authoritative proof target is iOS Simulator:
 Catalyst may be secondary smoke only.
 No commit/push before required proof is green.
 
-## 8) Tranche Discipline
+## 9) Tranche Discipline
 
 Changes must be bounded by subsystem tranche with explicit ownership and proof.
 
 Do not mix unrelated architecture migrations into one tranche.
 Do not “fix lint” by weakening checks or broadening allowlists.
 
-## 9) No Policy Theater
+## 10) No Policy Theater
 
 Forbidden:
 - incident-specific blacklist hacks (single test/helper name grudges)

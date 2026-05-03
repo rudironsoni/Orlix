@@ -144,6 +144,10 @@
     XCTAssertEqual(procfs_namespace_contract_reaped_proc_pid_mounts_disappear(), 0, @"errno %d", errno);
 }
 
+- (void)testReapedProcPidCoreViewsDisappear {
+    XCTAssertEqual(procfs_namespace_contract_reaped_proc_pid_core_views_disappear(), 0, @"errno %d", errno);
+}
+
 - (void)testRootProcFilesAreReadable {
     XCTAssertEqual(procfs_namespace_contract_root_files_are_readable(), 0, @"errno %d", errno);
 }

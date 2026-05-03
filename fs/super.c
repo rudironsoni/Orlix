@@ -10,6 +10,7 @@
 #include <asm/statfs.h>
 #include <linux/fcntl.h>
 #include <linux/magic.h>
+#include <linux/statfs.h>
 
 #include "fdtable.h"
 #include "vfs.h"
@@ -64,6 +65,7 @@ static int vfs_fill_statfs(const char *resolved_path, struct statfs *buf) {
     buf->f_ffree = 32768;
     buf->f_namelen = 255;
     buf->f_frsize = 4096;
+    buf->f_flags = ST_VALID;
     return 0;
 }
 

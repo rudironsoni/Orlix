@@ -60,7 +60,7 @@
 		7382EBBD679D92B216EB7155 /* PTYJobControlTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 88CA631FAF0EDC1ABC5785AE /* PTYJobControlTests.m */; };
 		76236EBE1D125F243FE8D067 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = CC4338AECA611FDBA915367D /* sync.c */; };
 		770ABACD2190C861D5E11AC4 /* DevfsContract.c in Sources */ = {isa = PBXBuildFile; fileRef = F78BA3D6A3CC08D9DF7FDC05 /* DevfsContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_INCLUDE_ROOT)/uapi"; }; };
-		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; };
+		79618F2FA8335DFFB36D8EF5 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 2117B106A13B76478FE5B3A1 /* super.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_ABI_INCLUDE_ROOT)"; }; };
 		7A549363DE583E69F024FC2B /* HostTestSupport.c in Sources */ = {isa = PBXBuildFile; fileRef = FFDE13EF2BAECD71C97C7CD4 /* HostTestSupport.c */; };
 		7FC2CF492A88F5BDE5A5E8B7 /* HostBridgeSmokeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4937592D664709CBF7746315 /* HostBridgeSmokeTests.m */; };
 		83F06BCA2B801A0D599FC7B2 /* TaskExecTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 92672608BC0DCE77AA7B30F0 /* TaskExecTests.m */; };

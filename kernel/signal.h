@@ -123,6 +123,7 @@ int signal_generate_task(struct task_struct *target, int32_t sig);
 int signal_generate_task_info(struct task_struct *target, int32_t sig, int32_t code, uint64_t addr);
 int signal_generate_process(struct task_struct *target, int32_t sig);
 int signal_generate_pgrp(int32_t pgid, int32_t sig);
+int signal_generate_orphaned_pgrp(int32_t pgid);
 
 /* Check if signal is blocked */
 bool signal_is_blocked(const struct task_struct *task, int32_t sig);

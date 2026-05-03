@@ -2385,6 +2385,78 @@ out:
     return ret;
 }
 
+int procfs_namespace_contract_reaped_proc_pid_core_views_disappear(void) {
+    struct task_struct *parent;
+    struct task_struct *child = NULL;
+    char path[96] = {0};
+    char content[2048];
+    int fd = -1;
+    int32_t reaped_pid;
+    int ret = -1;
+
+    reset_procfs_namespace_state();
+
+    parent = get_current();
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+    child = task_create_child_impl(parent);
+    if (!child) {
+        return -1;
+    }
+    reaped_pid = child->pid;
+
+    proc_pid_file_path(path, sizeof(path), child->pid, "/status");
+    if (read_file_content(path, content, sizeof(content)) != 0) {
+        goto out;
+    }
+    task_unlink_child_impl(parent, child);
+    free_task(child);
+    child = NULL;
+
+    errno = 0;
+    if (read_file_content(path, content, sizeof(content)) != -1 || errno != ENOENT) {
+        errno = ENODATA;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), reaped_pid, "/stat");
+    errno = 0;
+    if (read_file_content(path, content, sizeof(content)) != -1 || errno != ENOENT) {
+        errno = ENOMSG;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), reaped_pid, "/fd");
+    errno = 0;
+    fd = open_impl(path, O_RDONLY | O_DIRECTORY, 0);
+    if (fd != -1 || errno != ENOENT) {
+        close_impl(fd);
+        fd = -1;
+        errno = ENOTEMPTY;
+        goto out;
+    }
+    proc_pid_file_path(path, sizeof(path), reaped_pid, "/task");
+    errno = 0;
+    fd = open_impl(path, O_RDONLY | O_DIRECTORY, 0);
+    if (fd != -1 || errno != ENOENT) {
+        close_impl(fd);
+        fd = -1;
+        errno = ENOTDIR;
+        goto out;
+    }
+
+    ret = 0;
+
+out:
+    close_impl(fd);
+    if (child) {
+        task_unlink_child_impl(parent, child);
+        free_task(child);
+    }
+    reset_procfs_namespace_state();
+    return ret;
+}
+
 int procfs_namespace_contract_root_files_are_readable(void) {
     char content[1024];
 

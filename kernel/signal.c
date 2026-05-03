@@ -516,6 +516,16 @@ int signal_generate_pgrp(int32_t pgid, int32_t sig) {
     return 0;
 }
 
+int signal_generate_orphaned_pgrp(int32_t pgid) {
+    int result;
+
+    result = signal_generate_pgrp(pgid, SIGHUP);
+    if (result != 0) {
+        return result;
+    }
+    return signal_generate_pgrp(pgid, SIGCONT);
+}
+
 int signal_enqueue_task(struct task_struct *task, int32_t sig) {
     return signal_generate_task(task, sig);
 }

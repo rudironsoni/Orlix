@@ -82,6 +82,8 @@ targets:
       group: fs
     - path: fs/super.c
       group: fs
+      compilerFlags:
+      - -I$(LINUX_ABI_INCLUDE_ROOT)
     - path: fs/vfs.c
       group: fs
     - path: fs/xattr.c

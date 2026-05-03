@@ -11,6 +11,7 @@
 #include <linux/mount.h>
 #include <linux/sched.h>
 #include <linux/stat.h>
+#include <linux/statfs.h>
 #include <linux/umount.h>
 #include <linux/xattr.h>
 #include <asm/unistd.h>
@@ -6409,13 +6410,15 @@ int vfs_contract_statfs_reports_virtual_proc_and_tmpfs(void) {
     int ret = -1;
 
     memset(&st, 0, sizeof(st));
-    if (statfs("/proc", &st) != 0 || st.f_type != PROC_SUPER_MAGIC || st.f_bsize != 4096) {
+    if (statfs("/proc", &st) != 0 || st.f_type != PROC_SUPER_MAGIC ||
+        st.f_bsize != 4096 || (st.f_flags & ST_VALID) == 0) {
         errno = ENODATA;
         return -1;
     }
 
     memset(&st, 0, sizeof(st));
-    if (statfs("/tmp", &st) != 0 || st.f_type != TMPFS_MAGIC || st.f_bsize != 4096) {
+    if (statfs("/tmp", &st) != 0 || st.f_type != TMPFS_MAGIC ||
+        st.f_bsize != 4096 || (st.f_flags & ST_VALID) == 0) {
         errno = ENODATA;
         return -1;
     }
@@ -6425,7 +6428,8 @@ int vfs_contract_statfs_reports_virtual_proc_and_tmpfs(void) {
         return -1;
     }
     memset(&st, 0, sizeof(st));
-    if (fstatfs(fd, &st) == 0 && st.f_type == PROC_SUPER_MAGIC) {
+    if (fstatfs(fd, &st) == 0 && st.f_type == PROC_SUPER_MAGIC &&
+        (st.f_flags & ST_VALID) != 0) {
         ret = 0;
     } else {
         errno = ENODATA;
