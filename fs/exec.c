@@ -1532,6 +1532,7 @@ int exec_elf(struct task_struct *task, const char *path, int argc, char **argv, 
     task->mm->handoff.aarch64_sp = task->mm->initial_stack_pointer;
     task->mm->handoff.read_memory = task_read_virtual_memory_impl;
     task->mm->handoff.write_memory = task_write_virtual_memory_impl;
+    task_mm_update_high_water_impl(task->mm);
 
     strncpy(task->exec_image->path, path, sizeof(task->exec_image->path) - 1);
     task->exec_image->path[sizeof(task->exec_image->path) - 1] = '\0';

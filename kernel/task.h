@@ -192,6 +192,8 @@ struct mm_struct {
     uint32_t auxv_count;
     struct task_vma vmas[TASK_EXEC_MAX_VMAS];
     uint32_t vma_count;
+    uint64_t vm_peak_pages;
+    uint64_t vm_high_water_rss_pages;
     struct task_exec_handoff handoff;
     struct address_space *vma_addr_space;
     uint64_t brk_start;
@@ -413,6 +415,7 @@ void task_clear_vmas_impl(struct mm_struct *mm);
 struct mm_struct *task_mm_get_impl(struct mm_struct *mm);
 struct mm_struct *task_mm_dup_impl(const struct mm_struct *mm);
 void task_mm_put_impl(struct mm_struct *mm);
+void task_mm_update_high_water_impl(struct mm_struct *mm);
 void mm_shared_mapping_get_impl(struct vm_shared_mapping *mapping);
 void mm_shared_mapping_put_impl(struct vm_shared_mapping *mapping);
 void mm_private_page_put_impl(struct vm_private_page *page);

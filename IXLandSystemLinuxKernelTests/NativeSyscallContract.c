@@ -3011,6 +3011,105 @@ out:
     return result;
 }
 
+int native_syscall_contract_mremap_fixed_coalesces_file_backed_neighbors(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-mremap-fixed-file-coalesce";
+    char pages[12288];
+    char maps[8192];
+    char smaps[16384];
+    char range[32];
+    void *left = (void *)-1;
+    void *right = (void *)-1;
+    void *middle_source = (void *)-1;
+    void *moved = (void *)-1;
+    uint64_t base;
+    int fd = -1;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(pages, 'F', sizeof(pages));
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    if (syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)pages, sizeof(pages), 0, 0, 0) !=
+        (long)sizeof(pages)) {
+        errno = EIO;
+        goto out;
+    }
+
+    left = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 12288,
+                                                    PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if ((long)(uintptr_t)left < 0) {
+        errno = -(int)(long)(uintptr_t)left;
+        goto out;
+    }
+    base = (uint64_t)(uintptr_t)left;
+    if (syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)(base + 4096), 4096, 0, 0, 0, 0) != 0) {
+        goto out;
+    }
+    middle_source = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 4096,
+                                                             PROT_READ | PROT_WRITE, MAP_PRIVATE,
+                                                             fd, 4096);
+    if ((long)(uintptr_t)middle_source < 0) {
+        errno = -(int)(long)(uintptr_t)middle_source;
+        goto out;
+    }
+    if (task_write_virtual_memory_impl(task, base, "L", 1) != 1 ||
+        task_write_virtual_memory_impl(task, (uint64_t)(uintptr_t)middle_source, "M", 1) != 1 ||
+        task_write_virtual_memory_impl(task, base + 8192, "R", 1) != 1) {
+        goto out;
+    }
+    moved = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mremap,
+                                                     (long)(uintptr_t)middle_source,
+                                                     4096, 4096,
+                                                     MREMAP_MAYMOVE | MREMAP_FIXED,
+                                                     (long)(uintptr_t)(base + 4096), 0);
+    if (moved != (void *)(uintptr_t)(base + 4096)) {
+        errno = (long)(uintptr_t)moved < 0 ? -(int)(long)(uintptr_t)moved : EPROTO;
+        goto out;
+    }
+    middle_source = (void *)-1;
+    if (format_maps_range(range, sizeof(range), base, base + 12288) != 0 ||
+        read_file_into_buffer("/proc/self/maps", maps, sizeof(maps)) != 0 ||
+        read_file_into_buffer("/proc/self/smaps", smaps, sizeof(smaps)) != 0) {
+        goto out;
+    }
+    if (!strstr(maps, range) ||
+        !smaps_block_contains(smaps, range, path) ||
+        !smaps_block_contains(smaps, range, "Size:                 12 kB") ||
+        !smaps_block_contains(smaps, range, "Private_Dirty:        12 kB") ||
+        !smaps_block_contains(smaps, range, "Anonymous:            12 kB")) {
+        errno = ENODATA;
+        goto out;
+    }
+    result = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if ((long)(uintptr_t)middle_source >= 0) {
+            syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)middle_source, 4096, 0, 0, 0, 0);
+        }
+        if ((long)(uintptr_t)left >= 0) {
+            syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)left, 12288, 0, 0, 0, 0);
+        }
+        if ((long)(uintptr_t)right >= 0) {
+            syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)right, 4096, 0, 0, 0, 0);
+        }
+        close_if_open(fd);
+        unlink_impl(path);
+        errno = saved_errno;
+    }
+    return result;
+}
+
 int native_syscall_contract_mremap_fixed_rejects_zero_target(void) {
     void *mapped;
     void *remapped;
@@ -4264,6 +4363,42 @@ static int read_file_into_buffer(const char *path, char *buf, size_t buf_len) {
     return 0;
 }
 
+static int status_value_kb(const char *content, const char *name, uint64_t *out_value) {
+    const char *line;
+    const char *cursor;
+    uint64_t value = 0;
+
+    if (!content || !name || !out_value) {
+        errno = EINVAL;
+        return -1;
+    }
+    line = strstr(content, name);
+    if (!line) {
+        errno = ENOENT;
+        return -1;
+    }
+    cursor = line + strlen(name);
+    if (*cursor != '\t') {
+        errno = EPROTO;
+        return -1;
+    }
+    cursor++;
+    if (*cursor < '0' || *cursor > '9') {
+        errno = EPROTO;
+        return -1;
+    }
+    while (*cursor >= '0' && *cursor <= '9') {
+        value = (value * 10ULL) + (uint64_t)(*cursor - '0');
+        cursor++;
+    }
+    if (strncmp(cursor, " kB", 3) != 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    *out_value = value;
+    return 0;
+}
+
 static int latest_signal_info_matches(struct task_struct *task, int signo, int code, uint64_t addr) {
     struct signal_queue_entry *entry;
 
@@ -4277,6 +4412,19 @@ static int latest_signal_info_matches(struct task_struct *task, int signo, int c
            entry->si_signo == signo &&
            entry->si_code == code &&
            entry->fault_addr == addr;
+}
+
+static void clear_pending_task_signal(struct task_struct *task, int signo) {
+    int bit;
+
+    if (!task || signo <= 0) {
+        return;
+    }
+    bit = (signo - 1) & 63;
+    task->thread_pending_signals &= ~(1ULL << bit);
+    if (task->signal) {
+        task->signal->shared_pending.sig[0] &= ~(1ULL << bit);
+    }
 }
 
 int native_syscall_contract_virtual_memory_faults_queue_sigsegv_codes(void) {
@@ -4322,6 +4470,70 @@ int native_syscall_contract_virtual_memory_faults_queue_sigsegv_codes(void) {
 
 out:
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
+    return result;
+}
+
+int native_syscall_contract_partial_copy_records_sigbus_fault_address(void) {
+    struct task_struct *task = get_current();
+    const char path[] = "/tmp/native-partial-sigbus-copy";
+    char pages[8192];
+    char bytes[8192];
+    void *mapped = (void *)-1;
+    uint64_t base;
+    int fd = -1;
+    int result = -1;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    memset(pages, 'B', sizeof(pages));
+    unlink_impl(path);
+    fd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)path,
+                                    O_CREAT | O_RDWR | O_TRUNC, 0600, 0, 0);
+    if (fd < 0) {
+        errno = -fd;
+        return -1;
+    }
+    if (syscall_dispatch_impl(__NR_write, fd, (long)(uintptr_t)pages, sizeof(pages), 0, 0, 0) !=
+        (long)sizeof(pages)) {
+        errno = EIO;
+        goto out;
+    }
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, sizeof(pages),
+                                                      PROT_READ, MAP_SHARED, fd, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        goto out;
+    }
+    base = (uint64_t)(uintptr_t)mapped;
+    if (syscall_dispatch_impl(__NR_ftruncate, fd, 4096, 0, 0, 0, 0) != 0) {
+        goto out;
+    }
+    memset(bytes, 0, sizeof(bytes));
+    if (task_read_virtual_memory_impl(task, base, bytes, sizeof(bytes)) != 4096 ||
+        !signal_is_pending(task, SIGBUS) ||
+        task->last_fault_signal != SIGBUS ||
+        task->last_fault_code != BUS_ADRERR ||
+        task->last_fault_addr != base + 4096 ||
+        !latest_signal_info_matches(task, SIGBUS, BUS_ADRERR, base + 4096)) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        if ((long)(uintptr_t)mapped >= 0) {
+            syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, sizeof(pages), 0, 0, 0, 0);
+        }
+        close_if_open(fd);
+        unlink_impl(path);
+        clear_pending_task_signal(task, SIGBUS);
+        errno = saved_errno;
+    }
     return result;
 }
 
@@ -4441,6 +4653,62 @@ int native_syscall_contract_proc_vm_accounting_reports_mapped_pages(void) {
 
 out:
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 8192, 0, 0, 0, 0);
+    return result;
+}
+
+int native_syscall_contract_proc_status_reports_vm_high_water_fields(void) {
+    void *mapped = (void *)-1;
+    uint64_t base = 0;
+    char status[2048];
+    uint64_t vm_peak = 0;
+    uint64_t vm_hwm = 0;
+    uint64_t vm_size = 0;
+    uint64_t vm_rss = 0;
+    uint64_t vm_lck = 1;
+    uint64_t vm_pin = 1;
+    uint64_t vm_swap = 1;
+    int result = -1;
+
+    mapped = (void *)(uintptr_t)syscall_dispatch_impl(__NR_mmap, 0, 8192,
+                                                      PROT_READ | PROT_WRITE,
+                                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)(uintptr_t)mapped < 0) {
+        errno = -(int)(long)(uintptr_t)mapped;
+        return -1;
+    }
+    base = (uint64_t)(uintptr_t)mapped;
+    if (task_write_virtual_memory_impl(get_current(), (uint64_t)(uintptr_t)mapped, "H", 1) != 1 ||
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0) != 0) {
+        goto out;
+    }
+    mapped = (void *)-1;
+    if (read_file_into_buffer("/proc/self/status", status, sizeof(status)) != 0 ||
+        status_value_kb(status, "VmPeak:", &vm_peak) != 0 ||
+        status_value_kb(status, "VmHWM:", &vm_hwm) != 0 ||
+        status_value_kb(status, "VmSize:", &vm_size) != 0 ||
+        status_value_kb(status, "VmRSS:", &vm_rss) != 0 ||
+        status_value_kb(status, "VmLck:", &vm_lck) != 0 ||
+        status_value_kb(status, "VmPin:", &vm_pin) != 0 ||
+        status_value_kb(status, "VmSwap:", &vm_swap) != 0 ||
+        vm_peak < vm_size ||
+        vm_hwm < vm_rss ||
+        vm_peak < 8 ||
+        vm_hwm < 8 ||
+        vm_lck != 0 ||
+        vm_pin != 0 ||
+        vm_swap != 0) {
+        errno = ENODATA;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    if ((long)(uintptr_t)mapped >= 0) {
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 8192, 0, 0, 0, 0);
+    } else if (base != 0) {
+        syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)(base + 4096), 4096, 0, 0, 0, 0);
+    }
     return result;
 }
 

@@ -5238,6 +5238,7 @@ int vfs_proc_task_stat_content(int32_t pid, char *buf, size_t buf_len) {
             break;
     }
 
+    task_mm_update_high_water_impl(task->mm);
     vfs_vm_account_task(task, &acct);
     if (task->tty) {
         tty_nr = task->tty->index;
@@ -6200,13 +6201,18 @@ int vfs_proc_task_status_content(int32_t pid, char *buf, size_t buf_len) {
         "SigBlk:\t%016llx\n"
         "SigIgn:\t%016llx\n"
         "SigCgt:\t%016llx\n"
+        "VmPeak:\t%llu kB\n"
+        "VmHWM:\t%llu kB\n"
         "VmSize:\t%llu kB\n"
+        "VmLck:\t0 kB\n"
+        "VmPin:\t0 kB\n"
         "VmRSS:\t%llu kB\n"
         "RssAnon:\t%llu kB\n"
         "RssFile:\t%llu kB\n"
         "VmData:\t%llu kB\n"
         "VmStk:\t%llu kB\n"
         "VmExe:\t%llu kB\n"
+        "VmSwap:\t0 kB\n"
         "VmDirty:\t%llu kB\n",
         task->ns_pid,
         task->ns_pid,
@@ -6226,6 +6232,8 @@ int vfs_proc_task_status_content(int32_t pid, char *buf, size_t buf_len) {
         (unsigned long long)sigblk,
         (unsigned long long)sigign,
         (unsigned long long)sigcgt,
+        (unsigned long long)(task->mm ? task->mm->vm_peak_pages * 4ULL : 0ULL),
+        (unsigned long long)(task->mm ? task->mm->vm_high_water_rss_pages * 4ULL : 0ULL),
         (unsigned long long)(acct.size_pages * 4ULL),
         (unsigned long long)(acct.resident_pages * 4ULL),
         (unsigned long long)((acct.resident_pages - acct.resident_shared_pages) * 4ULL),

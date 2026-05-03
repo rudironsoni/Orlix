@@ -463,6 +463,35 @@ void task_mm_put_impl(struct mm_struct *mm) {
     free(mm);
 }
 
+void task_mm_update_high_water_impl(struct mm_struct *mm) {
+    uint64_t size_pages = 0;
+    uint64_t resident_pages = 0;
+
+    if (!mm) {
+        return;
+    }
+    for (uint32_t i = 0; i < mm->vma_count; i++) {
+        struct task_vma *vma = &mm->vmas[i];
+
+        size_pages += vma->page_count;
+        if (!vma->resident_pages) {
+            resident_pages += vma->page_count;
+            continue;
+        }
+        for (uint64_t page = 0; page < vma->page_count; page++) {
+            if (vma->resident_pages[page]) {
+                resident_pages++;
+            }
+        }
+    }
+    if (size_pages > mm->vm_peak_pages) {
+        mm->vm_peak_pages = size_pages;
+    }
+    if (resident_pages > mm->vm_high_water_rss_pages) {
+        mm->vm_high_water_rss_pages = resident_pages;
+    }
+}
+
 static long task_read_vma(struct task_vma *vma, uint64_t addr, void *buf, size_t count) {
     size_t offset;
     size_t available;
@@ -704,6 +733,7 @@ static int task_grow_stack_down_impl(struct task_struct *task, uint64_t fault_ad
 
     guard->start -= TASK_VMA_PAGE_SIZE;
     guard->end -= TASK_VMA_PAGE_SIZE;
+    task_mm_update_high_water_impl(mm);
     return 1;
 }
 

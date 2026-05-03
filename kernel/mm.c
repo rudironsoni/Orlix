@@ -1838,6 +1838,7 @@ void *mmap_impl(void *addr, size_t length, int prot, int flags, int fd, int64_t 
     }
     mm_sort_vmas_by_start(task->mm);
     (void)mm_merge_adjacent_vmas(task->mm);
+    task_mm_update_high_water_impl(task->mm);
     return (void *)(uintptr_t)map_addr;
 }
 
@@ -2219,6 +2220,7 @@ void *mremap_impl(void *old_address, size_t old_size, size_t new_size, int flags
             return (void *)-1;
         }
         (void)mm_merge_adjacent_vmas(task->mm);
+        task_mm_update_high_water_impl(task->mm);
         return new_address;
     }
     if ((flags & MREMAP_FIXED) != 0 && new_len > old_len) {
@@ -2254,6 +2256,7 @@ void *mremap_impl(void *old_address, size_t old_size, size_t new_size, int flags
             return (void *)-1;
         }
         (void)mm_merge_adjacent_vmas(task->mm);
+        task_mm_update_high_water_impl(task->mm);
         return new_address;
     }
     if (new_len <= old_len) {
@@ -2384,6 +2387,7 @@ void *mremap_impl(void *old_address, size_t old_size, size_t new_size, int flags
         vma->image_size = (size_t)new_len;
         vma->page_count = old_pages + added_pages;
         (void)mm_merge_adjacent_vmas(task->mm);
+        task_mm_update_high_water_impl(task->mm);
         return old_address;
     }
     if ((flags & MREMAP_MAYMOVE) == 0) {
@@ -2425,6 +2429,7 @@ void *mremap_impl(void *old_address, size_t old_size, size_t new_size, int flags
         return (void *)-1;
     }
     (void)mm_merge_adjacent_vmas(task->mm);
+    task_mm_update_high_water_impl(task->mm);
     return mapped;
 }
 

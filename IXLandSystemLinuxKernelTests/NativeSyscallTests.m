@@ -165,6 +165,10 @@
     XCTAssertEqual(native_syscall_contract_mremap_fixed_preserves_private_file_cow_smaps(), 0, @"errno %d", errno);
 }
 
+- (void)testMremapFixedCoalescesFileBackedNeighbors {
+    XCTAssertEqual(native_syscall_contract_mremap_fixed_coalesces_file_backed_neighbors(), 0, @"errno %d", errno);
+}
+
 - (void)testMremapFixedRejectsZeroTarget {
     XCTAssertEqual(native_syscall_contract_mremap_fixed_rejects_zero_target(), 0, @"errno %d", errno);
 }
@@ -217,6 +221,10 @@
     XCTAssertEqual(native_syscall_contract_virtual_memory_faults_queue_sigsegv_codes(), 0, @"errno %d", errno);
 }
 
+- (void)testPartialCopyRecordsSigbusFaultAddress {
+    XCTAssertEqual(native_syscall_contract_partial_copy_records_sigbus_fault_address(), 0, @"errno %d", errno);
+}
+
 - (void)testPartialCopyRecordsFaultAddress {
     XCTAssertEqual(native_syscall_contract_partial_copy_records_fault_address(), 0, @"errno %d", errno);
 }
@@ -227,6 +235,10 @@
 
 - (void)testProcVmAccountingReportsMappedPages {
     XCTAssertEqual(native_syscall_contract_proc_vm_accounting_reports_mapped_pages(), 0, @"errno %d", errno);
+}
+
+- (void)testProcStatusReportsVmHighWaterFields {
+    XCTAssertEqual(native_syscall_contract_proc_status_reports_vm_high_water_fields(), 0, @"errno %d", errno);
 }
 
 - (void)testProcSelfSmapsReportsVmaAccounting {
