@@ -36,7 +36,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 29 | `ioctl` | implemented:fd | none |
 | 30 | `ioprio_set` | kernel-owned missing:unclassified | package |
 | 31 | `ioprio_get` | kernel-owned missing:unclassified | package |
-| 32 | `flock` | kernel-owned missing:unclassified | shell |
+| 32 | `flock` | implemented:fd | none |
 | 33 | `mknodat` | kernel-owned missing:unclassified | package |
 | 34 | `mkdirat` | implemented:fd | none |
 | 35 | `unlinkat` | implemented:fd | none |

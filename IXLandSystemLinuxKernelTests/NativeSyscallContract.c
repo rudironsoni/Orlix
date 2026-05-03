@@ -4586,6 +4586,7 @@ int native_syscall_contract_dispatches_shell_fd_vfs_syscalls(void) {
     struct statfs fsfs;
     int fd = -1;
     int outfd = -1;
+    int lockfd = -1;
     int dupfd = -1;
     int cloexec_fd = 77;
     long ret;
@@ -4629,6 +4630,39 @@ int native_syscall_contract_dispatches_shell_fd_vfs_syscalls(void) {
         errno = (int)-fd;
         goto out;
     }
+    lockfd = (int)syscall_dispatch_impl(__NR_openat, AT_FDCWD, (long)(uintptr_t)file,
+                                        O_RDWR, 0, 0, 0);
+    if (lockfd < 0) {
+        errno = (int)-lockfd;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_flock, fd, LOCK_EX, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_flock, lockfd, LOCK_SH | LOCK_NB, 0, 0, 0, 0);
+    if (ret != -EAGAIN) {
+        errno = ret < 0 ? (int)-ret : EAGAIN;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_flock, fd, LOCK_UN, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_flock, lockfd, LOCK_SH | LOCK_NB, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_flock, lockfd, LOCK_UN, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    close_if_open(lockfd);
+    lockfd = -1;
     ret = syscall_dispatch_impl(__NR_fchdir, fd, 0, 0, 0, 0, 0);
     if (ret != -ENOTDIR) {
         errno = ret < 0 ? (int)-ret : ENOTDIR;
@@ -4876,6 +4910,7 @@ out:
     syscall_dispatch_impl(__NR_chdir, (long)(uintptr_t)"/", 0, 0, 0, 0, 0);
     close_if_open(fd);
     close_if_open(outfd);
+    close_if_open(lockfd);
     close_if_open(dupfd);
     close_if_open(cloexec_fd);
     unlink_impl(copied);
@@ -5135,6 +5170,7 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         __NR_copy_file_range,
         __NR_openat2,
         __NR_utimensat,
+        __NR_flock,
         __NR_execve,
         __NR_wait4,
         __NR_waitid,
@@ -5218,6 +5254,7 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         {__NR_copy_file_range, SYSCALL_CAPABILITY_FD},
         {__NR_openat2, SYSCALL_CAPABILITY_FD},
         {__NR_utimensat, SYSCALL_CAPABILITY_FD},
+        {__NR_flock, SYSCALL_CAPABILITY_FD},
         {__NR_prlimit64, SYSCALL_CAPABILITY_RESOURCE},
     };
     static const struct planned_syscall_gap planned_gaps[] = {

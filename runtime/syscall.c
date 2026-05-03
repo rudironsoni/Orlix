@@ -202,6 +202,7 @@ extern linux_off_t lseek_impl(int fd, linux_off_t offset, int whence);
 extern ssize_t copy_file_range_impl(int fd_in, linux_off_t *off_in, int fd_out,
                                     linux_off_t *off_out, size_t len, unsigned int flags);
 extern int fcntl_impl(int fd, int cmd, ...);
+extern int flock_impl(int fd, int operation);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
 extern int fstatat_impl(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
 extern int faccessat_impl(int dirfd, const char *pathname, int mode, int flags);
@@ -565,6 +566,7 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_dup3:
     case __NR_pipe2:
     case __NR_fcntl:
+    case __NR_flock:
     case __NR_ioctl:
     case __NR_getdents64:
     case __NR_readlinkat:
@@ -787,6 +789,8 @@ static long syscall_dispatch_inner_impl(long number,
         return syscall_result((long)pipe2_impl((int *)(uintptr_t)arg0, (int)arg1));
     case __NR_fcntl:
         return syscall_result((long)fcntl_impl((int)arg0, (int)arg1, (int)arg2));
+    case __NR_flock:
+        return syscall_result((long)flock_impl((int)arg0, (int)arg1));
     case __NR_brk:
         return syscall_result((long)(uintptr_t)brk_impl((void *)(uintptr_t)arg0));
     case __NR_set_tid_address: {

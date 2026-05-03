@@ -2,6 +2,9 @@
 
 #include <errno.h>
 #include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 
 #include "sync.h"
 #include "fdtable.h"
@@ -26,6 +29,140 @@ static int fcntl_get_entry_or_badf(int fd, void **entry_out) {
 
 static int fcntl_mutable_status_mask(void) {
     return O_APPEND | O_NONBLOCK | O_SYNC;
+}
+
+#define FLOCK_TABLE_MAX 256
+
+struct flock_entry {
+    bool active;
+    uint64_t identity;
+    int exclusive_fd;
+    int shared_fds[NR_OPEN_DEFAULT];
+};
+
+static struct flock_entry flock_table[FLOCK_TABLE_MAX];
+static fs_mutex_t flock_table_lock = FS_MUTEX_INITIALIZER;
+
+static struct flock_entry *flock_entry_for_identity_locked(uint64_t identity, bool create) {
+    struct flock_entry *free_entry = NULL;
+
+    for (size_t i = 0; i < FLOCK_TABLE_MAX; i++) {
+        if (flock_table[i].active && flock_table[i].identity == identity) {
+            return &flock_table[i];
+        }
+        if (!flock_table[i].active && !free_entry) {
+            free_entry = &flock_table[i];
+        }
+    }
+    if (!create || !free_entry) {
+        return NULL;
+    }
+    memset(free_entry, 0, sizeof(*free_entry));
+    free_entry->active = true;
+    free_entry->identity = identity;
+    free_entry->exclusive_fd = -1;
+    for (size_t i = 0; i < NR_OPEN_DEFAULT; i++) {
+        free_entry->shared_fds[i] = -1;
+    }
+    return free_entry;
+}
+
+static bool flock_has_other_shared_locked(const struct flock_entry *entry, int fd) {
+    if (!entry) {
+        return false;
+    }
+    for (size_t i = 0; i < NR_OPEN_DEFAULT; i++) {
+        if (entry->shared_fds[i] >= 0 && entry->shared_fds[i] != fd) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void flock_remove_fd_locked(struct flock_entry *entry, int fd) {
+    bool has_shared = false;
+
+    if (!entry) {
+        return;
+    }
+    if (entry->exclusive_fd == fd) {
+        entry->exclusive_fd = -1;
+    }
+    for (size_t i = 0; i < NR_OPEN_DEFAULT; i++) {
+        if (entry->shared_fds[i] == fd) {
+            entry->shared_fds[i] = -1;
+        }
+        if (entry->shared_fds[i] >= 0) {
+            has_shared = true;
+        }
+    }
+    if (entry->exclusive_fd < 0 && !has_shared) {
+        memset(entry, 0, sizeof(*entry));
+    }
+}
+
+int flock_impl(int fd, int operation) {
+    void *entry_ref;
+    struct flock_entry *entry;
+    uint64_t identity;
+    int op = operation & ~LOCK_NB;
+    int ret = 0;
+
+    if (fcntl_get_entry_or_badf(fd, &entry_ref) != 0) {
+        return -1;
+    }
+    identity = get_fd_file_identity_impl(entry_ref);
+    put_fd_entry_impl(entry_ref);
+    if (identity == 0) {
+        errno = EBADF;
+        return -1;
+    }
+    if (op != LOCK_SH && op != LOCK_EX && op != LOCK_UN) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    fs_mutex_lock(&flock_table_lock);
+    entry = flock_entry_for_identity_locked(identity, op != LOCK_UN);
+    if (op == LOCK_UN) {
+        flock_remove_fd_locked(entry, fd);
+        fs_mutex_unlock(&flock_table_lock);
+        return 0;
+    }
+
+    flock_remove_fd_locked(entry, fd);
+    entry = flock_entry_for_identity_locked(identity, true);
+    if (!entry) {
+        fs_mutex_unlock(&flock_table_lock);
+        errno = ENOLCK;
+        return -1;
+    }
+
+    if (op == LOCK_EX) {
+        if ((entry->exclusive_fd >= 0 && entry->exclusive_fd != fd) ||
+            flock_has_other_shared_locked(entry, fd)) {
+            ret = -1;
+        } else {
+            entry->exclusive_fd = fd;
+        }
+    } else {
+        if (entry->exclusive_fd >= 0 && entry->exclusive_fd != fd) {
+            ret = -1;
+        } else {
+            for (size_t i = 0; i < NR_OPEN_DEFAULT; i++) {
+                if (entry->shared_fds[i] < 0) {
+                    entry->shared_fds[i] = fd;
+                    break;
+                }
+            }
+        }
+    }
+    fs_mutex_unlock(&flock_table_lock);
+    if (ret != 0) {
+        errno = EAGAIN;
+        return -1;
+    }
+    return 0;
 }
 
 int dup_impl(int oldfd) {
