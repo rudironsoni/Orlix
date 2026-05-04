@@ -429,18 +429,17 @@ static void vfs_test_seed_linux_file(const char *path) {
 
     errno = 0;
     int new_fd = host_test_fcntl_dupfd_cloexec(fd, 10);
-    if (new_fd < 0 && (errno == EINVAL || errno == ENOTSUP)) {
+    XCTAssertTrue(new_fd >= 0, @"host dupfd_cloexec should succeed");
+    if (new_fd < 0) {
         host_close_impl(fd);
-        XCTSkip(@"host F_DUPFD_CLOEXEC is unavailable on this simulator runtime");
+        return;
     }
 
-    XCTAssertTrue(new_fd >= 0, @"host F_DUPFD_CLOEXEC should succeed when available");
-
-    int flags = fcntl(new_fd, F_GETFD);
+    int flags = host_test_fcntl_getfd(new_fd);
     XCTAssertTrue((flags & FD_CLOEXEC) != 0, @"duped fd should have FD_CLOEXEC");
 
     host_close_impl(fd);
-    if (new_fd >= 0) close(new_fd);
+    host_close_impl(new_fd);
 }
 
 

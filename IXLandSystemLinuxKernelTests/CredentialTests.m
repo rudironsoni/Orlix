@@ -312,11 +312,27 @@ extern void cred_reset_to_defaults(void);
  * ============================================================================ */
 
 - (void)testRootSetuidUpdatesSavedUid {
-    /* Skip this test - the test logic is flawed. cred_setuid on local cred 
-     * doesn't affect global state, then setuid_impl affects global state.
-     * The assertions don't match this behavior. 
-     * This test needs redesign to test saved UID semantics properly. */
-    XCTSkip(@"Test needs redesign - saved UID semantics not properly implemented");
+    uid_t ruid = 0;
+    uid_t euid = 0;
+    uid_t suid = 0;
+
+    XCTAssertEqual(setresuid_impl(1000, 0, 2000), 0, @"root should establish real and saved uid state");
+    XCTAssertEqual(getresuid_impl(&ruid, &euid, &suid), 0, @"getresuid should report established uid state");
+    XCTAssertEqual(ruid, 1000u, @"real uid should be set");
+    XCTAssertEqual(euid, 0u, @"effective uid should remain root");
+    XCTAssertEqual(suid, 2000u, @"saved uid should be set");
+
+    XCTAssertEqual(seteuid_impl(1000), 0, @"seteuid should drop effective uid to the real uid");
+    XCTAssertEqual(getresuid_impl(&ruid, &euid, &suid), 0, @"getresuid should report dropped effective uid");
+    XCTAssertEqual(ruid, 1000u);
+    XCTAssertEqual(euid, 1000u);
+    XCTAssertEqual(suid, 2000u, @"saved uid should survive effective uid changes");
+
+    XCTAssertEqual(setuid_impl(2000), 0, @"setuid should restore effective uid from the saved uid");
+    XCTAssertEqual(getresuid_impl(&ruid, &euid, &suid), 0, @"getresuid should report restored saved uid");
+    XCTAssertEqual(ruid, 1000u, @"real uid should remain unchanged when restoring saved uid");
+    XCTAssertEqual(euid, 2000u, @"effective uid should be restored from saved uid");
+    XCTAssertEqual(suid, 2000u, @"saved uid should remain available after restoration");
 }
 
 @end
