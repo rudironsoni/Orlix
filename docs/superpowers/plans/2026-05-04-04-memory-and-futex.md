@@ -77,6 +77,7 @@
 **Files:**
 - Reference: `docs/superpowers/plans/2026-05-04-00-kernel-completion-orchestration.md`
 
-- [ ] Re-run lint, project generation, simulator build, focused VM or futex or proc suites, and the full LinuxKernel suite.
+- [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
+- [ ] Run the focused VM or futex or proc simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Regenerate the syscall matrix if the futex or VM syscall surface changed.
 - [ ] Commit and push only after the proof gate passes and branch synchronization is verified.

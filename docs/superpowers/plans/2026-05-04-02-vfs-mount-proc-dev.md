@@ -81,6 +81,7 @@
 **Files:**
 - Reference: `docs/superpowers/plans/2026-05-04-00-kernel-completion-orchestration.md`
 
-- [ ] Re-run lint, project generation, simulator build, focused VFS and proc or dev suites, and the full LinuxKernel suite.
+- [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
+- [ ] Run the focused VFS and proc or dev simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Run a boundary grep for host vocabulary in touched filesystem files.
 - [ ] Commit and push only after the full proof gate passes and branch synchronization is verified.

@@ -87,5 +87,6 @@
 
 - [ ] Audit networking files for accidental host vocabulary leakage; if outbound bridging is truly required, isolate it under a new subsystem-specific `internal/ios/**` seam and add HostBridge proof for that seam only.
 - [ ] Regenerate the syscall matrix so socket-related entries move from `future backend:*` or `missing:*` to accurate final classifications.
-- [ ] Re-run lint, project generation, simulator build, focused networking or readiness suites, and the full LinuxKernel suite.
+- [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
+- [ ] Run the focused networking or readiness simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Commit and push only after the proof gate passes and branch synchronization is verified.

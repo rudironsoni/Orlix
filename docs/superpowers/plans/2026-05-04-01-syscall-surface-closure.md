@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Classify the remaining owned syscall surface and close the process-adjacent dispatch and policy gaps that block later milestones from staying Linux-shaped.
+**Goal:** Classify the milestone-01 audited process-adjacent syscall subset and close the specific dispatch and policy gaps that block later milestones from staying Linux-shaped.
 
-**Architecture:** Treat `runtime/syscall.c` as the public Linux syscall gate and make the matrix authoritative by eliminating `missing:unclassified` entries for subsystems already owned by IXLandSystem. Finish the small but high-leverage process and pidfd gaps first, then tighten explicit unsupported or future-backend policy so later milestones inherit a clean syscall boundary.
+**Architecture:** Treat `runtime/syscall.c` as the public Linux syscall gate and make the matrix authoritative for the audited milestone-01 subset instead of claiming repo-wide syscall closure. Finish the small but high-leverage process and pidfd gaps first, then tighten explicit unsupported or future-backend policy so later milestones inherit a clean syscall boundary.
 
 **Tech Stack:** `runtime/syscall.c`, `kernel/task.c`, `kernel/fork.c`, `kernel/signal.c`, `kernel/ptrace.c`, `fs/fdtable.c`, LinuxKernel syscall contracts, syscall matrix generator.
 
@@ -16,8 +16,7 @@
 - `pidfd_getfd`
 - `clone3` `set_tid`
 - `unshare(CLONE_FS)` policy
-- syscall wrappers already owned by existing kernel subsystems but missing dispatch or policy
-- matrix regeneration and inventory-contract updates
+- matrix regeneration and audited inventory-contract updates
 
 ### Task 1: Audit And Reclassify The Syscall Matrix
 
@@ -28,20 +27,23 @@
 - Test: `IXLandSystemLinuxKernelTests/NativeSyscallContract.c`
 - Test: `IXLandSystemLinuxKernelTests/NativeSyscallTests.m`
 
-- [ ] Audit every syscall currently marked `kernel-owned missing:unclassified` and sort each entry into one of four buckets: `implemented:*`, `kernel-owned next:*`, `libc-owned:*`, or `explicit unsupported policy:*`.
-- [ ] Extend `NativeSyscallContract.c` with compile-time and runtime inventory expectations for the specific syscalls closed in this milestone.
+- [ ] Audit only the milestone-01 process-adjacent syscall inventory proven by this task: `unshare`, `pidfd_send_signal`, and `pidfd_getfd`. Reclassify that audited set into repo-truth buckets: `implemented:*`, `kernel-owned next:*`, `libc-owned:*`, or `explicit unsupported policy:*`.
+- [ ] Extend `NativeSyscallContract.c` with both compile-time and runtime inventory expectations for the audited syscall set so milestone 01 proves the classification at both levels.
 - [ ] Run the focused inventory proof:
 
 ```bash
-xcodebuild test \
+rtk xcodebuild test-without-building \
   -project IXLandSystem.xcodeproj \
   -scheme IXLandSystem-6.12-arm64 \
+  -sdk iphonesimulator \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:IXLandSystemLinuxKernelTests/NativeSyscallTests
 ```
 
-Expected: the new inventory assertions fail before dispatch changes land.
+Expected: after the milestone-00 `build-for-testing` step, the new inventory assertions fail before dispatch changes land.
 
-- [ ] Update `runtime/syscall.c` classification comments and dispatch tables so the matrix generator stops producing stale `unclassified` entries for the audited syscall set.
+- [ ] Update `runtime/syscall.c` classification comments and dispatch tables so the matrix generator stops producing stale classification for the audited syscall set without claiming full-matrix or full-subsystem closure in milestone 01.
 
 ### Task 2: Close `pidfd_send_signal`
 
@@ -87,7 +89,7 @@ Expected: the new inventory assertions fail before dispatch changes land.
 - [ ] Implement either Linux-owner `CLONE_FS` unshare support or a deliberate `-EINVAL` or `-EOPNOTSUPP` policy that is documented in the matrix and tests.
 - [ ] Re-run the task and exec suite until both the new behavior and existing clone and exec paths remain green.
 
-### Task 5: Regenerate Matrix And Run Full Proof
+### Task 5: Regenerate Matrix And Run Two-Tier Proof
 
 **Files:**
 - Modify: `docs/syscall_gap_matrix_6.12_arm64.md`
@@ -95,9 +97,9 @@ Expected: the new inventory assertions fail before dispatch changes land.
 - [ ] Regenerate the matrix:
 
 ```bash
-python3 scripts/generate_syscall_gap_matrix.py > docs/syscall_gap_matrix_6.12_arm64.md
+rtk python3 scripts/generate_syscall_gap_matrix.py > docs/syscall_gap_matrix_6.12_arm64.md
 ```
 
 - [ ] Re-run the standard proof gate from the orchestration plan.
-- [ ] Run the full LinuxKernel suite after the focused syscall tranche passes.
+- [ ] Run the focused syscall simulator tests for milestone-01 first, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Commit and push only after `HEAD` and `origin/main` match on the verified branch tip.

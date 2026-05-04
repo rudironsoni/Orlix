@@ -4,7 +4,7 @@
 
 **Goal:** Finish the remaining IXLandSystem kernel milestones in a fixed dependency order without violating the Linux-owner versus host-mediation boundary.
 
-**Architecture:** Drive the remaining work as seven bounded subsystem tranches with one orchestration plan enforcing sequencing, proof, and rollback rules. Every milestone proves Linux-visible behavior through LinuxKernel contracts first, adds HostBridge proof only when `internal/ios/**` seams change, and refuses completion claims until the full LinuxKernel suite and branch-state checks are green.
+**Architecture:** Drive the remaining work as seven bounded subsystem tranches with one orchestration plan enforcing sequencing, proof, and rollback rules. Every milestone proves Linux-visible behavior through focused LinuxKernel contracts first, adds focused HostBridge seam proof only when `internal/ios/**` changes, and refuses completion claims until the full shared-scheme simulator suite and branch-state checks are green.
 
 **Tech Stack:** C and Objective-C kernel/runtime code, vendored Linux UAPI 6.12 arm64, XcodeGen, XcodeBuildMCP CLI, LinuxKernel contract tests, HostBridge seam tests, syscall gap matrix generation.
 
@@ -30,7 +30,7 @@
 - LinuxKernel tests prove Linux-visible behavior with syscall-facing contracts and C UAPI checks only.
 - HostBridge tests are supplemental seam proof only; they never count as Linux semantics proof.
 - No milestone is complete on lint alone, on build alone, or on one narrow green test.
-- Each milestone ends with proof on iOS Simulator, commit, push, and `HEAD == origin/main`.
+- Each milestone ends with the two-tier simulator proof gate: tranche-focused simulator tests first, then the full shared-scheme simulator suite, followed by commit, push, and `HEAD == origin/main`.
 
 ## Carry-Forward Baseline
 
@@ -89,9 +89,32 @@ rtk xcodebuild build-for-testing \
 
 Expected: build succeeds with no new warnings that indicate boundary regressions. If CoreSimulator is unavailable on the worker, record that infrastructure block explicitly; do not replace this step with an `xcodebuildmcp simulator build` argument shape that the local tool does not accept. For milestones `01` through `07`, completion remains blocked until this AGENTS-required iOS Simulator `build-for-testing` step is actually green.
 
-- [ ] For milestone work that changes kernel behavior, run the focused LinuxKernel tranche tests for the active milestone before the full suite.
-- [ ] For milestone work that changes kernel behavior, run the full LinuxKernel suite after the focused tranche passes. Orchestration-only or documentation-only Task `00` work is exempt from both LinuxKernel test bullets only when lint and project generation are green, the simulator step has been attempted with the AGENTS-required command, and the only blocker is documented simulator infrastructure unavailability; a real `build-for-testing` failure does not satisfy this exception.
-- [ ] Run HostBridge tests only if the milestone adds or widens an `internal/ios/**` seam.
+- [ ] For milestone work that changes kernel behavior, run tranche-focused simulator tests after `build-for-testing` succeeds. Use focused LinuxKernel tests as the primary subsystem proof, and add focused HostBridge tests only when the active tranche changes an `internal/ios/**` seam:
+
+```bash
+rtk xcodebuild test-without-building \
+  -project IXLandSystem.xcodeproj \
+  -scheme IXLandSystem-6.12-arm64 \
+  -sdk iphonesimulator \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:<active-focused-test-target-or-case>
+```
+
+Expected: the focused simulator selection proves the active tranche locally before broader completion proof runs.
+
+- [ ] Before any milestone-finished claim, run the full shared-scheme simulator suite after the focused tranche proof passes:
+
+```bash
+rtk xcodebuild test-without-building \
+  -project IXLandSystem.xcodeproj \
+  -scheme IXLandSystem-6.12-arm64 \
+  -sdk iphonesimulator \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17'
+```
+
+Expected: the shared scheme is green, including `IXLandSystemLinuxKernelTests` and `IXLandSystemHostBridgeTests`. Focused LinuxKernel proof remains the primary Linux-semantics evidence, but shared-scheme green is still mandatory for milestone completion. Orchestration-only or documentation-only Task `00` work is exempt from both simulator test bullets only when lint and project generation are green, the simulator step has been attempted with the AGENTS-required command, and the only blocker is documented simulator infrastructure unavailability; a real `build-for-testing` failure does not satisfy this exception.
 
 ### Task 3: Standard Implementation Skeleton For Every Milestone
 
@@ -107,7 +130,7 @@ Expected: build succeeds with no new warnings that indicate boundary regressions
 - [ ] Implement the minimal Linux-owner code needed to satisfy the contract in milestone-owned Linux paths under `fs/`, `kernel/`, `runtime/`, or `include/`.
 - [ ] If host mediation is required, add or adjust only a narrow subsystem-owned seam under `internal/ios/**`; do not move Linux semantic decisions, Linux-visible ABI truth, or Darwin-shaped behavior into that seam.
 - [ ] Re-run the focused test until it passes.
-- [ ] Re-run the full LinuxKernel suite before any commit claim.
+- [ ] Re-run the full shared-scheme simulator suite before any milestone-finished claim or proof-backed commit.
 - [ ] Re-run lint and simulator build if the implementation touched shared headers, syscall dispatch, or broad subsystem paths.
 
 ### Task 4: Matrix And Boundary Audits

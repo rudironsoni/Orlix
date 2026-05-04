@@ -12,6 +12,7 @@ It is not public drop-in proof for arbitrary Linux userspace yet.
 - minimum deployment target: iOS 16.0+
 - supported SDKs: `iphonesimulator`, `iphoneos`
 - authoritative validation: iOS Simulator or device build/test through XcodeGen + Xcodebuild
+- authoritative milestone completion: AGENTS-required iOS Simulator `build-for-testing`, focused simulator proof for the active tranche, then the full shared-scheme simulator suite
 
 ## Architectural Contract
 
@@ -61,17 +62,18 @@ Canonical project surface:
 
 - Targets:
   - `IXLandSystem`
-  - `IXLandSystemTests`
+  - `IXLandSystemLinuxKernelTests`
+  - `IXLandSystemHostBridgeTests`
 - Scheme:
   - `IXLandSystem-6.12-arm64`
 
 Canonical authoritative flow:
 
 ```bash
-xcodegen generate --project .
-xcodebuild -list -project IXLandSystem.xcodeproj
-xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build
-xcodebuild test -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+rtk xcodegen generate --project .
+rtk xcodebuild -list -project IXLandSystem.xcodeproj
+rtk xcodebuild build-for-testing -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+rtk xcodebuild test-without-building -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 `swift build`, CMake, Make, package manifests, and other build systems are non-authoritative drift for this repo.
@@ -103,25 +105,30 @@ Current subsystem ownership in this repository:
 
 ## Test Layering
 
-This repo currently contains two valid proof layers in XCTest:
+This repo currently contains two valid proof layers in XCTest plus Linux UAPI compile smoke:
 
-1. INTERNAL RUNTIME SEMANTIC TEST
-   - may use private internal headers
-   - may use `_impl()` entry points
-   - may use direct internal owner APIs
-   - does not prove public drop-in compatibility
+1. LinuxKernel proof
+   - exercises syscall-facing Linux-visible behavior
+   - uses C contract files for Linux UAPI constants, structs, and payload truth
+   - does not include `internal/ios/**`
 
-2. LINUX UAPI / ABI COMPILE TEST
+2. HostBridge proof
+   - verifies private `internal/ios/**` seams only
+   - may use host APIs when proving host mechanics
+   - does not prove Linux semantics
+
+3. Linux UAPI / ABI compile smoke
    - may use only `<linux/...>`, `<asm/...>`, `<asm-generic/...>` includes
    - proves vendored UAPI resolution only
    - does not prove runtime behavior
 
 Current test files:
 
-- `IXLandSystemTests/SignalTests.m` — INTERNAL RUNTIME SEMANTIC TEST
-- `IXLandSystemTests/TaskGroupTests.m` — INTERNAL RUNTIME SEMANTIC TEST
-- `IXLandSystemTests/CredentialTests.m` — INTERNAL RUNTIME SEMANTIC TEST
-- `IXLandSystemTests/LinuxUAPICompileSmoke.c` — LINUX UAPI / ABI COMPILE TEST
+- `IXLandSystemLinuxKernelTests/SignalTests.m` — LinuxKernel semantic test
+- `IXLandSystemLinuxKernelTests/TaskGroupTests.m` — LinuxKernel semantic test
+- `IXLandSystemLinuxKernelTests/CredentialTests.m` — LinuxKernel semantic test
+- `IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c` — Linux UAPI / ABI compile smoke
+- `IXLandSystemHostBridgeTests/HostBridgeSmokeTests.m` — HostBridge seam test
 
 True public drop-in Linux userspace compatibility proof is outside this XCTest tranche.
 
@@ -130,9 +137,9 @@ True public drop-in Linux userspace compatibility proof is outside this XCTest t
 What this repo can currently prove authoritatively:
 
 - canonical project generation through `xcodegen`
-- canonical iOS build/test execution through `xcodebuild`
+- canonical iOS Simulator `build-for-testing` plus focused and full shared-scheme execution through `xcodebuild`
 - Linux UAPI header resolution through canonical include paths
-- selected runtime semantics for task groups, signals, and credentials via internal tests
+- selected Linux-facing semantics via LinuxKernel tests and private seam behavior via HostBridge tests
 
 What this repo does not currently prove:
 

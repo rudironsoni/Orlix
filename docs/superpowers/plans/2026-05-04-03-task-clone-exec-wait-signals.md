@@ -80,6 +80,7 @@
 **Files:**
 - Reference: `docs/superpowers/plans/2026-05-04-00-kernel-completion-orchestration.md`
 
-- [ ] Re-run lint, project generation, simulator build, focused task or wait or signal or ptrace suites, and the full LinuxKernel suite.
+- [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
+- [ ] Run the focused task or wait or signal or ptrace simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Confirm LinuxKernel tests still avoid `internal/ios/**`.
 - [ ] Commit and push only after the proof gate and branch-synchronization checks succeed.

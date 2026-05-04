@@ -9,9 +9,10 @@ This repository is under active virtualization and proof work.
 It is not public drop-in compatibility proof for arbitrary Linux userspace yet.
 Current proof in this repo is limited to:
 
-- internal runtime semantic tests for selected subsystems
+- LinuxKernel syscall-facing semantic tests for selected subsystems
+- HostBridge seam tests for private `internal/ios/**` mediation
 - Linux UAPI / ABI compile smoke tests for vendored headers
-- canonical iOS Simulator builds and XCTest execution through XcodeGen + Xcodebuild
+- canonical iOS Simulator build-for-testing and shared-scheme XCTest execution through XcodeGen + Xcodebuild
 
 ## Build Truth
 
@@ -20,17 +21,18 @@ XcodeGen and the generated Xcode project are the only build truth.
 Canonical flow:
 
 ```bash
-xcodegen generate --project .
-xcodebuild -list -project IXLandSystem.xcodeproj
-xcodebuild -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -arch arm64 -configuration Debug build
-xcodebuild test -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+rtk xcodegen generate --project .
+rtk xcodebuild -list -project IXLandSystem.xcodeproj
+rtk xcodebuild build-for-testing -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+rtk xcodebuild test-without-building -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 Canonical project surface:
 
 - Targets:
   - `IXLandSystem`
-  - `IXLandSystemTests`
+  - `IXLandSystemLinuxKernelTests`
+  - `IXLandSystemHostBridgeTests`
 - Scheme:
   - `IXLandSystem-6.12-arm64`
 
@@ -43,8 +45,9 @@ Current top-level ownership is organized around the implemented subsystems in th
 - `kernel/` — process/task, signal, pid, wait, cred, time, sync, init, resource, random, sys, network ownership
 - `fs/` — VFS, fdtable, open/read/write, stat, fcntl, ioctl, exec, path, mount, inode, readdir, eventpoll ownership
 - `runtime/native/` — native command registry surface
-- `arch/darwin/` — private host bridges only
-- `IXLandSystemTests/` — XCTest-based internal semantic tests and Linux UAPI compile smoke
+- `internal/ios/` — private host mediation seams only
+- `IXLandSystemLinuxKernelTests/` — Linux-facing syscall and contract proof
+- `IXLandSystemHostBridgeTests/` — private host-bridge seam proof
 - `third_party/linux-uapi/6.12/arm64/include/` — vendored Linux UAPI truth
 - `project.yml` — authoritative XcodeGen project specification
 
@@ -86,24 +89,30 @@ Forbidden include forms:
 
 ## Test Layering
 
-This XCTest tranche contains two kinds of proof only:
+This repo currently contains two XCTest proof layers plus Linux UAPI compile smoke:
 
-1. INTERNAL RUNTIME SEMANTIC TEST
-   - uses private internal headers and `_impl()`/owner entry points
-   - verifies IXLandSystem runtime behavior inside this repo
-   - does not prove public drop-in compatibility
+1. LinuxKernel proof
+   - uses syscall-facing contracts and Linux-visible runtime assertions
+   - keeps Linux semantics proof out of `internal/ios/**`
+   - is the primary subsystem proof for Linux-facing behavior
 
-2. LINUX UAPI / ABI COMPILE TEST
+2. HostBridge proof
+   - verifies private `internal/ios/**` mediation seams only
+   - may use host APIs to prove host-mechanics contracts
+   - does not count as Linux semantics proof
+
+3. Linux UAPI / ABI compile smoke
    - uses vendored Linux UAPI headers through canonical include paths
    - proves header/constants/types resolution only
    - does not prove runtime behavior
 
 Current files:
 
-- `IXLandSystemTests/SignalTests.m` — INTERNAL RUNTIME SEMANTIC TEST
-- `IXLandSystemTests/TaskGroupTests.m` — INTERNAL RUNTIME SEMANTIC TEST
-- `IXLandSystemTests/CredentialTests.m` — INTERNAL RUNTIME SEMANTIC TEST
-- `IXLandSystemTests/LinuxUAPICompileSmoke.c` — LINUX UAPI / ABI COMPILE TEST
+- `IXLandSystemLinuxKernelTests/SignalTests.m` — LinuxKernel semantic test
+- `IXLandSystemLinuxKernelTests/TaskGroupTests.m` — LinuxKernel semantic test
+- `IXLandSystemLinuxKernelTests/CredentialTests.m` — LinuxKernel semantic test
+- `IXLandSystemLinuxKernelTests/LinuxUAPICompileSmoke.c` — Linux UAPI / ABI compile smoke
+- `IXLandSystemHostBridgeTests/HostBridgeSmokeTests.m` — HostBridge seam test
 
 True public drop-in Linux userspace compatibility proof is not part of this XCTest tranche.
 
@@ -116,5 +125,4 @@ Some subsystems remain incomplete or partial; incomplete behavior should be trea
 ## Primary References
 
 - `AGENTS.md` — development rules for syscall ownership, `_impl()` usage, build proof, and error handling
-- `BUILD.md` — canonical build and test commands
 - `docs/SUBSTRATE_CONTRACT.md` — current architecture and ownership contract
