@@ -721,13 +721,11 @@ int syscall_is_implemented_impl(long number) {
 /*
  * Milestone-01 keeps a narrow matrix override for audited process-adjacent
  * syscalls whose repo-truth status is more specific than the coarse
- * implemented-vs-gap inventory. Keep this table scoped to the audited set
- * until the owning process tranche lands the full Linux-facing behavior.
+ * implemented-vs-gap inventory. Keep this table scoped to the audited pidfd
+ * set until the owning process tranche lands the full Linux-facing behavior.
  */
 enum syscall_matrix_override_class syscall_matrix_override_class_impl(long number) {
     switch (number) {
-    case __NR_unshare:
-        return SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS;
     case __NR_pidfd_send_signal:
     case __NR_pidfd_getfd:
         return SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS;

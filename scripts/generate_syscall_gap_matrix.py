@@ -34,14 +34,6 @@ OVERRIDE_LABELS = {
         "kernel-owned next:process",
         "next",
     ),
-    "SYSCALL_MATRIX_OVERRIDE_LIBC_OWNED_PROCESS": (
-        "libc-owned:process",
-        "none",
-    ),
-    "SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS": (
-        "explicit unsupported policy:process",
-        "policy",
-    ),
 }
 
 SHELL_BASE_SYSCALLS = {

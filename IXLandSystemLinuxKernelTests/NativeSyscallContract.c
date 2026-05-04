@@ -5296,15 +5296,25 @@ out:
 }
 
 int native_syscall_contract_classifies_milestone_01_process_surface(void) {
+    struct required_syscall_class {
+        long number;
+        enum syscall_capability_class capability_class;
+    };
     struct audited_syscall_repo_truth {
         long number;
         enum syscall_matrix_override_class override_class;
     };
+    #define NATIVE_SYSCALL_MILESTONE_01_IMPLEMENTED_LIST(X) \
+        X(__NR_unshare, SYSCALL_CAPABILITY_PROCESS)
     #define NATIVE_SYSCALL_MILESTONE_01_NEXT_LIST(X) \
         X(__NR_pidfd_send_signal, SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS) \
         X(__NR_pidfd_getfd, SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS)
-    #define NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST(X) \
-        X(__NR_unshare, SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS)
+    enum {
+        NATIVE_SYSCALL_MILESTONE_01_IMPLEMENTED_COUNT =
+    #define NATIVE_SYSCALL_MILESTONE_01_COUNT_IMPLEMENTED(number, capability_class) + 1
+            0 NATIVE_SYSCALL_MILESTONE_01_IMPLEMENTED_LIST(NATIVE_SYSCALL_MILESTONE_01_COUNT_IMPLEMENTED)
+    #undef NATIVE_SYSCALL_MILESTONE_01_COUNT_IMPLEMENTED
+    };
     enum {
         NATIVE_SYSCALL_MILESTONE_01_NEXT_COUNT =
     #define NATIVE_SYSCALL_MILESTONE_01_COUNT_NEXT(number, override_class) + 1
@@ -5312,40 +5322,42 @@ int native_syscall_contract_classifies_milestone_01_process_surface(void) {
     #undef NATIVE_SYSCALL_MILESTONE_01_COUNT_NEXT
     };
     enum {
-        NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_COUNT =
-    #define NATIVE_SYSCALL_MILESTONE_01_COUNT_UNSUPPORTED(number, override_class) + 1
-            0 NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST(NATIVE_SYSCALL_MILESTONE_01_COUNT_UNSUPPORTED)
-    #undef NATIVE_SYSCALL_MILESTONE_01_COUNT_UNSUPPORTED
-    };
-    enum {
         NATIVE_SYSCALL_MILESTONE_01_AUDITED_COUNT =
-            NATIVE_SYSCALL_MILESTONE_01_NEXT_COUNT +
-            NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_COUNT,
+            NATIVE_SYSCALL_MILESTONE_01_IMPLEMENTED_COUNT +
+            NATIVE_SYSCALL_MILESTONE_01_NEXT_COUNT,
     };
+    _Static_assert(NATIVE_SYSCALL_MILESTONE_01_IMPLEMENTED_COUNT == 1,
+                   "milestone 01 must keep one implemented syscall in the audited process surface");
     _Static_assert(NATIVE_SYSCALL_MILESTONE_01_NEXT_COUNT == 2,
                    "milestone 01 must keep two kernel-owned-next pidfd syscalls in the audited process surface");
-    _Static_assert(NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_COUNT == 1,
-                   "milestone 01 must keep one explicit unsupported-policy syscall in the audited process surface");
     _Static_assert(NATIVE_SYSCALL_MILESTONE_01_AUDITED_COUNT == 3,
                    "milestone 01 audited process surface must stay scoped to the reviewed three-syscall set");
+    static const struct required_syscall_class required_classes[] = {
+    #define NATIVE_SYSCALL_MILESTONE_01_EMIT_IMPLEMENTED(number, capability_class) {number, capability_class},
+        NATIVE_SYSCALL_MILESTONE_01_IMPLEMENTED_LIST(NATIVE_SYSCALL_MILESTONE_01_EMIT_IMPLEMENTED)
+    #undef NATIVE_SYSCALL_MILESTONE_01_EMIT_IMPLEMENTED
+    };
     static const struct audited_syscall_repo_truth next_syscalls[] = {
     #define NATIVE_SYSCALL_MILESTONE_01_EMIT_NEXT(number, override_class) {number, override_class},
         NATIVE_SYSCALL_MILESTONE_01_NEXT_LIST(NATIVE_SYSCALL_MILESTONE_01_EMIT_NEXT)
     #undef NATIVE_SYSCALL_MILESTONE_01_EMIT_NEXT
     };
-    static const struct audited_syscall_repo_truth unsupported_policy_syscalls[] = {
-    #define NATIVE_SYSCALL_MILESTONE_01_EMIT_UNSUPPORTED(number, override_class) {number, override_class},
-        NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST(NATIVE_SYSCALL_MILESTONE_01_EMIT_UNSUPPORTED)
-    #undef NATIVE_SYSCALL_MILESTONE_01_EMIT_UNSUPPORTED
-    };
-    #undef NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST
     #undef NATIVE_SYSCALL_MILESTONE_01_NEXT_LIST
+    #undef NATIVE_SYSCALL_MILESTONE_01_IMPLEMENTED_LIST
     long ret;
 
-    if (syscall_capability_class_impl(__NR_unshare) != SYSCALL_CAPABILITY_PROCESS ||
-        syscall_matrix_override_class_impl(__NR_unshare) !=
-            SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS) {
-        errno = ENOMSG;
+    for (size_t i = 0; i < sizeof(required_classes) / sizeof(required_classes[0]); i++) {
+        if (syscall_capability_class_impl(required_classes[i].number) != required_classes[i].capability_class ||
+            syscall_matrix_override_class_impl(required_classes[i].number) != SYSCALL_MATRIX_OVERRIDE_NONE ||
+            !syscall_is_implemented_impl(required_classes[i].number)) {
+            errno = ENOMSG;
+            return -1;
+        }
+    }
+
+    ret = syscall_dispatch_impl(__NR_unshare, 0, 0, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
         return -1;
     }
 
@@ -5364,14 +5376,6 @@ int native_syscall_contract_classifies_milestone_01_process_surface(void) {
         ret = syscall_dispatch_impl(next_syscalls[i].number, 0, 0, 0, 0, 0, 0);
         if (ret != -ENOSYS) {
             errno = ret < 0 ? (int)-ret : EPROTO;
-            return -1;
-        }
-    }
-
-    for (size_t i = 0; i < sizeof(unsupported_policy_syscalls) / sizeof(unsupported_policy_syscalls[0]); i++) {
-        if (syscall_matrix_override_class_impl(unsupported_policy_syscalls[i].number) !=
-            unsupported_policy_syscalls[i].override_class) {
-            errno = ENOTSUP;
             return -1;
         }
     }

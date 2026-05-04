@@ -30,8 +30,6 @@ enum syscall_gap_priority {
 enum syscall_matrix_override_class {
     SYSCALL_MATRIX_OVERRIDE_NONE = 0,
     SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS,
-    SYSCALL_MATRIX_OVERRIDE_LIBC_OWNED_PROCESS,
-    SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS,
 };
 
 long syscall_dispatch_impl(long number,

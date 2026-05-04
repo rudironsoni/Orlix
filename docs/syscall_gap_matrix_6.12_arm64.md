@@ -101,7 +101,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 94 | `exit_group` | implemented:process | none |
 | 95 | `waitid` | implemented:process | none |
 | 96 | `set_tid_address` | implemented:process | none |
-| 97 | `unshare` | explicit unsupported policy:process | policy |
+| 97 | `unshare` | implemented:process | none |
 | 98 | `futex` | implemented:readiness | none |
 | 99 | `set_robust_list` | implemented:resource | none |
 | 100 | `get_robust_list` | implemented:resource | none |
