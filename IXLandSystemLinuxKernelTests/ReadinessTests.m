@@ -38,6 +38,7 @@
 - (void)testPollPipeHupAfterWriterClose { XCTAssertEqual(readiness_contract_poll_pipe_hup_after_writer_close(), 0, @"errno %d", errno); }
 - (void)testPollPipeWriteEndErrAfterReaderClose { XCTAssertEqual(readiness_contract_poll_pipe_write_end_err_after_reader_close(), 0, @"errno %d", errno); }
 - (void)testEventfd2CounterReadWriteAndPoll { XCTAssertEqual(readiness_contract_eventfd2_counter_read_write_and_poll(), 0, @"errno %d", errno); }
+- (void)testTimerfdRelativeExpirationReadAndPoll { XCTAssertEqual(readiness_contract_timerfd_relative_expiration_read_and_poll(), 0, @"errno %d", errno); }
 - (void)testPollPtyMasterBlocksUntilSlaveWrites { XCTAssertEqual(readiness_contract_poll_pty_master_blocks_until_slave_writes(), 0, @"errno %d", errno); }
 - (void)testPollPtySlaveBlocksUntilMasterWrites { XCTAssertEqual(readiness_contract_poll_pty_slave_blocks_until_master_writes(), 0, @"errno %d", errno); }
 - (void)testPollPtyHupAfterPeerClose { XCTAssertEqual(readiness_contract_poll_pty_hup_after_peer_close(), 0, @"errno %d", errno); }

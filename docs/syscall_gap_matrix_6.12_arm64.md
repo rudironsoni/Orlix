@@ -89,9 +89,9 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 82 | `fsync` | implemented:fd | none |
 | 83 | `fdatasync` | implemented:fd | none |
 | 84 | `sync_file_range` | kernel-owned missing:unclassified | package |
-| 85 | `timerfd_create` | kernel-owned missing:unclassified | shell |
-| 86 | `timerfd_settime` | kernel-owned missing:unclassified | shell |
-| 87 | `timerfd_gettime` | kernel-owned missing:unclassified | shell |
+| 85 | `timerfd_create` | implemented:readiness | none |
+| 86 | `timerfd_settime` | implemented:readiness | none |
+| 87 | `timerfd_gettime` | implemented:readiness | none |
 | 88 | `utimensat` | implemented:fd | none |
 | 89 | `acct` | kernel-owned missing:unclassified | package |
 | 90 | `capget` | kernel-owned missing:unclassified | package |

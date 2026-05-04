@@ -4,10 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <linux/close_range.h>
 #include <linux/eventfd.h>
 #include <linux/fcntl.h>
+#include <linux/time_types.h>
+#include <linux/timerfd.h>
 
 #include "sync.h"
 
@@ -27,6 +30,7 @@ static void retain_fd_description(struct fd_description *desc);
 static void release_fd_description(struct fd_description *desc);
 static struct file *copy_file_descriptor(struct file *file);
 extern void poll_notify_readiness_impl(void);
+extern int clock_gettime_impl(clockid_t clk_id, struct timespec *tp);
 
 struct files_struct *alloc_files(size_t max_fds) {
     if (max_fds == 0) {
@@ -342,7 +346,8 @@ enum fd_type {
     FD_TYPE_PIPE, /* Virtual pipe endpoint */
     FD_TYPE_EPOLL, /* Virtual epoll instance */
     FD_TYPE_MOUNT, /* Virtual detached mount tree */
-    FD_TYPE_EVENTFD /* Virtual event counter */
+    FD_TYPE_EVENTFD, /* Virtual event counter */
+    FD_TYPE_TIMERFD /* Virtual timer expiration counter */
 };
 
 typedef struct synthetic_dir_state {
@@ -376,6 +381,11 @@ typedef struct fd_description {
     struct vfs_mount_fd mount_fd;
     uint64_t eventfd_counter;
     bool eventfd_semaphore;
+    int timerfd_clockid;
+    uint64_t timerfd_interval_ns;
+    uint64_t timerfd_next_ns;
+    uint64_t timerfd_expirations;
+    bool timerfd_armed;
     atomic_int refs;
     fs_mutex_t lock;
 } fd_description_t;
@@ -839,6 +849,104 @@ static fd_description_t *alloc_eventfd_description(unsigned int initval, int fla
     atomic_init(&desc->refs, 1);
     fs_mutex_init(&desc->lock);
     memcpy(desc->path, "anon_inode:[eventfd]", sizeof("anon_inode:[eventfd]"));
+    return desc;
+}
+
+static int timerfd_clock_allowed(int clockid) {
+    return clockid == 0 || clockid == 1;
+}
+
+static int timerfd_now_ns(int clockid, uint64_t *now_out) {
+    struct timespec ts;
+    clockid_t backend_clockid;
+
+    if (!now_out || !timerfd_clock_allowed(clockid)) {
+        errno = EINVAL;
+        return -1;
+    }
+    backend_clockid = clockid == 0 ? CLOCK_REALTIME : CLOCK_MONOTONIC;
+    if (clock_gettime_impl(backend_clockid, &ts) != 0) {
+        return -1;
+    }
+    if (ts.tv_sec < 0 || ts.tv_nsec < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    *now_out = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+    return 0;
+}
+
+static int timerfd_timespec_valid(const struct __kernel_timespec *ts) {
+    return ts && ts->tv_sec >= 0 && ts->tv_nsec >= 0 && ts->tv_nsec < 1000000000LL;
+}
+
+static uint64_t timerfd_timespec_to_ns(const struct __kernel_timespec *ts) {
+    return (uint64_t)ts->tv_sec * 1000000000ULL + (uint64_t)ts->tv_nsec;
+}
+
+static void timerfd_ns_to_timespec(uint64_t ns, struct __kernel_timespec *ts) {
+    ts->tv_sec = (__kernel_time64_t)(ns / 1000000000ULL);
+    ts->tv_nsec = (long long)(ns % 1000000000ULL);
+}
+
+static void timerfd_update_locked(fd_description_t *desc, uint64_t now_ns) {
+    uint64_t elapsed;
+    uint64_t count;
+
+    if (!desc || desc->type != FD_TYPE_TIMERFD || !desc->timerfd_armed ||
+        now_ns < desc->timerfd_next_ns) {
+        return;
+    }
+
+    if (desc->timerfd_interval_ns == 0) {
+        desc->timerfd_expirations++;
+        desc->timerfd_armed = false;
+        desc->timerfd_next_ns = 0;
+        return;
+    }
+
+    elapsed = now_ns - desc->timerfd_next_ns;
+    count = 1 + elapsed / desc->timerfd_interval_ns;
+    desc->timerfd_expirations += count;
+    desc->timerfd_next_ns += count * desc->timerfd_interval_ns;
+}
+
+static void timerfd_snapshot_locked(fd_description_t *desc, uint64_t now_ns,
+                                    struct __kernel_itimerspec *value) {
+    memset(value, 0, sizeof(*value));
+    timerfd_ns_to_timespec(desc->timerfd_interval_ns, &value->it_interval);
+    if (desc->timerfd_armed && desc->timerfd_next_ns > now_ns) {
+        timerfd_ns_to_timespec(desc->timerfd_next_ns - now_ns, &value->it_value);
+    }
+}
+
+static fd_description_t *alloc_timerfd_description(int clockid, int flags) {
+    fd_description_t *desc = calloc(1, sizeof(fd_description_t));
+    if (!desc) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    desc->type = FD_TYPE_TIMERFD;
+    desc->fd = -1;
+    desc->flags = O_RDWR | (flags & O_NONBLOCK);
+    desc->mode = 0;
+    desc->offset = 0;
+    desc->is_dir = false;
+    desc->dev_node = SYNTHETIC_DEV_NONE;
+    desc->proc_file = SYNTHETIC_PROC_FILE_NONE;
+    desc->proc_file_fd_num = -1;
+    desc->proc_file_target_pid = -1;
+    desc->pty_index = 0;
+    desc->pty_is_master = false;
+    desc->pipe_endpoint = NULL;
+    desc->epoll_instance = NULL;
+    memset(&desc->mount_fd, 0, sizeof(desc->mount_fd));
+    desc->timerfd_clockid = clockid;
+    desc->synthetic_state = NULL;
+    atomic_init(&desc->refs, 1);
+    fs_mutex_init(&desc->lock);
+    memcpy(desc->path, "anon_inode:[timerfd]", sizeof("anon_inode:[timerfd]"));
     return desc;
 }
 
@@ -1629,6 +1737,41 @@ int eventfd2_impl(unsigned int initval, int flags) {
     return fd;
 }
 
+static int init_timerfd_entry_impl(int fd, int clockid, int flags) {
+    file_init_impl();
+    fd_entry_t *entry = &fd_table[fd];
+    fs_mutex_lock(&entry->lock);
+    entry->desc = alloc_timerfd_description(clockid, flags);
+    if (!entry->desc) {
+        fs_mutex_unlock(&entry->lock);
+        return -1;
+    }
+    entry->fd_flags = (flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
+    fdtable_sync_task_file_locked(fd, entry);
+    fs_mutex_unlock(&entry->lock);
+    return 0;
+}
+
+int timerfd_create_impl(int clockid, int flags) {
+    const int allowed_flags = TFD_CLOEXEC | TFD_NONBLOCK;
+    int fd;
+
+    if (!timerfd_clock_allowed(clockid) || (flags & ~allowed_flags) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    fd = alloc_fd_impl();
+    if (fd < 0) {
+        return -1;
+    }
+    if (init_timerfd_entry_impl(fd, clockid, flags) != 0) {
+        free_fd_impl(fd);
+        return -1;
+    }
+    return fd;
+}
+
 bool get_fd_is_synthetic_dev_impl(void *entry) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     return fd_entry->desc && fd_entry->desc->type == FD_TYPE_SYNTHETIC_DEV;
@@ -1800,6 +1943,180 @@ bool eventfd_write_ready_entry_impl(void *entry) {
     desc = fd_entry->desc;
     fs_mutex_lock(&desc->lock);
     ready = desc->eventfd_counter < UINT64_MAX - 1;
+    fs_mutex_unlock(&desc->lock);
+    return ready;
+}
+
+bool get_fd_is_timerfd_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    return fd_entry->desc && fd_entry->desc->type == FD_TYPE_TIMERFD;
+}
+
+static int timerfd_entry_snapshot(void *entry, struct __kernel_itimerspec *value) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    fd_description_t *desc;
+    uint64_t now_ns;
+
+    if (!fd_entry || !fd_entry->desc || fd_entry->desc->type != FD_TYPE_TIMERFD || !value) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    desc = fd_entry->desc;
+    if (timerfd_now_ns(desc->timerfd_clockid, &now_ns) != 0) {
+        return -1;
+    }
+    fs_mutex_lock(&desc->lock);
+    timerfd_update_locked(desc, now_ns);
+    timerfd_snapshot_locked(desc, now_ns, value);
+    fs_mutex_unlock(&desc->lock);
+    return 0;
+}
+
+int timerfd_gettime_impl(int fd, struct __kernel_itimerspec *curr_value) {
+    void *entry;
+    int ret;
+
+    if (!curr_value) {
+        errno = EFAULT;
+        return -1;
+    }
+    entry = get_fd_entry_impl(fd);
+    if (!entry) {
+        return -1;
+    }
+    ret = timerfd_entry_snapshot(entry, curr_value);
+    put_fd_entry_impl(entry);
+    return ret;
+}
+
+int timerfd_settime_impl(int fd, int flags, const struct __kernel_itimerspec *new_value,
+                         struct __kernel_itimerspec *old_value) {
+    const int allowed_flags = TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET;
+    void *entry;
+    fd_entry_t *fd_entry;
+    fd_description_t *desc;
+    uint64_t now_ns;
+    uint64_t value_ns;
+    int ret = 0;
+
+    if ((flags & ~allowed_flags) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!new_value) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (!timerfd_timespec_valid(&new_value->it_value) ||
+        !timerfd_timespec_valid(&new_value->it_interval)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    entry = get_fd_entry_impl(fd);
+    if (!entry) {
+        return -1;
+    }
+    fd_entry = (fd_entry_t *)entry;
+    if (!fd_entry->desc || fd_entry->desc->type != FD_TYPE_TIMERFD) {
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    }
+
+    desc = fd_entry->desc;
+    if (timerfd_now_ns(desc->timerfd_clockid, &now_ns) != 0) {
+        put_fd_entry_impl(entry);
+        return -1;
+    }
+    fs_mutex_lock(&desc->lock);
+    timerfd_update_locked(desc, now_ns);
+    if (old_value) {
+        timerfd_snapshot_locked(desc, now_ns, old_value);
+    }
+
+    value_ns = timerfd_timespec_to_ns(&new_value->it_value);
+    desc->timerfd_interval_ns = timerfd_timespec_to_ns(&new_value->it_interval);
+    desc->timerfd_expirations = 0;
+    if (value_ns == 0) {
+        desc->timerfd_armed = false;
+        desc->timerfd_next_ns = 0;
+    } else {
+        desc->timerfd_armed = true;
+        desc->timerfd_next_ns = (flags & TFD_TIMER_ABSTIME) ? value_ns : now_ns + value_ns;
+    }
+    fs_mutex_unlock(&desc->lock);
+    put_fd_entry_impl(entry);
+
+    poll_notify_readiness_impl();
+    return ret;
+}
+
+long timerfd_read_entry_impl(void *entry, void *buf, size_t count) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    fd_description_t *desc;
+    uint64_t now_ns;
+    uint64_t expirations;
+
+    if (!fd_entry || !fd_entry->desc || fd_entry->desc->type != FD_TYPE_TIMERFD) {
+        errno = EBADF;
+        return -1;
+    }
+    if (!buf) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (count < sizeof(uint64_t)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    desc = fd_entry->desc;
+    if (timerfd_now_ns(desc->timerfd_clockid, &now_ns) != 0) {
+        return -1;
+    }
+    fs_mutex_lock(&desc->lock);
+    timerfd_update_locked(desc, now_ns);
+    expirations = desc->timerfd_expirations;
+    if (expirations == 0) {
+        fs_mutex_unlock(&desc->lock);
+        errno = EAGAIN;
+        return -1;
+    }
+    desc->timerfd_expirations = 0;
+    fs_mutex_unlock(&desc->lock);
+
+    memcpy(buf, &expirations, sizeof(expirations));
+    poll_notify_readiness_impl();
+    return (long)sizeof(expirations);
+}
+
+long timerfd_write_entry_impl(void *entry, const void *buf, size_t count) {
+    (void)entry;
+    (void)buf;
+    (void)count;
+    errno = EINVAL;
+    return -1;
+}
+
+bool timerfd_read_ready_entry_impl(void *entry) {
+    fd_entry_t *fd_entry = (fd_entry_t *)entry;
+    fd_description_t *desc;
+    uint64_t now_ns;
+    bool ready;
+
+    if (!fd_entry || !fd_entry->desc || fd_entry->desc->type != FD_TYPE_TIMERFD) {
+        return false;
+    }
+
+    desc = fd_entry->desc;
+    if (timerfd_now_ns(desc->timerfd_clockid, &now_ns) != 0) {
+        return false;
+    }
+    fs_mutex_lock(&desc->lock);
+    timerfd_update_locked(desc, now_ns);
+    ready = desc->timerfd_expirations > 0;
     fs_mutex_unlock(&desc->lock);
     return ready;
 }

@@ -4,6 +4,7 @@
 #include <linux/fcntl.h>
 #include <linux/poll.h>
 #include <linux/time_types.h>
+#include <linux/timerfd.h>
 
 #ifdef SIGUSR1
 #undef SIGUSR1
@@ -116,6 +117,73 @@ int readiness_contract_eventfd2_counter_read_write_and_poll(void) {
 out:
     close_if_open(efd);
     close_if_open(semfd);
+    return -1;
+}
+
+int readiness_contract_timerfd_relative_expiration_read_and_poll(void) {
+    struct __kernel_itimerspec spec;
+    struct __kernel_itimerspec current;
+    struct pollfd pfd;
+    uint64_t expirations = 0;
+    int fd = -1;
+    long ret;
+
+    fd = (int)syscall_dispatch_impl(__NR_timerfd_create, 1, TFD_NONBLOCK | TFD_CLOEXEC, 0, 0, 0, 0);
+    if (fd < 0) {
+        errno = (int)-fd;
+        return -1;
+    }
+
+    ret = syscall_dispatch_impl(__NR_fcntl, fd, F_GETFD, 0, 0, 0, 0);
+    if (ret != FD_CLOEXEC) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(&current, 0, sizeof(current));
+    ret = syscall_dispatch_impl(__NR_timerfd_gettime, fd, (long)(uintptr_t)&current, 0, 0, 0, 0);
+    if (ret != 0 || current.it_value.tv_sec != 0 || current.it_value.tv_nsec != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(&spec, 0, sizeof(spec));
+    spec.it_value.tv_nsec = 1;
+    ret = syscall_dispatch_impl(__NR_timerfd_settime, fd, 0, (long)(uintptr_t)&spec,
+                                (long)(uintptr_t)&current, 0, 0);
+    if (ret != 0 || current.it_value.tv_sec != 0 || current.it_value.tv_nsec != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(&pfd, 0, sizeof(pfd));
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    ret = syscall_dispatch_impl(__NR_ppoll, (long)(uintptr_t)&pfd, 1, 0, 0, 0, 0);
+    if (ret != 1 || (pfd.revents & POLLIN) == 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    ret = syscall_dispatch_impl(__NR_read, fd, (long)(uintptr_t)&expirations,
+                                sizeof(expirations), 0, 0, 0);
+    if (ret != (long)sizeof(expirations) || expirations < 1) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(&current, 0, sizeof(current));
+    ret = syscall_dispatch_impl(__NR_timerfd_gettime, fd, (long)(uintptr_t)&current, 0, 0, 0, 0);
+    if (ret != 0 || current.it_value.tv_sec != 0 || current.it_value.tv_nsec != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    close_if_open(fd);
+    return 0;
+
+out:
+    close_if_open(fd);
     return -1;
 }
 

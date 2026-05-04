@@ -233,6 +233,10 @@ extern int dup_impl(int oldfd);
 extern int dup3_impl(int oldfd, int newfd, int flags);
 extern int close_range_impl(unsigned int first, unsigned int last, unsigned int flags);
 extern int eventfd2_impl(unsigned int initval, int flags);
+extern int timerfd_create_impl(int clockid, int flags);
+extern int timerfd_settime_impl(int fd, int flags, const struct __kernel_itimerspec *new_value,
+                                struct __kernel_itimerspec *old_value);
+extern int timerfd_gettime_impl(int fd, struct __kernel_itimerspec *curr_value);
 extern int mkdirat_impl(int dirfd, const char *pathname, linux_mode_t mode);
 extern int unlinkat_impl(int dirfd, const char *pathname, int flags);
 extern int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd,
@@ -656,6 +660,9 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_epoll_ctl:
     case __NR_epoll_pwait:
     case __NR_eventfd2:
+    case __NR_timerfd_create:
+    case __NR_timerfd_settime:
+    case __NR_timerfd_gettime:
     case __NR_futex:
         return SYSCALL_CAPABILITY_READINESS;
     case __NR_mount_setattr:
@@ -791,6 +798,15 @@ static long syscall_dispatch_inner_impl(long number,
         return syscall_result((long)pipe2_impl((int *)(uintptr_t)arg0, (int)arg1));
     case __NR_eventfd2:
         return syscall_result((long)eventfd2_impl((unsigned int)arg0, (int)arg1));
+    case __NR_timerfd_create:
+        return syscall_result((long)timerfd_create_impl((int)arg0, (int)arg1));
+    case __NR_timerfd_settime:
+        return syscall_result((long)timerfd_settime_impl((int)arg0, (int)arg1,
+                                                         (const struct __kernel_itimerspec *)(uintptr_t)arg2,
+                                                         (struct __kernel_itimerspec *)(uintptr_t)arg3));
+    case __NR_timerfd_gettime:
+        return syscall_result((long)timerfd_gettime_impl((int)arg0,
+                                                         (struct __kernel_itimerspec *)(uintptr_t)arg1));
     case __NR_fcntl:
         return syscall_result((long)fcntl_impl((int)arg0, (int)arg1, (int)arg2));
     case __NR_flock:

@@ -75,6 +75,12 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         return ret;
     }
 
+    if (get_fd_is_timerfd_impl(entry)) {
+        ssize_t ret = (ssize_t)timerfd_read_entry_impl(entry, buf, count);
+        put_fd_entry_impl(entry);
+        return ret;
+    }
+
     if (get_fd_is_synthetic_dev_impl(entry)) {
         synthetic_dev_node_t dev_node = get_fd_synthetic_dev_node_impl(entry);
         put_fd_entry_impl(entry);
@@ -307,6 +313,12 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
 
     if (get_fd_is_eventfd_impl(entry)) {
         ssize_t ret = (ssize_t)eventfd_write_entry_impl(entry, buf, count);
+        put_fd_entry_impl(entry);
+        return ret;
+    }
+
+    if (get_fd_is_timerfd_impl(entry)) {
+        ssize_t ret = (ssize_t)timerfd_write_entry_impl(entry, buf, count);
         put_fd_entry_impl(entry);
         return ret;
     }

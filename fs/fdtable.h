@@ -22,6 +22,7 @@ extern "C" {
 struct file;
 struct files_struct;
 struct task_struct;
+struct __kernel_itimerspec;
 
 struct file {
     int fd;
@@ -162,6 +163,10 @@ int init_pipe_fd_entry_impl(int fd, int flags, struct pipe_endpoint *endpoint);
 int init_epoll_fd_entry_impl(int fd, int flags, struct epoll_instance *instance);
 int init_mount_fd_entry_impl(int fd, int flags, const struct vfs_mount_fd *mount_fd);
 int eventfd2_impl(unsigned int initval, int flags);
+int timerfd_create_impl(int clockid, int flags);
+int timerfd_settime_impl(int fd, int flags, const struct __kernel_itimerspec *new_value,
+                         struct __kernel_itimerspec *old_value);
+int timerfd_gettime_impl(int fd, struct __kernel_itimerspec *curr_value);
 
 bool get_fd_is_synthetic_dev_impl(void *entry);
 synthetic_dev_node_t get_fd_synthetic_dev_node_impl(void *entry);
@@ -179,6 +184,10 @@ long eventfd_read_entry_impl(void *entry, void *buf, size_t count);
 long eventfd_write_entry_impl(void *entry, const void *buf, size_t count);
 bool eventfd_read_ready_entry_impl(void *entry);
 bool eventfd_write_ready_entry_impl(void *entry);
+bool get_fd_is_timerfd_impl(void *entry);
+long timerfd_read_entry_impl(void *entry, void *buf, size_t count);
+long timerfd_write_entry_impl(void *entry, const void *buf, size_t count);
+bool timerfd_read_ready_entry_impl(void *entry);
 
 enum synthetic_proc_file {
     SYNTHETIC_PROC_FILE_NONE = 0,

@@ -5172,6 +5172,9 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         __NR_utimensat,
         __NR_flock,
         __NR_eventfd2,
+        __NR_timerfd_create,
+        __NR_timerfd_settime,
+        __NR_timerfd_gettime,
         __NR_execve,
         __NR_wait4,
         __NR_waitid,
@@ -5257,6 +5260,9 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         {__NR_utimensat, SYSCALL_CAPABILITY_FD},
         {__NR_flock, SYSCALL_CAPABILITY_FD},
         {__NR_eventfd2, SYSCALL_CAPABILITY_READINESS},
+        {__NR_timerfd_create, SYSCALL_CAPABILITY_READINESS},
+        {__NR_timerfd_settime, SYSCALL_CAPABILITY_READINESS},
+        {__NR_timerfd_gettime, SYSCALL_CAPABILITY_READINESS},
         {__NR_prlimit64, SYSCALL_CAPABILITY_RESOURCE},
     };
     static const struct planned_syscall_gap planned_gaps[] = {
