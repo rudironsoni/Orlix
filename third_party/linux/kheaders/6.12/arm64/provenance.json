@@ -4,8 +4,8 @@
   "kernel_series": "v6.x",
   "tarball_url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.tar.xz",
   "source_release_name": "linux-6.12",
-  "generated_at_utc": "2026-05-04T18:40:12Z",
-  "generator_script": "scripts/vendor_linux_headers.sh",
+  "generated_at_utc": "2026-05-04T19:27:04Z",
+  "generator_script": "Makefile:vendor-linux-headers",
   "make_targets_run": [
     "defconfig",
     "olddefconfig",
