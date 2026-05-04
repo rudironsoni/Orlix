@@ -101,7 +101,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 94 | `exit_group` | implemented:process | none |
 | 95 | `waitid` | implemented:process | none |
 | 96 | `set_tid_address` | implemented:process | none |
-| 97 | `unshare` | kernel-owned missing:unclassified | package |
+| 97 | `unshare` | implemented:process | none |
 | 98 | `futex` | implemented:readiness | none |
 | 99 | `set_robust_list` | implemented:resource | none |
 | 100 | `get_robust_list` | implemented:resource | none |
@@ -283,7 +283,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 292 | `io_pgetevents` | kernel-owned missing:unclassified | package |
 | 293 | `rseq` | kernel-owned missing:unclassified | package |
 | 294 | `kexec_file_load` | kernel-owned missing:unclassified | package |
-| 424 | `pidfd_send_signal` | kernel-owned missing:unclassified | package |
+| 424 | `pidfd_send_signal` | kernel-owned missing:package | package |
 | 425 | `io_uring_setup` | kernel-owned missing:unclassified | package |
 | 426 | `io_uring_enter` | kernel-owned missing:unclassified | package |
 | 427 | `io_uring_register` | kernel-owned missing:unclassified | package |
@@ -297,7 +297,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 435 | `clone3` | implemented:process | none |
 | 436 | `close_range` | implemented:fd | none |
 | 437 | `openat2` | implemented:fd | none |
-| 438 | `pidfd_getfd` | kernel-owned missing:unclassified | package |
+| 438 | `pidfd_getfd` | kernel-owned missing:package | package |
 | 439 | `faccessat2` | implemented:fd | none |
 | 440 | `process_madvise` | kernel-owned missing:unclassified | package |
 | 441 | `epoll_pwait2` | kernel-owned missing:unclassified | package |

@@ -314,6 +314,10 @@
     XCTAssertEqual(native_syscall_contract_dispatches_pidfd_syscalls(), 0, @"errno %d", errno);
 }
 
+- (void)testClassifiesMilestone01ProcessSurface {
+    XCTAssertEqual(native_syscall_contract_classifies_milestone_01_process_surface(), 0, @"errno %d", errno);
+}
+
 - (void)testDispatchesReadvWritevSyscalls {
     XCTAssertEqual(syscall_uio_contract_readv_writev_round_trip(), 0, @"errno %d", errno);
 }

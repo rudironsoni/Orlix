@@ -629,6 +629,7 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_exit_group:
     case __NR_wait4:
     case __NR_waitid:
+    case __NR_unshare:
     case __NR_clone3:
     case __NR_pidfd_open:
     case __NR_getpid:
@@ -733,6 +734,9 @@ enum syscall_gap_priority syscall_gap_priority_impl(long number) {
     case __NR_recvmmsg:
     case __NR_sendmmsg:
         return SYSCALL_GAP_NETWORK;
+    case __NR_pidfd_send_signal:
+    case __NR_pidfd_getfd:
+        return SYSCALL_GAP_PACKAGE;
     default:
         return SYSCALL_GAP_NONE;
     }
@@ -1428,6 +1432,8 @@ static long syscall_dispatch_inner_impl(long number,
         return syscall_result((long)waitid_impl((int)arg0, (__kernel_pid_t)arg1,
                                                 (void *)(uintptr_t)arg2, (int)arg3,
                                                 (void *)(uintptr_t)arg4));
+    case __NR_unshare:
+        return syscall_result((long)unshare_impl((uint64_t)arg0));
     case __NR_clone3:
         return syscall_result((long)clone3_impl((const struct clone_args *)(uintptr_t)arg0,
                                                 (size_t)arg1));

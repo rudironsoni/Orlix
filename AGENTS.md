@@ -220,3 +220,5 @@ Required response to lint conflicts:
 - refine seam boundaries
 - relocate host mechanics behind `internal/ios/**`
 - preserve Linux-owner semantics and contracts
+
+@RTK.md

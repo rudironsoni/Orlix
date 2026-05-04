@@ -5295,6 +5295,63 @@ out:
     return -1;
 }
 
+int native_syscall_contract_classifies_milestone_01_process_surface(void) {
+    struct required_syscall_class {
+        long number;
+        enum syscall_capability_class capability_class;
+    };
+    struct planned_syscall_gap {
+        long number;
+        enum syscall_gap_priority priority;
+    };
+    static const long implemented_syscalls[] = {
+        __NR_unshare,
+    };
+    static const struct required_syscall_class required_classes[] = {
+        {__NR_unshare, SYSCALL_CAPABILITY_PROCESS},
+    };
+    static const struct planned_syscall_gap planned_gaps[] = {
+        {__NR_pidfd_send_signal, SYSCALL_GAP_PACKAGE},
+        {__NR_pidfd_getfd, SYSCALL_GAP_PACKAGE},
+    };
+    long ret;
+
+    for (size_t i = 0; i < sizeof(implemented_syscalls) / sizeof(implemented_syscalls[0]); i++) {
+        if (!syscall_is_implemented_impl(implemented_syscalls[i])) {
+            errno = ENOSYS;
+            return -1;
+        }
+    }
+
+    for (size_t i = 0; i < sizeof(required_classes) / sizeof(required_classes[0]); i++) {
+        if (syscall_capability_class_impl(required_classes[i].number) != required_classes[i].capability_class) {
+            errno = ENOMSG;
+            return -1;
+        }
+    }
+
+    ret = syscall_dispatch_impl(__NR_unshare, 0, 0, 0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        return -1;
+    }
+
+    for (size_t i = 0; i < sizeof(planned_gaps) / sizeof(planned_gaps[0]); i++) {
+        if (syscall_is_implemented_impl(planned_gaps[i].number) ||
+            syscall_gap_priority_impl(planned_gaps[i].number) != planned_gaps[i].priority) {
+            errno = ENOTSUP;
+            return -1;
+        }
+        ret = syscall_dispatch_impl(planned_gaps[i].number, 0, 0, 0, 0, 0, 0);
+        if (ret != -ENOSYS) {
+            errno = ret < 0 ? (int)-ret : EPROTO;
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) {
     struct required_syscall_class {
         long number;
