@@ -29,6 +29,21 @@ GAP_LABELS = {
     "SYSCALL_GAP_NETWORK": "future backend:virtual-network",
 }
 
+OVERRIDE_LABELS = {
+    "SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS": (
+        "kernel-owned next:process",
+        "next",
+    ),
+    "SYSCALL_MATRIX_OVERRIDE_LIBC_OWNED_PROCESS": (
+        "libc-owned:process",
+        "none",
+    ),
+    "SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS": (
+        "explicit unsupported policy:process",
+        "policy",
+    ),
+}
+
 SHELL_BASE_SYSCALLS = {
     "close_range",
     "copy_file_range",
@@ -133,15 +148,28 @@ def switch_cases(source: str, function_name: str) -> dict[str, str]:
     return result
 
 
-def classifications(root: Path) -> tuple[dict[str, str], dict[str, str]]:
+def classifications(root: Path) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     source = (root / "runtime/syscall.c").read_text()
     return (
         switch_cases(source, "syscall_capability_class_impl"),
         switch_cases(source, "syscall_gap_priority_impl"),
+        switch_cases(source, "syscall_matrix_override_class_impl"),
     )
 
 
-def row_for(name: str, number: int, implemented: dict[str, str], gaps: dict[str, str]) -> str:
+def row_for(
+    name: str,
+    number: int,
+    implemented: dict[str, str],
+    gaps: dict[str, str],
+    overrides: dict[str, str],
+) -> str:
+    if name in overrides:
+        classification, priority = OVERRIDE_LABELS.get(
+            overrides[name],
+            ("kernel-owned missing:unclassified", "package"),
+        )
+        return f"| {number} | `{name}` | {classification} | {priority} |"
     if name in implemented:
         classification = CAPABILITY_LABELS.get(implemented[name], "implemented:unknown")
         priority = "none"
@@ -160,7 +188,7 @@ def main() -> int:
     args = parser.parse_args()
 
     root = args.root.resolve()
-    implemented, gaps = classifications(root)
+    implemented, gaps, overrides = classifications(root)
     syscalls = syscall_macros(root)
 
     print("# Linux 6.12 arm64 Syscall Gap Matrix")
@@ -170,7 +198,7 @@ def main() -> int:
     print("| nr | syscall | classification | priority |")
     print("| ---: | --- | --- | --- |")
     for name, number in syscalls:
-        print(row_for(name, number, implemented, gaps))
+        print(row_for(name, number, implemented, gaps, overrides))
     return 0
 
 

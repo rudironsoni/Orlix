@@ -718,6 +718,24 @@ int syscall_is_implemented_impl(long number) {
     return syscall_capability_class_impl(number) != SYSCALL_CAPABILITY_NONE;
 }
 
+/*
+ * Milestone-01 keeps a narrow matrix override for audited process-adjacent
+ * syscalls whose repo-truth status is more specific than the coarse
+ * implemented-vs-gap inventory. Keep this table scoped to the audited set
+ * until the owning process tranche lands the full Linux-facing behavior.
+ */
+enum syscall_matrix_override_class syscall_matrix_override_class_impl(long number) {
+    switch (number) {
+    case __NR_unshare:
+        return SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS;
+    case __NR_pidfd_send_signal:
+    case __NR_pidfd_getfd:
+        return SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS;
+    default:
+        return SYSCALL_MATRIX_OVERRIDE_NONE;
+    }
+}
+
 enum syscall_gap_priority syscall_gap_priority_impl(long number) {
     if (syscall_is_implemented_impl(number)) {
         return SYSCALL_GAP_NONE;
@@ -734,9 +752,6 @@ enum syscall_gap_priority syscall_gap_priority_impl(long number) {
     case __NR_recvmmsg:
     case __NR_sendmmsg:
         return SYSCALL_GAP_NETWORK;
-    case __NR_pidfd_send_signal:
-    case __NR_pidfd_getfd:
-        return SYSCALL_GAP_PACKAGE;
     default:
         return SYSCALL_GAP_NONE;
     }

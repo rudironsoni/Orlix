@@ -5296,55 +5296,82 @@ out:
 }
 
 int native_syscall_contract_classifies_milestone_01_process_surface(void) {
-    struct required_syscall_class {
+    struct audited_syscall_repo_truth {
         long number;
-        enum syscall_capability_class capability_class;
+        enum syscall_matrix_override_class override_class;
     };
-    struct planned_syscall_gap {
-        long number;
-        enum syscall_gap_priority priority;
+    #define NATIVE_SYSCALL_MILESTONE_01_NEXT_LIST(X) \
+        X(__NR_pidfd_send_signal, SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS) \
+        X(__NR_pidfd_getfd, SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS)
+    #define NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST(X) \
+        X(__NR_unshare, SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS)
+    enum {
+        NATIVE_SYSCALL_MILESTONE_01_NEXT_COUNT =
+    #define NATIVE_SYSCALL_MILESTONE_01_COUNT_NEXT(number, override_class) + 1
+            0 NATIVE_SYSCALL_MILESTONE_01_NEXT_LIST(NATIVE_SYSCALL_MILESTONE_01_COUNT_NEXT)
+    #undef NATIVE_SYSCALL_MILESTONE_01_COUNT_NEXT
     };
-    static const long implemented_syscalls[] = {
-        __NR_unshare,
+    enum {
+        NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_COUNT =
+    #define NATIVE_SYSCALL_MILESTONE_01_COUNT_UNSUPPORTED(number, override_class) + 1
+            0 NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST(NATIVE_SYSCALL_MILESTONE_01_COUNT_UNSUPPORTED)
+    #undef NATIVE_SYSCALL_MILESTONE_01_COUNT_UNSUPPORTED
     };
-    static const struct required_syscall_class required_classes[] = {
-        {__NR_unshare, SYSCALL_CAPABILITY_PROCESS},
+    enum {
+        NATIVE_SYSCALL_MILESTONE_01_AUDITED_COUNT =
+            NATIVE_SYSCALL_MILESTONE_01_NEXT_COUNT +
+            NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_COUNT,
     };
-    static const struct planned_syscall_gap planned_gaps[] = {
-        {__NR_pidfd_send_signal, SYSCALL_GAP_PACKAGE},
-        {__NR_pidfd_getfd, SYSCALL_GAP_PACKAGE},
+    _Static_assert(NATIVE_SYSCALL_MILESTONE_01_NEXT_COUNT == 2,
+                   "milestone 01 must keep two kernel-owned-next pidfd syscalls in the audited process surface");
+    _Static_assert(NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_COUNT == 1,
+                   "milestone 01 must keep one explicit unsupported-policy syscall in the audited process surface");
+    _Static_assert(NATIVE_SYSCALL_MILESTONE_01_AUDITED_COUNT == 3,
+                   "milestone 01 audited process surface must stay scoped to the reviewed three-syscall set");
+    static const struct audited_syscall_repo_truth next_syscalls[] = {
+    #define NATIVE_SYSCALL_MILESTONE_01_EMIT_NEXT(number, override_class) {number, override_class},
+        NATIVE_SYSCALL_MILESTONE_01_NEXT_LIST(NATIVE_SYSCALL_MILESTONE_01_EMIT_NEXT)
+    #undef NATIVE_SYSCALL_MILESTONE_01_EMIT_NEXT
     };
+    static const struct audited_syscall_repo_truth unsupported_policy_syscalls[] = {
+    #define NATIVE_SYSCALL_MILESTONE_01_EMIT_UNSUPPORTED(number, override_class) {number, override_class},
+        NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST(NATIVE_SYSCALL_MILESTONE_01_EMIT_UNSUPPORTED)
+    #undef NATIVE_SYSCALL_MILESTONE_01_EMIT_UNSUPPORTED
+    };
+    #undef NATIVE_SYSCALL_MILESTONE_01_UNSUPPORTED_POLICY_LIST
+    #undef NATIVE_SYSCALL_MILESTONE_01_NEXT_LIST
     long ret;
 
-    for (size_t i = 0; i < sizeof(implemented_syscalls) / sizeof(implemented_syscalls[0]); i++) {
-        if (!syscall_is_implemented_impl(implemented_syscalls[i])) {
-            errno = ENOSYS;
-            return -1;
-        }
+    if (syscall_capability_class_impl(__NR_unshare) != SYSCALL_CAPABILITY_PROCESS ||
+        syscall_matrix_override_class_impl(__NR_unshare) !=
+            SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS) {
+        errno = ENOMSG;
+        return -1;
     }
 
-    for (size_t i = 0; i < sizeof(required_classes) / sizeof(required_classes[0]); i++) {
-        if (syscall_capability_class_impl(required_classes[i].number) != required_classes[i].capability_class) {
-            errno = ENOMSG;
-            return -1;
-        }
-    }
-
-    ret = syscall_dispatch_impl(__NR_unshare, 0, 0, 0, 0, 0, 0);
-    if (ret != 0) {
+    ret = syscall_dispatch_impl(__NR_unshare, CLONE_FS, 0, 0, 0, 0, 0);
+    if (ret != -ENOSYS) {
         errno = ret < 0 ? (int)-ret : EPROTO;
         return -1;
     }
 
-    for (size_t i = 0; i < sizeof(planned_gaps) / sizeof(planned_gaps[0]); i++) {
-        if (syscall_is_implemented_impl(planned_gaps[i].number) ||
-            syscall_gap_priority_impl(planned_gaps[i].number) != planned_gaps[i].priority) {
+    for (size_t i = 0; i < sizeof(next_syscalls) / sizeof(next_syscalls[0]); i++) {
+        if (syscall_is_implemented_impl(next_syscalls[i].number) ||
+            syscall_matrix_override_class_impl(next_syscalls[i].number) != next_syscalls[i].override_class) {
             errno = ENOTSUP;
             return -1;
         }
-        ret = syscall_dispatch_impl(planned_gaps[i].number, 0, 0, 0, 0, 0, 0);
+        ret = syscall_dispatch_impl(next_syscalls[i].number, 0, 0, 0, 0, 0, 0);
         if (ret != -ENOSYS) {
             errno = ret < 0 ? (int)-ret : EPROTO;
+            return -1;
+        }
+    }
+
+    for (size_t i = 0; i < sizeof(unsupported_policy_syscalls) / sizeof(unsupported_policy_syscalls[0]); i++) {
+        if (syscall_matrix_override_class_impl(unsupported_policy_syscalls[i].number) !=
+            unsupported_policy_syscalls[i].override_class) {
+            errno = ENOTSUP;
             return -1;
         }
     }

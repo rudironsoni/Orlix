@@ -27,6 +27,13 @@ enum syscall_gap_priority {
     SYSCALL_GAP_NETWORK,
 };
 
+enum syscall_matrix_override_class {
+    SYSCALL_MATRIX_OVERRIDE_NONE = 0,
+    SYSCALL_MATRIX_OVERRIDE_KERNEL_OWNED_NEXT_PROCESS,
+    SYSCALL_MATRIX_OVERRIDE_LIBC_OWNED_PROCESS,
+    SYSCALL_MATRIX_OVERRIDE_EXPLICIT_UNSUPPORTED_POLICY_PROCESS,
+};
+
 long syscall_dispatch_impl(long number,
                            long arg0,
                            long arg1,
@@ -37,6 +44,7 @@ long syscall_dispatch_impl(long number,
 int syscall_is_implemented_impl(long number);
 enum syscall_capability_class syscall_capability_class_impl(long number);
 enum syscall_gap_priority syscall_gap_priority_impl(long number);
+enum syscall_matrix_override_class syscall_matrix_override_class_impl(long number);
 
 #ifdef __cplusplus
 }
