@@ -434,6 +434,105 @@ out_cleanup:
     return ret;
 }
 
+int namespace_contract_unshare_clone_fs_splits_shared_fs_state(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    struct task_struct *saved;
+    struct fs_struct *original_shared_fs;
+    int original_umask;
+    int pid;
+    int ret = -1;
+
+    reset_namespace_contract_state();
+    if (!parent || !parent->fs) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    if (fs_set_root(parent->fs, "/") != 0 || fs_set_pwd(parent->fs, "/") != 0) {
+        goto out;
+    }
+    original_umask = parent->fs->umask;
+    pid = clone_impl(CLONE_FS);
+    if (pid < 0) {
+        goto out;
+    }
+    child = lookup_child_from_pid(pid);
+    if (!child || !child->fs) {
+        goto out;
+    }
+    if (child->fs != parent->fs) {
+        errno = EPROTO;
+        goto out_release;
+    }
+    original_shared_fs = parent->fs;
+
+    saved = get_current();
+    set_current(child);
+    if (unshare_impl(CLONE_FS) != 0) {
+        set_current(saved);
+        goto out_release;
+    }
+    if (child->fs == original_shared_fs) {
+        set_current(saved);
+        errno = EPROTO;
+        goto out_release;
+    }
+    if (fs_set_root(child->fs, "/tmp") != 0 || fs_set_pwd(child->fs, "/tmp") != 0) {
+        set_current(saved);
+        goto out_release;
+    }
+    child->fs->umask = 0077;
+    set_current(saved);
+
+    if (strcmp(child->fs->root_path, "/tmp") != 0 ||
+        strcmp(child->fs->pwd_path, "/tmp") != 0 ||
+        child->fs->umask != 0077) {
+        errno = EPROTO;
+        goto out_release;
+    }
+    if (parent->fs != original_shared_fs ||
+        strcmp(parent->fs->root_path, "/") != 0 ||
+        strcmp(parent->fs->pwd_path, "/") != 0 ||
+        parent->fs->umask != original_umask) {
+        errno = EPROTO;
+        goto out_release;
+    }
+
+    saved = get_current();
+    set_current(child);
+    if (unshare_impl(CLONE_NEWNS) != 0) {
+        set_current(saved);
+        goto out_release;
+    }
+    if (child->fs == original_shared_fs ||
+        fs_mount_namespace_id(child->fs) == fs_mount_namespace_id(parent->fs)) {
+        set_current(saved);
+        errno = EPROTO;
+        goto out_release;
+    }
+    if (fs_set_pwd(child->fs, "/var") != 0) {
+        set_current(saved);
+        goto out_release;
+    }
+    child->fs->umask = 0022;
+    set_current(saved);
+
+    if (strcmp(child->fs->pwd_path, "/var") != 0 ||
+        strcmp(parent->fs->pwd_path, "/") != 0 ||
+        parent->fs->umask != original_umask) {
+        errno = EPROTO;
+        goto out_release;
+    }
+    ret = 0;
+
+out_release:
+    release_lookup_child(parent, child);
+out:
+    reset_namespace_contract_state();
+    return ret;
+}
+
 int namespace_contract_clone_newns_with_clone_fs_rejected(void) {
     reset_namespace_contract_state();
     errno = 0;

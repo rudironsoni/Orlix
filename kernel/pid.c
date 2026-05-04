@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -93,6 +94,32 @@ void pid_init(void) {
 /* Public wrappers declared in task.h */
 int32_t alloc_pid(void) {
     return pid_alloc_impl();
+}
+
+int pid_reserve(int32_t pid) {
+    if (pid < PID_MIN || pid > PID_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!atomic_load(&pid_initialized)) {
+        pid_init();
+    }
+
+    kernel_mutex_lock(&pid_lock);
+    int top = atomic_load(&pid_stack_top);
+    for (int i = 0; i < top; i++) {
+        if (pid_free_stack[i] == pid) {
+            pid_free_stack[i] = pid_free_stack[top - 1];
+            atomic_store(&pid_stack_top, top - 1);
+            kernel_mutex_unlock(&pid_lock);
+            return 0;
+        }
+    }
+    kernel_mutex_unlock(&pid_lock);
+
+    errno = EEXIST;
+    return -1;
 }
 
 void free_pid(int32_t pid) {

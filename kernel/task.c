@@ -1458,6 +1458,59 @@ struct task_struct *task_lookup(int32_t pid) {
     return task;
 }
 
+int task_reassign_pid_impl(struct task_struct *task, int32_t pid) {
+    struct task_struct **link;
+    int old_pid;
+    int old_idx;
+    int new_idx;
+
+    if (!task) {
+        errno = ESRCH;
+        return -1;
+    }
+    if (pid <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (task->pid == pid) {
+        return 0;
+    }
+    if (pid_reserve(pid) != 0) {
+        return -1;
+    }
+
+    old_pid = task->pid;
+    old_idx = task_hash(old_pid);
+    new_idx = task_hash(pid);
+
+    kernel_mutex_lock(&task_table_lock);
+    link = &task_table[old_idx];
+    while (*link && *link != task) {
+        link = &(*link)->hash_next;
+    }
+    if (*link != task) {
+        kernel_mutex_unlock(&task_table_lock);
+        free_pid(pid);
+        errno = ESRCH;
+        return -1;
+    }
+
+    *link = task->hash_next;
+    task->pid = pid;
+    if (task->tgid == old_pid) {
+        task->tgid = pid;
+    }
+    if (task->ns_pid == old_pid) {
+        task->ns_pid = pid;
+    }
+    task->hash_next = task_table[new_idx];
+    task_table[new_idx] = task;
+    kernel_mutex_unlock(&task_table_lock);
+
+    free_pid(old_pid);
+    return 0;
+}
+
 static atomic_bool task_initialized = false;
 
 int task_init(void) {

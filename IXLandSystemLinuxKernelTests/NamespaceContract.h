@@ -11,6 +11,7 @@ int namespace_contract_unshare_newuts_isolates_current_task(void);
 int namespace_contract_clone_newns_isolates_child_mounts(void);
 int namespace_contract_clone_without_newns_shares_mounts(void);
 int namespace_contract_unshare_newns_isolates_current_mounts(void);
+int namespace_contract_unshare_clone_fs_splits_shared_fs_state(void);
 int namespace_contract_clone_newns_with_clone_fs_rejected(void);
 int namespace_contract_clone_newpid_records_child_namespace_metadata(void);
 int namespace_contract_unshare_newpid_applies_to_next_child_metadata(void);

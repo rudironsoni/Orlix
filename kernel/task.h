@@ -398,6 +398,7 @@ void set_current(struct task_struct *task);
 
 /* Virtual PID namespace management */
 int32_t alloc_pid(void);
+int pid_reserve(int32_t pid);
 void free_pid(int32_t pid);
 void pid_init(void);
 
@@ -406,6 +407,7 @@ int task_init(void);
 void task_deinit(void);
 struct task_struct *task_lookup(int32_t pid);
 int task_hash(int32_t pid);
+int task_reassign_pid_impl(struct task_struct *task, int32_t pid);
 struct task_struct *task_create_child_impl(struct task_struct *parent);
 struct task_struct *task_create_child_with_flags_impl(struct task_struct *parent, uint64_t flags);
 void task_unlink_child_impl(struct task_struct *parent, struct task_struct *child);

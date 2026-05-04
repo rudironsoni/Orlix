@@ -2,6 +2,7 @@
 
 #include <asm/unistd.h>
 #include <linux/futex.h>
+#include <linux/capability.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/time_types.h>
@@ -20,12 +21,15 @@
 #include <time.h>
 
 #include "runtime/syscall.h"
+#include "kernel/cred_internal.h"
 #include "kernel/signal.h"
 #include "kernel/task.h"
 
 extern int futex(int *uaddr, int futex_op, int val,
                  const struct timespec *timeout, int *uaddr2, int val3);
 extern void exit_impl(int status);
+extern int capget(cap_user_header_t header, cap_user_data_t data);
+extern int capset(cap_user_header_t header, const cap_user_data_t data);
 
 struct futex_wait_thread {
     int *word;
@@ -49,6 +53,16 @@ static void futex_clear_pending_signal(struct task_struct *task, int sig) {
     task->thread_pending_signals &= ~(1ULL << ((sig - 1) & 63));
     task->signal->pending.sig[(sig - 1) >> 6] &= ~(1ULL << ((sig - 1) & 63));
     task->signal->shared_pending.sig[(sig - 1) >> 6] &= ~(1ULL << ((sig - 1) & 63));
+}
+
+static void futex_release_lookup_child(struct task_struct *parent, struct task_struct **child) {
+    if (!parent || !child || !*child) {
+        return;
+    }
+    task_unlink_child_impl(parent, *child);
+    free_task(*child);
+    free_task(*child);
+    *child = NULL;
 }
 
 static void *futex_wait_thread_main(void *arg) {
@@ -403,6 +417,156 @@ out_child:
     free_task(child);
     free_task(child);
     syscall_dispatch_impl(__NR_munmap, (long)(uintptr_t)mapped, 4096, 0, 0, 0, 0);
+    return result;
+}
+
+int futex_contract_clone3_set_tid_supports_repo_pid_model(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    struct clone_args args;
+    struct __user_cap_header_struct header = {
+        .version = _LINUX_CAPABILITY_VERSION_3,
+        .pid = 0,
+    };
+    struct __user_cap_data_struct original_caps[_LINUX_CAPABILITY_U32S_3];
+    struct __user_cap_data_struct modified_caps[_LINUX_CAPABILITY_U32S_3];
+    int requested_pid = 0;
+    int invalid_size_tids[2] = {0};
+    int invalid_ns_pid = 2;
+    int one_pid = 1;
+    long ret;
+    int result = -1;
+    bool caps_modified = false;
+
+    if (!parent || !parent->cred) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    for (int candidate = 64; candidate < 512; candidate++) {
+        struct task_struct *existing = task_lookup(candidate);
+        if (!existing) {
+            requested_pid = candidate;
+            break;
+        }
+        free_task(existing);
+    }
+    if (requested_pid == 0) {
+        errno = EAGAIN;
+        return -1;
+    }
+
+    memset(&args, 0, sizeof(args));
+    args.set_tid = (uint64_t)(uintptr_t)&requested_pid;
+    args.set_tid_size = 1;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret != requested_pid) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    child = task_lookup((int32_t)ret);
+    if (!child) {
+        errno = ESRCH;
+        goto out;
+    }
+    if (child->pid != requested_pid ||
+        child->ns_pid != requested_pid ||
+        child->pid_ns_level != parent->pid_ns_level) {
+        errno = EPROTO;
+        goto out;
+    }
+    futex_release_lookup_child(parent, &child);
+
+    memset(&args, 0, sizeof(args));
+    args.set_tid = (uint64_t)(uintptr_t)&parent->pid;
+    args.set_tid_size = 1;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret != -EEXIST) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    invalid_size_tids[0] = requested_pid + 1;
+    invalid_size_tids[1] = 1;
+    memset(&args, 0, sizeof(args));
+    args.set_tid = (uint64_t)(uintptr_t)invalid_size_tids;
+    args.set_tid_size = 2;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret != -EINVAL) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    invalid_size_tids[0] = 0;
+    memset(&args, 0, sizeof(args));
+    args.set_tid = (uint64_t)(uintptr_t)invalid_size_tids;
+    args.set_tid_size = 1;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret != -EINVAL) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(&args, 0, sizeof(args));
+    args.flags = CLONE_NEWPID;
+    args.set_tid = (uint64_t)(uintptr_t)&invalid_ns_pid;
+    args.set_tid_size = 1;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret != -EINVAL) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(&args, 0, sizeof(args));
+    args.flags = CLONE_NEWPID;
+    args.set_tid = (uint64_t)(uintptr_t)&one_pid;
+    args.set_tid_size = 1;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = (int)-ret;
+        goto out;
+    }
+    child = task_lookup((int32_t)ret);
+    if (!child) {
+        errno = ESRCH;
+        goto out;
+    }
+    if (child->ns_pid != 1 || child->pid_ns_level != parent->pid_ns_level + 1) {
+        errno = EPROTO;
+        goto out;
+    }
+    futex_release_lookup_child(parent, &child);
+
+    if (capget(&header, original_caps) != 0) {
+        goto out;
+    }
+    memcpy(modified_caps, original_caps, sizeof(modified_caps));
+    modified_caps[CAP_SYS_ADMIN / 32].effective &= ~(1U << (CAP_SYS_ADMIN % 32));
+    modified_caps[CAP_CHECKPOINT_RESTORE / 32].effective &= ~(1U << (CAP_CHECKPOINT_RESTORE % 32));
+    if (capset(&header, modified_caps) != 0) {
+        goto out;
+    }
+    caps_modified = true;
+
+    memset(&args, 0, sizeof(args));
+    args.set_tid = (uint64_t)(uintptr_t)&requested_pid;
+    args.set_tid_size = 1;
+    ret = syscall_dispatch_impl(__NR_clone3, (long)(uintptr_t)&args, sizeof(args), 0, 0, 0, 0);
+    if (ret != -EPERM) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    result = 0;
+
+out:
+    futex_release_lookup_child(parent, &child);
+    if (caps_modified) {
+        int saved_errno = errno;
+        if (capset(&header, original_caps) != 0) {
+            return -1;
+        }
+        errno = saved_errno;
+    }
     return result;
 }
 

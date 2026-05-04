@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <linux/capability.h>
 #include <linux/fcntl.h>
 #include <linux/sched.h>
 
@@ -438,6 +439,7 @@ int32_t clone_impl(uint64_t flags) {
 
 int32_t clone3_impl(const struct clone_args *args, size_t size) {
     int32_t child_pid;
+    int32_t requested_tid = 0;
     int pidfd = -1;
     int *pidfd_ptr = NULL;
     int *parent_tid = NULL;
@@ -445,6 +447,7 @@ int32_t clone3_impl(const struct clone_args *args, size_t size) {
     struct task_struct *parent;
     struct task_struct *child;
     char cgroup_path[MAX_PATH];
+    bool child_creates_new_pidns = false;
     bool use_clone_into_cgroup = false;
 
     if (!args) {
@@ -459,9 +462,36 @@ int32_t clone3_impl(const struct clone_args *args, size_t size) {
         errno = EINVAL;
         return -1;
     }
-    if (args->set_tid || args->set_tid_size) {
-        errno = ENOSYS;
+    parent = get_current();
+    if (!parent || !parent->cred) {
+        errno = ESRCH;
         return -1;
+    }
+    child_creates_new_pidns =
+        ((args->flags & CLONE_NEWPID) != 0) || atomic_load(&parent->new_pid_namespace_pending);
+    if ((args->set_tid == 0) != (args->set_tid_size == 0)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (args->set_tid_size > 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (args->set_tid_size == 1) {
+        if (!cred_has_cap(parent->cred, CAP_SYS_ADMIN) &&
+            !cred_has_cap(parent->cred, CAP_CHECKPOINT_RESTORE)) {
+            errno = EPERM;
+            return -1;
+        }
+        requested_tid = *(const int32_t *)(uintptr_t)args->set_tid;
+        if (requested_tid <= 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (child_creates_new_pidns && requested_tid != 1) {
+            errno = EINVAL;
+            return -1;
+        }
     }
     if ((args->flags & CLONE_PIDFD) != 0) {
         if (args->pidfd == 0) {
@@ -504,12 +534,6 @@ int32_t clone3_impl(const struct clone_args *args, size_t size) {
         errno = EINVAL;
         return -1;
     }
-
-    parent = get_current();
-    if (!parent) {
-        errno = ESRCH;
-        return -1;
-    }
     child_pid = clone_impl(args->flags);
     if (child_pid < 0) {
         return -1;
@@ -518,6 +542,15 @@ int32_t clone3_impl(const struct clone_args *args, size_t size) {
     if (!child) {
         errno = ESRCH;
         return -1;
+    }
+    if (args->set_tid_size == 1) {
+        if (child_creates_new_pidns) {
+            child->ns_pid = requested_tid;
+        } else if (task_reassign_pid_impl(child, requested_tid) != 0) {
+            clone3_release_child_failure(parent, child);
+            return -1;
+        }
+        child_pid = child->pid;
     }
     if (use_clone_into_cgroup) {
         int ret = cgroup_attach_task_path(child, cgroup_path);
@@ -552,24 +585,58 @@ int32_t clone3_impl(const struct clone_args *args, size_t size) {
 
 int unshare_impl(uint64_t flags) {
     struct task_struct *task = get_current();
+    struct fs_struct *old_fs = NULL;
+    uint64_t namespace_flags = flags;
+    bool pidns_pending_set = false;
 
     if (!task) {
         errno = ESRCH;
         return -1;
     }
-    if (validate_clone_namespace_flags(flags) != 0) {
+    if ((namespace_flags & CLONE_NEWNS) != 0 || (namespace_flags & CLONE_NEWUSER) != 0) {
+        namespace_flags |= CLONE_FS;
+    }
+    if (validate_clone_namespace_flags(namespace_flags & ~(uint64_t)CLONE_FS) != 0) {
         return -1;
     }
-    if ((flags & CLONE_FS) != 0) {
-        errno = ENOSYS;
-        return -1;
-    }
-    if ((flags & CLONE_NEWPID) != 0) {
+    if ((namespace_flags & CLONE_NEWPID) != 0) {
         atomic_store(&task->new_pid_namespace_pending, true);
-        flags &= ~(uint64_t)CLONE_NEWPID;
+        namespace_flags &= ~(uint64_t)CLONE_NEWPID;
+        pidns_pending_set = true;
     }
-
-    return task_apply_clone_namespace_flags(task, flags);
+    if ((namespace_flags & CLONE_FS) != 0) {
+        if (!task->fs) {
+            if (pidns_pending_set) {
+                atomic_store(&task->new_pid_namespace_pending, false);
+            }
+            errno = ESRCH;
+            return -1;
+        }
+        old_fs = task->fs;
+        task->fs = dup_fs_struct(old_fs);
+        if (!task->fs) {
+            task->fs = old_fs;
+            if (pidns_pending_set) {
+                atomic_store(&task->new_pid_namespace_pending, false);
+            }
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    if (task_apply_clone_namespace_flags(task, namespace_flags & ~(uint64_t)CLONE_FS) != 0) {
+        if (old_fs) {
+            free_fs_struct(task->fs);
+            task->fs = old_fs;
+        }
+        if (pidns_pending_set) {
+            atomic_store(&task->new_pid_namespace_pending, false);
+        }
+        return -1;
+    }
+    if (old_fs) {
+        free_fs_struct(old_fs);
+    }
+    return 0;
 }
 
 /* ============================================================================

@@ -40,6 +40,10 @@
     XCTAssertEqual(namespace_contract_unshare_newns_isolates_current_mounts(), 0, @"errno %d", errno);
 }
 
+- (void)testUnshareCloneFsSplitsSharedFsState {
+    XCTAssertEqual(namespace_contract_unshare_clone_fs_splits_shared_fs_state(), 0, @"errno %d", errno);
+}
+
 - (void)testCloneNewnsWithCloneFsRejected {
     XCTAssertEqual(namespace_contract_clone_newns_with_clone_fs_rejected(), 0, @"errno %d", errno);
 }
