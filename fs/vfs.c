@@ -4045,39 +4045,6 @@ int vfs_open(const char *path, int flags, linux_mode_t mode, int *target_fd) {
     return 0;
 }
 
-int vfs_close(struct file *file) {
-    (void)file;
-    return -ENOSYS;
-}
-
-int vfs_lookup(const char *path, struct dentry **dentry) {
-    (void)path;
-    (void)dentry;
-    return -ENOSYS;
-}
-
-int vfs_path_walk(const char *path, struct dentry **dentry) {
-    (void)path;
-    (void)dentry;
-    return -ENOSYS;
-}
-
-int vfs_mkdir(const char *path, linux_mode_t mode) {
-    (void)path;
-    (void)mode;
-    return -ENOSYS;
-}
-
-int vfs_unlink(const char *path) {
-    (void)path;
-    return -ENOSYS;
-}
-
-int vfs_rmdir(const char *path) {
-    (void)path;
-    return -ENOSYS;
-}
-
 static int vfs_join_virtual_path(const char *base_path, const char *suffix, char *joined_path,
                                  size_t joined_path_len) {
     size_t base_len;

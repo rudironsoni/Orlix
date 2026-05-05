@@ -143,20 +143,6 @@ int fstatfs_impl(int fd, struct statfs *buf) {
     return vfs_fill_statfs(path, buf);
 }
 
-static int statvfs_impl(const char *path, void *buf) {
-    (void)path;
-    (void)buf;
-    errno = ENOSYS;
-    return -1;
-}
-
-static int fstatvfs_impl(int fd, void *buf) {
-    (void)fd;
-    (void)buf;
-    errno = ENOSYS;
-    return -1;
-}
-
 static int posix_fadvise_impl(int fd, super_off_t offset, super_off_t len, int advice) {
     (void)offset;
     (void)len;
@@ -192,14 +178,6 @@ __attribute__((visibility("default"))) int statfs(const char *path, struct statf
 
 __attribute__((visibility("default"))) int fstatfs(int fd, struct statfs *buf) {
     return fstatfs_impl(fd, buf);
-}
-
-__attribute__((visibility("default"))) int statvfs(const char *path, void *buf) {
-    return statvfs_impl(path, buf);
-}
-
-__attribute__((visibility("default"))) int fstatvfs(int fd, void *buf) {
-    return fstatvfs_impl(fd, buf);
 }
 
 __attribute__((visibility("default"))) int posix_fadvise(int fd, super_off_t offset,

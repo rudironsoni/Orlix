@@ -265,16 +265,8 @@ int vfs_statmount(const struct mnt_id_req *req, struct statmount *buf, size_t bu
                   unsigned int flags);
 int vfs_mount_basic(void);
 
-/* Path lookup and walk */
-int vfs_lookup(const char *path, struct dentry **dentry);
-int vfs_path_walk(const char *path, struct dentry **dentry);
-int vfs_mkdir(const char *path, linux_mode_t mode);
-int vfs_unlink(const char *path);
-int vfs_rmdir(const char *path);
-
-/* File operations through VFS */
-int vfs_open(const char *path, int flags, linux_mode_t mode, int *target_fd);
-int vfs_close(struct file *file);
+	/* File operations through VFS */
+	int vfs_open(const char *path, int flags, linux_mode_t mode, int *target_fd);
 
 /* Task-aware path translation between virtual and host paths */
 int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len);
