@@ -1247,6 +1247,12 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
                    @"pivot_root should rebase absolute paths and expose the old root, errno %d", errno);
 }
 
+- (void)testPivotRootSyscallRebasesAbsolutePathsAndExposesOldRoot {
+    extern int vfs_contract_pivot_root_syscall_rebases_absolute_paths_and_exposes_old_root(void);
+    XCTAssertEqual(vfs_contract_pivot_root_syscall_rebases_absolute_paths_and_exposes_old_root(), 0,
+                   @"__NR_pivot_root should route to IXLand pivot_root semantics (not ENOSYS), errno %d", errno);
+}
+
 - (void)testFchdirUpdatesVirtualPwd {
     extern int vfs_contract_fchdir_updates_virtual_pwd(void);
     XCTAssertEqual(vfs_contract_fchdir_updates_virtual_pwd(), 0,

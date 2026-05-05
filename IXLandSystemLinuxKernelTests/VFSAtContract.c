@@ -1229,6 +1229,66 @@ out:
     return ret;
 }
 
+int vfs_contract_pivot_root_syscall_rebases_absolute_paths_and_exposes_old_root(void) {
+    struct task_struct *task = get_current();
+    char old_root[MAX_PATH];
+    char old_pwd[MAX_PATH];
+    long ret;
+    int result = -1;
+
+    if (!task || !task->fs) {
+        errno = ESRCH;
+        return -1;
+    }
+    __builtin_memcpy(old_root, task->fs->root_path, sizeof(old_root));
+    __builtin_memcpy(old_pwd, task->fs->pwd_path, sizeof(old_pwd));
+
+    fs_set_root(task->fs, "/");
+    fs_set_pwd(task->fs, "/");
+    vfs_contract_cleanup_pivot_paths();
+    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-pivot-new", 0700)) != 0 ||
+        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-pivot-new/oldroot", 0700)) != 0 ||
+        vfs_contract_write_file("/tmp/vfs-pivot-new/inside", "new-root") != 0 ||
+        vfs_contract_write_file("/tmp/vfs-pivot-old-marker", "old-root") != 0 ||
+        mount("/tmp/vfs-pivot-new", "/tmp/vfs-pivot-new", NULL, MS_BIND, NULL) != 0) {
+        goto out;
+    }
+
+    ret = syscall_dispatch_impl(__NR_pivot_root,
+                                (long)(uintptr_t)"/tmp/vfs-pivot-new",
+                                (long)(uintptr_t)"/tmp/vfs-pivot-new/oldroot",
+                                0, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    if (__builtin_strcmp(task->fs->root_path, "/tmp/vfs-pivot-new") != 0) {
+        errno = EPROTO;
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/inside", "new-root") != 0) {
+        goto out;
+    }
+    if (vfs_contract_read_file_exact("/oldroot/tmp/vfs-pivot-old-marker", "old-root") != 0) {
+        errno = ENOMSG;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    {
+        int saved_errno = errno;
+        fs_set_root(task->fs, "/");
+        fs_set_pwd(task->fs, "/");
+        vfs_contract_cleanup_pivot_paths();
+        fs_set_root(task->fs, old_root);
+        fs_set_pwd(task->fs, old_pwd);
+        errno = saved_errno;
+    }
+    return result;
+}
+
 int vfs_contract_fchdir_updates_virtual_pwd(void) {
     struct task_struct *task = get_current();
     char old_root[MAX_PATH];
