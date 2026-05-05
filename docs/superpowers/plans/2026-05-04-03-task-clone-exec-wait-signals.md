@@ -100,4 +100,5 @@
 - [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
 - [ ] Run the focused task or wait or signal or ptrace simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Confirm LinuxKernel tests still avoid `internal/ios/**`.
+- [ ] Run the orchestration plan’s scope-closure audit: verify each `Tranche Scope` bullet has both (a) an owning implementation in `kernel/` / `runtime/` and (b) an explicit contract assertion that would fail if the behavior disappeared.
 - [ ] Commit and push only after the proof gate and branch-synchronization checks succeed.

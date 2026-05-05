@@ -106,4 +106,5 @@
 - [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
 - [ ] Run the focused credential or namespace or cgroup or seccomp or ptrace simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Update `docs/syscall_gap_matrix_6.12_arm64.md` explicitly if credential or policy syscall classifications changed (there is no generator today).
+- [ ] Run the orchestration plan’s scope-closure audit: for each `Tranche Scope` bullet, open the owning `kernel/` / `fs/` code and confirm an explicit LinuxKernel contract asserts the policy/namespace effect.
 - [ ] Commit and push only after the proof gate passes and branch synchronization is verified.

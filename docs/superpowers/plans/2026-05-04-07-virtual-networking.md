@@ -103,4 +103,5 @@ Notes:
 - [ ] Update `docs/syscall_gap_matrix_6.12_arm64.md` explicitly so socket-related entries move from `future backend:*` or `missing:*` to accurate final classifications (there is no generator today).
 - [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
 - [ ] Run the focused networking or readiness simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
+- [ ] Run the orchestration plan’s scope-closure audit: for each networking `Tranche Scope` bullet, confirm there is an explicit LinuxKernel contract proving the Linux-visible behavior (not host-mediated behavior).
 - [ ] Commit and push only after the proof gate passes and branch synchronization is verified.

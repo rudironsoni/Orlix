@@ -103,4 +103,5 @@
 
 - [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
 - [ ] Run the focused readiness or PTY or wait simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
+- [ ] Run the orchestration plan’s scope-closure audit: for each readiness/terminal bullet in `Tranche Scope`, confirm a LinuxKernel contract asserts the Linux-visible rule (not just incidental “green”).
 - [ ] Commit and push only after proof passes and branch synchronization is verified.

@@ -104,4 +104,5 @@
 - [ ] Re-run lint, project generation, and the AGENTS-authoritative simulator `build-for-testing` flow.
 - [ ] Run the focused VFS and proc or dev simulator suites for tranche-local proof, then run the full shared-scheme simulator suite before any milestone-finished claim.
 - [ ] Run a boundary grep for host vocabulary in touched filesystem files.
+- [ ] Run the orchestration plan’s scope-closure audit: for each `Tranche Scope` bullet, open the owning `fs/` implementation and confirm there is an explicit LinuxKernel contract assertion for it (not just incidental coverage).
 - [ ] Commit and push only after the full proof gate passes and branch synchronization is verified.

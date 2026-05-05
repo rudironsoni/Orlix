@@ -279,6 +279,18 @@ Run:
 xcodebuild build-for-testing -project IXLandSystem.xcodeproj -scheme IXLandSystem-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
+- [ ] **Step 5: Scope-closure audit (repo truth)**
+
+Open the `Makefile` `vendor-linux-headers` recipe and confirm it:
+- produces only the tuple-root layout (`uapi/include`, `srctree`, `objtree`) under `third_party/linux/<version>/<arch>/`
+- does not generate any repo-authored Linux-looking header side-trees
+- validates the tuple root before replacement
+
+Then verify the repo has no legacy vendor roots:
+```bash
+rg -n "third_party/linux/(uapi|kheaders|abi)/|third_party/linux/.*/abi/" -S
+```
+
 If the simulator name is not available, list simulators and use the closest iPhone simulator.
 
 ---

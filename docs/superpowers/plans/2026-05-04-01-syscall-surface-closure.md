@@ -110,4 +110,5 @@ Expected: after the milestone-00 `build-for-testing` step, the new inventory ass
 
 - [ ] Re-run the standard proof gate from the orchestration plan.
 - [ ] Run the focused syscall simulator tests for milestone-01 first, then run the full shared-scheme simulator suite before any milestone-finished claim.
+- [ ] Run the orchestration plan’s scope-closure audit: for each syscall in this tranche scope, open `runtime/syscall.c` and the owning implementation entrypoints, confirm the path is not stubbed, and confirm a LinuxKernel contract would fail on regression.
 - [ ] Commit and push only after `HEAD` and `origin/main` match on the verified branch tip.

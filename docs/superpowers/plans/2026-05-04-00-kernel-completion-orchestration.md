@@ -41,6 +41,7 @@
 - LinuxKernel tests prove Linux-visible behavior with syscall-facing contracts and C UAPI checks only.
 - HostBridge tests are secondary seam proof only; they never count as Linux semantics proof.
 - No milestone is complete on lint alone, on build alone, or on one narrow green test.
+- No milestone is complete just because a pre-existing test suite is green. If the plan’s tranche scope includes behaviors that are not explicitly contract-tested today, green tests can be a false signal.
 - Each milestone ends with the two-tier simulator proof gate: tranche-focused simulator tests first, then the full shared-scheme simulator suite, followed by commit, push, and `HEAD == origin/main`.
 
 ## Carry-Forward Baseline
@@ -171,6 +172,23 @@ rg -n "internal/ios/|TargetConditionals|dispatch_|pthread_|mach_|Foundation|NS[A
 ```
 
 Expected: no LinuxKernel test picks up new host-only headers or branded helpers.
+
+### Task 4b: Scope Closure Audit (Repo Truth, Not Test-Theater)
+
+**Files:**
+- Reference: the active milestone plan’s `Tranche Scope` section
+- Reference: owning implementation files under `fs/`, `kernel/`, `runtime/`, `include/`
+- Reference: owning LinuxKernel contract(s) under `IXLandSystemLinuxKernelTests/*.c`
+
+- [ ] For each bullet in the milestone’s `Tranche Scope`, open the owning implementation file(s) and confirm the scope item is implemented (not stubbed behind `-ENOSYS`, `TODO`, “future backend”, or host-truth shortcuts).
+- [ ] For each bullet in `Tranche Scope`, confirm there is an explicit LinuxKernel contract assertion that would fail if the behavior regressed. “A green suite” is not sufficient proof if the suite doesn’t assert the scope item.
+- [ ] Sanity grep only the touched owning files for stubs and shortcuts (do not scan the whole tree):
+
+```bash
+rg -n "ENOSYS|TODO|unimplemented|future backend" <touched-owning-files>
+```
+
+- [ ] If the audit finds a scope item is not explicitly proved, add the missing contract first and make it fail before implementing any fix.
 
 ### Task 5: Commit, Push, And Rollback Rules
 
