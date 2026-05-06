@@ -16,6 +16,7 @@
 #include <linux/prctl.h>
 #include <linux/random.h>
 #include <linux/sched.h>
+#include <linux/socket.h>
 #include <linux/stat.h>
 #include <linux/mount.h>
 #include <linux/times.h>
@@ -124,6 +125,26 @@ struct native_unix_sockaddr {
     char sun_path[108];
 };
 
+struct native_iovec {
+    void *iov_base;
+    size_t iov_len;
+};
+
+struct native_msghdr {
+    void *msg_name;
+    unsigned int msg_namelen;
+    struct native_iovec *msg_iov;
+    int msg_iovlen;
+    void *msg_control;
+    unsigned int msg_controllen;
+    int msg_flags;
+};
+
+struct native_mmsghdr {
+    struct native_msghdr msg_hdr;
+    unsigned int msg_len;
+};
+
 typedef unsigned int native_socklen_t;
 
 #ifndef AF_UNIX
@@ -132,6 +153,9 @@ typedef unsigned int native_socklen_t;
 
 #ifndef SOCK_STREAM
 #define SOCK_STREAM 1
+#endif
+#ifndef SOCK_DGRAM
+#define SOCK_DGRAM 2
 #endif
 #ifndef SOCK_CLOEXEC
 #define SOCK_CLOEXEC O_CLOEXEC
@@ -1334,6 +1358,191 @@ out:
     close_if_open(listener);
     close_if_open(client);
     close_if_open(accepted);
+    return -1;
+}
+
+int native_syscall_contract_unix_datagram_and_mmsg_paths(void) {
+    int tx = -1;
+    int rx = -1;
+    int pair[2] = {-1, -1};
+    struct native_unix_sockaddr tx_addr;
+    struct native_unix_sockaddr rx_addr;
+    struct native_unix_sockaddr actual_addr;
+    native_socklen_t tx_addrlen;
+    native_socklen_t rx_addrlen;
+    char buf[32];
+    char part1[8];
+    char part2[8];
+    struct native_iovec send_iov[2];
+    struct native_iovec recv_iov[2];
+    struct native_msghdr send_hdr;
+    struct native_msghdr recv_hdr;
+    struct native_mmsghdr send_vec[2];
+    struct native_mmsghdr recv_vec[2];
+    struct native_iovec sendmmsg_iov[2];
+    struct native_iovec recvmmsg_iov[2];
+    struct native_unix_sockaddr recv_addrs[2];
+    const char *sendmmsg_payloads[2] = {"first", "second"};
+    long ret;
+
+    memset(&tx_addr, 0, sizeof(tx_addr));
+    tx_addr.sun_family = AF_UNIX;
+    tx_addr.sun_path[0] = '\0';
+    memcpy(&tx_addr.sun_path[1], "ixland-dgram-tx", 15);
+    tx_addrlen = (native_socklen_t)(offsetof(struct native_unix_sockaddr, sun_path) + 1 + 15);
+
+    memset(&rx_addr, 0, sizeof(rx_addr));
+    rx_addr.sun_family = AF_UNIX;
+    rx_addr.sun_path[0] = '\0';
+    memcpy(&rx_addr.sun_path[1], "ixland-dgram-rx", 15);
+    rx_addrlen = (native_socklen_t)(offsetof(struct native_unix_sockaddr, sun_path) + 1 + 15);
+
+    tx = (int)syscall_dispatch_impl(__NR_socket, AF_UNIX, SOCK_DGRAM, 0, 0, 0, 0);
+    if (tx < 0) {
+        errno = -tx;
+        return -1;
+    }
+    rx = (int)syscall_dispatch_impl(__NR_socket, AF_UNIX, SOCK_DGRAM, 0, 0, 0, 0);
+    if (rx < 0) {
+        errno = -rx;
+        goto out;
+    }
+
+    ret = syscall_dispatch_impl(__NR_bind, tx, (long)(uintptr_t)&tx_addr, tx_addrlen, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_bind, rx, (long)(uintptr_t)&rx_addr, rx_addrlen, 0, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    ret = syscall_dispatch_impl(__NR_sendto, tx, (long)(uintptr_t)"abc", 3, 0,
+                                (long)(uintptr_t)&rx_addr, rx_addrlen);
+    if (ret != 3) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(&actual_addr, 0, sizeof(actual_addr));
+    memset(buf, 0, sizeof(buf));
+    rx_addrlen = sizeof(actual_addr);
+    ret = syscall_dispatch_impl(__NR_recvfrom, rx, (long)(uintptr_t)buf, sizeof(buf), 0,
+                                (long)(uintptr_t)&actual_addr, (long)(uintptr_t)&rx_addrlen);
+    if (ret != 3 || memcmp(buf, "abc", 3) != 0 ||
+        actual_addr.sun_family != AF_UNIX ||
+        rx_addrlen != tx_addrlen ||
+        memcmp(actual_addr.sun_path, tx_addr.sun_path, 16) != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(send_iov, 0, sizeof(send_iov));
+    memset(&send_hdr, 0, sizeof(send_hdr));
+    send_iov[0].iov_base = (void *)"ab";
+    send_iov[0].iov_len = 2;
+    send_iov[1].iov_base = (void *)"cd";
+    send_iov[1].iov_len = 2;
+    send_hdr.msg_name = &rx_addr;
+    send_hdr.msg_namelen = rx_addrlen;
+    send_hdr.msg_iov = send_iov;
+    send_hdr.msg_iovlen = 2;
+    ret = syscall_dispatch_impl(__NR_sendmsg, tx, (long)(uintptr_t)&send_hdr, 0, 0, 0, 0);
+    if (ret != 4) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(part1, 0, sizeof(part1));
+    memset(part2, 0, sizeof(part2));
+    memset(&actual_addr, 0, sizeof(actual_addr));
+    memset(recv_iov, 0, sizeof(recv_iov));
+    memset(&recv_hdr, 0, sizeof(recv_hdr));
+    recv_iov[0].iov_base = part1;
+    recv_iov[0].iov_len = 2;
+    recv_iov[1].iov_base = part2;
+    recv_iov[1].iov_len = 2;
+    recv_hdr.msg_name = &actual_addr;
+    recv_hdr.msg_namelen = sizeof(actual_addr);
+    recv_hdr.msg_iov = recv_iov;
+    recv_hdr.msg_iovlen = 2;
+    ret = syscall_dispatch_impl(__NR_recvmsg, rx, (long)(uintptr_t)&recv_hdr, 0, 0, 0, 0);
+    if (ret != 4 || memcmp(part1, "ab", 2) != 0 || memcmp(part2, "cd", 2) != 0 ||
+        actual_addr.sun_family != AF_UNIX || recv_hdr.msg_namelen != tx_addrlen ||
+        memcmp(actual_addr.sun_path, tx_addr.sun_path, 16) != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(send_vec, 0, sizeof(send_vec));
+    memset(sendmmsg_iov, 0, sizeof(sendmmsg_iov));
+    for (int i = 0; i < 2; i++) {
+        sendmmsg_iov[i].iov_base = (void *)sendmmsg_payloads[i];
+        sendmmsg_iov[i].iov_len = strlen(sendmmsg_payloads[i]);
+        send_vec[i].msg_hdr.msg_name = &rx_addr;
+        send_vec[i].msg_hdr.msg_namelen = tx_addrlen;
+        send_vec[i].msg_hdr.msg_iov = &sendmmsg_iov[i];
+        send_vec[i].msg_hdr.msg_iovlen = 1;
+    }
+    ret = syscall_dispatch_impl(__NR_sendmmsg, tx, (long)(uintptr_t)send_vec, 2, 0, 0, 0);
+    if (ret != 2 || send_vec[0].msg_len != 5 || send_vec[1].msg_len != 6) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    memset(recv_vec, 0, sizeof(recv_vec));
+    memset(recvmmsg_iov, 0, sizeof(recvmmsg_iov));
+    memset(buf, 0, sizeof(buf));
+    memset(part1, 0, sizeof(part1));
+    for (int i = 0; i < 2; i++) {
+        recv_vec[i].msg_hdr.msg_name = &recv_addrs[i];
+        recv_vec[i].msg_hdr.msg_namelen = sizeof(recv_addrs[i]);
+        recvmmsg_iov[i].iov_base = (i == 0) ? (void *)buf : (void *)part1;
+        recvmmsg_iov[i].iov_len = (i == 0) ? 5U : 6U;
+        recv_vec[i].msg_hdr.msg_iov = &recvmmsg_iov[i];
+        recv_vec[i].msg_hdr.msg_iovlen = 1;
+    }
+    ret = syscall_dispatch_impl(__NR_recvmmsg, rx, (long)(uintptr_t)recv_vec, 2, 0, 0, 0);
+    if (ret != 2 || recv_vec[0].msg_len != 5 || recv_vec[1].msg_len != 6 ||
+        memcmp(buf, "first", 5) != 0 || memcmp(part1, "second", 6) != 0 ||
+        recv_addrs[0].sun_family != AF_UNIX || recv_addrs[1].sun_family != AF_UNIX ||
+        recv_vec[0].msg_hdr.msg_namelen != tx_addrlen || recv_vec[1].msg_hdr.msg_namelen != tx_addrlen ||
+        memcmp(recv_addrs[0].sun_path, tx_addr.sun_path, 16) != 0 ||
+        memcmp(recv_addrs[1].sun_path, tx_addr.sun_path, 16) != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    ret = syscall_dispatch_impl(__NR_socketpair, AF_UNIX, SOCK_DGRAM, 0, (long)(uintptr_t)pair, 0, 0);
+    if (ret != 0) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    ret = syscall_dispatch_impl(__NR_sendto, pair[0], (long)(uintptr_t)"z", 1, 0, 0, 0);
+    if (ret != 1) {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+    memset(buf, 0, sizeof(buf));
+    ret = syscall_dispatch_impl(__NR_recvfrom, pair[1], (long)(uintptr_t)buf, sizeof(buf), 0, 0, 0);
+    if (ret != 1 || buf[0] != 'z') {
+        errno = ret < 0 ? (int)-ret : EPROTO;
+        goto out;
+    }
+
+    close_if_open(tx);
+    close_if_open(rx);
+    close_if_open(pair[0]);
+    close_if_open(pair[1]);
+    return 0;
+
+out:
+    close_if_open(tx);
+    close_if_open(rx);
+    close_if_open(pair[0]);
+    close_if_open(pair[1]);
     return -1;
 }
 
@@ -5754,10 +5963,6 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         long number;
         enum syscall_capability_class capability_class;
     };
-    struct planned_syscall_gap {
-        long number;
-        enum syscall_gap_priority priority;
-    };
     static const long required_syscalls[] = {
         __NR_read,
         __NR_write,
@@ -5975,6 +6180,8 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         {__NR_openat2, SYSCALL_CAPABILITY_FD},
         {__NR_utimensat, SYSCALL_CAPABILITY_FD},
         {__NR_flock, SYSCALL_CAPABILITY_FD},
+        {__NR_sendmmsg, SYSCALL_CAPABILITY_NETWORK},
+        {__NR_recvmmsg, SYSCALL_CAPABILITY_NETWORK},
         {__NR_eventfd2, SYSCALL_CAPABILITY_READINESS},
         {__NR_timerfd_create, SYSCALL_CAPABILITY_READINESS},
         {__NR_timerfd_settime, SYSCALL_CAPABILITY_READINESS},
@@ -5982,10 +6189,6 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
         {__NR_memfd_create, SYSCALL_CAPABILITY_FD},
         {__NR_pidfd_open, SYSCALL_CAPABILITY_PROCESS},
         {__NR_prlimit64, SYSCALL_CAPABILITY_RESOURCE},
-    };
-    static const struct planned_syscall_gap planned_gaps[] = {
-        {__NR_recvmmsg, SYSCALL_GAP_NETWORK},
-        {__NR_sendmmsg, SYSCALL_GAP_NETWORK},
     };
 
     for (size_t i = 0; i < sizeof(required_syscalls) / sizeof(required_syscalls[0]); i++) {
@@ -5998,14 +6201,6 @@ int native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(void) 
     for (size_t i = 0; i < sizeof(required_classes) / sizeof(required_classes[0]); i++) {
         if (syscall_capability_class_impl(required_classes[i].number) != required_classes[i].capability_class) {
             errno = ENOMSG;
-            return -1;
-        }
-    }
-
-    for (size_t i = 0; i < sizeof(planned_gaps) / sizeof(planned_gaps[0]); i++) {
-        if (syscall_is_implemented_impl(planned_gaps[i].number) ||
-            syscall_gap_priority_impl(planned_gaps[i].number) != planned_gaps[i].priority) {
-            errno = ENOTSUP;
             return -1;
         }
     }

@@ -210,6 +210,13 @@ extern ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const 
 extern ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 extern ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
 extern ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags);
+struct linux_mmsghdr {
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+extern int sendmmsg(int sockfd, struct linux_mmsghdr *msgvec, unsigned int vlen, int flags);
+extern int recvmmsg(int sockfd, struct linux_mmsghdr *msgvec, unsigned int vlen, int flags,
+                    struct __kernel_timespec *timeout);
 extern int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 extern int getpeername(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 extern int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
@@ -768,6 +775,8 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_recvfrom:
     case __NR_sendmsg:
     case __NR_recvmsg:
+    case __NR_sendmmsg:
+    case __NR_recvmmsg:
     case __NR_getsockname:
     case __NR_getpeername:
     case __NR_setsockopt:
@@ -940,6 +949,13 @@ static long syscall_dispatch_inner_impl(long number,
         return syscall_result((long)sendmsg((int)arg0, (const struct msghdr *)(uintptr_t)arg1, (int)arg2));
     case __NR_recvmsg:
         return syscall_result((long)recvmsg((int)arg0, (struct msghdr *)(uintptr_t)arg1, (int)arg2));
+    case __NR_sendmmsg:
+        return syscall_result((long)sendmmsg((int)arg0, (struct linux_mmsghdr *)(uintptr_t)arg1,
+                                             (unsigned int)arg2, (int)arg3));
+    case __NR_recvmmsg:
+        return syscall_result((long)recvmmsg((int)arg0, (struct linux_mmsghdr *)(uintptr_t)arg1,
+                                             (unsigned int)arg2, (int)arg3,
+                                             (struct __kernel_timespec *)(uintptr_t)arg4));
     case __NR_getsockname:
         return syscall_result((long)getsockname((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
                                                (socklen_t *)(uintptr_t)arg2));

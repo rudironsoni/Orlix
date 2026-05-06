@@ -9,6 +9,8 @@
 #include <linux/fcntl.h>
 #include <linux/net.h>
 #include <linux/poll.h>
+#include <linux/socket.h>
+#include <linux/time_types.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +28,11 @@
 #ifndef SOCK_NONBLOCK
 #define SOCK_NONBLOCK O_NONBLOCK
 #endif
+
+struct linux_mmsghdr {
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
 
 static int socket_flags_from_type(int type, int *base_type_out, int *fd_flags_out) {
     int base_type;
@@ -328,9 +335,15 @@ __attribute__((visibility("default"))) ssize_t sendto(int sockfd,
                                                       int flags,
                                                       const struct sockaddr *dest_addr,
                                                       socklen_t addrlen) {
-    (void)dest_addr;
-    (void)addrlen;
-    return send(sockfd, buf, len, flags);
+    struct socket_state *sock;
+    ssize_t ret;
+
+    if (fd_get_socket(sockfd, &sock) != 0) {
+        return -1;
+    }
+    ret = socket_sendto_impl(sock, buf, len, flags, dest_addr, addrlen);
+    socket_release_impl(sock);
+    return ret;
 }
 
 __attribute__((visibility("default"))) ssize_t recvfrom(int sockfd,
@@ -339,9 +352,15 @@ __attribute__((visibility("default"))) ssize_t recvfrom(int sockfd,
                                                         int flags,
                                                         struct sockaddr *src_addr,
                                                         socklen_t *addrlen) {
-    (void)src_addr;
-    (void)addrlen;
-    return recv(sockfd, buf, len, flags);
+    struct socket_state *sock;
+    ssize_t ret;
+
+    if (fd_get_socket(sockfd, &sock) != 0) {
+        return -1;
+    }
+    ret = socket_recvfrom_impl(sock, buf, len, flags, src_addr, addrlen);
+    socket_release_impl(sock);
+    return ret;
 }
 
 __attribute__((visibility("default"))) ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
@@ -382,7 +401,7 @@ __attribute__((visibility("default"))) ssize_t sendmsg(int sockfd, const struct 
         }
     }
 
-    ret = send(sockfd, tmp, offset, flags);
+    ret = sendto(sockfd, tmp, offset, flags, (const struct sockaddr *)msg->msg_name, (socklen_t)msg->msg_namelen);
     free(tmp);
     return ret;
 }
@@ -419,7 +438,12 @@ __attribute__((visibility("default"))) ssize_t recvmsg(int sockfd, struct msghdr
         return -1;
     }
 
-    nread = recv(sockfd, tmp, total, flags);
+    nread = recvfrom(sockfd,
+                     tmp,
+                     total,
+                     flags,
+                     (struct sockaddr *)msg->msg_name,
+                     (socklen_t *)&msg->msg_namelen);
     if (nread <= 0) {
         free(tmp);
         return nread;
@@ -446,6 +470,70 @@ __attribute__((visibility("default"))) ssize_t recvmsg(int sockfd, struct msghdr
     msg->msg_controllen = 0;
     msg->msg_flags = 0;
     return nread;
+}
+
+__attribute__((visibility("default"))) int sendmmsg(int sockfd,
+                                                    struct linux_mmsghdr *msgvec,
+                                                    unsigned int vlen,
+                                                    int flags) {
+    unsigned int sent = 0;
+
+    if (!msgvec) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (vlen == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    for (sent = 0; sent < vlen; sent++) {
+        ssize_t ret = sendmsg(sockfd, &msgvec[sent].msg_hdr, flags);
+        if (ret < 0) {
+            return sent > 0 ? (int)sent : -1;
+        }
+        msgvec[sent].msg_len = (unsigned int)ret;
+    }
+    return (int)sent;
+}
+
+__attribute__((visibility("default"))) int recvmmsg(int sockfd,
+                                                    struct linux_mmsghdr *msgvec,
+                                                    unsigned int vlen,
+                                                    int flags,
+                                                    struct __kernel_timespec *timeout) {
+    unsigned int received = 0;
+
+    if (!msgvec) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (vlen == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (timeout) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+
+    for (received = 0; received < vlen; received++) {
+        int recv_flags = flags;
+        ssize_t ret;
+
+        if (received > 0) {
+            recv_flags |= MSG_DONTWAIT;
+        }
+        ret = recvmsg(sockfd, &msgvec[received].msg_hdr, recv_flags);
+        if (ret < 0) {
+            if (received > 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                return (int)received;
+            }
+            return received > 0 ? (int)received : -1;
+        }
+        msgvec[received].msg_len = (unsigned int)ret;
+    }
+    return (int)received;
 }
 
 __attribute__((visibility("default"))) int shutdown(int sockfd, int how) {

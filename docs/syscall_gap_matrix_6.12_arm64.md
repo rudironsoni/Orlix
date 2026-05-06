@@ -247,7 +247,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 240 | `rt_tgsigqueueinfo` | kernel-owned missing:unclassified | package |
 | 241 | `perf_event_open` | kernel-owned missing:unclassified | package |
 | 242 | `accept4` | implemented:virtual-network | none |
-| 243 | `recvmmsg` | future backend:virtual-network | network |
+| 243 | `recvmmsg` | implemented:virtual-network | none |
 | 260 | `wait4` | implemented:process | none |
 | 261 | `prlimit64` | implemented:resource | none |
 | 262 | `fanotify_init` | kernel-owned missing:unclassified | package |
@@ -257,7 +257,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 266 | `clock_adjtime` | kernel-owned missing:unclassified | package |
 | 267 | `syncfs` | implemented:fd | none |
 | 268 | `setns` | kernel-owned missing:unclassified | package |
-| 269 | `sendmmsg` | future backend:virtual-network | network |
+| 269 | `sendmmsg` | implemented:virtual-network | none |
 | 270 | `process_vm_readv` | kernel-owned missing:unclassified | package |
 | 271 | `process_vm_writev` | kernel-owned missing:unclassified | package |
 | 272 | `kcmp` | kernel-owned missing:unclassified | package |

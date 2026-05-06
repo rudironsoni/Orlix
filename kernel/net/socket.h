@@ -42,6 +42,18 @@ int socket_setsockopt_impl(struct socket_state *sock,
 
 ssize_t socket_send_impl(struct socket_state *sock, const void *buf, size_t len, int flags);
 ssize_t socket_recv_impl(struct socket_state *sock, void *buf, size_t len, int flags);
+ssize_t socket_sendto_impl(struct socket_state *sock,
+                           const void *buf,
+                           size_t len,
+                           int flags,
+                           const struct sockaddr *dest_addr,
+                           socklen_t addrlen);
+ssize_t socket_recvfrom_impl(struct socket_state *sock,
+                             void *buf,
+                             size_t len,
+                             int flags,
+                             struct sockaddr *src_addr,
+                             socklen_t *addrlen);
 
 short socket_poll_revents_impl(struct socket_state *sock, short events);
 
