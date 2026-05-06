@@ -51,7 +51,7 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 44 | `fstatfs` | implemented:fd | none |
 | 45 | `truncate` | implemented:fd | none |
 | 46 | `ftruncate` | implemented:fd | none |
-| 47 | `fallocate` | kernel-owned missing:unclassified | package |
+| 47 | `fallocate` | implemented:fd | none |
 | 48 | `faccessat` | implemented:fd | none |
 | 49 | `chdir` | implemented:fd | none |
 | 50 | `fchdir` | implemented:fd | none |
@@ -79,16 +79,16 @@ Generated from vendored Linux UAPI and `runtime/syscall.c`.
 | 72 | `pselect6` | implemented:readiness | none |
 | 73 | `ppoll` | implemented:readiness | none |
 | 74 | `signalfd4` | kernel-owned missing:unclassified | package |
-| 75 | `vmsplice` | kernel-owned missing:unclassified | package |
-| 76 | `splice` | kernel-owned missing:unclassified | package |
-| 77 | `tee` | kernel-owned missing:unclassified | package |
+| 75 | `vmsplice` | implemented:fd | none |
+| 76 | `splice` | implemented:fd | none |
+| 77 | `tee` | implemented:fd | none |
 | 78 | `readlinkat` | implemented:fd | none |
 | 79 | `newfstatat` | implemented:fd | none |
 | 80 | `fstat` | implemented:fd | none |
 | 81 | `sync` | implemented:fd | none |
 | 82 | `fsync` | implemented:fd | none |
 | 83 | `fdatasync` | implemented:fd | none |
-| 84 | `sync_file_range` | kernel-owned missing:unclassified | package |
+| 84 | `sync_file_range` | implemented:fd | none |
 | 85 | `timerfd_create` | implemented:readiness | none |
 | 86 | `timerfd_settime` | implemented:readiness | none |
 | 87 | `timerfd_gettime` | implemented:readiness | none |

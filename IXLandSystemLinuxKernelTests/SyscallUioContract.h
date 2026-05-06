@@ -11,6 +11,10 @@ int syscall_uio_contract_truncate_changes_file_size_by_path(void);
 int syscall_uio_contract_preadv_pwritev_preserve_file_offset(void);
 int syscall_uio_contract_preadv2_pwritev2_flag_policy(void);
 int syscall_uio_contract_sendfile_honors_offset_rules(void);
+int syscall_uio_contract_fallocate_extends_file_and_zero_fills(void);
+int syscall_uio_contract_sync_file_range_accepts_zero_flags(void);
+int syscall_uio_contract_splice_moves_bytes_between_file_and_pipe(void);
+int syscall_uio_contract_vmsplice_and_tee_preserve_pipe_payloads(void);
 
 #ifdef __cplusplus
 }

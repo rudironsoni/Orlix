@@ -354,6 +354,22 @@
     XCTAssertEqual(syscall_uio_contract_sendfile_honors_offset_rules(), 0, @"errno %d", errno);
 }
 
+- (void)testFallocateExtendsFileAndZeroFills {
+    XCTAssertEqual(syscall_uio_contract_fallocate_extends_file_and_zero_fills(), 0, @"errno %d", errno);
+}
+
+- (void)testSyncFileRangeAcceptsZeroFlags {
+    XCTAssertEqual(syscall_uio_contract_sync_file_range_accepts_zero_flags(), 0, @"errno %d", errno);
+}
+
+- (void)testSpliceMovesBytesBetweenFileAndPipe {
+    XCTAssertEqual(syscall_uio_contract_splice_moves_bytes_between_file_and_pipe(), 0, @"errno %d", errno);
+}
+
+- (void)testVmspliceAndTeePreservePipePayloads {
+    XCTAssertEqual(syscall_uio_contract_vmsplice_and_tee_preserve_pipe_payloads(), 0, @"errno %d", errno);
+}
+
 - (void)testMlibcLinuxSysdepsInventoryIsKernelOwned {
     XCTAssertEqual(native_syscall_contract_mlibc_linux_sysdeps_inventory_is_kernel_owned(), 0, @"errno %d", errno);
 }

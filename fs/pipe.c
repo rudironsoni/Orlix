@@ -246,6 +246,115 @@ ssize_t pipe_write_endpoint_impl(struct pipe_endpoint *endpoint, const void *buf
     return (ssize_t)to_write;
 }
 
+ssize_t pipe_peek_endpoint_impl(struct pipe_endpoint *endpoint, void *buf, size_t count) {
+    struct pipe_object *pipe;
+    size_t to_read;
+    size_t first;
+
+    if (!endpoint || !endpoint->pipe || !endpoint->read_end) {
+        errno = EBADF;
+        return -1;
+    }
+    if (!buf && count > 0) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (count == 0) {
+        return 0;
+    }
+
+    pipe = endpoint->pipe;
+    wait_queue_lock(&pipe->wait);
+    to_read = count < pipe->len ? count : pipe->len;
+    first = to_read;
+    if (first > PIPE_BUFFER_SIZE - pipe->head) {
+        first = PIPE_BUFFER_SIZE - pipe->head;
+    }
+    if (to_read > 0) {
+        memcpy(buf, pipe->buffer + pipe->head, first);
+        if (first < to_read) {
+            memcpy((unsigned char *)buf + first, pipe->buffer, to_read - first);
+        }
+    }
+    wait_queue_unlock(&pipe->wait);
+    return (ssize_t)to_read;
+}
+
+ssize_t pipe_tee_between_endpoints_impl(struct pipe_endpoint *src, struct pipe_endpoint *dst, size_t count, bool nonblock) {
+    struct pipe_object *src_pipe;
+    struct pipe_object *dst_pipe;
+    unsigned char buffer[PIPE_BUFFER_SIZE];
+    size_t to_copy;
+    size_t src_first;
+    size_t dst_tail;
+    size_t dst_first;
+
+    if (!src || !dst || !src->pipe || !dst->pipe) {
+        errno = EBADF;
+        return -1;
+    }
+    if (count == 0) {
+        return 0;
+    }
+
+    src_pipe = src->pipe;
+    dst_pipe = dst->pipe;
+
+    wait_queue_lock(&src_pipe->wait);
+    to_copy = count < src_pipe->len ? count : src_pipe->len;
+    src_first = to_copy;
+    if (src_first > PIPE_BUFFER_SIZE - src_pipe->head) {
+        src_first = PIPE_BUFFER_SIZE - src_pipe->head;
+    }
+    if (to_copy > 0) {
+        memcpy(buffer, src_pipe->buffer + src_pipe->head, src_first);
+        if (src_first < to_copy) {
+            memcpy(buffer + src_first, src_pipe->buffer, to_copy - src_first);
+        }
+    }
+    wait_queue_unlock(&src_pipe->wait);
+
+    if (to_copy == 0) {
+        return 0;
+    }
+
+    wait_queue_lock(&dst_pipe->wait);
+    while (pipe_space_locked(dst_pipe) == 0) {
+        if (dst_pipe->readers == 0) {
+            wait_queue_unlock(&dst_pipe->wait);
+            errno = EPIPE;
+            return -1;
+        }
+        if (nonblock) {
+            wait_queue_unlock(&dst_pipe->wait);
+            errno = EAGAIN;
+            return -1;
+        }
+        if (wait_queue_wait_locked_interruptible(&dst_pipe->wait) != 0) {
+            wait_queue_unlock(&dst_pipe->wait);
+            errno = EINTR;
+            return -1;
+        }
+    }
+    if (to_copy > pipe_space_locked(dst_pipe)) {
+        to_copy = pipe_space_locked(dst_pipe);
+    }
+    dst_tail = (dst_pipe->head + dst_pipe->len) % PIPE_BUFFER_SIZE;
+    dst_first = to_copy;
+    if (dst_first > PIPE_BUFFER_SIZE - dst_tail) {
+        dst_first = PIPE_BUFFER_SIZE - dst_tail;
+    }
+    memcpy(dst_pipe->buffer + dst_tail, buffer, dst_first);
+    if (dst_first < to_copy) {
+        memcpy(dst_pipe->buffer, buffer + dst_first, to_copy - dst_first);
+    }
+    dst_pipe->len += to_copy;
+    wait_queue_wake_all_locked(&dst_pipe->wait);
+    wait_queue_unlock(&dst_pipe->wait);
+    poll_notify_readiness_impl();
+    return (ssize_t)to_copy;
+}
+
 short pipe_poll_revents_impl(struct pipe_endpoint *endpoint, short events) {
     struct pipe_object *pipe;
     short revents = 0;

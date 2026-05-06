@@ -238,6 +238,12 @@ extern linux_off_t lseek_impl(int fd, linux_off_t offset, int whence);
 extern ssize_t sendfile_impl(int out_fd, int in_fd, linux_off_t *offset, size_t count);
 extern ssize_t copy_file_range_impl(int fd_in, linux_off_t *off_in, int fd_out,
                                     linux_off_t *off_out, size_t len, unsigned int flags);
+extern int fallocate_impl(int fd, int mode, linux_off_t offset, linux_off_t len);
+extern int sync_file_range_impl(int fd, linux_off_t offset, linux_off_t nbytes, unsigned int flags);
+extern ssize_t splice_impl(int fd_in, linux_off_t *off_in, int fd_out, linux_off_t *off_out,
+                           size_t len, unsigned int flags);
+extern ssize_t vmsplice_impl(int fd, const struct iovec *iov, unsigned long nr_segs, unsigned int flags);
+extern ssize_t tee_impl(int fd_in, int fd_out, size_t len, unsigned int flags);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern int flock_impl(int fd, int operation);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
@@ -678,6 +684,9 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_preadv2:
     case __NR_pwritev2:
     case __NR_sendfile:
+    case __NR_splice:
+    case __NR_vmsplice:
+    case __NR_tee:
     case __NR_lseek:
     case __NR_readv:
     case __NR_writev:
@@ -717,6 +726,8 @@ enum syscall_capability_class syscall_capability_class_impl(long number) {
     case __NR_fdatasync:
     case __NR_syncfs:
     case __NR_truncate:
+    case __NR_fallocate:
+    case __NR_sync_file_range:
     case __NR_close_range:
     case __NR_copy_file_range:
     case __NR_openat2:
@@ -923,6 +934,15 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_sendfile:
         return syscall_result((long)sendfile_impl((int)arg0, (int)arg1,
                                                   (linux_off_t *)(uintptr_t)arg2, (size_t)arg3));
+    case __NR_splice:
+        return syscall_result((long)splice_impl((int)arg0, (linux_off_t *)(uintptr_t)arg1,
+                                                (int)arg2, (linux_off_t *)(uintptr_t)arg3,
+                                                (size_t)arg4, (unsigned int)arg5));
+    case __NR_vmsplice:
+        return syscall_result((long)vmsplice_impl((int)arg0, (const struct iovec *)(uintptr_t)arg1,
+                                                  (unsigned long)arg2, (unsigned int)arg3));
+    case __NR_tee:
+        return syscall_result((long)tee_impl((int)arg0, (int)arg1, (size_t)arg2, (unsigned int)arg3));
     case __NR_copy_file_range:
         return syscall_result((long)copy_file_range_impl((int)arg0, (linux_off_t *)(uintptr_t)arg1,
                                                          (int)arg2, (linux_off_t *)(uintptr_t)arg3,
@@ -1470,6 +1490,11 @@ static long syscall_dispatch_inner_impl(long number,
         return syscall_result((long)truncate_impl((const char *)(uintptr_t)arg0, (linux_off_t)arg1));
     case __NR_ftruncate:
         return syscall_result((long)ftruncate_impl((int)arg0, (linux_off_t)arg1));
+    case __NR_fallocate:
+        return syscall_result((long)fallocate_impl((int)arg0, (int)arg1, (linux_off_t)arg2, (linux_off_t)arg3));
+    case __NR_sync_file_range:
+        return syscall_result((long)sync_file_range_impl((int)arg0, (linux_off_t)arg1,
+                                                         (linux_off_t)arg2, (unsigned int)arg3));
     case __NR_setxattr:
         return syscall_result((long)setxattr_impl((const char *)(uintptr_t)arg0,
                                                   (const char *)(uintptr_t)arg1,

@@ -20,6 +20,9 @@
 #include "kernel/net/socket.h"
 #include "kernel/task.h"
 
+extern int ftruncate_impl(int fd, linux_off_t length);
+extern int fdatasync_impl(int fd);
+
 /* Linux-owner type for file offsets (matches __kernel_off_t) */
 typedef long long linux_off_t;
 
@@ -744,6 +747,230 @@ ssize_t copy_file_range_impl(int fd_in, linux_off_t *off_in, int fd_out,
     }
 
     return (ssize_t)copied;
+}
+
+int fallocate_impl(int fd, int mode, linux_off_t offset, linux_off_t len) {
+    void *entry;
+    int real_fd;
+    struct linux_stat st;
+    linux_off_t end;
+
+    if (mode != 0) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+    if (offset < 0 || len < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (len == 0) {
+        return 0;
+    }
+    if (offset > ((__LONG_LONG_MAX__) - len)) {
+        errno = EFBIG;
+        return -1;
+    }
+
+    entry = get_fd_entry_impl(fd);
+    if (!entry) {
+        errno = EBADF;
+        return -1;
+    }
+    if (!get_fd_is_writable_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EBADF;
+        return -1;
+    }
+    if (get_fd_is_pipe_impl(entry) || get_fd_is_synthetic_dir_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    }
+    real_fd = get_real_fd_impl(entry);
+    put_fd_entry_impl(entry);
+    if (real_fd < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (host_fstat_impl(real_fd, &st) != 0) {
+        return -1;
+    }
+
+    end = offset + len;
+    if ((linux_off_t)st.st_size >= end) {
+        return 0;
+    }
+    return ftruncate_impl(fd, end);
+}
+
+int sync_file_range_impl(int fd, linux_off_t offset, linux_off_t nbytes, unsigned int flags) {
+    unsigned int allowed = SYNC_FILE_RANGE_WAIT_BEFORE | SYNC_FILE_RANGE_WRITE | SYNC_FILE_RANGE_WAIT_AFTER;
+
+    if (offset < 0 || nbytes < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if ((flags & ~allowed) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return fdatasync_impl(fd);
+}
+
+ssize_t splice_impl(int fd_in, linux_off_t *off_in, int fd_out, linux_off_t *off_out,
+                    size_t len, unsigned int flags) {
+    void *entry_in;
+    void *entry_out;
+    char buffer[16384];
+    size_t copied = 0;
+
+    if (flags != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (len == 0) {
+        return 0;
+    }
+    entry_in = get_fd_entry_impl(fd_in);
+    if (!entry_in) {
+        errno = EBADF;
+        return -1;
+    }
+    entry_out = get_fd_entry_impl(fd_out);
+    if (!entry_out) {
+        put_fd_entry_impl(entry_in);
+        errno = EBADF;
+        return -1;
+    }
+    put_fd_entry_impl(entry_out);
+    put_fd_entry_impl(entry_in);
+
+    while (copied < len) {
+        size_t chunk = len - copied;
+        ssize_t nread;
+        ssize_t nwritten;
+        size_t written = 0;
+
+        if (chunk > sizeof(buffer)) {
+            chunk = sizeof(buffer);
+        }
+        if (off_in) {
+            nread = pread_impl(fd_in, buffer, chunk, *off_in);
+        } else {
+            nread = read_impl(fd_in, buffer, chunk);
+        }
+        if (nread < 0) {
+            return copied > 0 ? (ssize_t)copied : -1;
+        }
+        if (nread == 0) {
+            break;
+        }
+        while (written < (size_t)nread) {
+            if (off_out) {
+                nwritten = pwrite_impl(fd_out, buffer + written, (size_t)nread - written, *off_out);
+            } else {
+                nwritten = write_impl(fd_out, buffer + written, (size_t)nread - written);
+            }
+            if (nwritten < 0) {
+                return copied > 0 ? (ssize_t)copied : -1;
+            }
+            if (nwritten == 0) {
+                errno = EIO;
+                return copied > 0 ? (ssize_t)copied : -1;
+            }
+            written += (size_t)nwritten;
+            copied += (size_t)nwritten;
+            if (off_out) {
+                *off_out += (linux_off_t)nwritten;
+            }
+        }
+        if (off_in) {
+            *off_in += (linux_off_t)nread;
+        }
+    }
+
+    return (ssize_t)copied;
+}
+
+ssize_t vmsplice_impl(int fd, const struct iovec *iov, unsigned long nr_segs, unsigned int flags) {
+    size_t total = 0;
+
+    if (flags != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!iov && nr_segs > 0) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    for (unsigned long i = 0; i < nr_segs; i++) {
+        ssize_t nwritten;
+
+        if (!iov[i].iov_base && iov[i].iov_len != 0) {
+            errno = EFAULT;
+            return total > 0 ? (ssize_t)total : -1;
+        }
+        nwritten = write_impl(fd, iov[i].iov_base, iov[i].iov_len);
+        if (nwritten < 0) {
+            return total > 0 ? (ssize_t)total : -1;
+        }
+        total += (size_t)nwritten;
+        if ((size_t)nwritten < iov[i].iov_len) {
+            break;
+        }
+    }
+
+    return (ssize_t)total;
+}
+
+ssize_t tee_impl(int fd_in, int fd_out, size_t len, unsigned int flags) {
+    struct pipe_endpoint *src;
+    struct pipe_endpoint *dst;
+    ssize_t written;
+    bool nonblock;
+    void *entry;
+
+    if (flags != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    entry = get_fd_entry_impl(fd_in);
+    if (!entry) {
+        errno = EBADF;
+        return -1;
+    }
+    if (!get_fd_is_pipe_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    }
+    src = get_fd_pipe_endpoint_impl(entry);
+    put_fd_entry_impl(entry);
+    if (!src) {
+        errno = EBADF;
+        return -1;
+    }
+
+    entry = get_fd_entry_impl(fd_out);
+    if (!entry) {
+        errno = EBADF;
+        return -1;
+    }
+    if (!get_fd_is_pipe_impl(entry)) {
+        put_fd_entry_impl(entry);
+        errno = EINVAL;
+        return -1;
+    }
+    dst = get_fd_pipe_endpoint_impl(entry);
+    nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
+    put_fd_entry_impl(entry);
+    if (!dst) {
+        errno = EBADF;
+        return -1;
+    }
+    written = pipe_tee_between_endpoints_impl(src, dst, len, nonblock);
+    return written;
 }
 
 __attribute__((visibility("default"))) ssize_t read(int fd, void *buf, size_t count) {
