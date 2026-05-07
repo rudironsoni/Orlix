@@ -1,23 +1,13 @@
 #ifndef VFS_H
 #define VFS_H
 
-/* Freestanding - NO system headers that import Darwin modules */
-/* Use compiler builtin types */
-
-typedef __INT8_TYPE__ int8_t;
-typedef __INT16_TYPE__ int16_t;
-typedef __INT32_TYPE__ int32_t;
-typedef __INT64_TYPE__ int64_t;
-typedef __UINT8_TYPE__ uint8_t;
-typedef __UINT16_TYPE__ uint16_t;
-typedef __UINT32_TYPE__ uint32_t;
-typedef __UINT64_TYPE__ uint64_t;
-typedef __SIZE_TYPE__ size_t;
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdatomic.h>
+#include <stdint.h>
 
 /* Linux stat structure - defined in stat_types.h for shared use */
 #include "stat_types.h"
-
-typedef int linux_bool_t;
 
 /* Linux timespec */
 struct linux_timespec {
@@ -39,9 +29,6 @@ struct linux_statfs {
     long f_frsize;
     long f_flags;
 };
-
-/* Atomic type - use compiler builtin */
-typedef _Atomic int linux_atomic_int;
 
 #include "fdtable.h"
 #include "fs_sync.h"
@@ -162,7 +149,7 @@ struct inode {
     struct linux_timespec *i_atime;
     struct linux_timespec *i_mtime;
     struct linux_timespec *i_ctime;
-    linux_atomic_int i_count;
+    atomic_int i_count;
     void *i_private;
     struct super_block *i_sb;
     const struct inode_operations *i_op;
@@ -175,7 +162,7 @@ struct dentry {
     struct inode *d_inode;
     struct super_block *d_sb;
     const unsigned char *d_name;
-    linux_atomic_int d_count;
+    atomic_int d_count;
     struct dentry *d_parent;
     void *d_fsdata;
 };
@@ -195,8 +182,8 @@ struct mount {
     struct super_block *mnt_sb;
     int mnt_flags;
     char mnt_devname[MAX_PATH];
-    linux_atomic_int mnt_count;
-    linux_atomic_int mnt_ondie;
+    atomic_int mnt_count;
+    atomic_int mnt_ondie;
     struct mount *mnt_parent;
 };
 
@@ -206,7 +193,7 @@ struct fs_struct {
     struct dentry *root;
     struct dentry *pwd;
     uint32_t umask;
-    linux_atomic_int users;
+    atomic_int users;
     fs_mutex_t lock;
     /* Task-aware path resolution state */
     char root_path[MAX_PATH];      /* Virtual root path (absolute, normalized) */

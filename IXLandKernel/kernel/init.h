@@ -8,7 +8,7 @@
 #ifndef KERNEL_INIT_H
 #define KERNEL_INIT_H
 
-typedef __SIZE_TYPE__ size_t;
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {

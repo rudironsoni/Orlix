@@ -189,7 +189,7 @@ struct vfs_mount_entry {
 
 struct vfs_mount_namespace {
     struct vfs_mount_entry entries[MAX_MOUNTS];
-    linux_atomic_int refs;
+    atomic_int refs;
     uint64_t ns_id;
     uint64_t owner_user_ns_id;
     fs_mutex_t lock;
@@ -229,10 +229,10 @@ struct vfs_metadata_entry {
 
 static struct vfs_metadata_entry vfs_metadata_table[VFS_METADATA_MAX];
 static fs_mutex_t vfs_metadata_lock = FS_MUTEX_INITIALIZER;
-static linux_atomic_int vfs_next_mount_ns_id = 1;
-static linux_atomic_int vfs_next_file_identity = 1;
-static linux_atomic_int vfs_next_mount_id = 2;
-static linux_atomic_int vfs_next_mount_peer_group_id = 1;
+static atomic_int vfs_next_mount_ns_id = 1;
+static atomic_int vfs_next_file_identity = 1;
+static atomic_int vfs_next_mount_id = 2;
+static atomic_int vfs_next_mount_peer_group_id = 1;
 
 #define VFS_DETACHED_MOUNT_MAX 64
 

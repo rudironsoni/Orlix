@@ -125,6 +125,18 @@ if [ -n "$BRANDED_UAPI" ]; then
     echo "$BRANDED_UAPI"
     exit 1
 fi
+LOCAL_TYPE_PACKS=$(rg -n -e '^\s*typedef\s+__INT(8|16|32|64)_TYPE__\s+(u?int(8|16|32|64)_t)\s*;' \
+    -e '^\s*typedef\s+__UINT(8|16|32|64)_TYPE__\s+(u?int(8|16|32|64)_t)\s*;' \
+    -e '^\s*typedef\s+__SIZE_TYPE__\s+size_t\s*;' \
+    -e '\blinux_bool_t\b' \
+    -e '\blinux_atomic_int\b' \
+    $OWNER_PATHS 2>/dev/null || true)
+if [ -n "$LOCAL_TYPE_PACKS" ]; then
+    echo "FAIL: Repo-local Linux-owner type packs or synthetic linux_* scalar aliases found:"
+    echo "$LOCAL_TYPE_PACKS"
+    echo "Use standard headers or owner-specific narrow types instead of local integer typedef packs."
+    exit 1
+fi
 echo "   ✓ No ABI/UAPI drift indicators"
 
 echo ""
