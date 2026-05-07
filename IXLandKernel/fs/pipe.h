@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <sys/poll.h>
-#include <sys/types.h>
+
+#include "../../IXLandMLibC/include/ixlandmlibc/bits/kernel_types.h"
 
 #include "fdtable.h"
 

@@ -43,6 +43,7 @@
 		3306377899464216DFADA3D9 /* backing_io.m in Sources */ = {isa = PBXBuildFile; fileRef = 4AB1A3728C0A34A570038705 /* backing_io.m */; };
 		3818764A0D7594499AF2A4B4 /* ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = 2BBBB6844E65C0A0E0E44E17 /* ioctl.c */; };
 		3C47BFE6D3929E6874433C92 /* SyscallUioContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 642103A99C60EFFA1C6B326A /* SyscallUioContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
+		3DEE3517F680A71208F6E393 /* MLibCPackageHeadersCompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 2D3BB1A637E6A3750340FF6B /* MLibCPackageHeadersCompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(SRCROOT)/IXLandMLibC/include -I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		43B66CCF0B95FBA7863A2A82 /* errno_translation.c in Sources */ = {isa = PBXBuildFile; fileRef = 5B529A66EE48A5B08C7F1133 /* errno_translation.c */; };
 		44DF5BEBC1B35AB80A919AD5 /* socket.c in Sources */ = {isa = PBXBuildFile; fileRef = 8673C61E8B9C563C4C7ABD72 /* socket.c */; };
 		459343AFABA1140AC751F47F /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 796E473A9A486D8939FAD9C8 /* super.c */; };
@@ -109,6 +110,7 @@
 		C65F2C5794021E02A4AA1882 /* TaskGroupTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 714BAF93413E56EEEB5A6663 /* TaskGroupTests.m */; };
 		CCB453AF50B66417681D51AF /* wait_queue.c in Sources */ = {isa = PBXBuildFile; fileRef = 7C3F397E6A6B117F36B6BD9F /* wait_queue.c */; };
 		CDB1FB3CC4E068EDC4E6FBAF /* readdir.c in Sources */ = {isa = PBXBuildFile; fileRef = C0384F767FC53F0302EC3840 /* readdir.c */; };
+		CDC193A61C588675F54019C0 /* MLibCStatCompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 04E50F0A270A9A015C04A2CF /* MLibCStatCompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(SRCROOT)/IXLandMLibC/include -I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		D2F07E098F4B6BC9D06417DB /* memfd.c in Sources */ = {isa = PBXBuildFile; fileRef = 62C5B0106DBF038CC53C94B7 /* memfd.c */; };
 		D32D9E90AE7545A70B57CF77 /* ReadinessContract.c in Sources */ = {isa = PBXBuildFile; fileRef = C3E40917769ADB0AC3CF1602 /* ReadinessContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		D52E564D8201A33A6E5032BF /* RootfsBootstrapTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 7AB090E777D7DE7F286CA7C6 /* RootfsBootstrapTests.m */; };
@@ -203,6 +205,7 @@
 		036B99DB8D2DB217EDB1E14A /* signal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signal.c; sourceTree = "<group>"; };
 		03D8647E39D71CCCBBDF4F19 /* read_write.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = read_write.c; sourceTree = "<group>"; };
 		04AD66F00222EE330847E719 /* resource.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = resource.c; sourceTree = "<group>"; };
+		04E50F0A270A9A015C04A2CF /* MLibCStatCompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = MLibCStatCompileSmoke.c; sourceTree = "<group>"; };
 		06B5D8E0A9F7EBAD2A11D6A9 /* vfs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vfs.c; sourceTree = "<group>"; };
 		07BD4F9A3830783CDBE07900 /* stat.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stat.c; sourceTree = "<group>"; };
 		07F608E56716DC444E7EC585 /* EpollContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EpollContract.h; sourceTree = "<group>"; };
@@ -227,6 +230,7 @@
 		28DA4A072C5ABDDD9C7B2783 /* sys.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sys.c; sourceTree = "<group>"; };
 		2B5D1689AFFF83BDDA662B2E /* eventpoll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = eventpoll.c; sourceTree = "<group>"; };
 		2BBBB6844E65C0A0E0E44E17 /* ioctl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ioctl.c; sourceTree = "<group>"; };
+		2D3BB1A637E6A3750340FF6B /* MLibCPackageHeadersCompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = MLibCPackageHeadersCompileSmoke.c; sourceTree = "<group>"; };
 		2E5D3C0BF6D33D8D5045AEF4 /* ixland_observability.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ixland_observability.c; sourceTree = "<group>"; };
 		343C751E1457555FF2D8C9CA /* SignalSyscallContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SignalSyscallContract.h; sourceTree = "<group>"; };
 		34ED17BD9A6F04F91B1DE489 /* FutexUAPICompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FutexUAPICompileSmoke.c; sourceTree = "<group>"; };
@@ -543,6 +547,8 @@
 				13EFBE679CDC4DB51EA895C1 /* LinuxUAPICompileSmoke.c */,
 				EE1AA08B73C459E46CA42FED /* LinuxUAPITestSupport.c */,
 				19EE3C111CB6664A31623830 /* LinuxUAPITestSupport.h */,
+				2D3BB1A637E6A3750340FF6B /* MLibCPackageHeadersCompileSmoke.c */,
+				04E50F0A270A9A015C04A2CF /* MLibCStatCompileSmoke.c */,
 				691B73007BC1D8B37396FDAF /* NamespaceContract.c */,
 				6471126EAE15E1EFE366ED02 /* NamespaceContract.h */,
 				18C8B54CEABDF7BC7E20CD3D /* NamespaceTests.m */,
@@ -841,6 +847,8 @@
 				45950A4093CF68ABBBAFF94B /* LinuxKHeadersCompileSmoke.c in Sources */,
 				8B6234D074E1AF531588E6B1 /* LinuxUAPICompileSmoke.c in Sources */,
 				5FADE12CC2EB7EF5BCC2C688 /* LinuxUAPITestSupport.c in Sources */,
+				3DEE3517F680A71208F6E393 /* MLibCPackageHeadersCompileSmoke.c in Sources */,
+				CDC193A61C588675F54019C0 /* MLibCStatCompileSmoke.c in Sources */,
 				52318D92C27B08EA1A85100C /* NamespaceContract.c in Sources */,
 				13F6AF9F8919AB55CA34FDDD /* NamespaceTests.m in Sources */,
 				682076B34B5B562533151D2B /* NativeSyscallContract.c in Sources */,
@@ -1117,6 +1125,7 @@
 					_XOPEN_SOURCE,
 				);
 				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)",
 					"$(SRCROOT)/IXLandKernel",
 					"$(SRCROOT)/IXLandKernel/include",
 					"$(SRCROOT)/IXLandKernel/internal/private",
@@ -1198,6 +1207,7 @@
 					_XOPEN_SOURCE,
 				);
 				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)",
 					"$(SRCROOT)/IXLandKernel",
 					"$(SRCROOT)/IXLandKernel/include",
 					"$(SRCROOT)/IXLandKernel/internal/private",

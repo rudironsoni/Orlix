@@ -80,15 +80,15 @@ __attribute__((visibility("default"))) int sigaction(int signum, const struct si
     return result;
 }
 
-__attribute__((visibility("default"))) sighandler_t signal(int signum, sighandler_t handler) {
+__attribute__((visibility("default"))) void (*signal(int signum, void (*handler)(int)))(int) {
     if (signum < 1 || signum >= KERNEL_SIG_NUM) {
         errno = EINVAL;
-        return (sighandler_t)-1;
+        return (void (*)(int))-1;
     }
 
     if (signum == SIGKILL || signum == SIGSTOP) {
         errno = EINVAL;
-        return (sighandler_t)-1;
+        return (void (*)(int))-1;
     }
 
     return do_signal(signum, handler);

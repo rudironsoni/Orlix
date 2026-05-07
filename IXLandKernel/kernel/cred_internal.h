@@ -14,13 +14,11 @@
 #ifndef KERNEL_CRED_INTERNAL_H
 #define KERNEL_CRED_INTERNAL_H
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
-/* Use Linux-compatible UID/GID types */
-typedef uint32_t uid_t;
-typedef uint32_t gid_t;
+#include "../../IXLandMLibC/include/ixlandmlibc/bits/kernel_types.h"
 
 #ifdef __cplusplus
 extern "C" {

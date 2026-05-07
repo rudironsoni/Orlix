@@ -143,6 +143,7 @@ targets:
       iOS: '16.0'
     settings:
       HEADER_SEARCH_PATHS:
+        - $(SRCROOT)
         - $(SRCROOT)/IXLandKernel
         - $(SRCROOT)/IXLandKernel/include
         - $(SRCROOT)/IXLandKernel/internal/private
@@ -212,6 +213,14 @@ targets:
     - IXLandKernelTests/PtraceTests.m
     - path: IXLandKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+    - path: IXLandKernelTests/MLibCPackageHeadersCompileSmoke.c
+      compilerFlags:
+      - -I$(SRCROOT)/IXLandMLibC/include
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+    - path: IXLandKernelTests/MLibCStatCompileSmoke.c
+      compilerFlags:
+      - -I$(SRCROOT)/IXLandMLibC/include
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
     - path: IXLandKernelTests/LinuxKHeadersCompileSmoke.c
       compilerFlags:

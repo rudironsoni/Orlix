@@ -3,7 +3,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/types.h>
 
 struct linux_stat;
 
@@ -19,7 +18,7 @@ int backing_unlink(const char *pathname);
 int backing_link(const char *oldpath, const char *newpath);
 int backing_linkat(const char *oldpath, const char *newpath, int follow_symlink);
 int backing_symlink(const char *target, const char *linkpath);
-ssize_t backing_readlink(const char *pathname, char *buf, size_t bufsiz);
+long backing_readlink(const char *pathname, char *buf, size_t bufsiz);
 int backing_fchdir(int fd);
 
 #endif

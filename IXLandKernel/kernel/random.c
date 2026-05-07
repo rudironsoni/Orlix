@@ -13,9 +13,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/types.h>
 
 #include "../fs/vfs.h"
+#include "../../IXLandMLibC/include/ixlandmlibc/bits/kernel_types.h"
 
 extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern ssize_t read_impl(int fd, void *buf, size_t count);

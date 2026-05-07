@@ -6,6 +6,8 @@
 #include <asm-generic/signal.h>
 #undef __ASSEMBLY__
 
+#include "../../IXLandMLibC/include/poll.h"
+
 #include "pipe.h"
 
 #include <errno.h>

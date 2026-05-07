@@ -147,9 +147,9 @@ int backing_symlink(const char *target, const char *linkpath)
     return (int)syscall(SYS_symlink, target, linkpath);
 }
 
-ssize_t backing_readlink(const char *pathname, char *buf, size_t bufsiz)
+long backing_readlink(const char *pathname, char *buf, size_t bufsiz)
 {
-    return (ssize_t)syscall(SYS_readlink, pathname, buf, bufsiz);
+    return (long)syscall(SYS_readlink, pathname, buf, bufsiz);
 }
 
 /* Fchdir */

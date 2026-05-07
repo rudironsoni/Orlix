@@ -103,7 +103,8 @@ Current subsystem ownership in this repository:
 - VFS and fdtable: `IXLandKernel/fs/vfs.c`, `IXLandKernel/fs/vfs.h`, `IXLandKernel/fs/fdtable.c`, `IXLandKernel/fs/fdtable.h`
 - file operation owners: `IXLandKernel/fs/open.c`, `IXLandKernel/fs/read_write.c`, `IXLandKernel/fs/stat.c`, `IXLandKernel/fs/fcntl.c`, `IXLandKernel/fs/ioctl.c`, `IXLandKernel/fs/namei.c`, `IXLandKernel/fs/readdir.c`, `IXLandKernel/fs/eventpoll.c`, `IXLandKernel/fs/mount.c`, `IXLandKernel/fs/inode.c`, `IXLandKernel/fs/super.c`, `IXLandKernel/fs/path.c`, `IXLandKernel/fs/exec.c`
 - native runtime registry: `IXLandKernel/runtime/native/registry.c`, `IXLandKernel/runtime/native/registry.h`
-- private Darwin bridge surface: `IXLandHostAdapter/internal/ios/kernel/signal_bridge.c`
+- private Darwin bridge surface: `IXLandHostAdapter/kernel/signal.c`
+- package-facing libc bootstrap surface: `IXLandMLibC/include/**`
 
 ## Test Layering
 
@@ -112,10 +113,10 @@ This repo currently contains two valid proof layers in XCTest plus Linux UAPI co
 1. LinuxKernel proof
    - exercises syscall-facing Linux-visible behavior
    - uses C contract files for Linux UAPI constants, structs, and payload truth
-   - does not include `IXLandHostAdapter/internal/ios/**`
+   - does not include `IXLandHostAdapter/**`
 
 2. HostBridge proof
-   - verifies private `IXLandHostAdapter/internal/ios/**` seams only
+   - verifies private `IXLandHostAdapter/**` seams only
    - may use host APIs when proving host mechanics
    - does not prove Linux semantics
 
@@ -124,12 +125,19 @@ This repo currently contains two valid proof layers in XCTest plus Linux UAPI co
    - proves vendored UAPI resolution only
    - does not prove runtime behavior
 
+4. IXLandMLibC bootstrap compile smoke
+   - proves package-facing libc headers resolve through `IXLandMLibC/include/**`
+   - may use vendored Linux UAPI as the source of Linux constants and structs
+   - does not prove package runtime behavior yet
+
 Current test files:
 
 - `IXLandKernelTests/SignalTests.m` — LinuxKernel semantic test
 - `IXLandKernelTests/TaskGroupTests.m` — LinuxKernel semantic test
 - `IXLandKernelTests/CredentialTests.m` — LinuxKernel semantic test
 - `IXLandKernelTests/LinuxUAPICompileSmoke.c` — Linux UAPI / ABI compile smoke
+- `IXLandKernelTests/MLibCPackageHeadersCompileSmoke.c` — package-facing libc bootstrap compile smoke
+- `IXLandKernelTests/MLibCStatCompileSmoke.c` — package-facing stat/bootstrap compile smoke
 - `IXLandHostAdapterTests/HostBridgeSmokeTests.m` — HostBridge seam test
 
 True public drop-in Linux userspace compatibility proof is outside this XCTest tranche.

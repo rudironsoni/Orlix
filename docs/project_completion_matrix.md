@@ -30,8 +30,8 @@ It complements:
 
 | milestone | group | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- | --- |
-| `M0` | roadmap | `IXLandHostAdapter` split and boundary lockdown | all later milestones | `planned` | Explicitly defined as the prerequisite before all other roadmap work. |
-| `M1` | roadmap | sysroot and build truth | package configure and build transparency | `blocked` | Must follow the split so ownership and seam discipline are enforced by construction. |
+| `M0` | roadmap | `IXLandHostAdapter` split and boundary lockdown | all later milestones | `implemented` | The active kernel-facing seam is kernel-owned, `IXLandHostAdapter/include` is gone, and the full simulator suite was green after the cutover. |
+| `M1` | roadmap | sysroot and build truth | package configure and build transparency | `partial` | `IXLandMLibC` bootstrap headers and package-facing compile smoke now exist, but broader libc/sysroot ownership and drift cleanup remain. |
 | `M2` | roadmap | native exec plus shebang execution | `zsh`, scripts, Version 1 runtime | `blocked` | Version 1 is native-only, but execution-image plumbing must stay future-extensible. |
 | `M3` | roadmap | shell-critical process, signal, and PTY runtime | `zsh` primary proof | `blocked` | High-value Linux semantics cluster for shells and interactive use. |
 | `M4` | roadmap | VFS and runtime environment | shell startup, package runtime, `/proc`, `/dev` | `blocked` | Linux environment shape must be stable enough for package workflows. |
@@ -43,12 +43,12 @@ It complements:
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
 | ownership | `IXLandKernel` target or package | M0 | `implemented` | Owns the physical `IXLandKernel/fs/**`, `IXLandKernel/kernel/**`, `IXLandKernel/runtime/**`, and `IXLandKernel/include/**` trees. |
-| boundary | no Darwin, Foundation, UIKit, pthread, or dispatch headers in Linux-owner code | M0 | `partial` | Plans require this, but current repo still has host-shaped abstractions and direct host seam imports to eliminate. |
-| boundary | no arbitrary host implementation header visibility | M0 | `planned` | Must be enforced by target graph and include graph, not just convention. |
-| boundary | curated exported seam imports only | M0 | `partial` | Linux-owner code now imports exported adapter seams instead of raw `IXLandHostAdapter/internal/ios/**` headers, but the seam still needs further narrowing. |
-| header discipline | Linux UAPI as production ABI truth | M1 | `partial` | Main target already uses vendored UAPI include root, but broader ownership cleanup remains. |
+| boundary | no Darwin, Foundation, UIKit, pthread, or dispatch headers in Linux-owner code | M0 | `partial` | The active seam cutover landed, but Linux-owner cleanup still remains in older subsystem files outside the backing-contract tranche. |
+| boundary | no arbitrary host implementation header visibility | M0 | `partial` | `IXLandKernel` no longer includes `IXLandHostAdapter/**`, but `IXLandHostAdapter` still sees broader kernel roots than the long-term narrow-contract end-state. |
+| boundary | curated exported seam imports only | M0 | `implemented` | The old adapter-owned exported seam was removed; active cross-target declarations are kernel-owned private `backing_*` contracts. |
+| header discipline | Linux UAPI as production ABI truth | M1 | `partial` | Main target already uses vendored UAPI include root, and `IXLandMLibC` bootstrap headers now resolve Linux constants and structs through that vendored truth. |
 | header discipline | kheaders as classified private reference only | M1 | `partial` | Current project has kheaders smoke, but the project-wide classification discipline is not yet complete. |
-| type ownership | no libc-owned typedef reinvention in kernel | M1 | `partial` | Repo still contains Linux-like typedef recreation and host seam leakage that need cleanup. |
+| type ownership | no libc-owned typedef reinvention in kernel | M1 | `partial` | The first audited leaks now route through `IXLandMLibC` bootstrap types or kernel-owned narrow type headers, but broader drift still exists. |
 | architecture | backend-neutral execution architecture | M2 | `planned` | Needed now so Version 1 native execution does not block future ELF or WASM. |
 
 ## IXLandKernel: Process And Execution Runtime
@@ -125,12 +125,12 @@ It complements:
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
-| packaging | `IXLandHostAdapter` target or package | M0 | `implemented` | Owns the physical `IXLandHostAdapter/internal/ios/**` tree. |
-| seam | curated exported seam namespace | M0 | `planned` | Must replace casual direct imports of host headers from kernel code. |
+| packaging | `IXLandHostAdapter` target or package | M0 | `implemented` | Owns the physical `IXLandHostAdapter/**` tree. |
+| seam | curated exported seam namespace | M0 | `implemented` | The active seam is no longer adapter-owned or exported through `IXLandHostAdapter/include`. |
 | fs host mechanics | backing storage and path discovery | M0, M4 | `partial` | Current host fs helpers exist but need packaging and seam discipline. |
 | fs host mechanics | errno translation | M0, M4, M5 | `partial` | Present in current tree; still needs stronger boundary enforcement. |
 | fs host mechanics | open flags and host file I/O realization | M0, M4 | `partial` | Existing host helpers exist; must remain mechanism-only. |
-| kernel host mechanics | host clock access | M0, M3, M5 | `partial` | Existing host clock code lives in `IXLandHostAdapter/internal/ios/kernel`. |
+| kernel host mechanics | host clock access | M0, M3, M5 | `partial` | Existing host clock code lives in `IXLandHostAdapter/kernel`. |
 | kernel host mechanics | host sleep and wake primitives | M0, M3 | `partial` | Existing sync and wait realization exists, but seam redesign is still ahead. |
 | kernel host mechanics | host signal mask save and restore where required as mechanism | M0, M3 | `partial` | Existing bridge code exists, but semantics must remain kernel-owned. |
 | runtime host mechanics | runtime synchronization helper ownership | M0 | `implemented` | `IXLandKernel/runtime/native/registry.c` no longer imports host runtime sync directly. |
@@ -140,11 +140,11 @@ It complements:
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
-| ownership | package-facing Linux libc headers | M1, all packages | `planned` | Top-level roadmap assigns ownership clearly, but this matrix tracks project requirement, not proof of delivery yet. |
-| ownership | libc-owned typedefs and APIs | M1, all packages | `planned` | Must remain outside `IXLandKernel`. |
-| sysroot | sysroot ownership discipline | M1, configure and build | `planned` | Core requirement for zero package source changes. |
+| ownership | package-facing Linux libc headers | M1, all packages | `partial` | An in-repo bootstrap header surface now exists under `IXLandMLibC/include/**`, but it is not yet a complete package sysroot. |
+| ownership | libc-owned typedefs and APIs | M1, all packages | `partial` | The bootstrap now owns the first audited package-facing types, but broad libc surface migration remains ahead. |
+| sysroot | sysroot ownership discipline | M1, configure and build | `partial` | The repo now has package-facing compile smoke through `IXLandMLibC`, but full sysroot assembly is still future work. |
 | sysdeps | Linux-oriented sysdeps for native iOS builds | M1, Version 1 runtime | `planned` | Required for package transparency and native execution path. |
-| integration | no kernel reinvention of libc-owned surfaces | M1 | `planned` | Shared ownership boundary must be enforced through both kernel and sysroot cleanup. |
+| integration | no kernel reinvention of libc-owned surfaces | M1 | `partial` | The tranche introduced `IXLandMLibC` bootstrap ownership and removed the first audited direct leaks, but more kernel drift remains. |
 
 ## IXLandKernel Integration And Proof Harness
 
@@ -154,7 +154,7 @@ It complements:
 | proof split | LinuxKernel tests as Linux behavior proof | M0 onward | `partial` | Test target exists today and must remain host-implementation-free. |
 | proof split | HostBridge tests as host-adapter proof | M0 onward | `partial` | Test target exists today and already matches the intended split conceptually. |
 | proof policy | package-driven proof over unit-test-only proof | M6 | `planned` | Explicitly defined in the package proof milestone. |
-| proof artifacts | compile-smoke and contract files | M1 onward | `partial` | Current repo already uses UAPI compile smoke and contract tests. |
+| proof artifacts | compile-smoke and contract files | M1 onward | `partial` | Current repo now uses both vendored UAPI compile smoke and `IXLandMLibC` bootstrap compile smoke in addition to the contract tests. |
 
 ## Package Proof Targets
 
