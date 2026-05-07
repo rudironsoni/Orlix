@@ -49,19 +49,19 @@ extern int open_tree(int dirfd, const char *pathname, unsigned int flags);
 extern int move_mount(int from_dirfd, const char *from_pathname, int to_dirfd,
                       const char *to_pathname, unsigned int flags);
 extern int clone_impl(uint64_t flags);
-extern int mkdir_impl(const char *pathname, linux_mode_t mode);
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int mkdir_impl(const char *pathname, uint32_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 
 int vfs_path_contract_open_tmp_fd_symlink_file(void) {
     return open_impl("/tmp/test_fd_symlink", O_CREAT | O_RDWR, 0644);
 }
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
-extern int openat_impl(int dirfd, const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
+extern int openat_impl(int dirfd, const char *pathname, int flags, uint32_t mode);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
-extern long pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
+extern long pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
@@ -72,15 +72,15 @@ extern gid_t setfsgid_impl(gid_t fsgid);
 extern int setresuid_impl(uid_t ruid, uid_t euid, uid_t suid);
 extern int setresgid_impl(gid_t rgid, gid_t egid, gid_t sgid);
 extern int setgroups_impl(int size, const gid_t *list);
-extern int mkdirat(int dirfd, const char *pathname, linux_mode_t mode);
+extern int mkdirat(int dirfd, const char *pathname, uint32_t mode);
 extern int unlinkat(int dirfd, const char *pathname, int flags);
 extern int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
 extern long readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz);
 extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags);
 extern void cred_reset_to_defaults(void);
-extern int chmod(const char *pathname, linux_mode_t mode);
-extern int fchmod(int fd, linux_mode_t mode);
+extern int chmod(const char *pathname, uint32_t mode);
+extern int fchmod(int fd, uint32_t mode);
 extern int chown(const char *pathname, uid_t owner, gid_t group);
 extern int fchown(int fd, uid_t owner, gid_t group);
 extern int capget(cap_user_header_t header, cap_user_data_t data);

@@ -23,14 +23,14 @@
 
 extern int pipe_impl(int pipefd[2]);
 extern int pipe2_impl(int pipefd[2], int flags);
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int dup_impl(int oldfd);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
-extern linux_off_t lseek_impl(int fd, linux_off_t offset, int whence);
-extern ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
-extern ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset);
+extern int64_t lseek_impl(int fd, int64_t offset, int whence);
+extern ssize_t pread_impl(int fd, void *buf, size_t count, int64_t offset);
+extern ssize_t pwrite_impl(int fd, const void *buf, size_t count, int64_t offset);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int poll_impl(struct pollfd *fds, nfds_t nfds, int timeout);

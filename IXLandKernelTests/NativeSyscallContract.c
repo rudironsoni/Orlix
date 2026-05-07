@@ -196,9 +196,9 @@ struct linux_rusage_contract {
 extern int link_impl(const char *oldpath, const char *newpath);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern long read_impl(int fd, void *buf, size_t count);
-extern long pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
+extern long pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
 extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,

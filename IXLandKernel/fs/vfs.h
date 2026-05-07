@@ -17,15 +17,7 @@ typedef __SIZE_TYPE__ size_t;
 /* Linux stat structure - defined in stat_types.h for shared use */
 #include "stat_types.h"
 
-/* Use fixed-width types to avoid conflicts with Darwin headers */
-typedef __INT64_TYPE__ linux_off_t;
-typedef __INT64_TYPE__ linux_ssize_t;
 typedef int linux_bool_t;
-
-/* Linux UIDs/GIDs */
-typedef uint32_t linux_uid_t;
-typedef uint32_t linux_gid_t;
-typedef uint32_t linux_mode_t;
 
 /* Linux timespec */
 struct linux_timespec {
@@ -112,23 +104,23 @@ struct writeback_control;
 
 /* Linux-compatible VFS operations structure */
 struct file_operations {
-    linux_ssize_t (*read)(struct file *file, char *buf, size_t count, linux_off_t *pos);
-    linux_ssize_t (*write)(struct file *file, const char *buf, size_t count, linux_off_t *pos);
+    int64_t (*read)(struct file *file, char *buf, size_t count, int64_t *pos);
+    int64_t (*write)(struct file *file, const char *buf, size_t count, int64_t *pos);
     int (*open)(struct inode *inode, struct file *file);
     int (*release)(struct inode *inode, struct file *file);
     int (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
-    int (*mmap)(struct file *file, void *addr, size_t len, int prot, int flags, linux_off_t offset);
+    int (*mmap)(struct file *file, void *addr, size_t len, int prot, int flags, int64_t offset);
     unsigned int (*poll)(struct file *file, struct poll_table_struct *table);
 };
 
 /* Linux-compatible inode operations */
 struct inode_operations {
     struct dentry *(*lookup)(struct inode *dir, struct dentry *dentry);
-    int (*create)(struct inode *dir, struct dentry *dentry, linux_mode_t mode);
+    int (*create)(struct inode *dir, struct dentry *dentry, uint32_t mode);
     int (*link)(struct dentry *old_dentry, struct inode *dir, struct dentry *new_dentry);
     int (*unlink)(struct inode *dir, struct dentry *dentry);
     int (*symlink)(struct inode *dir, struct dentry *dentry, const char *oldname);
-    int (*mkdir)(struct inode *dir, struct dentry *dentry, linux_mode_t mode);
+    int (*mkdir)(struct inode *dir, struct dentry *dentry, uint32_t mode);
     int (*rmdir)(struct inode *dir, struct dentry *dentry);
     int (*rename)(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir,
                   struct dentry *new_dentry);
@@ -141,9 +133,9 @@ struct inode_operations {
 struct address_space_operations {
     int (*readpage)(struct file *file, struct page *page);
     int (*writepage)(struct page *page, struct writeback_control *wbc);
-    int (*write_begin)(struct file *file, struct address_space *mapping, linux_off_t pos, unsigned len,
+    int (*write_begin)(struct file *file, struct address_space *mapping, int64_t pos, unsigned len,
                        unsigned flags, struct page **pagep, void **fsdata);
-    int (*write_end)(struct file *file, struct address_space *mapping, linux_off_t pos, unsigned len,
+    int (*write_end)(struct file *file, struct address_space *mapping, int64_t pos, unsigned len,
                      unsigned copied, struct page *page, void *fsdata);
 };
 
@@ -164,9 +156,9 @@ struct super_operations {
 struct inode {
     uint64_t i_ino;
     unsigned int i_mode;
-    linux_uid_t i_uid;
-    linux_gid_t i_gid;
-    linux_off_t i_size;
+    uint32_t i_uid;
+    uint32_t i_gid;
+    int64_t i_size;
     struct linux_timespec *i_atime;
     struct linux_timespec *i_mtime;
     struct linux_timespec *i_ctime;
@@ -213,7 +205,7 @@ struct mount {
 struct fs_struct {
     struct dentry *root;
     struct dentry *pwd;
-    linux_mode_t umask;
+    uint32_t umask;
     linux_atomic_int users;
     fs_mutex_t lock;
     /* Task-aware path resolution state */
@@ -266,7 +258,7 @@ int vfs_statmount(const struct mnt_id_req *req, struct statmount *buf, size_t bu
 int vfs_mount_basic(void);
 
 	/* File operations through VFS */
-	int vfs_open(const char *path, int flags, linux_mode_t mode, int *target_fd);
+	int vfs_open(const char *path, int flags, uint32_t mode, int *target_fd);
 
 /* Task-aware path translation between virtual and host paths */
 int vfs_translate_path(const char *vpath, char *host_path, size_t host_path_len);
@@ -377,7 +369,7 @@ int vfs_check_open_permission(const char *resolved_vpath, const char *translated
 int vfs_check_parent_mutation_permission(const char *resolved_vpath);
 int vfs_check_sticky_unlink_permission(const char *resolved_vpath);
 int vfs_check_sticky_rename_permission(const char *old_resolved_vpath, const char *new_resolved_vpath);
-void vfs_record_created_path(const char *resolved_vpath, linux_mode_t mode);
+void vfs_record_created_path(const char *resolved_vpath, uint32_t mode);
 uint64_t vfs_file_identity_for_path(const char *resolved_vpath);
 int vfs_set_file_capabilities(const char *path, uint64_t permitted, uint64_t inheritable,
                               bool effective);
@@ -405,8 +397,8 @@ void vfs_link_path_metadata(const char *old_resolved_vpath, const char *new_reso
 void vfs_rename_path_metadata(const char *old_resolved_vpath, const char *new_resolved_vpath);
 void vfs_exchange_path_metadata(const char *left_resolved_vpath, const char *right_resolved_vpath);
 void vfs_apply_stat_metadata(const char *resolved_vpath, struct linux_stat *statbuf);
-int vfs_chmod_metadata(const char *resolved_vpath, linux_mode_t mode);
-int vfs_chown_metadata(const char *resolved_vpath, linux_uid_t owner, linux_gid_t group);
+int vfs_chmod_metadata(const char *resolved_vpath, uint32_t mode);
+int vfs_chown_metadata(const char *resolved_vpath, uint32_t owner, uint32_t group);
 int vfs_utimens_metadata(const char *resolved_vpath, long atime_sec, unsigned long atime_nsec,
                          long mtime_sec, unsigned long mtime_nsec);
 

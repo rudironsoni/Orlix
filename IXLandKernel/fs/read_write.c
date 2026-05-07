@@ -20,7 +20,7 @@
 #include "kernel/net/socket.h"
 #include "kernel/task.h"
 
-extern int ftruncate_impl(int fd, linux_off_t length);
+extern int ftruncate_impl(int fd, int64_t length);
 extern int fdatasync_impl(int fd);
 
 ssize_t read_impl(int fd, void *buf, size_t count) {
@@ -140,7 +140,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
                 errno = -content_len;
                 return -1;
             }
-            linux_off_t offset = (linux_off_t)get_fd_offset_impl(entry);
+            int64_t offset = get_fd_offset_impl(entry);
             if (offset < 0) {
                 offset = 0;
             }
@@ -151,7 +151,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
             size_t available = (size_t)content_len - (size_t)offset;
             size_t to_copy = count < available ? count : available;
             memcpy(buf, content + offset, to_copy);
-            set_fd_offset_impl((fd_entry_t *)entry, offset + (linux_off_t)to_copy);
+            set_fd_offset_impl((fd_entry_t *)entry, offset + (int64_t)to_copy);
             put_fd_entry_impl(entry);
             return (ssize_t)to_copy;
         }
@@ -164,7 +164,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
                 errno = -content_len;
                 return -1;
             }
-            linux_off_t offset = (linux_off_t)get_fd_offset_impl(entry);
+            int64_t offset = get_fd_offset_impl(entry);
             if (offset < 0) {
                 offset = 0;
             }
@@ -175,7 +175,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
             size_t available = (size_t)content_len - (size_t)offset;
             size_t to_copy = count < available ? count : available;
             memcpy(buf, content + offset, to_copy);
-            set_fd_offset_impl((fd_entry_t *)entry, offset + (linux_off_t)to_copy);
+            set_fd_offset_impl((fd_entry_t *)entry, offset + (int64_t)to_copy);
             put_fd_entry_impl(entry);
             return (ssize_t)to_copy;
         }
@@ -246,7 +246,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
             return -1;
         }
 
-        linux_off_t offset = (linux_off_t)get_fd_offset_impl(entry);
+        int64_t offset = get_fd_offset_impl(entry);
         if (offset < 0) {
             offset = 0;
         }
@@ -258,7 +258,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
         size_t available = (size_t)content_len - (size_t)offset;
         size_t to_copy = (count < available) ? count : available;
         memcpy(buf, content + offset, to_copy);
-        set_fd_offset_impl((fd_entry_t *)entry, offset + (linux_off_t)to_copy);
+        set_fd_offset_impl((fd_entry_t *)entry, offset + (int64_t)to_copy);
         put_fd_entry_impl(entry);
         return (ssize_t)to_copy;
     }
@@ -266,7 +266,7 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
     int real_fd = get_real_fd_impl(entry);
     ssize_t bytes = host_read_impl(real_fd, buf, count);
     if (bytes > 0) {
-        linux_off_t pos = (linux_off_t)host_lseek_impl(real_fd, 0, SEEK_CUR);
+        int64_t pos = host_lseek_impl(real_fd, 0, SEEK_CUR);
         if (pos >= 0) {
             set_fd_offset_impl((fd_entry_t *)entry, pos);
         }
@@ -422,7 +422,7 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     }
 
     int real_fd = get_real_fd_impl(entry);
-    linux_off_t current_size = host_lseek_impl(real_fd, 0, SEEK_END);
+    int64_t current_size = host_lseek_impl(real_fd, 0, SEEK_END);
     if (current_size < 0) {
         put_fd_entry_impl(entry);
         return -1;
@@ -437,7 +437,7 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
 
     ssize_t bytes = host_write_impl(real_fd, buf, count);
     if (bytes > 0) {
-        linux_off_t pos = (linux_off_t)host_lseek_impl(real_fd, 0, SEEK_CUR);
+        int64_t pos = host_lseek_impl(real_fd, 0, SEEK_CUR);
         if (pos >= 0) {
             set_fd_offset_impl((fd_entry_t *)entry, pos);
         }
@@ -446,39 +446,39 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
     return bytes;
 }
 
-linux_off_t lseek_impl(int fd, linux_off_t offset, int whence) {
+int64_t lseek_impl(int fd, int64_t offset, int whence) {
     void *entry;
 
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {
         errno = EBADF;
-        return (linux_off_t)-1;
+        return (int64_t)-1;
     }
 
     entry = get_fd_entry_impl(fd);
     if (!entry) {
         errno = EBADF;
-        return (linux_off_t)-1;
+        return (int64_t)-1;
     }
 
     if (get_fd_is_synthetic_dir_impl(entry) || get_fd_is_synthetic_proc_file_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = ESPIPE;
-        return (linux_off_t)-1;
+        return (int64_t)-1;
     }
 
     if (get_fd_is_synthetic_dev_impl(entry) || get_fd_is_synthetic_pty_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = ESPIPE;
-        return (linux_off_t)-1;
+        return (int64_t)-1;
     }
 
     if (get_fd_is_pipe_impl(entry)) {
         put_fd_entry_impl(entry);
         errno = ESPIPE;
-        return (linux_off_t)-1;
+        return (int64_t)-1;
     }
 
-    linux_off_t result = (linux_off_t)host_lseek_impl(get_real_fd_impl(entry), (long long)offset, whence);
+    int64_t result = host_lseek_impl(get_real_fd_impl(entry), offset, whence);
     if (result >= 0) {
         set_fd_offset_impl((fd_entry_t *)entry, result);
     }
@@ -531,7 +531,7 @@ static int synthetic_proc_file_content(synthetic_proc_file_t proc_file, int fd_n
     }
 }
 
-ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
+ssize_t pread_impl(int fd, void *buf, size_t count, int64_t offset) {
     if (count == 0) {
         return 0;
     }
@@ -576,7 +576,7 @@ ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
         synthetic_proc_file_t proc_file = get_fd_synthetic_proc_file_impl(entry);
         int fd_num = get_fd_proc_file_fd_num_impl(entry);
         int target_pid = get_fd_proc_file_target_pid_impl(entry);
-        linux_off_t saved_offset = get_fd_offset_impl(entry);
+        int64_t saved_offset = get_fd_offset_impl(entry);
         char content[32768];
         int content_len = synthetic_proc_file_content(proc_file, fd_num, target_pid, content, sizeof(content));
 
@@ -594,7 +594,7 @@ ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
             return -1;
         }
 
-        if ((linux_off_t)offset >= content_len) {
+        if ((int64_t)offset >= content_len) {
             set_fd_offset_impl((fd_entry_t *)entry, saved_offset);
             put_fd_entry_impl(entry);
             return 0;
@@ -613,7 +613,7 @@ ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset) {
     return bytes;
 }
 
-ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset) {
+ssize_t pwrite_impl(int fd, const void *buf, size_t count, int64_t offset) {
     if (count == 0) {
         return 0;
     }
@@ -683,8 +683,8 @@ ssize_t pwrite_impl(int fd, const void *buf, size_t count, linux_off_t offset) {
     return bytes;
 }
 
-ssize_t copy_file_range_impl(int fd_in, linux_off_t *off_in, int fd_out,
-                             linux_off_t *off_out, size_t len, unsigned int flags) {
+ssize_t copy_file_range_impl(int fd_in, int64_t *off_in, int fd_out,
+                             int64_t *off_out, size_t len, unsigned int flags) {
     char buffer[16384];
     size_t copied = 0;
 
@@ -733,24 +733,24 @@ ssize_t copy_file_range_impl(int fd_in, linux_off_t *off_in, int fd_out,
                 return copied > 0 ? (ssize_t)copied : -1;
             }
             if (off_out) {
-                *off_out += (linux_off_t)nwritten;
+                *off_out += (int64_t)nwritten;
             }
             written += (size_t)nwritten;
             copied += (size_t)nwritten;
         }
         if (off_in) {
-            *off_in += (linux_off_t)nread;
+            *off_in += (int64_t)nread;
         }
     }
 
     return (ssize_t)copied;
 }
 
-int fallocate_impl(int fd, int mode, linux_off_t offset, linux_off_t len) {
+int fallocate_impl(int fd, int mode, int64_t offset, int64_t len) {
     void *entry;
     int real_fd;
     struct linux_stat st;
-    linux_off_t end;
+    int64_t end;
 
     if (mode != 0) {
         errno = EOPNOTSUPP;
@@ -794,13 +794,13 @@ int fallocate_impl(int fd, int mode, linux_off_t offset, linux_off_t len) {
     }
 
     end = offset + len;
-    if ((linux_off_t)st.st_size >= end) {
+    if ((int64_t)st.st_size >= end) {
         return 0;
     }
     return ftruncate_impl(fd, end);
 }
 
-int sync_file_range_impl(int fd, linux_off_t offset, linux_off_t nbytes, unsigned int flags) {
+int sync_file_range_impl(int fd, int64_t offset, int64_t nbytes, unsigned int flags) {
     unsigned int allowed = SYNC_FILE_RANGE_WAIT_BEFORE | SYNC_FILE_RANGE_WRITE | SYNC_FILE_RANGE_WAIT_AFTER;
 
     if (offset < 0 || nbytes < 0) {
@@ -814,7 +814,7 @@ int sync_file_range_impl(int fd, linux_off_t offset, linux_off_t nbytes, unsigne
     return fdatasync_impl(fd);
 }
 
-ssize_t splice_impl(int fd_in, linux_off_t *off_in, int fd_out, linux_off_t *off_out,
+ssize_t splice_impl(int fd_in, int64_t *off_in, int fd_out, int64_t *off_out,
                     size_t len, unsigned int flags) {
     void *entry_in;
     void *entry_out;
@@ -878,11 +878,11 @@ ssize_t splice_impl(int fd_in, linux_off_t *off_in, int fd_out, linux_off_t *off
             written += (size_t)nwritten;
             copied += (size_t)nwritten;
             if (off_out) {
-                *off_out += (linux_off_t)nwritten;
+                *off_out += (int64_t)nwritten;
             }
         }
         if (off_in) {
-            *off_in += (linux_off_t)nread;
+            *off_in += (int64_t)nread;
         }
     }
 

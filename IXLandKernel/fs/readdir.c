@@ -77,7 +77,7 @@ static int append_linux_dirent64(void *dirp, size_t count, size_t *written, uint
 }
 
 static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count) {
-    linux_off_t cursor = get_fd_offset_impl(entry);
+    int64_t cursor = get_fd_offset_impl(entry);
     if (cursor < 0) {
         cursor = 0;
     }
@@ -415,7 +415,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
     }
 
     int real_fd = get_real_fd_impl(entry);
-    linux_off_t saved_offset = get_fd_offset_impl(entry);
+    int64_t saved_offset = get_fd_offset_impl(entry);
     bool is_dir = get_fd_is_dir_impl(entry);
     char fd_path[MAX_PATH];
 
@@ -458,7 +458,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
     }
 
     size_t written = 0;
-    linux_off_t latest_offset = saved_offset;
+    int64_t latest_offset = saved_offset;
     errno = 0;
 
     while (true) {
@@ -492,7 +492,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
 
         struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
         out->d_ino = native->d_ino;
-        latest_offset = (linux_off_t)telldir(dp);
+        latest_offset = (int64_t)telldir(dp);
         out->d_off = latest_offset;
         out->d_reclen = (unsigned short)aligned_len;
         out->d_type = map_dtype(native->d_type);

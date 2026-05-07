@@ -18,15 +18,15 @@
 #include "kernel/task.h"
 #include "runtime/syscall.h"
 
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int dup_impl(int oldfd);
 extern int dup2_impl(int oldfd, int newfd);
 extern int dup3_impl(int oldfd, int newfd, int flags);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern long read_impl(int fd, void *buf, size_t count);
-extern long pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
+extern long pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern long write_impl(int fd, const void *buf, size_t count);
-extern linux_off_t lseek_impl(int fd, linux_off_t offset, int whence);
+extern int64_t lseek_impl(int fd, int64_t offset, int whence);
 
 #ifndef SEEK_SET
 #define SEEK_SET 0
@@ -173,7 +173,7 @@ int fcntl_contract_dup_shares_offset(void) {
     int fd = -1;
     int dupfd = -1;
     int result = -1;
-    linux_off_t offset;
+    int64_t offset;
 
     fd = open_impl("/etc/passwd", O_RDONLY, 0);
     if (fd < 0) {
@@ -279,7 +279,7 @@ int fcntl_contract_dup2_replaces_open_fd(void) {
     int target = -1;
     int result = -1;
     int dup_result;
-    linux_off_t offset;
+    int64_t offset;
 
     source = open_impl("/etc/passwd", O_RDONLY, 0);
     if (source < 0) {
@@ -849,7 +849,7 @@ int fcntl_contract_pidfd_getfd_duplicates_target_descriptor(void) {
     int dupfd = -1;
     int result = -1;
     int dup_fd_flags;
-    linux_off_t offset;
+    int64_t offset;
 
     parent = get_current();
     if (!parent) {
@@ -1011,7 +1011,7 @@ int fcntl_contract_pidfd_getfd_allows_ptrace_eligible_sibling(void) {
     int pidfd = -1;
     int dupfd = -1;
     int result = -1;
-    linux_off_t offset;
+    int64_t offset;
 
     parent = get_current();
     if (!parent) {

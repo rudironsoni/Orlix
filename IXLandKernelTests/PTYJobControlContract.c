@@ -15,7 +15,7 @@
 #include "kernel/signal.h"
 #include "kernel/task.h"
 
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);

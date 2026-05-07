@@ -27,11 +27,11 @@
 extern int clone_impl(uint64_t flags);
 extern int unshare_impl(uint64_t flags);
 extern int fcntl_impl(int fd, int cmd, ...);
-extern int mkdir_impl(const char *pathname, linux_mode_t mode);
+extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int mount(const char *source, const char *target, const char *filesystemtype,
                  unsigned long mountflags, const void *data);
 extern int umount(const char *target);
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int close_impl(int fd);
 extern long long lseek_impl(int fd, long long offset, int whence);
 extern long read_impl(int fd, void *buf, size_t count);

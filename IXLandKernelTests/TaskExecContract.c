@@ -15,13 +15,13 @@
 #include "kernel/cred_internal.h"
 #include "kernel/task.h"
 
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
-extern int mkdir_impl(const char *pathname, linux_mode_t mode);
-extern int chmod(const char *pathname, linux_mode_t mode);
+extern int mkdir_impl(const char *pathname, uint32_t mode);
+extern int chmod(const char *pathname, uint32_t mode);
 extern int chown(const char *pathname, uid_t owner, gid_t group);
 extern int mount(const char *source, const char *target, const char *filesystemtype,
                  unsigned long mountflags, const void *data);

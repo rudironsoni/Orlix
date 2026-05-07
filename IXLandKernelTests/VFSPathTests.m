@@ -59,10 +59,10 @@ extern int vfs_discover_temp_root(char *path, size_t size);
 extern int stat_impl(const char *path, struct linux_stat *statbuf);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
 extern int lstat_impl(const char *path, struct linux_stat *statbuf);
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int dup2_impl(int oldfd, int newfd);
 extern long read_impl(int fd, void *buf, size_t count);
-extern long pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
+extern long pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern void cred_reset_to_defaults(void);
 extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 

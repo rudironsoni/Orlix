@@ -38,16 +38,16 @@
 
 extern int execve(const char *pathname, char *const argv[], char *const envp[]);
 extern int fexecve(int fd, char *const argv[], char *const envp[]);
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern long read_impl(int fd, void *buf, size_t count);
-extern ssize_t pread_impl(int fd, void *buf, size_t count, linux_off_t offset);
+extern ssize_t pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int unlink_impl(const char *pathname);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
-extern int chmod(const char *pathname, linux_mode_t mode);
-extern int chown(const char *pathname, linux_uid_t owner, linux_gid_t group);
-extern int mkdir_impl(const char *pathname, linux_mode_t mode);
+extern int chmod(const char *pathname, uint32_t mode);
+extern int chown(const char *pathname, uint32_t owner, uint32_t group);
+extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int rmdir_impl(const char *pathname);
 extern int mount(const char *source, const char *target, const char *filesystemtype,
                  unsigned long mountflags, const void *data);
@@ -55,7 +55,7 @@ extern int umount(const char *target);
 extern int setuid_impl(uid_t uid);
 extern int setgid_impl(gid_t gid);
 extern int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
-extern int ftruncate_impl(int fd, linux_off_t length);
+extern int ftruncate_impl(int fd, int64_t length);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern bool signal_is_pending(const struct task_struct *task, int32_t sig);
 

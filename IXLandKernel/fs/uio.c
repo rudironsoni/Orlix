@@ -8,10 +8,10 @@
 
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
-extern linux_ssize_t pread_impl(int fd, void *buf, size_t count, long long offset);
-extern linux_ssize_t pwrite_impl(int fd, const void *buf, size_t count, long long offset);
-extern linux_ssize_t copy_file_range_impl(int fd_in, long long *off_in, int fd_out,
-                                          long long *off_out, size_t len, unsigned int flags);
+extern int64_t pread_impl(int fd, void *buf, size_t count, long long offset);
+extern int64_t pwrite_impl(int fd, const void *buf, size_t count, long long offset);
+extern int64_t copy_file_range_impl(int fd_in, long long *off_in, int fd_out,
+                                    long long *off_out, size_t len, unsigned int flags);
 
 static long long uio_combine_offset(unsigned long pos_l, unsigned long pos_h) {
     return (long long)(((uint64_t)pos_h << 32) | (uint64_t)(uint32_t)pos_l);
@@ -215,9 +215,9 @@ long pwritev2_impl(int fd,
     return uio_pwritev_common(fd, iov, iovcnt, uio_combine_offset(pos_l, pos_h));
 }
 
-linux_ssize_t sendfile_impl(int out_fd, int in_fd, long long *offset, size_t count) {
+int64_t sendfile_impl(int out_fd, int in_fd, long long *offset, size_t count) {
     long long in_offset = 0;
-    linux_ssize_t copied;
+    int64_t copied;
 
     if (offset) {
         in_offset = *offset;

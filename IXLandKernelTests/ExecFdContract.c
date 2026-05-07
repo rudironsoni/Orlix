@@ -11,12 +11,12 @@
 #include "fs/vfs.h"
 #include "kernel/task.h"
 
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int dup_impl(int oldfd);
 extern int dup3_impl(int oldfd, int newfd, int flags);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern long read_impl(int fd, void *buf, size_t count);
-extern linux_off_t lseek_impl(int fd, linux_off_t offset, int whence);
+extern int64_t lseek_impl(int fd, int64_t offset, int whence);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 
 #ifndef SEEK_SET
@@ -135,7 +135,7 @@ int exec_fd_contract_close_on_exec_does_not_close_shared_description_still_refer
     int dupfd = -1;
     int closed;
     int result = -1;
-    linux_off_t offset;
+    int64_t offset;
 
     fd = open_impl("/etc/passwd", O_RDONLY, 0);
     if (fd < 0) {

@@ -197,7 +197,7 @@ extern int mount_impl(const char *source, const char *target,
                       const void *data);
 extern int umount2_impl(const char *target, int flags);
 
-extern int openat_impl(int dirfd, const char *pathname, int flags, linux_mode_t mode);
+extern int openat_impl(int dirfd, const char *pathname, int flags, uint32_t mode);
 extern int socket(int domain, int type, int protocol);
 extern int socketpair(int domain, int type, int protocol, int sv[2]);
 extern int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -234,13 +234,13 @@ extern long pwritev2_impl(int fd, const struct iovec *iov, int iovcnt,
                           unsigned long pos_l, unsigned long pos_h, int flags);
 extern ssize_t pread_impl(int fd, void *buf, size_t count, long long offset);
 extern ssize_t pwrite_impl(int fd, const void *buf, size_t count, long long offset);
-extern linux_off_t lseek_impl(int fd, linux_off_t offset, int whence);
-extern ssize_t sendfile_impl(int out_fd, int in_fd, linux_off_t *offset, size_t count);
-extern ssize_t copy_file_range_impl(int fd_in, linux_off_t *off_in, int fd_out,
-                                    linux_off_t *off_out, size_t len, unsigned int flags);
-extern int fallocate_impl(int fd, int mode, linux_off_t offset, linux_off_t len);
-extern int sync_file_range_impl(int fd, linux_off_t offset, linux_off_t nbytes, unsigned int flags);
-extern ssize_t splice_impl(int fd_in, linux_off_t *off_in, int fd_out, linux_off_t *off_out,
+extern int64_t lseek_impl(int fd, int64_t offset, int whence);
+extern ssize_t sendfile_impl(int out_fd, int in_fd, int64_t *offset, size_t count);
+extern ssize_t copy_file_range_impl(int fd_in, int64_t *off_in, int fd_out,
+                                    int64_t *off_out, size_t len, unsigned int flags);
+extern int fallocate_impl(int fd, int mode, int64_t offset, int64_t len);
+extern int sync_file_range_impl(int fd, int64_t offset, int64_t nbytes, unsigned int flags);
+extern ssize_t splice_impl(int fd_in, int64_t *off_in, int fd_out, int64_t *off_out,
                            size_t len, unsigned int flags);
 extern ssize_t vmsplice_impl(int fd, const struct iovec *iov, unsigned long nr_segs, unsigned int flags);
 extern ssize_t tee_impl(int fd_in, int fd_out, size_t len, unsigned int flags);
@@ -251,16 +251,16 @@ extern int fstatat_impl(int dirfd, const char *pathname, struct linux_stat *stat
 extern int faccessat_impl(int dirfd, const char *pathname, int mode, int flags);
 extern int statx_impl(int dirfd, const char *pathname, int flags, unsigned int mask,
                       struct statx *statxbuf);
-extern int truncate_impl(const char *path, linux_off_t length);
-extern int ftruncate_impl(int fd, linux_off_t length);
+extern int truncate_impl(const char *path, int64_t length);
+extern int ftruncate_impl(int fd, int64_t length);
 extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
 extern char *getcwd_impl(char *buf, size_t size);
 extern int chdir_impl(const char *path);
 extern int fchdir_impl(int fd);
-extern int fchmod_impl(int fd, linux_mode_t mode);
-extern int fchmodat_impl(int dirfd, const char *pathname, linux_mode_t mode, int flags);
-extern int fchown_impl(int fd, linux_uid_t owner, linux_gid_t group);
-extern int fchownat_impl(int dirfd, const char *pathname, linux_uid_t owner, linux_gid_t group, int flags);
+extern int fchmod_impl(int fd, uint32_t mode);
+extern int fchmodat_impl(int dirfd, const char *pathname, uint32_t mode, int flags);
+extern int fchown_impl(int fd, uint32_t owner, uint32_t group);
+extern int fchownat_impl(int dirfd, const char *pathname, uint32_t owner, uint32_t group, int flags);
 extern int utimensat_impl(int dirfd, const char *pathname,
                           const struct __kernel_timespec times[2], int flags);
 struct statfs;
@@ -270,7 +270,7 @@ extern int fdatasync_impl(int fd);
 extern int syncfs_impl(int fd);
 extern int statfs_impl(const char *path, struct statfs *buf);
 extern int fstatfs_impl(int fd, struct statfs *buf);
-extern linux_mode_t umask_impl(linux_mode_t mask);
+extern uint32_t umask_impl(uint32_t mask);
 extern int ioctl_impl(int fd, unsigned long request, void *arg);
 extern ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz);
 extern int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
@@ -288,7 +288,7 @@ extern int memfd_create_impl(const char *name, unsigned int flags);
 extern int pidfd_open_impl(int32_t pid, unsigned int flags);
 extern int pidfd_getfd_impl(struct task_struct *target, int targetfd, unsigned int flags);
 extern int task_pidfd_getfd_access_impl(struct task_struct *target);
-extern int mkdirat_impl(int dirfd, const char *pathname, linux_mode_t mode);
+extern int mkdirat_impl(int dirfd, const char *pathname, uint32_t mode);
 extern int unlinkat_impl(int dirfd, const char *pathname, int flags);
 extern int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd,
                           const char *newpath, unsigned int flags);
@@ -939,10 +939,10 @@ static long syscall_dispatch_inner_impl(long number,
                                             (int)arg2, (unsigned long)arg3, (unsigned long)arg4, (int)arg5));
     case __NR_sendfile:
         return syscall_result((long)sendfile_impl((int)arg0, (int)arg1,
-                                                  (linux_off_t *)(uintptr_t)arg2, (size_t)arg3));
+                                                  (int64_t *)(uintptr_t)arg2, (size_t)arg3));
     case __NR_splice:
-        return syscall_result((long)splice_impl((int)arg0, (linux_off_t *)(uintptr_t)arg1,
-                                                (int)arg2, (linux_off_t *)(uintptr_t)arg3,
+        return syscall_result((long)splice_impl((int)arg0, (int64_t *)(uintptr_t)arg1,
+                                                (int)arg2, (int64_t *)(uintptr_t)arg3,
                                                 (size_t)arg4, (unsigned int)arg5));
     case __NR_vmsplice:
         return syscall_result((long)vmsplice_impl((int)arg0, (const struct iovec *)(uintptr_t)arg1,
@@ -950,14 +950,14 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_tee:
         return syscall_result((long)tee_impl((int)arg0, (int)arg1, (size_t)arg2, (unsigned int)arg3));
     case __NR_copy_file_range:
-        return syscall_result((long)copy_file_range_impl((int)arg0, (linux_off_t *)(uintptr_t)arg1,
-                                                         (int)arg2, (linux_off_t *)(uintptr_t)arg3,
+        return syscall_result((long)copy_file_range_impl((int)arg0, (int64_t *)(uintptr_t)arg1,
+                                                         (int)arg2, (int64_t *)(uintptr_t)arg3,
                                                          (size_t)arg4, (unsigned int)arg5));
     case __NR_lseek:
-        return syscall_result((long)lseek_impl((int)arg0, (linux_off_t)arg1, (int)arg2));
+        return syscall_result((long)lseek_impl((int)arg0, (int64_t)arg1, (int)arg2));
     case __NR_openat:
         return syscall_result((long)openat_impl((int)arg0, (const char *)(uintptr_t)arg1,
-                                                (int)arg2, (linux_mode_t)arg3));
+                                                (int)arg2, (uint32_t)arg3));
     case __NR_openat2: {
         const struct open_how *how = (const struct open_how *)(uintptr_t)arg2;
 
@@ -974,7 +974,7 @@ static long syscall_dispatch_inner_impl(long number,
             return -EINVAL;
         }
         return syscall_result((long)openat_impl((int)arg0, (const char *)(uintptr_t)arg1,
-                                                (int)how->flags, (linux_mode_t)how->mode));
+                                                (int)how->flags, (uint32_t)how->mode));
     }
     case __NR_socket:
         return syscall_result((long)socket((int)arg0, (int)arg1, (int)arg2));
@@ -1317,7 +1317,7 @@ static long syscall_dispatch_inner_impl(long number,
                                                (char *)(uintptr_t)arg2, (size_t)arg3));
     case __NR_mkdirat:
         return syscall_result((long)mkdirat_impl((int)arg0, (const char *)(uintptr_t)arg1,
-                                                 (linux_mode_t)arg2));
+                                                 (uint32_t)arg2));
     case __NR_unlinkat:
         return syscall_result((long)unlinkat_impl((int)arg0, (const char *)(uintptr_t)arg1,
                                                   (int)arg2));
@@ -1365,19 +1365,19 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_chroot:
         return syscall_result((long)chroot((const char *)(uintptr_t)arg0));
     case __NR_umask:
-        return (long)umask_impl((linux_mode_t)arg0);
+        return (long)umask_impl((uint32_t)arg0);
     case __NR_fchmod:
-        return syscall_result((long)fchmod_impl((int)arg0, (linux_mode_t)arg1));
+        return syscall_result((long)fchmod_impl((int)arg0, (uint32_t)arg1));
     case __NR_fchmodat:
     case __NR_fchmodat2:
         return syscall_result((long)fchmodat_impl((int)arg0, (const char *)(uintptr_t)arg1,
-                                                  (linux_mode_t)arg2, (int)arg3));
+                                                  (uint32_t)arg2, (int)arg3));
     case __NR_fchown:
-        return syscall_result((long)fchown_impl((int)arg0, (linux_uid_t)arg1,
-                                                (linux_gid_t)arg2));
+        return syscall_result((long)fchown_impl((int)arg0, (uint32_t)arg1,
+                                                (uint32_t)arg2));
     case __NR_fchownat:
         return syscall_result((long)fchownat_impl((int)arg0, (const char *)(uintptr_t)arg1,
-                                                  (linux_uid_t)arg2, (linux_gid_t)arg3,
+                                                  (uint32_t)arg2, (uint32_t)arg3,
                                                   (int)arg4));
     case __NR_utimensat:
         return syscall_result((long)utimensat_impl((int)arg0, (const char *)(uintptr_t)arg1,
@@ -1502,14 +1502,14 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_msync:
         return syscall_result((long)msync_impl((void *)(uintptr_t)arg0, (size_t)arg1, (int)arg2));
     case __NR_truncate:
-        return syscall_result((long)truncate_impl((const char *)(uintptr_t)arg0, (linux_off_t)arg1));
+        return syscall_result((long)truncate_impl((const char *)(uintptr_t)arg0, (int64_t)arg1));
     case __NR_ftruncate:
-        return syscall_result((long)ftruncate_impl((int)arg0, (linux_off_t)arg1));
+        return syscall_result((long)ftruncate_impl((int)arg0, (int64_t)arg1));
     case __NR_fallocate:
-        return syscall_result((long)fallocate_impl((int)arg0, (int)arg1, (linux_off_t)arg2, (linux_off_t)arg3));
+        return syscall_result((long)fallocate_impl((int)arg0, (int)arg1, (int64_t)arg2, (int64_t)arg3));
     case __NR_sync_file_range:
-        return syscall_result((long)sync_file_range_impl((int)arg0, (linux_off_t)arg1,
-                                                         (linux_off_t)arg2, (unsigned int)arg3));
+        return syscall_result((long)sync_file_range_impl((int)arg0, (int64_t)arg1,
+                                                         (int64_t)arg2, (unsigned int)arg3));
     case __NR_setxattr:
         return syscall_result((long)setxattr_impl((const char *)(uintptr_t)arg0,
                                                   (const char *)(uintptr_t)arg1,

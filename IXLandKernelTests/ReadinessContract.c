@@ -30,7 +30,7 @@
 #include "runtime/syscall.h"
 
 extern int pty_contract_ioctl(int fd, unsigned long request, ...);
-extern int open_impl(const char *pathname, int flags, linux_mode_t mode);
+extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int pipe_impl(int pipefd[2]);
 extern int poll_impl(struct pollfd *fds, nfds_t nfds, int timeout);
 extern int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);

@@ -65,7 +65,7 @@ static int inode_resolve_fd_path(int fd, char *resolved_path, size_t resolved_pa
     return 0;
 }
 
-int chmod_impl(const char *pathname, linux_mode_t mode) {
+int chmod_impl(const char *pathname, uint32_t mode) {
     char resolved_path[MAX_PATH];
     int ret;
 
@@ -81,7 +81,7 @@ int chmod_impl(const char *pathname, linux_mode_t mode) {
     return 0;
 }
 
-int fchmod_impl(int fd, linux_mode_t mode) {
+int fchmod_impl(int fd, uint32_t mode) {
     char resolved_path[MAX_PATH];
     int ret;
 
@@ -97,7 +97,7 @@ int fchmod_impl(int fd, linux_mode_t mode) {
     return 0;
 }
 
-int fchmodat_impl(int dirfd, const char *pathname, linux_mode_t mode, int flags) {
+int fchmodat_impl(int dirfd, const char *pathname, uint32_t mode, int flags) {
     char resolved_path[MAX_PATH];
     int ret;
 
@@ -117,7 +117,7 @@ int fchmodat_impl(int dirfd, const char *pathname, linux_mode_t mode, int flags)
     return 0;
 }
 
-int chown_impl(const char *pathname, linux_uid_t owner, linux_gid_t group) {
+int chown_impl(const char *pathname, uint32_t owner, uint32_t group) {
     char resolved_path[MAX_PATH];
     int ret;
 
@@ -133,7 +133,7 @@ int chown_impl(const char *pathname, linux_uid_t owner, linux_gid_t group) {
     return 0;
 }
 
-int fchown_impl(int fd, linux_uid_t owner, linux_gid_t group) {
+int fchown_impl(int fd, uint32_t owner, uint32_t group) {
     char resolved_path[MAX_PATH];
     int ret;
 
@@ -149,11 +149,11 @@ int fchown_impl(int fd, linux_uid_t owner, linux_gid_t group) {
     return 0;
 }
 
-int lchown_impl(const char *pathname, linux_uid_t owner, linux_gid_t group) {
+int lchown_impl(const char *pathname, uint32_t owner, uint32_t group) {
     return chown_impl(pathname, owner, group);
 }
 
-int fchownat_impl(int dirfd, const char *pathname, linux_uid_t owner, linux_gid_t group, int flags) {
+int fchownat_impl(int dirfd, const char *pathname, uint32_t owner, uint32_t group, int flags) {
     char resolved_path[MAX_PATH];
     int ret;
 
@@ -256,20 +256,20 @@ int utimensat_impl(int dirfd, const char *pathname, const struct __kernel_timesp
     return 0;
 }
 
-linux_mode_t umask_impl(linux_mode_t mask) {
+uint32_t umask_impl(uint32_t mask) {
     struct task_struct *task = get_current();
-    linux_mode_t old;
+    uint32_t old;
 
     if (!task || !task->fs) {
         return 0;
     }
 
     old = task->fs->umask;
-    task->fs->umask = (linux_mode_t)(mask & 0777U);
+    task->fs->umask = (uint32_t)(mask & 0777U);
     return old;
 }
 
-int truncate_impl(const char *path, linux_off_t length) {
+int truncate_impl(const char *path, int64_t length) {
     char resolved_path[MAX_PATH];
     char translated_path[MAX_PATH];
     int ret;
@@ -293,7 +293,7 @@ int truncate_impl(const char *path, linux_off_t length) {
     return 0;
 }
 
-int ftruncate_impl(int fd, linux_off_t length) {
+int ftruncate_impl(int fd, int64_t length) {
     fd_entry_t *entry;
     int real_fd;
     int ret;
@@ -334,42 +334,42 @@ int ftruncate_impl(int fd, linux_off_t length) {
     return 0;
 }
 
-__attribute__((visibility("default"))) int chmod(const char *pathname, linux_mode_t mode) {
+__attribute__((visibility("default"))) int chmod(const char *pathname, uint32_t mode) {
     return chmod_impl(pathname, mode);
 }
 
-__attribute__((visibility("default"))) int fchmod(int fd, linux_mode_t mode) {
+__attribute__((visibility("default"))) int fchmod(int fd, uint32_t mode) {
     return fchmod_impl(fd, mode);
 }
 
-__attribute__((visibility("default"))) int fchmodat(int dirfd, const char *pathname, linux_mode_t mode, int flags) {
+__attribute__((visibility("default"))) int fchmodat(int dirfd, const char *pathname, uint32_t mode, int flags) {
     return fchmodat_impl(dirfd, pathname, mode, flags);
 }
 
-__attribute__((visibility("default"))) int chown(const char *pathname, linux_uid_t owner, linux_gid_t group) {
+__attribute__((visibility("default"))) int chown(const char *pathname, uint32_t owner, uint32_t group) {
     return chown_impl(pathname, owner, group);
 }
 
-__attribute__((visibility("default"))) int fchown(int fd, linux_uid_t owner, linux_gid_t group) {
+__attribute__((visibility("default"))) int fchown(int fd, uint32_t owner, uint32_t group) {
     return fchown_impl(fd, owner, group);
 }
 
-__attribute__((visibility("default"))) int lchown(const char *pathname, linux_uid_t owner, linux_gid_t group) {
+__attribute__((visibility("default"))) int lchown(const char *pathname, uint32_t owner, uint32_t group) {
     return lchown_impl(pathname, owner, group);
 }
 
-__attribute__((visibility("default"))) int fchownat(int dirfd, const char *pathname, linux_uid_t owner, linux_gid_t group, int flags) {
+__attribute__((visibility("default"))) int fchownat(int dirfd, const char *pathname, uint32_t owner, uint32_t group, int flags) {
     return fchownat_impl(dirfd, pathname, owner, group, flags);
 }
 
-__attribute__((visibility("default"))) linux_mode_t umask(linux_mode_t mask) {
+__attribute__((visibility("default"))) uint32_t umask(uint32_t mask) {
     return umask_impl(mask);
 }
 
-__attribute__((visibility("default"))) int truncate(const char *path, linux_off_t length) {
+__attribute__((visibility("default"))) int truncate(const char *path, int64_t length) {
     return truncate_impl(path, length);
 }
 
-__attribute__((visibility("default"))) int ftruncate(int fd, linux_off_t length) {
+__attribute__((visibility("default"))) int ftruncate(int fd, int64_t length) {
     return ftruncate_impl(fd, length);
 }
