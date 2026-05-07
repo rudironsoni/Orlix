@@ -1,10 +1,14 @@
 #ifndef FS_POLL_H
 #define FS_POLL_H
 
-#include <poll.h>
 #include <stdint.h>
+
+#define poll ixland_host_poll_frame
 #include <sys/select.h>
 #include <sys/time.h>
+#undef poll
+
+#include "../../IXLandMLibC/include/poll.h"
 
 #ifdef __cplusplus
 extern "C" {

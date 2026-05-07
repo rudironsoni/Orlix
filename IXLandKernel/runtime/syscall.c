@@ -170,11 +170,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/poll.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
+
+#include "../../IXLandMLibC/include/poll.h"
 
 #include "../fs/fdtable.h"
 #include "../fs/eventpoll.h"

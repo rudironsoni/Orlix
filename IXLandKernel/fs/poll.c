@@ -29,7 +29,11 @@ static void readiness_wait_init_once(void) {
 }
 
 static int backing_poll_wait(struct pollfd *fds, nfds_t nfds, int timeout) {
-    return backing_poll(fds, nfds, timeout);
+    if (nfds > (nfds_t)UINT_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+    return backing_poll(fds, (unsigned int)nfds, timeout);
 }
 
 void poll_notify_readiness_impl(void) {

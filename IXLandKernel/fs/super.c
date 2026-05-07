@@ -11,10 +11,11 @@
 #include <linux/fcntl.h>
 #include <linux/magic.h>
 #include <linux/mount.h>
+
+#include "../../IXLandMLibC/include/sys/types.h"
+
 #include "fdtable.h"
 #include "vfs.h"
-
-typedef __INT64_TYPE__ super_off_t;
 
 static long vfs_statfs_magic_for_path(const char *path) {
     enum vfs_backing_class backing_class;
@@ -143,14 +144,14 @@ int fstatfs_impl(int fd, struct statfs *buf) {
     return vfs_fill_statfs(path, buf);
 }
 
-static int posix_fadvise_impl(int fd, super_off_t offset, super_off_t len, int advice) {
+static int posix_fadvise_impl(int fd, off_t offset, off_t len, int advice) {
     (void)offset;
     (void)len;
     (void)advice;
     return fsync_impl(fd);
 }
 
-static int posix_fallocate_impl(int fd, super_off_t offset, super_off_t len) {
+static int posix_fallocate_impl(int fd, off_t offset, off_t len) {
     (void)offset;
     (void)len;
     return fsync_impl(fd);
@@ -180,12 +181,12 @@ __attribute__((visibility("default"))) int fstatfs(int fd, struct statfs *buf) {
     return fstatfs_impl(fd, buf);
 }
 
-__attribute__((visibility("default"))) int posix_fadvise(int fd, super_off_t offset,
-                                                         super_off_t len, int advice) {
+__attribute__((visibility("default"))) int posix_fadvise(int fd, off_t offset,
+                                                         off_t len, int advice) {
     return posix_fadvise_impl(fd, offset, len, advice);
 }
 
-__attribute__((visibility("default"))) int posix_fallocate(int fd, super_off_t offset,
-                                                           super_off_t len) {
+__attribute__((visibility("default"))) int posix_fallocate(int fd, off_t offset,
+                                                           off_t len) {
     return posix_fallocate_impl(fd, offset, len);
 }

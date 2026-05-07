@@ -46,6 +46,10 @@ static ssize_t mlibc_compile_smoke_iov_len(const struct iovec *iov) {
     return (ssize_t)iov->iov_len;
 }
 
+static nfds_t mlibc_compile_smoke_nfds(nfds_t count) {
+    return count;
+}
+
 static int mlibc_compile_smoke_poll_mask(short events) {
     return (events & (POLLIN | POLLOUT | POLLRDHUP));
 }
@@ -59,6 +63,7 @@ __attribute__((unused)) static void (*volatile mlibc_package_smoke_refs[])(void)
     (void (*)(void))mlibc_compile_smoke_gid,
     (void (*)(void))mlibc_compile_smoke_mode,
     (void (*)(void))mlibc_compile_smoke_iov_len,
+    (void (*)(void))mlibc_compile_smoke_nfds,
     (void (*)(void))mlibc_compile_smoke_poll_mask,
     (void (*)(void))mlibc_compile_smoke_fcntl_constants,
 };
