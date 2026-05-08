@@ -263,10 +263,10 @@ vendor-linux-headers:
 	tarball_sha="$$(shasum -a 256 "$$tarball" | awk '{print $$1}')"; \
 		tar -xf "$$tarball" -C "$$tmp"; \
 		require_dir "$$src"; \
-		cp "$$repo_root/build_support/linux_host_compat/include/elf.h" "$$host_compat_include/elf.h"; \
-		cp "$$repo_root/build_support/linux_host_compat/include/endian.h" "$$host_compat_include/endian.h"; \
-		cp "$$repo_root/build_support/linux_host_compat/include/byteswap.h" "$$host_compat_include/byteswap.h"; \
-		cp "$$repo_root/build_support/linux_host_compat/include/linux_arm_elf_compat.h" "$$host_compat_include/linux_arm_elf_compat.h"; \
+		cp "$$repo_root/tools/linux_host_compat/include/elf.h" "$$host_compat_include/elf.h"; \
+		cp "$$repo_root/tools/linux_host_compat/include/endian.h" "$$host_compat_include/endian.h"; \
+		cp "$$repo_root/tools/linux_host_compat/include/byteswap.h" "$$host_compat_include/byteswap.h"; \
+		cp "$$repo_root/tools/linux_host_compat/include/linux_arm_elf_compat.h" "$$host_compat_include/linux_arm_elf_compat.h"; \
 	perl -0pi -e 's/#include "modpost.h"/#define _UUID_T\n#define uuid_t int\n#include "modpost.h"\n#undef uuid_t/' "$$src/scripts/mod/file2alias.c"; \
 	linux_make_env+=("HOSTCFLAGS=-I$$host_compat_include -include $$host_compat_include/linux_arm_elf_compat.h"); \
 	if [ -n "$$linux_sed" ]; then \
