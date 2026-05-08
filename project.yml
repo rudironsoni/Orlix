@@ -157,6 +157,8 @@ targets:
     sources:
     - path: IXLandHostAdapter/fs/backing_io.m
       group: IXLandHostAdapter/fs
+    - path: IXLandHostAdapter/fs/backing_dir.c
+      group: IXLandHostAdapter/fs
     - path: IXLandHostAdapter/fs/backing_io_internal.h
       group: IXLandHostAdapter/fs
     - path: IXLandHostAdapter/fs/errno_translation.c

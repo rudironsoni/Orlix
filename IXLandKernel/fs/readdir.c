@@ -2,13 +2,12 @@
  * Virtual getdents/getdents64 implementation
  */
 
-#include <dirent.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
+#include "internal/private/backing_dir.h"
 #include "fdtable.h"
 #include "internal/private/backing_io.h"
 #include "path.h"
@@ -25,28 +24,33 @@ struct linux_dirent64 {
     char d_name[];
 };
 
+#define LINUX_DT_UNKNOWN 0
+#define LINUX_DT_FIFO 1
+#define LINUX_DT_CHR 2
+#define LINUX_DT_DIR 4
+#define LINUX_DT_BLK 6
+#define LINUX_DT_REG 8
+#define LINUX_DT_LNK 10
+#define LINUX_DT_SOCK 12
+
 static unsigned char map_dtype(unsigned char dtype) {
     switch (dtype) {
-    case DT_FIFO:
-        return DT_FIFO;
-    case DT_CHR:
-        return DT_CHR;
-    case DT_DIR:
-        return DT_DIR;
-    case DT_BLK:
-        return DT_BLK;
-    case DT_REG:
-        return DT_REG;
-    case DT_LNK:
-        return DT_LNK;
-    case DT_SOCK:
-        return DT_SOCK;
-#ifdef DT_WHT
-    case DT_WHT:
-        return DT_WHT;
-#endif
+    case LINUX_DT_FIFO:
+        return LINUX_DT_FIFO;
+    case LINUX_DT_CHR:
+        return LINUX_DT_CHR;
+    case LINUX_DT_DIR:
+        return LINUX_DT_DIR;
+    case LINUX_DT_BLK:
+        return LINUX_DT_BLK;
+    case LINUX_DT_REG:
+        return LINUX_DT_REG;
+    case LINUX_DT_LNK:
+        return LINUX_DT_LNK;
+    case LINUX_DT_SOCK:
+        return LINUX_DT_SOCK;
     default:
-        return DT_UNKNOWN;
+        return LINUX_DT_UNKNOWN;
     }
 }
 
@@ -93,7 +97,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
 
     /* Write "." entry if at cursor 0 */
     if (cursor == 0) {
-        rc = append_linux_dirent64(dirp, count, &written, 1, 1, DT_DIR, ".");
+        rc = append_linux_dirent64(dirp, count, &written, 1, 1, LINUX_DT_DIR, ".");
         if (rc == 0) {
             goto done;
         }
@@ -102,7 +106,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
 
     /* Write ".." entry if at cursor 1 */
     if (cursor == 1) {
-        rc = append_linux_dirent64(dirp, count, &written, 1, 2, DT_DIR, "..");
+        rc = append_linux_dirent64(dirp, count, &written, 1, 2, LINUX_DT_DIR, "..");
         if (rc == 0) {
             goto done;
         }
@@ -119,7 +123,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
         }
         if (strcmp(dir_path, "/sys/fs") == 0) {
             if (idx == 0) {
-                rc = append_linux_dirent64(dirp, count, &written, 1, 3, DT_DIR, "cgroup");
+                rc = append_linux_dirent64(dirp, count, &written, 1, 3, LINUX_DT_DIR, "cgroup");
                 if (rc != 0) {
                     cursor++;
                 }
@@ -130,7 +134,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             char name[256];
             enum cgroupfs_node_type node_type;
             char child_path[MAX_PATH];
-            unsigned char dtype = DT_REG;
+            unsigned char dtype = LINUX_DT_REG;
             int ret;
 
             ret = cgroupfs_child_at(dir_path, idx, name, sizeof(name));
@@ -141,7 +145,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             if (ret >= 0 && (size_t)ret < sizeof(child_path)) {
                 node_type = cgroupfs_classify_path(child_path);
                 if (node_type == CGROUPFS_NODE_DIR) {
-                    dtype = DT_DIR;
+                    dtype = LINUX_DT_DIR;
                 }
             }
             rc = append_linux_dirent64(dirp, count, &written, 1, (int64_t)(idx + 3), dtype, name);
@@ -159,25 +163,25 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             const char *name;
             unsigned char dtype;
         } entries[] = {
-            {"fd", DT_DIR},
-            {"cwd", DT_LNK},
-            {"exe", DT_LNK},
-            {"cmdline", DT_REG},
-            {"environ", DT_REG},
-            {"comm", DT_REG},
-            {"stat", DT_REG},
-            {"statm", DT_REG},
-            {"maps", DT_REG},
-            {"status", DT_REG},
-            {"cgroup", DT_REG},
-            {"uid_map", DT_REG},
-            {"gid_map", DT_REG},
-            {"setgroups", DT_REG},
-            {"mountinfo", DT_REG},
-            {"mounts", DT_REG},
-            {"fdinfo", DT_DIR},
-            {"ns", DT_DIR},
-            {"task", DT_DIR},
+            {"fd", LINUX_DT_DIR},
+            {"cwd", LINUX_DT_LNK},
+            {"exe", LINUX_DT_LNK},
+            {"cmdline", LINUX_DT_REG},
+            {"environ", LINUX_DT_REG},
+            {"comm", LINUX_DT_REG},
+            {"stat", LINUX_DT_REG},
+            {"statm", LINUX_DT_REG},
+            {"maps", LINUX_DT_REG},
+            {"status", LINUX_DT_REG},
+            {"cgroup", LINUX_DT_REG},
+            {"uid_map", LINUX_DT_REG},
+            {"gid_map", LINUX_DT_REG},
+            {"setgroups", LINUX_DT_REG},
+            {"mountinfo", LINUX_DT_REG},
+            {"mounts", LINUX_DT_REG},
+            {"fdinfo", LINUX_DT_DIR},
+            {"ns", LINUX_DT_DIR},
+            {"task", LINUX_DT_DIR},
         };
 
         size_t num_entries = sizeof(entries) / sizeof(entries[0]);
@@ -199,10 +203,10 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             const char *name;
             unsigned char dtype;
         } entries[] = {
-            {"self", DT_LNK},
-            {"filesystems", DT_REG},
-            {"meminfo", DT_REG},
-            {"cpuinfo", DT_REG},
+            {"self", LINUX_DT_LNK},
+            {"filesystems", LINUX_DT_REG},
+            {"meminfo", LINUX_DT_REG},
+            {"cpuinfo", LINUX_DT_REG},
         };
         size_t num_entries = sizeof(entries) / sizeof(entries[0]);
         size_t idx = (size_t)(cursor - 2);
@@ -223,10 +227,10 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             const char *name;
             unsigned char dtype;
         } entries[] = {
-            {"mnt", DT_LNK},
-            {"uts", DT_LNK},
-            {"pid", DT_LNK},
-            {"cgroup", DT_LNK},
+            {"mnt", LINUX_DT_LNK},
+            {"uts", LINUX_DT_LNK},
+            {"pid", LINUX_DT_LNK},
+            {"cgroup", LINUX_DT_LNK},
         };
         size_t num_entries = sizeof(entries) / sizeof(entries[0]);
         size_t idx = (size_t)(cursor - 2);
@@ -274,7 +278,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
                         return -1;
                     }
                     rc = append_linux_dirent64(dirp, count, &written, 1,
-                                               (int64_t)(task->pid + 2), DT_DIR, name);
+                                               (int64_t)(task->pid + 2), LINUX_DT_DIR, name);
                     if (rc == 0) {
                         kernel_mutex_unlock(&task_table_lock);
                         free_task(target);
@@ -296,13 +300,13 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             const char *name;
             unsigned char dtype;
         } entries[] = {
-            {"null", DT_CHR},
-            {"zero", DT_CHR},
-            {"random", DT_CHR},
-            {"urandom", DT_CHR},
-            {"tty", DT_CHR},
-            {"ptmx", DT_CHR},
-            {"pts", DT_DIR},
+            {"null", LINUX_DT_CHR},
+            {"zero", LINUX_DT_CHR},
+            {"random", LINUX_DT_CHR},
+            {"urandom", LINUX_DT_CHR},
+            {"tty", LINUX_DT_CHR},
+            {"ptmx", LINUX_DT_CHR},
+            {"pts", LINUX_DT_DIR},
         };
         size_t num_entries = sizeof(entries) / sizeof(entries[0]);
         size_t idx = (size_t)(cursor - 2);
@@ -338,7 +342,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
             }
             name[len] = '\0';
 
-            rc = append_linux_dirent64(dirp, count, &written, 1, (int64_t)(idx + 3), DT_CHR, name);
+            rc = append_linux_dirent64(dirp, count, &written, 1, (int64_t)(idx + 3), LINUX_DT_CHR, name);
             if (rc == 0) {
                 break;
             }
@@ -382,7 +386,7 @@ static ssize_t synthetic_getdents64(fd_entry_t *entry, void *dirp, size_t count)
                 fd_name[fd_name_len] = '\0';
             }
 
-            unsigned char dtype = (dir_class == SYNTHETIC_DIR_PROC_SELF_FD) ? DT_LNK : DT_REG;
+            unsigned char dtype = (dir_class == SYNTHETIC_DIR_PROC_SELF_FD) ? LINUX_DT_LNK : LINUX_DT_REG;
             rc = append_linux_dirent64(dirp, count, &written, 1, (int64_t)(scan_fd + 1), dtype, fd_name);
             if (rc == 0) {
                 break;
@@ -437,36 +441,22 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
         return ret;
     }
 
-    int dup_fd = backing_dup(real_fd);
-    if (dup_fd < 0) {
-        put_fd_entry_impl(entry);
-        return -1;
-    }
-
-    DIR *dp = fdopendir(dup_fd);
-    if (dp == NULL) {
-        int saved_errno = errno;
-        backing_close(dup_fd);
-        put_fd_entry_impl(entry);
-        errno = saved_errno;
-        return -1;
-    }
-
-    if (saved_offset > 0) {
-        seekdir(dp, (long)saved_offset);
-    }
-
+    struct backing_dir_stream *stream = NULL;
     size_t written = 0;
     int64_t latest_offset = saved_offset;
-    errno = 0;
+    struct backing_dir_record native;
+
+    if (backing_dir_open(real_fd, saved_offset, &stream) != 0) {
+        put_fd_entry_impl(entry);
+        return -1;
+    }
 
     while (true) {
-        struct dirent *native = readdir(dp);
-        if (native == NULL) {
-            if (errno != 0 && written == 0) {
+        int read_result = backing_dir_read(stream, &native);
+        if (read_result <= 0) {
+            if (read_result < 0 && written == 0) {
                 int saved_errno = errno;
-                closedir(dp);
-                backing_close(dup_fd);
+                backing_dir_close(stream);
                 put_fd_entry_impl(entry);
                 errno = saved_errno;
                 return -1;
@@ -474,14 +464,13 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
             break;
         }
 
-        size_t name_len = strlen(native->d_name);
+        size_t name_len = strlen(native.name);
         size_t record_len = sizeof(struct linux_dirent64) + name_len + 1;
         size_t aligned_len = (record_len + 7U) & ~7U;
 
         if (aligned_len > count - written) {
             if (written == 0) {
-                closedir(dp);
-                backing_close(dup_fd);
+                backing_dir_close(stream);
                 put_fd_entry_impl(entry);
                 errno = EINVAL;
                 return -1;
@@ -490,12 +479,12 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
         }
 
         struct linux_dirent64 *out = (struct linux_dirent64 *)((char *)dirp + written);
-        out->d_ino = native->d_ino;
-        latest_offset = (int64_t)telldir(dp);
+        out->d_ino = native.ino;
+        latest_offset = native.off;
         out->d_off = latest_offset;
         out->d_reclen = (unsigned short)aligned_len;
-        out->d_type = map_dtype(native->d_type);
-        memcpy(out->d_name, native->d_name, name_len + 1);
+        out->d_type = map_dtype(native.type);
+        memcpy(out->d_name, native.name, name_len + 1);
 
         if (aligned_len > record_len) {
             memset(((char *)out) + record_len, 0, aligned_len - record_len);
@@ -505,8 +494,7 @@ ssize_t getdents64_impl(int fd, void *dirp, size_t count) {
     }
 
     set_fd_offset_impl(entry, latest_offset);
-    closedir(dp);
-    /* closedir closes dup_fd; do NOT call backing_close here */
+    backing_dir_close(stream);
     put_fd_entry_impl(entry);
     return (ssize_t)written;
 }

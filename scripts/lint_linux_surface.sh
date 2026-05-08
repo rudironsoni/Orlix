@@ -37,6 +37,17 @@ fi
 echo "   ✓ No forbidden host headers"
 
 echo ""
+echo "=== Check 3a: Host directory iteration is private to IXLandHostAdapter ==="
+HOST_DIRENT_USAGE=$(rg -n -e '^\s*#\s*include\s*<dirent\.h>' -e '\b(fdopendir|readdir|closedir|seekdir|telldir)\s*\(' $OWNER_PATHS 2>/dev/null || true)
+if [ -n "$HOST_DIRENT_USAGE" ]; then
+    echo "FAIL: Host directory iteration APIs found in Linux-owner paths:"
+    echo "$HOST_DIRENT_USAGE"
+    echo "Move host-backed directory iteration behind a kernel-owned private backing contract."
+    exit 1
+fi
+echo "   ✓ No host directory iteration in Linux-owner paths"
+
+echo ""
 echo "=== Check 4: Forbidden host APIs/tokens in Linux-owner paths ==="
 FORBIDDEN_TOKENS=$(rg -n -e '\b(dlsym|RTLD_NEXT|RTLD_DEFAULT|dlopen|pthread_[a-z_]+|objc_[a-z_]+|mach_[a-z_]+|os_log)\b' -e '\b__(APPLE|MACH)__\b' -e '\bTARGET_OS_[A-Z0-9_]+\b' $OWNER_PATHS 2>/dev/null || true)
 if [ -n "$FORBIDDEN_TOKENS" ]; then
