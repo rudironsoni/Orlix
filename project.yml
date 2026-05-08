@@ -1,13 +1,13 @@
-name: IXLandKernel
+name: OrlixKernel
 settings:
   base:
     GCC_TREAT_WARNINGS_AS_ERRORS: true
     SWIFT_TREAT_WARNINGS_AS_ERRORS: true
     # End-state policy:
-    # - IXLandKernel consumes only kernel-owned headers plus vendored Linux truth
-    # - IXLandHostAdapter is private host implementation only
-    # - cross-target declarations must move under IXLandKernel private contract roots
-    # Current IXLandHostAdapter include usage is transitional until the seam refactor lands.
+    # - OrlixKernel consumes only kernel-owned headers plus vendored Linux truth
+    # - OrlixHostAdapter is private host implementation only
+    # - cross-target declarations must move under OrlixKernel private contract roots
+    # Current OrlixHostAdapter include usage is transitional until the seam refactor lands.
     LINUX_VERSION: '6.12'
     LINUX_ARCH: arm64
     LINUX_VENDOR_ROOT: $(SRCROOT)/third_party/linux
@@ -18,16 +18,16 @@ settings:
     LINUX_KHEADERS_SOURCE_ROOT: $(LINUX_KHEADERS_ROOT)/source
     LINUX_KHEADERS_GENERATED_ROOT: $(LINUX_KHEADERS_ROOT)/generated
 targets:
-  IXLandKernel:
+  OrlixKernel:
     type: library.static
     platform: iOS
     deploymentTarget:
       iOS: '16.0'
     settings:
       HEADER_SEARCH_PATHS:
-        - $(SRCROOT)/IXLandKernel
-        - $(SRCROOT)/IXLandKernel/include
-        - $(SRCROOT)/IXLandKernel/internal/private
+        - $(SRCROOT)/OrlixKernel
+        - $(SRCROOT)/OrlixKernel/include
+        - $(SRCROOT)/OrlixKernel/internal/private
         - $(LINUX_UAPI_INCLUDE_ROOT)
       GCC_PREPROCESSOR_DEFINITIONS:
       - _XOPEN_SOURCE
@@ -36,107 +36,107 @@ targets:
       OTHER_CFLAGS:
       - -fvisibility=hidden
     sources:
-    - path: IXLandKernel/fs/eventpoll.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/exec.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/fcntl.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/fdtable.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/inode.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/ioctl.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/mount.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/namei.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/open.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/pipe.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/poll.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/pty.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/path.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/read_write.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/readdir.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/stat.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/uio.c
-      group: IXLandKernel/fs
+    - path: OrlixKernel/fs/eventpoll.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/exec.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/fcntl.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/fdtable.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/inode.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/ioctl.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/mount.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/namei.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/open.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/pipe.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/poll.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/pty.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/path.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/read_write.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/readdir.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/stat.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/uio.c
+      group: OrlixKernel/fs
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernel/fs/super.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/vfs.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/fs/xattr.c
-      group: IXLandKernel/fs
-    - path: IXLandKernel/kernel/cgroup.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/cred.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/exit.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/fork.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/futex.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/init.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/mm.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/net/network.c
-      group: IXLandKernel/kernel/net
-    - path: IXLandKernel/kernel/net/socket.c
-      group: IXLandKernel/kernel/net
-    - path: IXLandKernel/kernel/net/socket.h
-      group: IXLandKernel/kernel/net
-    - path: IXLandKernel/kernel/pid.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/ptrace.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/random.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/resource.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/seccomp.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/signal.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/sync.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/sys.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/task.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/time.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/uts.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/wait_queue.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/kernel/wait.c
-      group: IXLandKernel/kernel
-    - path: IXLandKernel/observability/ixland_observability.c
-      group: IXLandKernel/observability
-    - path: IXLandKernel/runtime/aarch64/exec_context.c
-      group: IXLandKernel/runtime/aarch64
-    - path: IXLandKernel/runtime/aarch64/elf_reloc.c
-      group: IXLandKernel/runtime/aarch64
-    - path: IXLandKernel/runtime/syscall.c
-      group: IXLandKernel/runtime
-    - path: IXLandKernel/runtime/native/registry.c
-      group: IXLandKernel/runtime/native
+    - path: OrlixKernel/fs/super.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/vfs.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/fs/xattr.c
+      group: OrlixKernel/fs
+    - path: OrlixKernel/kernel/cgroup.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/cred.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/exit.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/fork.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/futex.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/init.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/mm.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/net/network.c
+      group: OrlixKernel/kernel/net
+    - path: OrlixKernel/kernel/net/socket.c
+      group: OrlixKernel/kernel/net
+    - path: OrlixKernel/kernel/net/socket.h
+      group: OrlixKernel/kernel/net
+    - path: OrlixKernel/kernel/pid.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/ptrace.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/random.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/resource.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/seccomp.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/signal.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/sync.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/sys.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/task.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/time.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/uts.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/wait_queue.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/kernel/wait.c
+      group: OrlixKernel/kernel
+    - path: OrlixKernel/observability/orlix_observability.c
+      group: OrlixKernel/observability
+    - path: OrlixKernel/runtime/aarch64/exec_context.c
+      group: OrlixKernel/runtime/aarch64
+    - path: OrlixKernel/runtime/aarch64/elf_reloc.c
+      group: OrlixKernel/runtime/aarch64
+    - path: OrlixKernel/runtime/syscall.c
+      group: OrlixKernel/runtime
+    - path: OrlixKernel/runtime/native/registry.c
+      group: OrlixKernel/runtime/native
     dependencies:
-    - target: IXLandHostAdapter
-  IXLandHostAdapter:
+    - target: OrlixHostAdapter
+  OrlixHostAdapter:
     type: library.static
     platform: iOS
     deploymentTarget:
@@ -144,9 +144,9 @@ targets:
     settings:
       HEADER_SEARCH_PATHS:
         - $(SRCROOT)
-        - $(SRCROOT)/IXLandKernel
-        - $(SRCROOT)/IXLandKernel/include
-        - $(SRCROOT)/IXLandKernel/internal/private
+        - $(SRCROOT)/OrlixKernel
+        - $(SRCROOT)/OrlixKernel/include
+        - $(SRCROOT)/OrlixKernel/internal/private
         - $(LINUX_UAPI_INCLUDE_ROOT)
       GCC_PREPROCESSOR_DEFINITIONS:
       - _XOPEN_SOURCE
@@ -155,80 +155,80 @@ targets:
       OTHER_CFLAGS:
       - -fvisibility=hidden
     sources:
-    - path: IXLandHostAdapter/fs/backing_io.m
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/backing_dir.c
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/backing_io_internal.h
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/errno_translation.c
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/open_flags.c
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/path.c
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/memfd.c
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/backing_paths.m
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/fs/epoll_mask.c
-      group: IXLandHostAdapter/fs
-    - path: IXLandHostAdapter/kernel/signal.c
-      group: IXLandHostAdapter/kernel
-    - path: IXLandHostAdapter/kernel/sync.c
-      group: IXLandHostAdapter/kernel
-    - path: IXLandHostAdapter/kernel/clock.c
-      group: IXLandHostAdapter/kernel
-    - path: IXLandHostAdapter/fs/sync.c
-      group: IXLandHostAdapter/fs
-  IXLandKernelTests:
+    - path: OrlixHostAdapter/fs/backing_io.m
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/backing_dir.c
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/backing_io_internal.h
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/errno_translation.c
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/open_flags.c
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/path.c
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/memfd.c
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/backing_paths.m
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/fs/epoll_mask.c
+      group: OrlixHostAdapter/fs
+    - path: OrlixHostAdapter/kernel/signal.c
+      group: OrlixHostAdapter/kernel
+    - path: OrlixHostAdapter/kernel/sync.c
+      group: OrlixHostAdapter/kernel
+    - path: OrlixHostAdapter/kernel/clock.c
+      group: OrlixHostAdapter/kernel
+    - path: OrlixHostAdapter/fs/sync.c
+      group: OrlixHostAdapter/fs
+  OrlixKernelTests:
     type: bundle.unit-test
     platform: iOS
     deploymentTarget:
       iOS: '16.0'
     sources:
-    - IXLandKernelTests/SignalTests.m
-    - IXLandKernelTests/TaskGroupTests.m
-    - IXLandKernelTests/CgroupTests.m
-    - IXLandKernelTests/CredentialTests.m
-    - IXLandKernelTests/VFSPathTests.m
-    - IXLandKernelTests/FutexTests.m
-    - IXLandKernelTests/RootfsBootstrapTests.m
-    - IXLandKernelTests/KernelBootTests.m
-    - IXLandKernelTests/KernelInitTests.m
-    - IXLandKernelTests/PTYSessionTests.m
-    - IXLandKernelTests/PTYJobControlTests.m
-    - IXLandKernelTests/WaitJobControlTests.m
-    - IXLandKernelTests/PipeTests.m
-    - IXLandKernelTests/ReadinessTests.m
-    - IXLandKernelTests/EpollTests.m
-    - IXLandKernelTests/FcntlTests.m
-    - IXLandKernelTests/ExecFdTests.m
-    - IXLandKernelTests/ExecSyscallTests.m
-    - IXLandKernelTests/NativeSyscallTests.m
-    - IXLandKernelTests/TaskExecTests.m
-    - IXLandKernelTests/UTSTests.m
-    - IXLandKernelTests/NamespaceTests.m
-    - IXLandKernelTests/ProcfsNamespaceTests.m
-    - IXLandKernelTests/DevfsTests.m
-    - IXLandKernelTests/SeccompTests.m
-    - IXLandKernelTests/PtraceTests.m
-    - path: IXLandKernelTests/LinuxUAPICompileSmoke.c
+    - OrlixKernelTests/SignalTests.m
+    - OrlixKernelTests/TaskGroupTests.m
+    - OrlixKernelTests/CgroupTests.m
+    - OrlixKernelTests/CredentialTests.m
+    - OrlixKernelTests/VFSPathTests.m
+    - OrlixKernelTests/FutexTests.m
+    - OrlixKernelTests/RootfsBootstrapTests.m
+    - OrlixKernelTests/KernelBootTests.m
+    - OrlixKernelTests/KernelInitTests.m
+    - OrlixKernelTests/PTYSessionTests.m
+    - OrlixKernelTests/PTYJobControlTests.m
+    - OrlixKernelTests/WaitJobControlTests.m
+    - OrlixKernelTests/PipeTests.m
+    - OrlixKernelTests/ReadinessTests.m
+    - OrlixKernelTests/EpollTests.m
+    - OrlixKernelTests/FcntlTests.m
+    - OrlixKernelTests/ExecFdTests.m
+    - OrlixKernelTests/ExecSyscallTests.m
+    - OrlixKernelTests/NativeSyscallTests.m
+    - OrlixKernelTests/TaskExecTests.m
+    - OrlixKernelTests/UTSTests.m
+    - OrlixKernelTests/NamespaceTests.m
+    - OrlixKernelTests/ProcfsNamespaceTests.m
+    - OrlixKernelTests/DevfsTests.m
+    - OrlixKernelTests/SeccompTests.m
+    - OrlixKernelTests/PtraceTests.m
+    - path: OrlixKernelTests/LinuxUAPICompileSmoke.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/MLibCPackageHeadersCompileSmoke.c
+    - path: OrlixKernelTests/MLibCPackageHeadersCompileSmoke.c
       compilerFlags:
-      - -I$(SRCROOT)/IXLandMLibC/include
+      - -I$(SRCROOT)/OrlixMLibC/include
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/MLibCStatCompileSmoke.c
+    - path: OrlixKernelTests/MLibCStatCompileSmoke.c
       compilerFlags:
-      - -I$(SRCROOT)/IXLandMLibC/include
+      - -I$(SRCROOT)/OrlixMLibC/include
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/MLibCConfigureProbeCompileSmoke.c
+    - path: OrlixKernelTests/MLibCConfigureProbeCompileSmoke.c
       compilerFlags:
-      - -I$(SRCROOT)/IXLandMLibC/include
+      - -I$(SRCROOT)/OrlixMLibC/include
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/LinuxKHeadersCompileSmoke.c
+    - path: OrlixKernelTests/LinuxKHeadersCompileSmoke.c
       compilerFlags:
       - -D__KERNEL__
       - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated
@@ -239,137 +239,137 @@ targets:
       - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include
       - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi
       - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include
-    - path: IXLandKernelTests/KernelBoot.c
+    - path: OrlixKernelTests/KernelBoot.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/KernelInitContract.c
+    - path: OrlixKernelTests/KernelInitContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/PTYSessionContract.c
+    - path: OrlixKernelTests/PTYSessionContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/PTYJobControlContract.c
+    - path: OrlixKernelTests/PTYJobControlContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/WaitJobControlContract.c
+    - path: OrlixKernelTests/WaitJobControlContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/PipeContract.c
+    - path: OrlixKernelTests/PipeContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/ReadinessContract.c
+    - path: OrlixKernelTests/ReadinessContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/EpollContract.c
+    - path: OrlixKernelTests/EpollContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/PtraceContract.c
+    - path: OrlixKernelTests/PtraceContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/PTYSessionContract.h
-    - IXLandKernelTests/PTYJobControlContract.h
-    - IXLandKernelTests/WaitJobControlContract.h
-    - IXLandKernelTests/PipeContract.h
-    - IXLandKernelTests/ReadinessContract.h
-    - IXLandKernelTests/EpollContract.h
-    - IXLandKernelTests/PtraceContract.h
-    - path: IXLandKernelTests/CgroupContract.c
+    - OrlixKernelTests/PTYSessionContract.h
+    - OrlixKernelTests/PTYJobControlContract.h
+    - OrlixKernelTests/WaitJobControlContract.h
+    - OrlixKernelTests/PipeContract.h
+    - OrlixKernelTests/ReadinessContract.h
+    - OrlixKernelTests/EpollContract.h
+    - OrlixKernelTests/PtraceContract.h
+    - path: OrlixKernelTests/CgroupContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/CgroupContract.h
-    - IXLandKernelTests/PTYSessionIoctlShim.c
-    - path: IXLandKernelTests/FutexUAPICompileSmoke.c
+    - OrlixKernelTests/CgroupContract.h
+    - OrlixKernelTests/PTYSessionIoctlShim.c
+    - path: OrlixKernelTests/FutexUAPICompileSmoke.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/FutexContract.c
+    - path: OrlixKernelTests/FutexContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/FutexContract.h
-    - path: IXLandKernelTests/LinuxUAPITestSupport.c
+    - OrlixKernelTests/FutexContract.h
+    - path: OrlixKernelTests/LinuxUAPITestSupport.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/LinuxUAPITestSupport.h
-    - path: IXLandKernelTests/VFSAtContract.c
+    - OrlixKernelTests/LinuxUAPITestSupport.h
+    - path: OrlixKernelTests/VFSAtContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/FcntlContract.c
+    - path: OrlixKernelTests/FcntlContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/ExecFdContract.c
+    - path: OrlixKernelTests/ExecFdContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/ExecSyscallContract.c
+    - path: OrlixKernelTests/ExecSyscallContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/NativeSyscallContract.c
+    - path: OrlixKernelTests/NativeSyscallContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/NativeSyscallContract.h
-    - path: IXLandKernelTests/SignalSyscallContract.c
+    - OrlixKernelTests/NativeSyscallContract.h
+    - path: OrlixKernelTests/SignalSyscallContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/SignalSyscallContract.h
-    - path: IXLandKernelTests/SyscallUioContract.c
+    - OrlixKernelTests/SignalSyscallContract.h
+    - path: OrlixKernelTests/SyscallUioContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/SyscallUioContract.h
-    - path: IXLandKernelTests/TaskExecContract.c
+    - OrlixKernelTests/SyscallUioContract.h
+    - path: OrlixKernelTests/TaskExecContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - path: IXLandKernelTests/UTSContract.c
+    - path: OrlixKernelTests/UTSContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/UTSContract.h
-    - path: IXLandKernelTests/NamespaceContract.c
+    - OrlixKernelTests/UTSContract.h
+    - path: OrlixKernelTests/NamespaceContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/NamespaceContract.h
-    - path: IXLandKernelTests/ProcfsNamespaceContract.c
+    - OrlixKernelTests/NamespaceContract.h
+    - path: OrlixKernelTests/ProcfsNamespaceContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/ProcfsNamespaceContract.h
-    - path: IXLandKernelTests/DevfsContract.c
+    - OrlixKernelTests/ProcfsNamespaceContract.h
+    - path: OrlixKernelTests/DevfsContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/DevfsContract.h
-    - path: IXLandKernelTests/SeccompContract.c
+    - OrlixKernelTests/DevfsContract.h
+    - path: OrlixKernelTests/SeccompContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
-    - IXLandKernelTests/SeccompContract.h
+    - OrlixKernelTests/SeccompContract.h
     dependencies:
-    - target: IXLandKernel
-    - target: IXLandHostAdapter
+    - target: OrlixKernel
+    - target: OrlixHostAdapter
     settings:
       GENERATE_INFOPLIST_FILE: true
       HEADER_SEARCH_PATHS:
-        - $(SRCROOT)/IXLandKernel
-        - $(SRCROOT)/IXLandKernel/include
-        - $(SRCROOT)/IXLandKernel/internal/private
+        - $(SRCROOT)/OrlixKernel
+        - $(SRCROOT)/OrlixKernel/include
+        - $(SRCROOT)/OrlixKernel/internal/private
       BUNDLE_LOADER: ''
-  IXLandHostAdapterTests:
+  OrlixHostAdapterTests:
     type: bundle.unit-test
     platform: iOS
     deploymentTarget:
       iOS: '16.0'
     sources:
-    - IXLandHostAdapterTests/HostBridgeSmokeTests.m
-    - IXLandHostAdapterTests/PTYHostBridgeTests.m
-    - IXLandHostAdapterTests/VFSPathHostBridgeTests.m
-    - IXLandHostAdapterTests/RootfsBootstrapTests.m
-    - IXLandHostAdapterTests/HostTestSupport.c
-    - IXLandHostAdapterTests/HostTestSupport.h
-    - IXLandHostAdapterTests/PTYTestSupport.c
-    - IXLandHostAdapterTests/PTYTestSupport.h
+    - OrlixHostAdapterTests/HostBridgeSmokeTests.m
+    - OrlixHostAdapterTests/PTYHostBridgeTests.m
+    - OrlixHostAdapterTests/VFSPathHostBridgeTests.m
+    - OrlixHostAdapterTests/RootfsBootstrapTests.m
+    - OrlixHostAdapterTests/HostTestSupport.c
+    - OrlixHostAdapterTests/HostTestSupport.h
+    - OrlixHostAdapterTests/PTYTestSupport.c
+    - OrlixHostAdapterTests/PTYTestSupport.h
     dependencies:
-    - target: IXLandKernel
-    - target: IXLandHostAdapter
+    - target: OrlixKernel
+    - target: OrlixHostAdapter
     settings:
       GENERATE_INFOPLIST_FILE: true
       HEADER_SEARCH_PATHS:
-        - $(SRCROOT)/IXLandKernel
-        - $(SRCROOT)/IXLandHostAdapterTests
-        - $(SRCROOT)/IXLandKernel/include
-        - $(SRCROOT)/IXLandKernel/internal/private
+        - $(SRCROOT)/OrlixKernel
+        - $(SRCROOT)/OrlixHostAdapterTests
+        - $(SRCROOT)/OrlixKernel/include
+        - $(SRCROOT)/OrlixKernel/internal/private
       BUNDLE_LOADER: ''
 configurations:
   Debug:
@@ -383,14 +383,14 @@ configurations:
       GCC_OPTIMIZATION_LEVEL: s
       SWIFT_OPTIMIZATION_LEVEL: -O
 schemes:
-  IXLandKernel-6.12-arm64:
+  OrlixKernel-6.12-arm64:
     build:
       targets:
-        IXLandKernel: all
-        IXLandHostAdapter: all
-        IXLandKernelTests: all
-        IXLandHostAdapterTests: all
+        OrlixKernel: all
+        OrlixHostAdapter: all
+        OrlixKernelTests: all
+        OrlixHostAdapterTests: all
     test:
       targets:
-      - IXLandKernelTests
-      - IXLandHostAdapterTests
+      - OrlixKernelTests
+      - OrlixHostAdapterTests

@@ -40,8 +40,8 @@ Provide the Linux-shaped runtime environment needed by shells and package workfl
 
 ### Do
 
-- Keep Linux path behavior in `IXLandKernel`.
-- Keep host root discovery and host backing paths inside `IXLandHostAdapter` only.
+- Keep Linux path behavior in `OrlixKernel`.
+- Keep host root discovery and host backing paths inside `OrlixHostAdapter` only.
 - Use explicit backend objects for runtime storage classes.
 - Treat host-private VFS backing code as mechanism only, and force Linux-visible behavior through proof.
 - Move any required cross-target VFS declarations under kernel-owned private contracts.

@@ -6,13 +6,13 @@ Authoritative program roadmap for Version 1 native-only package compatibility.
 
 This document is the top-level roadmap.
 
-It depends on `01-IXLandKernel_IXLandHostAdapter_Split_Plan.md` as Milestone 0 and does not replace it.
+It depends on `01-OrlixKernel_OrlixHostAdapter_Split_Plan.md` as Milestone 0 and does not replace it.
 
 All later milestones inherit the Milestone 0 constraint:
 
-- the structural split landed and the old branded kernel-facing seam was removed from `IXLandKernel`
-- the accepted end-state removed `internal/ios`, removed `IXLandHostAdapter/include`, and moved the active cross-target seam to kernel-owned private declarations
-- remaining Milestone 0 debt is now narrower: `IXLandHostAdapter` still sees broader `IXLandKernel` roots than ideal in `project.yml`, and host-backed runtime primitives still need Linux-shaped behavioral proof rather than assumption
+- the structural split landed and the old branded kernel-facing seam was removed from `OrlixKernel`
+- the accepted end-state removed `internal/ios`, removed `OrlixHostAdapter/include`, and moved the active cross-target seam to kernel-owned private declarations
+- remaining Milestone 0 debt is now narrower: `OrlixHostAdapter` still sees broader `OrlixKernel` roots than ideal in `project.yml`, and host-backed runtime primitives still need Linux-shaped behavioral proof rather than assumption
 
 No later milestone may regress back to branded adapter-owned kernel-facing vocabulary or treat a host primitive as correct without Linux-visible proof.
 
@@ -23,7 +23,7 @@ The roadmap is not starting from zero:
 - Milestone 0 is structurally delivered enough to unblock later work.
 - Milestone 1 is the active milestone.
 - The current repo already has:
-  - `IXLandMLibC` bootstrap ownership for the first package-facing libc header set
+  - `OrlixMLibC` bootstrap ownership for the first package-facing libc header set
   - compile-smoke proof for vendored UAPI, kheaders classification, package-facing libc headers, and configure-style bootstrap probes
   - the `fs/readdir.c` host-directory iteration cut over to a kernel-owned private backing seam
 
@@ -40,9 +40,9 @@ The package should:
 
 - configure unchanged
 - compile unchanged
-- install unchanged into the IXLand virtual filesystem
+- install unchanged into the Orlix virtual filesystem
 - run as native iOS code
-- observe Linux behavior through `IXLandMLibC` plus `IXLandKernel`
+- observe Linux behavior through `OrlixMLibC` plus `OrlixKernel`
 
 Primary proof target:
 
@@ -71,31 +71,31 @@ These future backends must be planned for now in the execution architecture, but
 
 ## Product Contract
 
-### IXLandMLibC owns
+### OrlixMLibC owns
 
 - package-facing Linux libc headers
 - libc-owned typedefs and APIs
 - sysroot ownership
 - Linux-oriented sysdeps for native iOS package builds
 
-### IXLandKernel owns
+### OrlixKernel owns
 
 - Linux syscall-visible semantics
 - virtual kernel behavior
 - Linux runtime semantics
 - VFS, task, signal, wait, PTY, futex, procfs, devfs, and related kernel subsystems
 
-### IXLandHostAdapter owns
+### OrlixHostAdapter owns
 
 - iOS and Darwin host mechanics only
-- private mediation under `IXLandHostAdapter/**`
+- private mediation under `OrlixHostAdapter/**`
 - no adapter-owned include surface for kernel consumption
 
 ### Repo Integration
 
-- the main project and Xcode project are now named `IXLandKernel`
-- architectural ownership remains split between `IXLandKernel` and `IXLandHostAdapter`
-- `IXLandSystem` is a retired name and must not be reintroduced as an active owner or product identity
+- the main project and Xcode project are now named `OrlixKernel`
+- architectural ownership remains split between `OrlixKernel` and `OrlixHostAdapter`
+- `OrlixSystem` is a retired name and must not be reintroduced as an active owner or product identity
 
 ## Execution Model
 
@@ -151,20 +151,20 @@ If `zsh` works correctly, large parts of the kernel surface are already forced i
 
 ### Milestone 0
 
-`IXLandHostAdapter` split and boundary lockdown
+`OrlixHostAdapter` split and boundary lockdown
 
 Authoritative detail lives in:
 
-- `01-IXLandKernel_IXLandHostAdapter_Split_Plan.md`
+- `01-OrlixKernel_OrlixHostAdapter_Split_Plan.md`
 
 This milestone is mandatory before all others.
 
 Its acceptance standard is strict:
 
 - separate targets were necessary but insufficient
-- the old branded kernel-facing seam is now removed from active `IXLandKernel` code
+- the old branded kernel-facing seam is now removed from active `OrlixKernel` code
 - the remaining acceptance burden is behavioral: host-backed primitives must still match Linux-visible expectations under simulator proof
-- the end-state remains kernel-owned private contracts, with `IXLandHostAdapter` kept private and narrower in dependency scope over time
+- the end-state remains kernel-owned private contracts, with `OrlixHostAdapter` kept private and narrower in dependency scope over time
 
 ### Milestone 1
 
@@ -175,11 +175,11 @@ Goals:
 - make package-facing headers and typedef ownership correct
 - make configure and compile probes reliable
 - enforce UAPI versus kheaders separation
-- keep Milestone 1 from normalizing branded `IXLandHostAdapter` seam vocabulary or adapter-owned headers as package-facing truth
+- keep Milestone 1 from normalizing branded `OrlixHostAdapter` seam vocabulary or adapter-owned headers as package-facing truth
 
 Current delivered learning:
 
-- `IXLandMLibC` bootstrap ownership is now real enough to host package-facing `fcntl`, `poll`, `signal`, `sys/stat`, `sys/types`, `sys/uio`, `unistd`, `time`, `sys/time`, `sys/socket`, and `sys/select` surfaces
+- `OrlixMLibC` bootstrap ownership is now real enough to host package-facing `fcntl`, `poll`, `signal`, `sys/stat`, `sys/types`, `sys/uio`, `unistd`, `time`, `sys/time`, `sys/socket`, and `sys/select` surfaces
 - package-facing compile smoke now includes both direct libc header proof and a configure-style probe file
 - host-backed directory iteration for `fs/readdir.c` is now behind a kernel-owned private backing contract instead of ambient `dirent.h` usage in Linux-owner code
 
@@ -194,7 +194,7 @@ Current next executable step:
 - keep Milestone 1 active
 - continue ownership cleanup in bounded slices instead of broad concept sweeps
 - treat the remaining Linux-owner `time` / `sys/time` / `sys/socket` / `sys/select` drift as a dedicated follow-on tranche with its own simulator proof
-- keep package-facing `IXLandMLibC` bootstrap progress and deeper kernel-owner include cleanup as separate concerns unless a tranche proves they can move together safely
+- keep package-facing `OrlixMLibC` bootstrap progress and deeper kernel-owner include cleanup as separate concerns unless a tranche proves they can move together safely
 
 Detailed plan:
 
@@ -242,7 +242,7 @@ Goals:
 
 - make the Linux virtual filesystem environment real enough for shells and package workflows
 - stabilize `/etc`, `/usr`, `/var`, `/tmp`, `/run`, `/proc`, and `/dev`
-- keep host root discovery and backing storage strictly private to `IXLandHostAdapter`
+- keep host root discovery and backing storage strictly private to `OrlixHostAdapter`
 
 Detailed plan:
 
@@ -322,20 +322,20 @@ Minimum proof ladder:
 1. No target-package source modifications in Version 1.
 2. No ELF execution dependency in Version 1.
 3. No WASM execution dependency in Version 1.
-4. No Darwin leakage into `IXLandKernel`.
-5. No libc-owned typedef reinvention inside `IXLandKernel`.
+4. No Darwin leakage into `OrlixKernel`.
+5. No libc-owned typedef reinvention inside `OrlixKernel`.
 6. No milestone is complete if the kernel-facing surface still depends on branded host-adapter vocabulary as normal contract surface.
 7. No adapter-owned header surface is accepted as the kernel-facing seam.
 8. No shallow stubs presented as completed kernel support.
 9. Real package behavior outranks local convenience.
-10. If Linux userspace behavior breaks, fix IXLand, not the package.
+10. If Linux userspace behavior breaks, fix Orlix, not the package.
 11. Do not compress package-facing bootstrap work and deeper kernel-owner ownership cleanup into one tranche unless simulator proof shows they are ABI-safe together.
 
 ## Definition Of Version 1 Success
 
 Version 1 is successful only when all are true:
 
-1. Native Linux-oriented package builds work through `IXLandMLibC` without package source changes.
+1. Native Linux-oriented package builds work through `OrlixMLibC` without package source changes.
 2. `zsh` behaves like a Linux shell on the surface.
 3. `curl` behaves like a Linux client on the surface.
 4. Shebang-driven scripts work.

@@ -1,8 +1,8 @@
-# IXLandKernel Substrate Contract
+# OrlixKernel Substrate Contract
 
 ## Scope
 
-IXLandKernel is the Linux-shaped runtime substrate for IXLand on iOS.
+OrlixKernel is the Linux-shaped runtime substrate for Orlix on iOS.
 This repository owns virtual kernel/runtime behavior inside one iOS app sandbox.
 It is not public drop-in proof for arbitrary Linux userspace yet.
 
@@ -28,7 +28,7 @@ Priority order:
 
 Decision rule:
 
-If a change makes IXLandKernel less suitable as a Linux-oriented syscall, header, or runtime target, it is the wrong change.
+If a change makes OrlixKernel less suitable as a Linux-oriented syscall, header, or runtime target, it is the wrong change.
 
 ## Linux Header Truth
 
@@ -62,20 +62,20 @@ XcodeGen and the generated Xcode project are the only build truth.
 Canonical project surface:
 
 - Targets:
-  - `IXLandKernel`
-  - `IXLandHostAdapter`
-  - `IXLandKernelTests`
-  - `IXLandHostAdapterTests`
+  - `OrlixKernel`
+  - `OrlixHostAdapter`
+  - `OrlixKernelTests`
+  - `OrlixHostAdapterTests`
 - Scheme:
-  - `IXLandKernel-6.12-arm64`
+  - `OrlixKernel-6.12-arm64`
 
 Canonical authoritative flow:
 
 ```bash
 rtk xcodegen generate --project .
-rtk xcodebuild -list -project IXLandKernel.xcodeproj
-rtk xcodebuild build-for-testing -project IXLandKernel.xcodeproj -scheme IXLandKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
-rtk xcodebuild test-without-building -project IXLandKernel.xcodeproj -scheme IXLandKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+rtk xcodebuild -list -project OrlixKernel.xcodeproj
+rtk xcodebuild build-for-testing -project OrlixKernel.xcodeproj -scheme OrlixKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+rtk xcodebuild test-without-building -project OrlixKernel.xcodeproj -scheme OrlixKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 `swift build`, CMake, Make, package manifests, and other build systems are non-authoritative drift for this repo.
@@ -94,17 +94,17 @@ Rules:
 
 Current subsystem ownership in this repository:
 
-- process/task lifecycle: `IXLandKernel/kernel/task.c`, `IXLandKernel/kernel/fork.c`, `IXLandKernel/kernel/exit.c`, `IXLandKernel/kernel/wait.c`, `IXLandKernel/kernel/pid.c`
-- credentials: `IXLandKernel/kernel/cred.c`, `IXLandKernel/kernel/cred_internal.h`
-- signals: `IXLandKernel/kernel/signal.c`, `IXLandKernel/kernel/signal.h`
-- time and sync: `IXLandKernel/kernel/time.c`, `IXLandKernel/kernel/sync.c`
-- init/sys/resource/random: `IXLandKernel/kernel/init.c`, `IXLandKernel/kernel/sys.c`, `IXLandKernel/kernel/resource.c`, `IXLandKernel/kernel/random.c`
-- networking owner surface: `IXLandKernel/kernel/net/network.c`
-- VFS and fdtable: `IXLandKernel/fs/vfs.c`, `IXLandKernel/fs/vfs.h`, `IXLandKernel/fs/fdtable.c`, `IXLandKernel/fs/fdtable.h`
-- file operation owners: `IXLandKernel/fs/open.c`, `IXLandKernel/fs/read_write.c`, `IXLandKernel/fs/stat.c`, `IXLandKernel/fs/fcntl.c`, `IXLandKernel/fs/ioctl.c`, `IXLandKernel/fs/namei.c`, `IXLandKernel/fs/readdir.c`, `IXLandKernel/fs/eventpoll.c`, `IXLandKernel/fs/mount.c`, `IXLandKernel/fs/inode.c`, `IXLandKernel/fs/super.c`, `IXLandKernel/fs/path.c`, `IXLandKernel/fs/exec.c`
-- native runtime registry: `IXLandKernel/runtime/native/registry.c`, `IXLandKernel/runtime/native/registry.h`
-- private Darwin bridge surface: `IXLandHostAdapter/kernel/signal.c`
-- package-facing libc bootstrap surface: `IXLandMLibC/include/**`
+- process/task lifecycle: `OrlixKernel/kernel/task.c`, `OrlixKernel/kernel/fork.c`, `OrlixKernel/kernel/exit.c`, `OrlixKernel/kernel/wait.c`, `OrlixKernel/kernel/pid.c`
+- credentials: `OrlixKernel/kernel/cred.c`, `OrlixKernel/kernel/cred_internal.h`
+- signals: `OrlixKernel/kernel/signal.c`, `OrlixKernel/kernel/signal.h`
+- time and sync: `OrlixKernel/kernel/time.c`, `OrlixKernel/kernel/sync.c`
+- init/sys/resource/random: `OrlixKernel/kernel/init.c`, `OrlixKernel/kernel/sys.c`, `OrlixKernel/kernel/resource.c`, `OrlixKernel/kernel/random.c`
+- networking owner surface: `OrlixKernel/kernel/net/network.c`
+- VFS and fdtable: `OrlixKernel/fs/vfs.c`, `OrlixKernel/fs/vfs.h`, `OrlixKernel/fs/fdtable.c`, `OrlixKernel/fs/fdtable.h`
+- file operation owners: `OrlixKernel/fs/open.c`, `OrlixKernel/fs/read_write.c`, `OrlixKernel/fs/stat.c`, `OrlixKernel/fs/fcntl.c`, `OrlixKernel/fs/ioctl.c`, `OrlixKernel/fs/namei.c`, `OrlixKernel/fs/readdir.c`, `OrlixKernel/fs/eventpoll.c`, `OrlixKernel/fs/mount.c`, `OrlixKernel/fs/inode.c`, `OrlixKernel/fs/super.c`, `OrlixKernel/fs/path.c`, `OrlixKernel/fs/exec.c`
+- native runtime registry: `OrlixKernel/runtime/native/registry.c`, `OrlixKernel/runtime/native/registry.h`
+- private Darwin bridge surface: `OrlixHostAdapter/kernel/signal.c`
+- package-facing libc bootstrap surface: `OrlixMLibC/include/**`
 
 ## Test Layering
 
@@ -113,10 +113,10 @@ This repo currently contains two valid proof layers in XCTest plus Linux UAPI co
 1. LinuxKernel proof
    - exercises syscall-facing Linux-visible behavior
    - uses C contract files for Linux UAPI constants, structs, and payload truth
-   - does not include `IXLandHostAdapter/**`
+   - does not include `OrlixHostAdapter/**`
 
 2. HostBridge proof
-   - verifies private `IXLandHostAdapter/**` seams only
+   - verifies private `OrlixHostAdapter/**` seams only
    - may use host APIs when proving host mechanics
    - does not prove Linux semantics
 
@@ -125,20 +125,20 @@ This repo currently contains two valid proof layers in XCTest plus Linux UAPI co
    - proves vendored UAPI resolution only
    - does not prove runtime behavior
 
-4. IXLandMLibC bootstrap compile smoke
-   - proves package-facing libc headers resolve through `IXLandMLibC/include/**`
+4. OrlixMLibC bootstrap compile smoke
+   - proves package-facing libc headers resolve through `OrlixMLibC/include/**`
    - may use vendored Linux UAPI as the source of Linux constants and structs
    - does not prove package runtime behavior yet
 
 Current test files:
 
-- `IXLandKernelTests/SignalTests.m` — LinuxKernel semantic test
-- `IXLandKernelTests/TaskGroupTests.m` — LinuxKernel semantic test
-- `IXLandKernelTests/CredentialTests.m` — LinuxKernel semantic test
-- `IXLandKernelTests/LinuxUAPICompileSmoke.c` — Linux UAPI / ABI compile smoke
-- `IXLandKernelTests/MLibCPackageHeadersCompileSmoke.c` — package-facing libc bootstrap compile smoke
-- `IXLandKernelTests/MLibCStatCompileSmoke.c` — package-facing stat/bootstrap compile smoke
-- `IXLandHostAdapterTests/HostBridgeSmokeTests.m` — HostBridge seam test
+- `OrlixKernelTests/SignalTests.m` — LinuxKernel semantic test
+- `OrlixKernelTests/TaskGroupTests.m` — LinuxKernel semantic test
+- `OrlixKernelTests/CredentialTests.m` — LinuxKernel semantic test
+- `OrlixKernelTests/LinuxUAPICompileSmoke.c` — Linux UAPI / ABI compile smoke
+- `OrlixKernelTests/MLibCPackageHeadersCompileSmoke.c` — package-facing libc bootstrap compile smoke
+- `OrlixKernelTests/MLibCStatCompileSmoke.c` — package-facing stat/bootstrap compile smoke
+- `OrlixHostAdapterTests/HostBridgeSmokeTests.m` — HostBridge seam test
 
 True public drop-in Linux userspace compatibility proof is outside this XCTest tranche.
 

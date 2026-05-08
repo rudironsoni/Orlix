@@ -17,7 +17,7 @@ It also verifies the split outcome indirectly:
 1. Real package behavior outranks narrow unit-test success.
 2. Configure, build, install, and runtime are all required proof stages.
 3. No target-package source modifications are allowed.
-4. If a package breaks due to Linux-visible behavior differences, IXLand is wrong.
+4. If a package breaks due to Linux-visible behavior differences, Orlix is wrong.
 5. Passing package proof does not retroactively bless bad host-private implementation choices that only happened to satisfy one narrow test shape.
 
 ## Package Order
@@ -75,7 +75,7 @@ It also verifies the split outcome indirectly:
 
 - Treat package proof as authoritative product proof.
 - Use blockers to drive subsystem ownership decisions.
-- Keep package patches out of scope unless the issue is unrelated to IXLand semantics.
+- Keep package patches out of scope unless the issue is unrelated to Orlix semantics.
 - Use package failures to push ownership back toward Linux-shaped contracts rather than preserving branded seam convenience.
 - Use package failures to push declaration ownership back into kernel-owned private contracts rather than adapter-owned seams.
 

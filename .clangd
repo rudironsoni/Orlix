@@ -1,4 +1,4 @@
-# clangd configuration for IXLandSystem
+# clangd configuration for OrlixSystem
 # This file uses portable relative paths - no machine-specific hardcoding
 #
 # IMPORTANT: This config works WITH compile_commands.json, not instead of it.
@@ -25,11 +25,11 @@ If:
     - ^arch/darwin/.*\.(c|h)$
   PathExclude:
     - ^internal/ios/.*$
-    - ^IXLandSystemTests/.*$
+    - ^OrlixSystemTests/.*$
   CompileFlags:
     Add:
-      - -DIXLAND_LINUX_OWNER_FILE=1
-      - --include=include/ixland/clangd_owner_policy.h
+      - -DORLIX_LINUX_OWNER_FILE=1
+      - --include=include/orlix/clangd_owner_policy.h
       - -std=gnu11
       # Portable fallback includes - compile_commands.json provides the real paths
       - -Ithird_party/linux-uapi/6.12/arm64/include
@@ -48,7 +48,7 @@ If:
     - ^internal/ios/.*\.(c|h|m|mm)$
   CompileFlags:
     Add:
-      - -DIXLAND_HOST_BRIDGE_FILE=1
+      - -DORLIX_HOST_BRIDGE_FILE=1
       - -std=gnu11
 
 ---
@@ -77,7 +77,7 @@ If:
 # Tests: Objective-C
 If:
   PathMatch:
-    - ^IXLandSystemTests/.*\.m$
+    - ^OrlixSystemTests/.*\.m$
   CompileFlags:
     Add:
       - -x
@@ -89,7 +89,7 @@ If:
 # Tests: Objective-C++
 If:
   PathMatch:
-    - ^IXLandSystemTests/.*\.mm$
+    - ^OrlixSystemTests/.*\.mm$
   CompileFlags:
     Add:
       - -x
@@ -101,7 +101,7 @@ If:
 # Tests: C with strict diagnostics
 If:
   PathMatch:
-    - ^IXLandSystemTests/.*\.(c|h)$
+    - ^OrlixSystemTests/.*\.(c|h)$
   Diagnostics:
     ClangTidy:
       FastCheckFilter: Strict

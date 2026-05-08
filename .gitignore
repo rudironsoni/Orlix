@@ -62,7 +62,7 @@ dkms.conf
 xcuserdata/
 .build
 .DS_Store
-IXLand.xcodeproj/
+Orlix.xcodeproj/
 
 # Build artifacts
 build/
@@ -82,7 +82,7 @@ ModuleCache/
 # (No @.cache variants should be tracked; only .cache is ignored)
 
 # Generated binary
-bin/ixland-cc
+bin/orlix-cc
 
 # Vendor source (regenerated from kernel)
 .vendor-src/

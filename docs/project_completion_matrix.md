@@ -1,4 +1,4 @@
-# IXLand Project Completion Matrix
+# Orlix Project Completion Matrix
 
 Generated from `docs/plans/*` and current repo reality.
 
@@ -8,7 +8,7 @@ It complements:
 
 - `docs/syscall_gap_matrix_6.12_arm64.md`
 - `docs/plans/00-Native_Package_Compatibility_Roadmap.md`
-- `docs/plans/01-IXLandKernel_IXLandHostAdapter_Split_Plan.md`
+- `docs/plans/01-OrlixKernel_OrlixHostAdapter_Split_Plan.md`
 - `docs/plans/02-Sysroot_Build_Truth_Plan.md`
 - `docs/plans/03-Exec_Shebang_Native_Execution_Plan.md`
 - `docs/plans/04-Shell_Process_Signal_PTY_Plan.md`
@@ -30,28 +30,28 @@ It complements:
 
 | milestone | group | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- | --- |
-| `M0` | roadmap | `IXLandHostAdapter` split and boundary lockdown | all later milestones | `implemented` | The active kernel-facing seam is kernel-owned, `IXLandHostAdapter/include` is gone, and the full simulator suite was green after the cutover. |
-| `M1` | roadmap | sysroot and build truth | package configure and build transparency | `partial` | `IXLandMLibC` bootstrap headers and package-facing compile smoke now exist, but broader libc/sysroot ownership and drift cleanup remain. |
+| `M0` | roadmap | `OrlixHostAdapter` split and boundary lockdown | all later milestones | `implemented` | The active kernel-facing seam is kernel-owned, `OrlixHostAdapter/include` is gone, and the full simulator suite was green after the cutover. |
+| `M1` | roadmap | sysroot and build truth | package configure and build transparency | `partial` | `OrlixMLibC` bootstrap headers and package-facing compile smoke now exist, but broader libc/sysroot ownership and drift cleanup remain. |
 | `M2` | roadmap | native exec plus shebang execution | `zsh`, scripts, Version 1 runtime | `blocked` | Version 1 is native-only, but execution-image plumbing must stay future-extensible. |
 | `M3` | roadmap | shell-critical process, signal, and PTY runtime | `zsh` primary proof | `blocked` | High-value Linux semantics cluster for shells and interactive use. |
 | `M4` | roadmap | VFS and runtime environment | shell startup, package runtime, `/proc`, `/dev` | `blocked` | Linux environment shape must be stable enough for package workflows. |
 | `M5` | roadmap | networking for `curl` | `curl` secondary proof | `blocked` | Socket and DNS semantics must be proven against a real client. |
 | `M6` | roadmap | package proof program | Version 1 product validation | `blocked` | Final product proof must be package-driven, not unit-test-only. |
 
-## IXLandKernel: Architecture And Ownership
+## OrlixKernel: Architecture And Ownership
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
-| ownership | `IXLandKernel` target or package | M0 | `implemented` | Owns the physical `IXLandKernel/fs/**`, `IXLandKernel/kernel/**`, `IXLandKernel/runtime/**`, and `IXLandKernel/include/**` trees. |
+| ownership | `OrlixKernel` target or package | M0 | `implemented` | Owns the physical `OrlixKernel/fs/**`, `OrlixKernel/kernel/**`, `OrlixKernel/runtime/**`, and `OrlixKernel/include/**` trees. |
 | boundary | no Darwin, Foundation, UIKit, pthread, or dispatch headers in Linux-owner code | M0 | `partial` | The active seam cutover landed, but Linux-owner cleanup still remains in older subsystem files outside the backing-contract tranche. |
-| boundary | no arbitrary host implementation header visibility | M0 | `partial` | `IXLandKernel` no longer includes `IXLandHostAdapter/**`, but `IXLandHostAdapter` still sees broader kernel roots than the long-term narrow-contract end-state. |
+| boundary | no arbitrary host implementation header visibility | M0 | `partial` | `OrlixKernel` no longer includes `OrlixHostAdapter/**`, but `OrlixHostAdapter` still sees broader kernel roots than the long-term narrow-contract end-state. |
 | boundary | curated exported seam imports only | M0 | `implemented` | The old adapter-owned exported seam was removed; active cross-target declarations are kernel-owned private `backing_*` contracts. |
-| header discipline | Linux UAPI as production ABI truth | M1 | `partial` | Main target already uses vendored UAPI include root, and `IXLandMLibC` bootstrap headers now resolve Linux constants and structs through that vendored truth. |
+| header discipline | Linux UAPI as production ABI truth | M1 | `partial` | Main target already uses vendored UAPI include root, and `OrlixMLibC` bootstrap headers now resolve Linux constants and structs through that vendored truth. |
 | header discipline | kheaders as classified private reference only | M1 | `partial` | Current project has kheaders smoke, but the project-wide classification discipline is not yet complete. |
-| type ownership | no libc-owned typedef reinvention in kernel | M1 | `partial` | The first audited leaks now route through `IXLandMLibC` bootstrap types or kernel-owned narrow type headers, but broader drift still exists. |
+| type ownership | no libc-owned typedef reinvention in kernel | M1 | `partial` | The first audited leaks now route through `OrlixMLibC` bootstrap types or kernel-owned narrow type headers, but broader drift still exists. |
 | architecture | backend-neutral execution architecture | M2 | `planned` | Needed now so Version 1 native execution does not block future ELF or WASM. |
 
-## IXLandKernel: Process And Execution Runtime
+## OrlixKernel: Process And Execution Runtime
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
@@ -67,7 +67,7 @@ It complements:
 | process | waitpid and waitid semantics | M3, `zsh` | `partial` | Existing code and tests exist, but shell-proof maturity remains downstream. |
 | process | sessions and process groups | M3, `zsh` | `partial` | Present in code and tests, but still part of shell-critical milestone. |
 
-## IXLandKernel: Signal, PTY, And Job Control
+## OrlixKernel: Signal, PTY, And Job Control
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
@@ -81,7 +81,7 @@ It complements:
 | job control | foreground and background process-group enforcement | M3, `zsh` | `partial` | Existing tests indicate progress, but milestone completion is still ahead. |
 | job control | `SIGTTIN`, `SIGTTOU`, `SIGTSTP`, `SIGCONT`, `SIGCHLD` shell-visible behavior | M3, `zsh` | `partial` | Must be validated through interactive shell scenarios, not only unit tests. |
 
-## IXLandKernel: VFS, Procfs, Devfs, And Runtime Environment
+## OrlixKernel: VFS, Procfs, Devfs, And Runtime Environment
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
@@ -98,7 +98,7 @@ It complements:
 | mount | mount namespace visibility | M4, tooling | `partial` | Existing work is present, but milestone proof is still required. |
 | host path hygiene | no raw host paths as Linux truth | M4 | `planned` | Explicit guardrail in the plans; adapter-backed storage must stay private. |
 
-## IXLandKernel: Readiness, FD, Memory, And Futex Support
+## OrlixKernel: Readiness, FD, Memory, And Futex Support
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
@@ -110,7 +110,7 @@ It complements:
 | futex | Linux-shaped futex wait and wake behavior | threading, future package breadth | `partial` | Gap matrix shows futex syscall support, but plans still call out guest-memory and semantic hardening gaps. |
 | futex | guest-memory-safe robust-list and clear-child-tid handling | correctness, future backends | `planned` | Existing code path still needs hardening away from direct host pointer assumptions. |
 
-## IXLandKernel: Networking And Client Support
+## OrlixKernel: Networking And Client Support
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
@@ -121,40 +121,40 @@ It complements:
 | protocol scope | HTTP and HTTPS proof path | M5, `curl` | `planned` | Runtime proof is still future work. |
 | compatibility | IPv4 and IPv6 compatibility | M5, `curl` | `planned` | Explicitly listed in plan and not yet claimed complete. |
 
-## IXLandHostAdapter
+## OrlixHostAdapter
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
-| packaging | `IXLandHostAdapter` target or package | M0 | `implemented` | Owns the physical `IXLandHostAdapter/**` tree. |
-| seam | curated exported seam namespace | M0 | `implemented` | The active seam is no longer adapter-owned or exported through `IXLandHostAdapter/include`. |
+| packaging | `OrlixHostAdapter` target or package | M0 | `implemented` | Owns the physical `OrlixHostAdapter/**` tree. |
+| seam | curated exported seam namespace | M0 | `implemented` | The active seam is no longer adapter-owned or exported through `OrlixHostAdapter/include`. |
 | fs host mechanics | backing storage and path discovery | M0, M4 | `partial` | Current host fs helpers exist but need packaging and seam discipline. |
 | fs host mechanics | errno translation | M0, M4, M5 | `partial` | Present in current tree; still needs stronger boundary enforcement. |
 | fs host mechanics | open flags and host file I/O realization | M0, M4 | `partial` | Existing host helpers exist; must remain mechanism-only. |
-| kernel host mechanics | host clock access | M0, M3, M5 | `partial` | Existing host clock code lives in `IXLandHostAdapter/kernel`. |
+| kernel host mechanics | host clock access | M0, M3, M5 | `partial` | Existing host clock code lives in `OrlixHostAdapter/kernel`. |
 | kernel host mechanics | host sleep and wake primitives | M0, M3 | `partial` | Existing sync and wait realization exists, but seam redesign is still ahead. |
 | kernel host mechanics | host signal mask save and restore where required as mechanism | M0, M3 | `partial` | Existing bridge code exists, but semantics must remain kernel-owned. |
-| runtime host mechanics | runtime synchronization helper ownership | M0 | `implemented` | `IXLandKernel/runtime/native/registry.c` no longer imports host runtime sync directly. |
+| runtime host mechanics | runtime synchronization helper ownership | M0 | `implemented` | `OrlixKernel/runtime/native/registry.c` no longer imports host runtime sync directly. |
 | future host mechanics | security-scoped file access lifecycle | future external mounts | `planned` | Explicitly planned but not yet completed. |
 
-## IXLandMLibC
+## OrlixMLibC
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
-| ownership | package-facing Linux libc headers | M1, all packages | `partial` | An in-repo bootstrap header surface now exists under `IXLandMLibC/include/**`, but it is not yet a complete package sysroot. |
+| ownership | package-facing Linux libc headers | M1, all packages | `partial` | An in-repo bootstrap header surface now exists under `OrlixMLibC/include/**`, but it is not yet a complete package sysroot. |
 | ownership | libc-owned typedefs and APIs | M1, all packages | `partial` | The bootstrap now owns the first audited package-facing types, but broad libc surface migration remains ahead. |
-| sysroot | sysroot ownership discipline | M1, configure and build | `partial` | The repo now has package-facing compile smoke through `IXLandMLibC`, but full sysroot assembly is still future work. |
+| sysroot | sysroot ownership discipline | M1, configure and build | `partial` | The repo now has package-facing compile smoke through `OrlixMLibC`, but full sysroot assembly is still future work. |
 | sysdeps | Linux-oriented sysdeps for native iOS builds | M1, Version 1 runtime | `planned` | Required for package transparency and native execution path. |
-| integration | no kernel reinvention of libc-owned surfaces | M1 | `partial` | The tranche introduced `IXLandMLibC` bootstrap ownership and removed the first audited direct leaks, but more kernel drift remains. |
+| integration | no kernel reinvention of libc-owned surfaces | M1 | `partial` | The tranche introduced `OrlixMLibC` bootstrap ownership and removed the first audited direct leaks, but more kernel drift remains. |
 
-## IXLandKernel Integration And Proof Harness
+## OrlixKernel Integration And Proof Harness
 
 | subgroup | artifact | required by | status | observation |
 | --- | --- | --- | --- | --- |
-| integration | `IXLandKernel` integration target | all milestones | `partial` | The main project now composes `IXLandKernel` with `IXLandHostAdapter`; proof and milestone tracking should treat `IXLandKernel` as the repo's primary product identity. |
+| integration | `OrlixKernel` integration target | all milestones | `partial` | The main project now composes `OrlixKernel` with `OrlixHostAdapter`; proof and milestone tracking should treat `OrlixKernel` as the repo's primary product identity. |
 | proof split | LinuxKernel tests as Linux behavior proof | M0 onward | `partial` | Test target exists today and must remain host-implementation-free. |
 | proof split | HostBridge tests as host-adapter proof | M0 onward | `partial` | Test target exists today and already matches the intended split conceptually. |
 | proof policy | package-driven proof over unit-test-only proof | M6 | `planned` | Explicitly defined in the package proof milestone. |
-| proof artifacts | compile-smoke and contract files | M1 onward | `partial` | Current repo now uses both vendored UAPI compile smoke and `IXLandMLibC` bootstrap compile smoke in addition to the contract tests. |
+| proof artifacts | compile-smoke and contract files | M1 onward | `partial` | Current repo now uses both vendored UAPI compile smoke and `OrlixMLibC` bootstrap compile smoke in addition to the contract tests. |
 
 ## Package Proof Targets
 
@@ -185,8 +185,8 @@ It complements:
 | area | summary |
 | --- | --- |
 | strongest current reality | syscall surface has broad existing implementation coverage across fd, process, time, mount, VM, readiness, and virtual networking, but package-driven proof is still missing |
-| most important prerequisite | `IXLandHostAdapter` split and boundary lockdown |
+| most important prerequisite | `OrlixHostAdapter` split and boundary lockdown |
 | primary Version 1 proof target | `zsh` |
 | secondary Version 1 proof target | `curl` |
-| biggest architectural risk | Darwin and host-mechanics leakage into `IXLandKernel` ownership zones |
+| biggest architectural risk | Darwin and host-mechanics leakage into `OrlixKernel` ownership zones |
 | biggest proof risk | passing narrow tests while real packages still fail unchanged configure, build, install, or runtime |

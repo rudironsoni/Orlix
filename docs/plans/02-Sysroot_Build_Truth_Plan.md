@@ -4,7 +4,7 @@
 
 Authoritative Milestone 1 plan.
 
-This milestone follows the delivered `IXLandKernel` and `IXLandHostAdapter` split and assumes that the physical ownership boundary and kernel-owned active seam are now in place.
+This milestone follows the delivered `OrlixKernel` and `OrlixHostAdapter` split and assumes that the physical ownership boundary and kernel-owned active seam are now in place.
 
 It must still account for the remaining Milestone 0 learning:
 
@@ -14,7 +14,7 @@ It must still account for the remaining Milestone 0 learning:
 
 ## Purpose
 
-Establish a correct package-facing build surface so Linux-oriented packages configure and compile unchanged against the IXLand stack.
+Establish a correct package-facing build surface so Linux-oriented packages configure and compile unchanged against the Orlix stack.
 
 Milestone 0 made subsystem ownership explicit in the repo.
 Milestone 1 must now make header ownership and build truth equally explicit.
@@ -23,16 +23,16 @@ Without this milestone, the repo can still compile selected internal code while 
 
 ## Product Goal For This Milestone
 
-Make package-facing build truth deterministic enough that `IXLandMLibC` can present a Linux-oriented sysroot without `IXLandKernel` silently re-owning libc or Linux ABI surface area.
+Make package-facing build truth deterministic enough that `OrlixMLibC` can present a Linux-oriented sysroot without `OrlixKernel` silently re-owning libc or Linux ABI surface area.
 
 This milestone is about source-compatibility truth, not runtime completion.
 
 ## Goals
 
-1. Make `IXLandMLibC` the sole owner of package-facing libc and sysroot surfaces.
+1. Make `OrlixMLibC` the sole owner of package-facing libc and sysroot surfaces.
 2. Keep vendored Linux UAPI as the kernel-userspace contract truth.
 3. Keep vendored `kheaders/source` and `kheaders/generated` as classified private kernel reference only.
-4. Eliminate local Linux-like typedef reinvention inside `IXLandKernel` and kernel-private backing contracts where vendored Linux truth or libc ownership should apply instead.
+4. Eliminate local Linux-like typedef reinvention inside `OrlixKernel` and kernel-private backing contracts where vendored Linux truth or libc ownership should apply instead.
 5. Make configure and compile probes reliable for real packages.
 6. Ensure build-truth cleanup does not bless host-private adapter declarations as Linux-facing ownership surfaces.
 
@@ -59,12 +59,12 @@ Relevant current facts in this repo:
   - `third_party/linux/6.12/arm64/uapi/include`
   - `third_party/linux/6.12/arm64/kheaders/source`
   - `third_party/linux/6.12/arm64/kheaders/generated`
-- `IXLandKernelTests/LinuxUAPICompileSmoke.c` already proves canonical UAPI include-path resolution.
-- `IXLandKernelTests/LinuxKHeadersCompileSmoke.c` already proves isolated kheaders include-path resolution.
+- `OrlixKernelTests/LinuxUAPICompileSmoke.c` already proves canonical UAPI include-path resolution.
+- `OrlixKernelTests/LinuxKHeadersCompileSmoke.c` already proves isolated kheaders include-path resolution.
 - `project.yml` already separates UAPI include paths from kheaders compile-smoke include paths.
 - The repo still contains local Linux-like scalar type recreation in Linux-owner and kernel-private contract-adjacent headers, including examples such as:
-  - `IXLandKernel/fs/vfs.h`
-  - `IXLandKernel/fs/fdtable.h`
+  - `OrlixKernel/fs/vfs.h`
+  - `OrlixKernel/fs/fdtable.h`
   - current kernel-owned backing contract surfaces
 - The project completion matrix already marks Milestone 1 as partial for Linux UAPI truth, kheaders classification, and libc-owned type ownership.
 
@@ -74,7 +74,7 @@ This means the foundation for M1 exists, but the ownership cleanup and package-f
 
 Milestone 1 is no longer theoretical in this repo. The following slices are already delivered and simulator-proofed:
 
-- `IXLandMLibC` bootstrap headers now exist for:
+- `OrlixMLibC` bootstrap headers now exist for:
   - `fcntl.h`
   - `poll.h`
   - `signal.h`
@@ -91,7 +91,7 @@ Milestone 1 is no longer theoretical in this repo. The following slices are alre
   - kheaders classification
   - package-facing libc header bootstrap
   - package-style configure probe bootstrap
-- `IXLandKernel/fs/readdir.c` no longer owns host directory iteration directly; that host mechanism now sits behind a kernel-owned private `backing_dir` contract
+- `OrlixKernel/fs/readdir.c` no longer owns host directory iteration directly; that host mechanism now sits behind a kernel-owned private `backing_dir` contract
 
 Those changes matter because they prove Milestone 1 can advance in bounded slices without pretending the entire libc/sysroot problem is already complete.
 
@@ -113,28 +113,28 @@ It means they must be treated as a separate, explicit kernel-owner cleanup tranc
 
 - `uapi/include` is the only production Linux ABI include truth in this repo.
 - `kheaders/source` and `kheaders/generated` are private classified kernel reference only.
-- `IXLandKernel` must not invent Linux ABI items already available in vendored Linux truth.
-- `IXLandKernel` must not own libc-owned typedefs or APIs.
+- `OrlixKernel` must not invent Linux ABI items already available in vendored Linux truth.
+- `OrlixKernel` must not own libc-owned typedefs or APIs.
 - Kernel-owned private backing contracts must not reintroduce Linux ABI ownership drift.
-- The end-state is kernel-owned private contracts plus `IXLandMLibC` sysroot truth, not convenience leakage through host-private declarations.
+- The end-state is kernel-owned private contracts plus `OrlixMLibC` sysroot truth, not convenience leakage through host-private declarations.
 
 ### Ownership model
 
-- `IXLandMLibC` owns package-facing libc ABI headers, typedef surfaces, and sysroot installation shape.
-- `IXLandMLibC` owns libc-facing types such as `pid_t`, `uid_t`, `gid_t`, `mode_t`, `dev_t`, `ino_t`, `socklen_t`, `sigval`, `sigevent`, `statvfs`, and related libc-facing API surface.
-- `IXLandKernel` owns syscall/runtime semantics and private virtual-kernel state only.
-- `IXLandHostAdapter` owns private mechanism implementation only and must not become a second place where Linux or libc-facing type truth is recreated.
+- `OrlixMLibC` owns package-facing libc ABI headers, typedef surfaces, and sysroot installation shape.
+- `OrlixMLibC` owns libc-facing types such as `pid_t`, `uid_t`, `gid_t`, `mode_t`, `dev_t`, `ino_t`, `socklen_t`, `sigval`, `sigevent`, `statvfs`, and related libc-facing API surface.
+- `OrlixKernel` owns syscall/runtime semantics and private virtual-kernel state only.
+- `OrlixHostAdapter` owns private mechanism implementation only and must not become a second place where Linux or libc-facing type truth is recreated.
 
 ### Build-truth model
 
 - XcodeGen and the generated Xcode project remain the only authoritative build truth for this repo.
 - UAPI headers may be visible to Linux-owner compile units as Linux contract truth.
 - Kheaders must be visible only to explicitly classified compile-smoke or private kernel-reference use, never as blanket production include roots.
-- Package-facing sysroot assembly belongs to `IXLandMLibC`, not to ad hoc repo-local header search path convenience.
+- Package-facing sysroot assembly belongs to `OrlixMLibC`, not to ad hoc repo-local header search path convenience.
 
 ## Non-Negotiable Rules
 
-1. `IXLandKernel` must not hand-own libc ABI.
+1. `OrlixKernel` must not hand-own libc ABI.
 2. Vendored Linux UAPI is the only Linux userspace ABI truth in this repo.
 3. Kheaders are not package-facing ABI.
 4. Adapter-owned seams must not become a backdoor for Linux-like typedef recreation.
@@ -148,7 +148,7 @@ Milestone 1 should be implemented as a build-truth and ownership tranche, not as
 
 In scope:
 
-- classify every Linux-facing header surface as UAPI truth, kheaders reference, `IXLandMLibC` ownership, or private kernel-only state
+- classify every Linux-facing header surface as UAPI truth, kheaders reference, `OrlixMLibC` ownership, or private kernel-only state
 - remove or narrow repo-local Linux-like typedef recreation where ownership is already known
 - keep production include roots narrow and explicit
 - add proof that real configure-style compile checks resolve against the intended owners
@@ -171,8 +171,8 @@ Current examples include Linux-owner headers that locally define names such as `
 
 Current examples to audit first:
 
-- `IXLandKernel/fs/vfs.h`
-- `IXLandKernel/fs/fdtable.h`
+- `OrlixKernel/fs/vfs.h`
+- `OrlixKernel/fs/fdtable.h`
 
 Milestone direction:
 
@@ -242,10 +242,10 @@ Milestone direction:
 2. Produce an ownership inventory for Linux-facing headers and typedef surfaces that distinguishes:
    - vendored UAPI truth
    - vendored kheaders reference only
-   - `IXLandMLibC` ownership
-   - `IXLandKernel` private-only state
-   - `IXLandHostAdapter` private mechanism-only implementation
-3. Remove or replace risky local typedef recreation in `IXLandKernel` and keep kernel-private backing contracts narrow and ownership-correct.
+   - `OrlixMLibC` ownership
+   - `OrlixKernel` private-only state
+   - `OrlixHostAdapter` private mechanism-only implementation
+3. Remove or replace risky local typedef recreation in `OrlixKernel` and keep kernel-private backing contracts narrow and ownership-correct.
 4. Keep kheaders out of blanket production include roots.
 5. Add compile-smoke and configure-probe proof for real package expectations.
 6. Update repo docs and guardrails so future work cannot casually reintroduce ownership drift.
@@ -278,7 +278,7 @@ Milestone 1 is not complete until all are true:
 
 1. UAPI include truth is documented and enforced as the only production Linux ABI source.
 2. Kheaders remain isolated to explicit classified use and compile-smoke proof.
-3. The repo no longer contains known local Linux-like typedef recreation for surfaces already owned by vendored Linux truth or `IXLandMLibC`.
+3. The repo no longer contains known local Linux-like typedef recreation for surfaces already owned by vendored Linux truth or `OrlixMLibC`.
 4. Adapter-owned seam headers are removed from the accepted contract surface.
 5. Configure-style compile probes for representative `zsh` and `curl` prerequisites pass through the intended owners.
 6. Project build settings do not grant blanket kheaders visibility to production targets.
@@ -291,8 +291,8 @@ Milestone 1 is not complete until all are true:
 
 Required proof for this milestone:
 
-1. `IXLandKernelTests/LinuxUAPICompileSmoke.c` remains green.
-2. `IXLandKernelTests/LinuxKHeadersCompileSmoke.c` remains isolated and green.
+1. `OrlixKernelTests/LinuxUAPICompileSmoke.c` remains green.
+2. `OrlixKernelTests/LinuxKHeadersCompileSmoke.c` remains isolated and green.
 3. New configure-style compile probes cover representative package prerequisites for `zsh` and `curl`.
 4. The authoritative simulator build remains green through the canonical XcodeGen plus Xcodebuild flow.
 5. Lint and repo checks fail if kheaders or local typedef ownership drift reappears.
@@ -304,9 +304,9 @@ Milestone 1 succeeds when the repo stops improvising Linux-facing header ownersh
 
 - Linux UAPI truth comes from vendored `uapi/include`
 - private kernel reference comes from classified `kheaders/source` and `kheaders/generated`
-- libc-facing sysroot truth belongs to `IXLandMLibC`
-- `IXLandKernel` keeps only private runtime state and syscall semantics
-- `IXLandHostAdapter` remains mechanism-only implementation
+- libc-facing sysroot truth belongs to `OrlixMLibC`
+- `OrlixKernel` keeps only private runtime state and syscall semantics
+- `OrlixHostAdapter` remains mechanism-only implementation
 
 It does not require pretending that every remaining host-libc-shaped kernel include has already been solved.
 Milestone 1 is still partial until those kernel-owner follow-on cutovers are delivered green in their own bounded tranches.

@@ -15,7 +15,7 @@ Provide networking behavior sufficient for `curl` as the secondary proof target.
 1. Make socket behavior reliable for `curl`.
 2. Provide DNS and timeout semantics compatible with Linux-oriented client code.
 3. Integrate readiness and file I/O behavior with the native package runtime.
-4. Keep host transport realization private to `IXLandHostAdapter`.
+4. Keep host transport realization private to `OrlixHostAdapter`.
 
 ## Required Surfaces
 
@@ -30,7 +30,7 @@ Provide networking behavior sufficient for `curl` as the secondary proof target.
 ## Deliverables
 
 1. Socket semantics sufficient for `curl` configure, build, and runtime behavior.
-2. DNS behavior integrated into the IXLand runtime model.
+2. DNS behavior integrated into the Orlix runtime model.
 3. Timeout and error behavior suitable for real client workflows.
 
 ## Guardrails

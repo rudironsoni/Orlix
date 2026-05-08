@@ -2,7 +2,7 @@
 
 ## Status
 
-This milestone builds on the `IXLandKernel` and `IXLandHostAdapter` split.
+This milestone builds on the `OrlixKernel` and `OrlixHostAdapter` split.
 
 It assumes the old branded seam is gone, and it must preserve that by keeping exec-facing contracts kernel-owned and behaviorally Linux-shaped under simulator proof.
 
@@ -12,10 +12,10 @@ Build the Version 1 execution path around native iOS execution only, while prese
 
 ## Goals
 
-1. Implement Linux-shaped `execve` semantics for native IXLand programs.
+1. Implement Linux-shaped `execve` semantics for native Orlix programs.
 2. Make shebang and script execution mandatory and correct.
 3. Keep the execution-image architecture open for future ELF and WASM backends.
-4. Keep host execution mechanics private to `IXLandHostAdapter` and non-authoritative for Linux-visible exec semantics.
+4. Keep host execution mechanics private to `OrlixHostAdapter` and non-authoritative for Linux-visible exec semantics.
 5. Use kernel-owned private contracts if exec needs cross-target declarations.
 6. Treat successful structure as insufficient without Linux-visible runtime proof on the booted simulator.
 
@@ -61,12 +61,12 @@ Common exec pipeline must handle:
 - Do not add ELF loading or emulation in this milestone.
 - Do not bake native-only assumptions into process semantics that will block future backends.
 - Do not fork a separate ad hoc script path outside the main exec pipeline.
-- Do not treat branded `IXLandHostAdapter` vocabulary or adapter-owned headers as the completed Linux-facing exec contract.
+- Do not treat branded `OrlixHostAdapter` vocabulary or adapter-owned headers as the completed Linux-facing exec contract.
 
 ## Proof
 
 1. Native commands run through the common exec path.
 2. Shebang scripts execute correctly.
 3. Nested interpreter behavior is Linux-shaped within supported scope.
-4. `FD_CLOEXEC`, argv, envp, and signal-reset behavior are covered by `IXLandKernelTests`.
+4. `FD_CLOEXEC`, argv, envp, and signal-reset behavior are covered by `OrlixKernelTests`.
 5. Completion claims for this milestone do not rely on branded host-adapter vocabulary as the normal kernel-facing seam.

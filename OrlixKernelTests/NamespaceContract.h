@@ -1,0 +1,27 @@
+#ifndef ORLIXSYSTEMLINUXKERNELTESTS_NAMESPACECONTRACT_H
+#define ORLIXSYSTEMLINUXKERNELTESTS_NAMESPACECONTRACT_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int namespace_contract_clone_newuts_isolates_child_hostname(void);
+int namespace_contract_clone_without_newuts_shares_hostname(void);
+int namespace_contract_unshare_newuts_isolates_current_task(void);
+int namespace_contract_clone_newns_isolates_child_mounts(void);
+int namespace_contract_clone_without_newns_shares_mounts(void);
+int namespace_contract_unshare_newns_isolates_current_mounts(void);
+int namespace_contract_unshare_clone_fs_splits_shared_fs_state(void);
+int namespace_contract_clone_newns_with_clone_fs_rejected(void);
+int namespace_contract_clone_newpid_records_child_namespace_metadata(void);
+int namespace_contract_unshare_newpid_applies_to_next_child_metadata(void);
+int namespace_contract_newuser_caps_are_scoped_to_mount_namespace_owner(void);
+int namespace_contract_proc_uid_gid_maps_are_visible(void);
+int namespace_contract_proc_uid_gid_maps_are_writable_with_setgroups_policy(void);
+int namespace_contract_newuser_caps_are_scoped_to_uts_namespace_owner(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* ORLIXSYSTEMLINUXKERNELTESTS_NAMESPACECONTRACT_H */

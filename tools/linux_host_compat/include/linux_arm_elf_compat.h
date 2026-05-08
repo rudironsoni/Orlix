@@ -1,5 +1,5 @@
-#ifndef IXLAND_MACOS_LINUX_ARM_ELF_COMPAT_H
-#define IXLAND_MACOS_LINUX_ARM_ELF_COMPAT_H
+#ifndef ORLIX_MACOS_LINUX_ARM_ELF_COMPAT_H
+#define ORLIX_MACOS_LINUX_ARM_ELF_COMPAT_H
 
 /*
  * Linux 6.12 ARM relocation values needed by macOS host tools during

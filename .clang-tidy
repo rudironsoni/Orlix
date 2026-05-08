@@ -1,4 +1,4 @@
-Checks: '-*,ixland-*'
-WarningsAsErrors: 'ixland-*'
-HeaderFilterRegex: '^(.*IXLandKernel/.*|.*IXLandHostAdapter/.*|.*IXLandKernelTests/.*|.*IXLandHostAdapterTests/.*)$'
+Checks: '-*,orlix-*'
+WarningsAsErrors: 'orlix-*'
+HeaderFilterRegex: '^(.*OrlixKernel/.*|.*OrlixHostAdapter/.*|.*OrlixKernelTests/.*|.*OrlixHostAdapterTests/.*)$'
 FormatStyle: none

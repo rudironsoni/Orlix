@@ -1,5 +1,5 @@
-#ifndef IXLAND_MACOS_BYTESWAP_H
-#define IXLAND_MACOS_BYTESWAP_H
+#ifndef ORLIX_MACOS_BYTESWAP_H
+#define ORLIX_MACOS_BYTESWAP_H
 
 #include <libkern/OSByteOrder.h>
 
