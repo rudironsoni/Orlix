@@ -3,8 +3,9 @@
 #include <errno.h>
 
 #include "PtraceContract.h"
-#include "kernel/cred_internal.h"
 #include "kernel/init.h"
+
+extern void cred_reset_to_defaults(void);
 
 @interface PtraceTests : XCTestCase
 @end

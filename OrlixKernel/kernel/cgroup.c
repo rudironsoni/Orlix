@@ -4,7 +4,7 @@
 
 #include "cgroup.h"
 
-#include "cred_internal.h"
+#include "cred.h"
 #include "task.h"
 
 #include <errno.h>

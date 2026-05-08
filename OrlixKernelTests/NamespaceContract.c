@@ -11,7 +11,7 @@
 
 #include "NamespaceContract.h"
 #include "fs/vfs.h"
-#include "kernel/cred_internal.h"
+#include "kernel/cred.h"
 #include "kernel/task.h"
 #include "kernel/uts.h"
 
@@ -27,7 +27,6 @@ extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
-extern int setgroups_impl(int size, const gid_t *list);
 extern void cred_reset_to_defaults(void);
 extern int capget(cap_user_header_t header, cap_user_data_t data);
 extern int capset(cap_user_header_t header, const cap_user_data_t data);

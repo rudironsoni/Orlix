@@ -1,6 +1,6 @@
 #include "ptrace.h"
 
-#include "cred_internal.h"
+#include "cred.h"
 #include "signal.h"
 #include "task.h"
 

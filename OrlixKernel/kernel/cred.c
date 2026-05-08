@@ -22,7 +22,7 @@
 #include <linux/securebits.h>
 #include <linux/stat.h>
 
-#include "cred_internal.h"
+#include "cred.h"
 #include "task.h"
 
 /* ============================================================================
@@ -167,12 +167,12 @@ struct cred *dup_cred(const struct cred *cred) {
         new->fsuid = cred->fsuid;
         new->fsgid = cred->fsgid;
         if (cred->group_count > 0) {
-            new->groups = calloc(cred->group_count, sizeof(gid_t));
+            new->groups = calloc(cred->group_count, sizeof(__kernel_gid32_t));
             if (!new->groups) {
                 free_cred(new);
                 return NULL;
             }
-            memcpy(new->groups, cred->groups, cred->group_count * sizeof(gid_t));
+            memcpy(new->groups, cred->groups, cred->group_count * sizeof(__kernel_gid32_t));
             new->group_count = cred->group_count;
         }
         new->no_new_privs = cred->no_new_privs;
@@ -325,7 +325,7 @@ void put_cred(struct cred *cred) {
  * No host privilege changes are attempted.
  */
 
-static int check_setuid_perm(struct cred *cred, uint32_t uid) {
+static int check_setuid_perm(struct cred *cred, __kernel_uid32_t uid) {
     (void)uid;
     /*
      * Linux rules for setuid:
@@ -342,7 +342,7 @@ static int check_setuid_perm(struct cred *cred, uint32_t uid) {
     return -EPERM;
 }
 
-static int check_setgid_perm(struct cred *cred, uint32_t gid) {
+static int check_setgid_perm(struct cred *cred, __kernel_gid32_t gid) {
     (void)gid;
     if (cred_has_cap(cred, CAP_SETGID)) {
         return 0; /* Root can setgid to anything */
@@ -353,7 +353,7 @@ static int check_setgid_perm(struct cred *cred, uint32_t gid) {
     return -EPERM;
 }
 
-int cred_setuid(struct cred *cred, uint32_t uid) {
+int cred_setuid(struct cred *cred, __kernel_uid32_t uid) {
     bool privileged;
 
     if (!cred) {
@@ -389,7 +389,7 @@ int cred_setuid(struct cred *cred, uint32_t uid) {
     return 0;
 }
 
-int cred_setgid(struct cred *cred, uint32_t gid) {
+int cred_setgid(struct cred *cred, __kernel_gid32_t gid) {
     bool privileged;
 
     if (!cred) {
@@ -424,7 +424,7 @@ int cred_setgid(struct cred *cred, uint32_t gid) {
     return 0;
 }
 
-int cred_seteuid(struct cred *cred, uint32_t euid) {
+int cred_seteuid(struct cred *cred, __kernel_uid32_t euid) {
     if (!cred) {
         return -EINVAL;
     }
@@ -442,7 +442,7 @@ int cred_seteuid(struct cred *cred, uint32_t euid) {
     return 0;
 }
 
-int cred_setegid(struct cred *cred, uint32_t egid) {
+int cred_setegid(struct cred *cred, __kernel_gid32_t egid) {
     if (!cred) {
         return -EINVAL;
     }
@@ -458,27 +458,27 @@ int cred_setegid(struct cred *cred, uint32_t egid) {
     return 0;
 }
 
-int cred_setreuid(struct cred *cred, uint32_t ruid, uint32_t euid) {
+int cred_setreuid(struct cred *cred, __kernel_uid32_t ruid, __kernel_uid32_t euid) {
     if (!cred) {
         return -EINVAL;
     }
 
     /* setreuid requires permission to set both values */
     if (!cred_has_cap(cred, CAP_SETUID)) {
-        if (ruid != (uint32_t)-1 && ruid != cred->uid && ruid != cred->euid && ruid != cred->suid) {
+        if (ruid != (__kernel_uid32_t)-1 && ruid != cred->uid && ruid != cred->euid && ruid != cred->suid) {
             return -EPERM;
         }
-        if (euid != (uint32_t)-1 && euid != cred->uid && euid != cred->euid && euid != cred->suid) {
+        if (euid != (__kernel_uid32_t)-1 && euid != cred->uid && euid != cred->euid && euid != cred->suid) {
             return -EPERM;
         }
     }
 
-    if (ruid != (uint32_t)-1) {
+    if (ruid != (__kernel_uid32_t)-1) {
         cred->uid = ruid;
     }
-    if (euid != (uint32_t)-1) {
+    if (euid != (__kernel_uid32_t)-1) {
         /* Update saved UID under certain conditions */
-        if (ruid != (uint32_t)-1 && cred->euid != ruid && cred->euid == cred->uid) {
+        if (ruid != (__kernel_uid32_t)-1 && cred->euid != ruid && cred->euid == cred->uid) {
             cred->suid = cred->euid;
         }
         cred->euid = euid;
@@ -489,25 +489,25 @@ int cred_setreuid(struct cred *cred, uint32_t ruid, uint32_t euid) {
     return 0;
 }
 
-int cred_setregid(struct cred *cred, uint32_t rgid, uint32_t egid) {
+int cred_setregid(struct cred *cred, __kernel_gid32_t rgid, __kernel_gid32_t egid) {
     if (!cred) {
         return -EINVAL;
     }
 
     if (!cred_has_cap(cred, CAP_SETGID)) {
-        if (rgid != (uint32_t)-1 && rgid != cred->gid && rgid != cred->egid && rgid != cred->sgid) {
+        if (rgid != (__kernel_gid32_t)-1 && rgid != cred->gid && rgid != cred->egid && rgid != cred->sgid) {
             return -EPERM;
         }
-        if (egid != (uint32_t)-1 && egid != cred->gid && egid != cred->egid && egid != cred->sgid) {
+        if (egid != (__kernel_gid32_t)-1 && egid != cred->gid && egid != cred->egid && egid != cred->sgid) {
             return -EPERM;
         }
     }
 
-    if (rgid != (uint32_t)-1) {
+    if (rgid != (__kernel_gid32_t)-1) {
         cred->gid = rgid;
     }
-    if (egid != (uint32_t)-1) {
-        if (rgid != (uint32_t)-1 && cred->egid != rgid && cred->egid == cred->gid) {
+    if (egid != (__kernel_gid32_t)-1) {
+        if (rgid != (__kernel_gid32_t)-1 && cred->egid != rgid && cred->egid == cred->gid) {
             cred->sgid = cred->egid;
         }
         cred->egid = egid;
@@ -517,7 +517,7 @@ int cred_setregid(struct cred *cred, uint32_t rgid, uint32_t egid) {
     return 0;
 }
 
-int cred_setresuid(struct cred *cred, uint32_t ruid, uint32_t euid, uint32_t suid) {
+int cred_setresuid(struct cred *cred, __kernel_uid32_t ruid, __kernel_uid32_t euid, __kernel_uid32_t suid) {
     if (!cred) {
         return -EINVAL;
     }
@@ -528,25 +528,25 @@ int cred_setresuid(struct cred *cred, uint32_t ruid, uint32_t euid, uint32_t sui
          * Non-root can only use current values when -1 is specified,
          * or switch to values they already have.
          */
-        if (ruid != (uint32_t)-1 && ruid != cred->uid && ruid != cred->euid && ruid != cred->suid) {
+        if (ruid != (__kernel_uid32_t)-1 && ruid != cred->uid && ruid != cred->euid && ruid != cred->suid) {
             return -EPERM;
         }
-        if (euid != (uint32_t)-1 && euid != cred->uid && euid != cred->euid && euid != cred->suid) {
+        if (euid != (__kernel_uid32_t)-1 && euid != cred->uid && euid != cred->euid && euid != cred->suid) {
             return -EPERM;
         }
-        if (suid != (uint32_t)-1 && suid != cred->uid && suid != cred->euid && suid != cred->suid) {
+        if (suid != (__kernel_uid32_t)-1 && suid != cred->uid && suid != cred->euid && suid != cred->suid) {
             return -EPERM;
         }
     }
 
-    if (ruid != (uint32_t)-1) {
+    if (ruid != (__kernel_uid32_t)-1) {
         cred->uid = ruid;
     }
-    if (euid != (uint32_t)-1) {
+    if (euid != (__kernel_uid32_t)-1) {
         cred->euid = euid;
         cred->fsuid = euid;
     }
-    if (suid != (uint32_t)-1) {
+    if (suid != (__kernel_uid32_t)-1) {
         cred->suid = suid;
     }
     cred_apply_uid_cap_fixup(cred);
@@ -554,38 +554,38 @@ int cred_setresuid(struct cred *cred, uint32_t ruid, uint32_t euid, uint32_t sui
     return 0;
 }
 
-int cred_setresgid(struct cred *cred, uint32_t rgid, uint32_t egid, uint32_t sgid) {
+int cred_setresgid(struct cred *cred, __kernel_gid32_t rgid, __kernel_gid32_t egid, __kernel_gid32_t sgid) {
     if (!cred) {
         return -EINVAL;
     }
 
     if (!cred_has_cap(cred, CAP_SETGID)) {
-        if (rgid != (uint32_t)-1 && rgid != cred->gid && rgid != cred->egid && rgid != cred->sgid) {
+        if (rgid != (__kernel_gid32_t)-1 && rgid != cred->gid && rgid != cred->egid && rgid != cred->sgid) {
             return -EPERM;
         }
-        if (egid != (uint32_t)-1 && egid != cred->gid && egid != cred->egid && egid != cred->sgid) {
+        if (egid != (__kernel_gid32_t)-1 && egid != cred->gid && egid != cred->egid && egid != cred->sgid) {
             return -EPERM;
         }
-        if (sgid != (uint32_t)-1 && sgid != cred->gid && sgid != cred->egid && sgid != cred->sgid) {
+        if (sgid != (__kernel_gid32_t)-1 && sgid != cred->gid && sgid != cred->egid && sgid != cred->sgid) {
             return -EPERM;
         }
     }
 
-    if (rgid != (uint32_t)-1) {
+    if (rgid != (__kernel_gid32_t)-1) {
         cred->gid = rgid;
     }
-    if (egid != (uint32_t)-1) {
+    if (egid != (__kernel_gid32_t)-1) {
         cred->egid = egid;
         cred->fsgid = egid;
     }
-    if (sgid != (uint32_t)-1) {
+    if (sgid != (__kernel_gid32_t)-1) {
         cred->sgid = sgid;
     }
 
     return 0;
 }
 
-bool cred_has_group(const struct cred *cred, gid_t gid) {
+bool cred_has_group(const struct cred *cred, __kernel_gid32_t gid) {
     if (!cred) {
         return false;
     }
@@ -600,8 +600,8 @@ bool cred_has_group(const struct cred *cred, gid_t gid) {
     return false;
 }
 
-int cred_setgroups(struct cred *cred, size_t size, const gid_t *list) {
-    gid_t *new_groups = NULL;
+int cred_setgroups(struct cred *cred, size_t size, const __kernel_gid32_t *list) {
+    __kernel_gid32_t *new_groups = NULL;
 
     if (!cred) {
         return -EINVAL;
@@ -620,11 +620,11 @@ int cred_setgroups(struct cred *cred, size_t size, const gid_t *list) {
     }
 
     if (size > 0) {
-        new_groups = calloc(size, sizeof(gid_t));
+        new_groups = calloc(size, sizeof(__kernel_gid32_t));
         if (!new_groups) {
             return -ENOMEM;
         }
-        memcpy(new_groups, list, size * sizeof(gid_t));
+        memcpy(new_groups, list, size * sizeof(__kernel_gid32_t));
     }
 
     free(cred->groups);
@@ -750,7 +750,8 @@ const char *cred_setgroups_state(const struct cred *cred) {
     return (!cred || cred->setgroups_allowed) ? "allow" : "deny";
 }
 
-void cred_apply_exec_metadata(struct cred *cred, uid_t file_uid, gid_t file_gid, uint32_t mode) {
+void cred_apply_exec_metadata(struct cred *cred, __kernel_uid32_t file_uid,
+                              __kernel_gid32_t file_gid, uint32_t mode) {
     bool privileged_file;
     bool gains_privilege;
 
@@ -881,31 +882,31 @@ int cred_unshare_user_namespace(struct cred *cred) {
  */
 
 /* Implementation of getuid_impl - internal entry point */
-uid_t getuid_impl(void) {
+__kernel_uid32_t getuid_impl(void) {
     struct cred *cred = get_current_cred();
-    return (uid_t)cred->uid;
+    return (__kernel_uid32_t)cred->uid;
 }
 
 /* Implementation of geteuid_impl - internal entry point */
-uid_t geteuid_impl(void) {
+__kernel_uid32_t geteuid_impl(void) {
     struct cred *cred = get_current_cred();
-    return (uid_t)cred->euid;
+    return (__kernel_uid32_t)cred->euid;
 }
 
 /* Implementation of getgid_impl - internal entry point */
-gid_t getgid_impl(void) {
+__kernel_gid32_t getgid_impl(void) {
     struct cred *cred = get_current_cred();
-    return (gid_t)cred->gid;
+    return (__kernel_gid32_t)cred->gid;
 }
 
 /* Implementation of getegid_impl - internal entry point */
-gid_t getegid_impl(void) {
+__kernel_gid32_t getegid_impl(void) {
     struct cred *cred = get_current_cred();
-    return (gid_t)cred->egid;
+    return (__kernel_gid32_t)cred->egid;
 }
 
 /* Implementation of setuid_impl - internal entry point */
-int setuid_impl(uid_t uid) {
+int setuid_impl(__kernel_uid32_t uid) {
     struct cred *cred = get_current_cred();
     int ret = cred_setuid(cred, (uint32_t)uid);
     if (ret < 0) {
@@ -916,7 +917,7 @@ int setuid_impl(uid_t uid) {
 }
 
 /* Implementation of setgid_impl - internal entry point */
-int setgid_impl(gid_t gid) {
+int setgid_impl(__kernel_gid32_t gid) {
     struct cred *cred = get_current_cred();
     int ret = cred_setgid(cred, (uint32_t)gid);
     if (ret < 0) {
@@ -926,7 +927,7 @@ int setgid_impl(gid_t gid) {
     return 0;
 }
 
-int seteuid_impl(uid_t euid) {
+int seteuid_impl(__kernel_uid32_t euid) {
     struct cred *cred = get_current_cred();
     int ret = cred_seteuid(cred, (uint32_t)euid);
     if (ret < 0) {
@@ -936,7 +937,7 @@ int seteuid_impl(uid_t euid) {
     return 0;
 }
 
-int setegid_impl(gid_t egid) {
+int setegid_impl(__kernel_gid32_t egid) {
     struct cred *cred = get_current_cred();
     int ret = cred_setegid(cred, (uint32_t)egid);
     if (ret < 0) {
@@ -946,7 +947,7 @@ int setegid_impl(gid_t egid) {
     return 0;
 }
 
-int setresuid_impl(uid_t ruid, uid_t euid, uid_t suid) {
+int setresuid_impl(__kernel_uid32_t ruid, __kernel_uid32_t euid, __kernel_uid32_t suid) {
     struct cred *cred = get_current_cred();
     int ret = cred_setresuid(cred, (uint32_t)ruid, (uint32_t)euid, (uint32_t)suid);
     if (ret < 0) {
@@ -956,7 +957,7 @@ int setresuid_impl(uid_t ruid, uid_t euid, uid_t suid) {
     return 0;
 }
 
-int setresgid_impl(gid_t rgid, gid_t egid, gid_t sgid) {
+int setresgid_impl(__kernel_gid32_t rgid, __kernel_gid32_t egid, __kernel_gid32_t sgid) {
     struct cred *cred = get_current_cred();
     int ret = cred_setresgid(cred, (uint32_t)rgid, (uint32_t)egid, (uint32_t)sgid);
     if (ret < 0) {
@@ -966,7 +967,7 @@ int setresgid_impl(gid_t rgid, gid_t egid, gid_t sgid) {
     return 0;
 }
 
-int setreuid_impl(uid_t ruid, uid_t euid) {
+int setreuid_impl(__kernel_uid32_t ruid, __kernel_uid32_t euid) {
     struct cred *cred = get_current_cred();
     int ret = cred_setreuid(cred, (uint32_t)ruid, (uint32_t)euid);
     if (ret < 0) {
@@ -976,7 +977,7 @@ int setreuid_impl(uid_t ruid, uid_t euid) {
     return 0;
 }
 
-int setregid_impl(gid_t rgid, gid_t egid) {
+int setregid_impl(__kernel_gid32_t rgid, __kernel_gid32_t egid) {
     struct cred *cred = get_current_cred();
     int ret = cred_setregid(cred, (uint32_t)rgid, (uint32_t)egid);
     if (ret < 0) {
@@ -986,40 +987,40 @@ int setregid_impl(gid_t rgid, gid_t egid) {
     return 0;
 }
 
-int getresuid_impl(uid_t *ruid, uid_t *euid, uid_t *suid) {
+int getresuid_impl(__kernel_uid32_t *ruid, __kernel_uid32_t *euid, __kernel_uid32_t *suid) {
     struct cred *cred = get_current_cred();
 
     if (!ruid || !euid || !suid) {
         errno = EFAULT;
         return -1;
     }
-    *ruid = (uid_t)cred->uid;
-    *euid = (uid_t)cred->euid;
-    *suid = (uid_t)cred->suid;
+    *ruid = (__kernel_uid32_t)cred->uid;
+    *euid = (__kernel_uid32_t)cred->euid;
+    *suid = (__kernel_uid32_t)cred->suid;
     return 0;
 }
 
-int getresgid_impl(gid_t *rgid, gid_t *egid, gid_t *sgid) {
+int getresgid_impl(__kernel_gid32_t *rgid, __kernel_gid32_t *egid, __kernel_gid32_t *sgid) {
     struct cred *cred = get_current_cred();
 
     if (!rgid || !egid || !sgid) {
         errno = EFAULT;
         return -1;
     }
-    *rgid = (gid_t)cred->gid;
-    *egid = (gid_t)cred->egid;
-    *sgid = (gid_t)cred->sgid;
+    *rgid = (__kernel_gid32_t)cred->gid;
+    *egid = (__kernel_gid32_t)cred->egid;
+    *sgid = (__kernel_gid32_t)cred->sgid;
     return 0;
 }
 
-uid_t setfsuid_impl(uid_t fsuid) {
+__kernel_uid32_t setfsuid_impl(__kernel_uid32_t fsuid) {
     struct cred *cred = get_current_cred();
-    uid_t old;
+    __kernel_uid32_t old;
 
     if (!cred) {
-        return (uid_t)-1;
+        return (__kernel_uid32_t)-1;
     }
-    old = (uid_t)cred->fsuid;
+    old = (__kernel_uid32_t)cred->fsuid;
     if (cred_has_cap(cred, CAP_SETUID) ||
         fsuid == cred->uid || fsuid == cred->euid ||
         fsuid == cred->suid || fsuid == cred->fsuid) {
@@ -1028,14 +1029,14 @@ uid_t setfsuid_impl(uid_t fsuid) {
     return old;
 }
 
-gid_t setfsgid_impl(gid_t fsgid) {
+__kernel_gid32_t setfsgid_impl(__kernel_gid32_t fsgid) {
     struct cred *cred = get_current_cred();
-    gid_t old;
+    __kernel_gid32_t old;
 
     if (!cred) {
-        return (gid_t)-1;
+        return (__kernel_gid32_t)-1;
     }
-    old = (gid_t)cred->fsgid;
+    old = (__kernel_gid32_t)cred->fsgid;
     if (cred_has_cap(cred, CAP_SETGID) ||
         fsgid == cred->gid || fsgid == cred->egid ||
         fsgid == cred->sgid || fsgid == cred->fsgid) {
@@ -1044,7 +1045,7 @@ gid_t setfsgid_impl(gid_t fsgid) {
     return old;
 }
 
-int getgroups_impl(int size, gid_t list[]) {
+int getgroups_impl(int size, __kernel_gid32_t list[]) {
     struct cred *cred = get_current_cred();
 
     if (!cred) {
@@ -1073,7 +1074,7 @@ int getgroups_impl(int size, gid_t list[]) {
     return (int)cred->group_count;
 }
 
-int setgroups_impl(int size, const gid_t *list) {
+int setgroups_impl(int size, const __kernel_gid32_t *list) {
     struct cred *cred = get_current_cred();
     int ret;
 
@@ -1349,75 +1350,83 @@ int capset_impl(cap_user_header_t header, const cap_user_data_t data) {
  * These are the Linux-facing ABI entry points.
  */
 
-__attribute__((visibility("default"))) uid_t getuid(void) {
+__attribute__((visibility("default"))) __kernel_uid32_t getuid(void) {
     return getuid_impl();
 }
 
-__attribute__((visibility("default"))) uid_t geteuid(void) {
+__attribute__((visibility("default"))) __kernel_uid32_t geteuid(void) {
     return geteuid_impl();
 }
 
-__attribute__((visibility("default"))) gid_t getgid(void) {
+__attribute__((visibility("default"))) __kernel_gid32_t getgid(void) {
     return getgid_impl();
 }
 
-__attribute__((visibility("default"))) gid_t getegid(void) {
+__attribute__((visibility("default"))) __kernel_gid32_t getegid(void) {
     return getegid_impl();
 }
 
-__attribute__((visibility("default"))) int setuid(uid_t uid) {
+__attribute__((visibility("default"))) int setuid(__kernel_uid32_t uid) {
     return setuid_impl(uid);
 }
 
-__attribute__((visibility("default"))) int setgid(gid_t gid) {
+__attribute__((visibility("default"))) int setgid(__kernel_gid32_t gid) {
     return setgid_impl(gid);
 }
 
-__attribute__((visibility("default"))) int seteuid(uid_t euid) {
+__attribute__((visibility("default"))) int seteuid(__kernel_uid32_t euid) {
     return seteuid_impl(euid);
 }
 
-__attribute__((visibility("default"))) int setegid(gid_t egid) {
+__attribute__((visibility("default"))) int setegid(__kernel_gid32_t egid) {
     return setegid_impl(egid);
 }
 
-__attribute__((visibility("default"))) int setresuid(uid_t ruid, uid_t euid, uid_t suid) {
+__attribute__((visibility("default"))) int setresuid(__kernel_uid32_t ruid,
+                                                     __kernel_uid32_t euid,
+                                                     __kernel_uid32_t suid) {
     return setresuid_impl(ruid, euid, suid);
 }
 
-__attribute__((visibility("default"))) int setresgid(gid_t rgid, gid_t egid, gid_t sgid) {
+__attribute__((visibility("default"))) int setresgid(__kernel_gid32_t rgid,
+                                                     __kernel_gid32_t egid,
+                                                     __kernel_gid32_t sgid) {
     return setresgid_impl(rgid, egid, sgid);
 }
 
-__attribute__((visibility("default"))) int setreuid(uid_t ruid, uid_t euid) {
+__attribute__((visibility("default"))) int setreuid(__kernel_uid32_t ruid, __kernel_uid32_t euid) {
     return setreuid_impl(ruid, euid);
 }
 
-__attribute__((visibility("default"))) int setregid(gid_t rgid, gid_t egid) {
+__attribute__((visibility("default"))) int setregid(__kernel_gid32_t rgid, __kernel_gid32_t egid) {
     return setregid_impl(rgid, egid);
 }
 
-__attribute__((visibility("default"))) int getresuid(uid_t *ruid, uid_t *euid, uid_t *suid) {
+__attribute__((visibility("default"))) int getresuid(__kernel_uid32_t *ruid,
+                                                     __kernel_uid32_t *euid,
+                                                     __kernel_uid32_t *suid) {
     return getresuid_impl(ruid, euid, suid);
 }
 
-__attribute__((visibility("default"))) int getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid) {
+__attribute__((visibility("default"))) int getresgid(__kernel_gid32_t *rgid,
+                                                     __kernel_gid32_t *egid,
+                                                     __kernel_gid32_t *sgid) {
     return getresgid_impl(rgid, egid, sgid);
 }
 
-__attribute__((visibility("default"))) uid_t setfsuid(uid_t fsuid) {
+__attribute__((visibility("default"))) __kernel_uid32_t setfsuid(__kernel_uid32_t fsuid) {
     return setfsuid_impl(fsuid);
 }
 
-__attribute__((visibility("default"))) gid_t setfsgid(gid_t fsgid) {
+__attribute__((visibility("default"))) __kernel_gid32_t setfsgid(__kernel_gid32_t fsgid) {
     return setfsgid_impl(fsgid);
 }
 
-__attribute__((visibility("default"))) int getgroups(int size, gid_t list[]) {
+__attribute__((visibility("default"))) int getgroups(int size, __kernel_gid32_t list[]) {
     return getgroups_impl(size, list);
 }
 
-__attribute__((visibility("default"))) int setgroups(int size, const gid_t *list) {
+__attribute__((visibility("default"))) int setgroups(int size, const __kernel_gid32_t *list) {
     return setgroups_impl(size, list);
 }
 

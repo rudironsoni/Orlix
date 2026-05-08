@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "fs/fdtable.h"
-#include "kernel/cred_internal.h"
+#include "kernel/cred.h"
 #include "kernel/signal.h"
 #include "kernel/task.h"
 #include "runtime/syscall.h"

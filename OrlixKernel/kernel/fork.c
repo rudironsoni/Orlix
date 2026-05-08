@@ -11,7 +11,7 @@
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
 #include "cgroup.h"
-#include "cred_internal.h"
+#include "cred.h"
 #include "ptrace.h"
 #include "signal.h"
 #include "task.h"
@@ -42,7 +42,7 @@ typedef struct {
     struct task_struct *parent;
     struct task_struct *child;
     jmp_buf jmpbuf;           /* Shared jump buffer */
-    volatile pid_t result;    /* Result from child perspective */
+    volatile __kernel_pid_t result; /* Result from child perspective */
     volatile int child_ready; /* Synchronization flag */
     kernel_mutex_t lock;
     kernel_cond_t cond;
@@ -297,7 +297,7 @@ static void *fork_child_trampoline(void *arg) {
     return NULL;
 }
 
-pid_t fork_impl(void) {
+__kernel_pid_t fork_impl(void) {
     struct task_struct *parent = get_current();
     if (!parent) {
         errno = ESRCH;
@@ -736,7 +736,7 @@ typedef struct {
     volatile int child_execed; /* Set if child called execve */
     kernel_mutex_t lock;
     kernel_cond_t cond;
-    pid_t child_pid;
+    __kernel_pid_t child_pid;
 } vfork_ctx_t;
 
 /* Global vfork context */
@@ -969,7 +969,7 @@ void vfork_exit_notify(void) {
  * PUBLIC CANONICAL WRAPPERS
  * ============================================================================ */
 
-__attribute__((visibility("default"))) pid_t fork(void) {
+__attribute__((visibility("default"))) __kernel_pid_t fork(void) {
     return fork_impl();
 }
 

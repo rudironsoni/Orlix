@@ -274,6 +274,7 @@ targets:
     - OrlixKernelTests/ReadinessContract.h
     - OrlixKernelTests/EpollContract.h
     - OrlixKernelTests/PtraceContract.h
+    - OrlixKernelTests/CredentialContract.h
     - path: OrlixKernelTests/CgroupContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
@@ -294,6 +295,9 @@ targets:
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
     - path: OrlixKernelTests/FcntlContract.c
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+    - path: OrlixKernelTests/CredentialContract.c
       compilerFlags:
       - -I$(LINUX_UAPI_INCLUDE_ROOT)
     - path: OrlixKernelTests/ExecFdContract.c

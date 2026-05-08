@@ -32,7 +32,7 @@
 #include "vfs.h"
 #include "fdtable.h"
 #include "../kernel/task.h"
-#include "../kernel/cred_internal.h"
+#include "../kernel/cred.h"
 
 static int directory_validate_path(const char *path) {
     if (path == NULL) {

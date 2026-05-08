@@ -32,7 +32,6 @@
 #include "kernel/task.h"
 #include "kernel/signal.h"
 #include "kernel/init.h"
-#include "kernel/cred_internal.h"
 #include "runtime/native/registry.h"
 #include "linux_umount2_flags.h"
 

@@ -15,7 +15,7 @@
 
 #include "runtime/syscall.h"
 #include "kernel/signal.h"
-#include "kernel/cred_internal.h"
+#include "kernel/cred.h"
 #include "kernel/task.h"
 
 extern void free(void *);

@@ -12,7 +12,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
-#include "kernel/cred_internal.h"
+#include "kernel/cred.h"
 #include "kernel/task.h"
 
 extern int open_impl(const char *pathname, int flags, uint32_t mode);
@@ -22,15 +22,10 @@ extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
 extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int chmod(const char *pathname, uint32_t mode);
-extern int chown(const char *pathname, uid_t owner, gid_t group);
+extern int chown(const char *pathname, __kernel_uid32_t owner, __kernel_gid32_t group);
 extern int mount(const char *source, const char *target, const char *filesystemtype,
                  unsigned long mountflags, const void *data);
 extern int umount(const char *target);
-extern uid_t getuid_impl(void);
-extern uid_t geteuid_impl(void);
-extern int setuid_impl(uid_t uid);
-extern int setgid_impl(gid_t gid);
-extern int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
 extern int capget(cap_user_header_t header, cap_user_data_t data);
 extern int capset(cap_user_header_t header, const cap_user_data_t data);
 extern void cred_reset_to_defaults(void);
@@ -358,12 +353,12 @@ out:
 }
 
 int task_exec_contract_setid_exec_saved_ids_allow_drop_and_reacquire(void) {
-    uid_t ruid = 0;
-    uid_t euid = 0;
-    uid_t suid = 0;
-    gid_t rgid = 0;
-    gid_t egid = 0;
-    gid_t sgid = 0;
+    __kernel_uid32_t ruid = 0;
+    __kernel_uid32_t euid = 0;
+    __kernel_uid32_t suid = 0;
+    __kernel_gid32_t rgid = 0;
+    __kernel_gid32_t egid = 0;
+    __kernel_gid32_t sgid = 0;
     int fd = -1;
     int ret = -1;
 
@@ -525,12 +520,12 @@ out:
 }
 
 int task_exec_contract_no_new_privs_setid_exec_cannot_reacquire_file_ids(void) {
-    uid_t ruid = 0;
-    uid_t euid = 0;
-    uid_t suid = 0;
-    gid_t rgid = 0;
-    gid_t egid = 0;
-    gid_t sgid = 0;
+    __kernel_uid32_t ruid = 0;
+    __kernel_uid32_t euid = 0;
+    __kernel_uid32_t suid = 0;
+    __kernel_gid32_t rgid = 0;
+    __kernel_gid32_t egid = 0;
+    __kernel_gid32_t sgid = 0;
     int fd = -1;
     int ret = -1;
 

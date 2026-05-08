@@ -141,7 +141,7 @@
 #include "pty.h"
 #include "../kernel/cgroup.h"
 #include "../kernel/task.h"
-#include "../kernel/cred_internal.h"
+#include "../kernel/cred.h"
 #include "../kernel/signal.h"
 #include "../kernel/uts.h"
 
@@ -5978,7 +5978,7 @@ int vfs_proc_task_fdinfo_content(int32_t pid, int fd_num, char *buf, size_t buf_
     struct task_struct *task;
     void *entry;
     char path[MAX_PATH];
-    off_t offset;
+    __kernel_off_t offset;
     int flags;
     int fd_flags;
     int ret;

@@ -10,30 +10,28 @@
 
 #import <XCTest/XCTest.h>
 
-/* Pull in private internal headers for credential subsystem testing */
-#include "../kernel/cred_internal.h"
-/* close_impl and other owner fd helpers are declared in fs/fdtable.h */
+#include "CredentialContract.h"
 #include "fs/fdtable.h"
 
-/* Declare internal _impl entry points for testing */
-extern uid_t getuid_impl(void);
-extern uid_t geteuid_impl(void);
-extern gid_t getgid_impl(void);
-extern gid_t getegid_impl(void);
-extern int setuid_impl(uid_t uid);
-extern int setgid_impl(gid_t gid);
-extern int seteuid_impl(uid_t euid);
-extern int setegid_impl(gid_t egid);
-extern int setresuid_impl(uid_t ruid, uid_t euid, uid_t suid);
-extern int setresgid_impl(gid_t rgid, gid_t egid, gid_t sgid);
-extern int setreuid_impl(uid_t ruid, uid_t euid);
-extern int setregid_impl(gid_t rgid, gid_t egid);
-extern int getresuid_impl(uid_t *ruid, uid_t *euid, uid_t *suid);
-extern int getresgid_impl(gid_t *rgid, gid_t *egid, gid_t *sgid);
-extern uid_t setfsuid_impl(uid_t fsuid);
-extern gid_t setfsgid_impl(gid_t fsgid);
-extern int getgroups_impl(int size, gid_t list[]);
-extern int setgroups_impl(int size, const gid_t *list);
+extern int cred_init(void);
+extern uint32_t getuid_impl(void);
+extern uint32_t geteuid_impl(void);
+extern uint32_t getgid_impl(void);
+extern uint32_t getegid_impl(void);
+extern int setuid_impl(uint32_t uid);
+extern int setgid_impl(uint32_t gid);
+extern int seteuid_impl(uint32_t euid);
+extern int setegid_impl(uint32_t egid);
+extern int setresuid_impl(uint32_t ruid, uint32_t euid, uint32_t suid);
+extern int setresgid_impl(uint32_t rgid, uint32_t egid, uint32_t sgid);
+extern int setreuid_impl(uint32_t ruid, uint32_t euid);
+extern int setregid_impl(uint32_t rgid, uint32_t egid);
+extern int getresuid_impl(uint32_t *ruid, uint32_t *euid, uint32_t *suid);
+extern int getresgid_impl(uint32_t *rgid, uint32_t *egid, uint32_t *sgid);
+extern uint32_t setfsuid_impl(uint32_t fsuid);
+extern uint32_t setfsgid_impl(uint32_t fsgid);
+extern int getgroups_impl(int size, uint32_t list[]);
+extern int setgroups_impl(int size, const uint32_t *list);
 extern void cred_reset_to_defaults(void);
 
 @interface CredentialTests : XCTestCase
@@ -105,8 +103,8 @@ extern void cred_reset_to_defaults(void);
 
     XCTAssertEqual(result, 0, @"setuid_impl should succeed for virtual root");
 
-    uid_t uid = getuid_impl();
-    uid_t euid = geteuid_impl();
+    uint32_t uid = getuid_impl();
+    uint32_t euid = geteuid_impl();
 
     XCTAssertEqual(uid, 1000, @"UID should be set to 1000");
     XCTAssertEqual(euid, 1000, @"EUID should be set to 1000");
@@ -117,8 +115,8 @@ extern void cred_reset_to_defaults(void);
 
     XCTAssertEqual(result, 0, @"setgid_impl should succeed for virtual root");
 
-    gid_t gid = getgid_impl();
-    gid_t egid = getegid_impl();
+    uint32_t gid = getgid_impl();
+    uint32_t egid = getegid_impl();
 
     XCTAssertEqual(gid, 1000, @"GID should be set to 1000");
     XCTAssertEqual(egid, 1000, @"EGID should be set to 1000");
@@ -179,9 +177,9 @@ extern void cred_reset_to_defaults(void);
 }
 
 - (void)testGetresuidImplReportsRealEffectiveAndSavedUid {
-    uid_t ruid = 0;
-    uid_t euid = 0;
-    uid_t suid = 0;
+    uint32_t ruid = 0;
+    uint32_t euid = 0;
+    uint32_t suid = 0;
 
     XCTAssertEqual(setresuid_impl(1000, 1001, 1002), 0, @"root should set all uid slots");
     XCTAssertEqual(getresuid_impl(&ruid, &euid, &suid), 0, @"getresuid should copy all uid slots");
@@ -191,9 +189,9 @@ extern void cred_reset_to_defaults(void);
 }
 
 - (void)testGetresgidImplReportsRealEffectiveAndSavedGid {
-    gid_t rgid = 0;
-    gid_t egid = 0;
-    gid_t sgid = 0;
+    uint32_t rgid = 0;
+    uint32_t egid = 0;
+    uint32_t sgid = 0;
 
     XCTAssertEqual(setresgid_impl(2000, 2001, 2002), 0, @"root should set all gid slots");
     XCTAssertEqual(getresgid_impl(&rgid, &egid, &sgid), 0, @"getresgid should copy all gid slots");
@@ -233,8 +231,8 @@ extern void cred_reset_to_defaults(void);
 }
 
 - (void)testSetgroupsImplVirtualRootSetsSupplementaryGroups {
-    gid_t groups[2] = {3000, 3001};
-    gid_t observed[2] = {0, 0};
+    uint32_t groups[2] = {3000, 3001};
+    uint32_t observed[2] = {0, 0};
 
     XCTAssertEqual(setgroups_impl(2, groups), 0, @"virtual root should set supplementary groups");
     XCTAssertEqual(getgroups_impl(0, NULL), 2, @"getgroups size query should return group count");
@@ -244,8 +242,8 @@ extern void cred_reset_to_defaults(void);
 }
 
 - (void)testGetgroupsImplRejectsSmallBuffer {
-    gid_t groups[2] = {3000, 3001};
-    gid_t observed[1] = {0};
+    uint32_t groups[2] = {3000, 3001};
+    uint32_t observed[1] = {0};
 
     XCTAssertEqual(setgroups_impl(2, groups), 0, @"virtual root should set supplementary groups");
     errno = 0;
@@ -254,7 +252,7 @@ extern void cred_reset_to_defaults(void);
 }
 
 - (void)testSetgroupsImplNonRootFails {
-    gid_t groups[1] = {3000};
+    uint32_t groups[1] = {3000};
 
     XCTAssertEqual(setuid_impl(1000), 0, @"root should first become non-root");
     errno = 0;
@@ -267,44 +265,11 @@ extern void cred_reset_to_defaults(void);
  * ============================================================================ */
 
 - (void)testAllocCredWithDefaults {
-    struct cred *cred = alloc_cred();
-    XCTAssertTrue(cred != NULL, @"alloc_cred should succeed");
-    
-    /* Skip assertions if allocation failed to avoid crash */
-    if (cred == NULL) {
-        return;
-    }
-
-    /* Should have Orlix defaults, not host identity */
-    XCTAssertEqual(cred->uid, 0u, @"Default cred UID should be 0 (virtual root)");
-    XCTAssertEqual(cred->gid, 0u, @"Default cred GID should be 0 (virtual root)");
-    XCTAssertEqual(cred->euid, 0u, @"Default cred EUID should be 0 (virtual root)");
-    XCTAssertEqual(cred->egid, 0u, @"Default cred EGID should be 0 (virtual root)");
-    XCTAssertEqual(cred->suid, 0u, @"Default cred SUID should be 0");
-    XCTAssertEqual(cred->sgid, 0u, @"Default cred SGID should be 0");
-    XCTAssertEqual(cred->fsuid, 0u, @"Default cred FSUID should be 0");
-    XCTAssertEqual(cred->fsgid, 0u, @"Default cred FSGID should be 0");
-    XCTAssertEqual(cred->group_count, (size_t)0, @"Default cred should have no supplementary groups");
-    XCTAssertFalse(cred->no_new_privs, @"Default cred should allow exec privilege transitions");
-    XCTAssertEqual(cred->securebits, 0u, @"Default cred should have no securebits set");
-    XCTAssertNotEqual(cred->cap_permitted, 0ULL, @"Default root cred should have virtual permitted capabilities");
-    XCTAssertNotEqual(cred->cap_effective, 0ULL, @"Default root cred should have virtual effective capabilities");
-    XCTAssertNotEqual(cred->cap_bounding, 0ULL, @"Default root cred should have a virtual bounding set");
-
-    free_cred(cred);
+    XCTAssertEqual(credential_contract_alloc_cred_with_defaults(), 0, @"alloc_cred should expose virtual root defaults");
 }
 
 - (void)testCredReferenceCounting {
-    struct cred *cred = alloc_cred();
-    XCTAssertEqual(cred->refs, 1, @"Initial refcount should be 1");
-
-    get_cred(cred);
-    XCTAssertEqual(cred->refs, 2, @"After get_cred, refcount should be 2");
-
-    put_cred(cred);
-    XCTAssertEqual(cred->refs, 1, @"After put_cred, refcount should be 1");
-
-    put_cred(cred); /* Should not crash, might free */
+    XCTAssertEqual(credential_contract_cred_reference_counting(), 0, @"cred refs should increment and decrement predictably");
 }
 
 /* ============================================================================
@@ -312,9 +277,9 @@ extern void cred_reset_to_defaults(void);
  * ============================================================================ */
 
 - (void)testRootSetuidUpdatesSavedUid {
-    uid_t ruid = 0;
-    uid_t euid = 0;
-    uid_t suid = 0;
+    uint32_t ruid = 0;
+    uint32_t euid = 0;
+    uint32_t suid = 0;
 
     XCTAssertEqual(setresuid_impl(1000, 0, 2000), 0, @"root should establish real and saved uid state");
     XCTAssertEqual(getresuid_impl(&ruid, &euid, &suid), 0, @"getresuid should report established uid state");

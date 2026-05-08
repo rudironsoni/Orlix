@@ -27,7 +27,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
-#include "kernel/cred_internal.h"
+#include "kernel/cred.h"
 #include "kernel/mm.h"
 #include "kernel/signal.h"
 #include "kernel/task.h"
@@ -52,9 +52,6 @@ extern int rmdir_impl(const char *pathname);
 extern int mount(const char *source, const char *target, const char *filesystemtype,
                  unsigned long mountflags, const void *data);
 extern int umount(const char *target);
-extern int setuid_impl(uid_t uid);
-extern int setgid_impl(gid_t gid);
-extern int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
 extern int ftruncate_impl(int fd, int64_t length);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern bool signal_is_pending(const struct task_struct *task, int32_t sig);

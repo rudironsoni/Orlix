@@ -3,8 +3,9 @@
 #include <errno.h>
 
 #include "kernel/init.h"
-#include "kernel/cred_internal.h"
 #include "CgroupContract.h"
+
+extern void cred_reset_to_defaults(void);
 
 @interface CgroupTests : XCTestCase
 @end

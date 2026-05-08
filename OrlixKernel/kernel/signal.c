@@ -157,7 +157,7 @@ typedef struct {
 #undef sigset_t
 
 #include "signal.h"
-#include "cred_internal.h"
+#include "cred.h"
 #include "ptrace.h"
 #include "task.h"
 #include "wait_queue.h"

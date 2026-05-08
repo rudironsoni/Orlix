@@ -95,7 +95,7 @@ Rules:
 Current subsystem ownership in this repository:
 
 - process/task lifecycle: `OrlixKernel/kernel/task.c`, `OrlixKernel/kernel/fork.c`, `OrlixKernel/kernel/exit.c`, `OrlixKernel/kernel/wait.c`, `OrlixKernel/kernel/pid.c`
-- credentials: `OrlixKernel/kernel/cred.c`, `OrlixKernel/kernel/cred_internal.h`
+- credentials: `OrlixKernel/kernel/cred.c`, `OrlixKernel/kernel/cred.h`
 - signals: `OrlixKernel/kernel/signal.c`, `OrlixKernel/kernel/signal.h`
 - time and sync: `OrlixKernel/kernel/time.c`, `OrlixKernel/kernel/sync.c`
 - init/sys/resource/random: `OrlixKernel/kernel/init.c`, `OrlixKernel/kernel/sys.c`, `OrlixKernel/kernel/resource.c`, `OrlixKernel/kernel/random.c`

@@ -5,7 +5,7 @@
 #include "task.h"
 #include "signal.h"
 #include "cgroup.h"
-#include "cred_internal.h"
+#include "cred.h"
 #include "mm.h"
 #include "ptrace.h"
 #include "seccomp.h"
@@ -1985,30 +1985,30 @@ int task_exec_transition_impl(const char *path, const char *argv0) {
  * OrlixKernel's internal representation.
  */
 
-__attribute__((visibility("default"))) pid_t getpid(void) {
-    return (pid_t)getpid_impl();
+__attribute__((visibility("default"))) __kernel_pid_t getpid(void) {
+    return (__kernel_pid_t)getpid_impl();
 }
 
-__attribute__((visibility("default"))) pid_t getppid(void) {
-    return (pid_t)getppid_impl();
+__attribute__((visibility("default"))) __kernel_pid_t getppid(void) {
+    return (__kernel_pid_t)getppid_impl();
 }
 
-__attribute__((visibility("default"))) pid_t getpgrp(void) {
-    return (pid_t)getpgrp_impl();
+__attribute__((visibility("default"))) __kernel_pid_t getpgrp(void) {
+    return (__kernel_pid_t)getpgrp_impl();
 }
 
-__attribute__((visibility("default"))) pid_t getpgid(pid_t pid) {
-    return (pid_t)getpgid_impl((int32_t)pid);
+__attribute__((visibility("default"))) __kernel_pid_t getpgid(__kernel_pid_t pid) {
+    return (__kernel_pid_t)getpgid_impl((int32_t)pid);
 }
 
-__attribute__((visibility("default"))) int setpgid(pid_t pid, pid_t pgid) {
+__attribute__((visibility("default"))) int setpgid(__kernel_pid_t pid, __kernel_pid_t pgid) {
     return setpgid_impl((int32_t)pid, (int32_t)pgid);
 }
 
-__attribute__((visibility("default"))) pid_t setsid(void) {
-    return (pid_t)setsid_impl();
+__attribute__((visibility("default"))) __kernel_pid_t setsid(void) {
+    return (__kernel_pid_t)setsid_impl();
 }
 
-__attribute__((visibility("default"))) pid_t getsid(pid_t pid) {
-    return (pid_t)getsid_impl((int32_t)pid);
+__attribute__((visibility("default"))) __kernel_pid_t getsid(__kernel_pid_t pid) {
+    return (__kernel_pid_t)getsid_impl((int32_t)pid);
 }

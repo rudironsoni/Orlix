@@ -38,7 +38,7 @@
 #define environ (*_NSGetEnviron())
 
 #include "../kernel/signal.h"
-#include "../kernel/cred_internal.h"
+#include "../kernel/cred.h"
 #include "../runtime/native/registry.h"
 #include "fdtable.h"
 #include "vfs.h"

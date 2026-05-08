@@ -6,11 +6,10 @@
 #include <string.h>
 
 #include "UTSContract.h"
-#include "kernel/cred_internal.h"
+#include "kernel/cred.h"
 #include "kernel/task.h"
 #include "kernel/uts.h"
 
-extern int setuid_impl(uid_t uid);
 extern void cred_reset_to_defaults(void);
 
 static int expect_errno(int expected) {

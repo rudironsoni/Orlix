@@ -178,7 +178,7 @@
 #include "../fs/vfs.h"
 #include "../internal/private/kernel_socket_compat.h"
 #include "../internal/private/kernel_time_compat.h"
-#include "../kernel/cred_internal.h"
+#include "../kernel/cred.h"
 #include "../kernel/futex.h"
 #include "../kernel/mm.h"
 #include "../kernel/ptrace.h"
@@ -197,16 +197,18 @@ extern int umount2_impl(const char *target, int flags);
 extern int openat_impl(int dirfd, const char *pathname, int flags, uint32_t mode);
 extern int socket(int domain, int type, int protocol);
 extern int socketpair(int domain, int type, int protocol, int sv[2]);
-extern int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-extern int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+extern int connect(int sockfd, const struct sockaddr *addr, __u32 addrlen);
+extern int bind(int sockfd, const struct sockaddr *addr, __u32 addrlen);
 extern int listen(int sockfd, int backlog);
-extern int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-extern int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
+extern int accept(int sockfd, struct sockaddr *addr, __u32 *addrlen);
+extern int accept4(int sockfd, struct sockaddr *addr, __u32 *addrlen, int flags);
 extern int shutdown(int sockfd, int how);
-extern ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
-extern ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
-extern ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
-extern ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags);
+extern __kernel_ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+                               const struct sockaddr *dest_addr, __u32 addrlen);
+extern __kernel_ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
+                                 struct sockaddr *src_addr, __u32 *addrlen);
+extern __kernel_ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
+extern __kernel_ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags);
 struct linux_mmsghdr {
     struct msghdr msg_hdr;
     unsigned int msg_len;
@@ -214,10 +216,10 @@ struct linux_mmsghdr {
 extern int sendmmsg(int sockfd, struct linux_mmsghdr *msgvec, unsigned int vlen, int flags);
 extern int recvmmsg(int sockfd, struct linux_mmsghdr *msgvec, unsigned int vlen, int flags,
                     struct __kernel_timespec *timeout);
-extern int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-extern int getpeername(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-extern int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
-extern int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
+extern int getsockname(int sockfd, struct sockaddr *addr, __u32 *addrlen);
+extern int getpeername(int sockfd, struct sockaddr *addr, __u32 *addrlen);
+extern int setsockopt(int sockfd, int level, int optname, const void *optval, __u32 optlen);
+extern int getsockopt(int sockfd, int level, int optname, void *optval, __u32 *optlen);
 extern ssize_t read_impl(int fd, void *buf, size_t count);
 extern ssize_t write_impl(int fd, const void *buf, size_t count);
 struct iovec;
@@ -295,7 +297,7 @@ extern int execveat_impl(int dirfd, const char *pathname, char *const argv[], ch
 extern void exit_impl(int status);
 extern int nanosleep_impl(const struct timespec *req, struct timespec *rem);
 extern int gettimeofday_impl(struct timeval *tv, void *tz);
-extern int clock_gettime_impl(clockid_t clk_id, struct timespec *tp);
+extern int clock_gettime_impl(__kernel_clockid_t clk_id, struct timespec *tp);
 extern int interval_timer_set_impl(int which, const struct itimerval *new_value,
                                    struct itimerval *old_value);
 extern int interval_timer_get_impl(int which, struct itimerval *curr_value);
@@ -370,7 +372,7 @@ static long syscall_prlimit64(int32_t pid, int resource, const uint64_t *new_lim
     return 0;
 }
 
-static long syscall_clock_nanosleep(clockid_t clk_id, int flags,
+static long syscall_clock_nanosleep(__kernel_clockid_t clk_id, int flags,
                                     const struct __kernel_timespec *req,
                                     struct __kernel_timespec *rem) {
     struct timespec sleep_req;
@@ -392,14 +394,14 @@ static long syscall_clock_nanosleep(clockid_t clk_id, int flags,
             (req->tv_sec == now.tv_sec && req->tv_nsec <= now.tv_nsec)) {
             return 0;
         }
-        sleep_req.tv_sec = (time_t)(req->tv_sec - now.tv_sec);
+        sleep_req.tv_sec = (__kernel_old_time_t)(req->tv_sec - now.tv_sec);
         sleep_req.tv_nsec = (long)(req->tv_nsec - now.tv_nsec);
         if (sleep_req.tv_nsec < 0) {
             sleep_req.tv_sec--;
             sleep_req.tv_nsec += 1000000000L;
         }
     } else {
-        sleep_req.tv_sec = (time_t)req->tv_sec;
+        sleep_req.tv_sec = (__kernel_old_time_t)req->tv_sec;
         sleep_req.tv_nsec = (long)req->tv_nsec;
     }
 
@@ -978,25 +980,25 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_socketpair:
         return syscall_result((long)socketpair((int)arg0, (int)arg1, (int)arg2, (int *)(uintptr_t)arg3));
     case __NR_connect:
-        return syscall_result((long)connect((int)arg0, (const struct sockaddr *)(uintptr_t)arg1, (socklen_t)arg2));
+        return syscall_result((long)connect((int)arg0, (const struct sockaddr *)(uintptr_t)arg1, (__u32)arg2));
     case __NR_bind:
-        return syscall_result((long)bind((int)arg0, (const struct sockaddr *)(uintptr_t)arg1, (socklen_t)arg2));
+        return syscall_result((long)bind((int)arg0, (const struct sockaddr *)(uintptr_t)arg1, (__u32)arg2));
     case __NR_listen:
         return syscall_result((long)listen((int)arg0, (int)arg1));
     case __NR_accept:
         return syscall_result((long)accept((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
-                                          (socklen_t *)(uintptr_t)arg2));
+                                          (__u32 *)(uintptr_t)arg2));
     case __NR_accept4:
         return syscall_result((long)accept4((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
-                                           (socklen_t *)(uintptr_t)arg2, (int)arg3));
+                                           (__u32 *)(uintptr_t)arg2, (int)arg3));
     case __NR_shutdown:
         return syscall_result((long)shutdown((int)arg0, (int)arg1));
     case __NR_sendto:
         return syscall_result((long)sendto((int)arg0, (const void *)(uintptr_t)arg1, (size_t)arg2, (int)arg3,
-                                          (const struct sockaddr *)(uintptr_t)arg4, (socklen_t)arg5));
+                                          (const struct sockaddr *)(uintptr_t)arg4, (__u32)arg5));
     case __NR_recvfrom:
         return syscall_result((long)recvfrom((int)arg0, (void *)(uintptr_t)arg1, (size_t)arg2, (int)arg3,
-                                            (struct sockaddr *)(uintptr_t)arg4, (socklen_t *)(uintptr_t)arg5));
+                                            (struct sockaddr *)(uintptr_t)arg4, (__u32 *)(uintptr_t)arg5));
     case __NR_sendmsg:
         return syscall_result((long)sendmsg((int)arg0, (const struct msghdr *)(uintptr_t)arg1, (int)arg2));
     case __NR_recvmsg:
@@ -1010,16 +1012,16 @@ static long syscall_dispatch_inner_impl(long number,
                                              (struct __kernel_timespec *)(uintptr_t)arg4));
     case __NR_getsockname:
         return syscall_result((long)getsockname((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
-                                               (socklen_t *)(uintptr_t)arg2));
+                                               (__u32 *)(uintptr_t)arg2));
     case __NR_getpeername:
         return syscall_result((long)getpeername((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
-                                               (socklen_t *)(uintptr_t)arg2));
+                                               (__u32 *)(uintptr_t)arg2));
     case __NR_setsockopt:
         return syscall_result((long)setsockopt((int)arg0, (int)arg1, (int)arg2, (const void *)(uintptr_t)arg3,
-                                              (socklen_t)arg4));
+                                              (__u32)arg4));
     case __NR_getsockopt:
         return syscall_result((long)getsockopt((int)arg0, (int)arg1, (int)arg2, (void *)(uintptr_t)arg3,
-                                              (socklen_t *)(uintptr_t)arg4));
+                                              (__u32 *)(uintptr_t)arg4));
     case __NR_close:
         return syscall_result((long)close_impl((int)arg0));
     case __NR_close_range:
@@ -1189,7 +1191,7 @@ static long syscall_dispatch_inner_impl(long number,
                                  (struct timespec *)(uintptr_t)arg1);
             return ret < 0 ? -(long)errno : ret;
         case TASK_RESTART_POLL:
-            ret = poll_impl((struct pollfd *)(uintptr_t)arg0, (nfds_t)arg1, (int)arg2);
+            ret = poll_impl((struct pollfd *)(uintptr_t)arg0, (__kernel_ulong_t)arg1, (int)arg2);
             return ret < 0 ? -(long)errno : ret;
         case TASK_RESTART_PIPE_READ:
             ret = read_impl((int)arg0, (void *)(uintptr_t)arg1, (size_t)arg2);
@@ -1262,7 +1264,7 @@ static long syscall_dispatch_inner_impl(long number,
         if (timeout_ms == -2) {
             return -(long)errno;
         }
-        return syscall_result((long)poll_impl((struct pollfd *)(uintptr_t)arg0, (nfds_t)arg1, timeout_ms));
+        return syscall_result((long)poll_impl((struct pollfd *)(uintptr_t)arg0, (__kernel_ulong_t)arg1, timeout_ms));
     }
     case __NR_pselect6: {
         struct timeval timeout_value;
@@ -1409,29 +1411,33 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_getegid:
         return (long)getegid_impl();
     case __NR_setuid:
-        return syscall_result((long)setuid_impl((uid_t)arg0));
+        return syscall_result((long)setuid_impl((__kernel_uid32_t)arg0));
     case __NR_setgid:
-        return syscall_result((long)setgid_impl((gid_t)arg0));
+        return syscall_result((long)setgid_impl((__kernel_gid32_t)arg0));
     case __NR_setreuid:
-        return syscall_result((long)setreuid_impl((uid_t)arg0, (uid_t)arg1));
+        return syscall_result((long)setreuid_impl((__kernel_uid32_t)arg0, (__kernel_uid32_t)arg1));
     case __NR_setregid:
-        return syscall_result((long)setregid_impl((gid_t)arg0, (gid_t)arg1));
+        return syscall_result((long)setregid_impl((__kernel_gid32_t)arg0, (__kernel_gid32_t)arg1));
     case __NR_setresuid:
-        return syscall_result((long)setresuid_impl((uid_t)arg0, (uid_t)arg1, (uid_t)arg2));
+        return syscall_result((long)setresuid_impl((__kernel_uid32_t)arg0,
+                                                   (__kernel_uid32_t)arg1,
+                                                   (__kernel_uid32_t)arg2));
     case __NR_getresuid:
-        return syscall_result((long)getresuid_impl((uid_t *)(uintptr_t)arg0,
-                                                   (uid_t *)(uintptr_t)arg1,
-                                                   (uid_t *)(uintptr_t)arg2));
+        return syscall_result((long)getresuid_impl((__kernel_uid32_t *)(uintptr_t)arg0,
+                                                   (__kernel_uid32_t *)(uintptr_t)arg1,
+                                                   (__kernel_uid32_t *)(uintptr_t)arg2));
     case __NR_setresgid:
-        return syscall_result((long)setresgid_impl((gid_t)arg0, (gid_t)arg1, (gid_t)arg2));
+        return syscall_result((long)setresgid_impl((__kernel_gid32_t)arg0,
+                                                   (__kernel_gid32_t)arg1,
+                                                   (__kernel_gid32_t)arg2));
     case __NR_getresgid:
-        return syscall_result((long)getresgid_impl((gid_t *)(uintptr_t)arg0,
-                                                   (gid_t *)(uintptr_t)arg1,
-                                                   (gid_t *)(uintptr_t)arg2));
+        return syscall_result((long)getresgid_impl((__kernel_gid32_t *)(uintptr_t)arg0,
+                                                   (__kernel_gid32_t *)(uintptr_t)arg1,
+                                                   (__kernel_gid32_t *)(uintptr_t)arg2));
     case __NR_getgroups:
-        return syscall_result((long)getgroups_impl((int)arg0, (gid_t *)(uintptr_t)arg1));
+        return syscall_result((long)getgroups_impl((int)arg0, (__kernel_gid32_t *)(uintptr_t)arg1));
     case __NR_setgroups:
-        return syscall_result((long)setgroups_impl((int)arg0, (const gid_t *)(uintptr_t)arg1));
+        return syscall_result((long)setgroups_impl((int)arg0, (const __kernel_gid32_t *)(uintptr_t)arg1));
     case __NR_getpgid:
         return syscall_result((long)getpgid_impl((int32_t)arg0));
     case __NR_getsid:
@@ -1570,7 +1576,7 @@ static long syscall_dispatch_inner_impl(long number,
         if (!linux_ts) {
             return -EFAULT;
         }
-        ret = syscall_result((long)clock_gettime_impl((clockid_t)arg0, &backing_ts));
+        ret = syscall_result((long)clock_gettime_impl((__kernel_clockid_t)arg0, &backing_ts));
         if (ret < 0) {
             return ret;
         }
@@ -1590,7 +1596,7 @@ static long syscall_dispatch_inner_impl(long number,
         if (linux_req->tv_sec < 0 || linux_req->tv_nsec < 0 || linux_req->tv_nsec >= 1000000000LL) {
             return -EINVAL;
         }
-        req.tv_sec = (time_t)linux_req->tv_sec;
+        req.tv_sec = (__kernel_old_time_t)linux_req->tv_sec;
         req.tv_nsec = (long)linux_req->tv_nsec;
         if (nanosleep_impl(&req, linux_rem ? &rem : NULL) != 0) {
             if (linux_rem) {
@@ -1606,7 +1612,7 @@ static long syscall_dispatch_inner_impl(long number,
         return 0;
     }
     case __NR_clock_nanosleep:
-        return syscall_clock_nanosleep((clockid_t)arg0, (int)arg1,
+        return syscall_clock_nanosleep((__kernel_clockid_t)arg0, (int)arg1,
                                        (const struct __kernel_timespec *)(uintptr_t)arg2,
                                        (struct __kernel_timespec *)(uintptr_t)arg3);
     case __NR_gettimeofday: {
@@ -1655,10 +1661,10 @@ static long syscall_dispatch_inner_impl(long number,
         long ret;
 
         if (linux_new) {
-            backing_new.it_interval.tv_sec = (time_t)linux_new->it_interval.tv_sec;
-            backing_new.it_interval.tv_usec = (suseconds_t)linux_new->it_interval.tv_usec;
-            backing_new.it_value.tv_sec = (time_t)linux_new->it_value.tv_sec;
-            backing_new.it_value.tv_usec = (suseconds_t)linux_new->it_value.tv_usec;
+            backing_new.it_interval.tv_sec = (__kernel_old_time_t)linux_new->it_interval.tv_sec;
+            backing_new.it_interval.tv_usec = (__kernel_suseconds_t)linux_new->it_interval.tv_usec;
+            backing_new.it_value.tv_sec = (__kernel_old_time_t)linux_new->it_value.tv_sec;
+            backing_new.it_value.tv_usec = (__kernel_suseconds_t)linux_new->it_value.tv_usec;
             backing_new_ptr = &backing_new;
         }
         ret = syscall_result((long)interval_timer_set_impl((int)arg0, backing_new_ptr,

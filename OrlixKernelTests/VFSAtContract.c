@@ -21,7 +21,7 @@
 
 #include "fs/vfs.h"
 #include "linux_umount2_flags.h"
-#include "kernel/cred_internal.h"
+#include "kernel/cred.h"
 #include "kernel/task.h"
 #include "runtime/syscall.h"
 
@@ -66,12 +66,6 @@ extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
 extern int fstat_impl(int fd, struct linux_stat *statbuf);
-extern int setuid_impl(uid_t uid);
-extern uid_t setfsuid_impl(uid_t fsuid);
-extern gid_t setfsgid_impl(gid_t fsgid);
-extern int setresuid_impl(uid_t ruid, uid_t euid, uid_t suid);
-extern int setresgid_impl(gid_t rgid, gid_t egid, gid_t sgid);
-extern int setgroups_impl(int size, const gid_t *list);
 extern int mkdirat(int dirfd, const char *pathname, uint32_t mode);
 extern int unlinkat(int dirfd, const char *pathname, int flags);
 extern int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
@@ -81,8 +75,8 @@ extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char
 extern void cred_reset_to_defaults(void);
 extern int chmod(const char *pathname, uint32_t mode);
 extern int fchmod(int fd, uint32_t mode);
-extern int chown(const char *pathname, uid_t owner, gid_t group);
-extern int fchown(int fd, uid_t owner, gid_t group);
+extern int chown(const char *pathname, __kernel_uid32_t owner, __kernel_gid32_t group);
+extern int fchown(int fd, __kernel_uid32_t owner, __kernel_gid32_t group);
 extern int capget(cap_user_header_t header, cap_user_data_t data);
 extern int capset(cap_user_header_t header, const cap_user_data_t data);
 extern int statfs(const char *path, struct statfs *buf);
@@ -6729,7 +6723,7 @@ out:
 }
 
 int vfs_contract_supplementary_group_can_read_group_file(void) {
-    gid_t groups[1] = {3000};
+    __kernel_gid32_t groups[1] = {3000};
     int ret = -1;
 
     cred_reset_to_defaults();
@@ -6762,7 +6756,7 @@ out:
 }
 
 int vfs_contract_missing_supplementary_group_cannot_read_group_file(void) {
-    gid_t groups[1] = {3001};
+    __kernel_gid32_t groups[1] = {3001};
     int fd = -1;
     int ret = -1;
 
