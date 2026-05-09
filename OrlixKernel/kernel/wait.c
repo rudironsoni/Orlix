@@ -1,23 +1,20 @@
 /* OrlixKernel/kernel/wait.c
  * Virtual wait/waitpid implementation
  */
-#include <errno.h>
-#include <string.h>
-
-#include <linux/types.h>
-#include <asm/posix_types.h>
-#include <linux/sched.h>
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
-#include <linux/wait.h>
-#include <asm-generic/siginfo.h>
+#include <uapi/linux/types.h>
+#include <linux/errno.h>
+#include <uapi/asm/posix_types.h>
+#include <uapi/linux/sched.h>
+#include <uapi/asm-generic/signal.h>
+#include <uapi/linux/wait.h>
+#include <uapi/asm-generic/siginfo.h>
 
 #include "signal.h"
 #include "../fs/fdtable.h"
 #include "task.h"
 #include "wait.h"
 
+#include <linux/string.h>
 enum wait_report_kind {
     WAIT_REPORT_NONE = 0,
     WAIT_REPORT_EXITED,
@@ -102,8 +99,7 @@ __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options) {
     int matched_status;
     bool should_reap;
     if (!parent) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     kernel_mutex_lock(&parent->lock);
@@ -138,8 +134,7 @@ __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options) {
         if (!matched_any_child) {
             parent->waiters--;
             kernel_mutex_unlock(&parent->lock);
-            errno = ECHILD;
-            return -1;
+            return -ECHILD;
         }
 
         if (options & WNOHANG) {
@@ -152,8 +147,7 @@ __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options) {
             wait_record_restart(parent, pid, wstatus, options);
             parent->waiters--;
             kernel_mutex_unlock(&parent->lock);
-            errno = EINTR;
-            return -1;
+            return -EINTR;
         }
 
         kernel_cond_wait(&parent->wait_cond, &parent->lock);
@@ -162,8 +156,7 @@ __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options) {
             wait_record_restart(parent, pid, wstatus, options);
             parent->waiters--;
             kernel_mutex_unlock(&parent->lock);
-            errno = EINTR;
-            return -1;
+            return -EINTR;
         }
     }
 
@@ -224,13 +217,11 @@ int waitid_impl(int idtype, __kernel_pid_t id, void *infop_arg, int options, voi
 
     (void)rusage;
     if (!infop) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if ((options & ~(WNOHANG | WEXITED | WSTOPPED | WCONTINUED | WNOWAIT)) != 0 ||
         (options & (WEXITED | WSTOPPED | WCONTINUED)) == 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     switch (idtype) {
@@ -239,8 +230,7 @@ int waitid_impl(int idtype, __kernel_pid_t id, void *infop_arg, int options, voi
         break;
     case P_PID:
         if (id <= 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         selector = id;
         break;
@@ -252,25 +242,22 @@ int waitid_impl(int idtype, __kernel_pid_t id, void *infop_arg, int options, voi
 
         entry = get_fd_entry_impl((int)id);
         if (!entry) {
-            errno = EBADF;
-            return -1;
+            return -EBADF;
         }
         target_task = pidfd_get_task_entry_impl(entry);
         put_fd_entry_impl(entry);
         if (!target_task) {
-            return -1;
+            return -ECHILD;
         }
         if (!parent || target_task->parent != parent) {
             free_task(target_task);
-            errno = ECHILD;
-            return -1;
+            return -ECHILD;
         }
         selector = target_task->pid;
         break;
     }
     default:
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     waited = waitpid_impl(selector, &status, options);
@@ -278,7 +265,7 @@ int waitid_impl(int idtype, __kernel_pid_t id, void *infop_arg, int options, voi
         free_task(target_task);
     }
     if (waited < 0) {
-        return -1;
+        return (int)waited;
     }
     memset(infop, 0, sizeof(*infop));
     if (waited == 0) {
@@ -306,33 +293,4 @@ int waitid_impl(int idtype, __kernel_pid_t id, void *infop_arg, int options, voi
 
 __kernel_pid_t wait_impl(int *wstatus) {
     return waitpid_impl(-1, wstatus, 0);
-}
-
-/* ============================================================================
- * PUBLIC CANONICAL WRAPPERS
- * ============================================================================
- * These wrappers expose Linux UAPI kernel pid types while keeping
- * OrlixKernel's internal wait implementation fixed-width.
- */
-
-__attribute__((visibility("default"))) __kernel_pid_t waitpid(__kernel_pid_t pid, int *wstatus, int options) {
-    return waitpid_impl(pid, wstatus, options);
-}
-
-__attribute__((visibility("default"))) __kernel_pid_t wait4(__kernel_pid_t pid, int *wstatus, int options,
-                                                            void *rusage) {
-    return wait4_impl(pid, wstatus, options, rusage);
-}
-
-__attribute__((visibility("default"))) __kernel_pid_t wait(int *wstatus) {
-    return wait_impl(wstatus);
-}
-
-__attribute__((visibility("default"))) __kernel_pid_t wait3(int *wstatus, int options, void *rusage) {
-    return wait4_impl(-1, wstatus, options, rusage);
-}
-
-__attribute__((visibility("default"))) int waitid(int idtype, __kernel_pid_t id, siginfo_t *infop,
-                                                  int options) {
-    return waitid_impl(idtype, id, infop, options, NULL);
 }

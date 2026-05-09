@@ -189,10 +189,6 @@
 #include "../kernel/uts.h"
 #include "../kernel/wait.h"
 
-struct sockaddr;
-struct user_msghdr;
-struct mmsghdr;
-
 extern int mount_impl(const char *source, const char *target,
                       const char *filesystemtype, unsigned long mountflags,
                       const void *data);
@@ -201,23 +197,23 @@ extern int umount2_impl(const char *target, int flags);
 extern int openat_impl(int dirfd, const char *pathname, int flags, uint32_t mode);
 extern long sys_socket(int domain, int type, int protocol);
 extern long sys_socketpair(int domain, int type, int protocol, int *sv);
-extern long sys_connect(int sockfd, struct sockaddr *addr, int addrlen);
-extern long sys_bind(int sockfd, struct sockaddr *addr, int addrlen);
+extern long sys_connect(int sockfd, void *addr, int addrlen);
+extern long sys_bind(int sockfd, void *addr, int addrlen);
 extern long sys_listen(int sockfd, int backlog);
-extern long sys_accept(int sockfd, struct sockaddr *addr, int *addrlen);
-extern long sys_accept4(int sockfd, struct sockaddr *addr, int *addrlen, int flags);
+extern long sys_accept(int sockfd, void *addr, int *addrlen);
+extern long sys_accept4(int sockfd, void *addr, int *addrlen, int flags);
 extern long sys_shutdown(int sockfd, int how);
 extern long sys_sendto(int sockfd, void *buf, size_t len, unsigned int flags,
-                       struct sockaddr *dest_addr, int addrlen);
+                       void *dest_addr, int addrlen);
 extern long sys_recvfrom(int sockfd, void *buf, size_t len, unsigned int flags,
-                         struct sockaddr *src_addr, int *addrlen);
-extern long sys_sendmsg(int sockfd, struct user_msghdr *msg, unsigned int flags);
-extern long sys_recvmsg(int sockfd, struct user_msghdr *msg, unsigned int flags);
-extern long sys_sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsigned int flags);
-extern long sys_recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsigned int flags,
+                         void *src_addr, int *addrlen);
+extern long sys_sendmsg(int sockfd, void *msg, unsigned int flags);
+extern long sys_recvmsg(int sockfd, void *msg, unsigned int flags);
+extern long sys_sendmmsg(int sockfd, void *msgvec, unsigned int vlen, unsigned int flags);
+extern long sys_recvmmsg(int sockfd, void *msgvec, unsigned int vlen, unsigned int flags,
                          struct __kernel_timespec *timeout);
-extern long sys_getsockname(int sockfd, struct sockaddr *addr, int *addrlen);
-extern long sys_getpeername(int sockfd, struct sockaddr *addr, int *addrlen);
+extern long sys_getsockname(int sockfd, void *addr, int *addrlen);
+extern long sys_getpeername(int sockfd, void *addr, int *addrlen);
 extern long sys_setsockopt(int sockfd, int level, int optname, char *optval, int optlen);
 extern long sys_getsockopt(int sockfd, int level, int optname, char *optval, int *optlen);
 extern ssize_t read_impl(int fd, void *buf, size_t count);
@@ -980,41 +976,41 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_socketpair:
         return syscall_result(sys_socketpair((int)arg0, (int)arg1, (int)arg2, (int *)(uintptr_t)arg3));
     case __NR_connect:
-        return syscall_result(sys_connect((int)arg0, (struct sockaddr *)(uintptr_t)arg1, (int)arg2));
+        return syscall_result(sys_connect((int)arg0, (void *)(uintptr_t)arg1, (int)arg2));
     case __NR_bind:
-        return syscall_result(sys_bind((int)arg0, (struct sockaddr *)(uintptr_t)arg1, (int)arg2));
+        return syscall_result(sys_bind((int)arg0, (void *)(uintptr_t)arg1, (int)arg2));
     case __NR_listen:
         return syscall_result(sys_listen((int)arg0, (int)arg1));
     case __NR_accept:
-        return syscall_result(sys_accept((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
+        return syscall_result(sys_accept((int)arg0, (void *)(uintptr_t)arg1,
                                          (int *)(uintptr_t)arg2));
     case __NR_accept4:
-        return syscall_result(sys_accept4((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
+        return syscall_result(sys_accept4((int)arg0, (void *)(uintptr_t)arg1,
                                           (int *)(uintptr_t)arg2, (int)arg3));
     case __NR_shutdown:
         return syscall_result(sys_shutdown((int)arg0, (int)arg1));
     case __NR_sendto:
         return syscall_result(sys_sendto((int)arg0, (void *)(uintptr_t)arg1, (size_t)arg2, (unsigned int)arg3,
-                                         (struct sockaddr *)(uintptr_t)arg4, (int)arg5));
+                                         (void *)(uintptr_t)arg4, (int)arg5));
     case __NR_recvfrom:
         return syscall_result(sys_recvfrom((int)arg0, (void *)(uintptr_t)arg1, (size_t)arg2, (unsigned int)arg3,
-                                           (struct sockaddr *)(uintptr_t)arg4, (int *)(uintptr_t)arg5));
+                                           (void *)(uintptr_t)arg4, (int *)(uintptr_t)arg5));
     case __NR_sendmsg:
-        return syscall_result(sys_sendmsg((int)arg0, (struct user_msghdr *)(uintptr_t)arg1, (unsigned int)arg2));
+        return syscall_result(sys_sendmsg((int)arg0, (void *)(uintptr_t)arg1, (unsigned int)arg2));
     case __NR_recvmsg:
-        return syscall_result(sys_recvmsg((int)arg0, (struct user_msghdr *)(uintptr_t)arg1, (unsigned int)arg2));
+        return syscall_result(sys_recvmsg((int)arg0, (void *)(uintptr_t)arg1, (unsigned int)arg2));
     case __NR_sendmmsg:
-        return syscall_result(sys_sendmmsg((int)arg0, (struct mmsghdr *)(uintptr_t)arg1,
+        return syscall_result(sys_sendmmsg((int)arg0, (void *)(uintptr_t)arg1,
                                            (unsigned int)arg2, (unsigned int)arg3));
     case __NR_recvmmsg:
-        return syscall_result(sys_recvmmsg((int)arg0, (struct mmsghdr *)(uintptr_t)arg1,
+        return syscall_result(sys_recvmmsg((int)arg0, (void *)(uintptr_t)arg1,
                                            (unsigned int)arg2, (unsigned int)arg3,
                                            (struct __kernel_timespec *)(uintptr_t)arg4));
     case __NR_getsockname:
-        return syscall_result(sys_getsockname((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
+        return syscall_result(sys_getsockname((int)arg0, (void *)(uintptr_t)arg1,
                                               (int *)(uintptr_t)arg2));
     case __NR_getpeername:
-        return syscall_result(sys_getpeername((int)arg0, (struct sockaddr *)(uintptr_t)arg1,
+        return syscall_result(sys_getpeername((int)arg0, (void *)(uintptr_t)arg1,
                                               (int *)(uintptr_t)arg2));
     case __NR_setsockopt:
         return syscall_result(sys_setsockopt((int)arg0, (int)arg1, (int)arg2, (char *)(uintptr_t)arg3,
@@ -1119,8 +1115,11 @@ static long syscall_dispatch_inner_impl(long number,
         if (arg2) {
             oldact_ptr = &oldact;
         }
-        if (do_sigaction((int32_t)arg0, act_ptr, oldact_ptr) != 0) {
-            return -(long)errno;
+        {
+            int ret = do_sigaction((int32_t)arg0, act_ptr, oldact_ptr);
+            if (ret != 0) {
+                return ret;
+            }
         }
         if (arg2) {
             syscall_sigaction_to_linux(&oldact, (struct syscall_sigaction_frame *)(uintptr_t)arg2);
@@ -1140,8 +1139,11 @@ static long syscall_dispatch_inner_impl(long number,
         if (arg1) {
             old_stack_ptr = &old_stack;
         }
-        if (do_sigaltstack(new_stack_ptr, old_stack_ptr) != 0) {
-            return -(long)errno;
+        {
+            int ret = do_sigaltstack(new_stack_ptr, old_stack_ptr);
+            if (ret != 0) {
+                return ret;
+            }
         }
         if (arg1) {
             syscall_sigaltstack_to_linux(&old_stack, (syscall_sigaltstack_frame *)(uintptr_t)arg1);
@@ -1238,8 +1240,11 @@ static long syscall_dispatch_inner_impl(long number,
         if (arg2) {
             oldset_ptr = &oldset;
         }
-        if (do_sigprocmask((int)arg0, set_ptr, oldset_ptr) != 0) {
-            return -(long)errno;
+        {
+            int ret = do_sigprocmask((int)arg0, set_ptr, oldset_ptr);
+            if (ret != 0) {
+                return ret;
+            }
         }
         if (arg2 && syscall_copy_mask_to_sigset(&oldset, (uint64_t *)(uintptr_t)arg2, (size_t)arg3) != 0) {
             return -(long)errno;

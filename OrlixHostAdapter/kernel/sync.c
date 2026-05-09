@@ -12,16 +12,21 @@
 
 #include <errno.h>
 #include <linux/time_types.h>
+#include <stddef.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 
-#include "kernel_sync.h"
-#include "internal/private/kernel_signal_bridge_contract.h"
-#include "task_current_contract.h"
+#include "exit.h"
+#include "kthread.h"
+#include "kernel/signal.h"
+#include "mutex.h"
+#include "timekeeping.h"
+#include "current.h"
 
 static const clockid_t host_nsecs_clock_realtime = _CLOCK_REALTIME;
 static const clockid_t host_nsecs_clock_monotonic = _CLOCK_MONOTONIC;
@@ -473,4 +478,8 @@ int kernel_clock_gettime(int clock_id, struct __kernel_timespec *tp) {
     tp->tv_sec = (__kernel_old_time_t)(ns / 1000000000ULL);
     tp->tv_nsec = (long)(ns % 1000000000ULL);
     return 0;
+}
+
+void process_terminate(int status) {
+    _Exit(status);
 }

@@ -14,8 +14,8 @@
 
 #include "fdtable.h"
 #include "pty.h"
-#include "internal/private/backing_ioctl.h"
-#include "fs_sync.h"
+#include "internal/fs/ioctl.h"
+#include "internal/fs/lock.h"
 
 int ioctl_impl(int fd, unsigned long request, void *arg) {
     if (fd < 0 || fd >= NR_OPEN_DEFAULT) {

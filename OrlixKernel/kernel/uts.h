@@ -7,6 +7,8 @@
 #ifndef KERNEL_UTS_H
 #define KERNEL_UTS_H
 
+#include <linux/types.h>
+
 #include <stddef.h>
 #include <stdint.h>
 

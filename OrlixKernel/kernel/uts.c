@@ -3,14 +3,17 @@
 #include "cred.h"
 #include "task.h"
 
-#include <errno.h>
+#include <linux/errno.h>
+#include <linux/gfp_types.h>
+#include <linux/string.h>
 #include <stdatomic.h>
 #include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include <linux/capability.h>
 #include <linux/utsname.h>
+
+extern void *__kmalloc_noprof(size_t size, gfp_t flags);
+extern void kfree(const void *objp);
 
 struct uts_namespace {
     atomic_int refs;
@@ -90,7 +93,7 @@ void uts_put(struct uts_namespace *ns) {
         return;
     }
     kernel_mutex_destroy(&ns->lock);
-    free(ns);
+    kfree(ns);
 }
 
 struct uts_namespace *uts_dup(struct uts_namespace *ns) {
@@ -104,7 +107,7 @@ struct uts_namespace *uts_dup(struct uts_namespace *ns) {
         uts_put(ns);
     }
 
-    copy = calloc(1, sizeof(*copy));
+    copy = __kmalloc_noprof(sizeof(*copy), GFP_KERNEL | __GFP_ZERO);
     if (!copy) {
         return NULL;
     }
@@ -181,8 +184,7 @@ static int uts_copy_from_namespace(char *dst, size_t len, const char *src) {
     size_t srclen;
 
     if (!dst && len > 0) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (len == 0) {
         return 0;
@@ -191,8 +193,7 @@ static int uts_copy_from_namespace(char *dst, size_t len, const char *src) {
     srclen = strlen(src);
     if (len <= srclen) {
         memcpy(dst, src, len);
-        errno = ENAMETOOLONG;
-        return -1;
+        return -ENAMETOOLONG;
     }
 
     memcpy(dst, src, srclen + 1);
@@ -204,18 +205,15 @@ static int uts_set_name(struct uts_namespace *ns, char dst[__NEW_UTS_LEN + 1],
     struct cred *cred;
 
     if (!src && len > 0) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (len > __NEW_UTS_LEN) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     cred = get_current_cred();
     if (!cred_has_cap_in_user_namespace(cred, uts_namespace_owner_user_ns_id(ns), CAP_SYS_ADMIN)) {
-        errno = EPERM;
-        return -1;
+        return -EPERM;
     }
 
     if (len > 0) {
@@ -229,8 +227,7 @@ int uname_impl(struct new_utsname *buf) {
     struct uts_namespace *ns;
 
     if (!buf) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     uts_init_initial_namespace();
@@ -304,15 +301,13 @@ int uts_unshare_current(void) {
     struct uts_namespace *copy;
 
     if (!task) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     uts_init_initial_namespace();
     copy = uts_dup(current_uts_namespace());
     if (!copy) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
 
     if (task->uts_ns) {
@@ -320,36 +315,4 @@ int uts_unshare_current(void) {
     }
     task->uts_ns = copy;
     return 0;
-}
-
-__attribute__((visibility("default"))) int uname(struct new_utsname *buf) {
-    return uname_impl(buf);
-}
-
-__attribute__((visibility("default"))) int gethostname(char *name, size_t len) {
-    return gethostname_impl(name, len);
-}
-
-__attribute__((visibility("default"))) int sethostname(const char *name, int len) {
-    if (len < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    return sethostname_impl(name, (size_t)len);
-}
-
-__attribute__((visibility("default"))) int getdomainname(char *name, int len) {
-    if (len < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    return getdomainname_impl(name, (size_t)len);
-}
-
-__attribute__((visibility("default"))) int setdomainname(const char *name, int len) {
-    if (len < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    return setdomainname_impl(name, (size_t)len);
 }

@@ -52,7 +52,7 @@ struct linux_dirent64 {
 
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern char *getcwd_impl(char *buf, size_t size);
-#include "internal/private/backing_roots.h"
+#include "internal/fs/rootfs.h"
 extern int stat_impl(const char *path, struct stat *statbuf);
 extern int fstat_impl(int fd, struct stat *statbuf);
 extern int lstat_impl(const char *path, struct stat *statbuf);

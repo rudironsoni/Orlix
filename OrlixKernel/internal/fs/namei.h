@@ -1,5 +1,5 @@
-#ifndef ORLIX_INTERNAL_PRIVATE_BACKING_PATH_H
-#define ORLIX_INTERNAL_PRIVATE_BACKING_PATH_H
+#ifndef INTERNAL_FS_NAMEI_H
+#define INTERNAL_FS_NAMEI_H
 
 #include <stddef.h>
 #include <stdint.h>

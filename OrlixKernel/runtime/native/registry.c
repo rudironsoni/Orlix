@@ -1,11 +1,14 @@
 #include "registry.h"
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "../../fs/fdtable.h"
 #include "../../fs/vfs.h"
-#include "kernel_sync.h"
+#include "../../internal/mutex.h"
+
+#include <linux/gfp_types.h>
+#include <linux/string.h>
+
+extern void *__kmalloc_noprof(size_t size, gfp_t flags);
+extern void kfree(const void *objp);
 
 static native_cmd_t *registry_head = NULL;
 static kernel_mutex_t registry_lock = KERNEL_MUTEX_INITIALIZER;
@@ -19,10 +22,10 @@ void native_registry_clear(void) {
     native_cmd_t *cmd = registry_head;
     while (cmd) {
         native_cmd_t *next = cmd->next;
-        free(cmd->path);
-        free(cmd->artifact_path);
-        free(cmd->abi);
-        free(cmd);
+        kfree(cmd->path);
+        kfree(cmd->artifact_path);
+        kfree(cmd->abi);
+        kfree(cmd);
         cmd = next;
     }
     registry_head = NULL;
@@ -44,27 +47,27 @@ int native_register_artifact(const char *path, const char *artifact_path, const 
         return -1;
     }
 
-    native_cmd_t *cmd = malloc(sizeof(native_cmd_t));
+    native_cmd_t *cmd = __kmalloc_noprof(sizeof(native_cmd_t), GFP_KERNEL);
     if (!cmd) {
         return -1;
     }
 
-    cmd->path = strdup(normalized);
+    cmd->path = kstrdup(normalized, GFP_KERNEL);
     if (!cmd->path) {
-        free(cmd);
+        kfree(cmd);
         return -1;
     }
-    cmd->artifact_path = strdup(artifact_path);
+    cmd->artifact_path = kstrdup(artifact_path, GFP_KERNEL);
     if (!cmd->artifact_path) {
-        free(cmd->path);
-        free(cmd);
+        kfree(cmd->path);
+        kfree(cmd);
         return -1;
     }
-    cmd->abi = strdup(abi);
+    cmd->abi = kstrdup(abi, GFP_KERNEL);
     if (!cmd->abi) {
-        free(cmd->artifact_path);
-        free(cmd->path);
-        free(cmd);
+        kfree(cmd->artifact_path);
+        kfree(cmd->path);
+        kfree(cmd);
         return -1;
     }
     cmd->entry = entry;

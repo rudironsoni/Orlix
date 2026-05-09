@@ -1,7 +1,7 @@
 #ifndef PATH_H
 #define PATH_H
 
-#include <stdbool.h>
+#include <linux/types.h>
 #include <stddef.h>
 
 #define MAX_PATH 4096

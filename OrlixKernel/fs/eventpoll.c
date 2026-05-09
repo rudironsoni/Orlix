@@ -11,7 +11,7 @@
 #include <string.h>
 
 #include "fdtable.h"
-#include "fs_sync.h"
+#include "internal/fs/lock.h"
 #include "poll.h"
 #include "../kernel/task.h"
 

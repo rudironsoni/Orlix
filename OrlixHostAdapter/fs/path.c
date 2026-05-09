@@ -6,7 +6,7 @@
  * Linux-owner code in fs/namei.c
  */
 
-#include "backing_path.h"
+#include "internal/fs/namei.h"
 #include "backing_stat_translate.h"
 
 /* Darwin headers - these define S_IFMT, S_ISDIR, etc. which are compatible

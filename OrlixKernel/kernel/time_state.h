@@ -10,8 +10,6 @@
 
 #include <stddef.h>
 
-#include <linux/time_types.h>
-
-int kernel_clock_gettime(int clock_id, struct __kernel_timespec *tp);
+#include "internal/timekeeping.h"
 
 #endif /* KERNEL_TIME_INTERNAL_H */

@@ -554,11 +554,11 @@ int task_exec_contract_no_new_privs_setid_exec_cannot_reacquire_file_ids(void) {
         errno = EPROTO;
         goto out;
     }
-    if (seteuid_impl(2000) != -1 || errno != EPERM) {
+    if (seteuid_impl(2000) != -EPERM) {
         errno = EACCES;
         goto out;
     }
-    if (setegid_impl(3000) != -1 || errno != EPERM) {
+    if (setegid_impl(3000) != -EPERM) {
         errno = ENODATA;
         goto out;
     }
@@ -577,8 +577,7 @@ int task_exec_contract_no_new_privs_is_irreversible(void) {
     if (prctl_impl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
         return -1;
     }
-    errno = 0;
-    if (prctl_impl(PR_SET_NO_NEW_PRIVS, 0, 0, 0, 0) != -1 || errno != EINVAL) {
+    if (prctl_impl(PR_SET_NO_NEW_PRIVS, 0, 0, 0, 0) != -EINVAL) {
         errno = EPROTO;
         return -1;
     }
@@ -748,13 +747,11 @@ int task_exec_contract_securebits_keepcaps_lock_is_enforced(void) {
         errno = EPROTO;
         return -1;
     }
-    errno = 0;
-    if (prctl_impl(PR_SET_KEEPCAPS, 0, 0, 0, 0) != -1 || errno != EPERM) {
+    if (prctl_impl(PR_SET_KEEPCAPS, 0, 0, 0, 0) != -EPERM) {
         errno = EPROTO;
         return -1;
     }
-    errno = 0;
-    if (prctl_impl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS_LOCKED, 0, 0, 0) != -1 || errno != EPERM) {
+    if (prctl_impl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS_LOCKED, 0, 0, 0) != -EPERM) {
         errno = EPROTO;
         return -1;
     }
@@ -1051,8 +1048,7 @@ int task_exec_contract_ambient_raise_requires_inheritable_cap(void) {
     if (capset(&header, data) != 0) {
         return -1;
     }
-    errno = 0;
-    if (prctl_impl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, CAP_SETUID, 0, 0) != -1 || errno != EPERM) {
+    if (prctl_impl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, CAP_SETUID, 0, 0) != -EPERM) {
         errno = EPROTO;
         return -1;
     }
@@ -1078,8 +1074,7 @@ int task_exec_contract_securebits_block_ambient_raise(void) {
     if (prctl_impl(PR_SET_SECUREBITS, SECBIT_NO_CAP_AMBIENT_RAISE, 0, 0, 0) != 0) {
         return -1;
     }
-    errno = 0;
-    if (prctl_impl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, CAP_SETUID, 0, 0) != -1 || errno != EPERM) {
+    if (prctl_impl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, CAP_SETUID, 0, 0) != -EPERM) {
         errno = EPROTO;
         return -1;
     }

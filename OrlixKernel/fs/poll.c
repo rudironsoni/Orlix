@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 #include "fdtable.h"
-#include "internal/private/backing_poll.h"
+#include "internal/fs/poll.h"
 #include "pipe.h"
 #include "pty.h"
 #include "kernel/net/socket.h"

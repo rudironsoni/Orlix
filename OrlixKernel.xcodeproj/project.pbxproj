@@ -27,9 +27,10 @@
 		2DD33877090FD853BD6D1EF3 /* TaskExecContract.c in Sources */ = {isa = PBXBuildFile; fileRef = B0503AE757709A36F1E82F32 /* TaskExecContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		2FAB1B9DFB1B35B4A4CD7368 /* stat.c in Sources */ = {isa = PBXBuildFile; fileRef = 40D9C511809CE69C33C72FA5 /* stat.c */; };
 		32250F1BD4DE753969CB28CF /* readdir.c in Sources */ = {isa = PBXBuildFile; fileRef = 731FD0CE5EECDDF824B58204 /* readdir.c */; };
+		33564FA082EBBC42B74E822B /* futex.c in Sources */ = {isa = PBXBuildFile; fileRef = 88398636C815C8EC0278F5F2 /* futex.c */; };
 		34D27A8A1EA1C280455CC5FD /* LinuxUAPICompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 6F0D2C981B4804AA4EE393A6 /* LinuxUAPICompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		36F0EB3AD4A943C9E4257687 /* random.c in Sources */ = {isa = PBXBuildFile; fileRef = B641675306E5E0E4C108ADD7 /* random.c */; };
-		38F2CC16EE3FEB7AD9ED8123 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = 2E4082ED2FFD96285D7A4CB9 /* sync.c */; };
+		38F2CC16EE3FEB7AD9ED8123 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = 2E4082ED2FFD96285D7A4CB9 /* sync.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		3C77C051B455DB725C05136B /* KernelOwnerCompatCompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 401F14541905D4566D1F3EA9 /* KernelOwnerCompatCompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		3C94E0FBE2F7AF0E96199284 /* SeccompTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 719FE383FDCB72E5E6979162 /* SeccompTests.m */; };
 		3DEC5F04961D44E1D855B171 /* WaitJobControlTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F684F5EB4A5943021FF5118 /* WaitJobControlTests.m */; };
@@ -44,6 +45,7 @@
 		4EA6FCFD08901D10BFEE2105 /* PTYSessionIoctlShim.c in Sources */ = {isa = PBXBuildFile; fileRef = F57E103ADA9BC025D9D82EB7 /* PTYSessionIoctlShim.c */; };
 		4EBC42471423BC6539FF3751 /* EpollTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 1BE8E6D3279E4DD0231DB711 /* EpollTests.m */; };
 		4FE797A1947867AF6E7029B8 /* pid.c in Sources */ = {isa = PBXBuildFile; fileRef = 7E00B066B66077513D8B0311 /* pid.c */; };
+		516A5DCCA693E90586FFAD37 /* uts.c in Sources */ = {isa = PBXBuildFile; fileRef = 3DBEE8F62D6B7FC0279C5C7F /* uts.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi"; }; };
 		5184B8BF2908F64EAB093706 /* ExecFdContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 5228446503673D30EA9131D1 /* ExecFdContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		52D4B7C8CB5F79B72E75A1ED /* FutexTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 1570F0727B571C5F59F7010C /* FutexTests.m */; };
 		5303358A2EC009B4C52D73C2 /* PtraceTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F0ED8E01ADDE4B3A72C3B178 /* PtraceTests.m */; };
@@ -53,6 +55,7 @@
 		56DFA59FC3F84C6810B66D6D /* PTYSessionTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B7ADA4794F1F967610CA8C7B /* PTYSessionTests.m */; };
 		56FBB369D5CC5796230FED34 /* futex.c in Sources */ = {isa = PBXBuildFile; fileRef = 389E1E92B3D5BEE78DCDBD30 /* futex.c */; };
 		5A9FFF07587876991B827389 /* RootfsBootstrapTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 7F916145DEF7F98DAE9FBFA2 /* RootfsBootstrapTests.m */; };
+		5E2C786BDB26B2AFA9F713AB /* backing_stat_translate.c in Sources */ = {isa = PBXBuildFile; fileRef = 92495377427D0B0247DCF63F /* backing_stat_translate.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		62C62B85F7F6F1410A8BA373 /* time.c in Sources */ = {isa = PBXBuildFile; fileRef = 4BDDBF6ECE1BEAADFDA6BD68 /* time.c */; };
 		665083D290BBBBB59F6E8119 /* ExecFdTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4156CE0CC76816B3F027B20D /* ExecFdTests.m */; };
 		6A17D2ABA54356F7816A6701 /* DevfsTests.m in Sources */ = {isa = PBXBuildFile; fileRef = ED4F0CE7925DB368D2A852B2 /* DevfsTests.m */; };
@@ -82,15 +85,18 @@
 		8E026B49667A3BDA746B459B /* mount.c in Sources */ = {isa = PBXBuildFile; fileRef = FE0A26565B07B4B0CD90281E /* mount.c */; };
 		8E4CC193B5ABC9C2E5F6AB67 /* wait_queue.c in Sources */ = {isa = PBXBuildFile; fileRef = FF793129AF48749B5C3625CC /* wait_queue.c */; };
 		907666610816A5C81E76691D /* signal.c in Sources */ = {isa = PBXBuildFile; fileRef = 71BB262C2DE2743B8A01A870 /* signal.c */; };
-		92AA2BD7063712EE90984DAB /* uio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8CF0AA8646A0B520A0C2E146 /* uio.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
+		92AA2BD7063712EE90984DAB /* uio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8CF0AA8646A0B520A0C2E146 /* uio.c */; };
 		9388228A8BF1046FB34EC8C2 /* MLibCPackageHeadersCompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = 5662039481CA0192921135B8 /* MLibCPackageHeadersCompileSmoke.c */; settings = {COMPILER_FLAGS = "-I$(SRCROOT)/OrlixMLibC/include -I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		94627BDF9AEBAD458988A6C5 /* KernelInitTests.m in Sources */ = {isa = PBXBuildFile; fileRef = C1668EA7256DBBE1A05722FC /* KernelInitTests.m */; };
 		9728FC77F5B41BE740DAE199 /* backing_io_internal.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = A37E8EB84816A9AF1E22BCAC /* backing_io_internal.h */; };
+		9A00B162F28D8052CBB74FD1 /* cred.c in Sources */ = {isa = PBXBuildFile; fileRef = 1ABFC2E88DDFD5957A0384D6 /* cred.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		9A3F4D9DF2129BCC1D06B88D /* FcntlContract.c in Sources */ = {isa = PBXBuildFile; fileRef = CBA2E6949A6475EAEB88DDFA /* FcntlContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		9B63BEA468AB1045DA441CF0 /* seccomp.c in Sources */ = {isa = PBXBuildFile; fileRef = 95B7770B3E267497F7AF7727 /* seccomp.c */; };
+		9EBF078C306AE21296E95AF7 /* resource.c in Sources */ = {isa = PBXBuildFile; fileRef = DB3B870AC37F546AFFAED2B4 /* resource.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi"; }; };
 		9F112DBB1B7D9E112B90FB4F /* TaskGroupTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 480522F1C7742EED876A3B98 /* TaskGroupTests.m */; };
 		9F2ABAC830AE1F9D851857BE /* libOrlixHostAdapter.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0378D449A2474BB6F384F7C4 /* libOrlixHostAdapter.a */; };
 		9FABE36CA6C1B493993CF3AD /* PTYJobControlTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D022D522C6FD847FBFE194F /* PTYJobControlTests.m */; };
+		A1AC017EB52CAC075E5C364A /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = 490D301AAA45DFA0E328A872 /* wait.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi"; }; };
 		A505B14DBA60A55094EDD2A2 /* super.c in Sources */ = {isa = PBXBuildFile; fileRef = 7D90105AE72F69CAB401E6D0 /* super.c */; };
 		A7F45ED16E95799C12844D59 /* NativeSyscallTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 81DAC16E179B145675DAED53 /* NativeSyscallTests.m */; };
 		AA17D32CE35B7BD064F5331D /* LinuxKHeadersCompileSmoke.c in Sources */ = {isa = PBXBuildFile; fileRef = AF646BC20B92F94A534170CA /* LinuxKHeadersCompileSmoke.c */; settings = {COMPILER_FLAGS = "-D__KERNEL__ -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi -I$(LINUX_KHEADERS_GENERATED_ROOT)/include -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/include"; }; };
@@ -100,6 +106,7 @@
 		B007EBB1DCDF86A26AB30831 /* syscall.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F7191B1CB57030C91346FFC /* syscall.c */; };
 		B13572D3F69C5459677243F7 /* FcntlTests.m in Sources */ = {isa = PBXBuildFile; fileRef = CF8E92190ED1D635513EFC5C /* FcntlTests.m */; };
 		B2FF2947067EE6DC9B321C6B /* SyscallUioContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 9F94DE1BF918ABE8BFE08778 /* SyscallUioContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
+		B401DE709F928BAD360943B3 /* slab.c in Sources */ = {isa = PBXBuildFile; fileRef = DC8F83598D8AD8B45A46A83C /* slab.c */; settings = {COMPILER_FLAGS = "-D__KERNEL__ -include $(LINUX_KHEADERS_SOURCE_ROOT)/include/linux/kconfig.h -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi -I$(LINUX_KHEADERS_GENERATED_ROOT)/include -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi -I$(LINUX_KHEADERS_SOURCE_ROOT)/include"; }; };
 		B806C50D8B98ED8D275831D8 /* EpollContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A861F20AD8BBA81E40E20B9 /* EpollContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		B92C88D67E641877459957E9 /* fork.c in Sources */ = {isa = PBXBuildFile; fileRef = 96CC08F7FAC252C6583BA051 /* fork.c */; };
 		BB84A34C25CF0FD119F343B5 /* FutexContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 4FA3652EF5B44895A7119AF4 /* FutexContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
@@ -110,10 +117,10 @@
 		C1E78D79633906BFAECBFC23 /* SeccompContract.c in Sources */ = {isa = PBXBuildFile; fileRef = BDE1B001F567E1FBA7B279EB /* SeccompContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		C2914A6F6864B331C5DEDE3F /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = B8CD22D348511EB37F28D884 /* sync.c */; };
 		C29210E980B82B10FEFDF4AC /* libOrlixHostAdapter.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0378D449A2474BB6F384F7C4 /* libOrlixHostAdapter.a */; };
-		C6A578F88FDFAD437A380FCE /* clock.c in Sources */ = {isa = PBXBuildFile; fileRef = 10F1559F89BA38EC57DE4843 /* clock.c */; };
+		C6A578F88FDFAD437A380FCE /* clock.c in Sources */ = {isa = PBXBuildFile; fileRef = 10F1559F89BA38EC57DE4843 /* clock.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		CAA017D78E3C0CD4E8B863AF /* mm.c in Sources */ = {isa = PBXBuildFile; fileRef = B27F3E03FE9A84BBE490F8BD /* mm.c */; };
 		CFE86E12DC2735F03ED2832E /* exec_context.c in Sources */ = {isa = PBXBuildFile; fileRef = CBD06FC197A4ACE498AE6F7F /* exec_context.c */; };
-		D00D37C74C69C43B2B8AE391 /* open_flags.c in Sources */ = {isa = PBXBuildFile; fileRef = 21395866312B1F852286D7A1 /* open_flags.c */; };
+		D00D37C74C69C43B2B8AE391 /* open_flags.c in Sources */ = {isa = PBXBuildFile; fileRef = 21395866312B1F852286D7A1 /* open_flags.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		D77BA9DF54C3260887B8542F /* NativeSyscallContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 708AF97B5E0C5BDE1B37BE04 /* NativeSyscallContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		D83945E1C0951AE3E00CBF36 /* NamespaceTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 1777614420D897C3AD42F018 /* NamespaceTests.m */; };
 		DF481DBF1548D3F1163FF4E9 /* open.c in Sources */ = {isa = PBXBuildFile; fileRef = 69E02B2B9839E86ACF62DFE6 /* open.c */; };
@@ -135,10 +142,9 @@
 		F29FC0B977315123243A67F9 /* HostBridgeSmokeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = C97CB1AD57218B41B22AACFD /* HostBridgeSmokeTests.m */; };
 		F2BF14FB5D015B813EA4E01D /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = 16F0C4B756AF24EAE8E83455 /* wait.c */; };
 		F30CAC59510415B82CCBE8AA /* KernelInitContract.c in Sources */ = {isa = PBXBuildFile; fileRef = 05AE1FF80CFF0BE1D29A8FA9 /* KernelInitContract.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
-		F404532AA3BD984A522E6508 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = 8C9F63E41B3B10D2444EC0C4 /* sync.c */; };
 		F853311645624C533A29E8D7 /* orlix_observability.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B1CF9495806F5C54C7E3113 /* orlix_observability.c */; };
 		F8F39A6EBDE77E5B02BC6A50 /* sys.c in Sources */ = {isa = PBXBuildFile; fileRef = 1D7ED6C9008BFAB23132C915 /* sys.c */; };
-		FA8D9AF468B55E8F4CAF924A /* uts.c in Sources */ = {isa = PBXBuildFile; fileRef = BA557A76C0643EF0CF2B4301 /* uts.c */; };
+		FA8D9AF468B55E8F4CAF924A /* uts.c in Sources */ = {isa = PBXBuildFile; fileRef = BA557A76C0643EF0CF2B4301 /* uts.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT)"; }; };
 		FD1DAB17A75DB206AF0C5F5E /* exec.c in Sources */ = {isa = PBXBuildFile; fileRef = 21262DF2035989931405BA99 /* exec.c */; };
 /* End PBXBuildFile section */
 
@@ -219,6 +225,7 @@
 		194AA294F71DFE4F59B15BBB /* epoll_mask.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = epoll_mask.c; sourceTree = "<group>"; };
 		199227F8D25233B9D7B63CFB /* FutexUAPICompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FutexUAPICompileSmoke.c; sourceTree = "<group>"; };
 		1A861F20AD8BBA81E40E20B9 /* EpollContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = EpollContract.c; sourceTree = "<group>"; };
+		1ABFC2E88DDFD5957A0384D6 /* cred.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cred.c; sourceTree = "<group>"; };
 		1B492079F3C7CD1E1CFD01BE /* PTYJobControlContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = PTYJobControlContract.c; sourceTree = "<group>"; };
 		1B50456E0DB75EE58BB8C0FE /* PTYTestSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PTYTestSupport.h; sourceTree = "<group>"; };
 		1BE8E6D3279E4DD0231DB711 /* EpollTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = EpollTests.m; sourceTree = "<group>"; };
@@ -240,6 +247,7 @@
 		3ADF9AA011B10D36AE0DBEA6 /* namei.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = namei.c; sourceTree = "<group>"; };
 		3CAA7F27C0BCEBA5E823DFF1 /* VFSAtContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = VFSAtContract.c; sourceTree = "<group>"; };
 		3CAD9C1C98F7BC6F29D65F3A /* inode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = inode.c; sourceTree = "<group>"; };
+		3DBEE8F62D6B7FC0279C5C7F /* uts.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = uts.c; sourceTree = "<group>"; };
 		401F14541905D4566D1F3EA9 /* KernelOwnerCompatCompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = KernelOwnerCompatCompileSmoke.c; sourceTree = "<group>"; };
 		40D9C511809CE69C33C72FA5 /* stat.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stat.c; sourceTree = "<group>"; };
 		41106F016E3FCE1A724314FF /* backing_io.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = backing_io.m; sourceTree = "<group>"; };
@@ -250,6 +258,7 @@
 		4724078A9689D911E749B5AB /* LinuxUAPITestSupport.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = LinuxUAPITestSupport.c; sourceTree = "<group>"; };
 		476E8B531D06CAE8B61BDCC8 /* backing_paths.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = backing_paths.m; sourceTree = "<group>"; };
 		480522F1C7742EED876A3B98 /* TaskGroupTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskGroupTests.m; sourceTree = "<group>"; };
+		490D301AAA45DFA0E328A872 /* wait.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = wait.c; sourceTree = "<group>"; };
 		4BDDBF6ECE1BEAADFDA6BD68 /* time.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = time.c; sourceTree = "<group>"; };
 		4DBAA95708912AEE3F371417 /* poll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = poll.c; sourceTree = "<group>"; };
 		4FA3652EF5B44895A7119AF4 /* FutexContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FutexContract.c; sourceTree = "<group>"; };
@@ -287,11 +296,12 @@
 		8383C67C95A306049D9DF0BC /* xattr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xattr.c; sourceTree = "<group>"; };
 		838E887EC3F4B36078E99CEE /* pty.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pty.c; sourceTree = "<group>"; };
 		84245D3FA37D3059CF6B6B7A /* HostTestSupport.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = HostTestSupport.c; sourceTree = "<group>"; };
+		88398636C815C8EC0278F5F2 /* futex.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = futex.c; sourceTree = "<group>"; };
 		88D9107BD95B20C2E495FB01 /* SignalSyscallContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SignalSyscallContract.h; sourceTree = "<group>"; };
 		8B1CF9495806F5C54C7E3113 /* orlix_observability.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = orlix_observability.c; sourceTree = "<group>"; };
-		8C9F63E41B3B10D2444EC0C4 /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
 		8CF0AA8646A0B520A0C2E146 /* uio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = uio.c; sourceTree = "<group>"; };
 		8E078B7A6C6D1E2DB8C89525 /* resource.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = resource.c; sourceTree = "<group>"; };
+		92495377427D0B0247DCF63F /* backing_stat_translate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = backing_stat_translate.c; sourceTree = "<group>"; };
 		92B037F700D37491354C28A5 /* ExecSyscallContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ExecSyscallContract.c; sourceTree = "<group>"; };
 		93BEC551A077CEE30F667A6E /* socket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = socket.h; sourceTree = "<group>"; };
 		941D82B82941FB524F6F3137 /* MLibCConfigureProbeCompileSmoke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = MLibCConfigureProbeCompileSmoke.c; sourceTree = "<group>"; };
@@ -340,6 +350,8 @@
 		D1F57E8094171050217C0955 /* CredentialContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CredentialContract.c; sourceTree = "<group>"; };
 		D480B9561A2910C3263FB01B /* pipe.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pipe.c; sourceTree = "<group>"; };
 		D57631BE9E05BF4F2E2B8E17 /* PipeTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PipeTests.m; sourceTree = "<group>"; };
+		DB3B870AC37F546AFFAED2B4 /* resource.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = resource.c; sourceTree = "<group>"; };
+		DC8F83598D8AD8B45A46A83C /* slab.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = slab.c; sourceTree = "<group>"; };
 		E59D3B9AB1F33EE24F21D8C9 /* SignalSyscallContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = SignalSyscallContract.c; sourceTree = "<group>"; };
 		E6C06DF7417B59B73618B78A /* WaitJobControlContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = WaitJobControlContract.c; sourceTree = "<group>"; };
 		ED4F0CE7925DB368D2A852B2 /* DevfsTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DevfsTests.m; sourceTree = "<group>"; };
@@ -400,6 +412,7 @@
 				A37E8EB84816A9AF1E22BCAC /* backing_io_internal.h */,
 				41106F016E3FCE1A724314FF /* backing_io.m */,
 				476E8B531D06CAE8B61BDCC8 /* backing_paths.m */,
+				92495377427D0B0247DCF63F /* backing_stat_translate.c */,
 				194AA294F71DFE4F59B15BBB /* epoll_mask.c */,
 				C75ADE792CF9E1CDB018936B /* errno_translation.c */,
 				FED776BD6CBA4CE5C24AFFF1 /* memfd.c */,
@@ -426,7 +439,6 @@
 				8E078B7A6C6D1E2DB8C89525 /* resource.c */,
 				95B7770B3E267497F7AF7727 /* seccomp.c */,
 				F64EAADE2A8228B41B7BEDBA /* signal.c */,
-				8C9F63E41B3B10D2444EC0C4 /* sync.c */,
 				1D7ED6C9008BFAB23132C915 /* sys.c */,
 				C525A1B7B809ADA3063176F5 /* task.c */,
 				4BDDBF6ECE1BEAADFDA6BD68 /* time.c */,
@@ -541,8 +553,14 @@
 			isa = PBXGroup;
 			children = (
 				10F1559F89BA38EC57DE4843 /* clock.c */,
+				1ABFC2E88DDFD5957A0384D6 /* cred.c */,
+				88398636C815C8EC0278F5F2 /* futex.c */,
+				DB3B870AC37F546AFFAED2B4 /* resource.c */,
 				71BB262C2DE2743B8A01A870 /* signal.c */,
+				DC8F83598D8AD8B45A46A83C /* slab.c */,
 				2E4082ED2FFD96285D7A4CB9 /* sync.c */,
+				3DBEE8F62D6B7FC0279C5C7F /* uts.c */,
+				490D301AAA45DFA0E328A872 /* wait.c */,
 			);
 			path = kernel;
 			sourceTree = "<group>";
@@ -775,15 +793,22 @@
 				844FF0756076AEB24D6A8CCB /* backing_dir.c in Sources */,
 				E61423C6E19ECF907C4332E6 /* backing_io.m in Sources */,
 				15E603EF90F2B5748117EE6D /* backing_paths.m in Sources */,
+				5E2C786BDB26B2AFA9F713AB /* backing_stat_translate.c in Sources */,
 				C6A578F88FDFAD437A380FCE /* clock.c in Sources */,
+				9A00B162F28D8052CBB74FD1 /* cred.c in Sources */,
 				71CD6E2B8EE94EBE9887113F /* epoll_mask.c in Sources */,
 				0B2D67091C9D8DB67DFFC496 /* errno_translation.c in Sources */,
+				33564FA082EBBC42B74E822B /* futex.c in Sources */,
 				6E6863DA4919C70C5A612D0A /* memfd.c in Sources */,
 				D00D37C74C69C43B2B8AE391 /* open_flags.c in Sources */,
 				744310669A5D43BD799F6409 /* path.c in Sources */,
+				9EBF078C306AE21296E95AF7 /* resource.c in Sources */,
 				907666610816A5C81E76691D /* signal.c in Sources */,
+				B401DE709F928BAD360943B3 /* slab.c in Sources */,
 				38F2CC16EE3FEB7AD9ED8123 /* sync.c in Sources */,
 				C2914A6F6864B331C5DEDE3F /* sync.c in Sources */,
+				516A5DCCA693E90586FFAD37 /* uts.c in Sources */,
+				A1AC017EB52CAC075E5C364A /* wait.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -827,7 +852,6 @@
 				88F0FEEE2F32DEE186117D6D /* socket.c in Sources */,
 				2FAB1B9DFB1B35B4A4CD7368 /* stat.c in Sources */,
 				A505B14DBA60A55094EDD2A2 /* super.c in Sources */,
-				F404532AA3BD984A522E6508 /* sync.c in Sources */,
 				F8F39A6EBDE77E5B02BC6A50 /* sys.c in Sources */,
 				B007EBB1DCDF86A26AB30831 /* syscall.c in Sources */,
 				E547D5AFAD8D0F5F3CF9F03A /* task.c in Sources */,
@@ -966,8 +990,7 @@
 					"$(SRCROOT)",
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
-					"$(LINUX_UAPI_INCLUDE_ROOT)",
+					"$(SRCROOT)/OrlixKernel/internal",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -985,27 +1008,45 @@
 		6835EA089CBEA633D66C9CAE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
+					__KERNEL__,
 					_XOPEN_SOURCE,
+					_DARWIN_C_SOURCE,
+					"_POSIX_C_SOURCE=200112L",
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
-					"$(LINUX_UAPI_INCLUDE_ROOT)",
+					"$(SRCROOT)/OrlixKernel/internal",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/include",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/include",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				OTHER_CFLAGS = (
+					"-nostdinc",
+					"-include",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/include/linux/kconfig.h",
 					"-fvisibility=hidden",
 				);
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/include",
+				);
 				TARGETED_DEVICE_FAMILY = "1,2";
+				USE_HEADERMAP = NO;
 			};
 			name = Debug;
 		};
@@ -1085,27 +1126,45 @@
 		B38E7C76D4C56086942EAB61 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
+					__KERNEL__,
 					_XOPEN_SOURCE,
+					_DARWIN_C_SOURCE,
+					"_POSIX_C_SOURCE=200112L",
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
-					"$(LINUX_UAPI_INCLUDE_ROOT)",
+					"$(SRCROOT)/OrlixKernel/internal",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/include",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/include",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi",
+					"$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				OTHER_CFLAGS = (
+					"-nostdinc",
+					"-include",
+					"$(LINUX_KHEADERS_SOURCE_ROOT)/include/linux/kconfig.h",
 					"-fvisibility=hidden",
 				);
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/include",
+				);
 				TARGETED_DEVICE_FAMILY = "1,2";
+				USE_HEADERMAP = NO;
 			};
 			name = Release;
 		};
@@ -1117,7 +1176,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
+					"$(SRCROOT)/OrlixKernel/internal",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1142,7 +1201,7 @@
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixHostAdapterTests",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
+					"$(SRCROOT)/OrlixKernel/internal",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1166,7 +1225,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
+					"$(SRCROOT)/OrlixKernel/internal",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1194,8 +1253,7 @@
 					"$(SRCROOT)",
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
-					"$(LINUX_UAPI_INCLUDE_ROOT)",
+					"$(SRCROOT)/OrlixKernel/internal",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1219,7 +1277,7 @@
 					"$(SRCROOT)/OrlixKernel",
 					"$(SRCROOT)/OrlixHostAdapterTests",
 					"$(SRCROOT)/OrlixKernel/include",
-					"$(SRCROOT)/OrlixKernel/internal/private",
+					"$(SRCROOT)/OrlixKernel/internal",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -16,14 +16,16 @@
 #ifndef KERNEL_TASK_H
 #define KERNEL_TASK_H
 
+#include <linux/types.h>
+
 #include <stdatomic.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
-#include "kernel_sync.h"
+#include "internal/kthread.h"
+#include "internal/mutex.h"
 
 #ifdef __cplusplus
 extern "C" {

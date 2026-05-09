@@ -1,16 +1,3 @@
-/* iXland - Synchronization Primitives
- *
- * Canonical owner for sync syscalls:
- * - futex() - Fast Userspace muTEX
- * - set_robust_list(), get_robust_list()
- * - restart_syscall()
- *
- * Linux-shaped canonical owner - iOS mediation as implementation detail
- * Note: futex is Linux-specific; unsupported operations currently reject with ENOSYS
- */
-
-#include "futex.h"
-
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
@@ -19,11 +6,9 @@
 #include <linux/futex.h>
 #include <linux/time.h>
 
-/* ============================================================================
- * FUTEX - Fast Userspace muTEX
- * ============================================================================ */
-
-/* ABI truth comes from vendored Linux UAPI: <linux/futex.h> */
+extern int futex_op_impl(int *uaddr, int futex_op, int val, int timeout_ms, int *uaddr2, int val3);
+extern int set_robust_list_impl(void *head, unsigned long len);
+extern int get_robust_list_impl(int pid, void **head, unsigned long *len);
 
 static int futex_timeout_ms(const struct __kernel_timespec *timeout) {
     int64_t ms;
@@ -32,8 +17,7 @@ static int futex_timeout_ms(const struct __kernel_timespec *timeout) {
         return -1;
     }
     if (timeout->tv_sec < 0 || timeout->tv_nsec < 0 || timeout->tv_nsec >= 1000000000L) {
-        errno = EINVAL;
-        return -2;
+        return -EINVAL;
     }
     if (timeout->tv_sec > (INT64_MAX / 1000)) {
         return INT_MAX;
@@ -46,8 +30,17 @@ static int futex_timeout_ms(const struct __kernel_timespec *timeout) {
     return (int)ms;
 }
 
+static int wrap_int_result(int ret) {
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
 __attribute__((visibility("default"))) int futex(int *uaddr, int futex_op, int val,
-const struct timespec *timeout, int *uaddr2, int val3) {
+                                                 const struct timespec *timeout,
+                                                 int *uaddr2, int val3) {
     struct __kernel_timespec kernel_timeout;
     const struct __kernel_timespec *kernel_timeout_ptr = NULL;
     int timeout_ms;
@@ -58,22 +51,17 @@ const struct timespec *timeout, int *uaddr2, int val3) {
         kernel_timeout_ptr = &kernel_timeout;
     }
     timeout_ms = futex_timeout_ms(kernel_timeout_ptr);
-    if (timeout_ms == -2) {
+    if (timeout_ms < -1) {
+        errno = -timeout_ms;
         return -1;
     }
-    return futex_op_impl(uaddr, futex_op, val, timeout_ms, uaddr2, val3);
+    return wrap_int_result(futex_op_impl(uaddr, futex_op, val, timeout_ms, uaddr2, val3));
 }
 
 __attribute__((visibility("default"))) int set_robust_list(void *head, unsigned long len) {
-return set_robust_list_impl(head, len);
+    return wrap_int_result(set_robust_list_impl(head, len));
 }
 
 __attribute__((visibility("default"))) int get_robust_list(int pid, void **head, unsigned long *len) {
-return get_robust_list_impl(pid, head, len);
+    return wrap_int_result(get_robust_list_impl(pid, head, len));
 }
-
-/*
- * NOTE: the generic variadic entrypoint was removed due to host header conflicts.
- * Use specific wrappers (futex, set_robust_list, etc.) instead.
-
-*/

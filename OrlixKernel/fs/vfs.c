@@ -132,9 +132,9 @@
 #undef __ASSEMBLY__
 
 /* Narrow seam headers for host operations */
-#include "internal/private/backing_io.h"
-#include "internal/private/backing_path.h"
-#include "internal/private/backing_roots.h"
+#include "internal/fs/file.h"
+#include "internal/fs/namei.h"
+#include "internal/fs/rootfs.h"
 
 #include "fdtable.h"
 #include "eventpoll.h"

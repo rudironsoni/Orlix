@@ -1,10 +1,8 @@
 #ifndef PIPE_H
 #define PIPE_H
 
-#include <stdbool.h>
-#include <stddef.h>
-
 #include <linux/types.h>
+#include <stddef.h>
 
 #include "fdtable.h"
 

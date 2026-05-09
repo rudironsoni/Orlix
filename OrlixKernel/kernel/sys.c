@@ -6,7 +6,7 @@
  * The exported Linux-facing call surface lives in OrlixLibC.
  */
 
-#include <errno.h>
+#include <linux/errno.h>
 
 #include "task.h"
 

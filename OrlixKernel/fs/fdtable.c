@@ -14,7 +14,7 @@
 #include <linux/time_types.h>
 #include <linux/timerfd.h>
 
-#include "fs_sync.h"
+#include "internal/fs/lock.h"
 
 /* Standard file descriptors - local definitions to avoid Darwin <unistd.h> */
 #ifndef STDIN_FILENO
@@ -22,8 +22,8 @@
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
 #endif
-#include "internal/private/backing_io.h"
-#include "internal/private/backing_memfd.h"
+#include "internal/fs/file.h"
+#include "internal/fs/memfd.h"
 #include "eventpoll.h"
 #include "pipe.h"
 #include "pty.h"

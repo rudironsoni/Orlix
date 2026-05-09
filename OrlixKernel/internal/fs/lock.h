@@ -1,5 +1,5 @@
-#ifndef ORLIX_INTERNAL_PRIVATE_FS_SYNC_H
-#define ORLIX_INTERNAL_PRIVATE_FS_SYNC_H
+#ifndef INTERNAL_FS_LOCK_H
+#define INTERNAL_FS_LOCK_H
 
 #ifdef __cplusplus
 extern "C" {

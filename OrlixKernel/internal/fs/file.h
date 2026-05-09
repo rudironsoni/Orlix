@@ -1,5 +1,5 @@
-#ifndef ORLIX_INTERNAL_PRIVATE_BACKING_IO_H
-#define ORLIX_INTERNAL_PRIVATE_BACKING_IO_H
+#ifndef INTERNAL_FS_FILE_H
+#define INTERNAL_FS_FILE_H
 
 #include <stddef.h>
 #include <stdint.h>

@@ -5,12 +5,14 @@
  * readiness infrastructure.
  */
 
-#include <linux/socket.h>
-#include <linux/net.h>
 #include <linux/errno.h>
 #include <linux/fcntl.h>
+#include <linux/socket.h>
+#include <linux/time_types.h>
+#include <linux/uio.h>
 #include <linux/un.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "socket.h"
 #include "fs/fdtable.h"
@@ -22,6 +24,30 @@ extern void *memcpy(void *, const void *, size_t);
 extern void *memset(void *, int, size_t);
 
 #define errno (*__error())
+#define AF_UNIX 1
+#define SOCK_STREAM 1
+#define SOCK_DGRAM 2
+#define SOCK_TYPE_MASK 0xf
+#define MSG_DONTWAIT 0x40
+#define SHUT_RD 0
+#define SHUT_WR 1
+#define SHUT_RDWR 2
+
+struct user_msghdr {
+    void *msg_name;
+    int msg_namelen;
+    struct iovec *msg_iov;
+    __kernel_size_t msg_iovlen;
+    void *msg_control;
+    __kernel_size_t msg_controllen;
+    unsigned int msg_flags;
+};
+
+struct mmsghdr {
+    struct user_msghdr msg_hdr;
+    unsigned int msg_len;
+};
+
 #ifndef SOCK_CLOEXEC
 #define SOCK_CLOEXEC O_CLOEXEC
 #endif
@@ -36,7 +62,7 @@ static size_t socket_unix_name_len(size_t name_len) {
     return offsetof(struct sockaddr_un, sun_path) + 1 + name_len;
 }
 
-static int socket_parse_unix_name(const struct sockaddr *addr,
+static int socket_parse_unix_name(const void *addr,
                                   __kernel_size_t addrlen,
                                   unsigned char *name_out,
                                   size_t *name_len_out) {
@@ -86,7 +112,7 @@ static int socket_parse_unix_name(const struct sockaddr *addr,
 
 static int socket_copy_name_out(const unsigned char *name,
                                 size_t name_len,
-                                struct sockaddr *addr,
+                                void *addr,
                                 int *addrlen) {
     struct sockaddr_un unix_addr;
     size_t actual_len;
@@ -302,7 +328,7 @@ fail:
     return -1;
 }
 
-long sys_connect(int sockfd, struct sockaddr *addr, int addrlen) {
+long sys_connect(int sockfd, void *addr, int addrlen) {
     struct socket_state *sock;
     unsigned char name[UNIX_PATH_MAX - 1];
     size_t name_len;
@@ -325,7 +351,7 @@ long sys_connect(int sockfd, struct sockaddr *addr, int addrlen) {
     return ret;
 }
 
-long sys_bind(int sockfd, struct sockaddr *addr, int addrlen) {
+long sys_bind(int sockfd, void *addr, int addrlen) {
     struct socket_state *sock;
     unsigned char name[UNIX_PATH_MAX - 1];
     size_t name_len;
@@ -360,7 +386,7 @@ long sys_listen(int sockfd, int backlog) {
     return ret;
 }
 
-long sys_accept(int sockfd, struct sockaddr *addr, int *addrlen) {
+long sys_accept(int sockfd, void *addr, int *addrlen) {
     struct socket_state *sock;
     struct socket_state *accepted;
     int fd;
@@ -415,7 +441,7 @@ long sys_accept(int sockfd, struct sockaddr *addr, int *addrlen) {
     return fd;
 }
 
-long sys_accept4(int sockfd, struct sockaddr *addr, int *addrlen, int flags) {
+long sys_accept4(int sockfd, void *addr, int *addrlen, int flags) {
     struct socket_state *sock;
     struct socket_state *accepted;
     int fd;
@@ -472,7 +498,7 @@ long sys_sendto(int sockfd,
                 void *buf,
                 size_t len,
                 unsigned int flags,
-                struct sockaddr *dest_addr,
+                void *dest_addr,
                 int addrlen) {
     struct socket_state *sock;
     unsigned char dest_name[UNIX_PATH_MAX - 1];
@@ -504,7 +530,7 @@ long sys_recvfrom(int sockfd,
                   void *buf,
                   size_t len,
                   unsigned int flags,
-                  struct sockaddr *src_addr,
+                  void *src_addr,
                   int *addrlen) {
     struct socket_state *sock;
     unsigned char src_name[UNIX_PATH_MAX - 1];
@@ -567,7 +593,7 @@ long sys_sendmsg(int sockfd, struct user_msghdr *msg, unsigned int flags) {
         }
     }
 
-    ret = sys_sendto(sockfd, tmp, offset, flags, (struct sockaddr *)msg->msg_name, msg->msg_namelen);
+    ret = sys_sendto(sockfd, tmp, offset, flags, msg->msg_name, msg->msg_namelen);
     free(tmp);
     return ret;
 }
@@ -603,7 +629,7 @@ long sys_recvmsg(int sockfd, struct user_msghdr *msg, unsigned int flags) {
                          tmp,
                          total,
                          flags,
-                         (struct sockaddr *)msg->msg_name,
+                         msg->msg_name,
                          &msg->msg_namelen);
     if (nread <= 0) {
         free(tmp);
@@ -772,7 +798,7 @@ long sys_setsockopt(int sockfd,
     return ret;
 }
 
-long sys_getsockname(int sockfd, struct sockaddr *addr, int *addrlen) {
+long sys_getsockname(int sockfd, void *addr, int *addrlen) {
     struct socket_state *sock;
     unsigned char name[UNIX_PATH_MAX - 1];
     size_t name_len = 0;
@@ -794,7 +820,7 @@ long sys_getsockname(int sockfd, struct sockaddr *addr, int *addrlen) {
     return ret;
 }
 
-long sys_getpeername(int sockfd, struct sockaddr *addr, int *addrlen) {
+long sys_getpeername(int sockfd, void *addr, int *addrlen) {
     struct socket_state *sock;
     unsigned char name[UNIX_PATH_MAX - 1];
     size_t name_len = 0;

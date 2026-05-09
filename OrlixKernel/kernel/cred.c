@@ -10,17 +10,19 @@
  * - setuid(), setgid()
  */
 
-#include <errno.h>
-#include <stdarg.h>
+#include <linux/errno.h>
+#include <linux/gfp_types.h>
+#include <linux/string.h>
 #include <stdatomic.h>
-#include <stdlib.h>
-#include <string.h>
 
-#include <linux/limits.h>
-#include <linux/capability.h>
-#include <linux/prctl.h>
-#include <linux/securebits.h>
-#include <linux/stat.h>
+#include <uapi/linux/limits.h>
+#include <uapi/linux/capability.h>
+#include <uapi/linux/prctl.h>
+#include <uapi/linux/securebits.h>
+#include <uapi/linux/stat.h>
+
+extern void *__kmalloc_noprof(size_t size, gfp_t flags);
+extern void kfree(const void *objp);
 
 #include "cred.h"
 #include "task.h"
@@ -137,7 +139,7 @@ static __thread struct cred *current_cred = NULL;
  * ============================================================================ */
 
 struct cred *alloc_cred(void) {
-    struct cred *cred = calloc(1, sizeof(struct cred));
+    struct cred *cred = __kmalloc_noprof(sizeof(struct cred), GFP_KERNEL | __GFP_ZERO);
     if (cred) {
         cred_init_defaults(cred);
         cred->refs = 1;
@@ -147,8 +149,8 @@ struct cred *alloc_cred(void) {
 
 void free_cred(struct cred *cred) {
     if (cred) {
-        free(cred->groups);
-        free(cred);
+        kfree(cred->groups);
+        kfree(cred);
     }
 }
 
@@ -167,7 +169,8 @@ struct cred *dup_cred(const struct cred *cred) {
         new->fsuid = cred->fsuid;
         new->fsgid = cred->fsgid;
         if (cred->group_count > 0) {
-            new->groups = calloc(cred->group_count, sizeof(__kernel_gid32_t));
+            new->groups = __kmalloc_noprof(cred->group_count * sizeof(__kernel_gid32_t),
+                                           GFP_KERNEL | __GFP_ZERO);
             if (!new->groups) {
                 free_cred(new);
                 return NULL;
@@ -248,7 +251,7 @@ void cred_reset_to_defaults(void) {
     global_init_cred.sgid = KERNEL_DEFAULT_SGID;
     global_init_cred.fsuid = KERNEL_DEFAULT_FSUID;
     global_init_cred.fsgid = KERNEL_DEFAULT_FSGID;
-    free(global_init_cred.groups);
+    kfree(global_init_cred.groups);
     global_init_cred.groups = NULL;
     global_init_cred.group_count = 0;
     global_init_cred.no_new_privs = false;
@@ -620,14 +623,15 @@ int cred_setgroups(struct cred *cred, size_t size, const __kernel_gid32_t *list)
     }
 
     if (size > 0) {
-        new_groups = calloc(size, sizeof(__kernel_gid32_t));
+        new_groups = __kmalloc_noprof((size_t)size * sizeof(__kernel_gid32_t),
+                                      GFP_KERNEL | __GFP_ZERO);
         if (!new_groups) {
             return -ENOMEM;
         }
         memcpy(new_groups, list, size * sizeof(__kernel_gid32_t));
     }
 
-    free(cred->groups);
+    kfree(cred->groups);
     cred->groups = new_groups;
     cred->group_count = size;
     return 0;
@@ -731,7 +735,7 @@ int cred_write_setgroups(struct cred *cred, const char *buf, size_t count) {
     }
     if (count == 4 && strncmp(buf, "deny", 4) == 0) {
         cred->setgroups_allowed = false;
-        free(cred->groups);
+        kfree(cred->groups);
         cred->groups = NULL;
         cred->group_count = 0;
         return 0;
@@ -908,91 +912,50 @@ __kernel_gid32_t getegid_impl(void) {
 /* Implementation of setuid_impl - internal entry point */
 int setuid_impl(__kernel_uid32_t uid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_setuid(cred, (uint32_t)uid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setuid(cred, (uint32_t)uid);
 }
 
 /* Implementation of setgid_impl - internal entry point */
 int setgid_impl(__kernel_gid32_t gid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_setgid(cred, (uint32_t)gid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setgid(cred, (uint32_t)gid);
 }
 
 int seteuid_impl(__kernel_uid32_t euid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_seteuid(cred, (uint32_t)euid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_seteuid(cred, (uint32_t)euid);
 }
 
 int setegid_impl(__kernel_gid32_t egid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_setegid(cred, (uint32_t)egid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setegid(cred, (uint32_t)egid);
 }
 
 int setresuid_impl(__kernel_uid32_t ruid, __kernel_uid32_t euid, __kernel_uid32_t suid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_setresuid(cred, (uint32_t)ruid, (uint32_t)euid, (uint32_t)suid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setresuid(cred, (uint32_t)ruid, (uint32_t)euid, (uint32_t)suid);
 }
 
 int setresgid_impl(__kernel_gid32_t rgid, __kernel_gid32_t egid, __kernel_gid32_t sgid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_setresgid(cred, (uint32_t)rgid, (uint32_t)egid, (uint32_t)sgid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setresgid(cred, (uint32_t)rgid, (uint32_t)egid, (uint32_t)sgid);
 }
 
 int setreuid_impl(__kernel_uid32_t ruid, __kernel_uid32_t euid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_setreuid(cred, (uint32_t)ruid, (uint32_t)euid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setreuid(cred, (uint32_t)ruid, (uint32_t)euid);
 }
 
 int setregid_impl(__kernel_gid32_t rgid, __kernel_gid32_t egid) {
     struct cred *cred = get_current_cred();
-    int ret = cred_setregid(cred, (uint32_t)rgid, (uint32_t)egid);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setregid(cred, (uint32_t)rgid, (uint32_t)egid);
 }
 
 int getresuid_impl(__kernel_uid32_t *ruid, __kernel_uid32_t *euid, __kernel_uid32_t *suid) {
     struct cred *cred = get_current_cred();
 
     if (!ruid || !euid || !suid) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     *ruid = (__kernel_uid32_t)cred->uid;
     *euid = (__kernel_uid32_t)cred->euid;
@@ -1004,8 +967,7 @@ int getresgid_impl(__kernel_gid32_t *rgid, __kernel_gid32_t *egid, __kernel_gid3
     struct cred *cred = get_current_cred();
 
     if (!rgid || !egid || !sgid) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     *rgid = (__kernel_gid32_t)cred->gid;
     *egid = (__kernel_gid32_t)cred->egid;
@@ -1049,23 +1011,19 @@ int getgroups_impl(int size, __kernel_gid32_t list[]) {
     struct cred *cred = get_current_cred();
 
     if (!cred) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (size < 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (size == 0) {
         return (int)cred->group_count;
     }
     if (!list) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if ((size_t)size < cred->group_count) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     for (size_t i = 0; i < cred->group_count; i++) {
@@ -1076,19 +1034,12 @@ int getgroups_impl(int size, __kernel_gid32_t list[]) {
 
 int setgroups_impl(int size, const __kernel_gid32_t *list) {
     struct cred *cred = get_current_cred();
-    int ret;
 
     if (size < 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
-    ret = cred_setgroups(cred, (size_t)size, list);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-    return 0;
+    return cred_setgroups(cred, (size_t)size, list);
 }
 
 int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) {
@@ -1099,8 +1050,7 @@ int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long
         uint64_t bit = cred_cap_bit((int)arg2);
 
         if (arg3 != 0 || arg4 != 0 || arg5 != 0 || bit == 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         return (cred->cap_bounding & bit) != 0 ? 1 : 0;
     }
@@ -1108,12 +1058,10 @@ int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long
         uint64_t bit = cred_cap_bit((int)arg2);
 
         if (arg3 != 0 || arg4 != 0 || arg5 != 0 || bit == 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         if (!cred_has_cap(cred, CAP_SETPCAP)) {
-            errno = EPERM;
-            return -1;
+            return -EPERM;
         }
         cred->cap_bounding &= ~bit;
         cred->cap_ambient &= ~bit;
@@ -1123,64 +1071,53 @@ int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long
         uint64_t bit = cred_cap_bit((int)arg3);
 
         if (arg5 != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         switch (arg2) {
         case PR_CAP_AMBIENT_IS_SET:
             if (arg4 != 0 || bit == 0) {
-                errno = EINVAL;
-                return -1;
+                return -EINVAL;
             }
             return (cred->cap_ambient & bit) != 0 ? 1 : 0;
         case PR_CAP_AMBIENT_RAISE:
             if (arg4 != 0 || bit == 0) {
-                errno = EINVAL;
-                return -1;
+                return -EINVAL;
             }
             if ((cred->securebits & SECBIT_NO_CAP_AMBIENT_RAISE) != 0) {
-                errno = EPERM;
-                return -1;
+                return -EPERM;
             }
             if ((cred->cap_permitted & bit) == 0 || (cred->cap_inheritable & bit) == 0) {
-                errno = EPERM;
-                return -1;
+                return -EPERM;
             }
             cred->cap_ambient |= bit;
             return 0;
         case PR_CAP_AMBIENT_LOWER:
             if (arg4 != 0 || bit == 0) {
-                errno = EINVAL;
-                return -1;
+                return -EINVAL;
             }
             cred->cap_ambient &= ~bit;
             return 0;
         case PR_CAP_AMBIENT_CLEAR_ALL:
             if (arg3 != 0 || arg4 != 0) {
-                errno = EINVAL;
-                return -1;
+                return -EINVAL;
             }
             cred->cap_ambient = 0;
             return 0;
         default:
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
     }
     case PR_GET_KEEPCAPS:
         if (arg2 != 0 || arg3 != 0 || arg4 != 0 || arg5 != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         return cred_keepcaps(cred) ? 1 : 0;
     case PR_SET_KEEPCAPS:
         if (arg2 > 1 || arg3 != 0 || arg4 != 0 || arg5 != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         if ((cred->securebits & SECBIT_KEEP_CAPS_LOCKED) != 0) {
-            errno = EPERM;
-            return -1;
+            return -EPERM;
         }
         if (arg2 == 1) {
             cred->securebits |= SECBIT_KEEP_CAPS;
@@ -1190,8 +1127,7 @@ int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long
         return 0;
     case PR_GET_SECUREBITS:
         if (arg2 != 0 || arg3 != 0 || arg4 != 0 || arg5 != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         return (int)cred->securebits;
     case PR_SET_SECUREBITS: {
@@ -1200,43 +1136,35 @@ int prctl_impl(int option, unsigned long arg2, unsigned long arg3, unsigned long
         uint32_t locked = cred->securebits & SECURE_ALL_LOCKS;
 
         if ((arg2 & ~valid) != 0 || arg3 != 0 || arg4 != 0 || arg5 != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         if (!cred_has_cap(cred, CAP_SETPCAP)) {
-            errno = EPERM;
-            return -1;
+            return -EPERM;
         }
         if ((requested & locked) != locked) {
-            errno = EPERM;
-            return -1;
+            return -EPERM;
         }
         if (((requested ^ cred->securebits) & (locked >> 1)) != 0) {
-            errno = EPERM;
-            return -1;
+            return -EPERM;
         }
         cred->securebits = requested;
         return 0;
     }
     case PR_SET_NO_NEW_PRIVS:
         if (arg2 != 1 || arg3 != 0 || arg4 != 0 || arg5 != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         if (cred_set_no_new_privs(cred) < 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         return 0;
     case PR_GET_NO_NEW_PRIVS:
         if (arg2 != 0 || arg3 != 0 || arg4 != 0 || arg5 != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         return cred_no_new_privs(cred) ? 1 : 0;
     default:
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 }
 
@@ -1279,17 +1207,14 @@ int capget_impl(cap_user_header_t header, cap_user_data_t data) {
     struct cred *cred = get_current_cred();
 
     if (!header || !data) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (header->version != _LINUX_CAPABILITY_VERSION_3) {
         header->version = _LINUX_CAPABILITY_VERSION_3;
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (header->pid != 0) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     memset(data, 0, sizeof(struct __user_cap_data_struct) * _LINUX_CAPABILITY_U32S_3);
@@ -1307,17 +1232,14 @@ int capset_impl(cap_user_header_t header, const cap_user_data_t data) {
     uint64_t inheritable;
 
     if (!header || !data) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (header->version != _LINUX_CAPABILITY_VERSION_3) {
         header->version = _LINUX_CAPABILITY_VERSION_3;
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (header->pid != 0) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     effective = cred_cap_join(data, 0) & full;
@@ -1325,16 +1247,13 @@ int capset_impl(cap_user_header_t header, const cap_user_data_t data) {
     inheritable = cred_cap_join(data, 2) & full;
 
     if ((effective & ~permitted) != 0) {
-        errno = EPERM;
-        return -1;
+        return -EPERM;
     }
     if ((permitted & ~cred->cap_permitted) != 0 && !cred_has_cap(cred, CAP_SETPCAP)) {
-        errno = EPERM;
-        return -1;
+        return -EPERM;
     }
     if ((inheritable & ~cred->cap_bounding) != 0) {
-        errno = EPERM;
-        return -1;
+        return -EPERM;
     }
 
     cred->cap_effective = effective;
@@ -1342,117 +1261,4 @@ int capset_impl(cap_user_header_t header, const cap_user_data_t data) {
     cred->cap_inheritable = inheritable;
     cred->cap_ambient &= permitted & inheritable;
     return 0;
-}
-
-/* ============================================================================
- * PUBLIC CANONICAL WRAPPERS
- * ============================================================================
- * These are the Linux-facing ABI entry points.
- */
-
-__attribute__((visibility("default"))) __kernel_uid32_t getuid(void) {
-    return getuid_impl();
-}
-
-__attribute__((visibility("default"))) __kernel_uid32_t geteuid(void) {
-    return geteuid_impl();
-}
-
-__attribute__((visibility("default"))) __kernel_gid32_t getgid(void) {
-    return getgid_impl();
-}
-
-__attribute__((visibility("default"))) __kernel_gid32_t getegid(void) {
-    return getegid_impl();
-}
-
-__attribute__((visibility("default"))) int setuid(__kernel_uid32_t uid) {
-    return setuid_impl(uid);
-}
-
-__attribute__((visibility("default"))) int setgid(__kernel_gid32_t gid) {
-    return setgid_impl(gid);
-}
-
-__attribute__((visibility("default"))) int seteuid(__kernel_uid32_t euid) {
-    return seteuid_impl(euid);
-}
-
-__attribute__((visibility("default"))) int setegid(__kernel_gid32_t egid) {
-    return setegid_impl(egid);
-}
-
-__attribute__((visibility("default"))) int setresuid(__kernel_uid32_t ruid,
-                                                     __kernel_uid32_t euid,
-                                                     __kernel_uid32_t suid) {
-    return setresuid_impl(ruid, euid, suid);
-}
-
-__attribute__((visibility("default"))) int setresgid(__kernel_gid32_t rgid,
-                                                     __kernel_gid32_t egid,
-                                                     __kernel_gid32_t sgid) {
-    return setresgid_impl(rgid, egid, sgid);
-}
-
-__attribute__((visibility("default"))) int setreuid(__kernel_uid32_t ruid, __kernel_uid32_t euid) {
-    return setreuid_impl(ruid, euid);
-}
-
-__attribute__((visibility("default"))) int setregid(__kernel_gid32_t rgid, __kernel_gid32_t egid) {
-    return setregid_impl(rgid, egid);
-}
-
-__attribute__((visibility("default"))) int getresuid(__kernel_uid32_t *ruid,
-                                                     __kernel_uid32_t *euid,
-                                                     __kernel_uid32_t *suid) {
-    return getresuid_impl(ruid, euid, suid);
-}
-
-__attribute__((visibility("default"))) int getresgid(__kernel_gid32_t *rgid,
-                                                     __kernel_gid32_t *egid,
-                                                     __kernel_gid32_t *sgid) {
-    return getresgid_impl(rgid, egid, sgid);
-}
-
-__attribute__((visibility("default"))) __kernel_uid32_t setfsuid(__kernel_uid32_t fsuid) {
-    return setfsuid_impl(fsuid);
-}
-
-__attribute__((visibility("default"))) __kernel_gid32_t setfsgid(__kernel_gid32_t fsgid) {
-    return setfsgid_impl(fsgid);
-}
-
-__attribute__((visibility("default"))) int getgroups(int size, __kernel_gid32_t list[]) {
-    return getgroups_impl(size, list);
-}
-
-__attribute__((visibility("default"))) int setgroups(int size, const __kernel_gid32_t *list) {
-    return setgroups_impl(size, list);
-}
-
-__attribute__((visibility("default"))) int prctl(int option, ...) {
-    va_list ap;
-    unsigned long arg2;
-    unsigned long arg3;
-    unsigned long arg4;
-    unsigned long arg5;
-    int ret;
-
-    va_start(ap, option);
-    arg2 = va_arg(ap, unsigned long);
-    arg3 = va_arg(ap, unsigned long);
-    arg4 = va_arg(ap, unsigned long);
-    arg5 = va_arg(ap, unsigned long);
-    va_end(ap);
-
-    ret = prctl_impl(option, arg2, arg3, arg4, arg5);
-    return ret;
-}
-
-__attribute__((visibility("default"))) int capget(cap_user_header_t header, cap_user_data_t data) {
-    return capget_impl(header, data);
-}
-
-__attribute__((visibility("default"))) int capset(cap_user_header_t header, const cap_user_data_t data) {
-    return capset_impl(header, data);
 }

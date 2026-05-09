@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "internal/private/backing_io.h"
+#include "internal/fs/file.h"
 #include "fs/vfs.h"
 
 @interface RootfsBootstrapTests : XCTestCase

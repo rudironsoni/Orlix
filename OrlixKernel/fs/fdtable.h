@@ -1,12 +1,13 @@
 #ifndef FDTABLE_H
 #define FDTABLE_H
 
+#include <linux/types.h>
+
 #include <stdatomic.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#include "fs_sync.h"
+#include "internal/fs/lock.h"
 
 #define NR_OPEN_DEFAULT 256
 #define MAX_PATH 4096

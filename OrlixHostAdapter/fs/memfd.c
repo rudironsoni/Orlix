@@ -1,4 +1,4 @@
-#include "backing_memfd.h"
+#include "internal/fs/memfd.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -8,8 +8,8 @@
 #include <unistd.h>
 
 #include "backing_io_internal.h"
-#include "backing_path.h"
-#include "backing_roots.h"
+#include "internal/fs/namei.h"
+#include "internal/fs/rootfs.h"
 
 static int try_memfd_root(int (*discover_root)(char *path, size_t path_len),
                           pid_t pid) {

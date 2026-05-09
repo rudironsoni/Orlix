@@ -14,8 +14,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#include "internal/private/backing_io.h"
-#include "internal/private/backing_path.h"
+#include "internal/fs/file.h"
+#include "internal/fs/namei.h"
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
 #include "HostTestSupport.h"

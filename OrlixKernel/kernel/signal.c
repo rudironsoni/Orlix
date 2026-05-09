@@ -5,9 +5,9 @@
  * Internal logic uses private types only.
  */
 
-#include <string.h>
-#include <errno.h>
-#include <stdlib.h>
+#include <linux/errno.h>
+#include <linux/gfp_types.h>
+#include <linux/string.h>
 
 #ifdef SIGHUP
 #undef SIGHUP
@@ -162,13 +162,16 @@ typedef struct {
 #include "task.h"
 #include "wait_queue.h"
 
+extern void *__kmalloc_noprof(size_t size, gfp_t flags);
+extern void kfree(const void *objp);
+
 enum {
     frame_record_words = 12,
     frame_ucontext_offset = 128,
 };
 
 struct signal_struct *alloc_signal_struct(void) {
-    struct signal_struct *sig = calloc(1, sizeof(struct signal_struct));
+    struct signal_struct *sig = __kmalloc_noprof(sizeof(struct signal_struct), GFP_KERNEL | __GFP_ZERO);
     if (!sig)
         return NULL;
 
@@ -203,13 +206,13 @@ void free_signal_struct(struct signal_struct *sig) {
     struct signal_queue_entry *entry = sig->queue.head;
     while (entry) {
         struct signal_queue_entry *next = entry->next;
-        free(entry);
+        kfree(entry);
         entry = next;
     }
     kernel_mutex_unlock(&sig->queue.lock);
 
     kernel_mutex_destroy(&sig->queue.lock);
-    free(sig);
+    kfree(sig);
 }
 
 struct signal_struct *dup_signal_struct(struct signal_struct *parent) {
@@ -240,7 +243,7 @@ static int signal_queue_append(struct signal_struct *signal, int32_t sig, int32_
         return -EINVAL;
     }
 
-    entry = calloc(1, sizeof(*entry));
+    entry = __kmalloc_noprof(sizeof(*entry), GFP_KERNEL | __GFP_ZERO);
     if (!entry) {
         return -ENOMEM;
     }
@@ -265,7 +268,7 @@ static int signal_queue_append(struct signal_struct *signal, int32_t sig, int32_
                     signal->queue.tail = prev;
                 }
                 signal->queue.count--;
-                free(cursor);
+                kfree(cursor);
                 break;
             }
             prev = cursor;
@@ -306,7 +309,7 @@ static int signal_queue_remove_first(struct signal_struct *signal, int32_t sig) 
                 signal->queue.tail = prev;
             }
             signal->queue.count--;
-            free(entry);
+            kfree(entry);
             break;
         }
         prev = entry;
@@ -732,19 +735,16 @@ int signal_init_task(struct task_struct *task) {
 int do_sigaction(int32_t sig, const struct signal_action_slot *act,
                  struct signal_action_slot *oldact) {
     if (sig < 1 || sig >= KERNEL_SIG_NUM) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     if (sig == SIGKILL || sig == SIGSTOP) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     struct task_struct *task = get_current();
     if (!task || !task->signal) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     if (oldact) {
@@ -762,8 +762,7 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
 		   struct signal_mask_bits *oldset) {
 	struct task_struct *task = get_current();
 	if (!task || !task->signal) {
-		errno = ESRCH;
-		return -1;
+		return -ESRCH;
 	}
 
 	struct signal_struct *sig = task->signal;
@@ -788,8 +787,7 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
 			sig->blocked = *set;
 			break;
 		default:
-			errno = EINVAL;
-			return -1;
+			return -EINVAL;
 		}
 	}
 
@@ -802,14 +800,12 @@ int do_sigsetmask(const struct signal_mask_bits *set, struct signal_mask_bits *o
 
 int do_sigpending(struct signal_mask_bits *set) {
     if (!set) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     struct task_struct *task = get_current();
     if (!task || !task->signal) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     memset(set, 0, sizeof(*set));
@@ -820,36 +816,34 @@ int do_sigpending(struct signal_mask_bits *set) {
     return 0;
 }
 
-sighandler_t do_signal(int32_t signum, sighandler_t handler) {
+int do_signal(int32_t signum, sighandler_t handler, sighandler_t *old_handler) {
     if (signum < 1 || signum >= KERNEL_SIG_NUM) {
-        errno = EINVAL;
-        return NULL;
+        return -EINVAL;
     }
 
     if (signum == SIGKILL || signum == SIGSTOP) {
-        errno = EINVAL;
-        return NULL;
+        return -EINVAL;
     }
 
     struct task_struct *task = get_current();
     if (!task || !task->signal) {
-        errno = ESRCH;
-        return NULL;
+        return -ESRCH;
     }
 
-    sighandler_t old_handler = task->signal->actions[signum - 1].handler;
+    if (old_handler) {
+        *old_handler = task->signal->actions[signum - 1].handler;
+    }
     task->signal->actions[signum - 1].handler = handler;
     task->signal->actions[signum - 1].flags = 0;
     memset(&task->signal->actions[signum - 1].mask, 0, sizeof(struct signal_mask_bits));
 
-    return old_handler;
+    return 0;
 }
 
 int do_raise(int32_t sig) {
     struct task_struct *task = get_current();
     if (!task) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
     return signal_generate_task(task, sig);
 }
@@ -865,8 +859,7 @@ static int is_sigset_empty(const struct signal_mask_bits *set) {
 int do_pause(void) {
     struct task_struct *task = get_current();
     if (!task) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     kernel_mutex_lock(&task->wait_lock);
@@ -879,20 +872,17 @@ int do_pause(void) {
 
     kernel_mutex_unlock(&task->wait_lock);
 
-    errno = EINTR;
-    return -1;
+    return -EINTR;
 }
 
 int do_sigsuspend(const struct signal_mask_bits *mask) {
     struct task_struct *task = get_current();
     if (!task || !task->signal) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     if (!mask) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     /* Save old mask */
@@ -911,14 +901,12 @@ int do_sigsuspend(const struct signal_mask_bits *mask) {
     /* Restore old mask */
     task->signal->blocked = old_mask;
 
-    errno = EINTR;
-    return -1;
+    return -EINTR;
 }
 
 int do_kill(int32_t pid, int32_t sig) {
     if (sig < 0 || sig > KERNEL_SIG_NUM) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     int result;
@@ -929,74 +917,48 @@ int do_kill(int32_t pid, int32_t sig) {
             /* Current process group */
             struct task_struct *task = get_current();
             if (!task) {
-                errno = ESRCH;
-                return -1;
+                return -ESRCH;
             }
             result = signal_generate_pgrp(task->pgid, sig);
         } else if (pid == -1) {
             /* All processes (privileged) */
-            errno = EPERM;
-            return -1;
+            return -EPERM;
         } else {
             /* Process group |pid| */
             result = signal_generate_pgrp(-pid, sig);
-        }
-        /* Convert internal error codes to errno + return -1 */
-        if (result < 0) {
-            errno = -result;
-            return -1;
         }
         return result;
     }
 
     struct task_struct *task = task_lookup(pid);
     if (!task) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
 
     result = signal_send_process(task, sig);
     free_task(task);
-    /* Convert internal error codes to errno + return -1 */
-    if (result < 0) {
-        errno = -result;
-        return -1;
-    }
     return result;
 }
 
 int do_killpg(int32_t pgrp, int32_t sig) {
-    int result = signal_generate_pgrp(pgrp, sig);
-    /* Convert internal error codes to errno + return -1 */
-    if (result < 0) {
-        errno = -result;
-        return -1;
-    }
-    return result;
-}
-
-__attribute__((visibility("default"))) int killpg(int pgrp, int sig) {
-    return do_killpg((int32_t)pgrp, (int32_t)sig);
+    return signal_generate_pgrp(pgrp, sig);
 }
 
 int do_sigaltstack(const struct signal_altstack *new_stack, struct signal_altstack *old_stack) {
     struct task_struct *task = get_current();
 
     if (!task || !task->signal) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
     if (old_stack) {
         *old_stack = task->signal->altstack;
     }
     if (new_stack) {
         if ((new_stack->ss_flags & ~(2 | (int32_t)(1U << 31))) != 0) {
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         if ((new_stack->ss_flags & 2) == 0 && new_stack->ss_size < 5120) {
-            errno = ENOMEM;
-            return -1;
+            return -ENOMEM;
         }
         task->signal->altstack = *new_stack;
     }
@@ -1012,8 +974,7 @@ int signal_prepare_frame_impl(struct task_struct *task, int32_t sig, uint64_t re
     const struct signal_action_slot *action;
 
     if (!task || !task->signal || !task->mm || sig < 1 || sig > KERNEL_SIG_NUM || !frame_sp_out) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     action = &task->signal->actions[sig - 1];
     frame_sp = current_sp;
@@ -1024,8 +985,7 @@ int signal_prepare_frame_impl(struct task_struct *task, int32_t sig, uint64_t re
         task->signal->altstack.ss_flags |= 1;
     }
     if (frame_sp < frame_size) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     frame_sp -= frame_size;
     frame_sp &= ~15ULL;

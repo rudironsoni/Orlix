@@ -7,6 +7,8 @@
 #ifndef KERNEL_CGROUP_H
 #define KERNEL_CGROUP_H
 
+#include <linux/types.h>
+
 #include <stddef.h>
 #include <stdint.h>
 

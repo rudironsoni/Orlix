@@ -7,14 +7,18 @@
 #include "cred.h"
 #include "task.h"
 
-#include <errno.h>
+#include <linux/errno.h>
+#include <linux/gfp_types.h>
+#include <linux/stdarg.h>
+#include <linux/sprintf.h>
+#include <linux/string.h>
 #include <stdatomic.h>
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-#include <linux/capability.h>
+#include <uapi/linux/capability.h>
+
+extern void *__kmalloc_noprof(size_t size, gfp_t flags);
+extern void kfree(const void *objp);
 
 struct cgroup {
     char path[MAX_PATH];
@@ -55,7 +59,7 @@ static void cgroup_free_tree(struct cgroup *cgrp) {
         cgroup_free_tree(child);
     }
     kernel_mutex_destroy(&cgrp->lock);
-    free(cgrp);
+    kfree(cgrp);
 }
 
 static bool cgroup_path_is_prefix(const char *parent, const char *child) {
@@ -127,11 +131,11 @@ static int cgroup_absolute_from_visible(const struct task_struct *task, const ch
         memcpy(out, root_path, strlen(root_path) + 1);
         return 0;
     }
-    ret = snprintf(out, out_len, "%s%s", root_path, visible);
+    ret = scnprintf(out, out_len, "%s%s", root_path, visible);
     if (ret < 0) {
         return -EINVAL;
     }
-    if ((size_t)ret >= out_len) {
+    if ((size_t)ret >= out_len - (out_len > 0 ? 1 : 0)) {
         return -ENAMETOOLONG;
     }
     return 0;
@@ -192,7 +196,7 @@ int cgroup_init(void) {
         return 0;
     }
 
-    root_cgroup = calloc(1, sizeof(*root_cgroup));
+    root_cgroup = __kmalloc_noprof(sizeof(*root_cgroup), GFP_KERNEL | __GFP_ZERO);
     if (!root_cgroup) {
         kernel_mutex_unlock(&cgroup_lock);
         return -ENOMEM;
@@ -437,11 +441,11 @@ static int task_cgroup_proc_content_for_viewer(const struct task_struct *viewer,
             memcpy(visible, task_path + root_len, strlen(task_path + root_len) + 1);
         }
     }
-    ret = snprintf(buf, buflen, "0::%s\n", visible);
+    ret = scnprintf(buf, buflen, "0::%s\n", visible);
     if (ret < 0) {
         return -EINVAL;
     }
-    if ((size_t)ret >= buflen) {
+    if (buflen > 0 && (size_t)ret >= buflen - 1) {
         return (int)(buflen - 1);
     }
     return ret;
@@ -461,11 +465,11 @@ int task_cgroup_proc_content(const struct task_struct *task, char *buf, size_t b
     if (ret != 0) {
         return ret;
     }
-    ret = snprintf(buf, buflen, "0::%s\n", visible);
+    ret = scnprintf(buf, buflen, "0::%s\n", visible);
     if (ret < 0) {
         return -EINVAL;
     }
-    if ((size_t)ret >= buflen) {
+    if (buflen > 0 && (size_t)ret >= buflen - 1) {
         return (int)(buflen - 1);
     }
     return ret;
@@ -634,13 +638,13 @@ int cgroupfs_mkdir(const char *path) {
         kernel_mutex_unlock(&cgroup_lock);
         return -ENOENT;
     }
-    child = calloc(1, sizeof(*child));
+    child = __kmalloc_noprof(sizeof(*child), GFP_KERNEL | __GFP_ZERO);
     if (!child) {
         kernel_mutex_unlock(&cgroup_lock);
         return -ENOMEM;
     }
     if (strlen(path) >= MAX_PATH) {
-        free(child);
+        kfree(child);
         kernel_mutex_unlock(&cgroup_lock);
         return -ENAMETOOLONG;
     }

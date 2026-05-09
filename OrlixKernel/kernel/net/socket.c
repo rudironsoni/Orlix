@@ -1,27 +1,28 @@
 #include "socket.h"
 
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
-#include <asm-generic/socket.h>
-
-#include <errno.h>
-#include <limits.h>
-#include <linux/poll.h>
-#include <linux/un.h>
+#include <linux/errno.h>
+#include <linux/err.h>
+#include <linux/gfp_types.h>
+#include <linux/limits.h>
+#include <linux/string.h>
 #include <stdatomic.h>
-#include <stdlib.h>
-#include <string.h>
 
-#include "kernel_sync.h"
+#include "internal/mutex.h"
 #include "../signal.h"
 #include "../task.h"
 #include "../wait_queue.h"
 
+#include <uapi/asm-generic/poll.h>
+#include <uapi/asm-generic/signal.h>
+#include <uapi/asm-generic/socket.h>
+
+extern void *__kmalloc_noprof(size_t size, gfp_t flags);
+extern void kfree(const void *objp);
+
 void poll_notify_readiness_impl(void);
 
 #define SOCKET_BUFFER_SIZE 65536U
-#define UNIX_NAME_MAX ((size_t)(UNIX_PATH_MAX - 1))
+#define UNIX_NAME_MAX ((size_t)(MAX_PATH - 1))
 
 struct socket_namespace_entry {
     struct socket_namespace_entry *next;
@@ -142,14 +143,12 @@ static int socket_namespace_register_impl(struct socket_state *sock, const unsig
     struct socket_namespace_entry *entry;
 
     if (!sock || !name || name_len == 0 || name_len > UNIX_NAME_MAX) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
-    entry = calloc(1, sizeof(*entry));
+    entry = __kmalloc_noprof(sizeof(*entry), GFP_KERNEL | __GFP_ZERO);
     if (!entry) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
     memcpy(entry->name, name, name_len);
     entry->name_len = name_len;
@@ -158,9 +157,8 @@ static int socket_namespace_register_impl(struct socket_state *sock, const unsig
     kernel_mutex_lock(&socket_namespace_lock);
     if (socket_namespace_lookup_locked(name, name_len)) {
         kernel_mutex_unlock(&socket_namespace_lock);
-        free(entry);
-        errno = EADDRINUSE;
-        return -1;
+        kfree(entry);
+        return -EADDRINUSE;
     }
     socket_retain_impl(sock);
     entry->next = socket_namespace_entries;
@@ -186,7 +184,7 @@ static void socket_namespace_unregister_impl(struct socket_state *sock, const un
             sock->namespace_registered = false;
             kernel_mutex_unlock(&socket_namespace_lock);
             socket_release_impl(cur->sock);
-            free(cur);
+            kfree(cur);
             return;
         }
         pp = &cur->next;
@@ -198,8 +196,7 @@ static struct socket_state *socket_lookup_named_peer(const unsigned char *name, 
     struct socket_state *peer = NULL;
 
     if (!name || name_len == 0 || name_len > UNIX_NAME_MAX) {
-        errno = EINVAL;
-        return NULL;
+        return ERR_PTR(-EINVAL);
     }
 
     kernel_mutex_lock(&socket_namespace_lock);
@@ -209,7 +206,7 @@ static struct socket_state *socket_lookup_named_peer(const unsigned char *name, 
     }
     kernel_mutex_unlock(&socket_namespace_lock);
     if (!peer) {
-        errno = ENOENT;
+        return ERR_PTR(-ENOENT);
     }
     return peer;
 }
@@ -233,7 +230,7 @@ static void socket_datagram_queue_free_all(struct socket_state *sock) {
     sock->dgram_bytes = 0;
     while (msg) {
         struct socket_datagram *next = msg->next;
-        free(msg);
+        kfree(msg);
         msg = next;
     }
 }
@@ -247,26 +244,21 @@ static ssize_t socket_queue_datagram_locked(struct socket_state *target,
     struct socket_datagram *msg;
 
     if (!target) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
     if (len > SOCKET_BUFFER_SIZE || len > (size_t)target->recvbuf) {
-        errno = EMSGSIZE;
-        return -1;
+        return -EMSGSIZE;
     }
     if (!target->writes_open) {
-        errno = ECONNREFUSED;
-        return -1;
+        return -ECONNREFUSED;
     }
     if (socket_datagram_space_locked(target) < len) {
-        errno = EAGAIN;
-        return -1;
+        return -EAGAIN;
     }
 
-    msg = calloc(1, sizeof(*msg) + len);
+    msg = __kmalloc_noprof(sizeof(*msg) + len, GFP_KERNEL | __GFP_ZERO);
     if (!msg) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
     msg->len = len;
     msg->sender_name_valid = sender_name_valid;
@@ -291,10 +283,9 @@ static ssize_t socket_queue_datagram_locked(struct socket_state *target,
 struct socket_state *socket_create_impl(int domain, int type, int protocol, bool datagram) {
     struct socket_state *sock;
 
-    sock = calloc(1, sizeof(*sock));
+    sock = __kmalloc_noprof(sizeof(*sock), GFP_KERNEL | __GFP_ZERO);
     if (!sock) {
-        errno = ENOMEM;
-        return NULL;
+        return ERR_PTR(-ENOMEM);
     }
 
     atomic_init(&sock->refs, 1);
@@ -344,18 +335,22 @@ int socketpair_create_impl(int domain,
     struct socket_state *b;
 
     if (!a_out || !b_out) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     *a_out = NULL;
     *b_out = NULL;
 
     a = socket_create_impl(domain, type, protocol, datagram);
     b = socket_create_impl(domain, type, protocol, datagram);
-    if (!a || !b) {
-        socket_release_impl(a);
-        socket_release_impl(b);
-        return -1;
+    if (IS_ERR(a) || IS_ERR(b)) {
+        int ret = IS_ERR(a) ? (int)PTR_ERR(a) : (int)PTR_ERR(b);
+        if (!IS_ERR(a)) {
+            socket_release_impl(a);
+        }
+        if (!IS_ERR(b)) {
+            socket_release_impl(b);
+        }
+        return ret;
     }
 
     a->peer = b;
@@ -440,19 +435,17 @@ void socket_release_impl(struct socket_state *sock) {
     }
 
     wait_queue_destroy(&sock->wait);
-    free(sock);
+    kfree(sock);
     poll_notify_readiness_impl();
 }
 
 int socket_shutdown_impl(struct socket_state *sock, bool shut_read, bool shut_write) {
     if (!sock) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
 
     if (!shut_read && !shut_write) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     wait_queue_lock(&sock->wait);
@@ -476,30 +469,27 @@ int socket_connect_impl(struct socket_state *sock, const unsigned char *name, si
     struct socket_state *server_side = NULL;
 
     if (!sock || !name || name_len == 0 || name_len > UNIX_NAME_MAX) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     wait_queue_lock(&sock->wait);
     if (sock->peer) {
         wait_queue_unlock(&sock->wait);
-        errno = EISCONN;
-        return -1;
+        return -EISCONN;
     }
     if (sock->datagram) {
         struct socket_state *peer;
 
         wait_queue_unlock(&sock->wait);
         peer = socket_lookup_named_peer(name, name_len);
-        if (!peer) {
-            return -1;
+        if (IS_ERR(peer)) {
+            return (int)PTR_ERR(peer);
         }
         wait_queue_lock(&peer->wait);
         if (peer->type != sock->type || peer->domain != sock->domain || !peer->is_bound) {
             wait_queue_unlock(&peer->wait);
             socket_release_impl(peer);
-            errno = EPROTOTYPE;
-            return -1;
+            return -EPROTOTYPE;
         }
         wait_queue_unlock(&peer->wait);
         socket_release_impl(peer);
@@ -515,29 +505,28 @@ int socket_connect_impl(struct socket_state *sock, const unsigned char *name, si
     wait_queue_unlock(&sock->wait);
 
     listener = socket_lookup_named_peer(name, name_len);
-    if (!listener) {
-        return -1;
+    if (IS_ERR(listener)) {
+        return (int)PTR_ERR(listener);
     }
 
     wait_queue_lock(&listener->wait);
     if (!listener->is_listening) {
         wait_queue_unlock(&listener->wait);
         socket_release_impl(listener);
-        errno = ECONNREFUSED;
-        return -1;
+        return -ECONNREFUSED;
     }
     if (listener->backlog > 0 && listener->accept_queue_len >= listener->backlog) {
         wait_queue_unlock(&listener->wait);
         socket_release_impl(listener);
-        errno = EAGAIN;
-        return -1;
+        return -EAGAIN;
     }
     wait_queue_unlock(&listener->wait);
 
     server_side = socket_create_impl(sock->domain, sock->type, sock->protocol, sock->datagram);
-    if (!server_side) {
+    if (IS_ERR(server_side)) {
+        int ret = (int)PTR_ERR(server_side);
         socket_release_impl(listener);
-        return -1;
+        return ret;
     }
 
     wait_queue_lock(&sock->wait);
@@ -578,15 +567,13 @@ int socket_connect_impl(struct socket_state *sock, const unsigned char *name, si
 
 int socket_bind_impl(struct socket_state *sock, const unsigned char *name, size_t name_len) {
     if (!sock || !name || name_len == 0 || name_len > UNIX_NAME_MAX) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     wait_queue_lock(&sock->wait);
     if (sock->is_bound) {
         wait_queue_unlock(&sock->wait);
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     memcpy(sock->bound_name, name, name_len);
     sock->bound_name_len = name_len;
@@ -594,12 +581,15 @@ int socket_bind_impl(struct socket_state *sock, const unsigned char *name, size_
     sock->namespace_registered = false;
     wait_queue_unlock(&sock->wait);
 
-    if (socket_namespace_register_impl(sock, sock->bound_name, sock->bound_name_len) != 0) {
+    {
+        int ret = socket_namespace_register_impl(sock, sock->bound_name, sock->bound_name_len);
+        if (ret != 0) {
         wait_queue_lock(&sock->wait);
         sock->is_bound = false;
         sock->bound_name_len = 0;
         wait_queue_unlock(&sock->wait);
-        return -1;
+        return ret;
+        }
     }
 
     return 0;
@@ -607,24 +597,20 @@ int socket_bind_impl(struct socket_state *sock, const unsigned char *name, size_
 
 int socket_listen_impl(struct socket_state *sock, int backlog) {
     if (!sock) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
     if (backlog < 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     wait_queue_lock(&sock->wait);
     if (sock->datagram) {
         wait_queue_unlock(&sock->wait);
-        errno = EOPNOTSUPP;
-        return -1;
+        return -EOPNOTSUPP;
     }
     if (!sock->is_bound) {
         wait_queue_unlock(&sock->wait);
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     sock->is_listening = true;
     sock->backlog = backlog;
@@ -638,31 +624,26 @@ struct socket_state *socket_accept_impl(struct socket_state *sock, bool nonblock
     struct socket_state *accepted;
 
     if (!sock) {
-        errno = EBADF;
-        return NULL;
+        return ERR_PTR(-EBADF);
     }
 
     wait_queue_lock(&sock->wait);
     if (!sock->is_listening) {
         wait_queue_unlock(&sock->wait);
-        errno = EINVAL;
-        return NULL;
+        return ERR_PTR(-EINVAL);
     }
     while (!sock->accept_queue_head) {
         if (nonblock) {
             wait_queue_unlock(&sock->wait);
-            errno = EAGAIN;
-            return NULL;
+            return ERR_PTR(-EAGAIN);
         }
         if (wait_queue_wait_locked_interruptible(&sock->wait) != 0) {
             wait_queue_unlock(&sock->wait);
-            errno = EINTR;
-            return NULL;
+            return ERR_PTR(-EINTR);
         }
         if (!sock->is_listening) {
             wait_queue_unlock(&sock->wait);
-            errno = EINVAL;
-            return NULL;
+            return ERR_PTR(-EINVAL);
         }
     }
 
@@ -685,8 +666,7 @@ int socket_getsockname_impl(struct socket_state *sock, unsigned char *name_out, 
     size_t name_len = 0;
 
     if (!sock || !name_len_out) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
 
     wait_queue_lock(&sock->wait);
@@ -706,8 +686,7 @@ int socket_getpeername_impl(struct socket_state *sock, unsigned char *name_out, 
     bool valid;
 
     if (!sock || !name_len_out) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
 
     wait_queue_lock(&sock->wait);
@@ -721,8 +700,7 @@ int socket_getpeername_impl(struct socket_state *sock, unsigned char *name_out, 
     wait_queue_unlock(&sock->wait);
 
     if (!valid) {
-        errno = ENOTCONN;
-        return -1;
+        return -ENOTCONN;
     }
 
     *name_len_out = name_len;
@@ -734,12 +712,10 @@ static int socket_copy_int_opt(void *optval, __u32 *optlen, int value) {
     __u32 copy_len;
 
     if (!optlen || !optval) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (*optlen < (__u32)sizeof(int)) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     copy_len = *optlen < (__u32)sizeof(copy_value) ? *optlen : (__u32)sizeof(copy_value);
     memcpy(optval, &copy_value, copy_len);
@@ -755,12 +731,10 @@ int socket_getsockopt_impl(struct socket_state *sock,
     int value;
 
     if (!sock) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
     if (level != SOL_SOCKET) {
-        errno = ENOPROTOOPT;
-        return -1;
+        return -ENOPROTOOPT;
     }
 
     wait_queue_lock(&sock->wait);
@@ -795,8 +769,7 @@ int socket_getsockopt_impl(struct socket_state *sock,
         break;
     default:
         wait_queue_unlock(&sock->wait);
-        errno = ENOPROTOOPT;
-        return -1;
+        return -ENOPROTOOPT;
     }
     wait_queue_unlock(&sock->wait);
     return socket_copy_int_opt(optval, optlen, value);
@@ -810,16 +783,13 @@ int socket_setsockopt_impl(struct socket_state *sock,
     int value;
 
     if (!sock) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
     if (level != SOL_SOCKET) {
-        errno = ENOPROTOOPT;
-        return -1;
+        return -ENOPROTOOPT;
     }
     if (!optval || optlen < (__u32)sizeof(int)) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     memcpy(&value, optval, sizeof(value));
@@ -834,23 +804,20 @@ int socket_setsockopt_impl(struct socket_state *sock,
     case SO_SNDBUF:
         if (value <= 0) {
             wait_queue_unlock(&sock->wait);
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         sock->sendbuf = value > INT_MAX / 2 ? INT_MAX / 2 : value;
         break;
     case SO_RCVBUF:
         if (value <= 0) {
             wait_queue_unlock(&sock->wait);
-            errno = EINVAL;
-            return -1;
+            return -EINVAL;
         }
         sock->recvbuf = value > INT_MAX / 2 ? INT_MAX / 2 : value;
         break;
     default:
         wait_queue_unlock(&sock->wait);
-        errno = ENOPROTOOPT;
-        return -1;
+        return -ENOPROTOOPT;
     }
     wait_queue_unlock(&sock->wait);
     return 0;
@@ -872,12 +839,10 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
     size_t name_len = 0;
 
     if (!sock) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
     if (!buf && len > 0) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (len == 0) {
         return 0;
@@ -889,8 +854,7 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
         wait_queue_lock(&sock->wait);
         if (!sock->writes_open) {
             wait_queue_unlock(&sock->wait);
-            errno = EPIPE;
-            return -1;
+            return -EPIPE;
         }
         if (sock->is_bound && sock->bound_name_len > 0) {
             sender_name_valid = true;
@@ -908,15 +872,14 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
             memcpy(name, sock->connected_name, name_len);
         } else {
             wait_queue_unlock(&sock->wait);
-            errno = EDESTADDRREQ;
-            return -1;
+            return -EDESTADDRREQ;
         }
         wait_queue_unlock(&sock->wait);
 
         if (!peer) {
             peer = socket_lookup_named_peer(name, name_len);
-            if (!peer) {
-                return -1;
+            if (IS_ERR(peer)) {
+                return PTR_ERR(peer);
             }
         }
 
@@ -924,27 +887,23 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
         if (peer->type != sock->type || peer->domain != sock->domain) {
             wait_queue_unlock(&peer->wait);
             socket_release_impl(peer);
-            errno = EPROTOTYPE;
-            return -1;
+            return -EPROTOTYPE;
         }
         while (socket_datagram_space_locked(peer) < len) {
             if (!peer->writes_open) {
                 wait_queue_unlock(&peer->wait);
                 socket_release_impl(peer);
-                errno = ECONNREFUSED;
-                return -1;
+                return -ECONNREFUSED;
             }
             if (nonblock) {
                 wait_queue_unlock(&peer->wait);
                 socket_release_impl(peer);
-                errno = EAGAIN;
-                return -1;
+                return -EAGAIN;
             }
             if (wait_queue_wait_locked_interruptible(&peer->wait) != 0) {
                 wait_queue_unlock(&peer->wait);
                 socket_release_impl(peer);
-                errno = EINTR;
-                return -1;
+                return -EINTR;
             }
         }
         to_write = socket_queue_datagram_locked(peer, buf, len, sender_name, sender_name_len, sender_name_valid);
@@ -959,15 +918,13 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
     wait_queue_lock(&sock->wait);
     if (!sock->writes_open) {
         wait_queue_unlock(&sock->wait);
-        errno = EPIPE;
-        return -1;
+        return -EPIPE;
     }
     peer = sock->peer;
     if (!peer || !sock->peer_writes_open) {
         wait_queue_unlock(&sock->wait);
         signal_generate_task(get_current(), SIGPIPE);
-        errno = EPIPE;
-        return -1;
+        return -EPIPE;
     }
     wait_queue_unlock(&sock->wait);
 
@@ -976,18 +933,15 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
         if (!peer->peer_writes_open) {
             wait_queue_unlock(&peer->wait);
             signal_generate_task(get_current(), SIGPIPE);
-            errno = EPIPE;
-            return -1;
+            return -EPIPE;
         }
         if (nonblock) {
             wait_queue_unlock(&peer->wait);
-            errno = EAGAIN;
-            return -1;
+            return -EAGAIN;
         }
         if (wait_queue_wait_locked_interruptible(&peer->wait) != 0) {
             wait_queue_unlock(&peer->wait);
-            errno = EINTR;
-            return -1;
+            return -EINTR;
         }
     }
 
@@ -1019,12 +973,10 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
                                       bool *has_src_name_out) {
 
     if (!sock) {
-        errno = EBADF;
-        return -1;
+        return -EBADF;
     }
     if (!buf && len > 0) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (len == 0) {
         return 0;
@@ -1045,13 +997,11 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
             }
             if (nonblock) {
                 wait_queue_unlock(&sock->wait);
-                errno = EAGAIN;
-                return -1;
+                return -EAGAIN;
             }
             if (wait_queue_wait_locked_interruptible(&sock->wait) != 0) {
                 wait_queue_unlock(&sock->wait);
-                errno = EINTR;
-                return -1;
+                return -EINTR;
             }
         }
 
@@ -1075,7 +1025,7 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
         }
         to_read = len < msg->len ? len : msg->len;
         memcpy(buf, msg->data, to_read);
-        free(msg);
+        kfree(msg);
         socket_wake_all_locked(sock);
         wait_queue_unlock(&sock->wait);
         if (src_name_out && sender_name_valid && sender_name_len > 0) {
@@ -1098,13 +1048,11 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
         }
         if (nonblock) {
             wait_queue_unlock(&sock->wait);
-            errno = EAGAIN;
-            return -1;
+            return -EAGAIN;
         }
         if (wait_queue_wait_locked_interruptible(&sock->wait) != 0) {
             wait_queue_unlock(&sock->wait);
-            errno = EINTR;
-            return -1;
+            return -EINTR;
         }
     }
 

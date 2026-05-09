@@ -9,8 +9,6 @@
 #define KERNEL_CRED_H
 
 #include <linux/types.h>
-
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 

@@ -1,10 +1,11 @@
-#include <errno.h>
-#include <stdlib.h>
+#include <linux/errno.h>
 
 #include "futex.h"
 #include "ptrace.h"
 #include "signal.h"
 #include "task.h"
+#include "internal/exit.h"
+#include "internal/kthread.h"
 #include "../fs/pty.h"
 
 /* External declaration for init task */
@@ -120,7 +121,7 @@ void exit_impl(int status) {
     struct orphaned_pgrp_candidate orphaned_candidates[TASK_MAX_TASKS];
     size_t orphaned_candidate_count = 0;
     if (!task) {
-        _Exit(status);
+        process_terminate(status);
     }
 
     futex_task_exit_impl(task);
@@ -212,10 +213,10 @@ void exit_impl(int status) {
 __attribute__((visibility("default"), __noreturn__)) void exit(int status) {
     exit_impl(status);
     kernel_thread_exit(NULL);
-    _Exit(status);
+    process_terminate(status);
 }
 
 __attribute__((visibility("default"))) void _exit(int status) {
     /* Immediate exit without cleanup */
-    _Exit(status);
+    process_terminate(status);
 }

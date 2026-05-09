@@ -73,7 +73,7 @@
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
 #include "../kernel/wait_queue.h"
-#include "fs_sync.h"
+#include "internal/fs/lock.h"
 
 void poll_notify_readiness_impl(void);
 

@@ -2,7 +2,15 @@
 #include <string.h>
 #include <errno.h>
 
-#include "kernel_signal_bridge_contract.h"
+#include "kernel/signal.h"
+
+static int wrap_int_result(int ret) {
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
 
 void bridge_sigset_from_host(const sigset_t *host_set, struct signal_mask_bits *out_set) {
     memset(out_set, 0, sizeof(*out_set));
@@ -71,7 +79,7 @@ __attribute__((visibility("default"))) int sigaction(int signum, const struct si
         internal_oldact_ptr = &internal_oldact;
     }
 
-    int result = do_sigaction(signum, internal_act_ptr, internal_oldact_ptr);
+    int result = wrap_int_result(do_sigaction(signum, internal_act_ptr, internal_oldact_ptr));
 
     if (oldact && result == 0) {
         bridge_signal_to_host(&internal_oldact, oldact);
@@ -81,21 +89,17 @@ __attribute__((visibility("default"))) int sigaction(int signum, const struct si
 }
 
 __attribute__((visibility("default"))) void (*signal(int signum, void (*handler)(int)))(int) {
-    if (signum < 1 || signum >= KERNEL_SIG_NUM) {
-        errno = EINVAL;
-        return (void (*)(int))-1;
+    sighandler_t old_handler = SIG_ERR;
+    int ret = do_signal(signum, handler, &old_handler);
+    if (ret < 0) {
+        errno = -ret;
+        return SIG_ERR;
     }
-
-    if (signum == SIGKILL || signum == SIGSTOP) {
-        errno = EINVAL;
-        return (void (*)(int))-1;
-    }
-
-    return do_signal(signum, handler);
+    return old_handler;
 }
 
 __attribute__((visibility("default"))) int kill(pid_t pid, int sig) {
-    return do_kill(pid, sig);
+    return wrap_int_result(do_kill(pid, sig));
 }
 
 __attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
@@ -118,7 +122,7 @@ __attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *
         internal_oldset_ptr = &internal_oldset;
     }
 
-    int result = do_sigprocmask(how, internal_set_ptr, internal_oldset_ptr);
+    int result = wrap_int_result(do_sigprocmask(how, internal_set_ptr, internal_oldset_ptr));
 
     if (oldset && result == 0) {
         bridge_sigset_to_host(&internal_oldset, oldset);
@@ -134,7 +138,7 @@ __attribute__((visibility("default"))) int sigpending(sigset_t *set) {
     }
 
     struct signal_mask_bits internal_set;
-    int result = do_sigpending(&internal_set);
+    int result = wrap_int_result(do_sigpending(&internal_set));
 
     if (result == 0) {
         bridge_sigset_to_host(&internal_set, set);
@@ -152,13 +156,17 @@ __attribute__((visibility("default"))) int sigsuspend(const sigset_t *mask) {
     struct signal_mask_bits internal_mask;
     bridge_sigset_from_host(mask, &internal_mask);
 
-    return do_sigsuspend(&internal_mask);
+    return wrap_int_result(do_sigsuspend(&internal_mask));
 }
 
 __attribute__((visibility("default"))) int raise(int sig) {
-    return do_raise(sig);
+    return wrap_int_result(do_raise(sig));
 }
 
 __attribute__((visibility("default"))) int pause(void) {
-    return do_pause();
+    return wrap_int_result(do_pause());
+}
+
+__attribute__((visibility("default"))) int killpg(int pgrp, int sig) {
+    return wrap_int_result(do_killpg((int32_t)pgrp, (int32_t)sig));
 }

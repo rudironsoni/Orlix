@@ -11,7 +11,7 @@
 
 #include "fdtable.h"
 #include "vfs.h"
-#include "internal/private/backing_io.h"
+#include "internal/fs/file.h"
 #include "../kernel/mm.h"
 #include "../kernel/task.h"
 

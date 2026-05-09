@@ -132,7 +132,7 @@ Owner:
 - `OrlixKernel/kernel/**`
 - `OrlixKernel/runtime/**`
 - `OrlixKernel/include/**`
-- `OrlixKernel/internal/private/**` only for kernel-owned private contracts,
+- `OrlixKernel/internal/**` only for kernel-owned private contracts,
   not for repo-local renamed Linux concepts
 
 Use for:
@@ -180,7 +180,6 @@ Required owners:
 
 Current violating repo-local surfaces:
 
-- `OrlixKernel/internal/private/kernel_time_compat.h`
 - `OrlixKernel/kernel/time_internal.h`
 - `OrlixKernel/kernel/time.c`
 
@@ -207,8 +206,10 @@ Required owners:
 
 Current violating repo-local surfaces:
 
-- `OrlixKernel/internal/private/kernel_sync.h`
-- `OrlixKernel/internal/private/kernel_signal_bridge_contract.h`
+- `OrlixKernel/internal/mutex.h`
+- `OrlixKernel/internal/kthread.h`
+- `OrlixKernel/internal/timekeeping.h`
+- `OrlixKernel/kernel/signal.h`
 
 Replacement target:
 
@@ -236,8 +237,6 @@ Required owners:
 
 Current violating repo-local surfaces:
 
-- `OrlixKernel/internal/private/kernel_socket_compat.h`
-- `OrlixKernel/internal/private/kernel_select_compat.h`
 - `OrlixKernel/fs/poll.h`
 - `OrlixKernel/fs/poll.c`
 
@@ -318,7 +317,7 @@ Required owners:
 Current violating contract-adjacent surfaces:
 
 - `OrlixKernel/fs/exec.c` still includes Darwin process-environment header
-- `OrlixKernel/internal/private/task_current_contract.h` uses a role-labeled
+- `OrlixKernel/internal/current.h` still exposes a current-task control seam that
   contract name
 
 Replacement target:
@@ -345,7 +344,9 @@ Host-only required mechanism surfaces:
 
 Current violating repo-local surfaces:
 
-- `OrlixKernel/internal/private/kernel_sync.h`
+- `OrlixKernel/internal/mutex.h`
+- `OrlixKernel/internal/kthread.h`
+- `OrlixKernel/internal/timekeeping.h`
 
 Replacement target:
 
@@ -390,12 +391,11 @@ The replacement work for contract/header cleanup is:
 These files are immediate blockers because they currently encode the forbidden
 contract/header pattern:
 
-- `OrlixKernel/internal/private/kernel_sync.h`
-- `OrlixKernel/internal/private/kernel_time_compat.h`
-- `OrlixKernel/internal/private/kernel_socket_compat.h`
-- `OrlixKernel/internal/private/kernel_select_compat.h`
-- `OrlixKernel/internal/private/kernel_signal_bridge_contract.h`
-- `OrlixKernel/internal/private/task_current_contract.h`
+- `OrlixKernel/internal/mutex.h`
+- `OrlixKernel/internal/kthread.h`
+- `OrlixKernel/internal/timekeeping.h`
+- `OrlixKernel/kernel/signal.h`
+- `OrlixKernel/internal/current.h`
 - `OrlixKernel/fs/pty.h`
 - `OrlixKernel/fs/vfs.h`
 - `OrlixKernel/fs/stat_types.h`

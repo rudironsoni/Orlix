@@ -10,6 +10,8 @@
 
 #import <XCTest/XCTest.h>
 
+#include <errno.h>
+
 #include "CredentialContract.h"
 #include "fs/fdtable.h"
 
@@ -131,8 +133,7 @@ extern void cred_reset_to_defaults(void);
     result = setuid_impl(2000);
 
     /* Should fail with EPERM - non-root cannot setuid to arbitrary UIDs */
-    XCTAssertEqual(result, -1, @"setuid_impl should fail for non-root setting arbitrary UID");
-    XCTAssertEqual(errno, EPERM, @"errno should be EPERM");
+    XCTAssertEqual(result, -EPERM, @"setuid_impl should return -EPERM for non-root arbitrary UID changes");
 }
 
 - (void)testSetuidNonRootCanRevertToOwnUid {
@@ -246,18 +247,14 @@ extern void cred_reset_to_defaults(void);
     uint32_t observed[1] = {0};
 
     XCTAssertEqual(setgroups_impl(2, groups), 0, @"virtual root should set supplementary groups");
-    errno = 0;
-    XCTAssertEqual(getgroups_impl(1, observed), -1, @"getgroups should reject undersized buffers");
-    XCTAssertEqual(errno, EINVAL, @"getgroups undersized buffer should set EINVAL");
+    XCTAssertEqual(getgroups_impl(1, observed), -EINVAL, @"getgroups should reject undersized buffers with -EINVAL");
 }
 
 - (void)testSetgroupsImplNonRootFails {
     uint32_t groups[1] = {3000};
 
     XCTAssertEqual(setuid_impl(1000), 0, @"root should first become non-root");
-    errno = 0;
-    XCTAssertEqual(setgroups_impl(1, groups), -1, @"non-root should not set supplementary groups");
-    XCTAssertEqual(errno, EPERM, @"non-root setgroups should set EPERM");
+    XCTAssertEqual(setgroups_impl(1, groups), -EPERM, @"non-root should not set supplementary groups");
 }
 
 /* ============================================================================

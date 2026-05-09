@@ -19,7 +19,7 @@ What was delivered:
 
 What is not yet safe to call finished forever:
 
-- `OrlixHostAdapter` still receives broader `OrlixKernel` roots than the ideal narrow-contract end-state, including `OrlixKernel/internal/private`
+- `OrlixHostAdapter` still receives broader `OrlixKernel` roots than the ideal narrow-contract end-state, including `OrlixKernel/internal`
 - some host-private helper names still contain descriptive host wording inside `OrlixHostAdapter`, even though they no longer pollute the kernel-facing seam
 - the latest simulator proof showed that structural split success does not guarantee correct Linux-visible runtime behavior from host-backed primitives; memfd backing had to be corrected after the seam cutover
 
@@ -101,7 +101,7 @@ Owns:
 - `OrlixKernel/runtime/**`
 - `OrlixKernel/include/**`
 - `OrlixKernel/observability/**`
-- `OrlixKernel/internal/private/**`
+- `OrlixKernel/internal/**`
 
 Responsibilities:
 
@@ -172,7 +172,7 @@ Relevant observations from the current tree:
 - `OrlixHostAdapter/fs/` is the intended host backing-storage and path realization area.
 - `OrlixHostAdapter/kernel/` is the intended host clock, signal, and synchronization realization area.
 - Linux-owner code now lives under `OrlixKernel/**`.
-- the active seam is now kernel-owned private `backing_*` declarations under `OrlixKernel/internal/private/**`.
+- the active seam is now kernel-owned `backing_*` declarations under `OrlixKernel/internal/**`.
 - the end-state is still for `OrlixKernel` to receive only `OrlixKernel` roots, vendored Linux include roots, and the narrowest necessary kernel-owned private contract roots.
 - Tests are split into `OrlixKernelTests` and `OrlixHostAdapterTests` in `project.yml`.
 - host-backed directory iteration for `fs/readdir.c` now routes through a kernel-owned private `backing_dir` contract instead of ambient `dirent.h` usage in Linux-owner code.
@@ -204,7 +204,7 @@ This means the coarse split and the active kernel-facing seam correction are bot
 
 ### Not yet delivered coherently
 
-- `OrlixHostAdapter` still compiles with broad visibility into `OrlixKernel`, including `OrlixKernel/internal/private`. That may be temporarily necessary, but it is not the narrow contract end-state.
+- `OrlixHostAdapter` still compiles with broad visibility into `OrlixKernel`, including `OrlixKernel/internal`. That may be temporarily necessary, but it is not the narrow contract end-state.
 - Host-private implementation choices can still violate Linux-visible expectations even when the seam is structurally correct. The memfd backing path had to be reworked after simulator proof exposed Darwin-specific behavior that Linux code could not tolerate.
 - Some host-private helper names remain descriptive rather than purely neutral, which is acceptable only while they stay private to `OrlixHostAdapter`.
 
@@ -349,7 +349,7 @@ Semantically, Linux model first and host realization second remains the product 
 Current repo truth:
 
 - the first bullet is not yet fully implemented because the seam is still adapter-owned in the source tree
-- the second bullet is only partially true today because `OrlixHostAdapter` still receives broad `OrlixKernel` header visibility, including `OrlixKernel/internal/private`
+- the second bullet is only partially true today because `OrlixHostAdapter` still receives broad `OrlixKernel` header visibility, including `OrlixKernel/internal`
 
 ## Header Search Path Guardrails
 

@@ -24,36 +24,60 @@ targets:
     deploymentTarget:
       iOS: '16.0'
     settings:
+      ALWAYS_SEARCH_USER_PATHS: false
       HEADER_SEARCH_PATHS:
         - $(SRCROOT)/OrlixKernel
         - $(SRCROOT)/OrlixKernel/include
-        - $(SRCROOT)/OrlixKernel/internal/private
-        - $(LINUX_UAPI_INCLUDE_ROOT)
+        - $(SRCROOT)/OrlixKernel/internal
+        - $(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated
+        - $(LINUX_KHEADERS_GENERATED_ROOT)/include
+        - $(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include
+        - $(LINUX_KHEADERS_SOURCE_ROOT)/include
+        - $(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi
+        - $(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi
+        - $(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi
+        - $(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi
+      SYSTEM_HEADER_SEARCH_PATHS:
+        - $(TOOLCHAIN_DIR)/usr/lib/clang/21/include
       GCC_PREPROCESSOR_DEFINITIONS:
+      - __KERNEL__
       - _XOPEN_SOURCE
+      - _DARWIN_C_SOURCE
+      - _POSIX_C_SOURCE=200112L
+      USE_HEADERMAP: false
       CLANG_ENABLE_OBJC_ARC: true
       CLANG_WARN_DOCUMENTATION_COMMENTS: true
       OTHER_CFLAGS:
+      - -nostdinc
+      - -include
+      - $(LINUX_KHEADERS_SOURCE_ROOT)/include/linux/kconfig.h
       - -fvisibility=hidden
+    headers:
+    - path: third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated
+      type: folder
+    - path: third_party/linux/6.12/arm64/kheaders/generated/include
+      type: folder
+    - path: third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include
+      type: folder
+    - path: third_party/linux/6.12/arm64/kheaders/source/include
+      type: folder
+    - path: third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated/uapi
+      type: folder
+    - path: third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include/uapi
+      type: folder
+    - path: third_party/linux/6.12/arm64/kheaders/generated/include/generated/uapi
+      type: folder
+    - path: third_party/linux/6.12/arm64/kheaders/source/include/uapi
+      type: folder
     sources:
     - path: OrlixKernel/fs/eventpoll.c
       group: OrlixKernel/fs
-      compilerFlags:
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include
     - path: OrlixKernel/fs/exec.c
       group: OrlixKernel/fs
     - path: OrlixKernel/fs/fcntl.c
       group: OrlixKernel/fs
     - path: OrlixKernel/fs/fdtable.c
       group: OrlixKernel/fs
-      compilerFlags:
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include
     - path: OrlixKernel/fs/inode.c
       group: OrlixKernel/fs
     - path: OrlixKernel/fs/ioctl.c
@@ -80,8 +104,6 @@ targets:
       group: OrlixKernel/fs
     - path: OrlixKernel/fs/uio.c
       group: OrlixKernel/fs
-      compilerFlags:
-      - -I$(LINUX_UAPI_INCLUDE_ROOT)
     - path: OrlixKernel/fs/super.c
       group: OrlixKernel/fs
     - path: OrlixKernel/fs/vfs.c
@@ -104,15 +126,6 @@ targets:
       group: OrlixKernel/kernel
     - path: OrlixKernel/kernel/net/network.c
       group: OrlixKernel/kernel/net
-      compilerFlags:
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi
-      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi
-      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi
     - path: OrlixKernel/kernel/net/socket.c
       group: OrlixKernel/kernel/net
     - path: OrlixKernel/kernel/net/socket.h
@@ -129,8 +142,6 @@ targets:
       group: OrlixKernel/kernel
     - path: OrlixKernel/kernel/signal.c
       group: OrlixKernel/kernel
-    - path: OrlixKernel/kernel/sync.c
-      group: OrlixKernel/kernel
     - path: OrlixKernel/kernel/sys.c
       group: OrlixKernel/kernel
     - path: OrlixKernel/kernel/task.c
@@ -139,6 +150,8 @@ targets:
       group: OrlixKernel/kernel
     - path: OrlixKernel/kernel/uts.c
       group: OrlixKernel/kernel
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
     - path: OrlixKernel/kernel/wait_queue.c
       group: OrlixKernel/kernel
     - path: OrlixKernel/kernel/wait.c
@@ -165,7 +178,7 @@ targets:
         - $(SRCROOT)
         - $(SRCROOT)/OrlixKernel
         - $(SRCROOT)/OrlixKernel/include
-        - $(SRCROOT)/OrlixKernel/internal/private
+        - $(SRCROOT)/OrlixKernel/internal
       GCC_PREPROCESSOR_DEFINITIONS:
       - _XOPEN_SOURCE
       CLANG_ENABLE_OBJC_ARC: true
@@ -199,6 +212,47 @@ targets:
       group: OrlixHostAdapter/fs
     - path: OrlixHostAdapter/kernel/signal.c
       group: OrlixHostAdapter/kernel
+    - path: OrlixHostAdapter/kernel/futex.c
+      group: OrlixHostAdapter/kernel
+    - path: OrlixHostAdapter/kernel/cred.c
+      group: OrlixHostAdapter/kernel
+      compilerFlags:
+      - -I$(LINUX_UAPI_INCLUDE_ROOT)
+    - path: OrlixHostAdapter/kernel/wait.c
+      group: OrlixHostAdapter/kernel
+      compilerFlags:
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi
+    - path: OrlixHostAdapter/kernel/resource.c
+      group: OrlixHostAdapter/kernel
+      compilerFlags:
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi
+    - path: OrlixHostAdapter/kernel/uts.c
+      group: OrlixHostAdapter/kernel
+      compilerFlags:
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi
+    - path: OrlixHostAdapter/kernel/slab.c
+      group: OrlixHostAdapter/kernel
+      compilerFlags:
+      - -D__KERNEL__
+      - -include
+      - $(LINUX_KHEADERS_SOURCE_ROOT)/include/linux/kconfig.h
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/arch/$(LINUX_ARCH)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/arch/$(LINUX_ARCH)/include/uapi
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include/generated/uapi
+      - -I$(LINUX_KHEADERS_GENERATED_ROOT)/include
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include/uapi
+      - -I$(LINUX_KHEADERS_SOURCE_ROOT)/include
     - path: OrlixHostAdapter/kernel/sync.c
       group: OrlixHostAdapter/kernel
       compilerFlags:
@@ -383,7 +437,7 @@ targets:
       HEADER_SEARCH_PATHS:
         - $(SRCROOT)/OrlixKernel
         - $(SRCROOT)/OrlixKernel/include
-        - $(SRCROOT)/OrlixKernel/internal/private
+        - $(SRCROOT)/OrlixKernel/internal
       BUNDLE_LOADER: ''
   OrlixHostAdapterTests:
     type: bundle.unit-test
@@ -408,7 +462,7 @@ targets:
         - $(SRCROOT)/OrlixKernel
         - $(SRCROOT)/OrlixHostAdapterTests
         - $(SRCROOT)/OrlixKernel/include
-        - $(SRCROOT)/OrlixKernel/internal/private
+        - $(SRCROOT)/OrlixKernel/internal
       BUNDLE_LOADER: ''
 configurations:
   Debug:

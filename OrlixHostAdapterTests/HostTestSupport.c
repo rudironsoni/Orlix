@@ -8,7 +8,7 @@
  */
 
 #include "HostTestSupport.h"
-#include "internal/private/backing_io.h"
+#include "internal/fs/file.h"
 
 #include <errno.h>
 #include <sys/types.h>

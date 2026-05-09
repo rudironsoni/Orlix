@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "fs_sync.h"
+#include "internal/fs/lock.h"
 #include "fdtable.h"
 
 static int fcntl_get_entry_or_badf(int fd, void **entry_out) {

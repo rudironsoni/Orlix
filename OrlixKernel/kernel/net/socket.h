@@ -1,10 +1,7 @@
 #ifndef ORLIX_KERNEL_NET_SOCKET_H
 #define ORLIX_KERNEL_NET_SOCKET_H
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
+#include <linux/stddef.h>
 #include <linux/types.h>
 
 struct socket_state;

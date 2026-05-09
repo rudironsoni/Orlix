@@ -1,7 +1,8 @@
 #ifndef VFS_H
 #define VFS_H
 
-#include <stdbool.h>
+#include <linux/types.h>
+
 #include <stddef.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -22,7 +23,7 @@ struct statfs {
 };
 
 #include "fdtable.h"
-#include "fs_sync.h"
+#include "internal/fs/lock.h"
 
 #ifdef __cplusplus
 extern "C" {

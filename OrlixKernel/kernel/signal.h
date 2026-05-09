@@ -17,13 +17,13 @@
 #ifndef KERNEL_SIGNAL_H
 #define KERNEL_SIGNAL_H
 
-
-#include <stdbool.h>
+#include <linux/types.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 
-#include "kernel_sync.h"
+#include "internal/mutex.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +42,12 @@ typedef void (*sighandler_t)(int);
 struct signal_mask_bits {
     uint64_t sig[KERNEL_SIG_NUM_WORDS];
 };
+
+int kernel_thread_sigmask(int how, const struct signal_mask_bits *set,
+                          struct signal_mask_bits *oldset);
+int kernel_sigemptyset(struct signal_mask_bits *set);
+int kernel_sigaddset(struct signal_mask_bits *set, int signo);
+int kernel_sigismember(const struct signal_mask_bits *set, int signo);
 
 /* Signal queue entry - private internal */
 struct signal_queue_entry {
@@ -142,7 +148,7 @@ int do_sigprocmask(int how, const struct signal_mask_bits *set,
                    struct signal_mask_bits *oldset);
 int do_sigsetmask(const struct signal_mask_bits *set, struct signal_mask_bits *oldset);
 int do_sigpending(struct signal_mask_bits *set);
-sighandler_t do_signal(int32_t signum, sighandler_t handler);
+int do_signal(int32_t signum, sighandler_t handler, sighandler_t *old_handler);
 int do_raise(int32_t sig);
 int do_pause(void);
 int do_sigsuspend(const struct signal_mask_bits *mask);

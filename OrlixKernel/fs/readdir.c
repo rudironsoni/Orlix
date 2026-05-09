@@ -7,9 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "internal/private/backing_dir.h"
+#include "internal/fs/readdir.h"
 #include "fdtable.h"
-#include "internal/private/backing_io.h"
+#include "internal/fs/file.h"
 #include "path.h"
 #include "pty.h"
 #include "vfs.h"

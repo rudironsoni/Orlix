@@ -25,29 +25,12 @@ ORLIX_LINT_COMMON_FLAGS := \
 	-fno-modules
 ORLIX_LINT_C_FLAGS := \
 	$(ORLIX_LINT_COMMON_FLAGS) \
+	-nostdinc \
+	-include $(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include/linux/kconfig.h \
+	-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include \
 	-I$(CURDIR)/OrlixKernel \
 	-I$(CURDIR)/OrlixKernel/include \
-	-I$(CURDIR)/OrlixKernel/internal/private \
-	-I$(CURDIR)/third_party/linux/6.12/arm64/uapi/include \
-	-D_XOPEN_SOURCE \
-	-fvisibility=hidden
-ORLIX_LINT_KERNEL_SOURCE_C_FLAGS := \
-	$(ORLIX_LINT_COMMON_FLAGS) \
-	-I$(CURDIR)/OrlixKernel \
-	-I$(CURDIR)/OrlixKernel/include \
-	-I$(CURDIR)/OrlixKernel/internal/private \
-	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include \
-	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include \
-	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated \
-	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include \
-	-I$(CURDIR)/third_party/linux/6.12/arm64/uapi/include \
-	-D_XOPEN_SOURCE \
-	-fvisibility=hidden
-ORLIX_LINT_NETWORK_C_FLAGS := \
-	$(ORLIX_LINT_COMMON_FLAGS) \
-	-I$(CURDIR)/OrlixKernel \
-	-I$(CURDIR)/OrlixKernel/include \
-	-I$(CURDIR)/OrlixKernel/internal/private \
+	-I$(CURDIR)/OrlixKernel/internal \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include \
@@ -56,22 +39,25 @@ ORLIX_LINT_NETWORK_C_FLAGS := \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include/uapi \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include/generated/uapi \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include/uapi \
+	-D__KERNEL__ \
 	-D_XOPEN_SOURCE \
 	-fvisibility=hidden
 ORLIX_LINT_HOST_C_FLAGS := \
 	$(ORLIX_LINT_COMMON_FLAGS) \
 	-I$(CURDIR)/OrlixKernel \
 	-I$(CURDIR)/OrlixKernel/include \
-	-I$(CURDIR)/OrlixKernel/internal/private \
+	-I$(CURDIR)/OrlixKernel/internal \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/uapi/include \
 	-D_XOPEN_SOURCE \
+	-D_DARWIN_C_SOURCE \
+	-D_POSIX_C_SOURCE=200112L \
 	-fvisibility=hidden
 ORLIX_LINT_OBJC_FLAGS := \
 	$(ORLIX_LINT_COMMON_FLAGS) \
 	-fobjc-arc \
 	-I$(CURDIR)/OrlixKernel \
 	-I$(CURDIR)/OrlixKernel/include \
-	-I$(CURDIR)/OrlixKernel/internal/private \
+	-I$(CURDIR)/OrlixKernel/internal \
 	-F$(IPHONESIM_FRAMEWORK_DIR) \
 	-F$(IPHONESIM_SDK_FRAMEWORK_DIR) \
 	-DDEBUG=1
@@ -111,10 +97,9 @@ lint: build-orlix-clang-tidy-module
 			flags="$(ORLIX_LINT_C_FLAGS)"; \
 			if [[ "$$file" == OrlixHostAdapter/* || "$$file" == OrlixHostAdapterTests/* ]]; then \
 				flags="$(ORLIX_LINT_HOST_C_FLAGS)"; \
-			elif [[ "$$file" == OrlixKernel/kernel/net/network.c ]]; then \
-				flags="$(ORLIX_LINT_NETWORK_C_FLAGS)"; \
-			elif [[ "$$file" == OrlixKernel/fs/eventpoll.c || "$$file" == OrlixKernel/fs/fdtable.c ]]; then \
-				flags="$(ORLIX_LINT_KERNEL_SOURCE_C_FLAGS)"; \
+				if [[ "$$file" == OrlixHostAdapter/kernel/slab.c ]]; then \
+					flags="$$flags -D__KERNEL__ -include $(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include/linux/kconfig.h -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include/generated/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include/uapi"; \
+				fi; \
 			fi; \
 			"$(CLANG_TIDY)" --load="$$plugin_path" --config-file=.clang-tidy "$$file" -- $$flags; \
 		done <<< "$$c_files"; \
@@ -124,6 +109,12 @@ lint: build-orlix-clang-tidy-module
 			flags="$(ORLIX_LINT_C_FLAGS)"; \
 			if [[ "$$file" == OrlixHostAdapter/* || "$$file" == OrlixHostAdapterTests/* ]]; then \
 				flags="$(ORLIX_LINT_HOST_C_FLAGS)"; \
+				if [[ "$$file" == OrlixHostAdapter/kernel/cred.c ]]; then \
+					flags="$$flags -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include/generated/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include/uapi"; \
+				fi; \
+				if [[ "$$file" == OrlixHostAdapter/kernel/slab.c ]]; then \
+					flags="$$flags -D__KERNEL__ -include $(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include/linux/kconfig.h -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include/generated/uapi -I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include/uapi"; \
+				fi; \
 			fi; \
 			"$(CLANG_TIDY)" --load="$$plugin_path" --config-file=.clang-tidy "$$file" -- $$flags -x c-header; \
 		done <<< "$$header_files"; \

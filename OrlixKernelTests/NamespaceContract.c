@@ -787,8 +787,7 @@ int namespace_contract_proc_uid_gid_maps_are_writable_with_setgroups_policy(void
         set_current(parent);
         goto out;
     }
-    errno = 0;
-    if (setgroups_impl(1, groups) != -1 || errno != EPERM) {
+    if (setgroups_impl(1, groups) != -EPERM) {
         set_current(parent);
         errno = ENODATA;
         goto out;

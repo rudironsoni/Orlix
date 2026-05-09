@@ -1,8 +1,6 @@
-#include <errno.h>
+#include <linux/errno.h>
 #include <stdatomic.h>
 #include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include <linux/types.h>
 

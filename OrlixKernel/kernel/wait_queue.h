@@ -1,7 +1,7 @@
 #ifndef KERNEL_WAIT_QUEUE_H
 #define KERNEL_WAIT_QUEUE_H
 
-#include "kernel_sync.h"
+#include "internal/mutex.h"
 
 #ifdef __cplusplus
 extern "C" {

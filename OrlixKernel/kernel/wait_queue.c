@@ -1,10 +1,10 @@
 #include "wait_queue.h"
 
-#include <errno.h>
+#include <linux/errno.h>
 
 #include "signal.h"
 #include "task.h"
-#include "kernel_sync.h"
+#include "internal/timekeeping.h"
 
 int wait_queue_init(struct wait_queue_head *queue) {
     int ret;

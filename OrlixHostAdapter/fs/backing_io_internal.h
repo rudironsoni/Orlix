@@ -127,7 +127,7 @@ int backing_root_discover_cache(char *path, size_t path_len);
 int backing_root_discover_temp(char *path, size_t path_len);
 
 /* Path operations live in the kernel-owned private contract. */
-#include "backing_path.h"
+#include "internal/fs/namei.h"
 
 /* Backing filesystem operations via direct syscalls. */
 int backing_open(const char *path, int flags, uint32_t mode);

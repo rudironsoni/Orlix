@@ -17,7 +17,7 @@
 #include <linux/stat.h>
 #include <asm-generic/stat.h>
 
-#include "internal/private/backing_path.h"
+#include "internal/fs/namei.h"
 #include "kernel/cgroup.h"
 
 /* Standard file descriptors - local definitions to avoid Darwin <unistd.h> */

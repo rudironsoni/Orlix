@@ -3,13 +3,12 @@
 #include "task.h"
 #include "wait_queue.h"
 
-#include <errno.h>
+#include <linux/errno.h>
+#include <linux/string.h>
 #include <stdatomic.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
-#include <linux/futex.h>
+#include <uapi/linux/futex.h>
 
 #define KERNEL_WAIT_WORD_BUCKETS 64
 
@@ -129,28 +128,23 @@ static int futex_wait_common_impl(int *uaddr, int expected, int timeout_ms, uint
     struct futex_waiter waiter;
 
     if (!uaddr) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (timeout_ms < -1) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (futex_table_init_once() != 0) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
     if (atomic_load((_Atomic int *)uaddr) != expected) {
-        errno = EAGAIN;
-        return -1;
+        return -EAGAIN;
     }
 
     wait_queue_lock(&futex_table_lock);
     bucket = futex_find_bucket_locked((uintptr_t)uaddr, 1);
     wait_queue_unlock(&futex_table_lock);
     if (!bucket) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
 
     memset(&waiter, 0, sizeof(waiter));
@@ -163,8 +157,7 @@ static int futex_wait_common_impl(int *uaddr, int expected, int timeout_ms, uint
     wait_queue_lock(&bucket->wait);
     if (atomic_load((_Atomic int *)uaddr) != expected) {
         wait_queue_unlock(&bucket->wait);
-        errno = EAGAIN;
-        return -1;
+        return -EAGAIN;
     }
     futex_waiter_add_locked(bucket, &waiter);
     while (1) {
@@ -183,11 +176,8 @@ static int futex_wait_common_impl(int *uaddr, int expected, int timeout_ms, uint
                                          (uint64_t)(int64_t)expected,
                                          (uint64_t)(int64_t)timeout_ms,
                                          0, 0, 0);
-                errno = EINTR;
-            } else {
-                errno = ETIMEDOUT;
             }
-            return -1;
+            return ret;
         }
 
         if (waiter.woken) {
@@ -216,8 +206,7 @@ static int futex_wait_common_impl(int *uaddr, int expected, int timeout_ms, uint
 	        if (waiter.check_expected && atomic_load((_Atomic int *)waiter.wait_uaddr) != waiter.expected) {
 	            futex_waiter_remove_locked(bucket, &waiter);
 	            wait_queue_unlock(&bucket->wait);
-            errno = EAGAIN;
-            return -1;
+            return -EAGAIN;
         }
     }
 }
@@ -228,8 +217,7 @@ int futex_wait_impl(int *uaddr, int expected, int timeout_ms) {
 
 static int futex_wait_bitset_impl(int *uaddr, int expected, int timeout_ms, uint32_t bitset) {
     if (bitset == 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     return futex_wait_common_impl(uaddr, expected, timeout_ms, bitset);
 }
@@ -239,19 +227,16 @@ int futex_wake_impl(int *uaddr, int max_wake) {
     int woken = 0;
 
     if (!uaddr) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (max_wake < 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (max_wake == 0) {
         return 0;
     }
     if (futex_table_init_once() != 0) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
 
     wait_queue_lock(&futex_table_lock);
@@ -281,19 +266,16 @@ static int futex_wake_bitset_impl(int *uaddr, int max_wake, uint32_t bitset) {
     int woken = 0;
 
     if (!uaddr) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (bitset == 0 || max_wake < 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (max_wake == 0) {
         return 0;
     }
     if (futex_table_init_once() != 0) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
 
     wait_queue_lock(&futex_table_lock);
@@ -329,20 +311,16 @@ static int futex_requeue_impl(int *uaddr, int nr_wake, int nr_requeue, int *uadd
     int woken = 0;
 
     if (!uaddr || !uaddr2) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (nr_wake < 0 || nr_requeue < 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     if (futex_table_init_once() != 0) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
     if (use_cmp && atomic_load((_Atomic int *)uaddr) != cmpval) {
-        errno = EAGAIN;
-        return -1;
+        return -EAGAIN;
     }
 
     wait_queue_lock(&futex_table_lock);
@@ -351,8 +329,7 @@ static int futex_requeue_impl(int *uaddr, int nr_wake, int nr_requeue, int *uadd
     wait_queue_unlock(&futex_table_lock);
 
     if (!dst) {
-        errno = ENOMEM;
-        return -1;
+        return -ENOMEM;
     }
     if (!src) {
         return 0;
@@ -420,8 +397,7 @@ int futex_op_impl(int *uaddr, int futex_op, int val, int timeout_ms, int *uaddr2
     if (op == FUTEX_CMP_REQUEUE) {
         return futex_requeue_impl(uaddr, val, timeout_ms, uaddr2, 1, val3);
     }
-    errno = ENOSYS;
-    return -1;
+    return -ENOSYS;
 }
 
 int set_robust_list_impl(void *head, unsigned long len) {
@@ -431,12 +407,10 @@ int set_robust_list_impl(void *head, unsigned long len) {
         task = get_current();
     }
     if (!task) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
     if (!head || len == 0) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
     task->robust_list_head = (uint64_t)(uintptr_t)head;
     task->robust_list_len = (uint64_t)len;
@@ -447,8 +421,7 @@ int get_robust_list_impl(int pid, void **head, unsigned long *len) {
     struct task_struct *task;
 
     if (!head || !len) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
     if (pid == 0) {
         task = get_current();
@@ -460,8 +433,7 @@ int get_robust_list_impl(int pid, void **head, unsigned long *len) {
         task = task_lookup(pid);
     }
     if (!task) {
-        errno = ESRCH;
-        return -1;
+        return -ESRCH;
     }
     *head = (void *)(uintptr_t)task->robust_list_head;
     *len = (unsigned long)task->robust_list_len;

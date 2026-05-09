@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "fs_sync.h"
+#include "internal/fs/lock.h"
 
 static pthread_mutex_t *fs_mutex_impl(const fs_mutex_t *mutex) {
     return mutex ? (pthread_mutex_t *)mutex->impl : NULL;

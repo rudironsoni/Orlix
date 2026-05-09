@@ -11,8 +11,8 @@
 #include <string.h>
 
 #include "fdtable.h"
-#include "internal/private/backing_io.h"
-#include "fs_sync.h"
+#include "internal/fs/file.h"
+#include "internal/fs/lock.h"
 #include "pipe.h"
 #include "pty.h"
 #include "vfs.h"

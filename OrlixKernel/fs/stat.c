@@ -9,9 +9,9 @@
 
 #include "vfs.h"
 #include "fdtable.h"
-#include "fs_sync.h"
-#include "internal/private/backing_io.h"
-#include "internal/private/backing_path.h"
+#include "internal/fs/lock.h"
+#include "internal/fs/file.h"
+#include "internal/fs/namei.h"
 #include "vfs.h"
 
 #ifndef MAX_PATH

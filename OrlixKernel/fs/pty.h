@@ -1,11 +1,9 @@
 #ifndef PTY_H
 #define PTY_H
 
-#include <stdbool.h>
+#include <linux/types.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include <linux/types.h>
 
 #ifdef __cplusplus
 extern "C" {
