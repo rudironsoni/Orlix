@@ -6,6 +6,7 @@
 #define __ASSEMBLY__ 1
 #include <asm-generic/signal.h>
 #undef __ASSEMBLY__
+#include <asm-generic/siginfo.h>
 
 #include <errno.h>
 #include <pthread.h>
@@ -27,6 +28,10 @@ extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 extern int32_t clone_impl(uint64_t flags);
+extern __kernel_pid_t kernel_wait4(__kernel_pid_t pid, int *wstatus, int options, void *rusage)
+    __asm("_wait4");
+extern int kernel_waitid(int idtype, __kernel_pid_t id, siginfo_t *infop, int options)
+    __asm("_waitid");
 
 #ifndef WIFEXITED
 #define WIFEXITED(status) (((status) & 0x7f) == 0)
@@ -672,6 +677,114 @@ int wait_job_control_contract_child_exit_generates_sigchld_for_parent(void) {
     }
     if (waitpid_impl(child_pid, NULL, 0) != child_pid) {
         errno = EBUSY;
+        return -1;
+    }
+    return 0;
+}
+
+int wait_job_control_contract_wait4_reports_exited_child_status(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    int32_t child_pid;
+    int status = 0;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    child = create_child_task(parent, 0);
+    if (!child) {
+        return -1;
+    }
+    child_pid = child->pid;
+    if (exit_child_with_status(parent, child, 23) != 0) {
+        destroy_child_task(parent, child);
+        return -1;
+    }
+
+    if (kernel_wait4(child_pid, &status, 0, NULL) != child_pid) {
+        errno = EBUSY;
+        return -1;
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 23) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int wait_job_control_contract_waitid_reports_exited_child_status(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    int32_t child_pid;
+    siginfo_t info;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    child = create_child_task(parent, 0);
+    if (!child) {
+        return -1;
+    }
+    child_pid = child->pid;
+    if (exit_child_with_status(parent, child, 31) != 0) {
+        destroy_child_task(parent, child);
+        return -1;
+    }
+
+    memset(&info, 0, sizeof(info));
+    if (kernel_waitid(P_PID, child_pid, &info, WEXITED) != 0) {
+        return -1;
+    }
+    if (info.si_signo != SIGCHLD || info.si_pid != child_pid || info.si_code != CLD_EXITED ||
+        info.si_status != 31) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int wait_job_control_contract_waitid_wnowait_preserves_waitable_child(void) {
+    struct task_struct *parent = get_current();
+    struct task_struct *child = NULL;
+    int32_t child_pid;
+    siginfo_t info;
+    int status = 0;
+
+    if (!parent) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    child = create_child_task(parent, 0);
+    if (!child) {
+        return -1;
+    }
+    child_pid = child->pid;
+    if (exit_child_with_status(parent, child, 9) != 0) {
+        destroy_child_task(parent, child);
+        return -1;
+    }
+
+    memset(&info, 0, sizeof(info));
+    if (kernel_waitid(P_PID, child_pid, &info, WEXITED | WNOWAIT) != 0) {
+        return -1;
+    }
+    if (info.si_signo != SIGCHLD || info.si_pid != child_pid || info.si_code != CLD_EXITED ||
+        info.si_status != 9) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (waitpid_impl(child_pid, &status, 0) != child_pid) {
+        errno = EBUSY;
+        return -1;
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 9) {
+        errno = EPROTO;
         return -1;
     }
     return 0;

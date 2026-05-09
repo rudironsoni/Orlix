@@ -331,3 +331,8 @@ __attribute__((visibility("default"))) __kernel_pid_t wait(int *wstatus) {
 __attribute__((visibility("default"))) __kernel_pid_t wait3(int *wstatus, int options, void *rusage) {
     return wait4_impl(-1, wstatus, options, rusage);
 }
+
+__attribute__((visibility("default"))) int waitid(int idtype, __kernel_pid_t id, siginfo_t *infop,
+                                                  int options) {
+    return waitid_impl(idtype, id, infop, options, NULL);
+}

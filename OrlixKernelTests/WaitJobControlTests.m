@@ -131,6 +131,18 @@ static void reset_wait_job_control_test_kernel_state(void) {
     XCTAssertEqual(wait_job_control_contract_child_exit_generates_sigchld_for_parent(), 0, @"errno %d", errno);
 }
 
+- (void)testWait4ReportsExitedChildStatus {
+    XCTAssertEqual(wait_job_control_contract_wait4_reports_exited_child_status(), 0, @"errno %d", errno);
+}
+
+- (void)testWaitidReportsExitedChildStatus {
+    XCTAssertEqual(wait_job_control_contract_waitid_reports_exited_child_status(), 0, @"errno %d", errno);
+}
+
+- (void)testWaitidWnowaitPreservesWaitableChild {
+    XCTAssertEqual(wait_job_control_contract_waitid_wnowait_preserves_waitable_child(), 0, @"errno %d", errno);
+}
+
 - (void)testPtyBackgroundReadStopIsWaitpidVisible {
     XCTAssertEqual(wait_job_control_contract_pty_background_read_stop_is_waitpid_visible(), 0, @"errno %d", errno);
 }
