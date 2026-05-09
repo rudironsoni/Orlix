@@ -26,12 +26,12 @@
 #include <linux/mount.h>
 #include <linux/sched.h>
 #include <linux/stat.h>
+#include <asm/stat.h>
+#include <linux/time_types.h>
 #ifdef RLIM_NLIMITS
 #undef RLIM_NLIMITS
 #endif
 #include <asm-generic/resource.h>
-
-#include "internal/private/kernel_time_compat.h"
 
 extern void poll_notify_readiness_impl(void);
 
@@ -112,7 +112,7 @@ kernel_mutex_t task_table_lock = KERNEL_MUTEX_INITIALIZER;
 struct task_struct *task_table[TASK_MAX_TASKS] = {NULL};
 
 static uint64_t task_monotonic_time_ns(void) {
-    struct kernel_timespec ts;
+    struct __kernel_timespec ts;
 
     if (kernel_clock_gettime(1, &ts) != 0) {
         return 0;
@@ -1860,7 +1860,7 @@ static const char *task_exec_basename(const char *name) {
 int task_exec_transition_impl(const char *path, const char *argv0) {
     struct task_struct *task;
     char normalized_path[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     const char *comm_source;
     size_t comm_len;
     int closed;

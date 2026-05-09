@@ -15,11 +15,9 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <time.h>
 
 #include <linux/futex.h>
-
-#include "internal/private/kernel_time_compat.h"
+#include <linux/time.h>
 
 /* ============================================================================
  * FUTEX - Fast Userspace muTEX
@@ -27,7 +25,7 @@
 
 /* ABI truth comes from vendored Linux UAPI: <linux/futex.h> */
 
-static int futex_timeout_ms(const struct kernel_timespec *timeout) {
+static int futex_timeout_ms(const struct __kernel_timespec *timeout) {
     int64_t ms;
 
     if (!timeout) {
@@ -50,8 +48,8 @@ static int futex_timeout_ms(const struct kernel_timespec *timeout) {
 
 __attribute__((visibility("default"))) int futex(int *uaddr, int futex_op, int val,
 const struct timespec *timeout, int *uaddr2, int val3) {
-    struct kernel_timespec kernel_timeout;
-    const struct kernel_timespec *kernel_timeout_ptr = NULL;
+    struct __kernel_timespec kernel_timeout;
+    const struct __kernel_timespec *kernel_timeout_ptr = NULL;
     int timeout_ms;
 
     if (timeout) {

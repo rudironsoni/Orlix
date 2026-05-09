@@ -34,7 +34,7 @@ extern int vfs_move_mount(int from_dirfd, const char *from_pathname, int to_dirf
 extern int vfs_pivot_root(const char *new_root, const char *put_old);
 
 static int umount_target_is_symlink(const char *target, int *is_symlink) {
-    struct linux_stat st;
+    struct stat st;
     int ret;
 
     if (!target || !is_symlink) {

@@ -40,7 +40,7 @@ extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
-extern int fstat_impl(int fd, struct linux_stat *statbuf);
+extern int fstat_impl(int fd, struct stat *statbuf);
 extern int unlink_impl(const char *pathname);
 extern int kernel_exec_init(const char *preferred_path, char *const argv[], char *const envp[]);
 extern void exit_impl(int status);
@@ -317,7 +317,7 @@ int kernel_init_contract_init_task_cwd_and_root_are_slash(void) {
 }
 
 int kernel_init_contract_kernel_boot_exposes_root(void) {
-    struct linux_stat st;
+    struct stat st;
 
     if (vfs_fstatat(AT_FDCWD, "/", &st, 0) != 0) {
         errno = EPROTO;
@@ -331,7 +331,7 @@ int kernel_init_contract_kernel_boot_exposes_root(void) {
 }
 
 int kernel_init_contract_kernel_boot_exposes_etc_passwd(void) {
-    struct linux_stat st;
+    struct stat st;
 
     if (vfs_fstatat(AT_FDCWD, "/etc", &st, 0) != 0) {
         return -1;
@@ -347,7 +347,7 @@ int kernel_init_contract_kernel_boot_exposes_etc_passwd(void) {
 }
 
 int kernel_init_contract_kernel_boot_exposes_dev_root(void) {
-    struct linux_stat st;
+    struct stat st;
 
     if (!vfs_path_is_synthetic("/dev")) {
         errno = EPROTO;
@@ -360,7 +360,7 @@ int kernel_init_contract_kernel_boot_exposes_dev_root(void) {
 }
 
 int kernel_init_contract_kernel_boot_exposes_proc_root(void) {
-    struct linux_stat st;
+    struct stat st;
 
     if (!vfs_path_is_synthetic("/proc")) {
         errno = EPROTO;
@@ -376,7 +376,7 @@ int kernel_init_contract_kernel_boot_exposes_proc_root(void) {
 }
 
 int kernel_init_contract_kernel_boot_exposes_sys_root_or_documents_policy(void) {
-    struct linux_stat st;
+    struct stat st;
 
     if (!vfs_path_is_synthetic("/sys")) {
         errno = EPROTO;
@@ -389,7 +389,7 @@ int kernel_init_contract_kernel_boot_exposes_sys_root_or_documents_policy(void) 
 }
 
 int kernel_init_contract_kernel_boot_exposes_tmp_and_var_cache_routes(void) {
-    struct linux_stat st;
+    struct stat st;
 
     if (vfs_backing_class_for_path("/tmp") != VFS_BACKING_TEMP) {
         errno = EPROTO;
@@ -411,7 +411,7 @@ int kernel_init_contract_kernel_boot_exposes_tmp_and_var_cache_routes(void) {
 int kernel_init_contract_kernel_boot_stdio_policy_is_explicit(void) {
     char buf[64];
     int link_len;
-    struct linux_stat st;
+    struct stat st;
 
     if (!fdtable_is_used_impl(0) || !fdtable_is_used_impl(1) || !fdtable_is_used_impl(2)) {
         errno = EPROTO;

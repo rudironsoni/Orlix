@@ -114,7 +114,7 @@ int kernel_boot_test_vfs_routing(void) {
 
 /* Test 4: Synthetic roots are available */
 int kernel_boot_test_synthetic_roots(void) {
-    struct linux_stat st;
+    struct stat st;
 
     /* /proc is synthetic */
     if (!vfs_path_is_synthetic("/proc")) {

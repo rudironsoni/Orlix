@@ -12,7 +12,6 @@
 
 #include "fdtable.h"
 #include "internal/private/backing_io.h"
-#include "internal/private/kernel_socket_compat.h"
 #include "fs_sync.h"
 #include "pipe.h"
 #include "pty.h"
@@ -73,12 +72,9 @@ ssize_t read_impl(int fd, void *buf, size_t count) {
 
     if (get_fd_is_socket_impl(entry)) {
         struct socket_state *sock = get_fd_socket_impl(entry);
-        int flags = 0;
-        if ((get_fd_flags_impl(entry) & O_NONBLOCK) != 0) {
-            flags |= MSG_DONTWAIT;
-        }
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         put_fd_entry_impl(entry);
-        return socket_recv_impl(sock, buf, count, flags);
+        return socket_recv_impl(sock, buf, count, nonblock);
     }
 
     if (get_fd_is_eventfd_impl(entry)) {
@@ -325,12 +321,9 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
 
     if (get_fd_is_socket_impl(entry)) {
         struct socket_state *sock = get_fd_socket_impl(entry);
-        int flags = 0;
-        if ((get_fd_flags_impl(entry) & O_NONBLOCK) != 0) {
-            flags |= MSG_DONTWAIT;
-        }
+        bool nonblock = (get_fd_flags_impl(entry) & O_NONBLOCK) != 0;
         put_fd_entry_impl(entry);
-        return socket_send_impl(sock, buf, count, flags);
+        return socket_send_impl(sock, buf, count, nonblock);
     }
 
     if (get_fd_is_eventfd_impl(entry)) {
@@ -424,7 +417,7 @@ ssize_t write_impl(int fd, const void *buf, size_t count) {
 
     int real_fd = get_real_fd_impl(entry);
     if (get_fd_is_memfd_impl(entry)) {
-        struct linux_stat st;
+        struct stat st;
         int64_t offset = get_fd_offset_impl((fd_entry_t *)entry);
         int64_t end = offset + (int64_t)count;
 
@@ -765,7 +758,7 @@ ssize_t copy_file_range_impl(int fd_in, int64_t *off_in, int fd_out,
 int fallocate_impl(int fd, int mode, int64_t offset, int64_t len) {
     void *entry;
     int real_fd;
-    struct linux_stat st;
+    struct stat st;
     int64_t end;
 
     if (mode != 0) {

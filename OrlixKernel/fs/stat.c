@@ -18,7 +18,7 @@
 #define MAX_PATH 4096
 #endif
 
-int stat_impl(const char *pathname, struct linux_stat *statbuf) {
+int stat_impl(const char *pathname, struct stat *statbuf) {
     int ret;
 
     if (!pathname || !statbuf) {
@@ -43,7 +43,7 @@ int stat_impl(const char *pathname, struct linux_stat *statbuf) {
     return 0;
 }
 
-int fstat_impl(int fd, struct linux_stat *statbuf) {
+int fstat_impl(int fd, struct stat *statbuf) {
     int ret;
     int real_fd;
     char path[MAX_PATH];
@@ -108,7 +108,7 @@ int fstat_impl(int fd, struct linux_stat *statbuf) {
     return 0;
 }
 
-int lstat_impl(const char *pathname, struct linux_stat *statbuf) {
+int lstat_impl(const char *pathname, struct stat *statbuf) {
     int ret;
 
     if (!pathname || !statbuf) {
@@ -149,7 +149,7 @@ int access_impl(const char *pathname, int mode) {
     return 0;
 }
 
-int fstatat_impl(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
+int fstatat_impl(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
     int ret;
 
     if (!pathname || !statbuf) {
@@ -191,7 +191,7 @@ static void statx_timestamp_from_linux_stat(struct statx_timestamp *dst, long se
     dst->__reserved = 0;
 }
 
-static void statx_from_linux_stat(struct statx *dst, const struct linux_stat *src,
+static void statx_from_linux_stat(struct statx *dst, const struct stat *src,
                                   unsigned int mask) {
     memset(dst, 0, sizeof(*dst));
     dst->stx_mask = STATX_BASIC_STATS & ~STATX_BTIME;
@@ -206,9 +206,9 @@ static void statx_from_linux_stat(struct statx *dst, const struct linux_stat *sr
     dst->stx_ino = src->st_ino;
     dst->stx_size = src->st_size;
     dst->stx_blocks = src->st_blocks;
-    statx_timestamp_from_linux_stat(&dst->stx_atime, src->st_atime_sec, src->st_atime_nsec);
-    statx_timestamp_from_linux_stat(&dst->stx_mtime, src->st_mtime_sec, src->st_mtime_nsec);
-    statx_timestamp_from_linux_stat(&dst->stx_ctime, src->st_ctime_sec, src->st_ctime_nsec);
+    statx_timestamp_from_linux_stat(&dst->stx_atime, src->st_atime, src->st_atime_nsec);
+    statx_timestamp_from_linux_stat(&dst->stx_mtime, src->st_mtime, src->st_mtime_nsec);
+    statx_timestamp_from_linux_stat(&dst->stx_ctime, src->st_ctime, src->st_ctime_nsec);
     dst->stx_rdev_major = (__u32)((src->st_rdev >> 8) & 0xfffU);
     dst->stx_rdev_minor = (__u32)((src->st_rdev & 0xffU) | ((src->st_rdev >> 12) & 0xfffff00U));
     dst->stx_dev_major = (__u32)((src->st_dev >> 8) & 0xfffU);
@@ -220,7 +220,7 @@ static void statx_from_linux_stat(struct statx *dst, const struct linux_stat *sr
 
 int statx_impl(int dirfd, const char *pathname, int flags, unsigned int mask,
                struct statx *statxbuf) {
-    struct linux_stat st;
+    struct stat st;
     int stat_flags = flags & AT_SYMLINK_NOFOLLOW;
     int ret;
 
@@ -246,15 +246,15 @@ int statx_impl(int dirfd, const char *pathname, int flags, unsigned int mask,
     return 0;
 }
 
-__attribute__((visibility("default"))) int stat(const char *pathname, struct linux_stat *statbuf) {
+__attribute__((visibility("default"))) int stat(const char *pathname, struct stat *statbuf) {
     return stat_impl(pathname, statbuf);
 }
 
-__attribute__((visibility("default"))) int fstat(int fd, struct linux_stat *statbuf) {
+__attribute__((visibility("default"))) int fstat(int fd, struct stat *statbuf) {
     return fstat_impl(fd, statbuf);
 }
 
-__attribute__((visibility("default"))) int lstat(const char *pathname, struct linux_stat *statbuf) {
+__attribute__((visibility("default"))) int lstat(const char *pathname, struct stat *statbuf) {
     return lstat_impl(pathname, statbuf);
 }
 
@@ -266,11 +266,11 @@ __attribute__((visibility("default"))) int faccessat(int dirfd, const char *path
     return faccessat_impl(dirfd, pathname, mode, flags);
 }
 
-__attribute__((visibility("default"))) int fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
+__attribute__((visibility("default"))) int fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
     return fstatat_impl(dirfd, pathname, statbuf, flags);
 }
 
-__attribute__((visibility("default"))) int newfstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
+__attribute__((visibility("default"))) int newfstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
     return fstatat_impl(dirfd, pathname, statbuf, flags);
 }
 

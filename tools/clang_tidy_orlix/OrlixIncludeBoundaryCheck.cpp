@@ -3,6 +3,7 @@
 #include "clang/Lex/PPCallbacks.h"
 #include "clang/Lex/Preprocessor.h"
 
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,24 @@ namespace {
 
 bool pathHasComponent(llvm::StringRef Path, llvm::StringRef Needle) {
   return Path.contains(Needle);
+}
+
+bool fileNameMatchesLinuxRename(llvm::StringRef FileName) {
+  llvm::StringRef BaseName = FileName;
+  size_t Slash = FileName.rfind('/');
+  if (Slash != llvm::StringRef::npos) {
+    BaseName = FileName.drop_front(Slash + 1);
+  }
+  if (FileName.starts_with("linux/") || FileName.starts_with("asm/") ||
+      FileName.starts_with("asm-generic/")) {
+    return false;
+  }
+  if (!BaseName.contains("_")) {
+    return false;
+  }
+  static const std::regex Pattern(
+      R"((^|/)(?:(?:orlix|ix|kernel|linux|private|internal|bridge|adapter|shim|compat)_)?(?:fdset|fd_set|timespec|timeval|timezone|itimerspec|itimerval|sockaddr|socklen|socket|pollfd|poll|select|termios|winsize|sigset|siginfo|sigaction|stat|statfs|rusage|tms|iovec|msghdr|mmsghdr|ucred)(?:_[A-Za-z0-9]+)*(?:_compat|_bridge|_adapter|_shim|_private|_internal|_owner)?\.h$)");
+  return std::regex_search(FileName.str(), Pattern);
 }
 
 class IncludeBoundaryPPCallbacks : public PPCallbacks {
@@ -39,15 +58,27 @@ public:
     }
 
     static const std::vector<std::string> ForbiddenHeaders = {
-        "pthread.h",            "sys/sysctl.h", "mach/",
-        "objc/",                "dispatch/",    "os/log.h",
-        "TargetConditionals.h", "Foundation/",  "UIKit/",
-        "CoreFoundation/"};
+        "pthread.h",            "sys/sysctl.h",   "mach/",
+        "objc/",                "dispatch/",      "os/log.h",
+        "TargetConditionals.h", "Foundation/",    "UIKit/",
+        "CoreFoundation/",      "sys/socket.h",   "sys/types.h",
+        "sys/uio.h",            "sys/ioctl.h",    "sys/select.h",
+        "sys/resource.h",       "sys/statvfs.h",  "sys/wait.h"};
+    static const std::vector<std::string> ForbiddenAngledOnlyHeaders = {
+        "poll.h", "termios.h", "signal.h"};
 
     for (const auto &Header : ForbiddenHeaders) {
       if (FileName == Header || FileName.starts_with(Header)) {
         Check.diag(HashLoc,
                    "forbidden host header is included from Linux-owner code");
+      }
+    }
+    if (IsAngled) {
+      for (const auto &Header : ForbiddenAngledOnlyHeaders) {
+        if (FileName == Header) {
+          Check.diag(HashLoc,
+                     "forbidden host header is included from Linux-owner code");
+        }
       }
     }
 
@@ -73,6 +104,14 @@ public:
                    "Linux-owner code must not include internal/ios mediation headers");
       }
     }
+
+    if (FileName.contains("_compat.h") || FileName.contains("_bridge.h") ||
+        FileName.contains("_adapter.h") || FileName.contains("_shim.h") ||
+        FileName.contains("_private.h") || FileName.contains("_internal.h") ||
+        fileNameMatchesLinuxRename(FileName)) {
+      Check.diag(HashLoc,
+                 "repo-local renamed Linux-concept headers are forbidden in Linux-owner code; use Linux names instead");
+    }
   }
 
 private:
@@ -90,7 +129,8 @@ bool OrlixIncludeBoundaryCheck::isLinuxOwnerPath(llvm::StringRef Path) const {
   return pathHasComponent(Path, "OrlixKernel/fs/") ||
          pathHasComponent(Path, "OrlixKernel/kernel/") ||
          pathHasComponent(Path, "OrlixKernel/runtime/") ||
-         pathHasComponent(Path, "OrlixKernel/include/");
+         pathHasComponent(Path, "OrlixKernel/include/") ||
+         pathHasComponent(Path, "OrlixKernel/internal/");
 }
 
 bool OrlixIncludeBoundaryCheck::isKernelPublicHeaderPath(

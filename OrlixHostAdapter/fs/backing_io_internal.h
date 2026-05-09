@@ -5,7 +5,6 @@
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <time.h>
@@ -14,6 +13,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct stat;
 
 typedef pthread_mutex_t kmutex_t;
 typedef pthread_cond_t kcond_t;
@@ -132,7 +133,7 @@ int backing_root_discover_temp(char *path, size_t path_len);
 int backing_open(const char *path, int flags, uint32_t mode);
 int backing_close(int fd);
 int backing_dup(int fd);
-int backing_fstat(int fd, struct linux_stat *statbuf);
+int backing_fstat(int fd, struct stat *statbuf);
 ssize_t backing_read(int fd, void *buf, size_t count);
 ssize_t backing_write(int fd, const void *buf, size_t count);
 int64_t backing_lseek(int fd, int64_t offset, int whence);

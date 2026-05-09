@@ -19,7 +19,7 @@ extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
-extern int stat_impl(const char *pathname, struct linux_stat *statbuf);
+extern int stat_impl(const char *pathname, struct stat *statbuf);
 extern int access(const char *pathname, int mode);
 
 struct devfs_linux_dirent64 {
@@ -74,7 +74,7 @@ static int append_decimal(char *buf, size_t buf_size, unsigned int value) {
 }
 
 int devfs_contract_random_device_is_character_and_readable(void) {
-    struct linux_stat st;
+    struct stat st;
     unsigned char buf[64];
     int fd = -1;
 
@@ -104,7 +104,7 @@ int devfs_contract_random_device_is_character_and_readable(void) {
 }
 
 int devfs_contract_tty_node_exists_without_controlling_tty(void) {
-    struct linux_stat st;
+    struct stat st;
     if (stat_impl("/dev/tty", &st) != 0) {
         return -1;
     }
@@ -154,7 +154,7 @@ int devfs_contract_tty_open_without_controlling_tty_returns_enxio(void) {
 }
 
 int devfs_contract_pts_directory_exists(void) {
-    struct linux_stat st;
+    struct stat st;
     int fd = -1;
 
     if (stat_impl("/dev/pts", &st) != 0) {
@@ -208,7 +208,7 @@ int devfs_contract_allocated_pty_slave_is_visible_in_devpts(void) {
     char slave_path[64];
     char name[16];
     char buf[1024];
-    struct linux_stat st;
+    struct stat st;
 
     if (pty_allocate_pair_impl(&pty_index) != 0) {
         return -1;

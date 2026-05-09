@@ -65,7 +65,7 @@ extern long pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int unlink_impl(const char *pathname);
 extern int rmdir_impl(const char *pathname);
-extern int fstat_impl(int fd, struct linux_stat *statbuf);
+extern int fstat_impl(int fd, struct stat *statbuf);
 extern int mkdirat(int dirfd, const char *pathname, uint32_t mode);
 extern int unlinkat(int dirfd, const char *pathname, int flags);
 extern int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
@@ -338,19 +338,19 @@ static void vfs_contract_cleanup_pivot_paths(void) {
 
 /* Contract: vfs_fstatat supports AT_FDCWD */
 int vfs_contract_fstatat_at_fdcwd(void) {
-    struct linux_stat st;
+    struct stat st;
     return vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, 0);
 }
 
 /* Contract: vfs_fstatat supports AT_SYMLINK_NOFOLLOW */
 int vfs_contract_fstatat_symlink_nofollow(void) {
-    struct linux_stat st;
+    struct stat st;
     return vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, AT_SYMLINK_NOFOLLOW);
 }
 
 /* Contract: vfs_fstatat rejects unsupported synthetic paths with AT_SYMLINK_NOFOLLOW */
 int vfs_contract_fstatat_synthetic_child_nofollow(void) {
-    struct linux_stat st;
+    struct stat st;
     return vfs_fstatat(AT_FDCWD, "/sys/kernel", &st, AT_SYMLINK_NOFOLLOW);
 }
 
@@ -872,7 +872,7 @@ int vfs_contract_mkdirat_resolves_intermediate_symlink_directory(void) {
     if (mkdirat(AT_FDCWD, "/tmp/vfs-mkdirat-symlink/link/created", 0700) != 0) {
         goto out;
     }
-    if (vfs_fstatat(AT_FDCWD, "/tmp/vfs-mkdirat-symlink/real/created", &(struct linux_stat){0}, 0) != 0) {
+    if (vfs_fstatat(AT_FDCWD, "/tmp/vfs-mkdirat-symlink/real/created", &(struct stat){0}, 0) != 0) {
         goto out;
     }
     ret = 0;
@@ -968,7 +968,7 @@ out:
 }
 
 int vfs_contract_linkat_respects_symlink_follow_flag(void) {
-    struct linux_stat st;
+    struct stat st;
     int ret = -1;
 
     unlink_impl("/tmp/vfs-linkat-follow/hard-target");
@@ -2267,7 +2267,7 @@ int vfs_contract_hardlink_inode_metadata_survives_unlink(void) {
     const char name[] = "user.hardlink-life";
     const char value[] = "hardlink-value";
     char readback[32];
-    struct linux_stat st;
+    struct stat st;
     int fd = -1;
     long ret;
     int result = -1;
@@ -5878,7 +5878,7 @@ out:
 }
 
 int vfs_contract_nonroot_created_file_records_virtual_owner(void) {
-    struct linux_stat st;
+    struct stat st;
     int fd = -1;
     int ret = -1;
 
@@ -6322,8 +6322,8 @@ out:
 }
 
 int vfs_contract_renameat2_exchange_swaps_virtual_metadata(void) {
-    struct linux_stat left_st;
-    struct linux_stat right_st;
+    struct stat left_st;
+    struct stat right_st;
     int dirfd = -1;
     int ret = -1;
 
@@ -6411,7 +6411,7 @@ out:
 }
 
 int vfs_contract_renameat_overwrite_moves_virtual_metadata(void) {
-    struct linux_stat st;
+    struct stat st;
     int dirfd = -1;
     int ret = -1;
 
@@ -6552,7 +6552,7 @@ out:
 }
 
 int vfs_contract_root_chown_updates_virtual_owner(void) {
-    struct linux_stat st;
+    struct stat st;
     int ret = -1;
 
     cred_reset_to_defaults();
@@ -6605,7 +6605,7 @@ out:
 }
 
 int vfs_contract_owner_chmod_updates_virtual_mode(void) {
-    struct linux_stat st;
+    struct stat st;
     int ret = -1;
 
     cred_reset_to_defaults();
@@ -6661,7 +6661,7 @@ out:
 }
 
 int vfs_contract_fchmod_updates_virtual_mode(void) {
-    struct linux_stat st;
+    struct stat st;
     int fd = -1;
     int ret = -1;
 
@@ -6692,7 +6692,7 @@ out:
 }
 
 int vfs_contract_fchown_updates_virtual_owner(void) {
-    struct linux_stat st;
+    struct stat st;
     int fd = -1;
     int ret = -1;
 

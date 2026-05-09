@@ -30,7 +30,7 @@ extern int dup3_impl(int oldfd, int newfd, int flags);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
-extern int fstat_impl(int fd, struct linux_stat *statbuf);
+extern int fstat_impl(int fd, struct stat *statbuf);
 extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int32_t getpgrp_impl(void);
@@ -405,7 +405,7 @@ int pty_session_contract_pty_fstat_reports_character_device(void) {
     int master_fd = -1;
     int slave_fd = -1;
     unsigned int pty_index = 0;
-    struct linux_stat st;
+    struct stat st;
 
     if (alloc_pty_pair(0, 0, &master_fd, &slave_fd, &pty_index) != 0) {
         return -1;

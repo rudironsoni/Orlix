@@ -179,7 +179,7 @@ int fchownat_impl(int dirfd, const char *pathname, uint32_t owner, uint32_t grou
 int utimensat_impl(int dirfd, const char *pathname, const struct __kernel_timespec times[2],
                    int flags) {
     char resolved_path[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     struct __kernel_timespec now;
     long atime_sec;
     unsigned long atime_nsec;
@@ -202,9 +202,9 @@ int utimensat_impl(int dirfd, const char *pathname, const struct __kernel_timesp
         return -1;
     }
 
-    atime_sec = st.st_atime_sec;
+    atime_sec = st.st_atime;
     atime_nsec = st.st_atime_nsec;
-    mtime_sec = st.st_mtime_sec;
+    mtime_sec = st.st_mtime;
     mtime_nsec = st.st_mtime_nsec;
 
     if (!times || times[0].tv_nsec == LINUX_UTIME_NOW_VALUE ||

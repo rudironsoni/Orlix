@@ -1,4 +1,4 @@
-/* OrlixKernel/kernel/time_internal.h
+/* OrlixKernel/kernel/time_state.h
  * Private internal header for time subsystem struct definitions
  * 
  * This is PRIVATE internal state - NOT Linux UAPI.
@@ -10,11 +10,8 @@
 
 #include <stddef.h>
 
-struct kernel_timeval;
-struct kernel_timezone;
-struct kernel_itimerval;
-struct kernel_timespec;
+#include <linux/time_types.h>
 
-int kernel_clock_gettime(int clock_id, struct kernel_timespec *tp);
+int kernel_clock_gettime(int clock_id, struct __kernel_timespec *tp);
 
 #endif /* KERNEL_TIME_INTERNAL_H */

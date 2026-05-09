@@ -77,7 +77,8 @@ bool OrlixSourcePolicyCheck::isLinuxOwnerPath(llvm::StringRef Path) const {
   return pathHasComponent(Path, "OrlixKernel/fs/") ||
          pathHasComponent(Path, "OrlixKernel/kernel/") ||
          pathHasComponent(Path, "OrlixKernel/runtime/") ||
-         pathHasComponent(Path, "OrlixKernel/include/");
+         pathHasComponent(Path, "OrlixKernel/include/") ||
+         pathHasComponent(Path, "OrlixKernel/internal/");
 }
 
 void OrlixSourcePolicyCheck::registerPPCallbacks(

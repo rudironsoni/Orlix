@@ -1,5 +1,6 @@
 #include <linux/fcntl.h>
 #include <linux/mount.h>
+#include <linux/stat.h>
 
 #include <errno.h>
 #include <stdbool.h>
@@ -382,7 +383,7 @@ int open_impl(const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    struct linux_stat st;
+    struct stat st;
     bool record_created = vfs_fstatat(AT_FDCWD, resolved_path, &st, 0) == -ENOENT;
 
     ret = vfs_check_open_permission(resolved_path, translated_path, flags);
@@ -601,7 +602,7 @@ int openat_impl(int dirfd, const char *pathname, int flags, mode_t mode) {
         return -1;
     }
 
-    struct linux_stat st;
+    struct stat st;
     bool record_created = vfs_fstatat(AT_FDCWD, resolved_path, &st, 0) == -ENOENT;
 
     ret = vfs_check_open_permission(resolved_path, translated_path, flags);

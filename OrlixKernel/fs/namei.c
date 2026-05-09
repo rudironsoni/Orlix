@@ -164,7 +164,7 @@ static int rename_apply_backing_exchange(const char *old_virtual_path, const cha
     return 0;
 }
 
-static int rename_lstat_backing_entry(const char *backing_path, struct linux_stat *st) {
+static int rename_lstat_backing_entry(const char *backing_path, struct stat *st) {
     int ret;
 
     ret = backing_lstat(backing_path, st);
@@ -175,7 +175,7 @@ static int rename_lstat_backing_entry(const char *backing_path, struct linux_sta
     return 0;
 }
 
-static int rename_lstat_optional_backing_entry(const char *backing_path, struct linux_stat *st, bool *exists) {
+static int rename_lstat_optional_backing_entry(const char *backing_path, struct stat *st, bool *exists) {
     int ret;
 
     ret = backing_lstat(backing_path, st);
@@ -194,8 +194,8 @@ static int rename_lstat_optional_backing_entry(const char *backing_path, struct 
 static int rename_validate_target_shape(const char *old_virtual_path, const char *new_virtual_path,
                                         const char *old_backing_path, const char *new_backing_path,
                                         unsigned int flags) {
-    struct linux_stat old_st;
-    struct linux_stat new_st;
+    struct stat old_st;
+    struct stat new_st;
     bool new_exists = false;
     bool old_is_dir;
     bool new_is_dir;
@@ -397,7 +397,7 @@ int chdir_impl(const char *path) {
         return -1;
     }
 
-    struct linux_stat st;
+    struct stat st;
     if (backing_stat(translated_path, &st) != 0) {
         return -1;
     }
@@ -578,7 +578,7 @@ int mkdir_impl(const char *pathname, mode_t mode) {
 int unlinkat_impl(int dirfd, const char *pathname, int flags) {
     char translated_path[MAX_PATH];
     char resolved_path[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     bool remove_dir;
     int ret;
 
@@ -661,7 +661,7 @@ static int linkat_impl(int olddirfd, const char *oldpath, int newdirfd, const ch
     char resolved_new[MAX_PATH];
     char translated_old[MAX_PATH];
     char translated_new[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     int ret;
 
     if (oldpath == NULL || newpath == NULL) {
@@ -744,7 +744,7 @@ int link_impl(const char *oldpath, const char *newpath) {
 static int symlinkat_impl(const char *target, int newdirfd, const char *linkpath) {
     char resolved_link[MAX_PATH];
     char translated_link[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     int ret;
 
     if (target == NULL || linkpath == NULL) {
@@ -885,7 +885,7 @@ static ssize_t readlinkat_impl(int dirfd, const char *pathname, char *buf, size_
         return -1;
     }
 
-    struct linux_stat path_stat;
+    struct stat path_stat;
     if (backing_lstat(translated_path, &path_stat) != 0) {
         return -1;
     }
@@ -907,7 +907,7 @@ int chroot_impl(const char *path) {
     char translated_path[MAX_PATH];
     char resolved_virtual[MAX_PATH];
     char current_pwd[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     int ret;
 
     if (directory_validate_path(path) != 0) {

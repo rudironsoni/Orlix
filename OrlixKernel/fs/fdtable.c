@@ -10,11 +10,11 @@
 #include <linux/fcntl.h>
 #include <linux/memfd.h>
 #include <linux/pidfd.h>
+#include <linux/stat.h>
 #include <linux/time_types.h>
 #include <linux/timerfd.h>
 
 #include "fs_sync.h"
-#include "internal/private/kernel_time_compat.h"
 
 /* Standard file descriptors - local definitions to avoid Darwin <unistd.h> */
 #ifndef STDIN_FILENO
@@ -34,7 +34,7 @@ static void retain_fd_description(struct fd_description *desc);
 static void release_fd_description(struct fd_description *desc);
 static struct file *copy_file_descriptor(struct file *file);
 extern void poll_notify_readiness_impl(void);
-extern int kernel_clock_gettime(int clock_id, struct kernel_timespec *tp);
+extern int kernel_clock_gettime(int clock_id, struct __kernel_timespec *tp);
 
 struct files_struct *alloc_files(size_t max_fds) {
     if (max_fds == 0) {
@@ -907,7 +907,7 @@ static int timerfd_clock_allowed(int clockid) {
 }
 
 static int timerfd_now_ns(int clockid, uint64_t *now_out) {
-    struct kernel_timespec ts;
+    struct __kernel_timespec ts;
 
     if (!now_out || !timerfd_clock_allowed(clockid)) {
         errno = EINVAL;
@@ -2581,7 +2581,7 @@ int memfd_write_allowed_entry_impl(void *entry, int64_t offset, size_t count) {
 int memfd_truncate_allowed_entry_impl(void *entry, int64_t length) {
     fd_entry_t *fd_entry = (fd_entry_t *)entry;
     fd_description_t *desc;
-    struct linux_stat st;
+    struct stat st;
 
     if (!fd_entry || !fd_entry->desc || fd_entry->desc->type != FD_TYPE_MEMFD) {
         return 0;

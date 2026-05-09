@@ -9,35 +9,33 @@
  * Linux-shaped canonical owner - iOS mediation via time_darwin.c
  */
 
-#include "time_internal.h"
+#include "time_state.h"
 
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/time.h>
-#include <time.h>
 
+#include <linux/time.h>
 #include <linux/time_types.h>
 
-#include "internal/private/kernel_time_compat.h"
 #include "task.h"
 #include "signal.h"
 #include "wait_queue.h"
 
 /* Forward declarations for private implementation - defined in time_darwin.c */
 __kernel_old_time_t time_impl(__kernel_old_time_t *tloc);
-int gettimeofday_impl(struct kernel_timeval *tv, struct kernel_timezone *tz);
-int settimeofday_impl(const struct kernel_timeval *tv, const struct kernel_timezone *tz);
-int clock_gettime_impl(__kernel_clockid_t clk_id, struct kernel_timespec *tp);
-int clock_getres_impl(__kernel_clockid_t clk_id, struct kernel_timespec *res);
-int clock_settime_impl(__kernel_clockid_t clk_id, const struct kernel_timespec *tp);
+int gettimeofday_impl(struct __kernel_old_timeval *tv, void *tz);
+int settimeofday_impl(const struct __kernel_old_timeval *tv, const void *tz);
+int clock_gettime_impl(__kernel_clockid_t clk_id, struct __kernel_timespec *tp);
+int clock_getres_impl(__kernel_clockid_t clk_id, struct __kernel_timespec *res);
+int clock_settime_impl(__kernel_clockid_t clk_id, const struct __kernel_timespec *tp);
 unsigned int sleep_impl(unsigned int seconds);
 int usleep_impl(__u32 usec);
-int setitimer_impl(int which, const struct kernel_itimerval *new_value, struct kernel_itimerval *old_value);
-int getitimer_impl(int which, struct kernel_itimerval *curr_value);
+int setitimer_impl(int which, const struct __kernel_old_itimerval *new_value, struct __kernel_old_itimerval *old_value);
+int getitimer_impl(int which, struct __kernel_old_itimerval *curr_value);
 unsigned int alarm_impl(unsigned int seconds);
 
-int nanosleep_impl(const struct kernel_timespec *req, struct kernel_timespec *rem) {
+int nanosleep_impl(const struct __kernel_timespec *req, struct __kernel_timespec *rem) {
     uint64_t total_ms;
     int ret;
 
@@ -89,7 +87,7 @@ int nanosleep_impl(const struct kernel_timespec *req, struct kernel_timespec *re
 }
 
 int linux_realtime_now_impl(struct __kernel_timespec *tp) {
-    struct kernel_timespec backing_ts;
+    struct __kernel_timespec backing_ts;
 
     if (!tp) {
         errno = EFAULT;
@@ -103,7 +101,7 @@ int linux_realtime_now_impl(struct __kernel_timespec *tp) {
     return 0;
 }
 
-int interval_timer_get_impl(int which, struct kernel_itimerval *curr_value) {
+int interval_timer_get_impl(int which, struct __kernel_old_itimerval *curr_value) {
     if (which != ITIMER_REAL && which != ITIMER_VIRTUAL && which != ITIMER_PROF) {
         errno = EINVAL;
         return -1;
@@ -116,8 +114,8 @@ int interval_timer_get_impl(int which, struct kernel_itimerval *curr_value) {
     return 0;
 }
 
-int interval_timer_set_impl(int which, const struct kernel_itimerval *new_value,
-                            struct kernel_itimerval *old_value) {
+int interval_timer_set_impl(int which, const struct __kernel_old_itimerval *new_value,
+                            struct __kernel_old_itimerval *old_value) {
     if (which != ITIMER_REAL && which != ITIMER_VIRTUAL && which != ITIMER_PROF) {
         errno = EINVAL;
         return -1;
@@ -153,9 +151,9 @@ __attribute__((visibility("default"))) __kernel_old_time_t time(__kernel_old_tim
 }
 
 __attribute__((visibility("default"))) int gettimeofday(struct timeval *tv, void *tz) {
-    struct kernel_timeval kernel_tv;
-    struct kernel_timezone kernel_tz;
-    struct kernel_timezone *kernel_tz_ptr = NULL;
+    struct __kernel_old_timeval kernel_tv;
+    struct timezone kernel_tz;
+    struct timezone *kernel_tz_ptr = NULL;
 
     if (tz) {
         kernel_tz_ptr = &kernel_tz;
@@ -176,10 +174,10 @@ __attribute__((visibility("default"))) int gettimeofday(struct timeval *tv, void
 }
 
 __attribute__((visibility("default"))) int settimeofday(const struct timeval *tv, const struct timezone *tz) {
-    struct kernel_timeval kernel_tv;
-    struct kernel_timezone kernel_tz;
-    const struct kernel_timeval *kernel_tv_ptr = NULL;
-    const struct kernel_timezone *kernel_tz_ptr = NULL;
+    struct __kernel_old_timeval kernel_tv;
+    struct timezone kernel_tz;
+    const struct __kernel_old_timeval *kernel_tv_ptr = NULL;
+    const struct timezone *kernel_tz_ptr = NULL;
 
     if (tv) {
         kernel_tv.tv_sec = tv->tv_sec;
@@ -194,8 +192,8 @@ __attribute__((visibility("default"))) int settimeofday(const struct timeval *tv
     return settimeofday_impl(kernel_tv_ptr, kernel_tz_ptr);
 }
 
-__attribute__((visibility("default"))) int clock_gettime(clockid_t clk_id, struct timespec *tp) {
-    struct kernel_timespec kernel_tp;
+__attribute__((visibility("default"))) int clock_gettime(__kernel_clockid_t clk_id, struct timespec *tp) {
+    struct __kernel_timespec kernel_tp;
 
     if (!tp) {
         errno = EFAULT;
@@ -209,8 +207,8 @@ __attribute__((visibility("default"))) int clock_gettime(clockid_t clk_id, struc
     return 0;
 }
 
-__attribute__((visibility("default"))) int clock_getres(clockid_t clk_id, struct timespec *res) {
-    struct kernel_timespec kernel_res;
+__attribute__((visibility("default"))) int clock_getres(__kernel_clockid_t clk_id, struct timespec *res) {
+    struct __kernel_timespec kernel_res;
 
     if (!res) {
         errno = EFAULT;
@@ -224,8 +222,8 @@ __attribute__((visibility("default"))) int clock_getres(clockid_t clk_id, struct
     return 0;
 }
 
-__attribute__((visibility("default"))) int clock_settime(clockid_t clk_id, const struct timespec *tp) {
-    struct kernel_timespec kernel_tp;
+__attribute__((visibility("default"))) int clock_settime(__kernel_clockid_t clk_id, const struct timespec *tp) {
+    struct __kernel_timespec kernel_tp;
 
     if (!tp) {
         errno = EFAULT;
@@ -245,8 +243,8 @@ __attribute__((visibility("default"))) int usleep(__u32 usec) {
 }
 
 __attribute__((visibility("default"))) int nanosleep(const struct timespec *req, struct timespec *rem) {
-    struct kernel_timespec kernel_req;
-    struct kernel_timespec kernel_rem;
+    struct __kernel_timespec kernel_req;
+    struct __kernel_timespec kernel_rem;
 
     if (!req) {
         errno = EFAULT;
@@ -269,9 +267,9 @@ __attribute__((visibility("default"))) int nanosleep(const struct timespec *req,
 }
 
 __attribute__((visibility("default"))) int setitimer(int which, const struct itimerval *new_value, struct itimerval *old_value) {
-    struct kernel_itimerval kernel_new;
-    struct kernel_itimerval kernel_old;
-    const struct kernel_itimerval *kernel_new_ptr = NULL;
+    struct __kernel_old_itimerval kernel_new;
+    struct __kernel_old_itimerval kernel_old;
+    const struct __kernel_old_itimerval *kernel_new_ptr = NULL;
 
     if (new_value) {
         kernel_new.it_interval.tv_sec = new_value->it_interval.tv_sec;
@@ -293,7 +291,7 @@ __attribute__((visibility("default"))) int setitimer(int which, const struct iti
 }
 
 __attribute__((visibility("default"))) int getitimer(int which, struct itimerval *curr_value) {
-    struct kernel_itimerval kernel_value;
+    struct __kernel_old_itimerval kernel_value;
 
     if (!curr_value) {
         errno = EFAULT;

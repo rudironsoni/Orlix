@@ -5,12 +5,12 @@
 #include <stdint.h>
 
 struct iovec;
-struct linux_stat;
+struct stat;
 
 int backing_open(const char *path, int flags, uint32_t mode);
 int backing_close(int fd);
 int backing_dup(int fd);
-int backing_fstat(int fd, struct linux_stat *statbuf);
+int backing_fstat(int fd, struct stat *statbuf);
 long backing_read(int fd, void *buf, size_t count);
 long backing_write(int fd, const void *buf, size_t count);
 int64_t backing_lseek(int fd, int64_t offset, int whence);

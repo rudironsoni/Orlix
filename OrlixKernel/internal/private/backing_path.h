@@ -4,10 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct linux_stat;
+struct stat;
 
-int backing_stat(const char *path, struct linux_stat *statbuf);
-int backing_lstat(const char *path, struct linux_stat *statbuf);
+int backing_stat(const char *path, struct stat *statbuf);
+int backing_lstat(const char *path, struct stat *statbuf);
 int backing_access(const char *path, int mode);
 int backing_directory_is_empty(const char *path);
 int backing_rename_with_flags(int fromfd, const char *from, int tofd, const char *to, unsigned int flags);

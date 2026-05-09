@@ -158,7 +158,7 @@ static int vfs_ensure_backing_initialized(void);
 static int vfs_join_virtual_path(const char *base_path, const char *suffix, char *joined_path,
                                  size_t joined_path_len);
 static int vfs_stat_virtual_backed_path(const char *resolved_vpath, const char *translated_path,
-                                        struct linux_stat *st);
+                                        struct stat *st);
 static bool vfs_path_is_on_readonly_mount(const char *resolved_vpath);
 static int vfs_proc_append(char *buf, size_t buf_len, size_t *pos, const char *fmt, ...);
 static int vfs_copy_string(const char *src, char *dst, size_t dst_len);
@@ -1289,7 +1289,7 @@ static uint32_t vfs_default_mode_for_virtual_path(const char *resolved_vpath, ui
     return current_mode;
 }
 
-void vfs_apply_stat_metadata(const char *resolved_vpath, struct linux_stat *statbuf) {
+void vfs_apply_stat_metadata(const char *resolved_vpath, struct stat *statbuf) {
     int idx;
 
     if (!statbuf) {
@@ -1309,9 +1309,9 @@ void vfs_apply_stat_metadata(const char *resolved_vpath, struct linux_stat *stat
         statbuf->st_mode = file_type | (vfs_metadata_table[idx].mode & 07777U);
     }
     if (idx >= 0 && vfs_metadata_table[idx].has_times) {
-        statbuf->st_atime_sec = vfs_metadata_table[idx].atime_sec;
+        statbuf->st_atime = vfs_metadata_table[idx].atime_sec;
         statbuf->st_atime_nsec = vfs_metadata_table[idx].atime_nsec;
-        statbuf->st_mtime_sec = vfs_metadata_table[idx].mtime_sec;
+        statbuf->st_mtime = vfs_metadata_table[idx].mtime_sec;
         statbuf->st_mtime_nsec = vfs_metadata_table[idx].mtime_nsec;
     }
     fs_mutex_unlock(&vfs_metadata_lock);
@@ -1352,7 +1352,7 @@ void vfs_record_created_path(const char *resolved_vpath, uint32_t mode) {
     fs_mutex_unlock(&vfs_metadata_lock);
 }
 
-static int vfs_record_metadata_for_stat(const char *resolved_vpath, const struct linux_stat *st) {
+static int vfs_record_metadata_for_stat(const char *resolved_vpath, const struct stat *st) {
     int idx;
     int free_slot = -1;
 
@@ -1427,7 +1427,7 @@ uint64_t vfs_file_identity_for_path(const char *resolved_vpath) {
 static int vfs_resolve_existing_metadata_path_follow(const char *path, char *resolved,
                                                      size_t resolved_len,
                                                      int follow_final_symlink) {
-    struct linux_stat st;
+    struct stat st;
     int ret;
 
     if (!path || !resolved || resolved_len == 0) {
@@ -2036,7 +2036,7 @@ void vfs_exchange_path_metadata(const char *left_resolved_vpath, const char *rig
     fs_mutex_unlock(&vfs_metadata_lock);
 }
 
-static bool vfs_cred_has_mode_permission(const struct cred *cred, const struct linux_stat *st,
+static bool vfs_cred_has_mode_permission(const struct cred *cred, const struct stat *st,
                                          uint32_t mask) {
     uint32_t perm;
 
@@ -2065,7 +2065,7 @@ static bool vfs_cred_has_mode_permission(const struct cred *cred, const struct l
     return (perm & mask) == mask;
 }
 
-static bool vfs_cred_has_mode_permission_as(const struct cred *cred, const struct linux_stat *st,
+static bool vfs_cred_has_mode_permission_as(const struct cred *cred, const struct stat *st,
                                             uint32_t mask, uint32_t uid, uint32_t gid) {
     uint32_t perm;
 
@@ -2096,7 +2096,7 @@ static bool vfs_cred_has_mode_permission_as(const struct cred *cred, const struc
 
 int vfs_chmod_metadata(const char *resolved_vpath, uint32_t mode) {
     char translated_path[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     struct cred *cred = get_current_cred();
     uint64_t identity;
     int ret;
@@ -2131,7 +2131,7 @@ int vfs_chmod_metadata(const char *resolved_vpath, uint32_t mode) {
 
 int vfs_chown_metadata(const char *resolved_vpath, uint32_t owner, uint32_t group) {
     char translated_path[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     struct cred *cred = get_current_cred();
     uint64_t identity;
     int ret;
@@ -2172,7 +2172,7 @@ int vfs_chown_metadata(const char *resolved_vpath, uint32_t owner, uint32_t grou
 int vfs_utimens_metadata(const char *resolved_vpath, long atime_sec, unsigned long atime_nsec,
                          long mtime_sec, unsigned long mtime_nsec) {
     char translated_path[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     struct cred *cred = get_current_cred();
     uint64_t identity;
     int ret;
@@ -2211,7 +2211,7 @@ int vfs_utimens_metadata(const char *resolved_vpath, long atime_sec, unsigned lo
 }
 
 static int vfs_stat_virtual_backed_path(const char *resolved_vpath, const char *translated_path,
-                                        struct linux_stat *st) {
+                                        struct stat *st) {
     if (!resolved_vpath || !translated_path || !st) {
         return -EINVAL;
     }
@@ -2251,7 +2251,7 @@ static int vfs_parent_path(const char *resolved_vpath, char *parent, size_t pare
 int vfs_check_parent_mutation_permission(const char *resolved_vpath) {
     char parent[MAX_PATH];
     char translated_parent[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     struct cred *cred = get_current_cred();
     int ret;
 
@@ -2285,8 +2285,8 @@ int vfs_check_sticky_unlink_permission(const char *resolved_vpath) {
     char parent[MAX_PATH];
     char translated_parent[MAX_PATH];
     char translated_target[MAX_PATH];
-    struct linux_stat parent_st;
-    struct linux_stat target_st;
+    struct stat parent_st;
+    struct stat target_st;
     struct cred *cred = get_current_cred();
     int ret;
 
@@ -2359,7 +2359,7 @@ static int vfs_check_search_permission(const char *resolved_vpath) {
     len = strlen(resolved_vpath);
     for (size_t i = 1; i < len; i++) {
         char translated[MAX_PATH];
-        struct linux_stat st;
+        struct stat st;
         int ret;
 
         if (resolved_vpath[i] != '/') {
@@ -2393,7 +2393,7 @@ static int vfs_check_search_permission(const char *resolved_vpath) {
 }
 
 int vfs_check_open_permission(const char *resolved_vpath, const char *translated_path, int flags) {
-    struct linux_stat st;
+    struct stat st;
     struct cred *cred = get_current_cred();
     int access_mode = flags & O_ACCMODE;
     bool wants_read = access_mode == O_RDONLY || access_mode == O_RDWR;
@@ -2930,7 +2930,7 @@ int vfs_move_mount(int from_dirfd, const char *from_pathname, int to_dirfd,
     char resolved_from[MAX_PATH];
     char resolved_target[MAX_PATH];
     char backing_target[MAX_PATH];
-    struct linux_stat target_stat;
+    struct stat target_stat;
     struct vfs_mount_namespace *mnt_ns = vfs_task_mount_namespace();
     int ret;
 
@@ -3060,7 +3060,7 @@ int vfs_pivot_root(const char *new_root, const char *put_old) {
     char backing_new_root[MAX_PATH];
     char backing_put_old[MAX_PATH];
     char old_pwd[MAX_PATH];
-    struct linux_stat st;
+    struct stat st;
     int ret;
 
     if (!new_root || !put_old) {
@@ -3733,8 +3733,8 @@ int vfs_mount(const char *source, const char *target, const char *fstype, unsign
     char resolved_target[MAX_PATH];
     char backing_source[MAX_PATH];
     char backing_target[MAX_PATH];
-    struct linux_stat source_stat;
-    struct linux_stat target_stat;
+    struct stat source_stat;
+    struct stat target_stat;
     int ret;
     int slot = -1;
     unsigned long supported_flags = MS_BIND | MS_REMOUNT | vfs_mount_attribute_flags() | MS_REC | MS_MOVE |
@@ -4082,7 +4082,7 @@ static int vfs_join_virtual_path(const char *base_path, const char *suffix, char
     return 0;
 }
 
-static int vfs_lstat_resolved_virtual_path(const char *resolved_vpath, struct linux_stat *st) {
+static int vfs_lstat_resolved_virtual_path(const char *resolved_vpath, struct stat *st) {
     char mounted_path[MAX_PATH];
     char translated_path[MAX_PATH];
     int ret;
@@ -4227,7 +4227,7 @@ static int vfs_resolve_symlink_path(const char *normalized_path, const char *roo
         while (work_path[offset] != '\0') {
             char component_path[MAX_PATH];
             char target[MAX_PATH];
-            struct linux_stat st;
+            struct stat st;
             size_t component_end = offset;
             bool is_final;
 
@@ -4619,7 +4619,7 @@ int vfs_reverse_translate(const char *backing_path, char *vpath, size_t vpath_le
     }
 }
 
-int vfs_stat_path(const char *pathname, struct linux_stat *statbuf) {
+int vfs_stat_path(const char *pathname, struct stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
@@ -4629,7 +4629,7 @@ int vfs_stat_path(const char *pathname, struct linux_stat *statbuf) {
     return backing_stat(pathname, statbuf);
 }
 
-int vfs_lstat(const char *pathname, struct linux_stat *statbuf) {
+int vfs_lstat(const char *pathname, struct stat *statbuf) {
     if (!pathname || !statbuf) {
         return -EFAULT;
     }
@@ -6557,7 +6557,7 @@ int vfs_access(const char *pathname, int mode) {
     return vfs_faccessat(AT_FDCWD, pathname, mode, 0);
 }
 
-int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags) {
+int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags) {
     char translated_path[MAX_PATH];
     char resolved_virtual[MAX_PATH];
     int ret;
@@ -6883,7 +6883,7 @@ int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags) {
     }
 
     {
-        struct linux_stat st;
+        struct stat st;
         struct cred *cred = get_current_cred();
         uint32_t check_uid;
         uint32_t check_gid;

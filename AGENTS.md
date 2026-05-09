@@ -60,6 +60,25 @@ Forbidden seam shape:
 - abstractions that rename/deodorize host APIs and make them ambient
 - adapter-owned include surfaces consumed by `OrlixKernel`
 - filenames or contract names that encode host role redundantly with `_host`, `_bridge`, `internal/ios`, or similar labels
+- repo-local compatibility layers that rename Linux-shaped concepts instead of using Linux names
+
+Linux naming rule:
+- If the concept already has a Linux name, use the Linux name.
+- If the concept already exists in `third_party/linux/<version>/<arch>/uapi/include` or `third_party/linux/<version>/<arch>/kheaders/**`, do not recreate it in `OrlixKernel/**` under any repo-local spelling.
+- If the concept is libc-owned and already belongs in `OrlixMLibC`, do not recreate it in `OrlixKernel/**` under any repo-local spelling.
+- Do not invent repo-local spellings for Linux-shaped concepts such as `orlix_*`, `kernel_*`, or `*_compat`.
+- Do not invent repo-local `linux_*` stand-ins for common Linux concepts when the real contract name is just `timespec`, `timeval`, `itimerval`, `fd_set`, `sockaddr`, `msghdr`, `termios`, `winsize`, `statfs`, or similar.
+- This applies to filenames, header names, structs, typedefs, enums, macros, helper functions, and local private state when the thing being modeled is still a Linux concept.
+- Examples of forbidden spellings include patterns such as `kernel_timeval`, `orlix_kernel_fd_zero`, `kernel_select_compat.h`, or similar repo-local renames of `timespec`, `timeval`, `fd_set`, `sockaddr`, `pollfd`, `termios`, `winsize`, and related Linux-shaped concepts.
+- Additional forbidden examples include `linux_timespec`, `linux_statfs`, `linux_mmsghdr`, and other repo-local spellings that merely prepend `linux_` to a concept whose real Linux-facing name is already defined elsewhere.
+- If the concept is genuinely private state and not a Linux concept, use a plain subsystem noun instead of branding or fake compatibility vocabulary.
+- Extrapolation rule: if a repo-local name would still read as “Linux concept plus project/role/private/compat dressing,” it is forbidden even if the exact spelling is new.
+- Forbidden dressing includes project branding, ownership branding, and fake adaptation words before or after a Linux concept:
+  - prefixes such as `orlix_`, `ix_`, `kernel_`, `linux_`, `private_`, `internal_`, `bridge_`, `adapter_`, `shim_`, `compat_`
+  - suffixes such as `_compat`, `_bridge`, `_adapter`, `_shim`, `_private`, `_internal`, `_owner`
+- This prohibition applies equally to helper functions, typedefs, structs, macros, local aliases, and header filenames.
+- If you are tempted to write a name like `kernel_*`, `linux_*`, `orlix_*`, `*_compat`, `*_bridge`, or similar around a Linux concept, stop and redesign the ownership boundary instead.
+- Mandatory stop rule: if the only apparent way forward is to mint a repo-local Linux-concept rename, stop immediately and ask for guidance instead of inventing the name.
 
 ## 4) Ambient Host Vocabulary Is Forbidden in Linux-Owner Code
 
@@ -137,12 +156,25 @@ OrlixMLibC ownership:
 - native iOS arm64/aarch64 sysdeps for recompiled Linux-oriented packages
 - errno exposure at the libc boundary
 - `_start`, libc startup, libc syscall stubs/wrappers, package-facing sysroot headers
+- userspace socket ABI surfaces built from vendored Linux UAPI, including:
+  - `sys/socket.h`
+  - `socklen_t`
+  - `sa_family_t`
+  - `struct sockaddr`
+  - `struct sockaddr_storage`
+  - `struct msghdr`
+  - `struct cmsghdr`
+  - `struct mmsghdr` when needed by Linux userspace ABI
 
 Hard direction rule:
 - `OrlixKernel/**` must not include `OrlixMLibC/**`.
 - The only allowed consumers of `OrlixMLibC/**` inside this repo are package-facing compile probes, sysroot/bootstrap plumbing, and non-kernel targets that explicitly model native userspace.
 - If Linux-owner code needs a type or struct that is not appropriate to take from Darwin and not appropriate to take from `OrlixMLibC`, define or use a kernel-private/Linux-owned surface instead of crossing into libc ownership.
 - Do not "fix" Darwin leakage in `OrlixKernel` by replacing it with `OrlixMLibC` includes. That is still a wrong-direction dependency.
+- `OrlixKernel` must not own libc specifics. Libc-facing typedefs, structs, and APIs belong either to vendored Linux UAPI/kernel headers or to `OrlixMLibC`, never to repo-local kernel headers.
+- Treat libc-owned spellings such as `pid_t`, `uid_t`, `gid_t`, `mode_t`, `dev_t`, `ino_t`, `nlink_t`, `socklen_t`, `sa_family_t`, `suseconds_t`, `sigval`, `sigevent`, `statvfs`, `termios`, `winsize`, `iovec`, `msghdr`, `cmsghdr`, and `mmsghdr` as non-kernel ownership unless they come from the correct vendored Linux source of truth.
+- `OrlixKernel/**` must not include libc-facing headers such as `sys/socket.h`, `sys/types.h`, `sys/uio.h`, `sys/ioctl.h`, `sys/select.h`, `sys/resource.h`, `sys/statvfs.h`, `sys/wait.h`, `poll.h`, `termios.h`, or `signal.h`. Use vendored Linux UAPI/kheaders or a kernel-owned private state model instead.
+- Do not recreate public socket ABI structs or typedefs inside `OrlixKernel`. Socket runtime behavior is kernel-owned; userspace socket ABI types are `OrlixMLibC`-owned.
 
 Correct native userspace path:
 
@@ -204,6 +236,7 @@ Forbidden implementation behavior:
 - compile-only hacks that weaken Linux source compatibility
 - local typedefs, aliases, wrappers, or renames that dodge ABI ownership
 - replacing Linux UAPI/libc-owned concepts with repo-local convenience types
+- renaming Linux concepts into repo-local “private” or “compat” spellings instead of using Linux names
 - using Darwin/POSIX host types because they are easier to compile
 - moving semantic problems into tests instead of fixing subsystem ownership
 - stopping at the smallest green test when the architecture is still wrong
@@ -229,6 +262,8 @@ Additional hard rule:
   instead of explaining it away.
 - Do not downgrade Linux ABI types to local fixed-width convenience types when
   vendored generated Linux headers provide the contract type.
+- Do not create repo-local header files whose purpose is to restate Linux UAPI or kheaders concepts that already exist under `third_party/linux/<version>/<arch>/**`.
+- Do not create repo-local wrapper macros or helper functions whose sole job is to rename Linux constants, Linux structs, or Linux fd-set/socket/time/termios behavior into project-specific spellings.
 - Laziness is not an implementation strategy: do not choose shallow stubs,
   renamed adapters, local typedefs, or narrow test-shaped behavior when the
   kernel capability requires real subsystem semantics.
@@ -241,6 +276,8 @@ Forbidden:
 - cosmetic renames that preserve the same architectural violation
 - adapter-owned seam headers consumed by `OrlixKernel`
 - redundant path or filename role labels such as `internal/ios`, `*_host`, and `*_bridge` in the accepted end-state
+- repo-local Linux-concept renames such as `orlix_*`, `kernel_*`, or `*_compat` when Linux naming already exists
+- near-equivalent permutations of the same rename pattern using `linux_*`, `ix_*`, `private_*`, `internal_*`, `bridge_*`, `adapter_*`, `shim_*`, or matching suffix variants
 
 Required response to lint conflicts:
 - refine seam boundaries

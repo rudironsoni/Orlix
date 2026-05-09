@@ -31,6 +31,26 @@ ORLIX_LINT_C_FLAGS := \
 	-I$(CURDIR)/third_party/linux/6.12/arm64/uapi/include \
 	-D_XOPEN_SOURCE \
 	-fvisibility=hidden
+ORLIX_LINT_KERNEL_SOURCE_C_FLAGS := \
+	$(ORLIX_LINT_COMMON_FLAGS) \
+	-I$(CURDIR)/OrlixKernel \
+	-I$(CURDIR)/OrlixKernel/include \
+	-I$(CURDIR)/OrlixKernel/internal/private \
+	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/arch/arm64/include \
+	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/source/include \
+	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/arch/arm64/include/generated \
+	-I$(CURDIR)/third_party/linux/6.12/arm64/kheaders/generated/include \
+	-I$(CURDIR)/third_party/linux/6.12/arm64/uapi/include \
+	-D_XOPEN_SOURCE \
+	-fvisibility=hidden
+ORLIX_LINT_HOST_C_FLAGS := \
+	$(ORLIX_LINT_COMMON_FLAGS) \
+	-I$(CURDIR)/OrlixKernel \
+	-I$(CURDIR)/OrlixKernel/include \
+	-I$(CURDIR)/OrlixKernel/internal/private \
+	-I$(CURDIR)/third_party/linux/6.12/arm64/uapi/include \
+	-D_XOPEN_SOURCE \
+	-fvisibility=hidden
 ORLIX_LINT_OBJC_FLAGS := \
 	$(ORLIX_LINT_COMMON_FLAGS) \
 	-fobjc-arc \
@@ -69,11 +89,29 @@ lint: build-orlix-clang-tidy-module
 		exit 1; \
 	fi; \
 	c_files="$$(rg --files OrlixKernel OrlixHostAdapter OrlixKernelTests OrlixHostAdapterTests | rg '\.(c|cc|cpp|cxx)$$' | rg -v '^OrlixKernelTests/.*\.c$$' || true)"; \
+	header_files="$$(rg --files OrlixKernel OrlixHostAdapter OrlixKernelTests OrlixHostAdapterTests | rg '\.h$$' || true)"; \
 	objc_files="$$(rg --files OrlixKernel OrlixHostAdapter OrlixKernelTests OrlixHostAdapterTests | rg '\.(m|mm)$$' || true)"; \
 	if [ -n "$$c_files" ]; then \
 		while IFS= read -r file; do \
-			"$(CLANG_TIDY)" --load="$$plugin_path" --config-file=.clang-tidy "$$file" -- $(ORLIX_LINT_C_FLAGS); \
+			flags="$(ORLIX_LINT_C_FLAGS)"; \
+			if [[ "$$file" == OrlixHostAdapter/* || "$$file" == OrlixHostAdapterTests/* ]]; then \
+				flags="$(ORLIX_LINT_HOST_C_FLAGS)"; \
+			elif [[ "$$file" == OrlixKernel/kernel/net/network.c || "$$file" == OrlixKernel/runtime/syscall.c || "$$file" == OrlixKernel/fs/poll.c || "$$file" == OrlixKernel/fs/eventpoll.c || "$$file" == OrlixKernel/fs/fdtable.c ]]; then \
+				flags="$(ORLIX_LINT_KERNEL_SOURCE_C_FLAGS)"; \
+			fi; \
+			"$(CLANG_TIDY)" --load="$$plugin_path" --config-file=.clang-tidy "$$file" -- $$flags; \
 		done <<< "$$c_files"; \
+	fi; \
+	if [ -n "$$header_files" ]; then \
+		while IFS= read -r file; do \
+			flags="$(ORLIX_LINT_C_FLAGS)"; \
+			if [[ "$$file" == OrlixHostAdapter/* || "$$file" == OrlixHostAdapterTests/* ]]; then \
+				flags="$(ORLIX_LINT_HOST_C_FLAGS)"; \
+			elif [[ "$$file" == OrlixKernel/fs/poll.h ]]; then \
+				flags="$(ORLIX_LINT_KERNEL_SOURCE_C_FLAGS)"; \
+			fi; \
+			"$(CLANG_TIDY)" --load="$$plugin_path" --config-file=.clang-tidy "$$file" -- $$flags -x c-header; \
+		done <<< "$$header_files"; \
 	fi; \
 	if [ -n "$$objc_files" ]; then \
 		while IFS= read -r file; do \

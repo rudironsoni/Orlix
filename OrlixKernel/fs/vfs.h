@@ -6,17 +6,8 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
-/* Linux stat structure - defined in stat_types.h for shared use */
-#include "stat_types.h"
-
-/* Linux timespec */
-struct linux_timespec {
-    long tv_sec;
-    long tv_nsec;
-};
-
 /* Linux statfs (minimal definition for VFS) */
-struct linux_statfs {
+struct statfs {
     long f_type;
     long f_bsize;
     uint64_t f_blocks;
@@ -76,6 +67,8 @@ enum vfs_route_identity {
 struct inode;
 struct dentry;
 struct file;
+struct stat;
+struct timespec;
 struct super_block;
 struct file_system_type;
 struct mount;
@@ -113,7 +106,7 @@ struct inode_operations {
                   struct dentry *new_dentry);
     int (*readlink)(struct dentry *dentry, char *buf, int buflen);
     int (*setattr)(struct dentry *dentry, struct iattr *attr);
-    int (*getattr)(const char *path, struct dentry *dentry, struct linux_stat *statbuf);
+    int (*getattr)(const char *path, struct dentry *dentry, struct stat *statbuf);
 };
 
 /* Linux-compatible address space operations */
@@ -133,7 +126,7 @@ struct super_operations {
     void (*dirty_inode)(struct inode *inode);
     int (*write_inode)(struct inode *inode, struct writeback_control *wbc);
     void (*evict_inode)(struct inode *inode);
-    int (*statfs)(struct dentry *dentry, struct linux_statfs *buf);
+    int (*statfs)(struct dentry *dentry, struct statfs *buf);
     int (*remount_fs)(struct super_block *sb, int *flags, char *data);
     void (*clear_inode)(struct inode *inode);
     void (*umount_begin)(struct super_block *sb);
@@ -146,9 +139,9 @@ struct inode {
     uint32_t i_uid;
     uint32_t i_gid;
     int64_t i_size;
-    struct linux_timespec *i_atime;
-    struct linux_timespec *i_mtime;
-    struct linux_timespec *i_ctime;
+    struct timespec *i_atime;
+    struct timespec *i_mtime;
+    struct timespec *i_ctime;
     atomic_int i_count;
     void *i_private;
     struct super_block *i_sb;
@@ -383,7 +376,7 @@ void vfs_forget_path_metadata(const char *resolved_vpath);
 void vfs_link_path_metadata(const char *old_resolved_vpath, const char *new_resolved_vpath);
 void vfs_rename_path_metadata(const char *old_resolved_vpath, const char *new_resolved_vpath);
 void vfs_exchange_path_metadata(const char *left_resolved_vpath, const char *right_resolved_vpath);
-void vfs_apply_stat_metadata(const char *resolved_vpath, struct linux_stat *statbuf);
+void vfs_apply_stat_metadata(const char *resolved_vpath, struct stat *statbuf);
 int vfs_chmod_metadata(const char *resolved_vpath, uint32_t mode);
 int vfs_chown_metadata(const char *resolved_vpath, uint32_t owner, uint32_t group);
 int vfs_utimens_metadata(const char *resolved_vpath, long atime_sec, unsigned long atime_nsec,
@@ -397,10 +390,10 @@ const char *vfs_cache_backing_root(void);
 const char *vfs_temp_backing_root(void);
 
 /* Stat operations */
-int vfs_stat_path(const char *pathname, struct linux_stat *statbuf);
-int vfs_lstat(const char *pathname, struct linux_stat *statbuf);
+int vfs_stat_path(const char *pathname, struct stat *statbuf);
+int vfs_lstat(const char *pathname, struct stat *statbuf);
 int vfs_access(const char *pathname, int mode);
-int vfs_fstatat(int dirfd, const char *pathname, struct linux_stat *statbuf, int flags);
+int vfs_fstatat(int dirfd, const char *pathname, struct stat *statbuf, int flags);
 int vfs_faccessat(int dirfd, const char *pathname, int mode, int flags);
 
 #ifdef __cplusplus

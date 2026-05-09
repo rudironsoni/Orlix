@@ -5,8 +5,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <sys/_types/_timeval.h>
-
 #include "fdtable.h"
 #include "internal/private/backing_poll.h"
 #include "pipe.h"
@@ -385,7 +383,7 @@ int poll_impl(struct pollfd *fds, __kernel_ulong_t nfds, int timeout) {
     return poll_impl_common(fds, nfds, timeout, true);
 }
 
-static int timeval_to_timeout_ms(const struct kernel_timeval *timeout) {
+static int timeval_to_timeout_ms(const struct timeval *timeout) {
     if (!timeout) {
         return -1;
     }
@@ -403,8 +401,41 @@ static int timeval_to_timeout_ms(const struct kernel_timeval *timeout) {
     return (int)total;
 }
 
+static void fdset_zero(fd_set *set) {
+    if (!set) {
+        return;
+    }
+    memset(set->fds_bits, 0, sizeof(set->fds_bits));
+}
+
+static bool fdset_isset(int fd, const fd_set *set) {
+    unsigned int bits_per_word = (unsigned int)(8U * sizeof(set->fds_bits[0]));
+    unsigned int word;
+    unsigned int bit;
+
+    if (!set || fd < 0 || fd >= __FD_SETSIZE) {
+        return false;
+    }
+    word = (unsigned int)fd / bits_per_word;
+    bit = (unsigned int)fd % bits_per_word;
+    return (set->fds_bits[word] & (1UL << bit)) != 0;
+}
+
+static void fdset_set(int fd, fd_set *set) {
+    unsigned int bits_per_word = (unsigned int)(8U * sizeof(set->fds_bits[0]));
+    unsigned int word;
+    unsigned int bit;
+
+    if (!set || fd < 0 || fd >= __FD_SETSIZE) {
+        return;
+    }
+    word = (unsigned int)fd / bits_per_word;
+    bit = (unsigned int)fd % bits_per_word;
+    set->fds_bits[word] |= (1UL << bit);
+}
+
 int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds,
-                struct kernel_timeval *timeout) {
+                struct timeval *timeout) {
     fd_set requested_read;
     fd_set requested_write;
     fd_set requested_error;
@@ -420,30 +451,30 @@ int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds,
         return -1;
     }
 
-    FD_ZERO(&requested_read);
-    FD_ZERO(&requested_write);
-    FD_ZERO(&requested_error);
+    fdset_zero(&requested_read);
+    fdset_zero(&requested_write);
+    fdset_zero(&requested_error);
 
     if (readfds) {
         requested_read = *readfds;
         requested_read_ptr = &requested_read;
-        FD_ZERO(readfds);
+        fdset_zero(readfds);
     }
     if (writefds) {
         requested_write = *writefds;
         requested_write_ptr = &requested_write;
-        FD_ZERO(writefds);
+        fdset_zero(writefds);
     }
     if (errorfds) {
         requested_error = *errorfds;
         requested_error_ptr = &requested_error;
-        FD_ZERO(errorfds);
+        fdset_zero(errorfds);
     }
 
     for (int fd = 0; fd < nfds; fd++) {
-        bool in_read = requested_read_ptr && FD_ISSET(fd, requested_read_ptr);
-        bool in_write = requested_write_ptr && FD_ISSET(fd, requested_write_ptr);
-        bool in_error = requested_error_ptr && FD_ISSET(fd, requested_error_ptr);
+        bool in_read = requested_read_ptr && fdset_isset(fd, requested_read_ptr);
+        bool in_write = requested_write_ptr && fdset_isset(fd, requested_write_ptr);
+        bool in_error = requested_error_ptr && fdset_isset(fd, requested_error_ptr);
         if (!in_read && !in_write && !in_error) {
             continue;
         }
@@ -482,9 +513,9 @@ int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds,
 
     int idx = 0;
     for (int fd = 0; fd < nfds; fd++) {
-        bool in_read = requested_read_ptr && FD_ISSET(fd, requested_read_ptr);
-        bool in_write = requested_write_ptr && FD_ISSET(fd, requested_write_ptr);
-        bool in_error = requested_error_ptr && FD_ISSET(fd, requested_error_ptr);
+        bool in_read = requested_read_ptr && fdset_isset(fd, requested_read_ptr);
+        bool in_write = requested_write_ptr && fdset_isset(fd, requested_write_ptr);
+        bool in_error = requested_error_ptr && fdset_isset(fd, requested_error_ptr);
         if (!in_read && !in_write && !in_error) {
             continue;
         }
@@ -532,15 +563,15 @@ int select_impl(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds,
         bool marked = false;
 
         if (readfds && (revents & (POLLIN | POLLRDNORM | POLLHUP))) {
-            FD_SET(fd, readfds);
+            fdset_set(fd, readfds);
             marked = true;
         }
         if (writefds && (revents & (POLLOUT | POLLWRNORM))) {
-            FD_SET(fd, writefds);
+            fdset_set(fd, writefds);
             marked = true;
         }
         if (errorfds && (revents & (POLLERR | POLLPRI | POLLNVAL))) {
-            FD_SET(fd, errorfds);
+            fdset_set(fd, errorfds);
             marked = true;
         }
         if (marked) {
@@ -558,8 +589,8 @@ __attribute__((visibility("default"))) int poll(struct pollfd *fds, __kernel_ulo
 
 __attribute__((visibility("default"))) int select(int nfds, fd_set *readfds, fd_set *writefds,
                                                   fd_set *errorfds, struct timeval *timeout) {
-    struct kernel_timeval kernel_timeout;
-    struct kernel_timeval *kernel_timeout_ptr = NULL;
+    struct timeval kernel_timeout;
+    struct timeval *kernel_timeout_ptr = NULL;
 
     if (timeout) {
         kernel_timeout.tv_sec = timeout->tv_sec;

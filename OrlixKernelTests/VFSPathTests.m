@@ -53,9 +53,9 @@ struct linux_dirent64 {
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern char *getcwd_impl(char *buf, size_t size);
 #include "internal/private/backing_roots.h"
-extern int stat_impl(const char *path, struct linux_stat *statbuf);
-extern int fstat_impl(int fd, struct linux_stat *statbuf);
-extern int lstat_impl(const char *path, struct linux_stat *statbuf);
+extern int stat_impl(const char *path, struct stat *statbuf);
+extern int fstat_impl(int fd, struct stat *statbuf);
+extern int lstat_impl(const char *path, struct stat *statbuf);
 extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int dup2_impl(int oldfd, int newfd);
 extern long read_impl(int fd, void *buf, size_t count);
@@ -589,14 +589,14 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testVfsFstatatRejectsInvalidFlags {
-    struct linux_stat st;
+    struct stat st;
     int ret = vfs_fstatat(AT_FDCWD, "/etc/passwd", &st, INVALID_FLAG_TEST_VALUE);
 
     XCTAssertEqual(ret, -EINVAL, @"vfs_fstatat should reject invalid flags");
 }
 
 - (void)testFstatInvalidFdReturnsBadf {
-    struct linux_stat st;
+    struct stat st;
 
     errno = 0;
     XCTAssertEqual(fstat_impl(-1, &st), -1, @"fstat_impl should reject invalid fd");
@@ -619,7 +619,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testFstatImplSucceedsForLinuxOwnedFd {
-    struct linux_stat st;
+    struct stat st;
     int fd = open("/etc/passwd", O_RDONLY);
     XCTAssertTrue(fd >= 0, @"open(/etc/passwd) should succeed");
     if (fd < 0) {
@@ -635,8 +635,8 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testFstatDuplicatedRealBackedFdMatchesOriginal {
-    struct linux_stat original_st;
-    struct linux_stat duplicate_st;
+    struct stat original_st;
+    struct stat duplicate_st;
     int fd = open("/etc/passwd", O_RDONLY);
     int dup_fd;
 
@@ -664,7 +664,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testFstatProcDirectoryFdReportsDirectory {
-    struct linux_stat st;
+    struct stat st;
     int fd = open("/proc", O_RDONLY | O_DIRECTORY, 0);
 
     XCTAssertTrue(fd >= 0, @"open(/proc, O_DIRECTORY) should succeed");
@@ -681,7 +681,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testFstatProcSelfFdDirectoryReportsDirectory {
-    struct linux_stat st;
+    struct stat st;
     int fd = open("/proc/self/fd", O_RDONLY | O_DIRECTORY, 0);
 
     XCTAssertTrue(fd >= 0, @"open(/proc/self/fd, O_DIRECTORY) should succeed");
@@ -698,7 +698,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testFstatProcSelfFdinfoFileReportsRegularFile {
-    struct linux_stat st;
+    struct stat st;
     int fd = open("/proc/self/fdinfo/0", O_RDONLY, 0);
 
     XCTAssertTrue(fd >= 0, @"open(/proc/self/fdinfo/0) should succeed");
@@ -715,7 +715,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testSyntheticRootStatSucceeds {
-    struct linux_stat st;
+    struct stat st;
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/proc", &st, 0), 0,
                    @"synthetic root vfs_fstatat should succeed");
@@ -742,7 +742,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testSyntheticChildStatHandlesSupportedProcFilesAndRejectsUnsupportedSys {
-    struct linux_stat st;
+    struct stat st;
     extern int vfs_contract_fstatat_synthetic_child_nofollow(void);
 
     XCTAssertEqual(vfs_fstatat(AT_FDCWD, "/proc/meminfo", &st, 0), 0,
@@ -980,7 +980,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
  * ============================================================================ */
 
 - (void)testDevNullStatSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/null", &st), 0, @"stat(/dev/null) should succeed");
     XCTAssertTrue(stat_mode_is_char_device(st.st_mode), @"/dev/null should be a character device");
@@ -992,7 +992,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testDevZeroStatSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/zero", &st), 0, @"stat(/dev/zero) should succeed");
     XCTAssertTrue(stat_mode_is_char_device(st.st_mode), @"/dev/zero should be a character device");
@@ -1000,7 +1000,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testDevUrandomStatSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/dev/urandom", &st), 0, @"stat(/dev/urandom) should succeed");
     XCTAssertTrue(stat_mode_is_char_device(st.st_mode), @"/dev/urandom should be a character device");
@@ -1137,7 +1137,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 
 - (void)testUnsupportedDevNodeStillFails {
     errno = 0;
-    struct linux_stat st;
+    struct stat st;
     XCTAssertEqual(stat_impl("/dev/sda", &st), -1, @"stat(/dev/sda) should fail for unsupported dev node");
     XCTAssertEqual(errno, ENOENT, @"stat(/dev/sda) should set ENOENT");
 
@@ -1949,14 +1949,14 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
  * ============================================================================ */
 
 - (void)testProcSelfStatSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self", &st), 0, @"stat(/proc/self) should succeed");
     XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/proc/self should be a directory");
 }
 
 - (void)testProcSelfStatFileSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/stat", &st), 0, @"stat(/proc/self/stat) should succeed");
     XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/stat should be a regular file");
@@ -1964,7 +1964,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfCmdlineSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/cmdline", &st), 0, @"stat(/proc/self/cmdline) should succeed");
     XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/cmdline should be a regular file");
@@ -1972,7 +1972,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfCommSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/comm", &st), 0, @"stat(/proc/self/comm) should succeed");
     XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/comm should be a regular file");
@@ -1980,7 +1980,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfStatmSucceeds {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/statm", &st), 0, @"stat(/proc/self/statm) should succeed");
     XCTAssertTrue(stat_mode_is_regular(st.st_mode), @"/proc/self/statm should be a regular file");
@@ -1988,7 +1988,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfExeIsSymlink {
-    struct linux_stat st;
+    struct stat st;
     struct task_struct *task = get_current();
     XCTAssertTrue(task != NULL, @"current task should exist");
     if (!task) return;
@@ -2010,21 +2010,21 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfCwdIsSymlink {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(lstat_impl("/proc/self/cwd", &st), 0, @"lstat(/proc/self/cwd) should succeed");
     XCTAssertTrue(stat_mode_is_symlink(st.st_mode), @"/proc/self/cwd should be a symlink");
 }
 
 - (void)testProcSelfFdIsDirectory {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/fd", &st), 0, @"stat(/proc/self/fd) should succeed");
     XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/proc/self/fd should be a directory");
 }
 
 - (void)testProcSelfFdinfoIsDirectory {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     XCTAssertEqual(stat_impl("/proc/self/fdinfo", &st), 0, @"stat(/proc/self/fdinfo) should succeed");
     XCTAssertTrue(stat_mode_is_directory(st.st_mode), @"/proc/self/fdinfo should be a directory");
@@ -2035,7 +2035,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
  * ============================================================================ */
 
 - (void)testProcSelfFdSymlinksExist {
-    struct linux_stat st;
+    struct stat st;
 
     // Get stdin fd (0) info via /proc/self/fd/0
     errno = 0;
@@ -2112,7 +2112,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfFdInvalidFdNumbersFail {
-    struct linux_stat st;
+    struct stat st;
 
     // Try to stat a non-existent fd
     errno = 0;
@@ -2128,7 +2128,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfFdinfoFilesExist {
-    struct linux_stat st;
+    struct stat st;
 
     // fdinfo/0 should exist and be a regular file
     errno = 0;
@@ -2145,7 +2145,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testProcSelfFdinfoInvalidFdNumbersFail {
-    struct linux_stat st;
+    struct stat st;
 
     // Try to stat a non-existent fdinfo entry
     errno = 0;
@@ -2244,7 +2244,7 @@ extern int vfs_path_contract_open_tmp_fd_symlink_file(void);
 }
 
 - (void)testDevTtyStatFails {
-    struct linux_stat st;
+    struct stat st;
     errno = 0;
     int ret = stat_impl("/dev/tty", &st);
     XCTAssertEqual(ret, 0, @"stat(/dev/tty) should report the devfs character node");

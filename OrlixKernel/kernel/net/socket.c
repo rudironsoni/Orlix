@@ -1,21 +1,18 @@
 #include "socket.h"
 
-#ifdef SIGPIPE
-#undef SIGPIPE
-#endif
 #define __ASSEMBLY__ 1
 #include <asm-generic/signal.h>
 #undef __ASSEMBLY__
+#include <asm-generic/socket.h>
 
 #include <errno.h>
 #include <limits.h>
 #include <linux/poll.h>
-#include <linux/socket.h>
+#include <linux/un.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "internal/private/kernel_socket_compat.h"
 #include "kernel_sync.h"
 #include "../signal.h"
 #include "../task.h"
@@ -23,28 +20,12 @@
 
 void poll_notify_readiness_impl(void);
 
-#define ORLIX_SOCKET_BUFFER_SIZE 65536U
-#define ORLIX_UNIX_NAME_MAX 107U /* sizeof(sockaddr_un.sun_path) - 1 */
-#define ORLIX_SOCKET_NONBLOCK 00004000 /* Linux O_NONBLOCK / SOCK_NONBLOCK */
-#define ORLIX_LINUX_SOL_SOCKET 1
-#define ORLIX_LINUX_SO_REUSEADDR 2
-#define ORLIX_LINUX_SO_TYPE 3
-#define ORLIX_LINUX_SO_ERROR 4
-#define ORLIX_LINUX_SO_SNDBUF 7
-#define ORLIX_LINUX_SO_RCVBUF 8
-#define ORLIX_LINUX_SO_KEEPALIVE 9
-#define ORLIX_LINUX_SO_ACCEPTCONN 30
-#define ORLIX_LINUX_SO_PROTOCOL 38
-#define ORLIX_LINUX_SO_DOMAIN 39
-
-struct socket_address_un {
-    __kernel_sa_family_t family;
-    char path[ORLIX_UNIX_NAME_MAX + 1];
-};
+#define SOCKET_BUFFER_SIZE 65536U
+#define UNIX_NAME_MAX ((size_t)(UNIX_PATH_MAX - 1))
 
 struct socket_namespace_entry {
     struct socket_namespace_entry *next;
-    unsigned char name[ORLIX_UNIX_NAME_MAX];
+    unsigned char name[UNIX_NAME_MAX];
     size_t name_len;
     struct socket_state *sock;
 };
@@ -54,7 +35,7 @@ struct socket_datagram {
     size_t len;
     bool sender_name_valid;
     size_t sender_name_len;
-    unsigned char sender_name[ORLIX_UNIX_NAME_MAX];
+    unsigned char sender_name[UNIX_NAME_MAX];
     unsigned char data[];
 };
 
@@ -64,20 +45,20 @@ struct socket_state {
     int domain;
     int type;
     int protocol;
-
+    bool datagram;
     struct socket_state *peer;
     bool peer_writes_open;
     bool writes_open;
 
     bool is_bound;
     bool namespace_registered;
-    unsigned char bound_name[ORLIX_UNIX_NAME_MAX];
+    unsigned char bound_name[UNIX_NAME_MAX];
     size_t bound_name_len;
     bool peer_name_valid;
-    unsigned char peer_name[ORLIX_UNIX_NAME_MAX];
+    unsigned char peer_name[UNIX_NAME_MAX];
     size_t peer_name_len;
     bool connected_name_valid;
-    unsigned char connected_name[ORLIX_UNIX_NAME_MAX];
+    unsigned char connected_name[UNIX_NAME_MAX];
     size_t connected_name_len;
     int pending_error;
     int sendbuf;
@@ -92,7 +73,7 @@ struct socket_state {
     struct socket_state *accept_queue_next;
     int accept_queue_len;
 
-    unsigned char buffer[ORLIX_SOCKET_BUFFER_SIZE];
+    unsigned char buffer[SOCKET_BUFFER_SIZE];
     size_t head;
     size_t len;
     struct socket_datagram *dgram_head;
@@ -107,25 +88,11 @@ static struct socket_namespace_entry *socket_namespace_entries;
 static atomic_ullong next_socket_id = 1;
 
 static size_t socket_space_locked(const struct socket_state *sock) {
-    return ORLIX_SOCKET_BUFFER_SIZE - sock->len;
+    return SOCKET_BUFFER_SIZE - sock->len;
 }
 
 static void socket_wake_all_locked(struct socket_state *sock) {
     wait_queue_wake_all_locked(&sock->wait);
-}
-
-static bool socket_is_stream(int type) { return type == SOCK_STREAM; }
-static bool socket_is_dgram(int type) { return type == SOCK_DGRAM; }
-
-static bool socket_is_supported_type(int type) {
-    return socket_is_stream(type) || socket_is_dgram(type);
-}
-
-static __u32 socket_unix_addr_len(size_t name_len) {
-    if (name_len == 0) {
-        return (__u32)offsetof(struct socket_address_un, path);
-    }
-    return (__u32)(offsetof(struct socket_address_un, path) + 1 + name_len);
 }
 
 static void socket_store_peer_name(struct socket_state *sock,
@@ -137,90 +104,10 @@ static void socket_store_peer_name(struct socket_state *sock,
     }
     sock->peer_name_valid = valid;
     sock->peer_name_len = 0;
-    if (valid && name && name_len > 0 && name_len <= ORLIX_UNIX_NAME_MAX) {
+    if (valid && name && name_len > 0 && name_len <= UNIX_NAME_MAX) {
         memcpy(sock->peer_name, name, name_len);
         sock->peer_name_len = name_len;
     }
-}
-
-static int socket_copy_name_out(const unsigned char *name,
-                                size_t name_len,
-                                struct sockaddr *addr,
-                                __u32 *addrlen) {
-    struct socket_address_un unix_addr;
-    __u32 actual_len;
-    __u32 copy_len;
-
-    if (!addrlen) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    actual_len = socket_unix_addr_len(name_len);
-    if (!addr) {
-        *addrlen = actual_len;
-        return 0;
-    }
-
-    memset(&unix_addr, 0, sizeof(unix_addr));
-    unix_addr.family = AF_UNIX;
-    if (name_len > 0) {
-        unix_addr.path[0] = '\0';
-        memcpy(&unix_addr.path[1], name, name_len);
-    }
-
-    copy_len = *addrlen < actual_len ? *addrlen : actual_len;
-    memcpy(addr, &unix_addr, copy_len);
-    *addrlen = actual_len;
-    return 0;
-}
-
-static int socket_parse_unix_name(const struct sockaddr *addr,
-                                  __u32 addrlen,
-                                  unsigned char *name_out,
-                                  size_t *name_len_out) {
-    const struct socket_address_un *un;
-    size_t sun_path_len;
-    size_t name_len;
-
-    if (!addr || !name_out || !name_len_out) {
-        errno = EFAULT;
-        return -1;
-    }
-    if (addrlen < offsetof(struct socket_address_un, path) + 1) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    un = (const struct socket_address_un *)addr;
-    if (un->family != AF_UNIX) {
-        errno = EAFNOSUPPORT;
-        return -1;
-    }
-
-    sun_path_len = addrlen - offsetof(struct socket_address_un, path);
-    if (sun_path_len == 0 || sun_path_len > sizeof(un->path)) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (un->path[0] != '\0') {
-        errno = EOPNOTSUPP;
-        return -1;
-    }
-    if (sun_path_len < 2) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    name_len = sun_path_len - 1;
-    if (name_len == 0 || name_len > ORLIX_UNIX_NAME_MAX) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    memcpy(name_out, &un->path[1], name_len);
-    *name_len_out = name_len;
-    return 0;
 }
 
 static void socket_store_connected_name(struct socket_state *sock,
@@ -232,7 +119,7 @@ static void socket_store_connected_name(struct socket_state *sock,
     }
     sock->connected_name_valid = valid;
     sock->connected_name_len = 0;
-    if (valid && name && name_len > 0 && name_len <= ORLIX_UNIX_NAME_MAX) {
+    if (valid && name && name_len > 0 && name_len <= UNIX_NAME_MAX) {
         memcpy(sock->connected_name, name, name_len);
         sock->connected_name_len = name_len;
     }
@@ -254,7 +141,7 @@ static struct socket_state *socket_namespace_lookup_locked(const unsigned char *
 static int socket_namespace_register_impl(struct socket_state *sock, const unsigned char *name, size_t name_len) {
     struct socket_namespace_entry *entry;
 
-    if (!sock || !name || name_len == 0 || name_len > ORLIX_UNIX_NAME_MAX) {
+    if (!sock || !name || name_len == 0 || name_len > UNIX_NAME_MAX) {
         errno = EINVAL;
         return -1;
     }
@@ -286,7 +173,7 @@ static int socket_namespace_register_impl(struct socket_state *sock, const unsig
 static void socket_namespace_unregister_impl(struct socket_state *sock, const unsigned char *name, size_t name_len) {
     struct socket_namespace_entry **pp;
 
-    if (!sock || !name || name_len == 0 || name_len > ORLIX_UNIX_NAME_MAX) {
+    if (!sock || !name || name_len == 0 || name_len > UNIX_NAME_MAX) {
         return;
     }
 
@@ -310,7 +197,7 @@ static void socket_namespace_unregister_impl(struct socket_state *sock, const un
 static struct socket_state *socket_lookup_named_peer(const unsigned char *name, size_t name_len) {
     struct socket_state *peer = NULL;
 
-    if (!name || name_len == 0 || name_len > ORLIX_UNIX_NAME_MAX) {
+    if (!name || name_len == 0 || name_len > UNIX_NAME_MAX) {
         errno = EINVAL;
         return NULL;
     }
@@ -363,7 +250,7 @@ static ssize_t socket_queue_datagram_locked(struct socket_state *target,
         errno = EBADF;
         return -1;
     }
-    if (len > ORLIX_SOCKET_BUFFER_SIZE || len > (size_t)target->recvbuf) {
+    if (len > SOCKET_BUFFER_SIZE || len > (size_t)target->recvbuf) {
         errno = EMSGSIZE;
         return -1;
     }
@@ -383,7 +270,7 @@ static ssize_t socket_queue_datagram_locked(struct socket_state *target,
     }
     msg->len = len;
     msg->sender_name_valid = sender_name_valid;
-    if (sender_name_valid && sender_name && sender_name_len > 0 && sender_name_len <= ORLIX_UNIX_NAME_MAX) {
+    if (sender_name_valid && sender_name && sender_name_len > 0 && sender_name_len <= UNIX_NAME_MAX) {
         msg->sender_name_len = sender_name_len;
         memcpy(msg->sender_name, sender_name, sender_name_len);
     }
@@ -401,17 +288,8 @@ static ssize_t socket_queue_datagram_locked(struct socket_state *target,
     return (ssize_t)len;
 }
 
-struct socket_state *socket_create_impl(int domain, int type, int protocol) {
+struct socket_state *socket_create_impl(int domain, int type, int protocol, bool datagram) {
     struct socket_state *sock;
-
-    if (domain != AF_UNIX) {
-        errno = EAFNOSUPPORT;
-        return NULL;
-    }
-    if (!socket_is_supported_type(type)) {
-        errno = EPROTOTYPE;
-        return NULL;
-    }
 
     sock = calloc(1, sizeof(*sock));
     if (!sock) {
@@ -424,6 +302,7 @@ struct socket_state *socket_create_impl(int domain, int type, int protocol) {
     sock->domain = domain;
     sock->type = type;
     sock->protocol = protocol;
+    sock->datagram = datagram;
     sock->peer = NULL;
     sock->peer_writes_open = false;
     sock->writes_open = true;
@@ -435,8 +314,8 @@ struct socket_state *socket_create_impl(int domain, int type, int protocol) {
     sock->connected_name_valid = false;
     sock->connected_name_len = 0;
     sock->pending_error = 0;
-    sock->sendbuf = (int)ORLIX_SOCKET_BUFFER_SIZE;
-    sock->recvbuf = (int)ORLIX_SOCKET_BUFFER_SIZE;
+    sock->sendbuf = (int)SOCKET_BUFFER_SIZE;
+    sock->recvbuf = (int)SOCKET_BUFFER_SIZE;
     sock->reuseaddr = false;
     sock->keepalive = false;
     sock->is_listening = false;
@@ -458,6 +337,7 @@ struct socket_state *socket_create_impl(int domain, int type, int protocol) {
 int socketpair_create_impl(int domain,
                            int type,
                            int protocol,
+                           bool datagram,
                            struct socket_state **a_out,
                            struct socket_state **b_out) {
     struct socket_state *a;
@@ -470,8 +350,8 @@ int socketpair_create_impl(int domain,
     *a_out = NULL;
     *b_out = NULL;
 
-    a = socket_create_impl(domain, type, protocol);
-    b = socket_create_impl(domain, type, protocol);
+    a = socket_create_impl(domain, type, protocol, datagram);
+    b = socket_create_impl(domain, type, protocol, datagram);
     if (!a || !b) {
         socket_release_impl(a);
         socket_release_impl(b);
@@ -502,7 +382,7 @@ void socket_retain_impl(struct socket_state *sock) {
 
 void socket_release_impl(struct socket_state *sock) {
     struct socket_state *peer;
-    unsigned char name[ORLIX_UNIX_NAME_MAX];
+    unsigned char name[UNIX_NAME_MAX];
     size_t name_len = 0;
     bool was_bound = false;
     struct socket_state *accepted_head = NULL;
@@ -521,7 +401,7 @@ void socket_release_impl(struct socket_state *sock) {
     was_bound = sock->is_bound;
     if (was_bound) {
         name_len = sock->bound_name_len;
-        if (name_len > 0 && name_len <= ORLIX_UNIX_NAME_MAX) {
+        if (name_len > 0 && name_len <= UNIX_NAME_MAX) {
             memcpy(name, sock->bound_name, name_len);
         } else {
             name_len = 0;
@@ -564,19 +444,19 @@ void socket_release_impl(struct socket_state *sock) {
     poll_notify_readiness_impl();
 }
 
-int socket_shutdown_impl(struct socket_state *sock, int how) {
+int socket_shutdown_impl(struct socket_state *sock, bool shut_read, bool shut_write) {
     if (!sock) {
         errno = EBADF;
         return -1;
     }
 
-    if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
+    if (!shut_read && !shut_write) {
         errno = EINVAL;
         return -1;
     }
 
     wait_queue_lock(&sock->wait);
-    if (how == SHUT_WR || how == SHUT_RDWR) {
+    if (shut_write) {
         sock->writes_open = false;
         if (sock->peer) {
             wait_queue_lock(&sock->peer->wait);
@@ -591,17 +471,12 @@ int socket_shutdown_impl(struct socket_state *sock, int how) {
     return 0;
 }
 
-int socket_connect_impl(struct socket_state *sock, const struct sockaddr *addr, __u32 addrlen) {
-    size_t name_len;
-    unsigned char name[ORLIX_UNIX_NAME_MAX];
+int socket_connect_impl(struct socket_state *sock, const unsigned char *name, size_t name_len) {
     struct socket_state *listener = NULL;
     struct socket_state *server_side = NULL;
 
-    if (!sock || !addr) {
+    if (!sock || !name || name_len == 0 || name_len > UNIX_NAME_MAX) {
         errno = EFAULT;
-        return -1;
-    }
-    if (socket_parse_unix_name(addr, addrlen, name, &name_len) != 0) {
         return -1;
     }
 
@@ -611,7 +486,7 @@ int socket_connect_impl(struct socket_state *sock, const struct sockaddr *addr, 
         errno = EISCONN;
         return -1;
     }
-    if (socket_is_dgram(sock->type)) {
+    if (sock->datagram) {
         struct socket_state *peer;
 
         wait_queue_unlock(&sock->wait);
@@ -659,7 +534,7 @@ int socket_connect_impl(struct socket_state *sock, const struct sockaddr *addr, 
     }
     wait_queue_unlock(&listener->wait);
 
-    server_side = socket_create_impl(AF_UNIX, sock->type, sock->protocol);
+    server_side = socket_create_impl(sock->domain, sock->type, sock->protocol, sock->datagram);
     if (!server_side) {
         socket_release_impl(listener);
         return -1;
@@ -701,15 +576,9 @@ int socket_connect_impl(struct socket_state *sock, const struct sockaddr *addr, 
     return 0;
 }
 
-int socket_bind_impl(struct socket_state *sock, const struct sockaddr *addr, __u32 addrlen) {
-    unsigned char name[ORLIX_UNIX_NAME_MAX];
-    size_t name_len;
-
-    if (!sock || !addr) {
+int socket_bind_impl(struct socket_state *sock, const unsigned char *name, size_t name_len) {
+    if (!sock || !name || name_len == 0 || name_len > UNIX_NAME_MAX) {
         errno = EFAULT;
-        return -1;
-    }
-    if (socket_parse_unix_name(addr, addrlen, name, &name_len) != 0) {
         return -1;
     }
 
@@ -747,7 +616,7 @@ int socket_listen_impl(struct socket_state *sock, int backlog) {
     }
 
     wait_queue_lock(&sock->wait);
-    if (!socket_is_stream(sock->type)) {
+    if (sock->datagram) {
         wait_queue_unlock(&sock->wait);
         errno = EOPNOTSUPP;
         return -1;
@@ -765,23 +634,12 @@ int socket_listen_impl(struct socket_state *sock, int backlog) {
     return 0;
 }
 
-struct socket_state *socket_accept_impl(struct socket_state *sock,
-                                        struct sockaddr *addr,
-                                        __u32 *addrlen,
-                                        int flags) {
-    bool nonblock = (flags & ORLIX_SOCKET_NONBLOCK) != 0;
+struct socket_state *socket_accept_impl(struct socket_state *sock, bool nonblock) {
     struct socket_state *accepted;
 
     if (!sock) {
         errno = EBADF;
         return NULL;
-    }
-    if (addr) {
-        errno = EOPNOTSUPP;
-        return NULL;
-    }
-    if (addrlen) {
-        *addrlen = 0;
     }
 
     wait_queue_lock(&sock->wait);
@@ -823,11 +681,10 @@ struct socket_state *socket_accept_impl(struct socket_state *sock,
     return accepted;
 }
 
-int socket_getsockname_impl(struct socket_state *sock, struct sockaddr *addr, __u32 *addrlen) {
-    unsigned char name[ORLIX_UNIX_NAME_MAX];
+int socket_getsockname_impl(struct socket_state *sock, unsigned char *name_out, size_t *name_len_out) {
     size_t name_len = 0;
 
-    if (!sock) {
+    if (!sock || !name_len_out) {
         errno = EBADF;
         return -1;
     }
@@ -835,18 +692,20 @@ int socket_getsockname_impl(struct socket_state *sock, struct sockaddr *addr, __
     wait_queue_lock(&sock->wait);
     if (sock->is_bound && sock->bound_name_len > 0) {
         name_len = sock->bound_name_len;
-        memcpy(name, sock->bound_name, name_len);
+        if (name_out) {
+            memcpy(name_out, sock->bound_name, name_len);
+        }
     }
     wait_queue_unlock(&sock->wait);
-    return socket_copy_name_out(name, name_len, addr, addrlen);
+    *name_len_out = name_len;
+    return 0;
 }
 
-int socket_getpeername_impl(struct socket_state *sock, struct sockaddr *addr, __u32 *addrlen) {
-    unsigned char name[ORLIX_UNIX_NAME_MAX];
+int socket_getpeername_impl(struct socket_state *sock, unsigned char *name_out, size_t *name_len_out) {
     size_t name_len = 0;
     bool valid;
 
-    if (!sock) {
+    if (!sock || !name_len_out) {
         errno = EBADF;
         return -1;
     }
@@ -855,7 +714,9 @@ int socket_getpeername_impl(struct socket_state *sock, struct sockaddr *addr, __
     valid = sock->peer_name_valid;
     if (valid && sock->peer_name_len > 0) {
         name_len = sock->peer_name_len;
-        memcpy(name, sock->peer_name, name_len);
+        if (name_out) {
+            memcpy(name_out, sock->peer_name, name_len);
+        }
     }
     wait_queue_unlock(&sock->wait);
 
@@ -864,7 +725,8 @@ int socket_getpeername_impl(struct socket_state *sock, struct sockaddr *addr, __
         return -1;
     }
 
-    return socket_copy_name_out(name, name_len, addr, addrlen);
+    *name_len_out = name_len;
+    return 0;
 }
 
 static int socket_copy_int_opt(void *optval, __u32 *optlen, int value) {
@@ -896,39 +758,39 @@ int socket_getsockopt_impl(struct socket_state *sock,
         errno = EBADF;
         return -1;
     }
-    if (level != ORLIX_LINUX_SOL_SOCKET) {
+    if (level != SOL_SOCKET) {
         errno = ENOPROTOOPT;
         return -1;
     }
 
     wait_queue_lock(&sock->wait);
     switch (optname) {
-    case ORLIX_LINUX_SO_TYPE:
+    case SO_TYPE:
         value = sock->type;
         break;
-    case ORLIX_LINUX_SO_DOMAIN:
+    case SO_DOMAIN:
         value = sock->domain;
         break;
-    case ORLIX_LINUX_SO_PROTOCOL:
+    case SO_PROTOCOL:
         value = sock->protocol;
         break;
-    case ORLIX_LINUX_SO_ACCEPTCONN:
+    case SO_ACCEPTCONN:
         value = sock->is_listening ? 1 : 0;
         break;
-    case ORLIX_LINUX_SO_ERROR:
+    case SO_ERROR:
         value = sock->pending_error;
         sock->pending_error = 0;
         break;
-    case ORLIX_LINUX_SO_SNDBUF:
+    case SO_SNDBUF:
         value = sock->sendbuf;
         break;
-    case ORLIX_LINUX_SO_RCVBUF:
+    case SO_RCVBUF:
         value = sock->recvbuf;
         break;
-    case ORLIX_LINUX_SO_REUSEADDR:
+    case SO_REUSEADDR:
         value = sock->reuseaddr ? 1 : 0;
         break;
-    case ORLIX_LINUX_SO_KEEPALIVE:
+    case SO_KEEPALIVE:
         value = sock->keepalive ? 1 : 0;
         break;
     default:
@@ -951,7 +813,7 @@ int socket_setsockopt_impl(struct socket_state *sock,
         errno = EBADF;
         return -1;
     }
-    if (level != ORLIX_LINUX_SOL_SOCKET) {
+    if (level != SOL_SOCKET) {
         errno = ENOPROTOOPT;
         return -1;
     }
@@ -963,13 +825,13 @@ int socket_setsockopt_impl(struct socket_state *sock,
     memcpy(&value, optval, sizeof(value));
     wait_queue_lock(&sock->wait);
     switch (optname) {
-    case ORLIX_LINUX_SO_REUSEADDR:
+    case SO_REUSEADDR:
         sock->reuseaddr = value != 0;
         break;
-    case ORLIX_LINUX_SO_KEEPALIVE:
+    case SO_KEEPALIVE:
         sock->keepalive = value != 0;
         break;
-    case ORLIX_LINUX_SO_SNDBUF:
+    case SO_SNDBUF:
         if (value <= 0) {
             wait_queue_unlock(&sock->wait);
             errno = EINVAL;
@@ -977,7 +839,7 @@ int socket_setsockopt_impl(struct socket_state *sock,
         }
         sock->sendbuf = value > INT_MAX / 2 ? INT_MAX / 2 : value;
         break;
-    case ORLIX_LINUX_SO_RCVBUF:
+    case SO_RCVBUF:
         if (value <= 0) {
             wait_queue_unlock(&sock->wait);
             errno = EINVAL;
@@ -997,17 +859,17 @@ int socket_setsockopt_impl(struct socket_state *sock,
 __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
                                     const void *buf,
                                     size_t len,
-                                    int flags,
-                                    const struct sockaddr *dest_addr,
-                                    __u32 addrlen) {
+                                    bool nonblock,
+                                    const unsigned char *dest_name,
+                                    size_t dest_name_len,
+                                    bool has_dest_name) {
     struct socket_state *peer;
-    bool nonblock;
     size_t to_write;
-    unsigned char name[ORLIX_UNIX_NAME_MAX];
-    size_t name_len = 0;
     bool sender_name_valid = false;
-    unsigned char sender_name[ORLIX_UNIX_NAME_MAX];
+    unsigned char sender_name[UNIX_NAME_MAX];
     size_t sender_name_len = 0;
+    unsigned char name[UNIX_NAME_MAX];
+    size_t name_len = 0;
 
     if (!sock) {
         errno = EBADF;
@@ -1021,9 +883,7 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
         return 0;
     }
 
-    nonblock = (flags & MSG_DONTWAIT) != 0;
-
-    if (socket_is_dgram(sock->type)) {
+    if (sock->datagram) {
         peer = NULL;
 
         wait_queue_lock(&sock->wait);
@@ -1040,11 +900,9 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
         if (sock->peer) {
             peer = sock->peer;
             socket_retain_impl(peer);
-        } else if (dest_addr) {
-            if (socket_parse_unix_name(dest_addr, addrlen, name, &name_len) != 0) {
-                wait_queue_unlock(&sock->wait);
-                return -1;
-            }
+        } else if (has_dest_name) {
+            name_len = dest_name_len;
+            memcpy(name, dest_name, dest_name_len);
         } else if (sock->connected_name_valid) {
             name_len = sock->connected_name_len;
             memcpy(name, sock->connected_name, name_len);
@@ -1135,10 +993,10 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
 
     to_write = len < socket_space_locked(peer) ? len : socket_space_locked(peer);
     {
-        size_t tail = (peer->head + peer->len) % ORLIX_SOCKET_BUFFER_SIZE;
+        size_t tail = (peer->head + peer->len) % SOCKET_BUFFER_SIZE;
         size_t first = to_write;
-        if (first > ORLIX_SOCKET_BUFFER_SIZE - tail) {
-            first = ORLIX_SOCKET_BUFFER_SIZE - tail;
+        if (first > SOCKET_BUFFER_SIZE - tail) {
+            first = SOCKET_BUFFER_SIZE - tail;
         }
         memcpy(peer->buffer + tail, buf, first);
         if (first < to_write) {
@@ -1155,10 +1013,10 @@ __kernel_ssize_t socket_sendto_impl(struct socket_state *sock,
 __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
                                       void *buf,
                                       size_t len,
-                                      int flags,
-                                      struct sockaddr *src_addr,
-                                      __u32 *addrlen) {
-    bool nonblock;
+                                      bool nonblock,
+                                      unsigned char *src_name_out,
+                                      size_t *src_name_len_out,
+                                      bool *has_src_name_out) {
 
     if (!sock) {
         errno = EBADF;
@@ -1172,13 +1030,11 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
         return 0;
     }
 
-    nonblock = (flags & MSG_DONTWAIT) != 0;
-
     wait_queue_lock(&sock->wait);
-    if (socket_is_dgram(sock->type)) {
+    if (sock->datagram) {
         struct socket_datagram *msg;
         size_t to_read;
-        unsigned char sender_name[ORLIX_UNIX_NAME_MAX];
+        unsigned char sender_name[UNIX_NAME_MAX];
         size_t sender_name_len = 0;
         bool sender_name_valid = false;
 
@@ -1222,10 +1078,14 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
         free(msg);
         socket_wake_all_locked(sock);
         wait_queue_unlock(&sock->wait);
-        if (src_addr || addrlen) {
-            if (socket_copy_name_out(sender_name, sender_name_valid ? sender_name_len : 0, src_addr, addrlen) != 0) {
-                return -1;
-            }
+        if (src_name_out && sender_name_valid && sender_name_len > 0) {
+            memcpy(src_name_out, sender_name, sender_name_len);
+        }
+        if (src_name_len_out) {
+            *src_name_len_out = sender_name_valid ? sender_name_len : 0;
+        }
+        if (has_src_name_out) {
+            *has_src_name_out = sender_name_valid;
         }
         poll_notify_readiness_impl();
         return (__kernel_ssize_t)to_read;
@@ -1251,14 +1111,14 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
     {
         size_t to_read = len < sock->len ? len : sock->len;
         size_t first = to_read;
-        if (first > ORLIX_SOCKET_BUFFER_SIZE - sock->head) {
-            first = ORLIX_SOCKET_BUFFER_SIZE - sock->head;
+        if (first > SOCKET_BUFFER_SIZE - sock->head) {
+            first = SOCKET_BUFFER_SIZE - sock->head;
         }
         memcpy(buf, sock->buffer + sock->head, first);
         if (first < to_read) {
             memcpy((unsigned char *)buf + first, sock->buffer, to_read - first);
         }
-        sock->head = (sock->head + to_read) % ORLIX_SOCKET_BUFFER_SIZE;
+        sock->head = (sock->head + to_read) % SOCKET_BUFFER_SIZE;
         sock->len -= to_read;
         socket_wake_all_locked(sock);
         wait_queue_unlock(&sock->wait);
@@ -1267,12 +1127,18 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
     }
 }
 
-__kernel_ssize_t socket_send_impl(struct socket_state *sock, const void *buf, size_t len, int flags) {
-    return socket_sendto_impl(sock, buf, len, flags, NULL, 0);
+__kernel_ssize_t socket_send_impl(struct socket_state *sock,
+                                  const void *buf,
+                                  size_t len,
+                                  bool nonblock) {
+    return socket_sendto_impl(sock, buf, len, nonblock, NULL, 0, false);
 }
 
-__kernel_ssize_t socket_recv_impl(struct socket_state *sock, void *buf, size_t len, int flags) {
-    return socket_recvfrom_impl(sock, buf, len, flags, NULL, NULL);
+__kernel_ssize_t socket_recv_impl(struct socket_state *sock,
+                                  void *buf,
+                                  size_t len,
+                                  bool nonblock) {
+    return socket_recvfrom_impl(sock, buf, len, nonblock, NULL, NULL, NULL);
 }
 
 short socket_poll_revents_impl(struct socket_state *sock, short events) {
@@ -1284,8 +1150,8 @@ short socket_poll_revents_impl(struct socket_state *sock, short events) {
 
     wait_queue_lock(&sock->wait);
     if ((events & (POLLIN | POLLRDNORM)) &&
-        ((socket_is_dgram(sock->type) && sock->dgram_head != NULL) ||
-         (socket_is_stream(sock->type) && sock->len > 0))) {
+        ((sock->datagram && sock->dgram_head != NULL) ||
+         (!sock->datagram && sock->len > 0))) {
         revents |= events & (POLLIN | POLLRDNORM);
     }
     if (!sock->peer_writes_open) {

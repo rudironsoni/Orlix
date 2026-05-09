@@ -19,6 +19,12 @@ bool pathHasComponent(llvm::StringRef Path, llvm::StringRef Needle) {
   return Path.contains(Needle);
 }
 
+bool pathMatchesCompatNaming(llvm::StringRef Path) {
+  static const std::regex Pattern(
+      R"((^|/)(?:(?:orlix|ix|kernel|linux|private|internal|bridge|adapter|shim|compat)_)?(?:fdset|fd_set|timespec|timeval|timezone|itimerspec|itimerval|sockaddr|socklen|socket|pollfd|poll|select|termios|winsize|sigset|siginfo|sigaction|stat|statfs|rusage|tms|iovec|msghdr|mmsghdr|ucred)(?:_[A-Za-z0-9]+)*(?:_compat|_bridge|_adapter|_shim|_private|_internal|_owner)?\.h$)");
+  return std::regex_search(Path.str(), Pattern);
+}
+
 SourceLocation translateLocation(const SourceManager &SM, FileID FID,
                                  unsigned Line, unsigned Column) {
   return SM.translateLineCol(FID, Line, Column);
@@ -51,6 +57,14 @@ void scanLines(ClangTidyCheck &Check, const SourceManager &SM, StringRef Buffer,
 const std::vector<RegexRule> AbstractionLeakageRules = {
     {R"(\b(kmutex|kcond|kthread|konce|ksig|kplatform|kbridge|ix_mutex|ix_cond|ix_thread|ix_platform|ix_bridge|platform_mutex|platform_thread|bridge_mutex|bridge_thread)_[a-z0-9_]*\b)",
      "generic abstraction leakage found in Linux-owner code"},
+    {R"(\b(orlix|ix|kernel|linux|private|internal|bridge|adapter|shim|compat)_(fd(set|bits?)|fd_set|time(val|spec)|timezone|itimer(val|spec)|socket|sock(addr|len)?|poll(fd)?|select|termios|winsize|sig(set|info|action)?|stat(fs)?|rusage|tms|iovec|msghdr|mmsghdr|dirent|ucred)[a-z0-9_]*\b)",
+     "repo-local prefixed spellings for Linux-shaped concepts are forbidden in Linux-owner code; use Linux names instead"},
+    {R"(\b(fd(set|bits?)|fd_set|time(val|spec)|timezone|itimer(val|spec)|socket|sock(addr|len)?|poll(fd)?|select|termios|winsize|sig(set|info|action)?|stat(fs)?|rusage|tms|iovec|msghdr|mmsghdr|dirent|ucred)_(compat|bridge|adapter|shim|private|internal|owner)\b)",
+     "repo-local suffixed spellings for Linux-shaped concepts are forbidden in Linux-owner code; use Linux names instead"},
+    {R"(\b[a-z0-9_]+_(compat|bridge|adapter|shim|private|internal|owner)(?:_[a-z0-9_]+)?\b)",
+     "repo-local compat naming for Linux-shaped concepts is forbidden in Linux-owner code; use Linux names instead"},
+    {R"(^\s*#\s*include\s*\"[^\"]*_(compat|bridge|adapter|shim|private|internal|owner)\.h\")",
+     "repo-local renamed Linux-concept headers are forbidden in Linux-owner code; use Linux names instead"},
 };
 
 } // namespace
@@ -63,7 +77,8 @@ bool OrlixAbstractionLeakageCheck::isLinuxOwnerPath(llvm::StringRef Path) const 
   return pathHasComponent(Path, "OrlixKernel/fs/") ||
          pathHasComponent(Path, "OrlixKernel/kernel/") ||
          pathHasComponent(Path, "OrlixKernel/runtime/") ||
-         pathHasComponent(Path, "OrlixKernel/include/");
+         pathHasComponent(Path, "OrlixKernel/include/") ||
+         pathHasComponent(Path, "OrlixKernel/internal/");
 }
 
 void OrlixAbstractionLeakageCheck::registerPPCallbacks(const SourceManager &SM,
@@ -90,6 +105,11 @@ void OrlixAbstractionLeakageCheck::scanMainFile() {
   StringRef Path = Entry->getName();
   if (!isLinuxOwnerPath(Path))
     return;
+
+  if (pathMatchesCompatNaming(Path)) {
+    diag(SM.getLocForStartOfFile(FID),
+         "Linux-owner header naming is forbidden when it dresses Linux concepts with repo-local compat or helper suffixes; use Linux names instead");
+  }
 
   StringRef Buffer = SM.getBufferData(FID);
   scanLines(*this, SM, Buffer, AbstractionLeakageRules);

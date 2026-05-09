@@ -4,9 +4,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <linux/time_types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct signal_mask_bits;
 
 #define KERNEL_COND_WAIT_TIMED_OUT 1
 
@@ -30,14 +34,10 @@ typedef struct kernel_once {
     int done;
 } kernel_once_t;
 
-typedef struct kernel_sigset {
-    uint64_t words[2];
-} kernel_sigset_t;
-
 #define KERNEL_MUTEX_INITIALIZER {NULL}
 #define KERNEL_COND_INITIALIZER {NULL}
 #define KERNEL_ONCE_INIT {0}
-#define KERNEL_SIGSET_INITIALIZER {{0, 0}}
+#define KERNEL_SIGSET_INITIALIZER {{0}}
 
 int kernel_mutex_init(kernel_mutex_t *mutex);
 int kernel_mutex_destroy(kernel_mutex_t *mutex);
@@ -62,14 +62,14 @@ void kernel_thread_exit(void *value_ptr);
 
 int kernel_once(kernel_once_t *once_control, void (*init_routine)(void));
 
-int kernel_thread_sigmask(int how, const kernel_sigset_t *set, kernel_sigset_t *oldset);
-int kernel_sigemptyset(kernel_sigset_t *set);
-int kernel_sigaddset(kernel_sigset_t *set, int signo);
-int kernel_sigismember(const kernel_sigset_t *set, int signo);
+int kernel_thread_sigmask(int how, const struct signal_mask_bits *set,
+                          struct signal_mask_bits *oldset);
+int kernel_sigemptyset(struct signal_mask_bits *set);
+int kernel_sigaddset(struct signal_mask_bits *set, int signo);
+int kernel_sigismember(const struct signal_mask_bits *set, int signo);
 int kernel_sleep_ms(int timeout_ms);
 
-struct kernel_timespec;
-int kernel_clock_gettime(int clock_id, struct kernel_timespec *tp);
+int kernel_clock_gettime(int clock_id, struct __kernel_timespec *tp);
 
 #ifdef __cplusplus
 }

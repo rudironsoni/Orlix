@@ -487,7 +487,7 @@ int native_syscall_contract_dispatches_fd_pipe_and_procfs(void) {
     const char payload[] = "pipe-data";
     char buf[64];
     char link_target[128];
-    struct linux_stat st;
+    struct stat st;
     struct pollfd pfd;
     long ret;
     int result = -1;
@@ -4709,7 +4709,7 @@ int native_syscall_contract_ftruncate_updates_shared_mapping_fault_policy(void) 
     const char path[] = "/tmp/native-shared-map-truncate";
     char page[8192];
     char byte = 0;
-    struct linux_stat st;
+    struct stat st;
     void *mapped;
     int fd = -1;
     long ret;
@@ -5198,7 +5198,7 @@ int native_syscall_contract_dispatches_shell_fd_vfs_syscalls(void) {
     struct statx stx;
     struct statfs sfs;
     struct statfs fsfs;
-    struct linux_stat memfd_st;
+    struct stat memfd_st;
     int fd = -1;
     int outfd = -1;
     int lockfd = -1;

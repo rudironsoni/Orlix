@@ -1,4 +1,5 @@
 #include "backing_io_internal.h"
+#include "backing_stat_translate.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -7,8 +8,9 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <sys/stat.h>
+
 #include "errno_translation.h"
-#include "fs/stat_types.h"
 
 extern int translate_open_flags(int flags,
                                 int darwin_rdonly,
@@ -72,28 +74,28 @@ int backing_dup(int fd) {
 
 /* Note: backing_stat, backing_lstat, backing_access are implemented in path.c. */
 
-static void translate_darwin_stat_to_linux(const struct stat *darwin_stat, struct linux_stat *linux_stat) {
-    memset(linux_stat, 0, sizeof(*linux_stat));
-    linux_stat->st_dev = darwin_stat->st_dev;
-    linux_stat->st_ino = darwin_stat->st_ino;
-    linux_stat->st_mode = darwin_stat->st_mode;
-    linux_stat->st_nlink = darwin_stat->st_nlink;
-    linux_stat->st_uid = darwin_stat->st_uid;
-    linux_stat->st_gid = darwin_stat->st_gid;
-    linux_stat->st_rdev = darwin_stat->st_rdev;
-    linux_stat->st_size = darwin_stat->st_size;
-    linux_stat->st_blksize = darwin_stat->st_blksize;
-    linux_stat->st_blocks = darwin_stat->st_blocks;
-    linux_stat->st_atime_sec = darwin_stat->st_atimespec.tv_sec;
-    linux_stat->st_atime_nsec = (unsigned long long)darwin_stat->st_atimespec.tv_nsec;
-    linux_stat->st_mtime_sec = darwin_stat->st_mtimespec.tv_sec;
-    linux_stat->st_mtime_nsec = (unsigned long long)darwin_stat->st_mtimespec.tv_nsec;
-    linux_stat->st_ctime_sec = darwin_stat->st_ctimespec.tv_sec;
-    linux_stat->st_ctime_nsec = (unsigned long long)darwin_stat->st_ctimespec.tv_nsec;
+static void capture_backing_stat(const struct stat *source, struct backing_stat_data *target) {
+    target->dev = source->st_dev;
+    target->ino = source->st_ino;
+    target->mode = source->st_mode;
+    target->nlink = source->st_nlink;
+    target->uid = source->st_uid;
+    target->gid = source->st_gid;
+    target->rdev = source->st_rdev;
+    target->size = source->st_size;
+    target->blksize = source->st_blksize;
+    target->blocks = source->st_blocks;
+    target->atime_sec = source->st_atimespec.tv_sec;
+    target->atime_nsec = (uint64_t)source->st_atimespec.tv_nsec;
+    target->mtime_sec = source->st_mtimespec.tv_sec;
+    target->mtime_nsec = (uint64_t)source->st_mtimespec.tv_nsec;
+    target->ctime_sec = source->st_ctimespec.tv_sec;
+    target->ctime_nsec = (uint64_t)source->st_ctimespec.tv_nsec;
 }
 
-int backing_fstat(int fd, struct linux_stat *statbuf) {
+int backing_fstat(int fd, struct stat *statbuf) {
     struct stat darwin_stat;
+    struct backing_stat_data data;
     int ret;
 
     if (statbuf == NULL) {
@@ -106,7 +108,8 @@ int backing_fstat(int fd, struct linux_stat *statbuf) {
         return -linux_errno_from_darwin_errno(darwin_errno);
     }
 
-    translate_darwin_stat_to_linux(&darwin_stat, statbuf);
+    capture_backing_stat(&darwin_stat, &data);
+    backing_stat_translate(&data, statbuf);
     return 0;
 }
 

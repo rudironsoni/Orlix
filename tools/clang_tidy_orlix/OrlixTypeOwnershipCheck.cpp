@@ -59,6 +59,14 @@ const std::vector<RegexRule> TypeOwnershipRules = {
      "synthetic linux_* scalar aliases are forbidden"},
     {R"(\blinux_atomic_int\b)",
      "synthetic linux_* scalar aliases are forbidden"},
+    {R"(\b(?:struct|typedef)\s+linux_(timespec|timeval|timezone|itimerval|itimerspec|sockaddr|socklen|fd_set|termios|winsize|stat|statfs|iovec|msghdr|mmsghdr|ucred)\b)",
+     "repo-local linux_* stand-ins for Linux concepts are forbidden; use the real Linux contract name instead"},
+    {R"(\b(?:struct|typedef)\s+kernel_(timespec|timeval|timezone|itimerval|itimerspec|sockaddr|socklen|fd_set|termios|winsize|stat|statfs|iovec|msghdr|mmsghdr|ucred)\b)",
+     "repo-local kernel_* stand-ins for Linux concepts are forbidden; use the real Linux contract name instead"},
+    {R"(^\s*typedef\b.*\b(pid_t|uid_t|gid_t|mode_t|dev_t|ino_t|nlink_t|socklen_t|sa_family_t|suseconds_t)\b)",
+     "repo-local libc-owned typedef declarations are forbidden in Linux-owner code"},
+    {R"(^\s*(?:typedef\s+)?struct\s+(sigval|sigevent|statvfs|termios|winsize|iovec|msghdr|cmsghdr|mmsghdr)\s*(?:[;{]|$))",
+     "repo-local libc-owned struct declarations are forbidden in Linux-owner code"},
 };
 
 } // namespace
@@ -71,7 +79,8 @@ bool OrlixTypeOwnershipCheck::isLinuxOwnerPath(llvm::StringRef Path) const {
   return pathHasComponent(Path, "OrlixKernel/fs/") ||
          pathHasComponent(Path, "OrlixKernel/kernel/") ||
          pathHasComponent(Path, "OrlixKernel/runtime/") ||
-         pathHasComponent(Path, "OrlixKernel/include/");
+         pathHasComponent(Path, "OrlixKernel/include/") ||
+         pathHasComponent(Path, "OrlixKernel/internal/");
 }
 
 void OrlixTypeOwnershipCheck::registerPPCallbacks(const SourceManager &SM,

@@ -31,7 +31,7 @@ extern long write_impl(int fd, const void *buf, size_t count);
 extern int64_t lseek_impl(int fd, int64_t offset, int whence);
 extern ssize_t pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern ssize_t pwrite_impl(int fd, const void *buf, size_t count, int64_t offset);
-extern int fstat_impl(int fd, struct linux_stat *statbuf);
+extern int fstat_impl(int fd, struct stat *statbuf);
 extern ssize_t getdents64(int fd, void *dirp, size_t count);
 extern int poll_impl(struct pollfd *fds, nfds_t nfds, int timeout);
 extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
@@ -556,7 +556,7 @@ out:
 
 int pipe_contract_fstat_reports_fifo(void) {
     int fds[2] = {-1, -1};
-    struct linux_stat st;
+    struct stat st;
     int ret = 0;
 
     if (pipe_impl(fds) != 0) {
