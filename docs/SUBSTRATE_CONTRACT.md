@@ -75,8 +75,12 @@ Canonical authoritative flow:
 rtk xcodegen generate --project .
 rtk xcodebuild -list -project OrlixKernel.xcodeproj
 rtk xcodebuild build-for-testing -project OrlixKernel.xcodeproj -scheme OrlixKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
-rtk xcodebuild test-without-building -project OrlixKernel.xcodeproj -scheme OrlixKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17'
+rtk xcodebuild test-without-building -project OrlixKernel.xcodeproj -scheme OrlixKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:OrlixKernelTests
+rtk xcodebuild test-without-building -project OrlixKernel.xcodeproj -scheme OrlixKernel-6.12-arm64 -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:OrlixHostAdapterTests
 ```
+
+The split target invocations above are the authoritative proof commands for this repo.
+The unsplit umbrella `test-without-building` invocation may still run the same simulator tests, but it is not the required closeout command because Xcode can hang afterward on unrelated locked-device notification traffic outside the simulator target.
 
 `swift build`, CMake, Make, package manifests, and other build systems are non-authoritative drift for this repo.
 

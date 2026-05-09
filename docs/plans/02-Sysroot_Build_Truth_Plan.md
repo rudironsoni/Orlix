@@ -112,7 +112,7 @@ That follow-on work is now delivered green:
 - `time` / `sys/time` kernel-owner cleanup is simulator-proofed
 - internal and public socket-surface cleanup is simulator-proofed
 - internal `poll` / `select` ownership cleanup is simulator-proofed
-- the shared iPhone 17 suite is green after the cleanup, including the timerfd and UNIX datagram plus `mmsg` Linux-surface proofs
+- the iPhone 17 proof is green after the cleanup, including the timerfd and UNIX datagram plus `mmsg` Linux-surface proofs, via explicit `OrlixKernelTests` and `OrlixHostAdapterTests` target runs
 
 ## Required Decisions
 
