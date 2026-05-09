@@ -98,10 +98,6 @@ __attribute__((visibility("default"))) int kill(pid_t pid, int sig) {
     return do_kill(pid, sig);
 }
 
-__attribute__((visibility("default"))) int killpg(pid_t pgrp, int sig) {
-    return do_killpg(pgrp, sig);
-}
-
 __attribute__((visibility("default"))) int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
     if (how < SIG_BLOCK || how > SIG_SETMASK) {
         errno = EINVAL;

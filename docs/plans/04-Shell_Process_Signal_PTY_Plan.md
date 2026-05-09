@@ -16,6 +16,7 @@ Current delivered learning:
 
 - the public shell-facing foreground-process-group surface is now covered, not just the PTY ioctl seam
 - `tcgetpgrp()` and `tcsetpgrp()` now ride the kernel-owned PTY job-control machinery and are simulator-proven against Linux-shaped `SIGTTOU` behavior
+- public `killpg()` now lives in `OrlixKernel`, not `OrlixHostAdapter`, and is simulator-proven against process-group signal delivery and `ESRCH` failure behavior
 
 ## Purpose
 

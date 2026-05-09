@@ -94,4 +94,12 @@ static void reset_pty_job_control_test_kernel_state(void) {
     XCTAssertEqual(pty_job_control_contract_detach_clears_dev_tty_policy(), 0, @"errno %d", errno);
 }
 
+- (void)testKillpgTargetsProcessGroup {
+    XCTAssertEqual(pty_job_control_contract_killpg_targets_process_group(), 0, @"errno %d", errno);
+}
+
+- (void)testKillpgInvalidGroupReturnsEsrch {
+    XCTAssertEqual(pty_job_control_contract_killpg_invalid_group_returns_esrch(), 0, @"errno %d", errno);
+}
+
 @end

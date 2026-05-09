@@ -22,6 +22,7 @@ extern long write_impl(int fd, const void *buf, size_t count);
 extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 extern __kernel_pid_t tcgetpgrp(int fd);
 extern int tcsetpgrp(int fd, __kernel_pid_t pgrp);
+extern int killpg(int pgrp, int sig);
 
 static int close_if_open(int fd) {
     if (fd >= 0) {
@@ -692,4 +693,55 @@ out:
     close_if_open(master_fd);
     close_if_open(slave_fd);
     return result;
+}
+
+int pty_job_control_contract_killpg_targets_process_group(void) {
+    struct task_struct *task = get_current();
+    struct task_struct *peer = NULL;
+    int32_t original_pgid;
+    int result = -1;
+
+    if (!task || !task->signal) {
+        errno = ESRCH;
+        return -1;
+    }
+
+    original_pgid = task->pgid;
+    peer = alloc_session_peer(task->sid, task->pid + 100, task->pid);
+    if (!peer) {
+        return -1;
+    }
+
+    task->pgid = peer->pgid;
+    clear_pending_signal(task, SIGCONT);
+    clear_pending_signal(peer, SIGCONT);
+    atomic_store(&task->signaled, false);
+    atomic_store(&peer->signaled, false);
+
+    errno = 0;
+    if (killpg(peer->pgid, SIGCONT) != 0) {
+        goto out;
+    }
+    if (!signal_is_pending(task, SIGCONT) || !signal_is_pending(peer, SIGCONT)) {
+        errno = EPROTO;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    task->pgid = original_pgid;
+    if (peer) {
+        free_task(peer);
+    }
+    return result;
+}
+
+int pty_job_control_contract_killpg_invalid_group_returns_esrch(void) {
+    errno = 0;
+    if (killpg(999999, SIGCONT) == 0 || errno != ESRCH) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
 }

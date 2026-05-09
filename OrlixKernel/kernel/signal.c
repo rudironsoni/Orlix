@@ -975,6 +975,10 @@ int do_killpg(int32_t pgrp, int32_t sig) {
     return result;
 }
 
+__attribute__((visibility("default"))) int killpg(int pgrp, int sig) {
+    return do_killpg((int32_t)pgrp, (int32_t)sig);
+}
+
 int do_sigaltstack(const struct signal_altstack *new_stack, struct signal_altstack *old_stack) {
     struct task_struct *task = get_current();
 

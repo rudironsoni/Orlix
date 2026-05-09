@@ -9,5 +9,7 @@ int pty_job_control_contract_background_read_delivers_sigttin(void);
 int pty_job_control_contract_background_write_delivers_sigttou(void);
 int pty_job_control_contract_signal_chars_target_foreground_pgrp(void);
 int pty_job_control_contract_detach_clears_dev_tty_policy(void);
+int pty_job_control_contract_killpg_targets_process_group(void);
+int pty_job_control_contract_killpg_invalid_group_returns_esrch(void);
 
 #endif
