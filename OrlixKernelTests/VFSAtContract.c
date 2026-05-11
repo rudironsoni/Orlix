@@ -6,6 +6,7 @@
  */
 
 #include <asm/unistd.h>
+#include <uapi/asm/stat.h>
 #include <asm/statfs.h>
 #include <uapi/linux/fcntl.h>
 #include <uapi/linux/fs.h>
@@ -16,9 +17,9 @@
 #include <uapi/linux/stat.h>
 #include <uapi/linux/xattr.h>
 #include <uapi/linux/fs.h>
+#include <linux/string.h>
 
 #include <errno.h>
-#include <string.h>
 
 #include "fs/vfs.h"
 #include "linux_umount2_flags.h"

@@ -54,8 +54,24 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 
+#ifndef likely_notrace
+#define likely_notrace(x) likely(x)
+#endif
+
+#ifndef unlikely_notrace
+#define unlikely_notrace(x) unlikely(x)
+#endif
+
 #ifndef unreachable
 #define unreachable() __builtin_unreachable()
+#endif
+
+#ifndef barrier
+#define barrier() __asm__ __volatile__("" : : : "memory")
+#endif
+
+#ifndef barrier_data
+#define barrier_data(ptr) __asm__ __volatile__("" : : "r"(ptr) : "memory")
 #endif
 
 #ifndef __no_kasan_or_inline

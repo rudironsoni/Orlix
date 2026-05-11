@@ -1,16 +1,12 @@
 #include <uapi/linux/fcntl.h>
+#include <uapi/linux/fs.h>
+#include <uapi/asm-generic/signal.h>
 #include <asm-generic/unistd.h>
-#ifdef SIGCHLD
-#undef SIGCHLD
-#endif
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <string.h>
 
 #include "fs/fdtable.h"
 #include "kernel/cred.h"
@@ -27,18 +23,6 @@ extern long read_impl(int fd, void *buf, size_t count);
 extern long pread_impl(int fd, void *buf, size_t count, int64_t offset);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern int64_t lseek_impl(int fd, int64_t offset, int whence);
-
-#ifndef SEEK_SET
-#define SEEK_SET 0
-#endif
-
-#ifndef SEEK_CUR
-#define SEEK_CUR 1
-#endif
-
-#ifndef SEEK_END
-#define SEEK_END 2
-#endif
 
 static int close_if_open(int fd) {
     if (fd >= 0) {

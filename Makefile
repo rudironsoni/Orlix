@@ -152,8 +152,12 @@ lint: build-orlix-clang-tidy-module
 				flags="$(ORLIX_LINT_KERNEL_TEST_STRICT_C_FLAGS)"; \
 				if [[ "$$file" == OrlixKernelTests/MLibC*CompileSmoke.c ]]; then \
 					flags="$(ORLIX_LINT_MLIBC_C_FLAGS)"; \
-				elif [[ "$$file" == OrlixKernelTests/NativeSyscallContract.c || "$$file" == OrlixKernelTests/SignalSyscallContract.c || "$$file" == OrlixKernelTests/SyscallUioContract.c || "$$file" == OrlixKernelTests/LinuxUAPICompileSmoke.c || "$$file" == OrlixKernelTests/LinuxUAPITestSupport.c || "$$file" == OrlixKernelTests/FutexUAPICompileSmoke.c || "$$file" == OrlixKernelTests/KernelOwnerCompatCompileSmoke.c || "$$file" == OrlixKernelTests/PtraceContract.c || "$$file" == OrlixKernelTests/SeccompContract.c || "$$file" == OrlixKernelTests/ExecSyscallContract.c || "$$file" == OrlixKernelTests/kunit/kunit.c ]]; then \
+				elif [[ "$$file" == OrlixKernelTests/NativeSyscallContract.c || "$$file" == OrlixKernelTests/SignalSyscallContract.c || "$$file" == OrlixKernelTests/LinuxUAPICompileSmoke.c || "$$file" == OrlixKernelTests/LinuxUAPITestSupport.c || "$$file" == OrlixKernelTests/FutexUAPICompileSmoke.c || "$$file" == OrlixKernelTests/SeccompContract.c || "$$file" == OrlixKernelTests/ExecSyscallContract.c ]]; then \
 					flags="$(ORLIX_LINT_KERNEL_TEST_C_FLAGS)"; \
+				elif [[ "$$file" == OrlixKernelTests/PTYSessionIoctlShim.c ]]; then \
+					flags="$(ORLIX_LINT_HOST_C_FLAGS)"; \
+				elif [[ "$$file" == OrlixKernelTests/kunit/kunit.c ]]; then \
+					flags="$(ORLIX_LINT_HOST_C_FLAGS)"; \
 				fi; \
 			fi; \
 			"$(CLANG_TIDY)" --load="$$plugin_path" --config-file=.clang-tidy "$$file" -- $$flags; \

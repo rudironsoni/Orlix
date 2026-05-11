@@ -5,16 +5,11 @@
 #include <uapi/linux/fcntl.h>
 #include <uapi/linux/sched.h>
 #include <uapi/linux/wait.h>
-#ifdef SIGCHLD
-#undef SIGCHLD
-#endif
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
+#include <uapi/asm-generic/signal.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "kernel/cgroup.h"
 #include "kernel/signal.h"

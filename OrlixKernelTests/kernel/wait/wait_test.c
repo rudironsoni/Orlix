@@ -4,10 +4,8 @@
 #include <uapi/linux/fcntl.h>
 #include <uapi/linux/sched.h>
 #include <uapi/linux/wait.h>
+#include <uapi/asm-generic/signal.h>
 #include <linux/string.h>
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
 #include <asm-generic/siginfo.h>
 
 #include "../../kunit/kunit.h"
@@ -34,27 +32,33 @@ extern int kernel_waitid(int idtype, __kernel_pid_t id, siginfo_t *infop, int op
     __asm("_waitid");
 extern int errno;
 
-#ifndef WIFEXITED
-#define WIFEXITED(status) (((status) & 0x7f) == 0)
-#endif
-#ifndef WEXITSTATUS
-#define WEXITSTATUS(status) (((status) >> 8) & 0xff)
-#endif
-#ifndef WIFSIGNALED
-#define WIFSIGNALED(status) (((status) & 0x7f) != 0 && ((status) & 0x7f) != 0x7f)
-#endif
-#ifndef WTERMSIG
-#define WTERMSIG(status) ((status) & 0x7f)
-#endif
-#ifndef WIFSTOPPED
-#define WIFSTOPPED(status) (((status) & 0xff) == 0x7f)
-#endif
-#ifndef WSTOPSIG
-#define WSTOPSIG(status) (((status) >> 8) & 0xff)
-#endif
-#ifndef WIFCONTINUED
-#define WIFCONTINUED(status) ((status) == 0xffff)
-#endif
+static int wait_status_exited(int status) {
+    return (status & 0x7f) == 0;
+}
+
+static int wait_status_exit_code(int status) {
+    return (status >> 8) & 0xff;
+}
+
+static int wait_status_signaled(int status) {
+    return (status & 0x7f) != 0 && (status & 0x7f) != 0x7f;
+}
+
+static int wait_status_term_signal(int status) {
+    return status & 0x7f;
+}
+
+static int wait_status_stopped(int status) {
+    return (status & 0xff) == 0x7f;
+}
+
+static int wait_status_stop_signal(int status) {
+    return (status >> 8) & 0xff;
+}
+
+static int wait_status_continued(int status) {
+    return status == 0xffff;
+}
 
 static int close_if_open(int fd) {
     if (fd >= 0) {
@@ -315,7 +319,7 @@ static int stop_and_wait_status(struct task_struct *parent, struct task_struct *
         errno = EBUSY;
         return -1;
     }
-    if (!WIFSTOPPED(status) || WSTOPSIG(status) != sig) {
+    if (!wait_status_stopped(status) || wait_status_stop_signal(status) != sig) {
         errno = ERANGE;
         return -1;
     }
@@ -441,7 +445,7 @@ int wait_job_control_contract_reaps_exited_child(void) {
         errno = EBUSY;
         return -1;
     }
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 23) {
+    if (!wait_status_exited(status) || wait_status_exit_code(status) != 23) {
         errno = ERANGE;
         return -1;
     }
@@ -592,7 +596,7 @@ int wait_job_control_contract_reports_continued_child_with_wcontinued(void) {
         errno = EBUSY;
         return -1;
     }
-    if (!WIFCONTINUED(status)) {
+    if (!wait_status_continued(status)) {
         destroy_child_task(parent, child);
         errno = ERANGE;
         return -1;
@@ -622,7 +626,8 @@ int wait_job_control_contract_continued_report_is_consumed(void) {
         errno = EPROTO;
         goto out;
     }
-    if (waitpid_impl(child->pid, &status, WCONTINUED) != child->pid || !WIFCONTINUED(status)) {
+    if (waitpid_impl(child->pid, &status, WCONTINUED) != child->pid ||
+        !wait_status_continued(status)) {
         errno = EBUSY;
         goto out;
     }
@@ -658,7 +663,7 @@ int wait_job_control_contract_pid_zero_selects_same_process_group(void) {
         errno = EBUSY;
         goto out;
     }
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 3) {
+    if (!wait_status_exited(status) || wait_status_exit_code(status) != 3) {
         errno = ERANGE;
         goto out;
     }
@@ -690,7 +695,7 @@ int wait_job_control_contract_negative_pid_selects_process_group(void) {
         errno = EBUSY;
         return -1;
     }
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 9) {
+    if (!wait_status_exited(status) || wait_status_exit_code(status) != 9) {
         errno = ERANGE;
         return -1;
     }
@@ -734,7 +739,8 @@ int wait_job_control_contract_child_continue_generates_sigchld_for_parent(void) 
         errno = ENOMSG;
         return -1;
     }
-    if (waitpid_impl(child->pid, &status, WCONTINUED) != child->pid || !WIFCONTINUED(status)) {
+    if (waitpid_impl(child->pid, &status, WCONTINUED) != child->pid ||
+        !wait_status_continued(status)) {
         destroy_child_task(parent, child);
         errno = EBUSY;
         return -1;
@@ -789,7 +795,7 @@ int wait_job_control_contract_public_waitpid_reports_exited_child_status(void) {
         errno = EBUSY;
         return -1;
     }
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 29) {
+    if (!wait_status_exited(status) || wait_status_exit_code(status) != 29) {
         errno = EPROTO;
         return -1;
     }
@@ -821,7 +827,7 @@ int wait_job_control_contract_wait4_reports_exited_child_status(void) {
         errno = EBUSY;
         return -1;
     }
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 23) {
+    if (!wait_status_exited(status) || wait_status_exit_code(status) != 23) {
         errno = EPROTO;
         return -1;
     }
@@ -853,7 +859,7 @@ int wait_job_control_contract_public_waitpid_reports_stopped_child_with_wuntrace
         errno = EBUSY;
         return -1;
     }
-    if (!WIFSTOPPED(status) || WSTOPSIG(status) != SIGSTOP) {
+    if (!wait_status_stopped(status) || wait_status_stop_signal(status) != SIGSTOP) {
         destroy_child_task(parent, child);
         errno = EPROTO;
         return -1;
@@ -892,7 +898,7 @@ int wait_job_control_contract_public_waitpid_reports_continued_child_with_wconti
         errno = EBUSY;
         return -1;
     }
-    if (!WIFCONTINUED(status)) {
+    if (!wait_status_continued(status)) {
         destroy_child_task(parent, child);
         errno = EPROTO;
         return -1;
@@ -971,7 +977,7 @@ int wait_job_control_contract_waitid_wnowait_preserves_waitable_child(void) {
         errno = EBUSY;
         return -1;
     }
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 9) {
+    if (!wait_status_exited(status) || wait_status_exit_code(status) != 9) {
         errno = EPROTO;
         return -1;
     }
@@ -993,7 +999,7 @@ static int expect_parent_wait_stop(struct task_struct *parent, struct task_struc
         errno = EBUSY;
         return -1;
     }
-    if (!WIFSTOPPED(status) || WSTOPSIG(status) != expected_signal) {
+    if (!wait_status_stopped(status) || wait_status_stop_signal(status) != expected_signal) {
         errno = ERANGE;
         return -1;
     }
@@ -1139,7 +1145,7 @@ int wait_job_control_contract_pty_vsusp_stop_is_waitpid_visible(void) {
         errno = EBUSY;
         goto out;
     }
-    if (!WIFSTOPPED(status) || WSTOPSIG(status) != SIGTSTP) {
+    if (!wait_status_stopped(status) || wait_status_stop_signal(status) != SIGTSTP) {
         errno = ERANGE;
         goto out;
     }
@@ -1240,7 +1246,8 @@ int wait_job_control_contract_waitpid_signal_interrupt_records_restart(void) {
     task_unlink_child_impl(parent, waiter);
     free_task(waiter);
 
-    if (ret != expected_pid || !WIFEXITED(status) || WEXITSTATUS(status) != 7) {
+    if (ret != expected_pid || !wait_status_exited(status) ||
+        wait_status_exit_code(status) != 7) {
         errno = EPROTO;
         return -1;
     }

@@ -7,9 +7,10 @@
  */
 
 #include <errno.h>
-#include <string.h>
 
-#include <uapi/linux/fcntl.h>
+#include <linux/fcntl.h>
+#include <linux/stat.h>
+#include <linux/string.h>
 
 #include "fs/vfs.h"
 #include "fs/fdtable.h"

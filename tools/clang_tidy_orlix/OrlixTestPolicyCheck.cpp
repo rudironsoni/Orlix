@@ -62,9 +62,9 @@ void scanLines(ClangTidyCheck &Check, const SourceManager &SM, StringRef Buffer,
 
 class TestPolicyPPCallbacks : public PPCallbacks {
 public:
-  TestPolicyPPCallbacks(OrlixTestPolicyCheck &Check, llvm::StringRef Path,
-                        bool KernelTests)
-      : Check(Check), Path(Path.str()), KernelTests(KernelTests) {}
+  TestPolicyPPCallbacks(OrlixTestPolicyCheck &Check, const SourceManager &SM,
+                        llvm::StringRef Path, bool KernelTests)
+      : Check(Check), Path(Path.str()), KernelTests(KernelTests), SM(SM) {}
 
   void InclusionDirective(SourceLocation HashLoc, const Token &,
                           StringRef FileName, bool IsAngled,
@@ -72,6 +72,27 @@ public:
                           StringRef, StringRef, const Module *, bool,
                           SrcMgr::CharacteristicKind) override {
     if (KernelTests) {
+      if (SM.isWrittenInMainFile(HashLoc)) {
+        static const std::vector<std::string> ForbiddenKernelTestHeaders = {
+            "string.h",      "strings.h",      "stdatomic.h",
+            "sys/socket.h",  "sys/types.h",    "sys/uio.h",
+            "sys/ioctl.h",   "sys/select.h",   "sys/resource.h",
+            "sys/statvfs.h", "sys/wait.h",     "poll.h",
+            "termios.h",     "signal.h"};
+
+        for (const auto &Header : ForbiddenKernelTestHeaders) {
+          if (FileName == Header || FileName.starts_with(Header)) {
+            Check.diag(HashLoc,
+                       "host libc or POSIX headers are forbidden in LinuxKernel tests; use vendored Linux headers or fix the owning lint environment instead");
+          }
+        }
+
+        if (FileName == "asm/stat.h") {
+          Check.diag(HashLoc,
+                     "full asm/stat.h is forbidden in LinuxKernel tests that prove userspace ABI; use vendored UAPI stat surfaces instead");
+        }
+      }
+
       if (!isMLibCCompileSmoke(Path) &&
           (FileName.starts_with("OrlixMLibC/") ||
            FileName.starts_with("orlixmlibc/") ||
@@ -107,6 +128,47 @@ public:
         Check.diag(HashLoc,
                    "LinuxKernel tests must not include host mediation headers");
       }
+
+      if (SM.isWrittenInMainFile(HashLoc)) {
+        if (FileName == "linux/fs.h") {
+          SawLinuxFs = true;
+          if (SawRepoFsOwner) {
+            Check.diag(HashLoc,
+                       "mixing full linux/fs.h with repo fs owner headers in one LinuxKernel test is forbidden; use the Linux ABI owner actually needed instead of combining incompatible VFS models");
+          }
+        } else if (FileName == "fs/vfs.h" || FileName == "fs/fdtable.h" ||
+                   FileName == "fs/path.h" || FileName == "fs/pty.h") {
+          SawRepoFsOwner = true;
+          if (SawLinuxFs) {
+            Check.diag(HashLoc,
+                       "mixing repo fs owner headers with full linux/fs.h in one LinuxKernel test is forbidden; use the Linux ABI owner actually needed instead of combining incompatible VFS models");
+          }
+        } else if (FileName == "linux/signal.h") {
+          SawLinuxSignal = true;
+          if (SawRepoSignalOwner) {
+            Check.diag(HashLoc,
+                       "mixing full linux/signal.h with repo kernel signal owners in one LinuxKernel test is forbidden; keep Linux ABI constants separate from repo signal runtime ownership");
+          }
+        } else if (FileName == "kernel/signal.h") {
+          SawRepoSignalOwner = true;
+          if (SawLinuxSignal) {
+            Check.diag(HashLoc,
+                       "mixing repo kernel signal owners with full linux/signal.h in one LinuxKernel test is forbidden; keep Linux ABI constants separate from repo signal runtime ownership");
+          }
+        } else if (FileName == "linux/sched.h") {
+          SawLinuxSched = true;
+          if (SawRepoTaskOwner) {
+            Check.diag(HashLoc,
+                       "mixing full linux/sched.h with repo task owners in one LinuxKernel test is forbidden; keep Linux task ABI/constants separate from repo task runtime ownership");
+          }
+        } else if (FileName == "kernel/task.h") {
+          SawRepoTaskOwner = true;
+          if (SawLinuxSched) {
+            Check.diag(HashLoc,
+                       "mixing repo task owners with full linux/sched.h in one LinuxKernel test is forbidden; keep Linux task ABI/constants separate from repo task runtime ownership");
+          }
+        }
+      }
     }
   }
 
@@ -114,6 +176,13 @@ private:
   OrlixTestPolicyCheck &Check;
   std::string Path;
   bool KernelTests;
+  const SourceManager &SM;
+  bool SawLinuxFs = false;
+  bool SawRepoFsOwner = false;
+  bool SawLinuxSignal = false;
+  bool SawRepoSignalOwner = false;
+  bool SawLinuxSched = false;
+  bool SawRepoTaskOwner = false;
 };
 
 const std::vector<RegexRule> KernelTestRules = {
@@ -121,6 +190,14 @@ const std::vector<RegexRule> KernelTestRules = {
      "LinuxKernel tests must not reference HostBridge support"},
     {R"(\bS_ISDIR\s*\(|\bS_ISLNK\s*\(|\bS_ISREG\s*\(|\bS_ISCHR\s*\()",
      "Darwin S_IS* macros must not be used as Linux proof in tests"},
+    {R"(^\s*#\s*define\s+[A-Za-z_][A-Za-z0-9_]*\s+__builtin_[A-Za-z0-9_]+\b)",
+     "compiler builtin alias macros are forbidden in LinuxKernel tests; fix the owning Linux header surface or lint environment instead"},
+    {R"(^\s*#\s*undef\s+(TASK_[A-Z0-9_]+|SIG[A-Z0-9_]+|W[A-Z0-9_]+|AF_[A-Z0-9_]+|SOCK_[A-Z0-9_]+|SOL_[A-Z0-9_]+|CLONE_[A-Z0-9_]+|RLIM_[A-Z0-9_]+)\b)",
+     "undef escapes around vendored Linux names are forbidden in LinuxKernel tests; fix the ownership or lint environment instead"},
+    {R"(^\s*#\s*ifndef\s+(S_[A-Z0-9_]+|AF_[A-Z0-9_]+|SOCK_[A-Z0-9_]+|SOL_[A-Z0-9_]+|SIG[A-Z0-9_]+|CLONE_[A-Z0-9_]+|EPOLL[A-Z0-9_]*|O_[A-Z0-9_]+|F_[A-Z0-9_]+|AT_[A-Z0-9_]+|RLIM_[A-Z0-9_]+)\b)",
+     "local fallback definitions for Linux ABI constants are forbidden in LinuxKernel tests; use vendored Linux headers instead"},
+    {R"(syscall_dispatch_impl\s*\(\s*__NR_socketpair\s*,\s*[0-9]+\s*,\s*[0-9]+\s*,)",
+     "raw numeric Linux socket ABI arguments are forbidden in LinuxKernel tests; consume the vendored Linux header owner for these constants instead"},
     {R"(\bextern\s+int\s+(ioctl|open|close|snprintf)\s*\()",
      "host syscall forward declarations are forbidden in test support"},
     {R"(\bsnprintf\s*\()",
@@ -257,7 +334,7 @@ void OrlixTestPolicyCheck::registerPPCallbacks(const SourceManager &SM,
     return;
   CurrentSM = &SM;
   PP->addPPCallbacks(
-      std::make_unique<TestPolicyPPCallbacks>(*this, Path, isKernelTestPath(Path)));
+      std::make_unique<TestPolicyPPCallbacks>(*this, SM, Path, isKernelTestPath(Path)));
 }
 
 void OrlixTestPolicyCheck::onEndOfTranslationUnit() { scanMainFile(); }

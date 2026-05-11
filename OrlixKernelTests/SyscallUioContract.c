@@ -4,11 +4,10 @@
 #include <uapi/linux/fcntl.h>
 #include <uapi/linux/fs.h>
 #include <uapi/linux/uio.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <string.h>
 
 #include "runtime/syscall.h"
 

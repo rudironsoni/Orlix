@@ -1,24 +1,14 @@
 #include <asm/ioctls.h>
-#include <uapi/linux/fcntl.h>
+#include <linux/fcntl.h>
+#include <uapi/asm-generic/signal.h>
 #include <uapi/linux/fs.h>
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
-#include <asm-generic/signal-defs.h>
+#include <linux/stat.h>
 #include <linux/dirent.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
-
-#ifndef S_IFMT
-#define S_IFMT 0170000
-#endif
-
-#ifndef S_IFCHR
-#define S_IFCHR 0020000
-#endif
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
@@ -921,8 +911,8 @@ int pty_session_contract_session_leader_exit_hangs_up_foreground_pgrp(void) {
 
     if (!signal_is_pending(foreground, SIGHUP) ||
         !signal_is_pending(foreground, SIGCONT) ||
-        !atomic_load(&foreground->signaled) ||
-        atomic_load(&foreground->termsig) != SIGHUP) {
+        !atomic_read(&foreground->signaled) ||
+        atomic_read(&foreground->termsig) != SIGHUP) {
         errno = ENOMSG;
         goto out;
     }
@@ -1008,8 +998,8 @@ int pty_session_contract_session_leader_tiocnotty_hangs_up_foreground_pgrp(void)
 
     if (!signal_is_pending(foreground, SIGHUP) ||
         !signal_is_pending(foreground, SIGCONT) ||
-        !atomic_load(&foreground->signaled) ||
-        atomic_load(&foreground->termsig) != SIGHUP) {
+        !atomic_read(&foreground->signaled) ||
+        atomic_read(&foreground->termsig) != SIGHUP) {
         errno = ENOMSG;
         goto out;
     }

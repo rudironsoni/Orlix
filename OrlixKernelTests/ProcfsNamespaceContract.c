@@ -1,20 +1,18 @@
-#include <uapi/linux/fcntl.h>
+#include <linux/fcntl.h>
 #include <uapi/linux/fs.h>
-#include <uapi/linux/mman.h>
-#include <uapi/linux/mount.h>
+#include <linux/mman.h>
+#include <linux/mount.h>
 #include <uapi/linux/sched.h>
-#include <uapi/linux/stat.h>
-#include <uapi/linux/wait.h>
+#include <uapi/asm-generic/signal.h>
+#include <linux/stat.h>
+#include <linux/wait.h>
 #include <linux/dirent.h>
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "ProcfsNamespaceContract.h"
 #include "fs/vfs.h"
@@ -46,7 +44,7 @@ static void reset_procfs_namespace_state(void) {
     cred_reset_to_defaults();
     uts_reset_current_namespace();
     if (get_current()) {
-        atomic_store(&get_current()->new_pid_namespace_pending, false);
+        atomic_set(&get_current()->new_pid_namespace_pending, 0);
         get_current()->thread_pending_signals = 0;
         if (get_current()->signal) {
             memset(&get_current()->signal->pending, 0, sizeof(get_current()->signal->pending));
@@ -1257,8 +1255,8 @@ int procfs_namespace_contract_thread_group_stop_continue_reports_once(void) {
         goto out;
     }
     if (signal_generate_task(thread, SIGSTOP) != 0 ||
-        !atomic_load(&child->stopped) ||
-        !atomic_load(&thread->stopped)) {
+        !atomic_read(&child->stopped) ||
+        !atomic_read(&thread->stopped)) {
         errno = ENODATA;
         goto out;
     }
@@ -1273,8 +1271,8 @@ int procfs_namespace_contract_thread_group_stop_continue_reports_once(void) {
         goto out;
     }
     if (signal_generate_task(child, SIGCONT) != 0 ||
-        atomic_load(&child->stopped) ||
-        atomic_load(&thread->stopped)) {
+        atomic_read(&child->stopped) ||
+        atomic_read(&thread->stopped)) {
         errno = ERANGE;
         goto out;
     }

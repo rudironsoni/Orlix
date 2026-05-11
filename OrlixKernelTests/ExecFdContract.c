@@ -1,17 +1,18 @@
-#include <uapi/linux/fcntl.h>
+#include <linux/fcntl.h>
 #include <uapi/linux/fs.h>
 #include <linux/dirent.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
 #include "kernel/task.h"
 
 extern int open_impl(const char *pathname, int flags, uint32_t mode);
+extern int close_impl(int fd);
 extern int dup_impl(int oldfd);
 extern int dup3_impl(int oldfd, int newfd, int flags);
 extern int fcntl_impl(int fd, int cmd, ...);

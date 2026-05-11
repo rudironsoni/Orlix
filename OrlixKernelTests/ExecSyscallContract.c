@@ -11,19 +11,12 @@
 #include <uapi/linux/securebits.h>
 #include <uapi/linux/stat.h>
 #include <uapi/linux/xattr.h>
+#include <uapi/asm-generic/signal.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdatomic.h>
-#include <string.h>
-
-#ifdef SIGSEGV
-#undef SIGSEGV
-#endif
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
@@ -55,6 +48,16 @@ extern int umount(const char *target);
 extern int ftruncate_impl(int fd, int64_t length);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern bool signal_is_pending(const struct task_struct *task, int32_t sig);
+
+static bool task_execed(const struct task_struct *task) {
+    return task && atomic_read(&task->execed) != 0;
+}
+
+static void task_reset_execed(struct task_struct *task) {
+    if (task) {
+        atomic_set(&task->execed, 0);
+    }
+}
 
 static int close_if_open(int fd) {
     if (fd >= 0 && fdtable_is_used_impl(fd)) {
@@ -908,7 +911,7 @@ static int verify_state_unchanged(struct task_struct *task,
         errno = EPROTO;
         return -1;
     }
-    if (atomic_load(&task->execed) != expected_execed) {
+    if (task_execed(task) != expected_execed) {
         errno = EPROTO;
         return -1;
     }
@@ -931,7 +934,7 @@ int exec_syscall_contract_rejects_null_path_without_transition(void) {
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve(NULL, NULL, NULL) != -1) {
@@ -955,7 +958,7 @@ int exec_syscall_contract_rejects_empty_path_without_transition(void) {
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("", NULL, NULL) != -1) {
@@ -982,7 +985,7 @@ int exec_syscall_contract_missing_path_preserves_state_and_cloexec_fds(void) {
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     cloexec_fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
     if (cloexec_fd < 0) {
@@ -1038,7 +1041,7 @@ int exec_syscall_contract_native_success_applies_transition_and_returns_entry_st
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     cloexec_fd = open_impl("/dev/null", O_RDONLY | O_CLOEXEC, 0);
     if (cloexec_fd < 0) {
@@ -1055,7 +1058,7 @@ int exec_syscall_contract_native_success_applies_transition_and_returns_entry_st
         errno = EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed)) {
+    if (!task_execed(task)) {
         errno = EPROTO;
         goto out;
     }
@@ -1738,7 +1741,7 @@ int exec_syscall_contract_oversized_argv_returns_e2big_without_transition(void) 
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/usr/bin/too-many-args", too_many, NULL) != -1 ||
@@ -1769,7 +1772,7 @@ int exec_syscall_contract_script_uses_virtual_path_and_native_interpreter(void) 
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     native_registry_clear();
     clear_captured_exec();
@@ -1787,7 +1790,7 @@ int exec_syscall_contract_script_uses_virtual_path_and_native_interpreter(void) 
         errno = EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed) ||
+    if (!task_execed(task) ||
         strcmp(task->exe, "/tmp/exec-script-launch") != 0 ||
         strcmp(task->comm, "script-name") != 0) {
         errno = EPROTO;
@@ -1899,7 +1902,7 @@ int exec_syscall_contract_script_symlink_records_resolved_target(void) {
         errno = EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed) ||
+    if (!task_execed(task) ||
         strcmp(task->exe, "/tmp/exec-script-real") != 0 ||
         strcmp(task->comm, "script-link") != 0) {
         errno = EPROTO;
@@ -1972,7 +1975,7 @@ int exec_syscall_contract_nested_script_interpreter_chains_to_native(void) {
         errno = EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed) ||
+    if (!task_execed(task) ||
         strcmp(task->exe, "/tmp/exec-outer-script") != 0 ||
         strcmp(task->comm, "outer-name") != 0) {
         errno = EPROTO;
@@ -2045,7 +2048,7 @@ int exec_syscall_contract_recursive_script_loop_returns_eloop_without_transition
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-loop-a", argv, NULL) != -1) {
@@ -2090,7 +2093,7 @@ int exec_syscall_contract_missing_script_interpreter_preserves_state(void) {
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-script-missing-interpreter", argv, NULL) != -1) {
@@ -2143,7 +2146,7 @@ int exec_syscall_contract_fexecve_uses_fd_path(void) {
         errno = EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed) ||
+    if (!task_execed(task) ||
         strcmp(task->exe, "/tmp/exec-native-fd") != 0 ||
         strcmp(task->comm, "fd-native") != 0 ||
         captured_argc != 1 ||
@@ -2210,7 +2213,7 @@ int exec_syscall_contract_execveat_uses_dirfd_relative_path(void) {
         errno = status < 0 ? (int)-status : EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed) ||
+    if (!task_execed(task) ||
         strcmp(task->exe, path) != 0 ||
         strcmp(task->comm, "execveat-rel") != 0 ||
         captured_argc != 1 ||
@@ -2265,7 +2268,7 @@ int exec_syscall_contract_execveat_empty_path_uses_fd(void) {
         errno = status < 0 ? (int)-status : EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed) ||
+    if (!task_execed(task) ||
         strcmp(task->exe, path) != 0 ||
         strcmp(task->comm, "execveat-fd") != 0 ||
         captured_argc != 1 ||
@@ -2355,14 +2358,14 @@ int exec_syscall_contract_elf64_aarch64_exec_loads_virtual_image(void) {
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     status = execve("/tmp/exec-elf64", argv, envp);
     if (status != 0) {
         errno = EPROTO;
         goto out;
     }
-    if (!atomic_load(&task->execed) ||
+    if (!task_execed(task) ||
         strcmp(task->exe, "/tmp/exec-elf64") != 0 ||
         strcmp(task->comm, "elf-prog") != 0) {
         errno = EPROTO;
@@ -3845,7 +3848,7 @@ int exec_syscall_contract_elf_missing_interp_returns_enoent_without_transition(v
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-elf-missing-loader", NULL, NULL) != -1 ||
@@ -3885,7 +3888,7 @@ int exec_syscall_contract_elf_invalid_interp_returns_enoexec_without_transition(
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-elf-invalid-loader", NULL, NULL) != -1 ||
@@ -3971,7 +3974,7 @@ int exec_syscall_contract_elf_interp_without_nul_returns_enoexec_without_transit
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-elf-bad-interp", NULL, NULL) != -1 ||
@@ -4020,7 +4023,7 @@ int exec_syscall_contract_elf_too_many_load_segments_returns_enoexec_without_tra
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-elf-too-many-loads", NULL, NULL) != -1 ||
@@ -4068,7 +4071,7 @@ int exec_syscall_contract_elf_bad_load_segment_returns_enoexec_without_transitio
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-elf-bad-segment", NULL, NULL) != -1 ||
@@ -4105,7 +4108,7 @@ int exec_syscall_contract_elf_wrong_machine_returns_enoexec_without_transition(v
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-elf-wrong-machine", NULL, NULL) != -1 ||
@@ -4140,7 +4143,7 @@ int exec_syscall_contract_truncated_elf_returns_enoexec_without_transition(void)
     memcpy(task->exe, "/before", 8);
     memset(task->comm, 0, sizeof(task->comm));
     memcpy(task->comm, "before", 7);
-    atomic_store(&task->execed, false);
+    task_reset_execed(task);
 
     errno = 0;
     if (execve("/tmp/exec-elf-truncated", NULL, NULL) != -1 ||

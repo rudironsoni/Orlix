@@ -6,16 +6,15 @@
  */
 
 #include <uapi/linux/time.h>
-#include <uapi/linux/socket.h>
+#include <uapi/linux/time_types.h>
+#include <uapi/asm-generic/socket.h>
+#include <linux/net.h>
+#include <linux/socket.h>
 
-#include <string.h>
+#define memset __builtin_memset
 
 #ifndef AF_UNIX
 #error "AF_UNIX must resolve through vendored Linux kernel headers"
-#endif
-
-#ifndef SOCK_STREAM
-#error "SOCK_STREAM must resolve through vendored Linux kernel headers"
 #endif
 
 #ifndef SOL_SOCKET
@@ -38,6 +37,10 @@ static sa_family_t kernel_owner_probe_family(const struct sockaddr *addr) {
     return addr->sa_family;
 }
 
+static int kernel_owner_probe_sock_type(void) {
+    return SOCK_STREAM;
+}
+
 static size_t kernel_owner_probe_iov_count(const struct user_msghdr *msg) {
     return (size_t)msg->msg_iovlen;
 }
@@ -46,11 +49,11 @@ static __kernel_old_time_t kernel_owner_probe_time(__kernel_old_time_t value) {
     return value;
 }
 
-static long kernel_owner_probe_nsec(const struct timespec *ts) {
+static long kernel_owner_probe_nsec(const struct __kernel_old_timespec *ts) {
     return ts->tv_nsec;
 }
 
-static __kernel_suseconds_t kernel_owner_probe_usec(const struct timeval *tv) {
+static __kernel_suseconds_t kernel_owner_probe_usec(const struct __kernel_old_timeval *tv) {
     return tv->tv_usec;
 }
 
@@ -67,6 +70,7 @@ static int kernel_owner_probe_fdset(__kernel_fd_set *set, int fd) {
 __attribute__((unused)) static void (*volatile kernel_owner_compat_refs[])(void) = {
     (void (*)(void))kernel_owner_probe_socklen,
     (void (*)(void))kernel_owner_probe_family,
+    (void (*)(void))kernel_owner_probe_sock_type,
     (void (*)(void))kernel_owner_probe_iov_count,
     (void (*)(void))kernel_owner_probe_time,
     (void (*)(void))kernel_owner_probe_nsec,

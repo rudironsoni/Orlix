@@ -3,34 +3,16 @@
 #include <asm/ptrace.h>
 #include <asm/unistd.h>
 #include <uapi/linux/mman.h>
-#ifdef SIGUSR1
-#undef SIGUSR1
-#endif
-#ifdef SIGCHLD
-#undef SIGCHLD
-#endif
-#ifdef SIGSTOP
-#undef SIGSTOP
-#endif
-#ifdef SIGTERM
-#undef SIGTERM
-#endif
-#ifdef SIGTRAP
-#undef SIGTRAP
-#endif
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
+#include <uapi/asm-generic/signal.h>
 #include <uapi/linux/elf.h>
 #include <uapi/linux/ptrace.h>
 #include <uapi/linux/sched.h>
 #include <uapi/linux/uio.h>
 #include <uapi/linux/wait.h>
+#include <linux/string.h>
 
 #include <errno.h>
-#include <stdatomic.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "kernel/signal.h"
 #include "kernel/task.h"
@@ -43,12 +25,13 @@ extern __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options
 extern long syscall_dispatch_impl(long number, long arg0, long arg1, long arg2,
                                   long arg3, long arg4, long arg5);
 
-#ifndef WIFSTOPPED
-#define WIFSTOPPED(status) (((status) & 0xff) == 0x7f)
-#endif
-#ifndef WSTOPSIG
-#define WSTOPSIG(status) (((status) >> 8) & 0xff)
-#endif
+static int wait_status_is_stopped(int status) {
+    return (status & 0xff) == 0x7f;
+}
+
+static int wait_status_stop_signal(int status) {
+    return (status >> 8) & 0xff;
+}
 
 static void ptrace_release_child(struct task_struct *parent, struct task_struct *child) {
     if (!parent || !child) {
@@ -352,7 +335,7 @@ int ptrace_contract_attach_stop_is_waitpid_visible(void) {
         goto out;
     }
     if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGSTOP) {
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGSTOP) {
         errno = ENODATA;
         goto out;
     }
@@ -393,7 +376,7 @@ int ptrace_contract_syscall_stop_is_waitpid_visible(void) {
     set_current(parent);
     status = 0;
     if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP) {
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTRAP) {
         errno = ENODATA;
         goto out;
     }
@@ -494,7 +477,7 @@ int ptrace_contract_traceclone_records_event_message(void) {
     }
     grandchild = task_lookup(grandchild_pid);
     if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP ||
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTRAP ||
         ptrace_impl(PTRACE_GETEVENTMSG, child->pid, NULL, &message) != 0 ||
         message != (unsigned long)grandchild_pid) {
         errno = ENODATA;
@@ -570,7 +553,7 @@ int ptrace_contract_clone3_set_tid_traceclone_records_requested_pid(void) {
     }
     grandchild = task_lookup((int32_t)ret);
     if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP ||
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTRAP ||
         ptrace_impl(PTRACE_GETEVENTMSG, child->pid, NULL, &message) != 0 ||
         message != (unsigned long)requested_pid) {
         errno = ENODATA;
@@ -622,7 +605,7 @@ int ptrace_contract_traceexec_records_event_message(void) {
     }
     set_current(parent);
     if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP ||
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTRAP ||
         ptrace_impl(PTRACE_GETEVENTMSG, child->pid, NULL, &message) != 0 ||
         message != (unsigned long)child->pid) {
         errno = ENODATA;
@@ -669,7 +652,7 @@ int ptrace_contract_traceexit_records_event_message(void) {
         errno = EBUSY;
         goto out;
     }
-    if (!WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP) {
+    if (!wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTRAP) {
         errno = ENODATA;
         goto out;
     }
@@ -712,16 +695,16 @@ int ptrace_contract_signal_delivery_stop_can_be_suppressed(void) {
         waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
         signal_generate_task(child, SIGTERM) != 0 ||
         waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTERM) {
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTERM) {
         errno = ENODATA;
         goto out;
     }
-    if (atomic_load(&child->exited) || atomic_load(&child->signaled)) {
+    if (atomic_read(&child->exited) || atomic_read(&child->signaled)) {
         errno = ENOMSG;
         goto out;
     }
     if (ptrace_impl(PTRACE_CONT, child->pid, NULL, NULL) != 0 ||
-        atomic_load(&child->exited) || atomic_load(&child->signaled) ||
+        atomic_read(&child->exited) || atomic_read(&child->signaled) ||
         signal_is_pending(child, SIGTERM)) {
         errno = EPROTO;
         goto out;
@@ -757,14 +740,14 @@ int ptrace_contract_signal_delivery_stop_can_inject_signal(void) {
         waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
         signal_generate_task(child, SIGTERM) != 0 ||
         waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTERM ||
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTERM ||
         ptrace_impl(PTRACE_CONT, child->pid, NULL, (void *)(uintptr_t)SIGTERM) != 0) {
         errno = ENODATA;
         goto out;
     }
-    if (!atomic_load(&child->exited) ||
-        !atomic_load(&child->signaled) ||
-        atomic_load(&child->termsig) != SIGTERM) {
+    if (!atomic_read(&child->exited) ||
+        !atomic_read(&child->signaled) ||
+        atomic_read(&child->termsig) != SIGTERM) {
         errno = ENOMSG;
         goto out;
     }
@@ -807,7 +790,7 @@ int ptrace_contract_event_stop_status_encodes_event(void) {
     }
     set_current(parent);
     if (waitpid_impl(child->pid, &status, WUNTRACED | WNOHANG) != child->pid ||
-        !WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP ||
+        !wait_status_is_stopped(status) || wait_status_stop_signal(status) != SIGTRAP ||
         (status >> 16) != PTRACE_EVENT_EXEC) {
         errno = ENODATA;
         goto out;

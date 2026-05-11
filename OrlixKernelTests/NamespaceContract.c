@@ -3,11 +3,11 @@
 #include <uapi/linux/mount.h>
 #include <uapi/linux/sched.h>
 #include <uapi/linux/utsname.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <string.h>
 
 #include "NamespaceContract.h"
 #include "fs/vfs.h"
@@ -144,7 +144,7 @@ static void reset_namespace_contract_state(void) {
     cred_reset_to_defaults();
     uts_reset_current_namespace();
     if (get_current()) {
-        atomic_store(&get_current()->new_pid_namespace_pending, false);
+        atomic_set(&get_current()->new_pid_namespace_pending, 0);
     }
     cleanup_mount_paths();
 }

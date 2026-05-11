@@ -7,11 +7,11 @@
 #include <uapi/linux/mman.h>
 #include <uapi/linux/sched.h>
 #include <uapi/linux/signal.h>
+#include <uapi/linux/time_types.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdint.h>
-#include <string.h>
-#include <time.h>
 
 #include "runtime/syscall.h"
 #include "kernel/signal.h"
@@ -19,7 +19,7 @@
 #include "kernel/task.h"
 
 extern void free(void *);
-extern int nanosleep_impl(const struct timespec *req, struct timespec *rem);
+extern int nanosleep_impl(const struct __kernel_timespec *req, struct __kernel_timespec *rem);
 
 static void signal_contract_disable_altstack(void) {
     stack_t disabled;
@@ -872,8 +872,8 @@ int signal_syscall_contract_ignored_dispositions_do_not_queue_or_terminate(void)
     if (ret != 0 ||
         signal_generate_task(task, SIGTERM) != 0 ||
         signal_is_pending(task, SIGTERM) ||
-        atomic_load(&task->exited) ||
-        atomic_load(&task->signaled)) {
+        atomic_read(&task->exited) ||
+        atomic_read(&task->signaled)) {
         errno = ret < 0 ? (int)-ret : EPROTO;
         syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&old_term,
                               0, sizeof(old_term.sa_mask), 0, 0);
@@ -884,13 +884,13 @@ int signal_syscall_contract_ignored_dispositions_do_not_queue_or_terminate(void)
     ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&act,
                                 0, sizeof(act.sa_mask), 0, 0);
     signal_contract_clear_pending(task, SIGTERM);
-    atomic_store(&task->exited, false);
-    atomic_store(&task->signaled, false);
+    atomic_set(&task->exited, 0);
+    atomic_set(&task->signaled, 0);
     if (ret != 0 ||
         signal_generate_task(task, SIGTERM) != 0 ||
         !signal_is_pending(task, SIGTERM) ||
-        atomic_load(&task->exited) ||
-        atomic_load(&task->signaled)) {
+        atomic_read(&task->exited) ||
+        atomic_read(&task->signaled)) {
         errno = ret < 0 ? (int)-ret : EPROTO;
         syscall_dispatch_impl(__NR_rt_sigaction, SIGTERM, (long)(uintptr_t)&old_term,
                               0, sizeof(old_term.sa_mask), 0, 0);
@@ -1088,8 +1088,8 @@ int signal_syscall_contract_restart_metadata_follows_sa_restart(void) {
     }
 
     {
-        struct timespec req = {.tv_sec = 0, .tv_nsec = 1000000};
-        struct timespec rem = {0};
+        struct __kernel_timespec req = {.tv_sec = 0, .tv_nsec = 1000000};
+        struct __kernel_timespec rem = {0};
         task->signal->blocked = old_blocked;
         signal_generate_task(task, SIGUSR1);
         if (nanosleep_impl(&req, &rem) != -1 ||

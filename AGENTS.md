@@ -117,6 +117,8 @@ Wrong-direction changes are forbidden:
 - Never describe Linux-owner files as “not needing Darwin” as if Darwin was a valid option there. Darwin is not a Linux-owner dependency.
 - Do not include host toolchain `std*.h` headers in Linux-owner code. That includes, at minimum, `stddef.h`, `stdint.h`, `stdbool.h`, `stdatomic.h`, `stdarg.h`, `stdlib.h`, `stdio.h`, and any similar standard-library convenience headers.
 - If a Linux-owner file appears to need a `std*.h` header, that is a boundary bug to fix, not a convenience exception to take. Use the vendored truth from `OrlixKernel/vendor/linux/<version>/<arch>/include`, or redesign the kernel-private type ownership.
+- Do not replace missing Linux-owned declarations by scattering compiler builtin aliases such as `#define memcpy __builtin_memcpy`, `#define memset __builtin_memset`, `#define strlen __builtin_strlen`, `#define strcmp __builtin_strcmp`, `#define strrchr __builtin_strrchr`, or similar repo-local escape hatches through Linux-owner code or Linux-kernel tests.
+- If a Linux-owner file only parses after adding `__builtin_*` aliases, implicit builtin declarations, or compiler-only macro rewrites, treat that as a build/lint environment or ownership bug. Fix the owning header surface or lint environment instead of keeping the builtin escape hatch.
 - Do not introduce repo-local private shim headers, split-contract headers, or reduced include façades whose purpose is to avoid including the real vendored Linux kernel header graph.
 - If the full vendored Linux header graph trips lint or the Apple toolchain, the fix belongs in the build/lint environment and vendor integration layer, not in a new repo-local private header that cuts around Linux truth.
 
@@ -380,6 +382,8 @@ Changes must be bounded by subsystem tranche with explicit ownership and proof.
 
 Do not mix unrelated architecture migrations into one tranche.
 Do not “fix lint” by weakening checks or broadening allowlists.
+Do not “fix lint” by rerouting a file into a lighter lint mode, adding per-file flag exceptions, or changing the owning parse mode unless that routing is genuinely correct for the file's ownership surface and the diff explains why.
+Do not use lint-mode changes to hide Linux-vs-Darwin collisions that still exist in the real owning header graph.
 
 ## 10) Quality Bar: No Shortcuts
 
@@ -423,6 +427,7 @@ Additional hard rule:
   vendored generated Linux headers provide the contract type.
 - Do not create repo-local header files whose purpose is to restate Linux UAPI or kheaders concepts that already exist under `OrlixKernel/vendor/linux/<version>/<arch>/include`.
 - Do not create repo-local wrapper macros or helper functions whose sole job is to rename Linux constants, Linux structs, or Linux fd-set/socket/time/termios behavior into project-specific spellings.
+- Do not use compiler builtins as a standing substitute for Linux-owned header truth in Linux-owner code or Linux-kernel tests.
 - Laziness is not an implementation strategy: do not choose shallow stubs,
   renamed adapters, local typedefs, or narrow test-shaped behavior when the
   kernel capability requires real subsystem semantics.

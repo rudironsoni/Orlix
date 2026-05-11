@@ -23,120 +23,18 @@
 #include <uapi/linux/utsname.h>
 #include <uapi/linux/xattr.h>
 #include <uapi/asm-generic/siginfo.h>
+#include <uapi/asm-generic/resource.h>
+#include <uapi/asm-generic/signal-defs.h>
+#include <uapi/asm-generic/signal.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#ifdef SIGBUS
-#undef SIGBUS
-#endif
-#ifdef SIGSEGV
-#undef SIGSEGV
-#endif
-#ifdef SIGIOT
-#undef SIGIOT
-#endif
-#ifdef SIGUSR1
-#undef SIGUSR1
-#endif
-#ifdef SIGUSR2
-#undef SIGUSR2
-#endif
-#ifdef SIGCHLD
-#undef SIGCHLD
-#endif
-#ifdef SIGCONT
-#undef SIGCONT
-#endif
-#ifdef SIGSTOP
-#undef SIGSTOP
-#endif
-#ifdef SIGTSTP
-#undef SIGTSTP
-#endif
-#ifdef SIGURG
-#undef SIGURG
-#endif
-#ifdef SIGIO
-#undef SIGIO
-#endif
-#ifdef SIGSYS
-#undef SIGSYS
-#endif
-#include <uapi/asm-generic/signal.h>
-
-#ifdef SIG_BLOCK
-#undef SIG_BLOCK
-#endif
-#ifdef SIG_UNBLOCK
-#undef SIG_UNBLOCK
-#endif
-#ifdef SIG_SETMASK
-#undef SIG_SETMASK
-#endif
-#ifdef SIG_DFL
-#undef SIG_DFL
-#endif
-#ifdef SIG_IGN
-#undef SIG_IGN
-#endif
-#ifdef SIG_ERR
-#undef SIG_ERR
-#endif
-#ifdef RLIMIT_NOFILE
-#undef RLIMIT_NOFILE
-#endif
-#ifdef RLIM_NLIMITS
-#undef RLIM_NLIMITS
-#endif
-#include <uapi/asm-generic/resource.h>
-#include <uapi/asm-generic/signal-defs.h>
-
-#ifndef SIG_BLOCK
-#define SIG_BLOCK 0
-#endif
-#ifndef SIG_UNBLOCK
-#define SIG_UNBLOCK 1
-#endif
-#ifndef SIG_SETMASK
-#define SIG_SETMASK 2
-#endif
-
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
 #include "kernel/signal.h"
-#ifdef TASK_RUNNING
-#undef TASK_RUNNING
-#endif
-#ifdef TASK_INTERRUPTIBLE
-#undef TASK_INTERRUPTIBLE
-#endif
-#ifdef TASK_UNINTERRUPTIBLE
-#undef TASK_UNINTERRUPTIBLE
-#endif
-#ifdef TASK_STOPPED
-#undef TASK_STOPPED
-#endif
-#ifdef TASK_ZOMBIE
-#undef TASK_ZOMBIE
-#endif
-#ifdef TASK_DEAD
-#undef TASK_DEAD
-#endif
 #include "kernel/task.h"
-#ifdef WEXITED
-#undef WEXITED
-#endif
-#ifdef WSTOPPED
-#undef WSTOPPED
-#endif
-#ifdef WCONTINUED
-#undef WCONTINUED
-#endif
-#ifdef WNOWAIT
-#undef WNOWAIT
-#endif
 #include <uapi/linux/wait.h>
 
 struct native_unix_sockaddr {
@@ -166,22 +64,6 @@ struct native_mmsghdr {
 
 typedef unsigned int native_socklen_t;
 
-#ifndef AF_UNIX
-#define AF_UNIX 1
-#endif
-
-#ifndef SOCK_STREAM
-#define SOCK_STREAM 1
-#endif
-#ifndef SOCK_DGRAM
-#define SOCK_DGRAM 2
-#endif
-#ifndef SOCK_CLOEXEC
-#define SOCK_CLOEXEC O_CLOEXEC
-#endif
-#ifndef SOCK_NONBLOCK
-#define SOCK_NONBLOCK O_NONBLOCK
-#endif
 #define NATIVE_SOL_SOCKET 1
 #define NATIVE_SO_REUSEADDR 2
 #define NATIVE_SO_TYPE 3
@@ -227,15 +109,6 @@ extern int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char
 
 extern int execve(const char *pathname, char *const argv[], char *const envp[]);
 extern void *calloc(size_t count, size_t size);
-
-#define memcpy  __builtin_memcpy
-#define memcmp  __builtin_memcmp
-#define memset  __builtin_memset
-#define strlen  __builtin_strlen
-#define strcmp  __builtin_strcmp
-#define strncmp __builtin_strncmp
-#define strchr  __builtin_strchr
-#define strstr  __builtin_strstr
 
 struct native_syscall_dirent64 {
     unsigned long long d_ino;

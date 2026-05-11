@@ -105,6 +105,11 @@ public:
                    "temporary vendored alias include surfaces are forbidden; include the real upstream Linux path instead");
       }
 
+      if (FileName.starts_with("uapi/")) {
+        Check.diag(HashLoc,
+                   "direct UAPI includes are forbidden in Linux-owner code; consume full upstream Linux kernel headers unless the file is an explicit userspace-ABI proof surface outside OrlixKernel");
+      }
+
       if (FileName.starts_with("third_party/linux/") ||
           FileName.starts_with("OrlixKernel/vendor/linux/") ||
           FileName.starts_with("OrlixMLibC/vendor/linux/")) {

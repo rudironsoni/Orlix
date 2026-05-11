@@ -1,32 +1,14 @@
-#include <uapi/linux/fcntl.h>
-#include <uapi/asm/stat.h>
+#include <linux/fcntl.h>
+#include <uapi/asm-generic/signal.h>
 #include <uapi/linux/fs.h>
-#include <uapi/linux/wait.h>
+#include <linux/stat.h>
+#include <linux/string.h>
+#include <linux/wait.h>
 #include <linux/dirent.h>
 
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <linux/string.h>
-
-#ifdef SIGCHLD
-#undef SIGCHLD
-#endif
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
-
-#ifndef S_IFMT
-#define S_IFMT 0170000
-#endif
-
-#ifndef S_IFDIR
-#define S_IFDIR 0040000
-#endif
-
-#ifndef S_IFREG
-#define S_IFREG 0100000
-#endif
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
@@ -46,13 +28,6 @@ extern int fstat_impl(int fd, struct stat *statbuf);
 extern int unlink_impl(const char *pathname);
 extern int kernel_exec_init(const char *preferred_path, char *const argv[], char *const envp[]);
 extern void exit_impl(int status);
-#ifndef WIFEXITED
-#define WIFEXITED(status) (((status) & 0x7f) == 0)
-#endif
-#ifndef WEXITSTATUS
-#define WEXITSTATUS(status) (((status) >> 8) & 0xff)
-#endif
-
 static int buffer_contains(const char *buf, size_t len, const char *needle) {
     size_t needle_len;
     size_t i;

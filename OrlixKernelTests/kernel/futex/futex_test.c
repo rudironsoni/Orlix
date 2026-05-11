@@ -6,12 +6,7 @@
 #include <uapi/linux/sched.h>
 #include <uapi/linux/time.h>
 #include <linux/string.h>
-#ifdef SIGUSR1
-#undef SIGUSR1
-#endif
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
+#include <uapi/asm-generic/signal.h>
 
 #include "../../kunit/kunit.h"
 #include "../../kunit/suite_registry.h"

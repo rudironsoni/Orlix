@@ -1,13 +1,13 @@
-#include <uapi/linux/fcntl.h>
+#include <linux/fcntl.h>
 #include <uapi/linux/fs.h>
-#include <uapi/linux/stat.h>
+#include <linux/stat.h>
 #include <linux/dirent.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "fs/fdtable.h"
 #include "fs/pty.h"

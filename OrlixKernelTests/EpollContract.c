@@ -4,20 +4,12 @@
 #include <uapi/linux/fcntl.h>
 #include <uapi/linux/pidfd.h>
 #include <uapi/linux/poll.h>
-#include <uapi/linux/socket.h>
-
-#ifdef SIGUSR1
-#undef SIGUSR1
-#endif
-#define __ASSEMBLY__ 1
-#include <asm-generic/signal.h>
-#undef __ASSEMBLY__
+#include <uapi/asm-generic/signal.h>
 #include <asm-generic/signal-defs.h>
+#include <linux/string.h>
 
 #include <errno.h>
 #include <stddef.h>
-#include <string.h>
-#include <sys/socket.h>
 
 #include "fs/fdtable.h"
 #include "kernel/signal.h"
@@ -666,7 +658,7 @@ int epoll_contract_ctl_add_socketpair_read_end(void) {
     if (epfd < 0) {
         return errno;
     }
-    sret = syscall_dispatch_impl(__NR_socketpair, AF_UNIX, SOCK_STREAM, 0, (long)(uintptr_t)fds, 0, 0);
+    sret = syscall_dispatch_impl(__NR_socketpair, 1, 1, 0, (long)(uintptr_t)fds, 0, 0);
     if (sret != 0) {
         ret = sret < 0 ? (int)-sret : EIO;
         goto out;
@@ -754,7 +746,7 @@ int epoll_contract_wait_socketpair_readable_after_write(void) {
     if (epfd < 0) {
         return errno;
     }
-    sret = syscall_dispatch_impl(__NR_socketpair, AF_UNIX, SOCK_STREAM, 0, (long)(uintptr_t)fds, 0, 0);
+    sret = syscall_dispatch_impl(__NR_socketpair, 1, 1, 0, (long)(uintptr_t)fds, 0, 0);
     if (sret != 0) {
         ret = sret < 0 ? (int)-sret : EIO;
         goto out;

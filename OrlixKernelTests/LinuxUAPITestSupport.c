@@ -15,25 +15,25 @@
  * ============================================================================ */
 
 int stat_mode_is_directory(unsigned int mode) {
-    return S_ISDIR(mode);
+    return (mode & S_IFMT) == S_IFDIR;
 }
 
 int stat_mode_is_symlink(unsigned int mode) {
-    return S_ISLNK(mode);
+    return (mode & S_IFMT) == S_IFLNK;
 }
 
 int stat_mode_is_regular(unsigned int mode) {
-    return S_ISREG(mode);
+    return (mode & S_IFMT) == S_IFREG;
 }
 
 int stat_mode_is_char_device(unsigned int mode) {
-    return S_ISCHR(mode);
+    return (mode & S_IFMT) == S_IFCHR;
 }
 
 int stat_mode_is_block_device(unsigned int mode) {
-    return S_ISBLK(mode);
+    return (mode & S_IFMT) == S_IFBLK;
 }
 
 int stat_mode_is_fifo(unsigned int mode) {
-    return S_ISFIFO(mode);
+    return (mode & S_IFMT) == S_IFIFO;
 }
