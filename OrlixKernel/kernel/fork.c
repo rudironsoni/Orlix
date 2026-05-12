@@ -18,6 +18,7 @@
 #include "signal.h"
 #include "../private/kernel/signal_state.h"
 #include "task.h"
+#include "../private/kernel/kthread_state.h"
 #include "../private/kernel/task_state.h"
 #include "uts.h"
 

@@ -16,6 +16,7 @@
 #include "private/kernel/signal_frame_state.h"
 #include "private/kernel/signal_state.h"
 #include "kernel/task.h"
+#include "private/kernel/kthread_state.h"
 #include "private/kernel/task_state.h"
 
 extern int pipe_impl(int pipefd[2]);

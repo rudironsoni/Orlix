@@ -12,7 +12,6 @@
 
 #include "fdtable.h"
 #include "internal/fs/file.h"
-#include "internal/fs/lock.h"
 #include "internal/random.h"
 #include "pipe.h"
 #include "pty.h"

@@ -5,7 +5,6 @@
 #include <linux/atomic.h>
 
 #include "path.h"
-#include "internal/fs/lock.h"
 
 #define NR_OPEN_DEFAULT 256
 

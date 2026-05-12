@@ -2,6 +2,7 @@
 #define PRIVATE_KERNEL_TASK_STATE_H
 
 #include "kernel/task.h"
+#include "private/kernel/kthread_state.h"
 
 #ifdef __cplusplus
 extern "C" {

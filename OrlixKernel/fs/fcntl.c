@@ -5,7 +5,7 @@
 #include <linux/string.h>
 #include <linux/types.h>
 
-#include "internal/fs/lock.h"
+#include "private/fs/lock_state.h"
 #include "fdtable.h"
 
 static int fcntl_get_entry_or_badf(int fd, void **entry_out) {

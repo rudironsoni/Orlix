@@ -19,9 +19,9 @@
 #include <unistd.h>
 
 #include "exit.h"
-#include "kthread.h"
 #include "mutex.h"
 #include "current.h"
+#include "private/kernel/kthread_state.h"
 
 static const clockid_t host_nsecs_clock_realtime = _CLOCK_REALTIME;
 

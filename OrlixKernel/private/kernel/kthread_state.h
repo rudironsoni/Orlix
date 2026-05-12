@@ -1,5 +1,5 @@
-#ifndef INTERNAL_KTHREAD_H
-#define INTERNAL_KTHREAD_H
+#ifndef PRIVATE_KERNEL_KTHREAD_STATE_H
+#define PRIVATE_KERNEL_KTHREAD_STATE_H
 
 #ifdef __cplusplus
 extern "C" {

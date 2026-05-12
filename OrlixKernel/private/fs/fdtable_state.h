@@ -2,6 +2,7 @@
 #define PRIVATE_FS_FDTABLE_STATE_H
 
 #include "fs/fdtable.h"
+#include "private/fs/lock_state.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,5 +1,5 @@
-#ifndef INTERNAL_FS_LOCK_H
-#define INTERNAL_FS_LOCK_H
+#ifndef PRIVATE_FS_LOCK_STATE_H
+#define PRIVATE_FS_LOCK_STATE_H
 
 #ifdef __cplusplus
 extern "C" {

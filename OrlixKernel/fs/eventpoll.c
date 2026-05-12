@@ -6,7 +6,7 @@
 
 #include "fdtable.h"
 #include "internal/slab.h"
-#include "internal/fs/lock.h"
+#include "private/fs/lock_state.h"
 #include "poll.h"
 #include "../kernel/task.h"
 

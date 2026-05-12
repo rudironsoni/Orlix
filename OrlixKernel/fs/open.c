@@ -4,7 +4,6 @@
 #include <linux/string.h>
 
 #include "fdtable.h"
-#include "internal/fs/lock.h"
 #include "pty.h"
 #include "vfs.h"
 #include "kernel/cgroup.h"

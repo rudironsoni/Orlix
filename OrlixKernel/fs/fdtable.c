@@ -25,7 +25,7 @@
 #include "internal/timekeeping.h"
 #include "private/fs/fdtable_state.h"
 #include "../private/kernel/task_state.h"
-#include "internal/fs/lock.h"
+#include "private/fs/lock_state.h"
 
 /* Standard file descriptors - local definitions to avoid Darwin <unistd.h> */
 #ifndef STDIN_FILENO

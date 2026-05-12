@@ -7,7 +7,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/vfs.h"
-#include "internal/fs/lock.h"
+#include "private/fs/lock_state.h"
 
 #ifdef __cplusplus
 extern "C" {

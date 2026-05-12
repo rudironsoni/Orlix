@@ -21,7 +21,6 @@
 #include <linux/atomic.h>
 
 #include "../fs/path.h"
-#include "internal/kthread.h"
 #include "internal/mutex.h"
 
 #ifdef __cplusplus

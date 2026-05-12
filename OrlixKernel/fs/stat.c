@@ -10,7 +10,6 @@
 
 #include "vfs.h"
 #include "fdtable.h"
-#include "internal/fs/lock.h"
 #include "internal/fs/file.h"
 #include "internal/fs/namei.h"
 #include "vfs.h"
