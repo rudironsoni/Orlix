@@ -1821,26 +1821,7 @@ int task_exec_transition_impl(const char *path, const char *argv0) {
         return -1;
     }
 
-    if (task->mm) {
-        task->mm->signal_frame_sp = 0;
-        task->mm->signal_frame_signo = 0;
-        task->mm->signal_frame_return_pc = 0;
-        task->mm->signal_handler_pc = 0;
-        task->mm->signal_frame_flags = 0;
-        task->mm->signal_frame_restorer_pc = 0;
-        task->mm->signal_frame_mask = 0;
-        task->mm->signal_frame_altstack_sp = 0;
-        task->mm->signal_frame_altstack_size = 0;
-        task->mm->signal_frame_altstack_flags = 0;
-        task->mm->signal_frame_current_sp = 0;
-        task->mm->signal_frame_size = 0;
-        task->mm->signal_frame_ucontext_flags = 0;
-        task->mm->signal_frame_restartable = 0;
-        task->mm->signal_frame_restart_return_pc = 0;
-        task->mm->signal_frame_restart_sp = 0;
-        task->mm->signal_frame_restart_signo = 0;
-        task_restart_clear_impl(task);
-    }
+    signal_frame_clear_task(task);
 
     memcpy(task->exe, normalized_path, strlen(normalized_path) + 1);
 
