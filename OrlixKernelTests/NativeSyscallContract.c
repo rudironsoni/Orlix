@@ -4238,8 +4238,8 @@ int native_syscall_contract_dispatches_process_startup_syscalls(void) {
     struct tms tms_value;
     struct linux_rusage_contract usage;
     struct new_utsname uts;
-    uint64_t block_set = 1ULL << (2 - 1);
-    uint64_t old_set = 0;
+    sigset_t block_set = {0};
+    sigset_t old_set = {0};
     uint64_t old_limit[2];
     uint64_t new_limit[2];
     unsigned char random_buf[16];
@@ -4261,6 +4261,7 @@ int native_syscall_contract_dispatches_process_startup_syscalls(void) {
         errno = ESRCH;
         return -1;
     }
+    sigaddset(&block_set, 2);
 
     ret = syscall_dispatch_impl(__NR_gettid, 0, 0, 0, 0, 0, 0);
     if (ret != task->pid) {
@@ -4482,14 +4483,14 @@ int native_syscall_contract_dispatches_process_startup_syscalls(void) {
 
     ret = syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, (long)(uintptr_t)&block_set,
                                 (long)(uintptr_t)&old_set, sizeof(block_set), 0, 0);
-    if (ret != 0 || (old_set & block_set) != 0) {
+    if (ret != 0 || sigismember(&old_set, 2) != 0) {
         errno = ret < 0 ? (int)-ret : ENOTRECOVERABLE;
         return -1;
     }
-    old_set = 0;
+    sigemptyset(&old_set);
     ret = syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
                                 (long)(uintptr_t)&old_set, sizeof(block_set), 0, 0);
-    if (ret != 0 || (old_set & block_set) == 0) {
+    if (ret != 0 || sigismember(&old_set, 2) == 0) {
         errno = ret < 0 ? (int)-ret : EOWNERDEAD;
         return -1;
     }
@@ -5214,8 +5215,8 @@ int native_syscall_contract_dispatches_pidfd_syscalls(void) {
     struct siginfo info;
     struct pollfd pfd;
     struct __kernel_timespec zero_timeout = {0, 0};
-    uint64_t block_sigchld = 1ULL << (SIGCHLD - 1);
-    uint64_t old_sigmask = 0;
+    sigset_t block_sigchld = {0};
+    sigset_t old_sigmask = {0};
     long ret;
     int pidfd = -1;
     int clone_pidfd = -1;
@@ -5246,6 +5247,7 @@ int native_syscall_contract_dispatches_pidfd_syscalls(void) {
     }
 
     clear_pending_signal(parent, SIGCHLD);
+    sigaddset(&block_sigchld, SIGCHLD);
     ret = syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK,
                                 (long)(uintptr_t)&block_sigchld,
                                 (long)(uintptr_t)&old_sigmask,
@@ -5364,15 +5366,15 @@ int native_syscall_contract_dispatches_pidfd_syscalls(void) {
         errno = ret < 0 ? (int)-ret : EPROTO;
         goto out;
     }
-    old_sigmask = 0;
+    sigemptyset(&old_sigmask);
 
     close_if_open(pidfd);
     close_if_open(clone_pidfd);
     return 0;
 
 out:
-    if (old_sigmask != 0 || (parent && parent->signal &&
-        (parent->signal->blocked.sig[0] & block_sigchld) != 0)) {
+    if (!sigisemptyset(&old_sigmask) || (parent && parent->signal &&
+        sigismember(&parent->signal->blocked, SIGCHLD) != 0)) {
         syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK,
                               (long)(uintptr_t)&block_sigchld, 0,
                               sizeof(block_sigchld), 0, 0);

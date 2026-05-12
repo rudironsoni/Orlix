@@ -549,11 +549,12 @@ static int epoll_mask_case_wait_done(struct epoll_mask_case *ctx) {
 static void *epoll_pwait_mask_thread(void *arg) {
     struct epoll_mask_case *ctx = arg;
     struct epoll_event event;
-    uint64_t sigmask = 1ULL << (SIGUSR1 - 1);
-    uint64_t queried = 0;
+    sigset_t sigmask = {0};
+    sigset_t queried = {0};
     long ret;
 
     task_set_current(ctx->task);
+    sigaddset(&sigmask, SIGUSR1);
     epoll_mask_case_mark_started(ctx);
     ret = syscall_dispatch_impl(__NR_epoll_pwait, ctx->epfd, (long)(uintptr_t)&event, 1,
                                 -1, (long)(uintptr_t)&sigmask, sizeof(sigmask));
@@ -563,7 +564,7 @@ static void *epoll_pwait_mask_thread(void *arg) {
     }
     ret = syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, 0,
                                 (long)(uintptr_t)&queried, sizeof(queried), 0, 0);
-    if (ret != 0 || (queried & sigmask) != 0) {
+    if (ret != 0 || sigismember(&queried, SIGUSR1) != 0) {
         epoll_mask_case_mark_done(ctx, ret < 0 ? (int)-ret : EBUSY);
         return NULL;
     }
