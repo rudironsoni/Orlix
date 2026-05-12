@@ -6,7 +6,7 @@
 #include <linux/types.h>
 
 #include "kernel/signal.h"
-#include "internal/mutex.h"
+#include "private/kernel/mutex_state.h"
 
 #ifdef __cplusplus
 extern "C" {

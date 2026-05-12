@@ -2,6 +2,7 @@
 #include <linux/atomic.h>
 #include <linux/types.h>
 
+#include "../private/kernel/mutex_state.h"
 #include "task.h"
 
 #define PID_MIN 1

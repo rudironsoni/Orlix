@@ -3,10 +3,13 @@
 
 #include "kernel/task.h"
 #include "private/kernel/kthread_state.h"
+#include "private/kernel/mutex_state.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+extern kernel_mutex_t task_table_lock;
 
 enum task_vma_kind {
     TASK_VMA_EXEC = 1,

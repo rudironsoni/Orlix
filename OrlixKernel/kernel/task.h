@@ -21,7 +21,6 @@
 #include <linux/atomic.h>
 
 #include "../fs/path.h"
-#include "internal/mutex.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,7 +70,6 @@ enum task_restart_kind {
 };
 
 /* Task global table - virtual PID namespace */
-extern kernel_mutex_t task_table_lock;
 extern struct task *task_table[TASK_MAX_TASKS];
 
 /* The task_init_process (pid 1) - set up during kernel boot */

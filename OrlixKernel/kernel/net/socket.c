@@ -5,7 +5,7 @@
 #include <linux/gfp_types.h>
 #include <linux/string.h>
 
-#include "internal/mutex.h"
+#include "../../private/kernel/mutex_state.h"
 #include "../signal.h"
 #include "../task.h"
 #include "../../private/kernel/wait_queue_state.h"

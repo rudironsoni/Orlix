@@ -1,8 +1,6 @@
 #ifndef KERNEL_WAIT_QUEUE_H
 #define KERNEL_WAIT_QUEUE_H
 
-#include "internal/mutex.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

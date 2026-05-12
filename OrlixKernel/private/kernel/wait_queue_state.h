@@ -2,6 +2,7 @@
 #define PRIVATE_KERNEL_WAIT_QUEUE_STATE_H
 
 #include "kernel/wait_queue.h"
+#include "private/kernel/mutex_state.h"
 
 #ifdef __cplusplus
 extern "C" {

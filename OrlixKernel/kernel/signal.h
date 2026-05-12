@@ -22,7 +22,6 @@
 #include <linux/types.h>
 
 #include "../include/signal_calls.h"
-#include "internal/mutex.h"
 
 #ifdef __cplusplus
 extern "C" {

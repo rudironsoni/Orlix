@@ -1,5 +1,5 @@
-#ifndef INTERNAL_MUTEX_H
-#define INTERNAL_MUTEX_H
+#ifndef PRIVATE_KERNEL_MUTEX_STATE_H
+#define PRIVATE_KERNEL_MUTEX_STATE_H
 
 #ifdef __cplusplus
 extern "C" {

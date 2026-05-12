@@ -9,6 +9,7 @@
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
+#include "../private/kernel/mutex_state.h"
 #include "../runtime/native/registry.h"
 #include "task.h"
 
