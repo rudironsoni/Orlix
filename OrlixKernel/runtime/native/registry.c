@@ -1,5 +1,6 @@
 #include "registry.h"
 
+#include "../../private/runtime/native/registry_state.h"
 #include "../../fs/fdtable.h"
 #include "../../fs/vfs.h"
 #include "../../internal/mutex.h"
