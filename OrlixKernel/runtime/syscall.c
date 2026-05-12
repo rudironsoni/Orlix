@@ -24,7 +24,6 @@
 #include "../kernel/resource.h"
 #include "../kernel/seccomp.h"
 #include "../kernel/signal.h"
-#include "../private/kernel/signal_frame_state.h"
 #include "../private/kernel/signal_state.h"
 #include "../kernel/task.h"
 #include "../private/kernel/task_state.h"
@@ -963,58 +962,68 @@ static long syscall_dispatch_inner_impl(long number,
     }
     case __NR_restart_syscall: {
         struct task *task = task_current();
-        struct signal_frame_state state;
+        uint64_t restart_kind = 0;
+        uint64_t restart_arg0 = 0;
+        uint64_t restart_arg1 = 0;
+        uint64_t restart_arg2 = 0;
+        uint64_t restart_arg3 = 0;
+        uint64_t restart_arg4 = 0;
         long ret;
 
         if (!task) {
             return -ESRCH;
         }
-        if (signal_frame_state_get_task(task, &state) != 0) {
+        if (signal_frame_restart_kind_get_task(task, &restart_kind) != 0 ||
+            signal_frame_restart_arg_get_task(task, 0, &restart_arg0) != 0 ||
+            signal_frame_restart_arg_get_task(task, 1, &restart_arg1) != 0 ||
+            signal_frame_restart_arg_get_task(task, 2, &restart_arg2) != 0 ||
+            signal_frame_restart_arg_get_task(task, 3, &restart_arg3) != 0 ||
+            signal_frame_restart_arg_get_task(task, 4, &restart_arg4) != 0) {
             return -ESRCH;
         }
-        if (state.restart_kind == TASK_RESTART_NONE) {
+        if (restart_kind == TASK_RESTART_NONE) {
             return -EINTR;
         }
         task_restart_clear_impl(task);
 
-        switch (state.restart_kind) {
+        switch (restart_kind) {
         case TASK_RESTART_NANOSLEEP:
-            ret = nanosleep_impl((const struct __kernel_timespec *)(uintptr_t)state.restart_arg0,
-                                 (struct __kernel_timespec *)(uintptr_t)state.restart_arg1);
+            ret = nanosleep_impl((const struct __kernel_timespec *)(uintptr_t)restart_arg0,
+                                 (struct __kernel_timespec *)(uintptr_t)restart_arg1);
             return syscall_result(ret);
         case TASK_RESTART_POLL:
-            ret = poll_impl((struct pollfd *)(uintptr_t)state.restart_arg0,
-                            (__kernel_ulong_t)state.restart_arg1,
-                            (int)state.restart_arg2);
+            ret = poll_impl((struct pollfd *)(uintptr_t)restart_arg0,
+                            (__kernel_ulong_t)restart_arg1,
+                            (int)restart_arg2);
             return syscall_result(ret);
         case TASK_RESTART_PIPE_READ:
-            ret = read_impl((int)state.restart_arg0, (void *)(uintptr_t)state.restart_arg1,
-                            (size_t)state.restart_arg2);
+            ret = read_impl((int)restart_arg0, (void *)(uintptr_t)restart_arg1,
+                            (size_t)restart_arg2);
             return syscall_result(ret);
         case TASK_RESTART_PIPE_WRITE:
-            ret = write_impl((int)state.restart_arg0, (const void *)(uintptr_t)state.restart_arg1,
-                             (size_t)state.restart_arg2);
+            ret = write_impl((int)restart_arg0, (const void *)(uintptr_t)restart_arg1,
+                             (size_t)restart_arg2);
             return syscall_result(ret);
         case TASK_RESTART_FUTEX_WAIT:
-            ret = futex_wait_impl((int *)(uintptr_t)state.restart_arg0,
-                                  (int)state.restart_arg1, (int)state.restart_arg2);
+            ret = futex_wait_impl((int *)(uintptr_t)restart_arg0,
+                                  (int)restart_arg1, (int)restart_arg2);
             return syscall_result(ret);
         case TASK_RESTART_WAITPID:
-            ret = waitpid_impl((__kernel_pid_t)state.restart_arg0,
-                               (int *)(uintptr_t)state.restart_arg1,
-                               (int)state.restart_arg2);
+            ret = waitpid_impl((__kernel_pid_t)restart_arg0,
+                               (int *)(uintptr_t)restart_arg1,
+                               (int)restart_arg2);
             return syscall_result(ret);
         case TASK_RESTART_SELECT:
-            ret = select_impl((int)state.restart_arg0,
-                              (__kernel_fd_set *)(uintptr_t)state.restart_arg1,
-                              (__kernel_fd_set *)(uintptr_t)state.restart_arg2,
-                              (__kernel_fd_set *)(uintptr_t)state.restart_arg3,
-                              (struct __kernel_old_timeval *)(uintptr_t)state.restart_arg4);
+            ret = select_impl((int)restart_arg0,
+                              (__kernel_fd_set *)(uintptr_t)restart_arg1,
+                              (__kernel_fd_set *)(uintptr_t)restart_arg2,
+                              (__kernel_fd_set *)(uintptr_t)restart_arg3,
+                              (struct __kernel_old_timeval *)(uintptr_t)restart_arg4);
             return syscall_result(ret);
         case TASK_RESTART_EPOLL_WAIT:
-            ret = epoll_wait_impl((int)state.restart_arg0,
-                                  (struct epoll_event *)(uintptr_t)state.restart_arg1,
-                                  (int)state.restart_arg2, (int)state.restart_arg3);
+            ret = epoll_wait_impl((int)restart_arg0,
+                                  (struct epoll_event *)(uintptr_t)restart_arg1,
+                                  (int)restart_arg2, (int)restart_arg3);
             return syscall_result(ret);
         default:
             return -EINTR;

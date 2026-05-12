@@ -15,7 +15,6 @@
 #include <uapi/asm/ucontext.h>
 
 #include "../private/kernel/signal_state.h"
-#include "../private/kernel/signal_frame_state.h"
 #include "../private/kernel/task_state.h"
 #include "../private/kernel/cred_state.h"
 #include "signal.h"
@@ -806,39 +805,6 @@ int signal_proc_status_snapshot_task(const struct task *task,
     return 0;
 }
 
-int signal_frame_state_get_task(const struct task *task,
-                                struct signal_frame_state *state) {
-    if (!task || !task->mm || !state) {
-        return -EINVAL;
-    }
-
-    state->sp = task->mm->signal_frame_sp;
-    state->signo = task->mm->signal_frame_signo;
-    state->return_pc = task->mm->signal_frame_return_pc;
-    state->handler_pc = task->mm->signal_handler_pc;
-    state->flags = task->mm->signal_frame_flags;
-    state->restorer_pc = task->mm->signal_frame_restorer_pc;
-    state->mask = task->mm->signal_frame_mask;
-    state->altstack_sp = task->mm->signal_frame_altstack_sp;
-    state->altstack_size = task->mm->signal_frame_altstack_size;
-    state->altstack_flags = task->mm->signal_frame_altstack_flags;
-    state->current_sp = task->mm->signal_frame_current_sp;
-    state->size = task->mm->signal_frame_size;
-    state->ucontext_flags = task->mm->signal_frame_ucontext_flags;
-    state->restartable = task->mm->signal_frame_restartable;
-    state->restart_return_pc = task->mm->signal_frame_restart_return_pc;
-    state->restart_sp = task->mm->signal_frame_restart_sp;
-    state->restart_signo = task->mm->signal_frame_restart_signo;
-    state->restart_kind = (enum task_restart_kind)task->mm->signal_frame_restart_kind;
-    state->restart_arg0 = task->mm->signal_frame_restart_arg0;
-    state->restart_arg1 = task->mm->signal_frame_restart_arg1;
-    state->restart_arg2 = task->mm->signal_frame_restart_arg2;
-    state->restart_arg3 = task->mm->signal_frame_restart_arg3;
-    state->restart_arg4 = task->mm->signal_frame_restart_arg4;
-    state->restart_arg5 = task->mm->signal_frame_restart_arg5;
-    return 0;
-}
-
 int signal_frame_metadata_get_task(const struct task *task,
                                    uint64_t *signo_out,
                                    uint64_t *return_pc_out,
@@ -877,6 +843,16 @@ int signal_frame_metadata_get_task(const struct task *task,
         *size_out = task->mm->signal_frame_size;
     }
 
+    return 0;
+}
+
+int signal_frame_restart_kind_get_task(const struct task *task,
+                                       uint64_t *kind_out) {
+    if (!task || !task->mm || !kind_out) {
+        return -EINVAL;
+    }
+
+    *kind_out = task->mm->signal_frame_restart_kind;
     return 0;
 }
 
