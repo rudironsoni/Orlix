@@ -1087,12 +1087,15 @@ out:
 
 int signal_syscall_contract_restart_metadata_follows_sa_restart(void) {
     struct task *task = task_current();
-    struct signal_frame_state frame;
     struct sigaction act;
     struct sigaction old_usr1;
     sigset_t old_blocked;
     void *mapped;
     uint64_t frame_sp = 0;
+    uint64_t restartable = 0;
+    uint64_t restart_return_pc = 0;
+    uint64_t restart_sp = 0;
+    uint64_t restart_signo = 0;
     long ret;
 
     if (!task || !task->signal) {
@@ -1124,12 +1127,13 @@ int signal_syscall_contract_restart_metadata_follows_sa_restart(void) {
     if (ret != 0 ||
         signal_prepare_frame_impl(task, SIGUSR1, 0x3333,
                                   (uint64_t)(uintptr_t)mapped + 16384, &frame_sp) != 0 ||
-        signal_contract_read_frame(task, &frame) != 0 ||
-        frame.restartable != 1 ||
-        frame.restart_return_pc != 0x3333 ||
-        frame.restart_sp != (uint64_t)(uintptr_t)mapped + 16384 ||
-        frame.restart_signo != SIGUSR1 ||
-        frame.restart_kind != TASK_RESTART_NONE ||
+        signal_frame_restart_status_get_task(task, &restartable, &restart_return_pc,
+                                             &restart_sp, &restart_signo) != 0 ||
+        restartable != 1 ||
+        restart_return_pc != 0x3333 ||
+        restart_sp != (uint64_t)(uintptr_t)mapped + 16384 ||
+        restart_signo != SIGUSR1 ||
+        !signal_frame_restart_is_task(task, TASK_RESTART_NONE) ||
         syscall_dispatch_impl(__NR_restart_syscall, 0, 0, 0, 0, 0, 0) != -EINTR) {
         errno = EPROTO;
         goto out;
@@ -1142,10 +1146,11 @@ int signal_syscall_contract_restart_metadata_follows_sa_restart(void) {
     if (ret != 0 ||
         signal_prepare_frame_impl(task, SIGUSR1, 0x4444,
                                   (uint64_t)(uintptr_t)mapped + 16384, &frame_sp) != 0 ||
-        signal_contract_read_frame(task, &frame) != 0 ||
-        frame.restartable != 0 ||
-        frame.restart_return_pc != 0x4444 ||
-        frame.restart_kind != TASK_RESTART_NONE ||
+        signal_frame_restart_status_get_task(task, &restartable, &restart_return_pc,
+                                             NULL, NULL) != 0 ||
+        restartable != 0 ||
+        restart_return_pc != 0x4444 ||
+        !signal_frame_restart_is_task(task, TASK_RESTART_NONE) ||
         syscall_dispatch_impl(__NR_restart_syscall, 0, 0, 0, 0, 0, 0) != -EINTR) {
         errno = ENODATA;
         goto out;
@@ -1161,17 +1166,16 @@ int signal_syscall_contract_restart_metadata_follows_sa_restart(void) {
         signal_generate_task(task, SIGUSR1);
         if (nanosleep_impl(&req, &rem) != -1 ||
             errno != EINTR ||
-            signal_contract_read_frame(task, &frame) != 0 ||
-            frame.restart_kind != TASK_RESTART_NANOSLEEP ||
-            frame.restart_arg0 != (uint64_t)(uintptr_t)&req ||
-            frame.restart_arg1 != (uint64_t)(uintptr_t)&rem) {
+            !signal_frame_restart_matches_task(task, TASK_RESTART_NANOSLEEP,
+                                               (uint64_t)(uintptr_t)&req,
+                                               (uint64_t)(uintptr_t)&rem,
+                                               0, 0, 0, 0)) {
             errno = EBADMSG;
             goto out;
         }
         signal_clear_pending_task(task, SIGUSR1);
         if (syscall_dispatch_impl(__NR_restart_syscall, 0, 0, 0, 0, 0, 0) != 0 ||
-            signal_contract_read_frame(task, &frame) != 0 ||
-            frame.restart_kind != TASK_RESTART_NONE) {
+            !signal_frame_restart_is_task(task, TASK_RESTART_NONE)) {
             errno = EALREADY;
             goto out;
         }

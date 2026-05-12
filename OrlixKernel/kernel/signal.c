@@ -900,6 +900,31 @@ int signal_frame_restart_arg_get_task(const struct task *task,
     }
 }
 
+int signal_frame_restart_status_get_task(const struct task *task,
+                                         uint64_t *restartable_out,
+                                         uint64_t *restart_return_pc_out,
+                                         uint64_t *restart_sp_out,
+                                         uint64_t *restart_signo_out) {
+    if (!task || !task->mm) {
+        return -EINVAL;
+    }
+
+    if (restartable_out) {
+        *restartable_out = task->mm->signal_frame_restartable;
+    }
+    if (restart_return_pc_out) {
+        *restart_return_pc_out = task->mm->signal_frame_restart_return_pc;
+    }
+    if (restart_sp_out) {
+        *restart_sp_out = task->mm->signal_frame_restart_sp;
+    }
+    if (restart_signo_out) {
+        *restart_signo_out = task->mm->signal_frame_restart_signo;
+    }
+
+    return 0;
+}
+
 void signal_frame_clear_task(struct task *task) {
     if (!task || !task->mm) {
         return;

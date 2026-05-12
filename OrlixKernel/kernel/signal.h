@@ -94,6 +94,11 @@ bool signal_frame_restart_matches_task(const struct task *task,
 int signal_frame_restart_arg_get_task(const struct task *task,
                                       int index,
                                       uint64_t *value_out);
+int signal_frame_restart_status_get_task(const struct task *task,
+                                         uint64_t *restartable_out,
+                                         uint64_t *restart_return_pc_out,
+                                         uint64_t *restart_sp_out,
+                                         uint64_t *restart_signo_out);
 void signal_frame_clear_task(struct task *task);
 long signal_finish_sigreturn_task(struct task *task);
 
