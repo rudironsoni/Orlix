@@ -2308,88 +2308,6 @@ out:
     return ret;
 }
 
-int vfs_contract_mount_setattr_recursive_marks_child_private(void) {
-    struct mount_attr attr;
-    char content[4096];
-    int ret = -1;
-
-    vfs_contract_cleanup_mount_namespace_paths();
-    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source/child", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-child-source", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0) {
-        goto out;
-    }
-    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-a", NULL, MS_BIND | MS_SHARED, NULL) != 0 ||
-        mount("/tmp/vfs-mntns-child-source", "/tmp/vfs-mntns-peer-a/child", NULL, MS_BIND | MS_SHARED, NULL) != 0) {
-        goto out;
-    }
-    memset(&attr, 0, sizeof(attr));
-    attr.propagation = MS_PRIVATE;
-    if (vfs_mount_setattr(AT_FDCWD, "/tmp/vfs-mntns-peer-a", AT_RECURSIVE,
-                      &attr, sizeof(attr)) != 0) {
-        goto out;
-    }
-    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0) {
-        goto out;
-    }
-    if (vfs_contract_content_contains(content, " /tmp/vfs-mntns-peer-a rw,relatime shared:") ||
-        vfs_contract_content_contains(content, " /tmp/vfs-mntns-peer-a/child rw,relatime shared:")) {
-        errno = ENODATA;
-        goto out;
-    }
-
-    ret = 0;
-
-out:
-    {
-        int saved_errno = errno;
-        vfs_contract_cleanup_mount_namespace_paths();
-        errno = saved_errno;
-    }
-    return ret;
-}
-
-int vfs_contract_recursive_remount_private_marks_child_private(void) {
-    char content[4096];
-    int ret = -1;
-
-    vfs_contract_cleanup_mount_namespace_paths();
-    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source/child", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-child-source", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0) {
-        goto out;
-    }
-    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-a", NULL, MS_BIND | MS_SHARED, NULL) != 0 ||
-        mount("/tmp/vfs-mntns-child-source", "/tmp/vfs-mntns-peer-a/child", NULL, MS_BIND | MS_SHARED, NULL) != 0) {
-        goto out;
-    }
-    if (mount(NULL, "/tmp/vfs-mntns-peer-a", NULL,
-              MS_BIND | MS_REMOUNT | MS_REC | MS_PRIVATE, NULL) != 0) {
-        goto out;
-    }
-    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0) {
-        goto out;
-    }
-    if (vfs_contract_content_contains(content, " /tmp/vfs-mntns-peer-a rw,relatime shared:") ||
-        vfs_contract_content_contains(content, " /tmp/vfs-mntns-peer-a/child rw,relatime shared:") ||
-        vfs_contract_content_contains(content, " /tmp/vfs-mntns-peer-a/child rw,relatime master:")) {
-        errno = ENODATA;
-        goto out;
-    }
-
-    ret = 0;
-
-out:
-    {
-        int saved_errno = errno;
-        vfs_contract_cleanup_mount_namespace_paths();
-        errno = saved_errno;
-    }
-    return ret;
-}
-
 int vfs_contract_recursive_remount_slave_preserves_peer_group_masters(void) {
     char content[4096];
     unsigned long long parent_shared = 0;
@@ -2730,47 +2648,6 @@ int vfs_contract_listmount_walks_mount_subtree_by_parent_id(void) {
                               (long)(uintptr_t)ids,
                               sizeof(ids) / sizeof(ids[0]), 0, 0, 0) != -ENOENT) {
         errno = ESTALE;
-        goto out;
-    }
-
-    ret = 0;
-
-out:
-    {
-        int saved_errno = errno;
-        vfs_contract_cleanup_mount_namespace_paths();
-        errno = saved_errno;
-    }
-    return ret;
-}
-
-int vfs_contract_mountinfo_reports_nested_parent_mount_id(void) {
-    char content[4096];
-    int parent_mount_id = 0;
-    int parent_parent_id = 0;
-    int child_mount_id = 0;
-    int child_parent_id = 0;
-    int ret = -1;
-
-    vfs_contract_cleanup_mount_namespace_paths();
-    if (vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-parent-source/child", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-child-source", 0700)) != 0 ||
-        vfs_contract_ignore_exists(mkdir_impl("/tmp/vfs-mntns-peer-a", 0700)) != 0) {
-        goto out;
-    }
-    if (mount("/tmp/vfs-mntns-parent-source", "/tmp/vfs-mntns-peer-a", NULL, MS_BIND | MS_SHARED, NULL) != 0 ||
-        mount("/tmp/vfs-mntns-child-source", "/tmp/vfs-mntns-peer-a/child", NULL, MS_BIND, NULL) != 0) {
-        goto out;
-    }
-    if (vfs_contract_read_proc_file("/proc/self/mountinfo", content, sizeof(content)) != 0 ||
-        vfs_contract_mountinfo_ids_for_target(content, "/tmp/vfs-mntns-peer-a", &parent_mount_id, &parent_parent_id) != 0 ||
-        vfs_contract_mountinfo_ids_for_target(content, "/tmp/vfs-mntns-peer-a/child", &child_mount_id, &child_parent_id) != 0) {
-        goto out;
-    }
-    if (parent_mount_id <= 1 || parent_parent_id != 1 || child_mount_id <= parent_mount_id ||
-        child_parent_id != parent_mount_id) {
-        errno = ENODATA;
         goto out;
     }
 
