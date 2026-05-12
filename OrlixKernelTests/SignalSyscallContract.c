@@ -108,6 +108,13 @@ static sigset_t signal_contract_mask_all_except(int signo) {
     return mask;
 }
 
+static int signal_contract_sigset_contains(const sigset_t *set, int signo) {
+    if (!set) {
+        return 0;
+    }
+    return sigismember((sigset_t *)set, signo) != 0;
+}
+
 static void signal_contract_set_task_identity(struct task *task, uint32_t uid) {
     if (!task || !task->cred) {
         return;
@@ -551,7 +558,8 @@ int signal_syscall_contract_frame_records_mask_restorer_and_context(void) {
     sigset_t old_blocked;
     uint64_t frame_sp = 0;
     uint64_t frame_words[8] = {0};
-    uint64_t block_set = 1ULL << (SIGTERM - 1);
+    uint64_t block_term = 1ULL << (SIGTERM - 1);
+    sigset_t block_set = {0};
     void *mapped;
     long ret;
 
@@ -567,6 +575,7 @@ int signal_syscall_contract_frame_records_mask_restorer_and_context(void) {
     act.sa_restorer = (__sigrestore_t)(uintptr_t)0x9200;
     act.sa_flags = SA_RESTART | SA_ONSTACK | SA_RESTORER;
     sigaddset(&act.sa_mask, SIGINT);
+    sigaddset(&block_set, SIGTERM);
     ret = syscall_dispatch_impl(__NR_rt_sigaction, SIGUSR2, (long)(uintptr_t)&act,
                                 (long)(uintptr_t)&old_act, sizeof(act.sa_mask), 0, 0);
     if (ret != 0) {
@@ -603,12 +612,12 @@ int signal_syscall_contract_frame_records_mask_restorer_and_context(void) {
         frame_words[1] != 0xbbbb ||
         frame_words[2] != 0x9100 ||
         frame_words[3] != (SA_RESTART | SA_ONSTACK | SA_RESTORER) ||
-        frame_words[4] != block_set ||
+        frame_words[4] != block_term ||
         frame_words[5] != (uint64_t)(uintptr_t)mapped ||
         frame_words[6] != 16384 ||
         (frame_words[7] & 1) == 0 ||
         task->mm->signal_frame_restorer_pc != 0x9200 ||
-        task->mm->signal_frame_mask != block_set) {
+        task->mm->signal_frame_mask != block_term) {
         errno = EPROTO;
         task->signal->blocked = old_blocked;
         syscall_dispatch_impl(__NR_rt_sigaction, SIGUSR2, (long)(uintptr_t)&old_act,
@@ -630,9 +639,9 @@ int signal_syscall_contract_rt_sigreturn_restores_mask_and_altstack(void) {
     struct task *task = task_current();
     stack_t stack;
     uint64_t frame_sp = 0;
-    uint64_t block_set = 1ULL << (SIGTERM - 1);
-    uint64_t unblock_set = block_set;
-    uint64_t queried = 0;
+    sigset_t block_set = {0};
+    sigset_t unblock_set = {0};
+    sigset_t queried = {0};
     void *mapped;
     long ret;
 
@@ -650,6 +659,8 @@ int signal_syscall_contract_rt_sigreturn_restores_mask_and_altstack(void) {
     stack = (stack_t){0};
     stack.ss_sp = mapped;
     stack.ss_size = 16384;
+    sigaddset(&block_set, SIGTERM);
+    sigaddset(&unblock_set, SIGTERM);
     if (syscall_dispatch_impl(__NR_sigaltstack, (long)(uintptr_t)&stack, 0, 0, 0, 0, 0) != 0 ||
         syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, (long)(uintptr_t)&block_set,
                               0, sizeof(block_set), 0, 0) != 0 ||
@@ -675,7 +686,8 @@ int signal_syscall_contract_rt_sigreturn_restores_mask_and_altstack(void) {
     }
     ret = syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, 0,
                                 (long)(uintptr_t)&queried, sizeof(queried), 0, 0);
-    if (ret != 0 || (queried & block_set) == 0 || (task->signal->altstack.ss_flags & SS_ONSTACK) != 0) {
+    if (ret != 0 || !signal_contract_sigset_contains(&queried, SIGTERM) ||
+        (task->signal->altstack.ss_flags & SS_ONSTACK) != 0) {
         errno = ret < 0 ? (int)-ret : EPROTO;
         signal_contract_disable_altstack();
         syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
@@ -696,8 +708,9 @@ int signal_syscall_contract_rt_sigreturn_restores_frame_context_record(void) {
     stack_t stack;
     uint64_t frame_sp = 0;
     uint64_t frame_words[12] = {0};
-    uint64_t block_set = 1ULL << (SIGTERM - 1);
-    uint64_t queried = 0;
+    uint64_t block_term = 1ULL << (SIGTERM - 1);
+    sigset_t block_set = {0};
+    sigset_t queried = {0};
     void *mapped;
     long ret;
 
@@ -715,6 +728,7 @@ int signal_syscall_contract_rt_sigreturn_restores_frame_context_record(void) {
     stack = (stack_t){0};
     stack.ss_sp = mapped;
     stack.ss_size = 16384;
+    sigaddset(&block_set, SIGTERM);
     if (syscall_dispatch_impl(__NR_sigaltstack, (long)(uintptr_t)&stack, 0, 0, 0, 0, 0) != 0 ||
         syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, (long)(uintptr_t)&block_set,
                               0, sizeof(block_set), 0, 0) != 0 ||
@@ -730,12 +744,12 @@ int signal_syscall_contract_rt_sigreturn_restores_frame_context_record(void) {
     }
     if (frame_words[0] != SIGUSR1 ||
         frame_words[1] != 0xabcddcba ||
-        frame_words[4] != block_set ||
+        frame_words[4] != block_term ||
         frame_words[5] != (uint64_t)(uintptr_t)mapped ||
         frame_words[6] != 16384 ||
         frame_words[8] != 0x7ffff000 ||
         frame_words[9] != frame_sp ||
-        frame_words[10] != block_set ||
+        frame_words[10] != block_term ||
         frame_words[11] == 0 ||
         task->mm->signal_frame_current_sp != 0x7ffff000 ||
         task->mm->signal_frame_size < sizeof(frame_words)) {
@@ -763,7 +777,7 @@ int signal_syscall_contract_rt_sigreturn_restores_frame_context_record(void) {
     }
     ret = syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, 0,
                                 (long)(uintptr_t)&queried, sizeof(queried), 0, 0);
-    if (ret != 0 || (queried & block_set) == 0) {
+    if (ret != 0 || !signal_contract_sigset_contains(&queried, SIGTERM)) {
         errno = ret < 0 ? (int)-ret : EPROTO;
         signal_contract_disable_altstack();
         syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_UNBLOCK, (long)(uintptr_t)&block_set,
@@ -784,7 +798,8 @@ int signal_syscall_contract_frame_contains_linux_ucontext(void) {
     stack_t stack;
     sigset_t old_blocked;
     uint64_t frame_sp = 0;
-    uint64_t block_set = 1ULL << (SIGTERM - 1);
+    uint64_t block_term = 1ULL << (SIGTERM - 1);
+    sigset_t block_set = {0};
     struct ucontext context;
     void *mapped;
 
@@ -803,6 +818,7 @@ int signal_syscall_contract_frame_contains_linux_ucontext(void) {
     stack = (stack_t){0};
     stack.ss_sp = mapped;
     stack.ss_size = 16384;
+    sigaddset(&block_set, SIGTERM);
     if (syscall_dispatch_impl(__NR_sigaltstack, (long)(uintptr_t)&stack, 0, 0, 0, 0, 0) != 0 ||
         syscall_dispatch_impl(__NR_rt_sigprocmask, SIG_BLOCK, (long)(uintptr_t)&block_set,
                               0, sizeof(block_set), 0, 0) != 0 ||
@@ -820,7 +836,7 @@ int signal_syscall_contract_frame_contains_linux_ucontext(void) {
         context.uc_stack.ss_sp != mapped ||
         context.uc_stack.ss_size != 16384 ||
         (context.uc_stack.ss_flags & SS_ONSTACK) == 0 ||
-        context.uc_sigmask.sig[0] != block_set ||
+        context.uc_sigmask.sig[0] != block_term ||
         context.uc_mcontext.sp != 0x7fff0000 ||
         context.uc_mcontext.pc != 0x13579bdf ||
         task->mm->signal_frame_size < 128 + sizeof(context)) {
