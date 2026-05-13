@@ -65,6 +65,18 @@ int signal_proc_status_snapshot_task(const struct task *task,
                                      uint64_t *blocked_out,
                                      uint64_t *ignored_out,
                                      uint64_t *caught_out);
+int signal_queued_count_task(const struct task *task, int32_t sig);
+bool signal_thread_pending(const struct task *task, int32_t sig);
+bool signal_shared_pending(const struct task *task, int32_t sig);
+bool signal_latest_queued_info_matches(const struct task *task,
+                                       int32_t sig,
+                                       int32_t code,
+                                       u64 addr);
+int signal_blocked_get_task(const struct task *task, sigset_t *mask);
+int signal_blocked_set_task(struct task *task, const sigset_t *mask);
+int signal_blocked_clear_task(struct task *task);
+void signal_recompute_pending(struct task *task);
+void signal_wake_task(struct task *task, bool group_wide);
 
 int signal_frame_metadata_get_task(const struct task *task,
                                    uint64_t *signo_out,

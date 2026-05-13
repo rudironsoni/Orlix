@@ -47,19 +47,7 @@ void signal_clear_queued_task(struct task *task, int32_t sig);
 void signal_clear_next_pending_task(struct task *task, int32_t sig);
 void signal_clear_pending_markers_task(struct task *task, int32_t sig);
 void signal_clear_pending_task(struct task *task, int32_t sig);
-int signal_queued_count_task(const struct task *task, int32_t sig);
-bool signal_thread_pending(const struct task *task, int32_t sig);
-bool signal_shared_pending(const struct task *task, int32_t sig);
-bool signal_latest_queued_info_matches(const struct task *task, int32_t sig, int32_t code, u64 addr);
-int signal_blocked_get_task(const struct task *task, sigset_t *mask);
-int signal_blocked_set_task(struct task *task, const sigset_t *mask);
-int signal_blocked_clear_task(struct task *task);
 bool signal_handler_ignored_task(const struct task *task, int32_t sig);
-/* Recompute pending state after mask changes */
-void signal_recompute_pending(struct task *task);
-
-/* Signal wakeup - wake the right task after signal generation */
-void signal_wake_task(struct task *task, bool group_wide);
 
 /* Internal signal generation */
 int signal_generate_task(struct task *target, int32_t sig);
