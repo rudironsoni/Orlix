@@ -19,6 +19,8 @@
 #include "../private/fs/fdtable_state.h"
 #include "../fs/pipe.h"
 #include "../fs/poll.h"
+#include "../fs/read_write.h"
+#include "../fs/uio.h"
 #include "../fs/vfs.h"
 #include "../fs/xattr.h"
 #include "../kernel/cred.h"
@@ -64,29 +66,6 @@ extern long sys_getsockname(int sockfd, void *addr, int *addrlen);
 extern long sys_getpeername(int sockfd, void *addr, int *addrlen);
 extern long sys_setsockopt(int sockfd, int level, int optname, char *optval, int optlen);
 extern long sys_getsockopt(int sockfd, int level, int optname, char *optval, int *optlen);
-extern ssize_t read_impl(int fd, void *buf, size_t count);
-extern ssize_t write_impl(int fd, const void *buf, size_t count);
-struct iovec;
-extern long readv_impl(int fd, const struct iovec *iov, int iovcnt);
-extern long writev_impl(int fd, const struct iovec *iov, int iovcnt);
-extern long preadv_impl(int fd, const struct iovec *iov, int iovcnt, unsigned long pos_l, unsigned long pos_h);
-extern long pwritev_impl(int fd, const struct iovec *iov, int iovcnt, unsigned long pos_l, unsigned long pos_h);
-extern long preadv2_impl(int fd, const struct iovec *iov, int iovcnt,
-                         unsigned long pos_l, unsigned long pos_h, int flags);
-extern long pwritev2_impl(int fd, const struct iovec *iov, int iovcnt,
-                          unsigned long pos_l, unsigned long pos_h, int flags);
-extern ssize_t pread_impl(int fd, void *buf, size_t count, long long offset);
-extern ssize_t pwrite_impl(int fd, const void *buf, size_t count, long long offset);
-extern int64_t lseek_impl(int fd, int64_t offset, int whence);
-extern ssize_t sendfile_impl(int out_fd, int in_fd, int64_t *offset, size_t count);
-extern ssize_t copy_file_range_impl(int fd_in, int64_t *off_in, int fd_out,
-                                    int64_t *off_out, size_t len, unsigned int flags);
-extern int fallocate_impl(int fd, int mode, int64_t offset, int64_t len);
-extern int sync_file_range_impl(int fd, int64_t offset, int64_t nbytes, unsigned int flags);
-extern ssize_t splice_impl(int fd_in, int64_t *off_in, int fd_out, int64_t *off_out,
-                           size_t len, unsigned int flags);
-extern ssize_t vmsplice_impl(int fd, const struct iovec *iov, unsigned long nr_segs, unsigned int flags);
-extern ssize_t tee_impl(int fd_in, int fd_out, size_t len, unsigned int flags);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern int flock_impl(int fd, int operation);
 extern int fstat_impl(int fd, struct stat *statbuf);
