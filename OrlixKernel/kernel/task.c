@@ -14,6 +14,7 @@
 #include "seccomp.h"
 #include "uts.h"
 #include "internal/timekeeping.h"
+#include "../private/kernel/ptrace_state.h"
 
 #include "../fs/fdtable.h"
 #include "../fs/vfs.h"
