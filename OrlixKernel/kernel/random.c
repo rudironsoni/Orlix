@@ -7,6 +7,8 @@
  * Linux-shaped canonical owner - iOS mediation as implementation detail
  */
 
+#include "random.h"
+
 #include <linux/errno.h>
 #include <linux/random.h>
 #include <linux/types.h>

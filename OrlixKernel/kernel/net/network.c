@@ -5,6 +5,8 @@
  * readiness infrastructure.
  */
 
+#include "network.h"
+
 #include <linux/errno.h>
 #include <linux/fcntl.h>
 #include <linux/page_ref.h>

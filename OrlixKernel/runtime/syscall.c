@@ -35,7 +35,9 @@
 #include "../kernel/cred.h"
 #include "../kernel/futex.h"
 #include "../kernel/mm.h"
+#include "../kernel/net/network.h"
 #include "../kernel/ptrace.h"
+#include "../kernel/random.h"
 #include "../private/kernel/ptrace_state.h"
 #include "../private/kernel/resource_state.h"
 #include "../private/kernel/seccomp_state.h"
@@ -48,39 +50,6 @@
 #include "../kernel/wait.h"
 
 struct epoll_instance;
-extern long sys_socket(int domain, int type, int protocol);
-extern long sys_socketpair(int domain, int type, int protocol, int *sv);
-extern long sys_connect(int sockfd, void *addr, int addrlen);
-extern long sys_bind(int sockfd, void *addr, int addrlen);
-extern long sys_listen(int sockfd, int backlog);
-extern long sys_accept(int sockfd, void *addr, int *addrlen);
-extern long sys_accept4(int sockfd, void *addr, int *addrlen, int flags);
-extern long sys_shutdown(int sockfd, int how);
-extern long sys_sendto(int sockfd, void *buf, size_t len, unsigned int flags,
-                       void *dest_addr, int addrlen);
-extern long sys_recvfrom(int sockfd, void *buf, size_t len, unsigned int flags,
-                         void *src_addr, int *addrlen);
-extern long sys_sendmsg(int sockfd, void *msg, unsigned int flags);
-extern long sys_recvmsg(int sockfd, void *msg, unsigned int flags);
-extern long sys_sendmmsg(int sockfd, void *msgvec, unsigned int vlen, unsigned int flags);
-extern long sys_recvmmsg(int sockfd, void *msgvec, unsigned int vlen, unsigned int flags,
-                         struct __kernel_timespec *timeout);
-extern long sys_getsockname(int sockfd, void *addr, int *addrlen);
-extern long sys_getpeername(int sockfd, void *addr, int *addrlen);
-extern long sys_setsockopt(int sockfd, int level, int optname, char *optval, int optlen);
-extern long sys_getsockopt(int sockfd, int level, int optname, char *optval, int *optlen);
-extern int close_range_impl(unsigned int first, unsigned int last, unsigned int flags);
-extern int eventfd2_impl(unsigned int initval, int flags);
-extern int timerfd_create_impl(int clockid, int flags);
-extern int timerfd_settime_impl(int fd, int flags, const struct __kernel_itimerspec *new_value,
-                                struct __kernel_itimerspec *old_value);
-extern int timerfd_gettime_impl(int fd, struct __kernel_itimerspec *curr_value);
-extern int memfd_create_impl(const char *name, unsigned int flags);
-extern int pidfd_open_impl(int32_t pid, unsigned int flags);
-extern int pidfd_getfd_impl(struct task *target, int targetfd, unsigned int flags);
-extern int task_pidfd_getfd_access_impl(struct task *target);
-extern void exit_impl(int status);
-extern ssize_t getrandom_impl(void *buf, size_t buflen, unsigned int flags);
 
 static long syscall_result(long ret);
 
