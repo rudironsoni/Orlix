@@ -1,4 +1,5 @@
 #include "uts.h"
+#include "../private/kernel/uts_state.h"
 
 #include "cred.h"
 #include "task.h"

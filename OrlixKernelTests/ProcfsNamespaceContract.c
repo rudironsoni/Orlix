@@ -24,6 +24,7 @@
 #include "kernel/task.h"
 #include "private/kernel/task_state.h"
 #include "kernel/uts.h"
+#include "private/kernel/uts_state.h"
 #include "kernel/wait.h"
 
 extern int errno;

@@ -13,6 +13,7 @@
 #include "ptrace.h"
 #include "seccomp.h"
 #include "uts.h"
+#include "../private/kernel/uts_state.h"
 #include "internal/timekeeping.h"
 #include "../private/kernel/ptrace_state.h"
 

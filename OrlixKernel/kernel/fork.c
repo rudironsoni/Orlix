@@ -23,6 +23,7 @@
 #include "../private/kernel/kthread_state.h"
 #include "../private/kernel/task_state.h"
 #include "uts.h"
+#include "../private/kernel/uts_state.h"
 
 /* Thread stack minimum fallback for portability */
 #define KERNEL_THREAD_STACK_MIN (64 * 1024)

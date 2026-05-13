@@ -27,6 +27,7 @@
 #include "private/fs/eventpoll_state.h"
 #include "private/fs/pty_state.h"
 #include "../private/kernel/task_state.h"
+#include "../private/kernel/uts_state.h"
 #include "../private/kernel/signal_state.h"
 #include "../private/kernel/cred_state.h"
 #include "../kernel/cgroup.h"

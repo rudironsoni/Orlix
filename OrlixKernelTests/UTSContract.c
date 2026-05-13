@@ -7,6 +7,7 @@
 #include "kernel/task.h"
 #include "private/kernel/task_state.h"
 #include "kernel/uts.h"
+#include "private/kernel/uts_state.h"
 
 extern void cred_reset_to_defaults(void);
 extern int errno;
