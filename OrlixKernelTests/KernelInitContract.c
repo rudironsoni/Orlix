@@ -12,7 +12,9 @@
 #include <stdint.h>
 
 #include "fs/fdtable.h"
+#include "fs/namei.h"
 #include "fs/open.h"
+#include "fs/readdir.h"
 #include "fs/read_write.h"
 #include "fs/stat.h"
 #include "private/fs/fdtable_state.h"
@@ -28,10 +30,6 @@
 
 extern int errno;
 
-extern int close_impl(int fd);
-extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
-extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
-extern int unlink_impl(const char *pathname);
 extern int kernel_exec_init(const char *preferred_path, char *const argv[], char *const envp[]);
 
 static int wait_status_exited(int status) {

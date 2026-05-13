@@ -13,7 +13,9 @@
 
 #include "fs/fcntl.h"
 #include "fs/fdtable.h"
+#include "fs/namei.h"
 #include "fs/open.h"
+#include "fs/readdir.h"
 #include "fs/read_write.h"
 #include "fs/stat.h"
 #include "private/fs/fdtable_state.h"
@@ -25,9 +27,6 @@
 
 extern int errno;
 
-extern int close_impl(int fd);
-extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
-extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
 extern __kernel_pid_t tcgetsid(int fd);
 extern int kernel_isatty(int fd) __asm("_isatty");
 

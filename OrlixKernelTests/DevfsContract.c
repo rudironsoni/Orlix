@@ -14,6 +14,7 @@
 #include "fs/read_write.h"
 #include "fs/stat.h"
 #include "fs/fdtable.h"
+#include "fs/readdir.h"
 #include "private/fs/pty_state.h"
 #include "fs/vfs.h"
 #include "kernel/signal.h"
@@ -23,8 +24,6 @@
 
 extern int errno;
 
-extern int close_impl(int fd);
-extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
 extern int access(const char *pathname, int mode);
 
 static int close_if_open(int fd) {

@@ -29,7 +29,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "fs/fdtable.h"
+#include "fs/namei.h"
 #include "fs/vfs.h"
+#include "fs/readdir.h"
 #include "private/fs/vfs_state.h"
 #include "kernel/signal.h"
 #include "private/kernel/signal_state.h"
@@ -61,14 +64,7 @@ struct linux_rusage_contract {
     __kernel_long_t ru_nivcsw;
 };
 
-extern int link_impl(const char *oldpath, const char *newpath);
-extern int unlink_impl(const char *pathname);
-extern int rmdir_impl(const char *pathname);
-extern int close_impl(int fd);
-extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
-extern int renameat2_impl(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
-                     unsigned int flags);
 #include "runtime/native/registry.h"
 #include "private/runtime/native/registry_state.h"
 #include "runtime/syscall.h"
