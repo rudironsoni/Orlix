@@ -44,8 +44,35 @@ struct pending_signals {
     struct signal_queue queue;
 };
 
+int signal_frame_metadata_get_task(const struct task *task,
+                                   uint64_t *signo_out,
+                                   uint64_t *return_pc_out,
+                                   uint64_t *handler_pc_out,
+                                   uint64_t *flags_out,
+                                   uint64_t *restorer_pc_out,
+                                   uint64_t *mask_out,
+                                   uint64_t *current_sp_out,
+                                   uint64_t *size_out);
 int signal_frame_restart_kind_get_task(const struct task *task,
                                        uint64_t *kind_out);
+bool signal_frame_restart_is_task(const struct task *task,
+                                  uint64_t kind);
+bool signal_frame_restart_matches_task(const struct task *task,
+                                       uint64_t kind,
+                                       uint64_t arg0,
+                                       uint64_t arg1,
+                                       uint64_t arg2,
+                                       uint64_t arg3,
+                                       uint64_t arg4,
+                                       uint64_t arg5);
+int signal_frame_restart_arg_get_task(const struct task *task,
+                                      int index,
+                                      uint64_t *value_out);
+int signal_frame_restart_status_get_task(const struct task *task,
+                                         uint64_t *restartable_out,
+                                         uint64_t *restart_return_pc_out,
+                                         uint64_t *restart_sp_out,
+                                         uint64_t *restart_signo_out);
 int signal_frame_restart_record_task(struct task *task,
                                      uint64_t kind,
                                      uint64_t arg0,
@@ -54,6 +81,9 @@ int signal_frame_restart_record_task(struct task *task,
                                      uint64_t arg3,
                                      uint64_t arg4,
                                      uint64_t arg5);
+void signal_frame_restart_clear_task(struct task *task);
+void signal_frame_clear_task(struct task *task);
+long signal_finish_sigreturn_task(struct task *task);
 
 #ifdef __cplusplus
 }
