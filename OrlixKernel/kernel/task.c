@@ -917,19 +917,6 @@ const struct task_exec_handoff *task_get_exec_handoff_impl(struct task *task) {
     return &task->mm->handoff;
 }
 
-void task_restart_clear_impl(struct task *task) {
-    if (!task || !task->mm) {
-        return;
-    }
-    task->mm->signal_frame_restart_kind = TASK_RESTART_NONE;
-    task->mm->signal_frame_restart_arg0 = 0;
-    task->mm->signal_frame_restart_arg1 = 0;
-    task->mm->signal_frame_restart_arg2 = 0;
-    task->mm->signal_frame_restart_arg3 = 0;
-    task->mm->signal_frame_restart_arg4 = 0;
-    task->mm->signal_frame_restart_arg5 = 0;
-}
-
 int task_restart_record_impl(struct task *task, enum task_restart_kind kind,
                              uint64_t arg0, uint64_t arg1, uint64_t arg2,
                              uint64_t arg3, uint64_t arg4, uint64_t arg5) {

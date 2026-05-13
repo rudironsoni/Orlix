@@ -812,7 +812,7 @@ int pipe_contract_blocking_read_interrupted_by_signal(void) {
                                                0, 0, 0, 0, 0)) {
             ret = ENODATA;
         } else {
-            task_restart_clear_impl(child);
+            signal_frame_restart_clear_task(child);
             ret = 0;
         }
     }
@@ -929,7 +929,7 @@ int pipe_contract_blocking_write_interrupted_by_signal(void) {
                                                0, 0, 0, 0, 0)) {
             ret = ENODATA;
         } else {
-            task_restart_clear_impl(child);
+            signal_frame_restart_clear_task(child);
             ret = 0;
         }
     }

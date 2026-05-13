@@ -789,7 +789,7 @@ int epoll_contract_wait_signal_interrupt_returns_intr(void) {
             (int)restart_arg3 != -1) {
             ret = ENODATA;
         } else {
-            task_restart_clear_impl(child);
+            signal_frame_restart_clear_task(child);
             ret = 0;
         }
     }

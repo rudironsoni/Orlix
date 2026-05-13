@@ -683,7 +683,7 @@ int readiness_contract_poll_pipe_signal_interrupt_returns_intr(void) {
             (int)restart_arg2 != -1) {
             ret = ENODATA;
         } else {
-            task_restart_clear_impl(child);
+            signal_frame_restart_clear_task(child);
             ret = 0;
         }
     }
@@ -856,7 +856,7 @@ int readiness_contract_select_signal_interrupt_returns_intr(void) {
             restart_arg0 != (uint64_t)(int64_t)(fds[0] + 1)) {
             ret = ENODATA;
         } else {
-            task_restart_clear_impl(child);
+            signal_frame_restart_clear_task(child);
             ret = 0;
         }
     }

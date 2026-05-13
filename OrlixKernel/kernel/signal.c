@@ -942,6 +942,20 @@ int signal_frame_restart_status_get_task(const struct task *task,
     return 0;
 }
 
+void signal_frame_restart_clear_task(struct task *task) {
+    if (!task || !task->mm) {
+        return;
+    }
+
+    task->mm->signal_frame_restart_kind = TASK_RESTART_NONE;
+    task->mm->signal_frame_restart_arg0 = 0;
+    task->mm->signal_frame_restart_arg1 = 0;
+    task->mm->signal_frame_restart_arg2 = 0;
+    task->mm->signal_frame_restart_arg3 = 0;
+    task->mm->signal_frame_restart_arg4 = 0;
+    task->mm->signal_frame_restart_arg5 = 0;
+}
+
 void signal_frame_clear_task(struct task *task) {
     if (!task || !task->mm) {
         return;
@@ -964,7 +978,7 @@ void signal_frame_clear_task(struct task *task) {
     task->mm->signal_frame_restart_return_pc = 0;
     task->mm->signal_frame_restart_sp = 0;
     task->mm->signal_frame_restart_signo = 0;
-    task_restart_clear_impl(task);
+    signal_frame_restart_clear_task(task);
 }
 
 long signal_finish_sigreturn_task(struct task *task) {

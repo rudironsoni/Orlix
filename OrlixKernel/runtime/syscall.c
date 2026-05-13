@@ -984,7 +984,7 @@ static long syscall_dispatch_inner_impl(long number,
         if (restart_kind == TASK_RESTART_NONE) {
             return -EINTR;
         }
-        task_restart_clear_impl(task);
+        signal_frame_restart_clear_task(task);
 
         switch (restart_kind) {
         case TASK_RESTART_NANOSLEEP:
