@@ -10,11 +10,13 @@
 #include "../../kunit/kunit.h"
 #include "../../kunit/suite_registry.h"
 #include "fs/fcntl.h"
+#include "fs/namei.h"
 #include "fs/open.h"
 #include "kernel/init.h"
 #include "fs/fdtable.h"
 #include "fs/pipe.h"
 #include "fs/poll.h"
+#include "fs/readdir.h"
 #include "fs/read_write.h"
 #include "fs/stat.h"
 #include "private/fs/fdtable_state.h"
@@ -25,8 +27,6 @@
 #include "private/kernel/kthread_state.h"
 #include "private/kernel/task_state.h"
 
-extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
-extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int signal_generate_task(struct task *target, int32_t sig);
 extern int errno;
 

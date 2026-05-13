@@ -16,6 +16,7 @@
 #include "fs/read_write.h"
 #include "fs/vfs.h"
 #include "fs/fdtable.h"
+#include "fs/namei.h"
 #include "private/fs/fdtable_state.h"
 #include "private/fs/vfs_state.h"
 #include "kernel/task.h"
@@ -23,9 +24,6 @@
 #include "kernel/init.h"
 
 extern int errno;
-
-extern int close_impl(int fd);
-extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 
 static int path_has_orlix_suffix(const char *path) {
     size_t len;

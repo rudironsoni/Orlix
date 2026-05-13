@@ -8,6 +8,8 @@
 #include <stdint.h>
 
 #include "NativeSyscallContract.h"
+#include "fs/fdtable.h"
+#include "fs/namei.h"
 #include "runtime/syscall.h"
 
 extern int errno;
@@ -38,9 +40,6 @@ struct native_mmsghdr {
 };
 
 typedef unsigned int native_socklen_t;
-
-extern int close_impl(int fd);
-extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 
 static int close_if_open(int fd) {
     if (fd >= 0) {
