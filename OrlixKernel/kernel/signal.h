@@ -36,18 +36,6 @@ int kernel_sigemptyset(sigset_t *set);
 int kernel_sigaddset(sigset_t *set, int signo);
 int kernel_sigismember(sigset_t *set, int signo);
 
-/* Reset signal state on exec */
-void signal_reset_on_exec(struct task *task);
-
-/* Virtual signal enqueue helpers */
-int signal_enqueue_task(struct task *task, int32_t sig);
-int signal_enqueue_group(int32_t pgid, int32_t sig);
-int signal_dequeue(struct task *task, sigset_t *mask, int32_t *sig);
-void signal_clear_queued_task(struct task *task, int32_t sig);
-void signal_clear_next_pending_task(struct task *task, int32_t sig);
-void signal_clear_pending_markers_task(struct task *task, int32_t sig);
-void signal_clear_pending_task(struct task *task, int32_t sig);
-
 /* Internal signal generation */
 int signal_generate_task(struct task *target, int32_t sig);
 int signal_generate_task_info(struct task *target, int32_t sig, int32_t code, u64 addr);
