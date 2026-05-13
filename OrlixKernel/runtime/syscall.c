@@ -143,12 +143,6 @@ extern int interval_timer_set_impl(int which, const struct __kernel_old_itimerva
                                    struct __kernel_old_itimerval *old_value);
 extern int interval_timer_get_impl(int which, struct __kernel_old_itimerval *curr_value);
 extern ssize_t getrandom_impl(void *buf, size_t buflen, unsigned int flags);
-extern int mount_setattr(int dirfd, const char *pathname, unsigned int flags,
-                         struct mount_attr *attr, size_t size);
-extern int open_tree(int dirfd, const char *pathname, unsigned int flags);
-extern int move_mount(int from_dirfd, const char *from_pathname, int to_dirfd,
-                      const char *to_pathname, unsigned int flags);
-extern int pivot_root(const char *new_root, const char *put_old);
 extern int setxattr_impl(const char *path, const char *name, const void *value, size_t size, int flags);
 extern int lsetxattr_impl(const char *path, const char *name, const void *value, size_t size, int flags);
 extern int fsetxattr_impl(int fd, const char *name, const void *value, size_t size, int flags);
@@ -1313,10 +1307,10 @@ static long syscall_dispatch_inner_impl(long number,
         return syscall_result((long)mincore_impl((void *)(uintptr_t)arg0, (size_t)arg1,
                                                  (unsigned char *)(uintptr_t)arg2));
     case __NR_mount_setattr:
-        return syscall_result((long)mount_setattr((int)arg0, (const char *)(uintptr_t)arg1,
-                                                  (unsigned int)arg2,
-                                                  (struct mount_attr *)(uintptr_t)arg3,
-                                                  (size_t)arg4));
+        return syscall_result((long)vfs_mount_setattr((int)arg0, (const char *)(uintptr_t)arg1,
+                                                      (unsigned int)arg2,
+                                                      (const struct mount_attr *)(uintptr_t)arg3,
+                                                      (size_t)arg4));
     case __NR_mount:
         return syscall_result((long)mount_impl((const char *)(uintptr_t)arg0,
                                               (const char *)(uintptr_t)arg1,
@@ -1326,15 +1320,15 @@ static long syscall_dispatch_inner_impl(long number,
     case __NR_umount2:
         return syscall_result((long)umount2_impl((const char *)(uintptr_t)arg0, (int)arg1));
     case __NR_open_tree:
-        return syscall_result((long)open_tree((int)arg0, (const char *)(uintptr_t)arg1,
-                                              (unsigned int)arg2));
+        return syscall_result((long)vfs_open_tree((int)arg0, (const char *)(uintptr_t)arg1,
+                                                  (unsigned int)arg2));
     case __NR_move_mount:
-        return syscall_result((long)move_mount((int)arg0, (const char *)(uintptr_t)arg1,
-                                               (int)arg2, (const char *)(uintptr_t)arg3,
-                                               (unsigned int)arg4));
+        return syscall_result((long)vfs_move_mount((int)arg0, (const char *)(uintptr_t)arg1,
+                                                   (int)arg2, (const char *)(uintptr_t)arg3,
+                                                   (unsigned int)arg4));
     case __NR_pivot_root:
-        return syscall_result((long)pivot_root((const char *)(uintptr_t)arg0,
-                                               (const char *)(uintptr_t)arg1));
+        return syscall_result((long)vfs_pivot_root((const char *)(uintptr_t)arg0,
+                                                   (const char *)(uintptr_t)arg1));
     case __NR_listmount:
         return syscall_result(vfs_listmount((const struct mnt_id_req *)(uintptr_t)arg0,
                                             (uint64_t *)(uintptr_t)arg1,
