@@ -17,15 +17,13 @@
 #include "kernel/signal.h"
 #include "private/kernel/signal_state.h"
 #include "kernel/task.h"
+#include "kernel/wait.h"
 #include "private/kernel/task_state.h"
 
 extern int errno;
 
-extern int clone_impl(uint64_t flags);
-extern void exit_impl(int status);
 extern long ptrace_impl(long request, __kernel_pid_t pid, void *addr, void *data);
 extern int task_exec_transition_impl(const char *path, const char *argv0);
-extern __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options);
 extern long syscall_dispatch_impl(long number, long arg0, long arg1, long arg2,
                                   long arg3, long arg4, long arg5);
 

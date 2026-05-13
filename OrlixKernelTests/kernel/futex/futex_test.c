@@ -22,7 +22,6 @@
 #include "private/kernel/task_state.h"
 #include "runtime/syscall.h"
 
-extern void exit_impl(int status);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern int capset_impl(cap_user_header_t header, const cap_user_data_t data);
 extern int unshare_impl(uint64_t flags);

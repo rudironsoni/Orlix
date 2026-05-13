@@ -31,10 +31,6 @@ extern long write_impl(int fd, const void *buf, size_t count);
 extern int fstat_impl(int fd, struct stat *statbuf);
 extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
-extern int32_t getpgrp_impl(void);
-extern int32_t getsid_impl(int32_t pid);
-extern int32_t setsid_impl(void);
-extern void exit_impl(int status);
 extern __kernel_pid_t tcgetsid(int fd);
 extern int kernel_isatty(int fd) __asm("_isatty");
 

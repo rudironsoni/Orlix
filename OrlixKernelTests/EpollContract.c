@@ -29,7 +29,6 @@ extern long write_impl(int fd, const void *buf, size_t count);
 extern long read_impl(int fd, void *buf, size_t count);
 extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int signal_generate_task(struct task *target, int32_t sig);
-extern void exit_impl(int status);
 
 static int close_if_open(int fd) {
     return fd >= 0 ? close_impl(fd) : 0;

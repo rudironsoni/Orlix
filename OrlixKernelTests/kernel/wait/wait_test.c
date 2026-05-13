@@ -26,7 +26,6 @@ extern int close_impl(int fd);
 extern long read_impl(int fd, void *buf, size_t count);
 extern long write_impl(int fd, const void *buf, size_t count);
 extern int pty_contract_ioctl(int fd, unsigned long request, ...);
-extern int32_t clone_impl(uint64_t flags);
 extern __kernel_pid_t kernel_waitpid(__kernel_pid_t pid, int *wstatus, int options)
     __asm("_waitpid");
 extern __kernel_pid_t kernel_wait4(__kernel_pid_t pid, int *wstatus, int options, void *rusage)

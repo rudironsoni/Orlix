@@ -34,7 +34,6 @@ extern int readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern int fstat_impl(int fd, struct stat *statbuf);
 extern int unlink_impl(const char *pathname);
 extern int kernel_exec_init(const char *preferred_path, char *const argv[], char *const envp[]);
-extern void exit_impl(int status);
 
 static int wait_status_exited(int status) {
     return (status & 0x7f) == 0;

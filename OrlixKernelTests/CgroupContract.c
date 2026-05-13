@@ -14,6 +14,7 @@
 #include "private/kernel/cgroup_state.h"
 #include "kernel/signal.h"
 #include "kernel/task.h"
+#include "kernel/wait.h"
 #include "private/kernel/signal_state.h"
 #include "private/kernel/task_state.h"
 #include "runtime/syscall.h"
@@ -27,13 +28,10 @@ extern int close_impl(int fd);
 extern int mkdir_impl(const char *pathname, unsigned int mode);
 extern int rmdir_impl(const char *pathname);
 extern int unshare_impl(uint64_t flags);
-extern int clone_impl(uint64_t flags);
 extern int mount_impl(const char *source, const char *target, const char *filesystemtype,
                       unsigned long mountflags, const void *data);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern int capset_impl(cap_user_header_t header, const cap_user_data_t data);
-extern void exit_impl(int status);
-extern __kernel_pid_t waitpid_impl(__kernel_pid_t pid, int *wstatus, int options);
 
 static void cgroup_contract_format_pid(int32_t pid, char *buf, unsigned long size);
 
