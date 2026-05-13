@@ -44,6 +44,15 @@ struct pending_signals {
     struct signal_queue queue;
 };
 
+int signal_frame_restart_record_task(struct task *task,
+                                     uint64_t kind,
+                                     uint64_t arg0,
+                                     uint64_t arg1,
+                                     uint64_t arg2,
+                                     uint64_t arg3,
+                                     uint64_t arg4,
+                                     uint64_t arg5);
+
 #ifdef __cplusplus
 }
 #endif
