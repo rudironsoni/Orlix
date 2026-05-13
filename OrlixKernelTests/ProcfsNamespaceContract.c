@@ -30,8 +30,6 @@
 
 extern int errno;
 
-extern int clone_impl(uint64_t flags);
-extern int unshare_impl(uint64_t flags);
 extern int fcntl_impl(int fd, int cmd, ...);
 extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int mount(const char *source, const char *target, const char *filesystemtype,

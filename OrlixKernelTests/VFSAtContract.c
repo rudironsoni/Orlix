@@ -30,7 +30,6 @@ extern int chdir(const char *path);
 extern int fchdir(int fd);
 extern char *getcwd(char *buf, size_t size);
 extern int access(const char *pathname, int mode);
-extern int clone_impl(uint64_t flags);
 extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int open_impl(const char *pathname, int flags, uint32_t mode);
 

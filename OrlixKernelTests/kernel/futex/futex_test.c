@@ -24,7 +24,6 @@
 
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern int capset_impl(cap_user_header_t header, const cap_user_data_t data);
-extern int unshare_impl(uint64_t flags);
 extern int library_init(const void *config);
 extern int library_is_initialized(void);
 extern int errno;

@@ -27,7 +27,6 @@ extern int umount_impl(const char *target);
 extern int umount2_impl(const char *target, int flags);
 extern int chdir(const char *path);
 extern int pivot_root(const char *new_root, const char *put_old);
-extern int clone_impl(uint64_t flags);
 extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int open_impl(const char *pathname, int flags, uint32_t mode);
 extern int fcntl_impl(int fd, int cmd, ...);

@@ -21,8 +21,6 @@
 
 extern int errno;
 
-extern int clone_impl(uint64_t flags);
-extern int unshare_impl(uint64_t flags);
 extern int mount(const char *source, const char *target, const char *filesystemtype,
                  unsigned long mountflags, const void *data);
 extern int umount_impl(const char *target);
