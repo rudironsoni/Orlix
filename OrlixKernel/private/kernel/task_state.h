@@ -39,6 +39,7 @@ int task_session_has_pgrp_impl(int32_t sid, int32_t pgid);
 int task_reassign_pid_impl(struct task *task, int32_t pid);
 long task_read_virtual_memory_impl(struct task *task, uint64_t addr, void *buf, size_t count);
 long task_write_virtual_memory_impl(struct task *task, uint64_t addr, const void *buf, size_t count);
+int task_exec_transition_impl(const char *path, const char *argv0);
 void task_rename_vma_backing_path_impl(const char *old_path, const char *new_path);
 void task_exchange_vma_backing_paths_impl(const char *left_path, const char *right_path);
 const struct task_exec_handoff *task_get_exec_handoff_impl(struct task *task);

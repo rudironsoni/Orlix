@@ -109,7 +109,6 @@ int32_t vfork_impl(void);
 int32_t clone_impl(uint64_t flags);
 int32_t clone3_impl(const struct clone_args *args, size_t size);
 int unshare_impl(uint64_t flags);
-int task_exec_transition_impl(const char *path, const char *argv0);
 
 /* Virtual exit helper */
 void exit_impl(int status);
