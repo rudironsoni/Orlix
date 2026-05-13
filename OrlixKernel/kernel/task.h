@@ -94,7 +94,6 @@ int task_init(void);
 void task_deinit(void);
 struct task *task_lookup(int32_t pid);
 int task_hash(int32_t pid);
-int task_reassign_pid_impl(struct task *task, int32_t pid);
 struct task *task_create_child_impl(struct task *parent);
 struct task *task_create_child_with_flags_impl(struct task *parent, uint64_t flags);
 void task_unlink_child_impl(struct task *parent, struct task *child);
