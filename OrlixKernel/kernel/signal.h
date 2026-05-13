@@ -98,8 +98,6 @@ bool signal_is_pending(const struct task *task, int32_t sig);
 bool signal_has_unblocked_pending(const struct task *task);
 
 int do_sigaltstack(const stack_t *new_stack, stack_t *old_stack);
-int signal_prepare_frame_impl(struct task *task, int32_t sig, u64 return_pc,
-                              u64 current_sp, u64 *frame_sp_out);
 
 #ifdef __cplusplus
 }

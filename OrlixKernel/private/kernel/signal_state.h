@@ -83,6 +83,11 @@ int signal_frame_restart_record_task(struct task *task,
                                      uint64_t arg5);
 void signal_frame_restart_clear_task(struct task *task);
 void signal_frame_clear_task(struct task *task);
+int signal_prepare_frame_impl(struct task *task,
+                              int32_t sig,
+                              uint64_t return_pc,
+                              uint64_t current_sp,
+                              uint64_t *frame_sp_out);
 long signal_finish_sigreturn_task(struct task *task);
 
 #ifdef __cplusplus
