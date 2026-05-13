@@ -20,6 +20,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/exec.h"
+#include "fs/mount.h"
 #include "fs/open.h"
 #include "fs/read_write.h"
 #include "private/fs/fdtable_state.h"
@@ -47,9 +48,6 @@ extern int chmod(const char *pathname, uint32_t mode);
 extern int chown(const char *pathname, uint32_t owner, uint32_t group);
 extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int rmdir_impl(const char *pathname);
-extern int mount(const char *source, const char *target, const char *filesystemtype,
-                 unsigned long mountflags, const void *data);
-extern int umount_impl(const char *target);
 extern int ftruncate_impl(int fd, int64_t length);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern bool signal_is_pending(const struct task *task, int32_t sig);
@@ -77,6 +75,25 @@ static int expect_errno(int expected) {
         return -1;
     }
     return 0;
+}
+
+static int mount_contract_syscall_error_or_neg1(int ret) {
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+static int mount_call(const char *source, const char *target,
+                      const char *filesystemtype, unsigned long mountflags,
+                      const void *data) {
+    return mount_contract_syscall_error_or_neg1(
+        mount_impl(source, target, filesystemtype, mountflags, data));
+}
+
+static int umount_call(const char *target) {
+    return mount_contract_syscall_error_or_neg1(umount_impl(target));
 }
 
 static int read_proc_file(const char *path, char *buf, size_t buf_len, ssize_t *out_len) {
@@ -1654,7 +1671,7 @@ int exec_syscall_contract_native_execve_nosuid_mount_blocks_setid_and_file_caps(
 
     cred_reset_to_defaults();
     native_registry_clear();
-    umount_impl(target_dir);
+    umount_call(target_dir);
     unlink_impl(source_path);
     rmdir_impl(source_dir);
     rmdir_impl(target_dir);
@@ -1666,7 +1683,7 @@ int exec_syscall_contract_native_execve_nosuid_mount_blocks_setid_and_file_caps(
         chown(source_path, 2000, 3000) != 0 ||
         chmod(source_path, S_ISUID | S_ISGID | 0755) != 0 ||
         vfs_set_file_capabilities(source_path, cap_mask, 0, true) != 0 ||
-        mount(source_dir, target_dir, NULL, MS_BIND | MS_NOSUID, NULL) != 0) {
+        mount_call(source_dir, target_dir, NULL, MS_BIND | MS_NOSUID, NULL) != 0) {
         goto out;
     }
     mounted = 1;
@@ -1698,7 +1715,7 @@ out:
         native_registry_clear();
         cred_reset_to_defaults();
         if (mounted) {
-            umount_impl(target_dir);
+            umount_call(target_dir);
         }
         unlink_impl(source_path);
         rmdir_impl(source_dir);

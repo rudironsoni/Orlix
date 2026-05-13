@@ -10,6 +10,7 @@
 #include <stddef.h>
 
 #include "NamespaceContract.h"
+#include "fs/mount.h"
 #include "fs/open.h"
 #include "fs/read_write.h"
 #include "fs/vfs.h"
@@ -23,9 +24,6 @@
 
 extern int errno;
 
-extern int mount(const char *source, const char *target, const char *filesystemtype,
-                 unsigned long mountflags, const void *data);
-extern int umount_impl(const char *target);
 extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int close_impl(int fd);
 extern int unlink_impl(const char *pathname);
@@ -40,6 +38,25 @@ static int expect_errno(int expected) {
         return -1;
     }
     return 0;
+}
+
+static int mount_contract_syscall_error_or_neg1(int ret) {
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+static int mount_call(const char *source, const char *target,
+                      const char *filesystemtype, unsigned long mountflags,
+                      const void *data) {
+    return mount_contract_syscall_error_or_neg1(
+        mount_impl(source, target, filesystemtype, mountflags, data));
+}
+
+static int umount_call(const char *target) {
+    return mount_contract_syscall_error_or_neg1(umount_impl(target));
 }
 
 static int ignore_exists(int result) {
@@ -119,7 +136,7 @@ static int read_file_contains(const char *path, const char *needle) {
 }
 
 static void cleanup_mount_paths(void) {
-    umount_impl("/tmp/ns-target");
+    umount_call("/tmp/ns-target");
     unlink_impl("/tmp/ns-parent-source/file");
     unlink_impl("/tmp/ns-child-source/file");
     unlink_impl("/tmp/ns-target/file");
@@ -326,7 +343,7 @@ int namespace_contract_clone_newns_isolates_child_mounts(void) {
 
     saved = task_current();
     task_set_current(child);
-    if (mount("/tmp/ns-child-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0 ||
+    if (mount_call("/tmp/ns-child-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0 ||
         read_file_exact("/tmp/ns-target/file", "child") != 0) {
         goto out_restore;
     }
@@ -339,7 +356,7 @@ int namespace_contract_clone_newns_isolates_child_mounts(void) {
 
 out_restore:
     task_set_current(child);
-    umount_impl("/tmp/ns-target");
+    umount_call("/tmp/ns-target");
     task_set_current(saved);
     release_lookup_child(parent, child);
 out_cleanup:
@@ -371,7 +388,7 @@ int namespace_contract_clone_without_newns_shares_mounts(void) {
 
     saved = task_current();
     task_set_current(child);
-    if (mount("/tmp/ns-child-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0) {
+    if (mount_call("/tmp/ns-child-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0) {
         goto out_restore;
     }
     task_set_current(parent);
@@ -382,7 +399,7 @@ int namespace_contract_clone_without_newns_shares_mounts(void) {
 
 out_restore:
     task_set_current(parent);
-    umount_impl("/tmp/ns-target");
+    umount_call("/tmp/ns-target");
     task_set_current(saved);
     release_lookup_child(parent, child);
 out_cleanup:
@@ -412,7 +429,7 @@ int namespace_contract_unshare_newns_isolates_current_mounts(void) {
         goto out_cleanup;
     }
     if (unshare_impl(CLONE_NEWNS) != 0 ||
-        mount("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0 ||
+        mount_call("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0 ||
         read_file_exact("/tmp/ns-target/file", "parent") != 0) {
         goto out_release;
     }
@@ -428,7 +445,7 @@ out_restore:
     task_set_current(saved);
 out_release:
     task_set_current(parent);
-    umount_impl("/tmp/ns-target");
+    umount_call("/tmp/ns-target");
     release_lookup_child(parent, child);
 out_cleanup:
     cleanup_mount_paths();
@@ -636,7 +653,7 @@ int namespace_contract_newuser_caps_are_scoped_to_mount_namespace_owner(void) {
         goto out;
     }
     errno = 0;
-    if (mount("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != -1 ||
+    if (mount_call("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != -1 ||
         errno != EPERM) {
         errno = EPROTO;
         goto out;
@@ -654,7 +671,7 @@ int namespace_contract_newuser_caps_are_scoped_to_mount_namespace_owner(void) {
     }
     task_set_current(user_child);
     errno = 0;
-    if (mount("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != -1 ||
+    if (mount_call("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != -1 ||
         errno != EPERM) {
         task_set_current(parent);
         errno = ENODATA;
@@ -673,7 +690,7 @@ int namespace_contract_newuser_caps_are_scoped_to_mount_namespace_owner(void) {
         goto out;
     }
     task_set_current(user_mnt_child);
-    if (mount("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0) {
+    if (mount_call("/tmp/ns-parent-source", "/tmp/ns-target", NULL, MS_BIND, NULL) != 0) {
         task_set_current(parent);
         goto out;
     }

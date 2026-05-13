@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 
+#include "fs/mount.h"
 #include "fs/open.h"
 #include "fs/read_write.h"
 #include "private/kernel/cgroup_state.h"
@@ -27,12 +28,25 @@ extern int close_impl(int fd);
 extern int mkdir_impl(const char *pathname, unsigned int mode);
 extern int rmdir_impl(const char *pathname);
 extern int unshare_impl(uint64_t flags);
-extern int mount_impl(const char *source, const char *target, const char *filesystemtype,
-                      unsigned long mountflags, const void *data);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern int capset_impl(cap_user_header_t header, const cap_user_data_t data);
 
 static void cgroup_contract_format_pid(int32_t pid, char *buf, unsigned long size);
+
+static int mount_contract_syscall_error_or_neg1(int ret) {
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+static int mount_call(const char *source, const char *target,
+                      const char *filesystemtype, unsigned long mountflags,
+                      const void *data) {
+    return mount_contract_syscall_error_or_neg1(
+        mount_impl(source, target, filesystemtype, mountflags, data));
+}
 
 static int cgroup_contract_read_file(const char *path, char *buf, unsigned long size) {
     int fd;
@@ -562,7 +576,7 @@ int cgroup_contract_mount_cgroup2_exposes_cgroupfs_view(void) {
     if (cgroup_contract_ignore_exists(mkdir_impl("/tmp/cgroup2", 0755)) != 0) {
         goto out;
     }
-    if (mount_impl("none", "/tmp/cgroup2", "cgroup2", 0, 0) != 0) {
+    if (mount_call("none", "/tmp/cgroup2", "cgroup2", 0, 0) != 0) {
         goto out;
     }
     if (cgroup_contract_ignore_exists(mkdir_impl("/tmp/cgroup2/mounted", 0755)) != 0) {

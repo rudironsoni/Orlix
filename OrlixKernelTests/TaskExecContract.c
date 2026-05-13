@@ -10,6 +10,7 @@
 
 #include "fs/fcntl.h"
 #include "fs/fdtable.h"
+#include "fs/mount.h"
 #include "fs/open.h"
 #include "private/fs/fdtable_state.h"
 #include "fs/vfs.h"
@@ -25,9 +26,6 @@ extern int rmdir_impl(const char *pathname);
 extern int mkdir_impl(const char *pathname, uint32_t mode);
 extern int chmod(const char *pathname, uint32_t mode);
 extern int chown(const char *pathname, __kernel_uid32_t owner, __kernel_gid32_t group);
-extern int mount(const char *source, const char *target, const char *filesystemtype,
-                 unsigned long mountflags, const void *data);
-extern int umount_impl(const char *target);
 extern int capget_impl(cap_user_header_t header, cap_user_data_t data);
 extern int capset_impl(cap_user_header_t header, const cap_user_data_t data);
 extern void cred_reset_to_defaults(void);
@@ -46,6 +44,25 @@ static int expect_errno(int expected) {
         return -1;
     }
     return 0;
+}
+
+static int mount_contract_syscall_error_or_neg1(int ret) {
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+static int mount_call(const char *source, const char *target,
+                      const char *filesystemtype, unsigned long mountflags,
+                      const void *data) {
+    return mount_contract_syscall_error_or_neg1(
+        mount_impl(source, target, filesystemtype, mountflags, data));
+}
+
+static int umount_call(const char *target) {
+    return mount_contract_syscall_error_or_neg1(umount_impl(target));
 }
 
 static int task_exec_contract_cap_has_effective(const struct __user_cap_data_struct *data, int cap);
@@ -891,7 +908,7 @@ int task_exec_contract_nosuid_mount_blocks_setuid_exec_gain(void) {
     int ret = -1;
 
     cred_reset_to_defaults();
-    umount_impl("/tmp/task-exec-nosuid-target");
+    umount_call("/tmp/task-exec-nosuid-target");
     unlink_impl("/tmp/task-exec-nosuid-source/suid-file");
     rmdir_impl("/tmp/task-exec-nosuid-source");
     rmdir_impl("/tmp/task-exec-nosuid-target");
@@ -908,7 +925,7 @@ int task_exec_contract_nosuid_mount_blocks_setuid_exec_gain(void) {
     fd = -1;
     if (chown("/tmp/task-exec-nosuid-source/suid-file", 2000, 3000) != 0 ||
         chmod("/tmp/task-exec-nosuid-source/suid-file", S_ISUID | 0755) != 0 ||
-        mount("/tmp/task-exec-nosuid-source", "/tmp/task-exec-nosuid-target", NULL,
+        mount_call("/tmp/task-exec-nosuid-source", "/tmp/task-exec-nosuid-target", NULL,
               MS_BIND | MS_NOSUID, NULL) != 0 ||
         setuid_impl(1000) != 0 ||
         task_exec_transition_impl("/tmp/task-exec-nosuid-target/suid-file", "nosuid-file") != 0) {
@@ -925,7 +942,7 @@ int task_exec_contract_nosuid_mount_blocks_setuid_exec_gain(void) {
 out:
     close_if_open(fd);
     cred_reset_to_defaults();
-    umount_impl("/tmp/task-exec-nosuid-target");
+    umount_call("/tmp/task-exec-nosuid-target");
     unlink_impl("/tmp/task-exec-nosuid-source/suid-file");
     rmdir_impl("/tmp/task-exec-nosuid-source");
     rmdir_impl("/tmp/task-exec-nosuid-target");
@@ -943,7 +960,7 @@ int task_exec_contract_nosuid_mount_blocks_file_capability_exec_gain(void) {
     int ret = -1;
 
     cred_reset_to_defaults();
-    umount_impl("/tmp/task-exec-nosuid-filecap-target");
+    umount_call("/tmp/task-exec-nosuid-filecap-target");
     unlink_impl("/tmp/task-exec-nosuid-filecap-source/filecap-file");
     rmdir_impl("/tmp/task-exec-nosuid-filecap-source");
     rmdir_impl("/tmp/task-exec-nosuid-filecap-target");
@@ -962,7 +979,7 @@ int task_exec_contract_nosuid_mount_blocks_file_capability_exec_gain(void) {
 
     if (vfs_set_file_capabilities("/tmp/task-exec-nosuid-filecap-source/filecap-file",
                                   cap_setuid, 0, true) != 0 ||
-        mount("/tmp/task-exec-nosuid-filecap-source", "/tmp/task-exec-nosuid-filecap-target",
+        mount_call("/tmp/task-exec-nosuid-filecap-source", "/tmp/task-exec-nosuid-filecap-target",
               NULL, MS_BIND | MS_NOSUID, NULL) != 0 ||
         setuid_impl(1000) != 0 ||
         task_exec_transition_impl("/tmp/task-exec-nosuid-filecap-target/filecap-file",
@@ -986,7 +1003,7 @@ out:
     close_if_open(fd);
     cred_reset_to_defaults();
     vfs_remove_file_capabilities("/tmp/task-exec-nosuid-filecap-source/filecap-file");
-    umount_impl("/tmp/task-exec-nosuid-filecap-target");
+    umount_call("/tmp/task-exec-nosuid-filecap-target");
     unlink_impl("/tmp/task-exec-nosuid-filecap-source/filecap-file");
     rmdir_impl("/tmp/task-exec-nosuid-filecap-source");
     rmdir_impl("/tmp/task-exec-nosuid-filecap-target");
@@ -997,7 +1014,7 @@ int task_exec_contract_noexec_mount_blocks_exec_transition(void) {
     int fd = -1;
     int ret = -1;
 
-    umount_impl("/tmp/task-exec-noexec-target");
+    umount_call("/tmp/task-exec-noexec-target");
     unlink_impl("/tmp/task-exec-noexec-source/file");
     rmdir_impl("/tmp/task-exec-noexec-source");
     rmdir_impl("/tmp/task-exec-noexec-target");
@@ -1013,7 +1030,7 @@ int task_exec_contract_noexec_mount_blocks_exec_transition(void) {
     close_if_open(fd);
     fd = -1;
 
-    if (mount("/tmp/task-exec-noexec-source", "/tmp/task-exec-noexec-target", NULL,
+    if (mount_call("/tmp/task-exec-noexec-source", "/tmp/task-exec-noexec-target", NULL,
               MS_BIND | MS_NOEXEC, NULL) != 0) {
         goto out;
     }
@@ -1029,7 +1046,7 @@ int task_exec_contract_noexec_mount_blocks_exec_transition(void) {
 
 out:
     close_if_open(fd);
-    umount_impl("/tmp/task-exec-noexec-target");
+    umount_call("/tmp/task-exec-noexec-target");
     unlink_impl("/tmp/task-exec-noexec-source/file");
     rmdir_impl("/tmp/task-exec-noexec-source");
     rmdir_impl("/tmp/task-exec-noexec-target");

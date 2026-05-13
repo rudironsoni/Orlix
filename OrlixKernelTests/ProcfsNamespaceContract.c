@@ -17,6 +17,7 @@
 
 #include "ProcfsNamespaceContract.h"
 #include "fs/fcntl.h"
+#include "fs/mount.h"
 #include "fs/open.h"
 #include "fs/read_write.h"
 #include "fs/vfs.h"
@@ -34,15 +35,31 @@
 extern int errno;
 
 extern int mkdir_impl(const char *pathname, uint32_t mode);
-extern int mount(const char *source, const char *target, const char *filesystemtype,
-                 unsigned long mountflags, const void *data);
-extern int umount_impl(const char *target);
 extern int close_impl(int fd);
 extern long readlink_impl(const char *pathname, char *buf, size_t bufsiz);
 extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
 extern int signal_generate_process(struct task *target, int32_t sig);
 extern void cred_reset_to_defaults(void);
 extern void set_current_cred(struct cred *cred);
+
+static int mount_contract_syscall_error_or_neg1(int ret) {
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return ret;
+}
+
+static int mount_call(const char *source, const char *target,
+                      const char *filesystemtype, unsigned long mountflags,
+                      const void *data) {
+    return mount_contract_syscall_error_or_neg1(
+        mount_impl(source, target, filesystemtype, mountflags, data));
+}
+
+static int umount_call(const char *target) {
+    return mount_contract_syscall_error_or_neg1(umount_impl(target));
+}
 
 static void reset_procfs_namespace_state(void) {
     cred_reset_to_defaults();
@@ -2192,7 +2209,7 @@ int procfs_namespace_contract_proc_pid_mountinfo_uses_target_mount_namespace(voi
 
     saved = task_current();
     task_set_current(child);
-    if (mount("/tmp/proc-pid-mnt-source", "/tmp/proc-pid-mnt-target", NULL, MS_BIND, NULL) != 0) {
+    if (mount_call("/tmp/proc-pid-mnt-source", "/tmp/proc-pid-mnt-target", NULL, MS_BIND, NULL) != 0) {
         task_set_current(saved);
         goto out;
     }
@@ -2232,7 +2249,7 @@ out:
     if (child) {
         saved = task_current();
         task_set_current(child);
-        umount_impl("/tmp/proc-pid-mnt-target");
+        umount_call("/tmp/proc-pid-mnt-target");
         task_set_current(saved);
         task_unlink_child_impl(parent, child);
         task_put(child);
@@ -2272,7 +2289,7 @@ int procfs_namespace_contract_zombie_proc_pid_mounts_keep_target_mount_namespace
 
     saved = task_current();
     task_set_current(child);
-    if (mount("/tmp/proc-zombie-mnt-source", "/tmp/proc-zombie-mnt-target", NULL, MS_BIND, NULL) != 0) {
+    if (mount_call("/tmp/proc-zombie-mnt-source", "/tmp/proc-zombie-mnt-target", NULL, MS_BIND, NULL) != 0) {
         task_set_current(saved);
         goto out;
     }
@@ -2293,7 +2310,7 @@ out:
     if (child) {
         saved = task_current();
         task_set_current(child);
-        umount_impl("/tmp/proc-zombie-mnt-target");
+        umount_call("/tmp/proc-zombie-mnt-target");
         task_set_current(saved);
         task_unlink_child_impl(parent, child);
         task_put(child);
@@ -2333,7 +2350,7 @@ int procfs_namespace_contract_reaped_proc_pid_mounts_disappear(void) {
 
     saved = task_current();
     task_set_current(child);
-    if (mount("/tmp/proc-reaped-mnt-source", "/tmp/proc-reaped-mnt-target", NULL, MS_BIND, NULL) != 0) {
+    if (mount_call("/tmp/proc-reaped-mnt-source", "/tmp/proc-reaped-mnt-target", NULL, MS_BIND, NULL) != 0) {
         task_set_current(saved);
         goto out;
     }
@@ -2362,7 +2379,7 @@ out:
     if (child) {
         saved = task_current();
         task_set_current(child);
-        umount_impl("/tmp/proc-reaped-mnt-target");
+        umount_call("/tmp/proc-reaped-mnt-target");
         task_set_current(saved);
         task_unlink_child_impl(parent, child);
         task_put(child);
