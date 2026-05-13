@@ -8,6 +8,8 @@
 #include "../private/kernel/task_state.h"
 
 #include "../fs/fdtable.h"
+#include "../fs/open.h"
+#include "../fs/read_write.h"
 #include "../private/fs/fdtable_state.h"
 
 #include <linux/atomic.h>
@@ -56,12 +58,6 @@ struct mm_file_size_note {
 
 static struct mm_file_size_note mm_file_size_notes[128];
 
-extern long long pread_impl(int fd, void *buf, size_t count, long long offset);
-extern long long pwrite_impl(int fd, const void *buf, size_t count, long long offset);
-extern long long lseek_impl(int fd, long long offset, int whence);
-extern long long read_impl(int fd, void *buf, size_t count);
-extern long long write_impl(int fd, const void *buf, size_t count);
-extern int open_impl(const char *path, int flags, unsigned int mode);
 extern int close_impl(int fd);
 extern void *__kmalloc_noprof(size_t size, gfp_t flags);
 extern void kfree(const void *objp);

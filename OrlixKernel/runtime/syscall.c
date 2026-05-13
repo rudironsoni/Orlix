@@ -16,10 +16,14 @@
 #include "../fs/fdtable.h"
 #include "../fs/eventpoll.h"
 #include "../fs/exec.h"
+#include "../fs/fcntl.h"
+#include "../fs/ioctl.h"
+#include "../fs/open.h"
 #include "../private/fs/fdtable_state.h"
 #include "../fs/pipe.h"
 #include "../fs/poll.h"
 #include "../fs/read_write.h"
+#include "../fs/stat.h"
 #include "../fs/uio.h"
 #include "../fs/vfs.h"
 #include "../fs/xattr.h"
@@ -44,7 +48,6 @@ extern int mount_impl(const char *source, const char *target,
 extern int umount2_impl(const char *target, int flags);
 
 struct epoll_instance;
-extern int openat_impl(int dirfd, const char *pathname, int flags, uint32_t mode);
 extern long sys_socket(int domain, int type, int protocol);
 extern long sys_socketpair(int domain, int type, int protocol, int *sv);
 extern long sys_connect(int sockfd, void *addr, int addrlen);
@@ -66,13 +69,6 @@ extern long sys_getsockname(int sockfd, void *addr, int *addrlen);
 extern long sys_getpeername(int sockfd, void *addr, int *addrlen);
 extern long sys_setsockopt(int sockfd, int level, int optname, char *optval, int optlen);
 extern long sys_getsockopt(int sockfd, int level, int optname, char *optval, int *optlen);
-extern int fcntl_impl(int fd, int cmd, ...);
-extern int flock_impl(int fd, int operation);
-extern int fstat_impl(int fd, struct stat *statbuf);
-extern int fstatat_impl(int dirfd, const char *pathname, struct stat *statbuf, int flags);
-extern int faccessat_impl(int dirfd, const char *pathname, int mode, int flags);
-extern int statx_impl(int dirfd, const char *pathname, int flags, unsigned int mask,
-                      struct statx *statxbuf);
 extern int truncate_impl(const char *path, int64_t length);
 extern int ftruncate_impl(int fd, int64_t length);
 extern ssize_t getdents64_impl(int fd, void *dirp, size_t count);
@@ -93,13 +89,10 @@ extern int syncfs_impl(int fd);
 extern int statfs_impl(const char *path, struct statfs *buf);
 extern int fstatfs_impl(int fd, struct statfs *buf);
 extern uint32_t umask_impl(uint32_t mask);
-extern int ioctl_impl(int fd, unsigned long request, void *arg);
 extern ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz);
 extern int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
 extern int chroot(const char *path);
-extern int dup_impl(int oldfd);
-extern int dup3_impl(int oldfd, int newfd, int flags);
 extern int close_range_impl(unsigned int first, unsigned int last, unsigned int flags);
 extern int eventfd2_impl(unsigned int initval, int flags);
 extern int timerfd_create_impl(int clockid, int flags);
