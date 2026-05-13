@@ -11,7 +11,7 @@
 #include "cred.h"
 #include "mm.h"
 #include "ptrace.h"
-#include "seccomp.h"
+#include "../private/kernel/seccomp_state.h"
 #include "uts.h"
 #include "../private/kernel/uts_state.h"
 #include "internal/timekeeping.h"

@@ -4,7 +4,7 @@
 
 #include "task.h"
 #include "../private/kernel/task_state.h"
-#include "seccomp.h"
+#include "../private/kernel/seccomp_state.h"
 
 #include <linux/atomic.h>
 #include <linux/errno.h>

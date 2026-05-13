@@ -1,9 +1,5 @@
-/* OrlixKernel/kernel/seccomp.h
- * Private owner header for Orlix virtual syscall policy.
- */
-
-#ifndef KERNEL_SECCOMP_H
-#define KERNEL_SECCOMP_H
+#ifndef PRIVATE_KERNEL_SECCOMP_STATE_H
+#define PRIVATE_KERNEL_SECCOMP_STATE_H
 
 #include <linux/types.h>
 
@@ -27,4 +23,4 @@ long seccomp_check_current_syscall(int64_t syscall_nr);
 }
 #endif
 
-#endif /* KERNEL_SECCOMP_H */
+#endif /* PRIVATE_KERNEL_SECCOMP_STATE_H */

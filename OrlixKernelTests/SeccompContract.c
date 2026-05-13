@@ -4,7 +4,7 @@
 #include <uapi/linux/errno.h>
 #include <uapi/linux/sched.h>
 
-#include "kernel/seccomp.h"
+#include "private/kernel/seccomp_state.h"
 #include "kernel/task.h"
 #include "private/kernel/task_state.h"
 #include "runtime/syscall.h"

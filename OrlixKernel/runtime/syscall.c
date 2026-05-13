@@ -24,7 +24,7 @@
 #include "../kernel/ptrace.h"
 #include "../private/kernel/ptrace_state.h"
 #include "../private/kernel/resource_state.h"
-#include "../kernel/seccomp.h"
+#include "../private/kernel/seccomp_state.h"
 #include "../kernel/signal.h"
 #include "../private/kernel/signal_state.h"
 #include "../kernel/task.h"
