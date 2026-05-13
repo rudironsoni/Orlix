@@ -8,6 +8,7 @@
 #include "internal/slab.h"
 #include "private/fs/lock_state.h"
 #include "poll.h"
+#include "private/fs/readiness_state.h"
 #include "../kernel/task.h"
 #include "../private/kernel/task_state.h"
 

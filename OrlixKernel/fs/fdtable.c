@@ -37,6 +37,7 @@
 #include "internal/fs/memfd.h"
 #include "eventpoll.h"
 #include "private/fs/eventpoll_state.h"
+#include "private/fs/readiness_state.h"
 #include "pipe.h"
 #include "pty.h"
 #include "vfs.h"
@@ -46,7 +47,6 @@
 static void retain_fd_description(struct fd_description *desc);
 static void release_fd_description(struct fd_description *desc);
 static struct fd_file *copy_file_descriptor(struct fd_file *file);
-extern void poll_notify_readiness_impl(void);
 extern int scnprintf(char *buf, size_t size, const char *fmt, ...);
 
 struct fd_table *alloc_files(size_t max_fds) {

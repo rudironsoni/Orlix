@@ -17,6 +17,7 @@
 #include "../private/kernel/ptrace_state.h"
 
 #include "../fs/fdtable.h"
+#include "../private/fs/readiness_state.h"
 #include "../fs/vfs.h"
 
 #include <linux/errno.h>
@@ -34,7 +35,6 @@
 #include <uapi/asm/stat.h>
 #include <linux/resource.h>
 
-extern void poll_notify_readiness_impl(void);
 extern void *__kmalloc_noprof(size_t size, gfp_t flags);
 extern void kfree(const void *objp);
 extern char *kstrdup(const char *src, gfp_t flags);

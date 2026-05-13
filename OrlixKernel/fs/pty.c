@@ -12,10 +12,9 @@
 #include "../private/kernel/task_state.h"
 #include "../private/kernel/wait_queue_state.h"
 #include "../kernel/wait_queue.h"
+#include "private/fs/readiness_state.h"
 #include "private/fs/lock_state.h"
 #include "internal/slab.h"
-
-void poll_notify_readiness_impl(void);
 
 #define PTY_MAX 128
 #define PTY_BUFFER_CAPACITY 4096

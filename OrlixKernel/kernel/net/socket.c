@@ -6,6 +6,7 @@
 #include <linux/string.h>
 
 #include "../../private/kernel/mutex_state.h"
+#include "../../private/fs/readiness_state.h"
 #include "../signal.h"
 #include "../task.h"
 #include "../../private/kernel/wait_queue_state.h"
@@ -17,8 +18,6 @@
 
 extern void *__kmalloc_noprof(size_t size, gfp_t flags);
 extern void kfree(const void *objp);
-
-void poll_notify_readiness_impl(void);
 
 static void *err_ptr_impl(long error) {
     return (void *)(intptr_t)error;

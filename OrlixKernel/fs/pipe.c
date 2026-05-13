@@ -5,6 +5,7 @@
 #include <uapi/linux/signal.h>
 
 #include "pipe.h"
+#include "private/fs/readiness_state.h"
 
 #include <linux/string.h>
 
@@ -13,8 +14,6 @@
 #include "../kernel/task.h"
 #include "../private/kernel/wait_queue_state.h"
 #include "../kernel/wait_queue.h"
-
-void poll_notify_readiness_impl(void);
 
 #define PIPE_BUFFER_SIZE 65536U
 

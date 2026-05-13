@@ -15,9 +15,6 @@ int select_impl(int nfds,
                 __kernel_fd_set *writefds,
                 __kernel_fd_set *errorfds,
                 struct __kernel_old_timeval *timeout);
-void poll_notify_readiness_impl(void);
-short poll_fd_revents_impl(int fd, short events, int *is_virtual);
-int poll_wait_for_readiness_impl(int timeout);
 
 #ifdef __cplusplus
 }
