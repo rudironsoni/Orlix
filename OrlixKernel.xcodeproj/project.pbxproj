@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		053466CDFB1F9CBEAEB38C74 /* xattr.c in Sources */ = {isa = PBXBuildFile; fileRef = 8383C67C95A306049D9DF0BC /* xattr.c */; };
 		0B2D67091C9D8DB67DFFC496 /* errno_translation.c in Sources */ = {isa = PBXBuildFile; fileRef = C75ADE792CF9E1CDB018936B /* errno_translation.c */; };
-		0B80493C4929F775B9FAAAC2 /* socket.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 93BEC551A077CEE30F667A6E /* socket.h */; };
 		0D60955F5865947E6D9F9446 /* ptrace.c in Sources */ = {isa = PBXBuildFile; fileRef = 55BA06C0965FE48670C588F1 /* ptrace.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_INCLUDE_ROOT) -I$(LINUX_UAPI_ROOT)"; }; };
 		0E35C484C7BBB429ACD8357D /* HostTestSupport.c in Sources */ = {isa = PBXBuildFile; fileRef = 84245D3FA37D3059CF6B6B7A /* HostTestSupport.c */; };
 		0E5978A2CA951E7F20409AD9 /* pty.c in Sources */ = {isa = PBXBuildFile; fileRef = 838E887EC3F4B36078E99CEE /* pty.c */; };
@@ -64,6 +63,7 @@
 		62C62B85F7F6F1410A8BA373 /* time.c in Sources */ = {isa = PBXBuildFile; fileRef = 4BDDBF6ECE1BEAADFDA6BD68 /* time.c */; settings = {COMPILER_FLAGS = "-I$(LINUX_UAPI_ROOT)"; }; };
 		665083D290BBBBB59F6E8119 /* ExecFdTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4156CE0CC76816B3F027B20D /* ExecFdTests.m */; };
 		6A17D2ABA54356F7816A6701 /* DevfsTests.m in Sources */ = {isa = PBXBuildFile; fileRef = ED4F0CE7925DB368D2A852B2 /* DevfsTests.m */; };
+		6AC86A6B477244671951CE91 /* endpoint_state.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = C2847DFACB27F39F3116B05A /* endpoint_state.h */; };
 		6D758202AF66637AD6DA7AB7 /* CgroupTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 7AF7EC1353666D74D570C75B /* CgroupTests.m */; };
 		6E6863DA4919C70C5A612D0A /* memfd.c in Sources */ = {isa = PBXBuildFile; fileRef = FED776BD6CBA4CE5C24AFFF1 /* memfd.c */; };
 		6E980D8031E7BA0DADC116C6 /* VFSPathHostBridgeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 7FDF5ED03FACDF00158E399C /* VFSPathHostBridgeTests.m */; };
@@ -204,7 +204,7 @@
 			dstPath = "include/$(PRODUCT_NAME)";
 			dstSubfolderSpec = 16;
 			files = (
-				0B80493C4929F775B9FAAAC2 /* socket.h in CopyFiles */,
+				6AC86A6B477244671951CE91 /* endpoint_state.h in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -303,7 +303,6 @@
 		8E078B7A6C6D1E2DB8C89525 /* resource.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = resource.c; sourceTree = "<group>"; };
 		92495377427D0B0247DCF63F /* backing_stat_translate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = backing_stat_translate.c; sourceTree = "<group>"; };
 		92B037F700D37491354C28A5 /* ExecSyscallContract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ExecSyscallContract.c; sourceTree = "<group>"; };
-		93BEC551A077CEE30F667A6E /* socket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = socket.h; sourceTree = "<group>"; };
 		95B7770B3E267497F7AF7727 /* seccomp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = seccomp.c; sourceTree = "<group>"; };
 		96CC08F7FAC252C6583BA051 /* fork.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fork.c; sourceTree = "<group>"; };
 		99ED3C12835594522DEEC5FC /* elf_reloc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = elf_reloc.c; sourceTree = "<group>"; };
@@ -332,6 +331,7 @@
 		BFAA54B89F9911A3EA8A53E7 /* ProcfsNamespaceContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ProcfsNamespaceContract.h; sourceTree = "<group>"; };
 		C1668EA7256DBBE1A05722FC /* KernelInitTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KernelInitTests.m; sourceTree = "<group>"; };
 		C1B1F042C28ACD85F8C0FB37 /* SyscallUioContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SyscallUioContract.h; sourceTree = "<group>"; };
+		C2847DFACB27F39F3116B05A /* endpoint_state.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = endpoint_state.h; sourceTree = "<group>"; };
 		C3302730CF4FE82D2EBFDA3F /* NamespaceContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NamespaceContract.h; sourceTree = "<group>"; };
 		C525A1B7B809ADA3063176F5 /* task.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = task.c; sourceTree = "<group>"; };
 		C75ADE792CF9E1CDB018936B /* errno_translation.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = errno_translation.c; sourceTree = "<group>"; };
@@ -542,9 +542,18 @@
 				CF6F41FCCD785D3696F6A23D /* fs */,
 				153D9352EC8CE8A6630EB5D5 /* kernel */,
 				9CF46824F5AA28EA333BECA6 /* observability */,
+				398DCADE5088448B4769FA4E /* private */,
 				EADA5313EBF323E291DCE078 /* runtime */,
 			);
 			path = OrlixKernel;
+			sourceTree = "<group>";
+		};
+		398DCADE5088448B4769FA4E /* private */ = {
+			isa = PBXGroup;
+			children = (
+				EC56C8D87E38CE20267A9D36 /* kernel */,
+			);
+			path = private;
 			sourceTree = "<group>";
 		};
 		3F18C5CCCD2ADE41C72D8BB1 /* signal */ = {
@@ -573,7 +582,6 @@
 			children = (
 				46DA2C39399EEDACD156A317 /* network.c */,
 				EF78989F13706642524FD096 /* socket.c */,
-				93BEC551A077CEE30F667A6E /* socket.h */,
 			);
 			path = net;
 			sourceTree = "<group>";
@@ -739,6 +747,14 @@
 			path = runtime;
 			sourceTree = "<group>";
 		};
+		EC56C8D87E38CE20267A9D36 /* kernel */ = {
+			isa = PBXGroup;
+			children = (
+				ED52B7FC488D18847E4CB284 /* net */,
+			);
+			path = kernel;
+			sourceTree = "<group>";
+		};
 		ED02141C21F39E4672622696 /* pty */ = {
 			isa = PBXGroup;
 			children = (
@@ -746,6 +762,14 @@
 			);
 			name = pty;
 			path = OrlixKernelTests/fs/pty;
+			sourceTree = "<group>";
+		};
+		ED52B7FC488D18847E4CB284 /* net */ = {
+			isa = PBXGroup;
+			children = (
+				C2847DFACB27F39F3116B05A /* endpoint_state.h */,
+			);
+			path = net;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

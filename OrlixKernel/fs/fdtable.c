@@ -42,7 +42,7 @@
 #include "pipe.h"
 #include "private/fs/pty_state.h"
 #include "vfs.h"
-#include "kernel/net/socket.h"
+#include "../private/kernel/net/endpoint_state.h"
 #include "../kernel/task.h"
 
 static void retain_fd_description(struct fd_description *desc);

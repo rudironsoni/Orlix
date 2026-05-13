@@ -20,7 +20,7 @@
 #include "vfs.h"
 #include "private/fs/vfs_state.h"
 #include "../private/kernel/cgroup_state.h"
-#include "kernel/net/socket.h"
+#include "../private/kernel/net/endpoint_state.h"
 #include "kernel/task.h"
 #include "private/kernel/task_state.h"
 

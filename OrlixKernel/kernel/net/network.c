@@ -19,7 +19,7 @@
 #include <linux/uio.h>
 #include <uapi/linux/un.h>
 
-#include "socket.h"
+#include "../../private/kernel/net/endpoint_state.h"
 #include "fs/fdtable.h"
 #include "private/fs/fdtable_state.h"
 

@@ -1,8 +1,12 @@
-#ifndef ORLIX_KERNEL_NET_SOCKET_H
-#define ORLIX_KERNEL_NET_SOCKET_H
+#ifndef PRIVATE_KERNEL_NET_ENDPOINT_STATE_H
+#define PRIVATE_KERNEL_NET_ENDPOINT_STATE_H
 
 #include <linux/stddef.h>
 #include <linux/types.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct socket_state;
 
@@ -55,4 +59,8 @@ __kernel_ssize_t socket_recvfrom_impl(struct socket_state *sock,
 
 short socket_poll_revents_impl(struct socket_state *sock, short events);
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif /* PRIVATE_KERNEL_NET_ENDPOINT_STATE_H */

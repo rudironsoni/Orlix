@@ -1,4 +1,4 @@
-#include "socket.h"
+#include "../../private/kernel/net/endpoint_state.h"
 
 #include <linux/errno.h>
 #include <linux/atomic.h>

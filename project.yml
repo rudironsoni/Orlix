@@ -146,8 +146,8 @@ targets:
       - -I$(LINUX_UAPI_ROOT)
     - path: OrlixKernel/kernel/net/socket.c
       group: OrlixKernel/kernel/net
-    - path: OrlixKernel/kernel/net/socket.h
-      group: OrlixKernel/kernel/net
+    - path: OrlixKernel/private/kernel/net/endpoint_state.h
+      group: OrlixKernel/private/kernel/net
     - path: OrlixKernel/kernel/pid.c
       group: OrlixKernel/kernel
     - path: OrlixKernel/kernel/ptrace.c
