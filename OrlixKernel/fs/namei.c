@@ -28,6 +28,7 @@
 #include "private/fs/vfs_state.h"
 #include "fdtable.h"
 #include "private/fs/fdtable_state.h"
+#include "../private/kernel/cred_state.h"
 #include "../private/kernel/task_state.h"
 #include "../kernel/task.h"
 #include "../kernel/cred.h"

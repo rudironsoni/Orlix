@@ -9,6 +9,7 @@
 #include "../../private/fs/readiness_state.h"
 #include "../signal.h"
 #include "../task.h"
+#include "../../private/kernel/task_state.h"
 #include "../../private/kernel/wait_queue_state.h"
 #include "../wait_queue.h"
 

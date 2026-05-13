@@ -57,43 +57,6 @@ struct task_rlimit;
 struct clone_args;
 struct address_space;
 
-enum task_restart_kind {
-    TASK_RESTART_NONE = 0,
-    TASK_RESTART_NANOSLEEP,
-    TASK_RESTART_POLL,
-    TASK_RESTART_PIPE_READ,
-    TASK_RESTART_PIPE_WRITE,
-    TASK_RESTART_FUTEX_WAIT,
-    TASK_RESTART_WAITPID,
-    TASK_RESTART_SELECT,
-    TASK_RESTART_EPOLL_WAIT,
-};
-
-/* Task global table - virtual PID namespace */
-extern struct task *task_table[TASK_MAX_TASKS];
-
-/* The task_init_process (pid 1) - set up during kernel boot */
-extern struct task *task_init_process;
-
-/* Task allocation - virtual kernel internal */
-struct task *alloc_task(void);
-void task_put(struct task *task);
-
-/* Current task accessors - virtual kernel runtime */
-struct task *task_current(void);
-void task_set_current(struct task *task);
-
-/* Virtual PID namespace management */
-int32_t task_alloc_pid(void);
-int pid_reserve(int32_t pid);
-void task_free_pid(int32_t pid);
-void pid_init(void);
-
-/* Virtual task table management */
-int task_init(void);
-void task_deinit(void);
-struct task *task_lookup(int32_t pid);
-int task_hash(int32_t pid);
 /* Virtual process identity syscalls (internal helpers) */
 int32_t getpid_impl(void);
 int32_t getppid_impl(void);
@@ -112,10 +75,6 @@ int unshare_impl(uint64_t flags);
 
 /* Virtual exit helper */
 void exit_impl(int status);
-
-/* Virtual vfork notifications */
-void vfork_exec_notify(void);
-void vfork_exit_notify(void);
 
 #ifdef __cplusplus
 }

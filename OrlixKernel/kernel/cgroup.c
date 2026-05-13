@@ -4,6 +4,7 @@
 
 #include "cgroup.h"
 
+#include "../private/kernel/cred_state.h"
 #include "cred.h"
 #include "task.h"
 #include "../private/kernel/task_state.h"

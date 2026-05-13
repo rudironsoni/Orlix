@@ -14,6 +14,7 @@
 #include <linux/string.h>
 
 #include "kernel/cred.h"
+#include "private/kernel/cred_state.h"
 #include "kernel/task.h"
 #include "private/fs/vfs_state.h"
 #include "private/kernel/task_state.h"

@@ -14,6 +14,7 @@
 #include "internal/slab.h"
 #include "../kernel/signal.h"
 #include "../kernel/task.h"
+#include "../private/kernel/task_state.h"
 #include "../private/kernel/wait_queue_state.h"
 #include "../kernel/wait_queue.h"
 

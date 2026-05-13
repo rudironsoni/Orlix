@@ -18,6 +18,7 @@
 #include "ProcfsNamespaceContract.h"
 #include "fs/vfs.h"
 #include "kernel/cred.h"
+#include "private/kernel/cred_state.h"
 #include "kernel/mm.h"
 #include "kernel/signal.h"
 #include "private/kernel/signal_state.h"

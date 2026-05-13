@@ -9,7 +9,34 @@
 extern "C" {
 #endif
 
+enum task_restart_kind {
+    TASK_RESTART_NONE = 0,
+    TASK_RESTART_NANOSLEEP,
+    TASK_RESTART_POLL,
+    TASK_RESTART_PIPE_READ,
+    TASK_RESTART_PIPE_WRITE,
+    TASK_RESTART_FUTEX_WAIT,
+    TASK_RESTART_WAITPID,
+    TASK_RESTART_SELECT,
+    TASK_RESTART_EPOLL_WAIT,
+};
+
+extern struct task *task_table[TASK_MAX_TASKS];
+extern struct task *task_init_process;
 extern kernel_mutex_t task_table_lock;
+
+struct task *alloc_task(void);
+void task_put(struct task *task);
+struct task *task_current(void);
+void task_set_current(struct task *task);
+int32_t task_alloc_pid(void);
+int pid_reserve(int32_t pid);
+void task_free_pid(int32_t pid);
+void pid_init(void);
+int task_init(void);
+void task_deinit(void);
+struct task *task_lookup(int32_t pid);
+int task_hash(int32_t pid);
 
 void task_clear_vmas_impl(struct memory_space *mm);
 struct memory_space *task_mm_get_impl(struct memory_space *mm);
@@ -339,6 +366,8 @@ int task_restart_record_impl(struct task *task,
                              uint64_t arg3,
                              uint64_t arg4,
                              uint64_t arg5);
+void vfork_exec_notify(void);
+void vfork_exit_notify(void);
 
 #ifdef __cplusplus
 }

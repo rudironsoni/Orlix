@@ -12,6 +12,7 @@
 #include "../../kunit/suite_registry.h"
 #include "kernel/init.h"
 #include "kernel/cred.h"
+#include "private/kernel/cred_state.h"
 #include "kernel/futex.h"
 #include "kernel/signal.h"
 #include "private/kernel/futex_state.h"

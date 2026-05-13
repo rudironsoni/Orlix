@@ -11,6 +11,7 @@
 #include "../private/fs/fdtable_state.h"
 #include "../fs/vfs.h"
 #include "../private/kernel/mutex_state.h"
+#include "../private/kernel/task_state.h"
 #include "../runtime/native/registry.h"
 #include "task.h"
 

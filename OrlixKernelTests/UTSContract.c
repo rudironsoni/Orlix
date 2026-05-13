@@ -4,6 +4,7 @@
 
 #include "UTSContract.h"
 #include "kernel/cred.h"
+#include "private/kernel/cred_state.h"
 #include "kernel/task.h"
 #include "private/kernel/task_state.h"
 #include "kernel/uts.h"

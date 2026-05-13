@@ -4,6 +4,7 @@
 
 #include "../private/kernel/mutex_state.h"
 #include "task.h"
+#include "../private/kernel/task_state.h"
 
 #define PID_MIN 1
 #define PID_MAX 65535
