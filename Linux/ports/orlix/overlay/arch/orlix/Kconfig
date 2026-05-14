@@ -1,3 +1,8 @@
 config ORLIX
 	bool "Orlix architecture"
 	default y
+	select HAVE_ARCH_SECCOMP_FILTER
+
+config MMU
+	bool
+	default y
