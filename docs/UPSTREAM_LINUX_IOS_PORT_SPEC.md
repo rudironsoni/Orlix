@@ -4,7 +4,7 @@ This document defines the approved architecture for the Orlix upstream Linux iOS
 
 ## Core Position
 
-Orlix compiles upstream Linux for iOS-hosted products. The local repository owns the Orlix port overlay, patch set, configs, bootloader-facing product API, private host mediation, and build/package proof targets.
+Orlix materializes and configures upstream Linux for iOS-hosted products, then packages the bootloader-facing OrlixKernel skeleton library. The local repository owns the Orlix port overlay, patch set, configs, bootloader-facing product API, private host mediation, and build/package proof targets.
 
 The upstream Linux source tree is generated local input. It is not the durable place for Orlix changes.
 
@@ -154,7 +154,7 @@ make build-linux-iphoneos
 make package-orlixkernel-xcframework
 ```
 
-These targets prove that the upstream source can be materialized, the Orlix port overlay and patches can prepare a disposable worktree, and the simulator/device slices can be packaged as an XCFramework.
+These targets prove that the upstream source can be materialized, the Orlix port overlay and patches can prepare a disposable worktree, the Orlix Linux Kbuild configuration step can run, and the simulator/device OrlixKernel skeleton library slices can be packaged as an XCFramework.
 
 They do not prove real boot, real syscall entry, real Linux drivers, rootfs mount, bundled userspace, procfs/sysfs/devfs/cgroupfs runtime behavior, or App Store execution policy.
 

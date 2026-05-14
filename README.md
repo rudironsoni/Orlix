@@ -2,7 +2,7 @@
 
 Orlix is an iOS-hosted port of upstream Linux. This repository keeps the local Orlix port overlay and build packaging around an upstream Linux source tree generated on demand.
 
-The product goal for this skeleton is narrow: prepare, build, and package an Orlix-flavored upstream Linux kernel artifact for iOS simulator and device targets. This repository does not claim real boot-to-`start_kernel`, syscall entry, drivers, rootfs mount, bundled userspace, procfs/sysfs/devfs/cgroupfs runtime proof, or App Store execution policy.
+The product goal for this skeleton is narrow: materialize and configure an Orlix-flavored upstream Linux worktree, then package the bootloader-facing OrlixKernel skeleton library for iOS simulator and device targets. This repository does not claim real boot-to-`start_kernel`, syscall entry, drivers, rootfs mount, bundled userspace, procfs/sysfs/devfs/cgroupfs runtime proof, or App Store execution policy.
 
 ## Source Model
 
@@ -53,7 +53,7 @@ Use it for local build products and generated Linux state only. If a change shou
 
 ## Port Ownership
 
-Orlix compiles upstream Linux. It does not locally rewrite Linux core subsystems.
+Orlix materializes and configures upstream Linux through Kbuild. It does not locally rewrite Linux core subsystems.
 
 Committed Orlix Linux code is owned by Linux-native extension points:
 
@@ -92,9 +92,9 @@ make build-linux-iphoneos
 make package-orlixkernel-xcframework
 ```
 
-`make build-linux-simulator` prepares the disposable Linux worktree and builds the simulator slice.
+`make build-linux-simulator` prepares the disposable Linux worktree, runs the Orlix Linux Kbuild configuration step, and builds the simulator OrlixKernel skeleton library slice.
 
-`make build-linux-iphoneos` prepares the disposable Linux worktree and builds the device slice.
+`make build-linux-iphoneos` prepares the disposable Linux worktree, runs the Orlix Linux Kbuild configuration step, and builds the device OrlixKernel skeleton library slice.
 
 `make package-orlixkernel-xcframework` builds both slices and packages the public OrlixKernel XCFramework artifact.
 
