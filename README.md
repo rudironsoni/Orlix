@@ -125,13 +125,12 @@ Ad hoc build systems are not proof truth for this repo.
 The current vendored Linux tuple lives under:
 
 ```text
-OrlixKernel/vendor/linux/6.12/arm64/
-└── kheaders/
-    └── include/
-        ├── linux/
-        ├── asm/
-        ├── asm-generic/
-        └── uapi/
+Build/linux-work/
+└── include/
+    ├── linux/
+    ├── asm/
+    ├── asm-generic/
+    └── uapi/
 ```
 
 The correct architectural reading is:
@@ -178,7 +177,7 @@ Allowed Linux include forms:
 - `#include <uapi/...>` where the owning surface is explicitly userspace ABI oriented
 
 Forbidden include forms:
-- provenance-heavy include paths such as `OrlixKernel/vendor/linux/...`
+- provenance-heavy include paths such as `Linux/upstream/...` or `Build/linux-work/...`
 - repo-local Linux-concept wrappers or renamed shim headers
 - libc, POSIX, Darwin, Foundation, or Apple SDK headers in `OrlixKernel`
 

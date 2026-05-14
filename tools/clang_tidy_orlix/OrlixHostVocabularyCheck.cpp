@@ -22,7 +22,7 @@ bool isVendoredLinuxDecl(const NamedDecl &Decl, const SourceManager &SM) {
   if (Loc.isInvalid())
     return false;
   auto Entry = SM.getFileEntryRefForID(SM.getFileID(Loc));
-  return Entry && pathHasComponent(Entry->getName(), "OrlixKernel/vendor/linux/");
+  return Entry && pathHasComponent(Entry->getName(), "Build/linux-work/");
 }
 
 llvm::StringRef kindLabel(const NamedDecl &Decl) {

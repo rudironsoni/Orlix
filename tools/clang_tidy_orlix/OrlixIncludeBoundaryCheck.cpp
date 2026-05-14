@@ -189,7 +189,7 @@ public:
 
       if (isForbiddenStdHeader(FileName)) {
         Check.diag(HashLoc,
-                   "host toolchain std*.h headers are forbidden in Linux-owner code; use vendored Linux truth from OrlixKernel/vendor/linux/<version>/<arch>/kheaders/include instead");
+                   "host toolchain std*.h headers are forbidden in Linux-owner code; use upstream Linux truth from Build/linux-work/include instead");
       }
 
       if (FileName.starts_with("__vendor/") || FileName.starts_with("support/uapi/")) {
@@ -208,7 +208,8 @@ public:
       }
 
       if (FileName.starts_with("third_party/linux/") ||
-          FileName.starts_with("OrlixKernel/vendor/linux/")) {
+          FileName.starts_with("Linux/upstream/") ||
+          FileName.starts_with("Build/linux-work/")) {
         Check.diag(HashLoc,
                    "provenance-heavy vendor paths are forbidden in source includes; use upstream Linux include names only");
       }
