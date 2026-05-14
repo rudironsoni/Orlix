@@ -19,11 +19,10 @@
 #include "../private/kernel/mm_state.h"
 #include "../private/kernel/task_state.h"
 #include "../kernel/task.h"
+#include "../kernel/time.h"
 
 #define LINUX_UTIME_NOW_VALUE  ((1L << 30) - 1L)
 #define LINUX_UTIME_OMIT_VALUE ((1L << 30) - 2L)
-
-extern int linux_realtime_now_impl(struct __kernel_timespec *tp);
 
 static int inode_resolve_path_at(int dirfd, const char *pathname, char *resolved_path,
                                  size_t resolved_path_len) {

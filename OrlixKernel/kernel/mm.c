@@ -58,7 +58,6 @@ struct mm_file_size_note {
 
 static struct mm_file_size_note mm_file_size_notes[128];
 
-extern int close_impl(int fd);
 extern void *__kmalloc_noprof(size_t size, gfp_t flags);
 extern void kfree(const void *objp);
 

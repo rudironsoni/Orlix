@@ -28,14 +28,12 @@
 #include "../private/runtime/native/registry_state.h"
 #include "internal/slab.h"
 #include "fdtable.h"
+#include "namei.h"
 #include "open.h"
 #include "read_write.h"
 #include "private/fs/fdtable_state.h"
 #include "vfs.h"
 #include "private/fs/vfs_state.h"
-
-extern int close_impl(int fd);
-extern ssize_t readlinkat_impl(int dirfd, const char *pathname, char *buf, size_t bufsiz);
 
 /* Forward declarations for exec variants */
 int exec_native(struct task *task, const char *path, int argc, char **argv, char **envp);

@@ -8,14 +8,13 @@
 #include <linux/atomic.h>
 
 #include "../fs/fdtable.h"
+#include "../fs/exec.h"
 #include "../private/fs/fdtable_state.h"
 #include "../fs/vfs.h"
 #include "../private/kernel/mutex_state.h"
 #include "../private/kernel/task_state.h"
 #include "../runtime/native/registry.h"
 #include "task.h"
-
-extern int execve_impl(const char *pathname, char *const argv[], char *const envp[]);
 
 /* Global initialization state */
 static atomic_t library_initialized = ATOMIC_INIT(0);

@@ -12,20 +12,19 @@
 
 #include "fdtable.h"
 #include "private/fs/fdtable_state.h"
+#include "inode.h"
 #include "internal/fs/file.h"
 #include "internal/random.h"
 #include "pipe.h"
 #include "private/fs/pipe_state.h"
 #include "private/fs/pty_state.h"
+#include "super.h"
 #include "vfs.h"
 #include "private/fs/vfs_state.h"
 #include "../private/kernel/cgroup_state.h"
 #include "../private/kernel/net/endpoint_state.h"
 #include "kernel/task.h"
 #include "private/kernel/task_state.h"
-
-extern int ftruncate_impl(int fd, int64_t length);
-extern int fdatasync_impl(int fd);
 
 ssize_t read_impl(int fd, void *buf, size_t count) {
     if (count == 0) {
