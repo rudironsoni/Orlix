@@ -141,9 +141,17 @@ prepare-linux-worktree: bootstrap-linux-upstream
 		""|"/"|"."|"..") echo "unsafe Linux work directory: $$linux_work_dir" >&2; exit 1 ;; \
 	esac; \
 	case "$$linux_work_dir" in \
+		../*|*/../*|*/..) echo "Linux work directory must not contain path traversal: $$linux_work_dir" >&2; exit 1 ;; \
+	esac; \
+	case "$$linux_work_dir" in \
 		Build/*) ;; \
 		*) echo "Linux work directory must be under Build/: $$linux_work_dir" >&2; exit 1 ;; \
 	esac; \
+	if [ -L Build ]; then \
+		echo "refusing to use symlinked Build directory" >&2; \
+		exit 1; \
+	fi; \
+	mkdir -p Build; \
 	if [ "$$linux_work_dir" = "$$linux_upstream_dir" ]; then \
 		echo "Linux work directory must not equal upstream directory: $$linux_work_dir" >&2; \
 		exit 1; \
