@@ -15,21 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "362206659F15D41903575E28"
-               BuildableName = "libOrlixHostAdapter.a"
-               BlueprintName = "OrlixHostAdapter"
-               ReferencedContainer = "container:OrlixKernel.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "340ACF678BDA50A044F7EFEE"
+               BlueprintIdentifier = "0E81156E7BC3E4ED1EB5311D"
                BuildableName = "libOrlixKernel.a"
                BlueprintName = "OrlixKernel"
                ReferencedContainer = "container:OrlixKernel.xcodeproj">
@@ -46,9 +32,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "362206659F15D41903575E28"
-            BuildableName = "libOrlixHostAdapter.a"
-            BlueprintName = "OrlixHostAdapter"
+            BlueprintIdentifier = "0E81156E7BC3E4ED1EB5311D"
+            BuildableName = "libOrlixKernel.a"
+            BlueprintName = "OrlixKernel"
             ReferencedContainer = "container:OrlixKernel.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -68,9 +54,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "362206659F15D41903575E28"
-            BuildableName = "libOrlixHostAdapter.a"
-            BlueprintName = "OrlixHostAdapter"
+            BlueprintIdentifier = "0E81156E7BC3E4ED1EB5311D"
+            BuildableName = "libOrlixKernel.a"
+            BlueprintName = "OrlixKernel"
             ReferencedContainer = "container:OrlixKernel.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -84,9 +70,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "362206659F15D41903575E28"
-            BuildableName = "libOrlixHostAdapter.a"
-            BlueprintName = "OrlixHostAdapter"
+            BlueprintIdentifier = "0E81156E7BC3E4ED1EB5311D"
+            BuildableName = "libOrlixKernel.a"
+            BlueprintName = "OrlixKernel"
             ReferencedContainer = "container:OrlixKernel.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

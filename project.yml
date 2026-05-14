@@ -1,9 +1,4 @@
-name: Orlix
-options:
-  postGenCommand: >-
-    perl -pi -e 's/container:Orlix\.xcodeproj/container:OrlixKernel.xcodeproj/g' Orlix.xcodeproj/xcshareddata/xcschemes/*.xcscheme
-    && rm -rf OrlixKernel.xcodeproj
-    && mv Orlix.xcodeproj OrlixKernel.xcodeproj
+name: OrlixKernel
 settings:
   base:
     GCC_TREAT_WARNINGS_AS_ERRORS: true
@@ -65,14 +60,11 @@ targets:
     sources:
       - path: OrlixHostAdapter/fs/backing_dir.c
       - path: OrlixHostAdapter/fs/backing_io.m
-      - path: OrlixHostAdapter/fs/backing_io_internal.h
       - path: OrlixHostAdapter/fs/backing_paths.m
       - path: OrlixHostAdapter/fs/backing_stat_translate.c
         compilerFlags:
           - -I$(LINUX_KERNEL_UAPI_INCLUDE_ROOT)
-      - path: OrlixHostAdapter/fs/backing_stat_translate.h
       - path: OrlixHostAdapter/fs/errno_translation.c
-      - path: OrlixHostAdapter/fs/errno_translation.h
       - path: OrlixHostAdapter/fs/memfd.c
       - path: OrlixHostAdapter/fs/open_flags.c
         compilerFlags:
@@ -104,7 +96,6 @@ targets:
           - $(LINUX_KERNEL_KHEADERS_INCLUDE_ROOT)/linux/kconfig.h
           - -I$(LINUX_KERNEL_KHEADERS_INCLUDE_ROOT)
           - -I$(LINUX_KERNEL_UAPI_INCLUDE_ROOT)
-      - path: OrlixHostAdapter/runtime/sync.h
 configurations:
   Debug:
     settings:
@@ -121,4 +112,3 @@ schemes:
     build:
       targets:
         OrlixKernel: all
-        OrlixHostAdapter: all
