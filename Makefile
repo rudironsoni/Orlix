@@ -137,16 +137,10 @@ prepare-linux-worktree: bootstrap-linux-upstream
 	patch_dir="$(ORLIX_LINUX_PATCH_DIR)"; \
 	exception_dir="$$patch_dir/exceptions"; \
 	forbidden_re='^(fs|kernel|mm|ipc|net|include/linux|include/uapi)(/|$$)'; \
-	case "$$linux_work_dir" in \
-		""|"/"|"."|"..") echo "unsafe Linux work directory: $$linux_work_dir" >&2; exit 1 ;; \
-	esac; \
-	case "$$linux_work_dir" in \
-		../*|*/../*|*/..) echo "Linux work directory must not contain path traversal: $$linux_work_dir" >&2; exit 1 ;; \
-	esac; \
-	case "$$linux_work_dir" in \
-		Build/*) ;; \
-		*) echo "Linux work directory must be under Build/: $$linux_work_dir" >&2; exit 1 ;; \
-	esac; \
+	if [ "$$linux_work_dir" != "Build/linux-work" ]; then \
+		echo "Linux work directory must be Build/linux-work: $$linux_work_dir" >&2; \
+		exit 1; \
+	fi; \
 	if [ -L Build ]; then \
 		echo "refusing to use symlinked Build directory" >&2; \
 		exit 1; \
