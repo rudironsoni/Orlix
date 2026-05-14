@@ -16,7 +16,6 @@
 #include "kernel/task.h"
 #include "private/kernel/task_state.h"
 
-extern int close_impl(int fd);
 extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 extern __kernel_pid_t tcgetpgrp(int fd);
 extern int tcsetpgrp(int fd, __kernel_pid_t pgrp);

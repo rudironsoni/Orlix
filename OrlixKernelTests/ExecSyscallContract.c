@@ -20,6 +20,7 @@
 
 #include "fs/fdtable.h"
 #include "fs/exec.h"
+#include "fs/inode.h"
 #include "fs/namei.h"
 #include "fs/mount.h"
 #include "fs/open.h"
@@ -45,7 +46,6 @@ extern int execve(const char *pathname, char *const argv[], char *const envp[]);
 extern int symlinkat(const char *target, int newdirfd, const char *linkpath);
 extern int chmod(const char *pathname, uint32_t mode);
 extern int chown(const char *pathname, uint32_t owner, uint32_t group);
-extern int ftruncate_impl(int fd, int64_t length);
 extern bool signal_is_pending(const struct task *task, int32_t sig);
 
 static bool task_execed(const struct task *task) {

@@ -23,7 +23,6 @@
 #include "private/kernel/task_state.h"
 #include "kernel/wait.h"
 
-extern int close_impl(int fd);
 extern int pty_contract_ioctl(int fd, unsigned long request, ...);
 extern __kernel_pid_t kernel_waitpid(__kernel_pid_t pid, int *wstatus, int options)
     __asm("_waitpid");
