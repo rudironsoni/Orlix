@@ -1,2 +1,2 @@
-obj-$(CONFIG_ORLIX_BLOCK_FILE) += file.o
-obj-$(CONFIG_ORLIX_BLOCK_IMAGE) += image.o
+obj-$(CONFIG_ORLIX_BLOCK) += file.o
+obj-$(CONFIG_ORLIX_BLOCK) += image.o

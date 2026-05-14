@@ -1,13 +1,4 @@
-menu "Orlix block drivers"
-
-config ORLIX_BLOCK_FILE
-	tristate "Orlix file-backed block device"
+config ORLIX_BLOCK
+	bool "Orlix block devices"
 	help
-	  Build the Orlix file-backed block device skeleton.
-
-config ORLIX_BLOCK_IMAGE
-	tristate "Orlix image-backed block device"
-	help
-	  Build the Orlix image-backed block device skeleton.
-
-endmenu
+	  Enable Orlix Linux block device skeletons.

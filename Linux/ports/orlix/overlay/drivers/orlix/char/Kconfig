@@ -1,8 +1,4 @@
-menu "Orlix character drivers"
-
-config ORLIX_CHAR_RANDOM
-	tristate "Orlix random character device"
+config ORLIX_CHAR
+	bool "Orlix character devices"
 	help
-	  Build the Orlix random character device skeleton.
-
-endmenu
+	  Enable Orlix Linux character device skeletons.

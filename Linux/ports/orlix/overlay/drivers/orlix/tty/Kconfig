@@ -1,8 +1,4 @@
-menu "Orlix tty drivers"
-
-config ORLIX_TTY_CONSOLE
-	tristate "Orlix console tty"
+config ORLIX_TTY
+	bool "Orlix TTY devices"
 	help
-	  Build the Orlix console tty skeleton.
-
-endmenu
+	  Enable Orlix Linux TTY skeletons.
