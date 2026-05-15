@@ -64,7 +64,39 @@ expect_success_not_contains() {
     esac
 }
 
+expect_fail_before_network_contains() {
+    local expected="$1"
+    shift
+    local output
+    local status
+
+    set +e
+    output="$({ "$@"; } 2>&1)"
+    status=$?
+    set -e
+
+    if [ "$status" -eq 0 ]; then
+        printf '%s\n' "$output" >&2
+        fail "expected command to fail: $*"
+    fi
+    case "$output" in
+        *"git -C"*fetch*)
+            printf '%s\n' "$output" >&2
+            fail "expected command to fail before network/git fetch: $*"
+            ;;
+    esac
+    case "$output" in
+        *"$expected"*) ;;
+        *)
+            printf '%s\n' "$output" >&2
+            fail "expected output containing: $expected"
+            ;;
+    esac
+}
+
 expect_fail_contains "unsupported PROFILE=bogus" "$MAKE_BIN" validate-orlix-profile PROFILE=bogus
+expect_fail_before_network_contains "Linux upstream directory must be Linux/upstream/linux-6.12" "$MAKE_BIN" bootstrap-linux-upstream LINUX_UPSTREAM_DIR=/tmp/bad
+expect_fail_before_network_contains "Linux clone cache repo must be $ROOT/.cache/linux-clone/linux-6.12.git" "$MAKE_BIN" bootstrap-linux-upstream LINUX_CLONE_CACHE_DIR=/tmp/bad
 expect_success_contains "Build/OrlixKernel/linux-6.12-port" "$MAKE_BIN" -n prepare-orlixkernel-port PROFILE=appstore
 expect_success_contains "Linux/ports/orlix/configs/appstore_defconfig" "$MAKE_BIN" -n prepare-orlixkernel-port PROFILE=appstore
 expect_success_contains "Linux/ports/orlix/configs/appstore_defconfig" "$MAKE_BIN" -n prepare-orlixkernel-port PROFILE=appstore ORLIX_PROFILE_CONFIG=/tmp/bad

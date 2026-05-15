@@ -4,7 +4,7 @@ int OrlixPrepareBootConfig(const struct OrlixBootConfig *config);
 
 static int expect_invalid_config(const struct OrlixBootConfig *config)
 {
-    return OrlixPrepareBootConfig(config) == ORLIX_BOOT_STATUS_INVALID_CONFIG ? 0 : -1;
+    return OrlixBoot(config) == ORLIX_BOOT_STATUS_INVALID_CONFIG ? 0 : -1;
 }
 
 int main(void)

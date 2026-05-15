@@ -36,8 +36,34 @@ bootstrap-linux-upstream:
 	linux_tag="$(LINUX_TAG)"; \
 	upstream_dir="$(LINUX_UPSTREAM_DIR)"; \
 	clone_cache="$(LINUX_CLONE_CACHE_REPO)"; \
+	expected_upstream_dir="Linux/upstream/linux-$(LINUX_VERSION)"; \
+	expected_clone_cache="$(CURDIR)/.cache/linux-clone/linux-$(LINUX_VERSION).git"; \
+	if [ "$$upstream_dir" != "$$expected_upstream_dir" ]; then \
+		echo "Linux upstream directory must be $$expected_upstream_dir: $$upstream_dir" >&2; \
+		exit 1; \
+	fi; \
+	if [ "$$clone_cache" != "$$expected_clone_cache" ]; then \
+		echo "Linux clone cache repo must be $$expected_clone_cache: $$clone_cache" >&2; \
+		exit 1; \
+	fi; \
 	if [ -L Build ]; then \
 		echo "refusing to use symlinked Build directory" >&2; \
+		exit 1; \
+	fi; \
+	if [ -e Linux ] && [ -L Linux ]; then \
+		echo "refusing to use symlinked Linux directory" >&2; \
+		exit 1; \
+	fi; \
+	if [ -e Linux/upstream ] && [ -L Linux/upstream ]; then \
+		echo "refusing to use symlinked Linux/upstream directory" >&2; \
+		exit 1; \
+	fi; \
+	if [ -e .cache ] && [ -L .cache ]; then \
+		echo "refusing to use symlinked .cache directory" >&2; \
+		exit 1; \
+	fi; \
+	if [ -e .cache/linux-clone ] && [ -L .cache/linux-clone ]; then \
+		echo "refusing to use symlinked .cache/linux-clone directory" >&2; \
 		exit 1; \
 	fi; \
 	if [ -L "$$upstream_dir" ]; then \
