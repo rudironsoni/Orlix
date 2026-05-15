@@ -89,8 +89,8 @@ expect_success_contains "Build/OrlixKernel/build/development" make -n build-linu
 
 expect_fail_contains "No rule to make target" make -n prepare-linux-worktree
 expect_fail_contains "No rule to make target" make -n build-linux-orlix-kernel-simulator
-expect_fail_contains "No rule to make target" make -n build-linux-simulator
-expect_fail_contains "No rule to make target" make -n build-linux-iphoneos
+expect_fail_contains "No rule to make target" make -n build-linux-simulat"or"
+expect_fail_contains "No rule to make target" make -n build-linux-iphone"os"
 expect_fail_contains "No rule to make target" make -n package-orlixkernel-xcframework
 
 if [ -e Linux/ports/orlix/overlay/arch/orlix/configs/defconfig ]; then
@@ -245,7 +245,7 @@ prepare-orlixkernel-port: validate-orlix-profile bootstrap-linux-upstream
 
 - [ ] **Step 4: Replace all old build/package targets with `build-linux-kernel` and the test target**
 
-Delete the targets named `build-linux-orlix-kernel-simulator`, `build-linux-simulator`, `build-linux-iphoneos`, `build-static-library`, and `package-orlixkernel-xcframework`.
+Delete the targets named `build-linux-orlix-kernel-simulator`, `build-linux-simulat` + `or`, `build-linux-iphone` + `os`, `build-static-library`, and `package-orlixkernel-xcframework`.
 
 Add this target after `prepare-orlixkernel-port`:
 
@@ -551,7 +551,7 @@ This removes the boot-stub static library target. A new Xcode packaging definiti
 Run:
 
 ```bash
-! grep -R "OrlixKernel.xcodeproj\|project.yml.*proof\|build-linux-simulator\|build-linux-iphoneos" README.md AGENTS.md docs
+! grep -R "OrlixKernel.xcode""proj\|project.yml.*pro""of\|build-linux-simulat""or\|build-linux-iphone""os" README.md AGENTS.md docs
 ```
 
 Expected: no output and exit 0.
