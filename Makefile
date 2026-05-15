@@ -5,27 +5,30 @@ LINUX_ARCH ?= orlix
 LINUX_TAG ?= v$(LINUX_VERSION)
 LINUX_REMOTE ?= https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
 
+PROFILE ?= appstore
+ORLIX_PROFILES := appstore development enterprise
+
 LINUX_UPSTREAM_DIR ?= Linux/upstream/linux-$(LINUX_VERSION)
-LINUX_WORK_DIR ?= Build/linux-work
 LINUX_CLONE_CACHE_DIR ?= .cache/linux-clone
 LINUX_CLONE_CACHE_REPO := $(CURDIR)/$(LINUX_CLONE_CACHE_DIR)/linux-$(LINUX_VERSION).git
 
 ORLIX_LINUX_OVERLAY ?= Linux/ports/orlix/overlay
 ORLIX_LINUX_PATCH_DIR ?= Linux/ports/orlix/patches
+ORLIX_PROFILE_CONFIG := Linux/ports/orlix/configs/$(PROFILE)_defconfig
 ORLIX_KERNEL_HEADER ?= OrlixKernel/include/OrlixKernel.h
-ORLIX_XCFRAMEWORK_DIR ?= Build/OrlixKernel.xcframework
+
+ORLIX_KERNEL_PORT_DIR ?= Build/OrlixKernel/linux-$(LINUX_VERSION)-port
+ORLIX_KERNEL_BUILD_ROOT := $(CURDIR)/Build/OrlixKernel/build
+ORLIX_KERNEL_BUILD_DIR := $(ORLIX_KERNEL_BUILD_ROOT)/$(PROFILE)
+ORLIX_KERNEL_VMLINUX := $(ORLIX_KERNEL_BUILD_DIR)/vmlinux
+ORLIX_BOOT_CONTRACT_DIR := $(CURDIR)/Build/OrlixKernel/bootloader-contract
 
 LINUX_MAKE ?=
 LINUX_SED ?=
 LINUX_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
 LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/tools/linux_host_compat/include
 
-ORLIX_KBUILD_SIM_DIR := $(CURDIR)/Build/linux-orlix-kernel-simulator
-ORLIX_SIMULATOR_DIR := $(CURDIR)/Build/linux-simulator
-ORLIX_IPHONEOS_DIR := $(CURDIR)/Build/linux-iphoneos
-ORLIX_BOOT_CONTRACT_DIR := $(CURDIR)/Build/bootloader-contract
-
-.PHONY: bootstrap-linux-upstream prepare-linux-worktree build-linux-orlix-kernel-simulator build-linux-simulator build-linux-iphoneos build-static-library package-orlixkernel-xcframework test-bootloader-contract
+.PHONY: bootstrap-linux-upstream validate-orlix-profile prepare-orlixkernel-port build-linux-kernel test-bootloader-contract test-milestone1-contract
 
 bootstrap-linux-upstream:
 	@set -euo pipefail; \
@@ -66,34 +69,52 @@ bootstrap-linux-upstream:
 	fi; \
 	echo "upstream Linux ready: $$upstream_dir ($$checked_tag, clone cache $$clone_cache)"
 
-prepare-linux-worktree: bootstrap-linux-upstream
+validate-orlix-profile:
+	@set -euo pipefail; \
+	profile="$(PROFILE)"; \
+	case " $(ORLIX_PROFILES) " in \
+		*" $$profile "*) ;; \
+		*) echo "unsupported PROFILE=$$profile (expected one of: $(ORLIX_PROFILES))" >&2; exit 1 ;; \
+	esac; \
+	config="$(ORLIX_PROFILE_CONFIG)"; \
+	[ -f "$$config" ] || { echo "missing profile defconfig: $$config" >&2; exit 1; }
+
+prepare-orlixkernel-port: validate-orlix-profile bootstrap-linux-upstream
 	@set -euo pipefail; \
 	upstream_dir="$(LINUX_UPSTREAM_DIR)"; \
-	work_dir="$(LINUX_WORK_DIR)"; \
+	port_dir="$(ORLIX_KERNEL_PORT_DIR)"; \
+	expected_port_dir="Build/OrlixKernel/linux-$(LINUX_VERSION)-port"; \
 	overlay_dir="$(ORLIX_LINUX_OVERLAY)"; \
 	patch_dir="$(ORLIX_LINUX_PATCH_DIR)"; \
+	profile_config="$(ORLIX_PROFILE_CONFIG)"; \
 	exception_dir="$$patch_dir/exceptions"; \
 	forbidden_re='^(fs|kernel|mm|ipc|net|include/linux|include/uapi)(/|$$)'; \
-	if [ "$$work_dir" != "Build/linux-work" ]; then \
-		echo "Linux work directory must be Build/linux-work: $$work_dir" >&2; \
+	if [ "$$port_dir" != "$$expected_port_dir" ]; then \
+		echo "Orlix kernel port tree must be $$expected_port_dir: $$port_dir" >&2; \
 		exit 1; \
 	fi; \
-	if [ "$$work_dir" = "$$upstream_dir" ]; then \
-		echo "Linux work directory must not equal upstream directory: $$work_dir" >&2; \
+	if [ "$$port_dir" = "$$upstream_dir" ]; then \
+		echo "Orlix kernel port tree must not equal upstream directory: $$port_dir" >&2; \
 		exit 1; \
 	fi; \
 	if [ -L Build ]; then \
 		echo "refusing to use symlinked Build directory" >&2; \
 		exit 1; \
 	fi; \
+	if [ -e Build/OrlixKernel ] && [ -L Build/OrlixKernel ]; then \
+		echo "refusing to use symlinked Build/OrlixKernel directory" >&2; \
+		exit 1; \
+	fi; \
 	if [ ! -d "$$overlay_dir" ]; then \
 		echo "missing Linux overlay directory: $$overlay_dir" >&2; \
 		exit 1; \
 	fi; \
-	rm -rf "$$work_dir"; \
-	mkdir -p "$$work_dir"; \
-	git -C "$$upstream_dir" archive --format=tar HEAD | tar -x -C "$$work_dir"; \
-	cp -R "$$overlay_dir/." "$$work_dir"; \
+	rm -rf "$$port_dir"; \
+	mkdir -p "$$port_dir"; \
+	git -C "$$upstream_dir" archive --format=tar HEAD | tar -x -C "$$port_dir"; \
+	cp -R "$$overlay_dir/." "$$port_dir"; \
+	mkdir -p "$$port_dir/arch/$(LINUX_ARCH)/configs"; \
+	cp "$$profile_config" "$$port_dir/arch/$(LINUX_ARCH)/configs/defconfig"; \
 	if [ -d "$$patch_dir" ]; then \
 		for patch in "$$patch_dir"/*.patch "$$patch_dir"/*.diff; do \
 			[ -e "$$patch" ] || continue; \
@@ -108,12 +129,12 @@ prepare-linux-worktree: bootstrap-linux-upstream
 					exit 1; \
 				fi; \
 			fi; \
-			patch -d "$$work_dir" -p1 < "$$patch_abs" >/dev/null; \
+			patch -d "$$port_dir" -p1 < "$$patch_abs" >/dev/null; \
 		done; \
 	fi; \
-	echo "prepared Linux worktree: $$work_dir"
+	echo "prepared Orlix kernel port tree: $$port_dir (profile $(PROFILE))"
 
-build-linux-orlix-kernel-simulator: prepare-linux-worktree
+build-linux-kernel: prepare-orlixkernel-port
 	@set -euo pipefail; \
 	linux_make="$(LINUX_MAKE)"; \
 	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
@@ -133,76 +154,24 @@ build-linux-orlix-kernel-simulator: prepare-linux-worktree
 	export PATH; \
 	sed --version >/dev/null 2>&1 || { echo "GNU sed is required by Linux Kbuild on this host" >&2; exit 1; }; \
 	command -v llvm-ar >/dev/null 2>&1 || { echo "llvm-ar is required by Linux Kbuild; install LLVM or set LINUX_LLVM_BIN=/path/to/llvm/bin" >&2; exit 1; }; \
-	build_dir="$(ORLIX_KBUILD_SIM_DIR)"; \
+	build_dir="$(ORLIX_KERNEL_BUILD_DIR)"; \
 	rm -rf "$$build_dir"; \
 	mkdir -p "$$build_dir"; \
-	echo "Kbuild boundary: compiling real arch/orlix/kernel objects; vmlinux is intentionally out of scope."; \
-	"$$linux_make" -C "$(LINUX_WORK_DIR)" O="$$build_dir" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" mrproper defconfig arch/orlix/kernel/; \
-	echo "arch/orlix kernel object compile boundary reached: Build/linux-orlix-kernel-simulator"
-
-build-linux-simulator: prepare-linux-worktree
-	@$(MAKE) build-static-library SDK=iphonesimulator MIN_VERSION=-mios-simulator-version-min=16.0 OUTPUT_DIR="$(ORLIX_SIMULATOR_DIR)"
-
-build-linux-iphoneos: prepare-linux-worktree
-	@$(MAKE) build-static-library SDK=iphoneos MIN_VERSION=-miphoneos-version-min=16.0 OUTPUT_DIR="$(ORLIX_IPHONEOS_DIR)"
-
-build-static-library:
-	@set -euo pipefail; \
-	linux_make="$(LINUX_MAKE)"; \
-	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
-	if [ -z "$$linux_make" ]; then \
-		echo "GNU Make >= 4.0 is required by Linux Kbuild; install gmake or set LINUX_MAKE=/path/to/gmake" >&2; \
-		exit 1; \
-	fi; \
-	linux_llvm_bin="$(LINUX_LLVM_BIN)"; \
-	PATH="$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
-	export PATH; \
-	command -v llvm-ar >/dev/null 2>&1 || { echo "llvm-ar is required by Linux Kbuild; install LLVM or set LINUX_LLVM_BIN=/path/to/llvm/bin" >&2; exit 1; }; \
-	build_dir="$(OUTPUT_DIR)"; \
-	objects_dir="$$build_dir/objects"; \
-	mkdir -p "$$build_dir"; \
-	"$$linux_make" -C "$(LINUX_WORK_DIR)" O="$$build_dir" ARCH="$(LINUX_ARCH)" LLVM=1 mrproper defconfig; \
-	rm -rf "$$objects_dir"; \
-	mkdir -p "$$objects_dir"; \
-	for src in boot/*.c; do \
-		obj="$$objects_dir/$$(basename "$$src" .c).o"; \
-		xcrun --sdk "$(SDK)" clang -arch arm64 "$(MIN_VERSION)" -IOrlixKernel/include -c "$$src" -o "$$obj"; \
-	done; \
-	xcrun --sdk "$(SDK)" clang -arch arm64 "$(MIN_VERSION)" -IOrlixKernel/include -ILinux/ports/orlix/overlay/arch/orlix/include -c Linux/ports/orlix/overlay/arch/orlix/boot/boot.c -o "$$objects_dir/arch_boot.o"; \
-	xcrun --sdk "$(SDK)" libtool -static -o "$$build_dir/libOrlixKernel.a" "$$objects_dir"/*.o; \
-	echo "$(SDK) static library ready: $$build_dir/libOrlixKernel.a"
-
-package-orlixkernel-xcframework: build-linux-simulator build-linux-iphoneos
-	@set -euo pipefail; \
-	xcframework_dir="$(ORLIX_XCFRAMEWORK_DIR)"; \
-	header="$(ORLIX_KERNEL_HEADER)"; \
-	device_lib="$(ORLIX_IPHONEOS_DIR)/libOrlixKernel.a"; \
-	simulator_lib="$(ORLIX_SIMULATOR_DIR)/libOrlixKernel.a"; \
-	[ -f "$$header" ] || { echo "missing OrlixKernel header: $$header" >&2; exit 1; }; \
-	[ -f "$$device_lib" ] || { echo "missing device library: $$device_lib" >&2; exit 1; }; \
-	[ -f "$$simulator_lib" ] || { echo "missing simulator library: $$simulator_lib" >&2; exit 1; }; \
-	rm -rf "$$xcframework_dir"; \
-	xcodebuild -create-xcframework \
-		-library "$$device_lib" -headers OrlixKernel/include \
-		-library "$$simulator_lib" -headers OrlixKernel/include \
-		-output "$$xcframework_dir" >/dev/null; \
-	echo "OrlixKernel.xcframework ready: $$xcframework_dir"
+	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_DIR)" O="$$build_dir" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" mrproper defconfig vmlinux; \
+	[ -f "$(ORLIX_KERNEL_VMLINUX)" ] || { echo "missing vmlinux artifact: $(ORLIX_KERNEL_VMLINUX)" >&2; exit 1; }; \
+	echo "Linux vmlinux ready: $(ORLIX_KERNEL_VMLINUX) (profile $(PROFILE))"
 
 test-bootloader-contract:
 	@set -euo pipefail; \
 	build_dir="$(ORLIX_BOOT_CONTRACT_DIR)"; \
 	mkdir -p "$$build_dir"; \
 	$(CC) -std=c11 -Wall -Wextra -Werror \
-		-DORLIX_BOOT_TESTING=1 \
 		-IOrlixKernel/include \
-		-ILinux/ports/orlix/overlay/arch/orlix/include \
-		boot/dtb.c \
-		boot/image.c \
-		boot/initrd.c \
 		boot/loader.c \
 		boot/params.c \
-		boot/rootfs.c \
-		Linux/ports/orlix/overlay/arch/orlix/boot/boot.c \
 		tests/bootloader_contract.c \
 		-o "$$build_dir/bootloader_contract"; \
 	"$$build_dir/bootloader_contract"
+
+test-milestone1-contract:
+	@tests/milestone1_makefile_contract.sh
