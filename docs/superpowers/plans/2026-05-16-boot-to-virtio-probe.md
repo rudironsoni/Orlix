@@ -79,7 +79,7 @@ with:
 
 - [ ] **Step 3: Compile the bootloader contract with testing hooks and handoff implementation**
 
-In `Makefile`, update the `test-bootloader-contract` compile command so it becomes:
+In `Makefile`, update the `test-bootloader-contract` compile command so it adds `-DORLIX_BOOT_TESTING` but does not yet add `boot/handoff.c`:
 
 ```make
 	$(CC) -std=c11 -Wall -Wextra -Werror \
@@ -88,7 +88,6 @@ In `Makefile`, update the `test-bootloader-contract` compile command so it becom
 		-IOrlixKernel/include \
 		boot/loader.c \
 		boot/params.c \
-		boot/handoff.c \
 		tests/bootloader_contract.c \
 		-o "$$build_dir/bootloader_contract"; \
 ```
@@ -118,6 +117,7 @@ rtk git commit -m "test: define boot handoff contract"
 - Create: `boot/handoff.h`
 - Create: `boot/handoff.c`
 - Modify: `boot/loader.c`
+- Modify: `Makefile`
 
 - [ ] **Step 1: Create the private handoff header**
 
@@ -209,7 +209,23 @@ int OrlixBoot(const struct OrlixBootConfig *config) {
 }
 ```
 
-- [ ] **Step 4: Run the bootloader contract and verify GREEN**
+- [ ] **Step 4: Compile the bootloader contract with the handoff implementation**
+
+In `Makefile`, update the `test-bootloader-contract` compile command so it now includes `boot/handoff.c` after `boot/params.c`:
+
+```make
+	$(CC) -std=c11 -Wall -Wextra -Werror \
+		-DORLIX_BOOT_TESTING \
+		-I. \
+		-IOrlixKernel/include \
+		boot/loader.c \
+		boot/params.c \
+		boot/handoff.c \
+		tests/bootloader_contract.c \
+		-o "$$build_dir/bootloader_contract"; \
+```
+
+- [ ] **Step 5: Run the bootloader contract and verify GREEN**
 
 Run:
 
@@ -219,12 +235,12 @@ rtk make test-bootloader-contract
 
 Expected: PASS with output ending in `make: ok`.
 
-- [ ] **Step 5: Commit the handoff implementation**
+- [ ] **Step 6: Commit the handoff implementation**
 
 Run:
 
 ```bash
-rtk git add boot/handoff.h boot/handoff.c boot/loader.c
+rtk git add Makefile boot/handoff.h boot/handoff.c boot/loader.c
 rtk git commit -m "boot: hand valid configs to private boot seam"
 ```
 
