@@ -16,4 +16,10 @@ struct boot_params {
 
 void arch_boot_entry(const struct boot_params *params);
 
+#if defined(CONFIG_ORLIX_BOOT_KUNIT_TEST)
+int arch_boot_handoff_count(void);
+const struct boot_params *arch_boot_last_params(void);
+void arch_boot_reset_handoff(void);
+#endif
+
 #endif /* _ASM_ORLIX_BOOT_H */

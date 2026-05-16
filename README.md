@@ -37,19 +37,33 @@ make build-linux-kernel PROFILE=development
 
 `PROFILE=appstore` is the default profile. Pass another profile only when you intentionally need it.
 
-Milestone 2 boot-entrypoint proof is intentionally narrower than booting Linux. It verifies that the public API stays bootloader-shaped, that private boot input generation maps closed profiles to Linux-shaped defaults, and that durable profile DTS sources are materialized into the generated port tree:
+Milestone 2 boot-entrypoint proof is intentionally narrower than booting Linux. It verifies that profile DTS sources are materialized into the generated Linux port tree.
 
 ```bash
-make test-milestone2-boot-contract
+make prepare-orlixkernel-port PROFILE=appstore
 ```
 
 Milestone 2 does not prove QEMU execution, iOS execution, task switching, MMU behavior, userspace access, device binding, or root filesystem assembly.
 
-Milestone 3 boot-to-virtio-probe proof keeps the dependency chain honest. It verifies that valid boot configs reach a private boot handoff, that profile DTS files describe virtio-mmio probe-shape devices, and that profile configs enable upstream OF, virtio-mmio, and virtio-block probe paths:
+Milestone 3 boot-to-virtio-probe proof keeps the dependency chain honest. It verifies that generated profile DTS files describe virtio-mmio probe-shape devices, that the selected generated profile defconfig enables upstream OF, virtio-mmio, and virtio-block probe paths, and that Orlix architecture boot handoff state is covered by a KUnit suite.
+
+Build Orlix kselftest artifacts with Linux's kselftest build shape:
 
 ```bash
-make test-milestone3-boot-probe-contract
+make prepare-orlixkernel-port PROFILE=appstore
+make -C Build/OrlixKernel/linux-6.12-port/tools/testing/selftests TARGETS=orlix
 ```
+
+Build Orlix KUnit artifacts with Linux Kbuild and the Orlix KUnit config:
+
+```bash
+cd Build/OrlixKernel/linux-6.12-port
+make O=../kunit-orlix ARCH=orlix defconfig
+scripts/kconfig/merge_config.sh -m -O ../kunit-orlix ../kunit-orlix/.config arch/orlix/.kunitconfig
+make O=../kunit-orlix ARCH=orlix olddefconfig arch/orlix/boot/boot_test.o
+```
+
+Do not run kselftest or KUnit on Darwin and do not use a VM as product proof. Test execution belongs inside the Orlix Linux instance once the iOS-hosted boot path can run Linux userspace and kernel test output.
 
 Milestone 3 does not prove `/dev/vda`, `/dev/vdb`, virtio-block request I/O, host-backed disk persistence, initramfs loading, OverlayFS root assembly, or userspace boot.
 

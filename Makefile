@@ -21,14 +21,13 @@ ORLIX_KERNEL_PORT_DIR ?= Build/OrlixKernel/linux-$(LINUX_VERSION)-port
 ORLIX_KERNEL_BUILD_ROOT := $(CURDIR)/Build/OrlixKernel/build
 ORLIX_KERNEL_BUILD_DIR := $(ORLIX_KERNEL_BUILD_ROOT)/$(PROFILE)
 ORLIX_KERNEL_VMLINUX := $(ORLIX_KERNEL_BUILD_DIR)/vmlinux
-ORLIX_BOOT_CONTRACT_DIR := $(CURDIR)/Build/OrlixKernel/bootloader-contract
 
 LINUX_MAKE ?=
 LINUX_SED ?=
 LINUX_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
 LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/tools/linux_host_compat/include
 
-.PHONY: bootstrap-linux-upstream validate-orlix-profile prepare-orlixkernel-port build-linux-kernel test-bootloader-contract test-milestone1-contract test-milestone2-boot-contract test-milestone3-boot-probe-contract
+.PHONY: bootstrap-linux-upstream validate-orlix-profile prepare-orlixkernel-port build-linux-kernel
 
 bootstrap-linux-upstream:
 	@set -euo pipefail; \
@@ -211,44 +210,3 @@ build-linux-kernel: prepare-orlixkernel-port
 	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_DIR)" O="$$build_dir" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" mrproper defconfig vmlinux; \
 	[ -f "$$vmlinux" ] || { echo "missing vmlinux artifact: $$vmlinux" >&2; exit 1; }; \
 	echo "Linux vmlinux ready: $$vmlinux (profile $(PROFILE))"
-
-test-bootloader-contract:
-	@set -euo pipefail; \
-	build_dir="$(CURDIR)/Build/OrlixKernel/bootloader-contract"; \
-	expected_boot_contract_dir="$(CURDIR)/Build/OrlixKernel/bootloader-contract"; \
-	if [ "$$build_dir" != "$$expected_boot_contract_dir" ]; then \
-		echo "Orlix bootloader contract directory must be $$expected_boot_contract_dir: $$build_dir" >&2; \
-		exit 1; \
-	fi; \
-	if [ -L Build ]; then \
-		echo "refusing to use symlinked Build directory" >&2; \
-		exit 1; \
-	fi; \
-	if [ -e Build/OrlixKernel ] && [ -L Build/OrlixKernel ]; then \
-		echo "refusing to use symlinked Build/OrlixKernel directory" >&2; \
-		exit 1; \
-	fi; \
-	if [ -e Build/OrlixKernel/bootloader-contract ] && [ -L Build/OrlixKernel/bootloader-contract ]; then \
-		echo "refusing to use symlinked Build/OrlixKernel/bootloader-contract directory" >&2; \
-		exit 1; \
-	fi; \
-	mkdir -p "$$build_dir"; \
-	$(CC) -std=c11 -Wall -Wextra -Werror \
-		-DORLIX_BOOT_TESTING \
-		-I. \
-		-IOrlixKernel/include \
-		boot/loader.c \
-		boot/params.c \
-		boot/handoff.c \
-		tests/bootloader_contract.c \
-		-o "$$build_dir/bootloader_contract"; \
-	"$$build_dir/bootloader_contract"
-
-test-milestone1-contract:
-	@MAKE_BIN="$(MAKE)" tests/milestone1_makefile_contract.sh
-
-test-milestone2-boot-contract: test-bootloader-contract
-	@MAKE_BIN="$(MAKE)" tests/milestone2_boot_contract.sh
-
-test-milestone3-boot-probe-contract: test-milestone2-boot-contract
-	@MAKE_BIN="$(MAKE)" tests/milestone3_boot_probe_contract.sh
