@@ -2,6 +2,7 @@
 
 #include "OrlixKernel.h"
 #include "boot/input.h"
+#include "boot/handoff.h"
 
 int OrlixPrepareBootConfig(const struct OrlixBootConfig *config);
 
@@ -138,8 +139,26 @@ int main(void)
         return 12;
     }
 
+    OrlixBootResetHandoff();
     if (OrlixBoot(&config) != ORLIX_BOOT_STATUS_UNAVAILABLE) {
         return 13;
+    }
+    if (OrlixBootHandoffCount() != 1) {
+        return 14;
+    }
+    if (!OrlixBootLastHandoff()) {
+        return 15;
+    }
+    if (OrlixBootLastHandoff()->profile != ORLIX_BOOT_PROFILE_APPSTORE) {
+        return 16;
+    }
+    if (expect_string(OrlixBootLastHandoff()->profile_dtb_path,
+                      "arch/orlix/boot/dts/appstore.dtb") != 0) {
+        return 17;
+    }
+    if (expect_string(OrlixBootLastHandoff()->kernel_cmdline,
+                      "console=ttyS0 root=/dev/ram0 rw orlix.profile=appstore") != 0) {
+        return 18;
     }
 
     return 0;
