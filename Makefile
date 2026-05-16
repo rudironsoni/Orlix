@@ -239,6 +239,7 @@ test-bootloader-contract:
 		-IOrlixKernel/include \
 		boot/loader.c \
 		boot/params.c \
+		boot/handoff.c \
 		tests/bootloader_contract.c \
 		-o "$$build_dir/bootloader_contract"; \
 	"$$build_dir/bootloader_contract"
