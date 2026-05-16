@@ -1,10 +1,70 @@
+#include <string.h>
+
 #include "OrlixKernel.h"
+#include "boot/input.h"
 
 int OrlixPrepareBootConfig(const struct OrlixBootConfig *config);
 
 static int expect_invalid_config(const struct OrlixBootConfig *config)
 {
     return OrlixBoot(config) == ORLIX_BOOT_STATUS_INVALID_CONFIG ? 0 : -1;
+}
+
+static int expect_string(const char *actual, const char *expected)
+{
+    if (!actual || !expected) {
+        return -1;
+    }
+    return strcmp(actual, expected) == 0 ? 0 : -1;
+}
+
+static int expect_cmdline_contains(const char *actual, const char *fragment)
+{
+    if (!actual || !fragment) {
+        return -1;
+    }
+    return strstr(actual, fragment) ? 0 : -1;
+}
+
+static int expect_profile_input(enum OrlixBootProfile profile,
+                                const char *expected_dtb,
+                                const char *expected_console,
+                                const char *expected_root,
+                                const char *expected_cmdline_fragment)
+{
+    struct OrlixBootConfig config = {
+        .profile = profile,
+        .root_image_identifier = "default-root",
+        .terminal_identifier = "default-terminal",
+    };
+    struct OrlixBootInput input;
+
+    if (OrlixPrepareBootInput(&config, &input) != ORLIX_BOOT_STATUS_OK) {
+        return 1;
+    }
+    if (input.profile != profile) {
+        return 2;
+    }
+    if (expect_string(input.profile_dtb_path, expected_dtb) != 0) {
+        return 3;
+    }
+    if (expect_string(input.console_device, expected_console) != 0) {
+        return 4;
+    }
+    if (expect_string(input.root_device, expected_root) != 0) {
+        return 5;
+    }
+    if (expect_cmdline_contains(input.kernel_cmdline, expected_cmdline_fragment) != 0) {
+        return 6;
+    }
+    if (input.root_image_identifier != config.root_image_identifier) {
+        return 7;
+    }
+    if (input.terminal_identifier != config.terminal_identifier) {
+        return 8;
+    }
+
+    return 0;
 }
 
 int main(void)
@@ -14,6 +74,7 @@ int main(void)
         .root_image_identifier = "default-root",
         .terminal_identifier = "default-terminal",
     };
+    struct OrlixBootInput input;
 
     if (expect_invalid_config(0) != 0) {
         return 1;
@@ -53,8 +114,40 @@ int main(void)
         return 7;
     }
 
-    if (OrlixBoot(&config) != ORLIX_BOOT_STATUS_UNAVAILABLE) {
+    if (OrlixPrepareBootInput(0, &input) != ORLIX_BOOT_STATUS_INVALID_CONFIG) {
         return 8;
+    }
+
+    if (OrlixPrepareBootInput(&config, 0) != ORLIX_BOOT_STATUS_INVALID_CONFIG) {
+        return 9;
+    }
+
+    if (expect_profile_input(ORLIX_BOOT_PROFILE_APPSTORE,
+                             "arch/orlix/boot/dts/appstore.dtb",
+                             "ttyS0",
+                             "/dev/ram0",
+                             "orlix.profile=appstore") != 0) {
+        return 10;
+    }
+
+    if (expect_profile_input(ORLIX_BOOT_PROFILE_DEVELOPMENT,
+                             "arch/orlix/boot/dts/development.dtb",
+                             "ttyS0",
+                             "/dev/ram0",
+                             "orlix.profile=development") != 0) {
+        return 11;
+    }
+
+    if (expect_profile_input(ORLIX_BOOT_PROFILE_ENTERPRISE,
+                             "arch/orlix/boot/dts/enterprise.dtb",
+                             "ttyS0",
+                             "/dev/ram0",
+                             "orlix.profile=enterprise") != 0) {
+        return 12;
+    }
+
+    if (OrlixBoot(&config) != ORLIX_BOOT_STATUS_UNAVAILABLE) {
+        return 13;
     }
 
     return 0;

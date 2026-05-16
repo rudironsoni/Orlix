@@ -234,6 +234,7 @@ test-bootloader-contract:
 	fi; \
 	mkdir -p "$$build_dir"; \
 	$(CC) -std=c11 -Wall -Wextra -Werror \
+		-I. \
 		-IOrlixKernel/include \
 		boot/loader.c \
 		boot/params.c \
