@@ -36,7 +36,7 @@ LINUX_SED ?=
 LINUX_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
 LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/tools/linux_host_compat/include
 
-.PHONY: bootstrap-linux-upstream validate-orlix-profile prepare-orlixkernel-port build-linux-kernel stage-orlixkernel-payload generate-xcode-project prepare-ios-packaging build-ios-simulator-framework package-ios-simulator-xcframework test-ios-simulator-packaging run-ios-simulator-terminal proof-ios-simulator-packaging
+.PHONY: bootstrap-linux-upstream validate-orlix-profile prepare-orlixkernel-port build-linux-kernel stage-orlixkernel-payload generate-xcode-project prepare-ios-packaging build-ios-simulator-framework package-ios-simulator-xcframework verify-ios-simulator-xcframework test-ios-simulator-packaging run-ios-simulator-terminal proof-ios-simulator-packaging
 
 bootstrap-linux-upstream:
 	@set -euo pipefail; \
@@ -262,6 +262,10 @@ package-ios-simulator-xcframework: build-ios-simulator-framework
 	./scripts/package-orlixkernel-simulator-xcframework.sh --framework "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)" --output "$(ORLIX_KERNEL_XCFRAMEWORK)"; \
 	[ -d "$(ORLIX_KERNEL_XCFRAMEWORK)" ] || { echo "missing simulator XCFramework: $(ORLIX_KERNEL_XCFRAMEWORK)" >&2; exit 1; }
 
+verify-ios-simulator-xcframework: package-ios-simulator-xcframework
+	@set -euo pipefail; \
+	./scripts/verify-orlixkernel-simulator-xcframework.sh --xcframework "$(ORLIX_KERNEL_XCFRAMEWORK)" --profile "$(PROFILE)" --linux-version "$(LINUX_VERSION)" --linux-arch "$(LINUX_ARCH)"
+
 test-ios-simulator-packaging: prepare-ios-packaging
 	@set -euo pipefail; \
 	command -v "$(XCODEBUILD_MCP)" >/dev/null 2>&1 || { echo "XcodeBuildMCP is required; install xcodebuildmcp or set XCODEBUILD_MCP=/path/to/xcodebuildmcp" >&2; exit 1; }; \
@@ -296,4 +300,4 @@ run-ios-simulator-terminal: prepare-ios-packaging
 		"$${selector[@]}" \
 		--output json
 
-proof-ios-simulator-packaging: package-ios-simulator-xcframework test-ios-simulator-packaging run-ios-simulator-terminal
+proof-ios-simulator-packaging: verify-ios-simulator-xcframework test-ios-simulator-packaging run-ios-simulator-terminal

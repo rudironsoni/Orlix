@@ -60,6 +60,14 @@ This builds the selected profile's Linux `vmlinux`, builds the closed profile DT
 For simulator-first development, run the current simulator packaging proof with:
 
 ```bash
+make proof-ios-simulator-packaging PROFILE=appstore
+```
+
+This verifies the simulator XCFramework payload, runs the packaging XCTest, and launches `OrlixTerminal` against the packaged framework.
+
+Run only the packaging XCTest with:
+
+```bash
 make test-ios-simulator-packaging PROFILE=appstore
 ```
 
@@ -67,6 +75,12 @@ Build a simulator-only `OrlixKernel.xcframework` package with:
 
 ```bash
 make package-ios-simulator-xcframework PROFILE=appstore
+```
+
+Verify that simulator-only package with:
+
+```bash
+make verify-ios-simulator-xcframework PROFILE=appstore
 ```
 
 Launch the simulator host app with:
