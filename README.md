@@ -37,6 +37,14 @@ make build-linux-kernel PROFILE=development
 
 `PROFILE=appstore` is the default profile. Pass another profile only when you intentionally need it.
 
+Milestone 2 boot-entrypoint proof is intentionally narrower than booting Linux. It verifies that the public API stays bootloader-shaped, that private boot input generation maps closed profiles to Linux-shaped defaults, and that durable profile DTS sources are materialized into the generated port tree:
+
+```bash
+make test-milestone2-boot-contract
+```
+
+Milestone 2 does not prove QEMU execution, iOS execution, task switching, MMU behavior, userspace access, device binding, or root filesystem assembly.
+
 ## Generated Trees
 
 The pristine upstream source is generated at:
