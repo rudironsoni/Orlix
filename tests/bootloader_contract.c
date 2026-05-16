@@ -18,19 +18,11 @@ static int expect_string(const char *actual, const char *expected)
     return strcmp(actual, expected) == 0 ? 0 : -1;
 }
 
-static int expect_cmdline_contains(const char *actual, const char *fragment)
-{
-    if (!actual || !fragment) {
-        return -1;
-    }
-    return strstr(actual, fragment) ? 0 : -1;
-}
-
 static int expect_profile_input(enum OrlixBootProfile profile,
                                 const char *expected_dtb,
                                 const char *expected_console,
                                 const char *expected_root,
-                                const char *expected_cmdline_fragment)
+                                const char *expected_cmdline)
 {
     struct OrlixBootConfig config = {
         .profile = profile,
@@ -54,7 +46,7 @@ static int expect_profile_input(enum OrlixBootProfile profile,
     if (expect_string(input.root_device, expected_root) != 0) {
         return 5;
     }
-    if (expect_cmdline_contains(input.kernel_cmdline, expected_cmdline_fragment) != 0) {
+    if (expect_string(input.kernel_cmdline, expected_cmdline) != 0) {
         return 6;
     }
     if (input.root_image_identifier != config.root_image_identifier) {
@@ -126,7 +118,7 @@ int main(void)
                              "arch/orlix/boot/dts/appstore.dtb",
                              "ttyS0",
                              "/dev/ram0",
-                             "orlix.profile=appstore") != 0) {
+                             "console=ttyS0 root=/dev/ram0 rw orlix.profile=appstore") != 0) {
         return 10;
     }
 
@@ -134,7 +126,7 @@ int main(void)
                              "arch/orlix/boot/dts/development.dtb",
                              "ttyS0",
                              "/dev/ram0",
-                             "orlix.profile=development") != 0) {
+                             "console=ttyS0 root=/dev/ram0 rw debug ignore_loglevel orlix.profile=development") != 0) {
         return 11;
     }
 
@@ -142,7 +134,7 @@ int main(void)
                              "arch/orlix/boot/dts/enterprise.dtb",
                              "ttyS0",
                              "/dev/ram0",
-                             "orlix.profile=enterprise") != 0) {
+                             "console=ttyS0 root=/dev/ram0 rw orlix.profile=enterprise") != 0) {
         return 12;
     }
 
