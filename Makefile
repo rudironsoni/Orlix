@@ -26,6 +26,8 @@ ORLIX_XCODE_PROJECT ?= OrlixSystem.xcodeproj
 ORLIX_IOS_SIMULATOR_NAME ?= iPhone 17 Pro
 ORLIX_IOS_SIMULATOR_ID ?=
 ORLIX_IOS_SIMULATOR_DERIVED_DATA ?= $(CURDIR)/.deriveddata/OrlixSystem-sim
+ORLIX_IOS_SIMULATOR_FRAMEWORK := $(ORLIX_IOS_SIMULATOR_DERIVED_DATA)/Build/Products/Debug-iphonesimulator/OrlixKernel.framework
+ORLIX_KERNEL_XCFRAMEWORK ?= $(CURDIR)/Build/OrlixKernel/xcframework/OrlixKernel.xcframework
 XCODEGEN ?= xcodegen
 XCODEBUILD_MCP ?= xcodebuildmcp
 
@@ -34,7 +36,7 @@ LINUX_SED ?=
 LINUX_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
 LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/tools/linux_host_compat/include
 
-.PHONY: bootstrap-linux-upstream validate-orlix-profile prepare-orlixkernel-port build-linux-kernel stage-orlixkernel-payload generate-xcode-project prepare-ios-packaging test-ios-simulator-packaging run-ios-simulator-terminal proof-ios-simulator-packaging
+.PHONY: bootstrap-linux-upstream validate-orlix-profile prepare-orlixkernel-port build-linux-kernel stage-orlixkernel-payload generate-xcode-project prepare-ios-packaging build-ios-simulator-framework package-ios-simulator-xcframework test-ios-simulator-packaging run-ios-simulator-terminal proof-ios-simulator-packaging
 
 bootstrap-linux-upstream:
 	@set -euo pipefail; \
@@ -237,6 +239,29 @@ prepare-ios-packaging: stage-orlixkernel-payload
 	"$(XCODEGEN)" generate --spec project.yml; \
 	echo "iOS packaging inputs ready: project.yml generated $(ORLIX_XCODE_PROJECT) and staged $(ORLIX_KERNEL_PAYLOAD_DIR)"
 
+build-ios-simulator-framework: prepare-ios-packaging
+	@set -euo pipefail; \
+	command -v "$(XCODEBUILD_MCP)" >/dev/null 2>&1 || { echo "XcodeBuildMCP is required; install xcodebuildmcp or set XCODEBUILD_MCP=/path/to/xcodebuildmcp" >&2; exit 1; }; \
+	selector=(); \
+	if [ -n "$(ORLIX_IOS_SIMULATOR_ID)" ]; then \
+		selector=(--simulator-id "$(ORLIX_IOS_SIMULATOR_ID)"); \
+	else \
+		selector=(--simulator-name "$(ORLIX_IOS_SIMULATOR_NAME)" --use-latest-os); \
+	fi; \
+	"$(XCODEBUILD_MCP)" simulator build \
+		--project-path "$(CURDIR)/$(ORLIX_XCODE_PROJECT)" \
+		--scheme "OrlixKernel" \
+		--configuration "Debug" \
+		--derived-data-path "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)" \
+		"$${selector[@]}" \
+		--output json; \
+	[ -d "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)" ] || { echo "missing simulator framework: $(ORLIX_IOS_SIMULATOR_FRAMEWORK)" >&2; exit 1; }
+
+package-ios-simulator-xcframework: build-ios-simulator-framework
+	@set -euo pipefail; \
+	./scripts/package-orlixkernel-simulator-xcframework.sh --framework "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)" --output "$(ORLIX_KERNEL_XCFRAMEWORK)"; \
+	[ -d "$(ORLIX_KERNEL_XCFRAMEWORK)" ] || { echo "missing simulator XCFramework: $(ORLIX_KERNEL_XCFRAMEWORK)" >&2; exit 1; }
+
 test-ios-simulator-packaging: prepare-ios-packaging
 	@set -euo pipefail; \
 	command -v "$(XCODEBUILD_MCP)" >/dev/null 2>&1 || { echo "XcodeBuildMCP is required; install xcodebuildmcp or set XCODEBUILD_MCP=/path/to/xcodebuildmcp" >&2; exit 1; }; \
@@ -271,4 +296,4 @@ run-ios-simulator-terminal: prepare-ios-packaging
 		"$${selector[@]}" \
 		--output json
 
-proof-ios-simulator-packaging: test-ios-simulator-packaging run-ios-simulator-terminal
+proof-ios-simulator-packaging: package-ios-simulator-xcframework test-ios-simulator-packaging run-ios-simulator-terminal

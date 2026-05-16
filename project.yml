@@ -74,6 +74,10 @@ targets:
         INFOPLIST_FILE: OrlixKernelPackagingTests/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixKernelPackagingTests
 schemes:
+  OrlixKernel:
+    build:
+      targets:
+        OrlixKernel: all
   OrlixTerminal:
     build:
       targets:

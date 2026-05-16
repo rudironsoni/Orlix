@@ -63,6 +63,12 @@ For simulator-first development, run the current simulator packaging proof with:
 make test-ios-simulator-packaging PROFILE=appstore
 ```
 
+Build a simulator-only `OrlixKernel.xcframework` package with:
+
+```bash
+make package-ios-simulator-xcframework PROFILE=appstore
+```
+
 Launch the simulator host app with:
 
 ```bash
