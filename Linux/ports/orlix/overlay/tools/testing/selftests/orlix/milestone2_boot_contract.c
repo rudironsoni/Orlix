@@ -76,7 +76,7 @@ int main(void)
 	char *root = kernel_root();
 
 	ksft_print_header();
-	ksft_set_plan(6);
+	ksft_set_plan(4);
 
 	expect_file_contains("appstore DTS has compatible string", root,
 			     "arch/orlix/boot/dts/appstore.dts",
@@ -90,13 +90,6 @@ int main(void)
 	expect_file_contains("development DTS has profile cmdline", root,
 			     "arch/orlix/boot/dts/development.dts",
 			     "orlix.profile=development");
-	expect_file_contains("enterprise DTS has compatible string", root,
-			     "arch/orlix/boot/dts/enterprise.dts",
-			     "compatible = \"orlix,enterprise\", \"orlix\";");
-	expect_file_contains("enterprise DTS has profile cmdline", root,
-			     "arch/orlix/boot/dts/enterprise.dts",
-			     "orlix.profile=enterprise");
-
 	free(root);
 	ksft_finished();
 }

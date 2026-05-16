@@ -23,13 +23,6 @@ static const struct OrlixProfileBootDefaults OrlixProfileBootDefaultsTable[] = {
         .root_device = "/dev/ram0",
         .console_device = "ttyS0",
     },
-    {
-        .profile = ORLIX_BOOT_PROFILE_ENTERPRISE,
-        .profile_dtb_path = "arch/orlix/boot/dts/enterprise.dtb",
-        .kernel_cmdline = "console=ttyS0 root=/dev/ram0 rw orlix.profile=enterprise",
-        .root_device = "/dev/ram0",
-        .console_device = "ttyS0",
-    },
 };
 
 static int OrlixBootStringIsPresent(const char *value)

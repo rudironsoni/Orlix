@@ -6,7 +6,7 @@ LINUX_TAG ?= v$(LINUX_VERSION)
 LINUX_REMOTE ?= https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
 
 PROFILE ?= appstore
-ORLIX_PROFILES := appstore development enterprise
+ORLIX_PROFILES := appstore development
 
 LINUX_UPSTREAM_DIR ?= Linux/upstream/linux-$(LINUX_VERSION)
 LINUX_CLONE_CACHE_DIR ?= .cache/linux-clone

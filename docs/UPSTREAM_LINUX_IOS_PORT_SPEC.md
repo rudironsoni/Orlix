@@ -6,6 +6,8 @@ Orlix compiles upstream Linux into an iOS-hosted kernel product named `OrlixKern
 
 Orlix does not imitate Linux by rewriting Linux core subsystems locally. It adapts Linux through Linux-native extension points such as boot, `arch/orlix`, drivers, Kconfig, device description, host backends, and build packaging.
 
+When upstream Linux already has a surface, implementation convention, build/test flow, or ownership model for a problem, Orlix follows that Linux shape. Orlix-specific alternatives require a concrete iOS constraint and a documented exception.
+
 ## Product Identity
 
 Correct names:
@@ -114,7 +116,11 @@ make build-linux-kernel PROFILE=appstore
 make build-linux-kernel PROFILE=development
 ```
 
-`OrlixKernel.xcframework` packaging must depend on a real Linux build artifact. Boot-stub packaging is not product proof.
+`OrlixKernel.xcframework` packaging must happen early enough to support iOS-hosted Linux execution proof and must depend on a real Linux build artifact. Boot-stub packaging is not product proof.
+
+The App Store and development profiles should validate the same product scope. Development may enable explicit debug and testing affordances, but it must not drift into a broader Linux-visible product shape. Milestones that claim iOS packaging, boot, runtime, or Linux behavior must validate the same XCTest suite and assertions across App Store and development profiles on both `iphoneos` and `iphonesimulator`.
+
+Test-only kernel config overlays may enable KUnit, kselftest support, KUnit debugfs, and proof collection affordances for both App Store and development proof builds. Those overlays do not change the normal product profile configs.
 
 ## Boot Model
 
@@ -126,7 +132,6 @@ The public direction is:
 enum OrlixBootProfile {
     ORLIX_BOOT_PROFILE_APPSTORE,
     ORLIX_BOOT_PROFILE_DEVELOPMENT,
-    ORLIX_BOOT_PROFILE_ENTERPRISE,
 };
 
 struct OrlixBootConfig {
@@ -260,13 +265,19 @@ Proof must remain honest about what it proves.
 
 Kbuild `vmlinux` proof means upstream Linux is being built as Linux for `ARCH=orlix`.
 
-XCFramework packaging proof means the product packages a real Linux build artifact for the selected profile.
+XCFramework packaging proof means the product packages a real Linux build artifact for the selected profile. This proof is required before iOS-hosted Linux test execution can advance.
 
 Boot proof means the bootloader hands Linux-shaped boot inputs into `arch/orlix` and reaches the intended Linux boot stage.
 
 Device proof means upstream Linux device classes bind and operate through Orlix transport and backend mechanics.
 
+Linux-native test execution proof means KUnit and kselftest are built as Linux artifacts and executed inside an Orlix Linux instance launched by the iOS host app. Darwin-hosted execution, VM/QEMU execution, repo-local shell harnesses, and standalone C contract binaries are not product proof. XCTest launches Orlix, verifies iOS packaging/host mechanics, collects KUnit output from the Linux kernel log path, and collects kselftest output from test-initramfs stdout on both `iphoneos` and `iphonesimulator`; both destinations must validate the same milestone scope. KUnit and kselftest remain the tests of record for Linux behavior.
+
+The test kernel may enable Linux debugfs and `CONFIG_KUNIT_DEBUGFS` for per-suite KUnit KTAP retrieval inside the test initramfs. This is a test affordance, not public product API.
+
 Old local-kernel tests are migration reference. They are not proof of the target architecture.
+
+Existing XCTest files that target `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime` are local-kernel migration reference. Retained XCTest should either launch packaged Orlix Linux and collect Linux test output or test narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions belong in KUnit or kselftest.
 
 ## Milestones
 
@@ -278,23 +289,31 @@ Milestone 2: Boot Entrypoint
 
 Introduce the minimal bootloader entrypoint, closed profile selection, profile device trees, and Linux-shaped boot input generation.
 
-Milestone 3: Boot To Virtio Probe
+Milestone 3: XCFramework Packaging
+
+Package a real Orlix Linux artifact into `OrlixKernel.xcframework` for the selected profile. Packaging boot stubs alone is not proof.
+
+Milestone 4: iOS-Hosted Linux Test Execution
+
+Launch packaged Orlix Linux from an iOS host app or test host, run Linux-native KUnit and kselftest inside Orlix Linux, and collect KUnit KTAP plus kselftest TAP from that Linux instance. Build-only KUnit or kselftest artifacts are preparatory evidence, not runtime proof.
+
+Milestone 5: Boot To Virtio Probe
 
 Carry boot beyond prepared inputs so Linux consumes profile device tree data and reaches the point where upstream virtio-mmio probing can be attempted. Do not claim block-device creation, block I/O, root assembly, or userspace boot.
 
-Milestone 4: Virtio Root Disks
+Milestone 6: Virtio Root Disks
 
 Introduce Orlix's virtio-mmio-shaped transport under `drivers/orlix`, bind upstream `virtio_blk`, and expose `/dev/vda` and `/dev/vdb` through host-backed storage.
 
-Milestone 5: Root Assembly
+Milestone 7: Root Assembly
 
 Load the bundled immutable initramfs, mount virtio-blk-backed base and writable state disks, assemble root with upstream OverlayFS, and preserve Linux-shaped writable state paths.
 
-Milestone 6: Console
+Milestone 8: Console
 
 Provide minimal early console diagnostics, serial-style console support, upstream virtio-console selection, and host terminal byte I/O needed for early interactive boot.
 
-Milestone 7: Remaining Virtio Devices
+Milestone 9: Remaining Virtio Devices
 
 Add virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. Split this milestone if it becomes too large.
 

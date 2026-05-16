@@ -123,11 +123,10 @@ int main(void)
 	char *root = kernel_root();
 
 	ksft_print_header();
-	ksft_set_plan(29);
+	ksft_set_plan(22);
 
 	expect_profile_probe_shape(root, "appstore");
 	expect_profile_probe_shape(root, "development");
-	expect_profile_probe_shape(root, "enterprise");
 
 	expect_profile_config(root, "selected");
 

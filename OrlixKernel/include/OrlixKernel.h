@@ -8,7 +8,6 @@ extern "C" {
 enum OrlixBootProfile {
     ORLIX_BOOT_PROFILE_APPSTORE = 0,
     ORLIX_BOOT_PROFILE_DEVELOPMENT = 1,
-    ORLIX_BOOT_PROFILE_ENTERPRISE = 2,
 };
 
 enum OrlixBootStatus {

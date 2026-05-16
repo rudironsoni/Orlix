@@ -10,11 +10,99 @@ No new Linux subsystem behavior should be added to `OrlixKernel/fs`, `OrlixKerne
 
 ## Test Migration Rule
 
-Tests for the local kernel prototype are migration reference, not authoritative proof for the target architecture. New proof should focus on upstream Linux build behavior, Linux-native tests, boot/rootfs integration, Xcode packaging after real Linux artifacts exist, and `OrlixHostAdapter` host-mechanics tests.
+Tests for the local kernel prototype are migration reference, not authoritative proof for the target architecture. New proof should be KUnit for kernel-internal Linux behavior, kselftest for Linux user-visible behavior, and XCTest for iOS-hosted launch, packaging, Linux test-output collection, and narrow `OrlixHostAdapter` host mechanics.
+
+## Linux-Native Test Proof
+
+KUnit and kselftest are the tests of record for Linux-owned behavior. Building those artifacts is only preparatory evidence; runtime proof requires executing them inside Orlix Linux and collecting KUnit KTAP plus kselftest TAP from that Linux instance.
+
+## XCTest Proof Harness
+
+The iOS-side proof harness that packages or launches `OrlixKernel.xcframework`, starts Orlix through the bootloader-shaped API, collects Linux test output from inside Orlix Linux, and verifies host-mechanics behavior without replacing KUnit or kselftest assertions.
+
+## Linux Test Output Collection
+
+A private host-side collection path for Linux-native test output. KUnit output is collected from the Linux kernel log path, kselftest output is collected from test-initramfs stdout, and XCTest parses those streams without becoming a public test-management API.
+
+## Separate Linux Test Streams
+
+The proof rule that KUnit and kselftest raw outputs remain separate streams. XCTest parses each independently and reports a combined verdict only after both pass.
+
+## Test Initramfs Sequence
+
+The test initramfs first collects KUnit output from the kernel log path and KUnit debugfs when enabled, then runs `run_kselftest.sh -c orlix` and captures kselftest stdout separately.
+
+## KUnit DebugFS Affordance
+
+A test-kernel option set that enables Linux debugfs plus KUnit debugfs and exposes per-suite KUnit KTAP under `/sys/kernel/debug/kunit/<suite>/results`. It is useful to the test initramfs and XCTest proof path, but it is not public `OrlixKernel` API.
+
+## OrlixTerminal
+
+The iOS terminal app that hosts `OrlixKernel.xcframework`, launches Orlix through the bootloader-shaped API, presents the terminal surface, and serves as the XCTest host for iOS-hosted proof.
+
+## Terminal UI Surface
+
+The libghostty-spm-provided terminal presentation layer used by `OrlixTerminal`. It renders terminal I/O but does not own Linux execution or shell semantics.
+
+## Orlix Terminal Backend
+
+The Orlix-owned terminal byte path between Linux console/terminal plumbing and the terminal UI surface. It replaces sandbox shell execution backends such as `ShellCraftKit`.
+
+## No-Fake-Terminal Rule
+
+`OrlixTerminal` must not use fake shells, sandbox shells, or local execution backends to simulate Linux terminal behavior. Before Linux console bytes exist, it may display only real Orlix boot or proof output.
+
+## iOS-Targeted Build
+
+An Xcode build for both `iphoneos` and `iphonesimulator` that packages or launches an `ARCH=orlix` Linux artifact through the iOS host surface. Both destinations are iOS proof destinations and must validate the same milestone scope; `iphoneos` targets physical devices, `iphonesimulator` targets Simulator, and neither means compiling Linux as an Apple iOS ABI.
+
+## XcodeGen Project Manifest
+
+The committed `project.yml` file that defines Orlix's iOS packaging and XCTest proof topology. It is durable source; the generated `.xcodeproj` is disposable output unless a future toolchain constraint requires otherwise.
+
+## iOS Proof Parity
+
+The requirement that the same XCTest suite and assertions pass on both `iphoneos` and `iphonesimulator`, with destination-specific wiring allowed only for mechanics such as signing, resource lookup, transport, or host-adapter details.
+
+## Simulator-First Implementation
+
+A development order that brings up the iOS harness on `iphonesimulator` first for speed. It does not reduce the milestone proof requirement; completion still requires the same proof on both `iphoneos` and `iphonesimulator`.
+
+## OrlixKernel XCFramework Slice Set
+
+The initial `OrlixKernel.xcframework` platform slices are `ios-arm64` for physical iOS devices and `ios-arm64-simulator` for Apple Silicon Simulator. Intel Simulator support is not part of the initial slice set.
+
+## Profile Linux Artifact Parity
+
+For a selected Orlix profile, `iphoneos` and `iphonesimulator` slices wrap the same bit-identical `ARCH=orlix` Linux artifact. Destination differences belong in the iOS host wrapper or `OrlixHostAdapter`, not in the Linux kernel artifact.
+
+## Selected Profile Framework Build
+
+An `OrlixKernel.xcframework` build that packages exactly one selected profile's `ARCH=orlix` Linux artifact while also bundling the closed built-in profile DTBs.
+
+## OrlixKernel Wrapper
+
+The iOS Mach-O framework or static-library surface inside each `OrlixKernel.xcframework` slice. It exposes the bootloader-shaped public API while bundling or loading the `ARCH=orlix` Linux artifact and private boot resources as payload data.
+
+## Linux Payload Artifact
+
+The real `ARCH=orlix` Linux build output, initially `vmlinux`, packaged as private payload data inside or alongside the iOS wrapper. It is proof input and boot payload, not the iOS linkable framework binary.
+
+## Local-Kernel XCTest Reference
+
+The existing XCTest coverage for `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime`. It is migration reference only; Linux subsystem assertions should move to KUnit or kselftest, while retained XCTest should cover iOS-hosted Orlix launch, Linux test-output collection, packaging, or narrow host mechanics.
+
+## iOS-Hosted Linux Test Execution
+
+The proof path where an iOS host app or XCTest target launches `OrlixKernel.xcframework`, boots Orlix Linux with test resources, and captures KUnit KTAP plus kselftest TAP from inside the Linux instance. Darwin-hosted execution, QEMU or VM execution, and repo-local shell harnesses are not substitutes.
 
 ## Ownership-Based Migration
 
 The process for moving from the local kernel prototype to the target architecture. Existing behavior is kept only when it still belongs under the upstream-Linux iOS port model; behavior that upstream Linux owns is deleted rather than reimplemented locally.
+
+## Linux Surface Rule
+
+When upstream Linux has a user-visible surface, implementation convention, build/test flow, or ownership model for a problem, Orlix follows that Linux shape instead of inventing an Orlix-specific equivalent unless a concrete iOS constraint forces a documented exception.
 
 ## Orlix Kernel Port Tree
 
@@ -22,15 +110,55 @@ The disposable upstream-Linux source tree after applying the Orlix port overlay 
 
 ## Real Linux Build Proof
 
-Evidence that upstream Linux is being built as Linux for `ARCH=orlix`, with `vmlinux` as the first honest proof artifact. Packaging `OrlixKernel.xcframework` is a later product step and must not substitute for this proof.
+Evidence that upstream Linux is being built as Linux for `ARCH=orlix`, with `vmlinux` as the first honest proof artifact. `OrlixKernel.xcframework` packaging follows early as the iOS execution enabler, but must package a real Linux artifact rather than substitute boot stubs for Linux proof.
+
+## XCFramework Packaging Milestone
+
+The third milestone for the upstream-Linux iOS port. It packages a real Orlix Linux artifact into `OrlixKernel.xcframework` before iOS-hosted Linux test execution; boot-stub packaging is not proof.
 
 ## App Store Profile
 
 The default Orlix build profile. Normal build targets use this profile unless explicitly overridden, because it carries the strictest product constraints.
 
+## Development Profile
+
+An Orlix build profile that should match the App Store profile except for explicit debug and testing affordances. It must not become a noisier or broader product shape.
+
+## Profile Parity
+
+The rule that App Store and development profile differences are limited to explicit debug and testing affordances. All product behavior, Linux-visible device shape, boot resource roles, and milestone proof scope should otherwise remain equal.
+
+## Test Build Overlay
+
+A test-only kernel configuration layer applied to both App Store and development proof builds to enable KUnit, kselftest support, KUnit debugfs, and related proof affordances without changing the normal product profile configs.
+
+## Orlix KUnit Config
+
+A committed `.kunitconfig` under the Orlix architecture overlay that selects Orlix KUnit suites and their KUnit-specific dependencies, matching upstream KUnit practice.
+
+## KUnit Proof Merge
+
+The proof-build step that merges the selected profile defconfig with `arch/orlix/.kunitconfig` for both App Store and development proof kernels. Normal product builds use only the selected profile defconfig.
+
+## Profile Proof Parity
+
+The requirement that milestones claiming iOS packaging, boot, runtime, or Linux behavior validate both App Store and development profiles against the same XCTest scope.
+
+## iOS Proof Matrix
+
+The required four-cell XCTest proof matrix for milestones claiming iOS packaging, boot, runtime, or Linux behavior: App Store on `iphoneos`, App Store on `iphonesimulator`, development on `iphoneos`, and development on `iphonesimulator`.
+
+## Proof Matrix Orchestrator
+
+The repository `make` target that runs the iOS proof matrix non-interactively. XcodeGen defines the Xcode topology and schemes, but `make` owns repeatable proof orchestration.
+
+## Milestone Proof Target
+
+An explicit repository target used to claim milestone completion. Heavy proof such as the four-cell iOS proof matrix belongs here, not in a generic fast local check.
+
 ## Boot Profile
 
-A closed product-profile choice exposed through the bootloader entrypoint. Supported profiles are App Store, development, and enterprise; arbitrary string-named profiles are not part of the public API.
+A closed product-profile choice exposed through the bootloader entrypoint. Supported profiles are App Store and development; arbitrary string-named profiles are not part of the public API.
 
 ## Profile Defconfig
 
@@ -154,39 +282,43 @@ Old build target names such as `prepare-linux-worktree` are not preserved as com
 
 ## XCFramework Packaging Rule
 
-`OrlixKernel.xcframework` packaging must depend on a real Linux build artifact for the selected profile. Boot-stub packaging must not masquerade as product proof.
+`OrlixKernel.xcframework` packaging is required before iOS-hosted Linux execution proof can advance and must depend on a real Linux build artifact for the selected profile. Boot-stub packaging must not masquerade as product proof.
 
 ## Boot-Stub Packaging
 
 Packaging `OrlixKernel.xcframework` from boot stubs alone is not a valid product target and should be removed in the first milestone. Narrow bootloader tests may remain only if they do not claim product packaging proof.
 
-## Bootloader Contract Test
+## Boot Entrypoint Proof
 
-A narrow test for the public bootloader entrypoint direction. It should not preserve raw boot parameters as the product API or fake kernel image loading from memory fields; it should be rewritten around the minimal boot config and profile-based boot input generation.
+Proof that the public boot entrypoint remains bootloader-shaped and derives Linux-shaped boot input from closed profiles and resource identifiers. It must migrate to KUnit, kselftest, and XCTest rather than repo-local shell scripts or standalone C contract binaries.
 
 ## Boot Entrypoint Milestone
 
 The second milestone for the upstream-Linux iOS port. It introduces the minimal bootloader entrypoint, closed boot profile selection, profile device trees, and Linux-shaped boot input generation while avoiding raw boot parameters as the product API.
 
+## iOS-Hosted Linux Test Execution Milestone
+
+The fourth milestone for the upstream-Linux iOS port. It launches packaged Orlix Linux from an iOS host app or test host, runs Linux-native KUnit and kselftest inside Orlix Linux, and captures KUnit KTAP plus kselftest TAP as proof. It does not prove virtio-block devices, root assembly, or interactive userspace.
+
 ## Boot To Virtio Probe Milestone
 
-The third milestone for the upstream-Linux iOS port. It carries boot beyond prepared inputs so Linux can consume profile device tree data and reach the point where upstream virtio-mmio probing can be attempted. It does not prove virtio-block device creation, block I/O, root assembly, or userspace boot.
+The fifth milestone for the upstream-Linux iOS port. It carries boot beyond prepared inputs so Linux can consume profile device tree data and reach the point where upstream virtio-mmio probing can be attempted. It depends on the iOS-hosted Linux test execution path for runtime proof and does not prove virtio-block device creation, block I/O, root assembly, or userspace boot.
 
 ## Virtio Root Disk Milestone
 
-The fourth milestone for the upstream-Linux iOS port. It introduces Orlix's virtio-mmio-shaped transport under `drivers/orlix`, binds upstream `virtio_blk`, and exposes `/dev/vda` and `/dev/vdb` as the immutable base and writable state disks through `OrlixHostAdapter` backing.
+The sixth milestone for the upstream-Linux iOS port. It introduces Orlix's virtio-mmio-shaped transport under `drivers/orlix`, binds upstream `virtio_blk`, and exposes `/dev/vda` and `/dev/vdb` as the immutable base and writable state disks through `OrlixHostAdapter` backing.
 
 ## Root Assembly Milestone
 
-The fifth milestone for the upstream-Linux iOS port. It loads the bundled immutable initramfs, mounts virtio-blk-backed base and writable state disks, assembles the root with upstream OverlayFS, and preserves Linux-shaped writable state paths.
+The seventh milestone for the upstream-Linux iOS port. It loads the bundled immutable initramfs, mounts virtio-blk-backed base and writable state disks, assembles the root with upstream OverlayFS, and preserves Linux-shaped writable state paths.
 
 ## Console Milestone
 
-The sixth milestone for the upstream-Linux iOS port. It provides minimal early console diagnostics, serial-style console support, upstream virtio-console selection, and host terminal byte I/O needed for early interactive boot.
+The eighth milestone for the upstream-Linux iOS port. It provides minimal early console diagnostics, serial-style console support, upstream virtio-console selection, and host terminal byte I/O needed for early interactive boot.
 
 ## Virtio Devices Milestone
 
-The seventh milestone for the upstream-Linux iOS port. It adds remaining virtio-first devices such as virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. It may be split if the scope becomes too large.
+The ninth milestone for the upstream-Linux iOS port. It adds remaining virtio-first devices such as virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. It may be split if the scope becomes too large.
 
 ## Root Overlay
 
@@ -271,3 +403,39 @@ A profile-selected set of Linux-shaped boot artifacts, especially device tree da
 ## Profile Device Tree
 
 The static Linux-shaped device tree source for an Orlix profile. Durable profile device trees live under the Orlix architecture overlay, for example `Linux/ports/orlix/overlay/arch/orlix/boot/dts/appstore.dts`, and the bootloader supplies dynamic boot-time values.
+
+## Bundled Profile DTB
+
+The compiled device tree blob for a closed built-in Orlix profile, shipped inside `OrlixKernel.xcframework` as part of the kernel port machine description. App Store constraints require built-in profile DTBs to be bundled rather than arbitrary host-supplied files.
+
+## Test Initramfs Resource
+
+A Linux-shaped test payload bundled with the XCTest host app, not with the product `OrlixKernel.xcframework`. It contains the minimal userspace needed to run kselftest and emit TAP without becoming part of the product framework contract.
+
+## kselftest Install Shape
+
+The upstream kselftest build/install flow used to stage Orlix kselftest binaries for the test initramfs. Manual copying from the build tree is only a temporary fallback when upstream install flow is blocked.
+
+## kselftest Proof Runner
+
+The installed `run_kselftest.sh` script used inside the test initramfs to execute Orlix kselftests. Direct binary execution is debugging only, not milestone proof.
+
+## Orlix kselftest Collection
+
+The installed kselftest collection selected with `run_kselftest.sh -c orlix` inside the test initramfs, even when only `TARGETS=orlix` is installed.
+
+## Orlix kselftest Target Scope
+
+The initial kselftest proof scope is `TARGETS=orlix`. Other upstream kselftest targets are added intentionally as the relevant Linux subsystems become available.
+
+## kselftest Timeout Policy
+
+The upstream timeout model where selftests default to 45 seconds per test. Orlix adds a test-local `settings` file only when a concrete test needs a non-default timeout; milestone fatality is decided by the XCTest proof runner, not hidden inside the test binary.
+
+## kselftest Timeout Override
+
+An explicit `run_kselftest.sh --override-timeout` value supplied by the XCTest proof runner. It is not used initially and should be added only for a concrete iOS proof-runner need.
+
+## Product Initramfs
+
+The later product/root-assembly boot payload for normal Orlix startup. It is separate from the test initramfs and is not designed by the early iOS-hosted test-execution milestone.

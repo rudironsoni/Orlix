@@ -14,6 +14,8 @@ The product goal is real Linux userspace compatibility inside an iOS app boundar
 
 Orlix will compile upstream Linux and adapt it through Linux-native extension points. Upstream Linux owns core Linux subsystems. The local kernel prototype is migration reference only and is not a target implementation path.
 
+When upstream Linux already provides the surface or implementation approach for a problem, Orlix follows that Linux approach rather than inventing a parallel Orlix-specific surface.
+
 ## Consequences
 
 New Linux subsystem behavior must not be added to the local prototype tree.

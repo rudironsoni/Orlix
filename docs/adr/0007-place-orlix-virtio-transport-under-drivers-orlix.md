@@ -14,6 +14,8 @@ The transport is Orlix-specific, but it should remain close to Linux virtio conv
 
 The Orlix virtio transport lives under `drivers/orlix`, shaped as virtio-mmio where practical.
 
+Boot-to-virtio-probe work stages the first virtio step as normal `virtio,mmio` profile device-tree shape and upstream OF/platform probing readiness. That stage is not allowed to claim virtio-block binding, `/dev/vda`, `/dev/vdb`, request I/O, or root assembly.
+
 ## Consequences
 
 `drivers/orlix` contains the Orlix-specific transport and backend integration.
@@ -21,3 +23,5 @@ The Orlix virtio transport lives under `drivers/orlix`, shaped as virtio-mmio wh
 Profile device trees should describe normal virtio-mmio-style devices where practical.
 
 Upstream virtio device drivers remain the Linux-visible owners of block, console, entropy, and networking behavior.
+
+Virtio root disks remain a later proof after the probe-shape milestone can run through the iOS-hosted Linux test path.
