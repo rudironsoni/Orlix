@@ -63,6 +63,8 @@ xcuserdata/
 /.build/
 .DS_Store
 Orlix.xcodeproj/
+OrlixKernel.xcodeproj/
+OrlixSystem.xcodeproj/
 
 # Build artifacts
 /build/

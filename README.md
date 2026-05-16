@@ -49,6 +49,28 @@ Milestone 2 does not prove QEMU execution, iOS execution, task switching, MMU be
 
 Milestone 3 XCFramework packaging proof establishes the iOS execution artifact early. It must package a real Orlix Linux artifact into `OrlixKernel.xcframework`; packaging boot stubs alone is not proof.
 
+Prepare the iOS packaging inputs with:
+
+```bash
+make prepare-ios-packaging PROFILE=appstore
+```
+
+This builds the selected profile's Linux `vmlinux`, builds the closed profile DTBs, stages them as private framework payload resources, and generates the disposable Xcode project from `project.yml`.
+
+For simulator-first development, run the current simulator packaging proof with:
+
+```bash
+make test-ios-simulator-packaging PROFILE=appstore
+```
+
+Launch the simulator host app with:
+
+```bash
+make run-ios-simulator-terminal PROFILE=appstore
+```
+
+These simulator targets are sequencing aids. They do not replace the eventual `iphoneos` proof cell.
+
 Milestone 4 iOS-hosted Linux test-execution proof establishes the runtime proof path. It must launch packaged Orlix Linux through an iOS host app or test host, run Linux-native KUnit and kselftest inside that Linux instance, and collect KUnit KTAP plus kselftest TAP from the Linux side.
 
 Build Orlix kselftest artifacts with Linux's kselftest build shape as preparatory evidence:
