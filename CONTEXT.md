@@ -168,21 +168,25 @@ A narrow test for the public bootloader entrypoint direction. It should not pres
 
 The second milestone for the upstream-Linux iOS port. It introduces the minimal bootloader entrypoint, closed boot profile selection, profile device trees, and Linux-shaped boot input generation while avoiding raw boot parameters as the product API.
 
+## Boot To Virtio Probe Milestone
+
+The third milestone for the upstream-Linux iOS port. It carries boot beyond prepared inputs so Linux can consume profile device tree data and reach the point where upstream virtio-mmio probing can be attempted. It does not prove virtio-block device creation, block I/O, root assembly, or userspace boot.
+
 ## Virtio Root Disk Milestone
 
-The third milestone for the upstream-Linux iOS port. It introduces Orlix's virtio-mmio-shaped transport under `drivers/orlix`, binds upstream `virtio_blk`, and exposes `/dev/vda` and `/dev/vdb` as the immutable base and writable state disks through `OrlixHostAdapter` backing.
+The fourth milestone for the upstream-Linux iOS port. It introduces Orlix's virtio-mmio-shaped transport under `drivers/orlix`, binds upstream `virtio_blk`, and exposes `/dev/vda` and `/dev/vdb` as the immutable base and writable state disks through `OrlixHostAdapter` backing.
 
 ## Root Assembly Milestone
 
-The fourth milestone for the upstream-Linux iOS port. It loads the bundled immutable initramfs, mounts virtio-blk-backed base and writable state disks, assembles the root with upstream OverlayFS, and preserves Linux-shaped writable state paths.
+The fifth milestone for the upstream-Linux iOS port. It loads the bundled immutable initramfs, mounts virtio-blk-backed base and writable state disks, assembles the root with upstream OverlayFS, and preserves Linux-shaped writable state paths.
 
 ## Console Milestone
 
-The fifth milestone for the upstream-Linux iOS port. It provides minimal early console diagnostics, serial-style console support, upstream virtio-console selection, and host terminal byte I/O needed for early interactive boot.
+The sixth milestone for the upstream-Linux iOS port. It provides minimal early console diagnostics, serial-style console support, upstream virtio-console selection, and host terminal byte I/O needed for early interactive boot.
 
 ## Virtio Devices Milestone
 
-The sixth milestone for the upstream-Linux iOS port. It adds remaining virtio-first devices such as virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. It may be split if the scope becomes too large.
+The seventh milestone for the upstream-Linux iOS port. It adds remaining virtio-first devices such as virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. It may be split if the scope becomes too large.
 
 ## Root Overlay
 

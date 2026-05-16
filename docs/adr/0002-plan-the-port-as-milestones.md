@@ -18,6 +18,6 @@ The port will be planned and executed as focused milestones. Each milestone must
 
 Milestone 1 is Kbuild `vmlinux` proof, not full boot or device support.
 
-Later milestones cover boot entrypoint, virtio root disks, root assembly, console, remaining virtio devices, and final prototype deletion.
+Later milestones cover boot entrypoint, boot to virtio probe, virtio root disks, root assembly, console, remaining virtio devices, and final prototype deletion.
 
 Scope that does not belong to the current milestone should be deferred rather than partially implemented.

@@ -278,19 +278,23 @@ Milestone 2: Boot Entrypoint
 
 Introduce the minimal bootloader entrypoint, closed profile selection, profile device trees, and Linux-shaped boot input generation.
 
-Milestone 3: Virtio Root Disks
+Milestone 3: Boot To Virtio Probe
+
+Carry boot beyond prepared inputs so Linux consumes profile device tree data and reaches the point where upstream virtio-mmio probing can be attempted. Do not claim block-device creation, block I/O, root assembly, or userspace boot.
+
+Milestone 4: Virtio Root Disks
 
 Introduce Orlix's virtio-mmio-shaped transport under `drivers/orlix`, bind upstream `virtio_blk`, and expose `/dev/vda` and `/dev/vdb` through host-backed storage.
 
-Milestone 4: Root Assembly
+Milestone 5: Root Assembly
 
 Load the bundled immutable initramfs, mount virtio-blk-backed base and writable state disks, assemble root with upstream OverlayFS, and preserve Linux-shaped writable state paths.
 
-Milestone 5: Console
+Milestone 6: Console
 
 Provide minimal early console diagnostics, serial-style console support, upstream virtio-console selection, and host terminal byte I/O needed for early interactive boot.
 
-Milestone 6: Remaining Virtio Devices
+Milestone 7: Remaining Virtio Devices
 
 Add virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. Split this milestone if it becomes too large.
 

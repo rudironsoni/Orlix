@@ -57,12 +57,14 @@ Milestone 1 is Kbuild `vmlinux` proof and documentation alignment.
 
 Milestone 2 is boot entrypoint and profile device tree.
 
-Milestone 3 is virtio root disks.
+Milestone 3 is boot to virtio probe.
 
-Milestone 4 is initramfs and OverlayFS root assembly.
+Milestone 4 is virtio root disks.
 
-Milestone 5 is console selection and early interactive boot.
+Milestone 5 is initramfs and OverlayFS root assembly.
 
-Milestone 6 is remaining virtio-first devices.
+Milestone 6 is console selection and early interactive boot.
+
+Milestone 7 is remaining virtio-first devices.
 
 Final cleanup deletes the local kernel prototype directories.
