@@ -1,4 +1,4 @@
-/* OrlixKernelTests/LinuxUAPITestSupport.c
+/* LocalKernelPrototype/LinuxUAPITestSupport.c
  * Semantic test helpers for Linux UAPI-sensitive assertions
  *
  * This file implements semantic helpers that interpret Linux UAPI values.

@@ -1,5 +1,5 @@
 /*
- * OrlixKernelTests - CredentialTests.m
+ * LocalKernelPrototype - CredentialTests.m
  *
  * Internal runtime semantic tests for credential subsystem.
  *

@@ -28,7 +28,9 @@ Proof is claim-promoted, not flat. Work may happen in parallel, but product clai
 5. POSIX shell environment proof
 6. Third-party package ladder: jq, curl, zsh
 
-The canonical OrlixKernel proof artifact is the app-hosted OrlixKernel integration that actually runs in the Orlix app environment. A standalone `vmlinux` image is optional tooling output only for a named non-product consumer. KUnit proves kernel-internal behavior. Temporary, nolibc, or foreign-libc kselftest proves kernel-interface behavior only. mlibc tests prove OrlixMLibC. OrlixMLibC-built kselftests prove the libc-to-kernel syscall/UAPI path. Bash proves the first interactive POSIX shell environment. jq, curl, and zsh prove increasingly realistic third-party package compatibility.
+Orlix does not require `vmlinux` as a canonical build, proof, or runtime artifact. The canonical OrlixKernel proof artifact is the iOS app-hosted OrlixKernel integration that actually runs inside the Orlix app environment. A `vmlinux`-style artifact may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, not libc proof, and not required for installed UAPI headers.
+
+KUnit proves kernel-internal behavior. Temporary, nolibc, or foreign-libc kselftest proves kernel-interface behavior only. mlibc tests prove OrlixMLibC. OrlixMLibC-built kselftests prove the libc-to-kernel syscall/UAPI path. Bash proves the first interactive POSIX shell environment. jq, curl, and zsh prove increasingly realistic third-party package compatibility.
 
 Do not claim product runtime readiness from KUnit, temporary kselftest, boot logs, packaging, or a host-side harness.
 
@@ -46,7 +48,7 @@ Milestone 1 build work must make this the generated port-tree step:
 make prepare-orlixkernel-port PROFILE=appstore
 ```
 
-Milestone 1 build work must make the app-hosted OrlixKernel integration build for the iOS destinations. Building a `vmlinux`-style image is optional and only valid when a named tooling/debug workflow consumes it.
+Milestone 1 build work must make the app-hosted OrlixKernel integration build for the iOS destinations. It must not build or require `vmlinux` as a milestone artifact.
 
 `PROFILE=appstore` is the default profile. Pass another profile only when you intentionally need it.
 
@@ -102,21 +104,37 @@ These simulator targets are sequencing aids. They do not replace the eventual `i
 
 Milestone 4 iOS-hosted kernel-interface test execution proves dependency behavior, not the final Orlix product runtime. KUnit proves kernel-internal behavior. Selected Linux kselftests may run through a temporary, nolibc, or foreign-libc harness as kernel-interface proof, but that temporary lane is not OrlixMLibC proof, final Orlix userspace ABI proof, shell proof, or package proof.
 
-Build Orlix kselftest artifacts with Linux's kselftest build shape as preparatory evidence:
+Build temporary Orlix kselftest artifacts with Linux's kselftest build shape as kernel-interface preparatory evidence:
 
 ```bash
-make prepare-orlixkernel-port PROFILE=appstore
-make -C Build/OrlixKernel/linux-6.12-port/tools/testing/selftests TARGETS=orlix
+make build-temporary-orlix-kselftests PROFILE=appstore ORLIX_LINUX_USERSPACE_SYSROOT=Build/OrlixKernel/linux-userspace-sysroot/aarch64
 ```
 
 Stage the Linux-shaped test initramfs resource for the XCTest proof host with:
 
 ```bash
 make bootstrap-orlix-linux-userspace-sysroot
-make stage-orlix-test-initramfs PROFILE=appstore ORLIX_LINUX_USERSPACE_SYSROOT=Build/OrlixKernel/linux-userspace-sysroot/aarch64
+make stage-temporary-orlix-test-initramfs PROFILE=appstore ORLIX_LINUX_USERSPACE_SYSROOT=Build/OrlixKernel/linux-userspace-sysroot/aarch64
 ```
 
-The bootstrap target creates a disposable Debian arm64 sysroot under `Build/OrlixKernel/linux-userspace-sysroot/aarch64`. The staging target uses upstream kselftest install shape and refuses to build with the Darwin host SDK. This is a temporary kernel-interface harness, not Orlix userspace ABI proof. The staged resource is for the forthcoming XCTest proof host bundle, not `OrlixKernel.xcframework` product payload, and is not required for Milestone 3 packaging tests.
+The bootstrap target creates a disposable Debian arm64 sysroot under `Build/OrlixKernel/linux-userspace-sysroot/aarch64`. The staging target uses upstream kselftest install shape and refuses to build with the Darwin host SDK. This is labeled `temporary-kselftest-kernel-interface`; it is not Orlix userspace ABI proof. The staged resource is for the forthcoming XCTest proof host bundle, not `OrlixKernel.xcframework` product payload, and is not required for Milestone 3 packaging tests.
+
+Install Orlix UAPI headers for OrlixMLibC with:
+
+```bash
+make install-orlix-uapi-headers PROFILE=appstore
+```
+
+This runs Linux `headers_install` into `Build/OrlixMLibC/kernel-headers/<profile>/include`. It does not build or consume `vmlinux`.
+
+The future OrlixMLibC kselftest lane is separate:
+
+```bash
+make build-orlixmlibc-kselftests PROFILE=appstore ORLIX_MLIBC_SYSROOT=Build/OrlixMLibC/sysroot/appstore
+make stage-orlixmlibc-test-initramfs PROFILE=appstore ORLIX_MLIBC_SYSROOT=Build/OrlixMLibC/sysroot/appstore
+```
+
+That lane is labeled `orlixmlibc-kselftest-syscall-uapi` and requires an OrlixMLibC sysroot plus installed Orlix UAPI headers.
 
 Build Orlix KUnit artifacts with Linux Kbuild and the Orlix KUnit config as preparatory evidence:
 
@@ -130,6 +148,8 @@ make O=../kunit-orlix ARCH=orlix olddefconfig arch/orlix/boot/boot_test.o
 Do not run kselftest or KUnit on Darwin and do not use a VM as product proof. Do not add repo-local shell or standalone C contract tests as milestone proof. Linux kernel-internal behavior belongs in KUnit. Linux kernel-interface behavior belongs in selected kselftests. Orlix userspace ABI and product runtime claims require the later ADR 0017 proof lanes.
 
 Both `iphoneos` and `iphonesimulator` are iOS proof destinations. Milestones must validate the same scope on both.
+
+XCTest proof targets are organized under `Tests/XCTest/`. `OrlixKernelHostProofTests` launches the bootloader-shaped product API, `OrlixLinuxProofOutputParserTests` parses Linux-native KUnit and kselftest output fixtures, and `OrlixHostAdapterTests` covers narrow host mechanics. They do not own Linux subsystem assertions.
 
 Milestone 5 boot-to-virtio-probe proof keeps the dependency chain honest. It verifies that generated profile DTS files describe virtio-mmio probe-shape devices, that the selected generated profile defconfig enables upstream OF, virtio-mmio, and virtio-block probe paths, and that Orlix architecture boot handoff state is covered by kernel dependency or kernel-interface proof.
 

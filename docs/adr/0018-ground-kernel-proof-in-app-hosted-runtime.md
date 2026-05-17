@@ -12,11 +12,13 @@ Linux-shaped proof means preserving Linux UAPI, syscall behavior, ABI discipline
 
 ## Decision
 
-The canonical OrlixKernel proof artifact is the app-hosted OrlixKernel integration that actually runs in the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter`, the iOS app host, and simulator/device execution.
+Orlix does not require `vmlinux` as a canonical build, proof, or runtime artifact.
+
+The canonical OrlixKernel proof artifact is the iOS app-hosted OrlixKernel integration that actually runs inside the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter`, the iOS app host, and simulator/device execution.
 
 Kernel proof must be based on that hosted runtime path. The proof question is always whether the Orlix app-hosted runtime executed the Linux-shaped behavior on iOS.
 
-`vmlinux` is optional. A `vmlinux`-style linked kernel image may be generated only for a named non-product consumer such as debug-symbol inspection, a Linux tooling compatibility check, or a specific Kbuild/KUnit experiment. It is disposable tooling output, not the canonical build artifact, not product proof, not runtime proof, not libc proof, not package proof, and not required for `headers_install`.
+A `vmlinux`-style artifact may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, not libc proof, and not required for installed UAPI headers.
 
 If no concrete workflow consumes `vmlinux`, do not generate it.
 

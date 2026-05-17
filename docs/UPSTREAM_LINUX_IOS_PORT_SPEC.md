@@ -131,9 +131,11 @@ PROFILE=appstore
 
 Profile defconfigs are durable product-profile configs under `Linux/ports/orlix/configs`. The selected profile is materialized into the generated port tree in the location Kbuild expects.
 
-The canonical OrlixKernel proof artifact is the app-hosted OrlixKernel integration that actually runs in the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter`, the iOS app host, and simulator/device execution.
+Orlix does not require `vmlinux` as a canonical build, proof, or runtime artifact.
 
-Do not require `vmlinux` as a normal Orlix build, proof, or runtime artifact. A `vmlinux`-style linked image may exist only as optional disposable output for a named non-product consumer such as debug-symbol inspection, Linux tooling compatibility, or a specific Kbuild/KUnit experiment.
+The canonical OrlixKernel proof artifact is the iOS app-hosted OrlixKernel integration that actually runs inside the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter`, the iOS app host, and simulator/device execution.
+
+A `vmlinux`-style artifact may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, not libc proof, and not required for installed UAPI headers.
 
 `OrlixKernel.xcframework` packaging or app linking must happen early enough to support iOS-hosted kernel-interface proof and later product runtime proof, and must carry the app-hosted OrlixKernel integration that the iOS app will actually execute. Boot-stub packaging is not product proof.
 
@@ -319,6 +321,12 @@ The test kernel may enable Linux debugfs and `CONFIG_KUNIT_DEBUGFS` for per-suit
 Old local-kernel tests are migration reference. They are not proof of the target architecture.
 
 Existing XCTest files that target `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime` are local-kernel migration reference. Retained XCTest should either launch packaged Orlix Linux and collect Linux test output or test narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions belong in KUnit or kselftest.
+
+Durable KUnit tests live in the Linux port overlay next to Linux-owned code and are selected by `Linux/ports/orlix/overlay/arch/orlix/.kunitconfig`. Durable kselftests live under `Linux/ports/orlix/overlay/tools/testing/selftests/orlix/` and run through upstream kselftest install plus `run_kselftest.sh -c orlix`.
+
+Temporary kselftests and OrlixMLibC-built kselftests must use separate install and staging paths. The temporary lane uses `Build/OrlixKernel/kselftest/temporary/<profile>/` and `proof_lane=temporary-kselftest-kernel-interface`. The OrlixMLibC lane uses `Build/OrlixMLibC/kselftest/<profile>/` and `proof_lane=orlixmlibc-kselftest-syscall-uapi`.
+
+XCTest targets live under `Tests/XCTest/` and are limited to app-hosted launch, packaging, proof-output collection, parser behavior, and narrow host-adapter mechanics. XCTest must not replace KUnit, kselftest, OrlixMLibC tests, or package proof as the owner of Linux-visible assertions.
 
 ## Milestones
 

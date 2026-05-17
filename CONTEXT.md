@@ -222,11 +222,11 @@ The canonical OrlixKernel product/proof artifact: the OrlixKernel static library
 
 ## Canonical Kernel Proof Artifact
 
-The app-hosted OrlixKernel integration that actually runs inside the Orlix app environment. A standalone `vmlinux` image is not canonical proof unless a named non-product workflow consumes it.
+The iOS app-hosted OrlixKernel integration that actually runs inside the Orlix app environment. Orlix does not require `vmlinux` as a canonical build, proof, or runtime artifact.
 
 ## Optional vmlinux Tooling Artifact
 
-A disposable `vmlinux`-style linked kernel image generated only for a named non-product consumer such as debug-symbol inspection, Linux tooling compatibility, or a specific Kbuild/KUnit experiment. It is not product proof, runtime proof, libc proof, package proof, or required for `headers_install`.
+A `vmlinux`-style artifact that may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, not libc proof, and not required for installed UAPI headers.
 
 ## App-Hosted Proof Question
 
@@ -254,11 +254,23 @@ Private Linux-shaped boot data or generated kernel inputs consumed by the app-ho
 
 ## Local-Kernel XCTest Reference
 
-The existing XCTest coverage for `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime`. It is migration reference only; Linux subsystem assertions should move to KUnit or kselftest, while retained XCTest should cover iOS-hosted Orlix launch, Linux test-output collection, packaging, or narrow host mechanics.
+The quarantined coverage under `Tests/MigrationReference/LocalKernelPrototype/` for the old `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` prototype. It is migration reference only; Linux subsystem assertions should move to KUnit or kselftest, while retained XCTest should cover iOS-hosted Orlix launch, Linux test-output collection, packaging, or narrow host mechanics.
 
 ## iOS-Hosted Kernel-Interface Test Execution
 
 The dependency-proof path where an iOS host app or XCTest target launches `OrlixKernel.xcframework`, boots Orlix Linux with test resources, and captures Linux-native test output without claiming product runtime proof.
+
+## Temporary Kselftest Kernel-Interface Lane
+
+The early kselftest lane installed under `Build/OrlixKernel/kselftest/temporary/<profile>/` and staged with `proof_lane=temporary-kselftest-kernel-interface`. It may use a foreign Linux libc, bootstrap Debian arm64 sysroot, or nolibc-style harness. It is not OrlixMLibC proof, Orlix userspace ABI proof, package proof, or product runtime proof.
+
+## OrlixMLibC Kselftest Syscall/UAPI Lane
+
+The later kselftest lane installed under `Build/OrlixMLibC/kselftest/<profile>/` and staged with `proof_lane=orlixmlibc-kselftest-syscall-uapi`. It requires an OrlixMLibC sysroot plus installed Orlix UAPI headers and proves selected OrlixMLibC-to-OrlixKernel syscall/UAPI behavior.
+
+## XCTest Proof Topology
+
+The iOS proof harness under `Tests/XCTest/`: `OrlixKernelHostProofTests`, `OrlixLinuxProofOutputParserTests`, and `OrlixHostAdapterTests`. XCTest launches or observes the hosted runtime, validates packaging and host mechanics, and parses Linux-native output. It does not own Linux subsystem assertions.
 
 ## Ownership-Based Migration
 
@@ -274,7 +286,7 @@ The disposable upstream-Linux source tree after applying the Orlix port overlay 
 
 ## Real Linux Build Proof
 
-Evidence that the app-hosted OrlixKernel integration for `ARCH=orlix` can be built for the selected profile and iOS destination. Standalone `vmlinux` output is optional tooling evidence only when a named non-product workflow consumes it.
+Evidence that the app-hosted OrlixKernel integration for `ARCH=orlix` can be built for the selected profile and iOS destination. `vmlinux` is not a milestone artifact.
 
 ## XCFramework Packaging Milestone
 
@@ -438,7 +450,7 @@ Architecture Decision Records for the upstream-Linux port should be created duri
 
 ## Agent Test Rules Cleanup
 
-Old detailed `OrlixKernelTests` and KUnit/XCTest migration rules should be removed from `AGENTS.md` during the architecture rewrite. The retained rule is that local-kernel tests are migration reference, not proof for the target upstream-Linux architecture.
+Old detailed local-prototype test and KUnit/XCTest migration rules should be removed from `AGENTS.md` during the architecture rewrite. The retained rule is that local-kernel tests are migration reference, not proof for the target upstream-Linux architecture.
 
 ## README Role
 

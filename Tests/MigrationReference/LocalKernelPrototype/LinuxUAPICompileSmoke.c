@@ -1,6 +1,6 @@
 /*
  * LinuxUAPICompileSmoke.c
- * OrlixKernelTests
+ * LocalKernelPrototype
  *
  * LINUX UAPI / ABI COMPILE TEST
  *

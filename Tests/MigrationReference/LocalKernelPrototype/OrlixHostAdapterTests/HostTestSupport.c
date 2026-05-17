@@ -1,4 +1,4 @@
-/* OrlixKernelTests/HostTestSupport.c
+/* LocalKernelPrototype/OrlixHostAdapterTests/HostTestSupport.c
  * Host-side test support helpers
  *
  * This file implements host-side helpers needed for test setup.

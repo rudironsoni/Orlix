@@ -1,7 +1,7 @@
 /*
  * Host bridge Rootfs bootstrap tests
  * These tests prove host bridge file access only.
- * Linux-visible rootfs translation/shape proof belongs in OrlixKernelTests.
+ * Linux-visible rootfs translation/shape proof belongs in Linux-native proof lanes.
  */
 
 #import <XCTest/XCTest.h>

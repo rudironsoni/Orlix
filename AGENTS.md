@@ -127,9 +127,11 @@ Orlix userspace ABI is profile-invariant. App Store, development, simulator, CI,
 
 ## Build And Proof Rule
 
-The canonical OrlixKernel proof artifact is the app-hosted OrlixKernel integration that actually runs inside the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter`, the iOS app host, and simulator/device execution.
+Orlix does not require `vmlinux` as a canonical build, proof, or runtime artifact.
 
-Do not introduce `vmlinux` as a required Orlix artifact. A `vmlinux`-style linked image is allowed only for a named non-product consumer, such as debug-symbol inspection, Linux tooling compatibility, or a specific Kbuild/KUnit experiment. If no concrete workflow consumes it, do not generate it.
+The canonical OrlixKernel proof artifact is the iOS app-hosted OrlixKernel integration that actually runs inside the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter`, the iOS app host, and simulator/device execution.
+
+A `vmlinux`-style artifact may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, not libc proof, and not required for installed UAPI headers. If no concrete workflow consumes it, do not generate it.
 
 `PROFILE=appstore` is the default normal profile.
 
@@ -149,6 +151,15 @@ Do not claim product runtime readiness from KUnit, temporary kselftest, no-init 
 ## Test Rule
 
 Tests for the old local kernel prototype are migration reference only. They are not authoritative proof for the target architecture.
+
+Target test ownership is split by proof lane:
+
+- KUnit lives in Linux-owned overlay paths such as `Linux/ports/orlix/overlay/arch/orlix/**/<owner>_test.c` and `Linux/ports/orlix/overlay/drivers/orlix/**/<owner>_test.c`, selected by `Linux/ports/orlix/overlay/arch/orlix/.kunitconfig`.
+- kselftest lives under `Linux/ports/orlix/overlay/tools/testing/selftests/orlix/` and must run through upstream kselftest install plus `run_kselftest.sh -c orlix`.
+- XCTest lives under `Tests/XCTest/` and owns iOS host launch, packaging, output collection, parser behavior, and narrow `OrlixHostAdapter` mechanics only.
+- Local prototype tests live only under `Tests/MigrationReference/LocalKernelPrototype/` until migrated or deleted.
+
+Temporary kselftests use `Build/OrlixKernel/kselftest/temporary/<profile>/` and the proof label `temporary-kselftest-kernel-interface`. OrlixMLibC-built kselftests use `Build/OrlixMLibC/kselftest/<profile>/` and the proof label `orlixmlibc-kselftest-syscall-uapi`.
 
 New proof must be labeled by what it proves:
 

@@ -12,7 +12,7 @@ Tuist and XcodeGen could both generate the Xcode surface. Tuist would add a larg
 
 ## Decision
 
-Use XcodeGen for the iOS project generation surface. XcodeGen describes the iOS packaging, resource bundling, and XCTest host targets that consume or link the app-hosted OrlixKernel integration. Optional Kbuild outputs such as `vmlinux` remain tooling artifacts only when a named workflow consumes them.
+Use XcodeGen for the iOS project generation surface. XcodeGen describes the iOS packaging, resource bundling, and XCTest host targets that consume or link the app-hosted OrlixKernel integration. `vmlinux` is not an XcodeGen packaging input and is not a proof artifact.
 
 Commit `project.yml` as the durable XcodeGen source of truth. Do not commit the generated `.xcodeproj` unless a concrete future toolchain constraint requires it.
 

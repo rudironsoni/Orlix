@@ -1,5 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+/*
+ * Retained only for explicit manual `make ... ARCH=orlix vmlinux` Linux
+ * Kbuild compatibility experiments. The Orlix proof path is app-hosted and
+ * does not build or consume this standalone image path.
+ */
+
 #define RO_EXCEPTION_TABLE_ALIGN 4
 #define RUNTIME_DISCARD_EXIT
 

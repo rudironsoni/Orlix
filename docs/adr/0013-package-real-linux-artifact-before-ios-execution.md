@@ -12,7 +12,7 @@ Orlix cannot validate the product direction without building and testing through
 
 `OrlixKernel.xcframework` packaging is Milestone 3 and must package or link the app-hosted OrlixKernel integration for the selected profile. Boot-stub packaging is not product proof.
 
-Each XCFramework slice contains a real iOS Mach-O framework or static-library wrapper plus the private OrlixKernel runtime integration and boot resources needed by the iOS host path. A standalone `vmlinux` image is optional tooling output only when a named non-product workflow consumes it.
+Each XCFramework slice contains a real iOS Mach-O framework or static-library wrapper plus the private OrlixKernel runtime integration and boot resources needed by the iOS host path. A `vmlinux`-style artifact may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, and not libc proof.
 
 Each framework build packages one selected profile's Linux artifact. Closed built-in profile DTBs may all be bundled with the framework as machine-description resources.
 

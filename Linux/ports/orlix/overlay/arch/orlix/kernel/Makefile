@@ -1,3 +1,6 @@
+# Retained only for explicit manual `make ... ARCH=orlix vmlinux` Linux
+# Kbuild compatibility experiments. Normal Orlix proof does not build or
+# consume this linked-image path.
 extra-y += vmlinux.lds
 
 obj-y += cpuinfo.o

@@ -4,6 +4,7 @@ set -euo pipefail
 profile="${PROFILE:-appstore}"
 linux_version="${LINUX_VERSION:-6.12}"
 linux_arch="${LINUX_ARCH:-orlix}"
+proof_lane=""
 kselftest_install=""
 output=""
 
@@ -21,6 +22,10 @@ while [ "$#" -gt 0 ]; do
             linux_arch="$2"
             shift 2
             ;;
+        --proof-lane)
+            proof_lane="$2"
+            shift 2
+            ;;
         --kselftest-install)
             kselftest_install="$2"
             shift 2
@@ -36,8 +41,8 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-if [ -z "$kselftest_install" ] || [ -z "$output" ]; then
-    printf 'usage: %s --kselftest-install DIR --output OrlixTestInitramfs.bundle [--profile appstore]\n' "$0" >&2
+if [ -z "$proof_lane" ] || [ -z "$kselftest_install" ] || [ -z "$output" ]; then
+    printf 'usage: %s --proof-lane LANE --kselftest-install DIR --output OrlixTestInitramfs.bundle [--profile appstore]\n' "$0" >&2
     exit 1
 fi
 
@@ -49,19 +54,27 @@ case "$profile" in
         ;;
 esac
 
+case "$proof_lane" in
+    temporary-kselftest-kernel-interface|orlixmlibc-kselftest-syscall-uapi) ;;
+    *)
+        printf 'unsupported proof lane: %s\n' "$proof_lane" >&2
+        exit 1
+        ;;
+esac
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$script_dir/.." && pwd -P)"
 cd "$repo_root"
 
 case "$output" in
-    "$repo_root"/Build/OrlixKernel/test-initramfs/OrlixTestInitramfs.bundle|Build/OrlixKernel/test-initramfs/OrlixTestInitramfs.bundle) ;;
+    "$repo_root"/Build/OrlixKernel/test-initramfs/*|Build/OrlixKernel/test-initramfs/*|"$repo_root"/Build/OrlixMLibC/test-initramfs/*|Build/OrlixMLibC/test-initramfs/*) ;;
     *)
-        printf 'refusing to write test initramfs resource outside Build/OrlixKernel/test-initramfs: %s\n' "$output" >&2
+        printf 'refusing to write test initramfs resource outside Build test-initramfs roots: %s\n' "$output" >&2
         exit 1
         ;;
 esac
 
-if [ -L Build ] || [ -L Build/OrlixKernel ] || [ -L Build/OrlixKernel/test-initramfs ] || [ -L "$output" ]; then
+if [ -L Build ] || [ -L Build/OrlixKernel ] || [ -L Build/OrlixMLibC ] || [ -L Build/OrlixKernel/test-initramfs ] || [ -L Build/OrlixMLibC/test-initramfs ] || [ -L "$output" ]; then
     printf 'refusing to stage test initramfs through symlinked Build path\n' >&2
     exit 1
 fi
@@ -75,20 +88,20 @@ for required in \
     "$kselftest_install/run_kselftest.sh" \
     "$kselftest_install/kselftest/runner.sh" \
     "$kselftest_install/kselftest-list.txt" \
-    "$kselftest_install/orlix/milestone2_boot_contract" \
-    "$kselftest_install/orlix/milestone3_boot_probe_contract"; do
+    "$kselftest_install/orlix/boot_profile_contract" \
+    "$kselftest_install/orlix/virtio_mmio_probe_contract"; do
     if [ ! -s "$required" ]; then
         printf 'missing non-empty kselftest install input: %s\n' "$required" >&2
         exit 1
     fi
 done
 
-if ! grep -qx 'orlix:milestone2_boot_contract' "$kselftest_install/kselftest-list.txt"; then
-    printf 'kselftest install list is missing orlix:milestone2_boot_contract\n' >&2
+if ! grep -qx 'orlix:boot_profile_contract' "$kselftest_install/kselftest-list.txt"; then
+    printf 'kselftest install list is missing orlix:boot_profile_contract\n' >&2
     exit 1
 fi
-if ! grep -qx 'orlix:milestone3_boot_probe_contract' "$kselftest_install/kselftest-list.txt"; then
-    printf 'kselftest install list is missing orlix:milestone3_boot_probe_contract\n' >&2
+if ! grep -qx 'orlix:virtio_mmio_probe_contract' "$kselftest_install/kselftest-list.txt"; then
+    printf 'kselftest install list is missing orlix:virtio_mmio_probe_contract\n' >&2
     exit 1
 fi
 
@@ -97,7 +110,7 @@ rm -rf "$output"
 mkdir -p "$output_parent" "$output/kselftest"
 cp -R "$kselftest_install/." "$output/kselftest"
 
-cat > "$output/init" <<'EOF'
+cat > "$output/init" <<EOF
 #!/bin/sh
 set -eu
 
@@ -105,6 +118,14 @@ mkdir -p /proc /sys /sys/kernel/debug /dev
 mount -t proc proc /proc 2>/dev/null || true
 mount -t sysfs sysfs /sys 2>/dev/null || true
 mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null || true
+
+echo "ORLIX-PROOF-LANE $proof_lane"
+echo "ORLIX-PROFILE $profile"
+echo "ORLIX-LINUX-ARCH $linux_arch"
+echo "ORLIX-LINUX-VERSION $linux_version"
+EOF
+
+cat >> "$output/init" <<'EOF'
 
 echo "ORLIX-KUNIT-BEGIN"
 if [ -d /sys/kernel/debug/kunit ]; then
@@ -134,6 +155,7 @@ exit "$kselftest_status"
 EOF
 chmod 755 "$output/init"
 
+printf 'proof_lane=%s\n' "$proof_lane" > "$output/proof_lane.txt"
 printf '%s\n' "$profile" > "$output/selected_profile.txt"
 printf '%s\n' "$linux_arch" > "$output/linux_arch.txt"
 printf '%s\n' "$linux_version" > "$output/linux_version.txt"
@@ -160,9 +182,11 @@ cat > "$output/Info.plist" <<EOF
     <string>$linux_version</string>
     <key>OrlixProfile</key>
     <string>$profile</string>
+    <key>OrlixProofLane</key>
+    <string>$proof_lane</string>
 </dict>
 </plist>
 EOF
 
 plutil -lint "$output/Info.plist" >/dev/null
-printf 'staged Orlix test initramfs resource: %s (profile %s)\n' "$output" "$profile"
+printf 'staged Orlix test initramfs resource: %s (profile %s, lane %s)\n' "$output" "$profile" "$proof_lane"

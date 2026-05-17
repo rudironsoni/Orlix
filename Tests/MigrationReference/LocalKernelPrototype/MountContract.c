@@ -1,4 +1,4 @@
-/* OrlixKernelTests/MountContract.c
+/* LocalKernelPrototype/MountContract.c
  * Mount and umount2 Linux contract tests that need full linux/fs.h ownership.
  */
 
