@@ -9,7 +9,7 @@
 
 @implementation OrlixKernelHostProofTests
 
-- (void)testBootloaderHandoffEntersHostedArchPathThroughProductAPI
+- (void)testBootloaderHandoffDoesNotReportBootWithoutStartKernel
 {
     struct OrlixBootConfig config = {
         .profile = ORLIX_BOOT_PROFILE_APPSTORE,
@@ -21,7 +21,7 @@
 
     int status = OrlixBoot(&config);
 
-    XCTAssertEqual(status, ORLIX_BOOT_STATUS_OK);
+    XCTAssertEqual(status, ORLIX_BOOT_STATUS_UNAVAILABLE);
     XCTAssertEqual(arch_boot_handoff_count(), 1);
     XCTAssertNotEqual(arch_boot_params(), NULL);
 }

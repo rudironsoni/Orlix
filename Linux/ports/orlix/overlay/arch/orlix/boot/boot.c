@@ -2,6 +2,7 @@
 #include <asm/boot.h>
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
+#include "OrlixHostAdapter/boot/kernel_entry.h"
 #define __init
 #else
 #include <linux/init.h>
@@ -36,12 +37,21 @@ int arch_boot_prepare_entry(const struct boot_params *params)
 
 int __init arch_boot_entry(const struct boot_params *params)
 {
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	OrlixHostKernelEntrypoint start_kernel_entry;
+#endif
 	int status = arch_boot_prepare_entry(params);
 
 	if (status != ORLIX_ARCH_BOOT_OK)
 		return status;
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	start_kernel_entry = OrlixHostResolveStartKernel();
 
-#if !defined(ORLIX_APP_HOSTED_BOOT)
+	if (!start_kernel_entry)
+		return ORLIX_ARCH_BOOT_UNAVAILABLE;
+
+	start_kernel_entry();
+#else
 	start_kernel();
 #endif
 

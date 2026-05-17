@@ -36,7 +36,7 @@ const char *OrlixTerminalBootStatusMessage(int status)
 {
     switch (status) {
     case ORLIX_BOOT_STATUS_OK:
-        return "Orlix bootloader entered the hosted arch/orlix path. No-init proof is still pending.";
+        return "Orlix boot entered the Linux kernel path.";
     case ORLIX_BOOT_STATUS_INVALID_CONFIG:
         return "Orlix bootloader rejected the boot config.";
     case ORLIX_BOOT_STATUS_UNAVAILABLE:

@@ -17,6 +17,7 @@ struct boot_params {
 enum orlix_arch_boot_status {
 	ORLIX_ARCH_BOOT_OK = 0,
 	ORLIX_ARCH_BOOT_INVALID_CONFIG = -1,
+	ORLIX_ARCH_BOOT_UNAVAILABLE = -2,
 };
 
 int arch_boot_entry(const struct boot_params *params);

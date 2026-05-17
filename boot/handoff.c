@@ -10,6 +10,8 @@ static int OrlixLinuxBootStringIsPresent(const char *value)
 
 static int OrlixEnterLinux(const struct boot_params *params)
 {
+    int status;
+
     if (!params || !OrlixLinuxBootStringIsPresent(params->cmdline) ||
         !params->dtb_base || params->dtb_size == 0 ||
         !OrlixLinuxBootStringIsPresent(params->root_device) ||
@@ -17,16 +19,15 @@ static int OrlixEnterLinux(const struct boot_params *params)
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
 
-    /*
-     * The app-hosted build compiles arch_boot_entry() in hosted-entry mode. The
-     * normal Linux build path continues from the same arch/orlix function into
-     * start_kernel().
-     */
-    if (arch_boot_entry(params) != ORLIX_ARCH_BOOT_OK) {
-        return ORLIX_BOOT_STATUS_INVALID_CONFIG;
+    status = arch_boot_entry(params);
+    if (status == ORLIX_ARCH_BOOT_OK) {
+        return ORLIX_BOOT_STATUS_OK;
+    }
+    if (status == ORLIX_ARCH_BOOT_UNAVAILABLE) {
+        return ORLIX_BOOT_STATUS_UNAVAILABLE;
     }
 
-    return ORLIX_BOOT_STATUS_OK;
+    return ORLIX_BOOT_STATUS_INVALID_CONFIG;
 }
 
 #if defined(ORLIX_BOOT_TESTING)
