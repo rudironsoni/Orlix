@@ -39,6 +39,7 @@ Do not claim product runtime readiness from KUnit, temporary kselftest, boot log
 The top-level Makefile keeps a small, Linux-shaped interface:
 
 ```bash
+make help
 make setup-env
 make build
 make test
@@ -49,6 +50,8 @@ make clean
 `make setup-env` fetches upstream Linux and generates the disposable Xcode project from `project.yml`. `make build` builds the app-hosted OrlixKernel iOS artifact. It must not build or require `vmlinux` as a normal artifact.
 
 `PROFILE=appstore` is the default profile. Pass another profile only when you intentionally need it.
+
+Use variables for scope instead of target-name variants: `PROFILE=...`, `type=...`, and `libc=...`. Proof labels are emitted inside artifacts and logs; they are not public Make targets.
 
 The Linux-shaped lower-level targets are available when needed:
 
@@ -72,7 +75,7 @@ Do not run kselftest or KUnit on Darwin and do not use a VM as product proof. Do
 
 Both `iphoneos` and `iphonesimulator` are iOS proof destinations. Milestones must validate the same scope on both.
 
-XCTest proof targets are organized under `Tests/XCTest/`. `OrlixKernelHostProofTests` launches the bootloader-shaped product API, `OrlixLinuxProofOutputParserTests` parses Linux-native KUnit and kselftest output fixtures, and `OrlixHostAdapterTests` covers narrow host mechanics. They do not own Linux subsystem assertions.
+XCTest suites are organized under `Tests/XCTest/`. `OrlixKernelHostProofTests` launches the bootloader-shaped product API, `OrlixLinuxProofOutputParserTests` parses Linux-native KUnit and kselftest output fixtures, and `OrlixHostAdapterTests` covers narrow host mechanics. They do not own Linux subsystem assertions.
 
 Milestone 5 boot-to-virtio-probe proof keeps the dependency chain honest. It verifies that generated profile DTS files describe virtio-mmio probe-shape devices, that the selected generated profile defconfig enables upstream OF, virtio-mmio, and virtio-block probe paths, and that Orlix architecture boot handoff state is covered by kernel dependency or kernel-interface proof.
 

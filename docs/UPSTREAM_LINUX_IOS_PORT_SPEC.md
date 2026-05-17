@@ -131,6 +131,12 @@ PROFILE=appstore
 
 Profile defconfigs are durable product-profile configs under `Linux/ports/orlix/configs`. The selected profile is materialized into the generated port tree in the location Kbuild expects.
 
+The repository Makefile is the command surface for repeatable local orchestration. Its public targets should stay small and Linux-shaped: `all`, `build`, `setup-env`, `prepare`, `scripts`, `dtbs`, `headers_install`, `kunit`, `kselftest`, `kselftest-install`, `test`, `clean`, `mrproper`, `xcodeproj`, and `run`.
+
+When Linux has a conventional target name, use that name. Orlix-specific dimensions should be variables such as `PROFILE=appstore`, `type=kunit,kselftest`, and `libc=linux` or `libc=orlixmlibc`, not new target names. Do not add milestone, proof-lane, or artifact-path names such as `build-temporary-*`, `stage-temporary-*`, `proof-kernel-*`, or `proof-ios-*` as normal user-facing targets.
+
+Proof labels are artifact metadata and log markers, not public Make targets. Internal Make plumbing may use private implementation targets, but docs and normal workflows should point users at the Linux-shaped public targets.
+
 Orlix does not require `vmlinux` as a canonical build, proof, or runtime artifact.
 
 The canonical OrlixKernel proof artifact is the iOS app-hosted OrlixKernel integration that actually runs inside the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter`, the iOS app host, and simulator/device execution.
@@ -322,9 +328,11 @@ Old local-kernel tests are migration reference. They are not proof of the target
 
 Existing XCTest files that target `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime` are local-kernel migration reference. Retained XCTest should either launch packaged Orlix Linux and collect Linux test output or test narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions belong in KUnit or kselftest.
 
-Durable KUnit tests live in the Linux port overlay next to Linux-owned code and are selected by `Linux/ports/orlix/overlay/arch/orlix/.kunitconfig`. Durable kselftests live under `Linux/ports/orlix/overlay/tools/testing/selftests/orlix/` and run through upstream kselftest install plus `run_kselftest.sh -c orlix`.
+Durable KUnit tests live in the Linux port overlay next to Linux-owned code and are selected by `Linux/ports/orlix/overlay/arch/orlix/.kunitconfig`. The repository entry point is `make kunit` or `make test type=kunit`.
 
-Temporary kselftests and OrlixMLibC-built kselftests must use separate install and staging paths. The temporary lane uses `Build/OrlixKernel/kselftest/temporary/<profile>/` and `proof_lane=temporary-kselftest-kernel-interface`. The OrlixMLibC lane uses `Build/OrlixMLibC/kselftest/<profile>/` and `proof_lane=orlixmlibc-kselftest-syscall-uapi`.
+Durable kselftests live under `Linux/ports/orlix/overlay/tools/testing/selftests/orlix/` and run through upstream kselftest install plus `run_kselftest.sh -c orlix`. The repository entry point is `make kselftest`, `make kselftest-install`, or `make test type=kselftest`.
+
+Temporary kselftests and OrlixMLibC-built kselftests must use separate install and packaging paths while sharing the same Linux-shaped Make target. Select the temporary lane with `libc=linux`; it installs under `Build/OrlixKernel/kselftest/temporary/<profile>/` and carries `proof_lane=temporary-kselftest-kernel-interface` metadata. Select the OrlixMLibC lane with `libc=orlixmlibc`; it installs under `Build/OrlixMLibC/kselftest/<profile>/` and carries `proof_lane=orlixmlibc-kselftest-syscall-uapi` metadata.
 
 XCTest targets live under `Tests/XCTest/` and are limited to app-hosted launch, packaging, proof-output collection, parser behavior, and narrow host-adapter mechanics. XCTest must not replace KUnit, kselftest, OrlixMLibC tests, or package proof as the owner of Linux-visible assertions.
 

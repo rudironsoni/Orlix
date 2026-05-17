@@ -148,6 +148,12 @@ Work may happen in parallel, but product runtime claims must follow ADR 0017's p
 
 Do not claim product runtime readiness from KUnit, temporary kselftest, no-init boot logs, packaging, simulator launch, or a host-side harness.
 
+## Make Target Rule
+
+The top-level Makefile's public interface must stay small and Linux-shaped. Prefer conventional targets such as `build`, `prepare`, `headers_install`, `kunit`, `kselftest`, `kselftest-install`, and `test`.
+
+Select Orlix-specific scope with variables such as `PROFILE=appstore`, `type=kunit,kselftest`, and `libc=linux` or `libc=orlixmlibc`. Do not add user-facing milestone, proof-lane, or artifact-path targets such as `proof-*`, `build-temporary-*`, `stage-temporary-*`, or `test-all`; proof labels belong in artifact metadata and logs.
+
 ## Test Rule
 
 Tests for the old local kernel prototype are migration reference only. They are not authoritative proof for the target architecture.

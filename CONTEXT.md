@@ -332,13 +332,17 @@ The requirement that milestones claiming iOS packaging, boot, runtime, or Linux 
 
 The required four-cell XCTest proof matrix for milestones claiming iOS packaging, boot, runtime, or Linux behavior: App Store on `iphoneos`, App Store on `iphonesimulator`, development on `iphoneos`, and development on `iphonesimulator`.
 
-## Proof Matrix Orchestrator
+## Linux-Shaped Make Surface
 
-The repository `make` target that runs the iOS proof matrix non-interactively. XcodeGen defines the Xcode topology and schemes, but `make` owns repeatable proof orchestration.
+The top-level Makefile's public command surface stays small and follows conventional names such as `build`, `prepare`, `headers_install`, `kunit`, `kselftest`, and `test`. Orlix-specific scope is selected with variables rather than target-name sprawl.
 
-## Milestone Proof Target
+## Make Scope Variables
 
-An explicit repository target used to claim milestone completion. Heavy proof such as the four-cell iOS proof matrix belongs here, not in a generic fast local check.
+Variables such as `PROFILE=appstore`, `type=kunit,kselftest`, and `libc=linux` or `libc=orlixmlibc` select profile, test class, and kselftest libc lane without creating new public target names for each proof lane or artifact path.
+
+## Proof Label Metadata
+
+Proof labels name what an artifact or log stream proves, such as `temporary-kselftest-kernel-interface` or `orlixmlibc-kselftest-syscall-uapi`. They are metadata and log markers, not public Make targets.
 
 ## Boot Profile
 
@@ -462,7 +466,7 @@ The README should explain concepts before commands: what Orlix is, what the repo
 
 ## Build Target Compatibility
 
-Old build target names such as `prepare-linux-worktree` are not preserved as compatibility aliases. Build targets should be renamed to match the upstream-Linux OrlixKernel architecture directly.
+Old build target names such as `prepare-linux-worktree`, `build-temporary-*`, `stage-temporary-*`, `proof-*`, and `test-all` are not preserved as compatibility aliases. Public Make targets should stay Linux-shaped; use variables for profile, test type, and libc lane selection.
 
 ## XCFramework Packaging Rule
 

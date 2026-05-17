@@ -22,7 +22,7 @@ The generated project includes `OrlixTerminal` as the iOS app host and XCTest ho
 
 The generated project may depend on `libghostty-spm` for terminal UI packages needed by `OrlixTerminal`, but Linux execution remains owned by Orlix.
 
-The full iOS proof matrix should run through explicit milestone proof targets, not implicitly through a generic fast local test target.
+The full iOS proof matrix should run through repository automation using the Linux-shaped Make surface and XcodeBuildMCP, not implicitly through a generic fast local test target or a separate public command for every milestone.
 
 The generated Xcode project must support both `iphoneos` and `iphonesimulator` destinations. Both are iOS proof destinations and must validate the same milestone scope. They package and launch an `ARCH=orlix` Linux artifact; they do not redefine the Linux build target as an Apple iOS ABI.
 
