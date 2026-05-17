@@ -27,6 +27,7 @@ override ORLIX_PROFILE_CONFIG := Linux/ports/orlix/configs/$(PROFILE)_defconfig
 ORLIX_KERNEL_PORT_DIR ?= Build/OrlixKernel/linux-$(LINUX_VERSION)-port
 ORLIX_KERNEL_BUILD_ROOT := $(CURDIR)/Build/OrlixKernel/build
 ORLIX_KERNEL_BUILD_DIR := $(ORLIX_KERNEL_BUILD_ROOT)/$(PROFILE)
+ORLIX_START_KERNEL_OBJECT := $(ORLIX_KERNEL_BUILD_DIR)/init/main.o
 ORLIX_KUNIT_BUILD_DIR := $(CURDIR)/Build/OrlixKernel/kunit/$(PROFILE)
 ORLIX_TEMPORARY_KSELFTEST_INSTALL_DIR := $(CURDIR)/Build/OrlixKernel/kselftest/temporary/$(PROFILE)
 ORLIX_TEMPORARY_TEST_INITRAMFS_DIR := $(CURDIR)/Build/OrlixKernel/test-initramfs/temporary/$(PROFILE)/OrlixTestInitramfs.bundle
@@ -83,7 +84,7 @@ KSELFTEST_PROOF_LABEL :=
 KSELFTEST_PREREQS :=
 endif
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __bootstrap-linux-upstream __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __linux-userspace-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __bootstrap-linux-upstream __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __linux-start-kernel-object __linux-userspace-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 
 all: build
 
@@ -401,6 +402,18 @@ __kunit: __prepare-kbuild
 	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_DIR)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" olddefconfig arch/$(LINUX_ARCH)/boot/boot_test.o; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
+__linux-start-kernel-object: __prepare-kbuild
+	@set -euo pipefail; \
+	linux_make="$(LINUX_MAKE)"; \
+	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
+	if [ -z "$$linux_make" ]; then echo "GNU Make >= 4.0 is required by Linux Kbuild; install gmake or set LINUX_MAKE=/path/to/gmake" >&2; exit 1; fi; \
+	linux_llvm_bin="$(LINUX_LLVM_BIN)"; \
+	PATH="$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
+	export PATH; \
+	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_DIR)" O="$(ORLIX_KERNEL_BUILD_DIR)" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" init/main.o; \
+	[ -s "$(ORLIX_START_KERNEL_OBJECT)" ] || { echo "missing compiled upstream start_kernel object: $(ORLIX_START_KERNEL_OBJECT)" >&2; exit 1; }; \
+	echo "compiled upstream start_kernel object: $(ORLIX_START_KERNEL_OBJECT)"
+
 __linux-userspace-sysroot:
 	@set -euo pipefail; \
 	if [ -L "$(ORLIX_LINUX_USERSPACE_SYSROOT_BOOTSTRAP_DIR)" ]; then \
@@ -553,7 +566,7 @@ __kselftest-initramfs: kselftest-install
 	plutil -lint "$$output/Info.plist" >/dev/null; \
 	echo "packaged kselftest initramfs: $$output (libc $$selected_libc)"
 
-__kernel-payload: prepare
+__kernel-payload: __linux-start-kernel-object
 	@set -euo pipefail; \
 	output="$(ORLIX_KERNEL_PAYLOAD_DIR)"; \
 	case "$$output" in \
