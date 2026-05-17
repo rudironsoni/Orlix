@@ -1,0 +1,10 @@
+# Mach-O Linux Build Investigations
+
+These probes support ADR 0020's Mach-O-native OrlixKernel framework lane.
+
+- `make macho-linux-build-probes PROFILE=appstore` builds the section probe, builds the initial Mach-O Linux archive, and records the `start_kernel()` dependency probe result.
+- The section probe verifies that freestanding C objects can place data in explicit Mach-O sections used to model Linux section classes.
+- The Linux object probe is the `build-linux-mach-o` lane: it compiles selected generated `arch/orlix` Linux source with `-nostdinc` and iOS Mach-O target triples.
+- The framework symbol probe runs from the normal framework build and verifies that expected Linux arch symbols are present in `OrlixKernel.framework`.
+
+The probes must not introduce hosted ELF loading, ELF-to-Mach-O conversion, fake `start_kernel()` implementations, or Darwin/libc headers in Linux-owned code.

@@ -28,7 +28,6 @@ targets:
       - path: OrlixHostAdapter/boot
         includes:
           - "*.c"
-      - path: Linux/ports/orlix/overlay/arch/orlix/boot/boot.c
       - path: OrlixKernel/include
         buildPhase: headers
         headerVisibility: public
@@ -58,6 +57,9 @@ targets:
           - $(SRCROOT)
           - $(SRCROOT)/OrlixKernel/include
           - $(SRCROOT)/Linux/ports/orlix/overlay/arch/orlix/include
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - $(SRCROOT)/Build/OrlixKernel/macho/selected/$(PLATFORM_NAME)/liborlixlinux.a
         GCC_PREPROCESSOR_DEFINITIONS:
           - $(inherited)
           - ORLIX_APP_HOSTED_BOOT=1
