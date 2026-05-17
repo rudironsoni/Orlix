@@ -46,15 +46,23 @@ The port will be planned and executed as focused milestones because later layers
 
 Durable milestone decisions belong in ADRs, the canonical architecture spec, and glossary terms. Task-by-task execution plans and brainstorming specs are not durable architecture records and should not be committed under `docs/superpowers/`.
 
+## Clarification: Relationship To ADR 0017
+
+This ADR establishes that Linux-facing behavior must be grounded in Linux-native proof, while iOS host integration is proved with XCTest. ADR 0017 refines how Linux-native proof is promoted into product runtime claims.
+
+KUnit proves OrlixKernel internal behavior. kselftest run through a temporary foreign-libc, nolibc, or other temporary harness proves kernel-interface behavior only. These lanes are necessary dependency proof, but they do not by themselves prove the full Orlix userspace runtime.
+
+Full product runtime claims must follow the claim promotion order in ADR 0017: kernel dependency proof, kselftest kernel-interface proof, OrlixMLibC libc proof, OrlixMLibC-built syscall/UAPI proof, POSIX shell environment proof, and third-party package proof.
+
 ## Consequences
 
 Milestone 1 is Kbuild `vmlinux` proof, not full boot or device support.
 
 Milestone 3 establishes real-artifact `OrlixKernel.xcframework` packaging because iOS-hosted execution cannot advance without a packageable product artifact.
 
-Milestone 4 establishes iOS-hosted Linux test execution before later runtime milestones claim proof. KUnit and kselftest must run inside Orlix Linux launched by the iOS host app, with KUnit KTAP and kselftest TAP collected from that Linux instance.
+Milestone 4 establishes iOS-hosted kernel-interface test execution before later runtime milestones claim proof. KUnit proves kernel-internal behavior, and temporary-harness kselftests prove kernel-interface behavior only.
 
-Later milestones cover boot entrypoint, XCFramework packaging, iOS-hosted Linux test execution, boot to virtio probe, virtio root disks, root assembly, console, remaining virtio devices, and final prototype deletion.
+Later milestones cover boot entrypoint, XCFramework packaging, iOS-hosted kernel-interface test execution, boot to virtio probe, virtio root disks, root assembly, console, remaining virtio devices, OrlixMLibC, POSIX shell proof, package proof, and final prototype deletion.
 
 Scope that does not belong to the current milestone should be deferred rather than partially implemented.
 

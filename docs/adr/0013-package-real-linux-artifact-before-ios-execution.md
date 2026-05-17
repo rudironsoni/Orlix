@@ -18,9 +18,9 @@ Each framework build packages one selected profile's Linux artifact. Closed buil
 
 ## Consequences
 
-iOS-hosted Linux test execution depends on real-artifact packaging.
+iOS-hosted kernel-interface execution and later product runtime proof depend on real-artifact packaging.
 
-Packaging proof is separate from runtime proof: it proves the product artifact contains Linux, not that Linux has booted, run KUnit, run kselftest, or emitted Linux test output.
+Packaging proof is separate from execution proof: it proves the product artifact contains Linux, not that Linux has booted, run KUnit, run kselftest, emitted Linux test output, or run product userspace.
 
 Packaging multiple profile-specific Linux artifacts into one framework would blur proof and increase product surface. Build separate framework artifacts when a different profile kernel artifact is needed.
 

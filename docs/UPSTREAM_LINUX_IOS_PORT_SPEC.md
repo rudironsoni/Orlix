@@ -2,11 +2,13 @@
 
 ## Purpose
 
-Orlix compiles upstream Linux into an iOS-hosted kernel product named `OrlixKernel.xcframework`.
+Orlix compiles upstream Linux into an iOS-hosted kernel product named `OrlixKernel.xcframework` and pairs it with `OrlixMLibC`, an mlibc-based C library for Orlix Linux userspace.
 
 Orlix does not imitate Linux by rewriting Linux core subsystems locally. It adapts Linux through Linux-native extension points such as boot, `arch/orlix`, drivers, Kconfig, device description, host backends, and build packaging.
 
 When upstream Linux already has a surface, implementation convention, build/test flow, or ownership model for a problem, Orlix follows that Linux shape. Orlix-specific alternatives require a concrete iOS constraint and a documented exception.
+
+The product goal is Linux userspace compatibility inside an iOS app boundary. OrlixKernel is Linux. OrlixMLibC fills the libc role for Orlix Linux userspace with glibc/musl source compatibility, not a new Orlix application ABI.
 
 ## Product Identity
 
@@ -15,6 +17,8 @@ Correct names:
 - Project: Orlix
 - Repository: OrlixSystem
 - Product: `OrlixKernel.xcframework`
+- Userspace libc: `OrlixMLibC`
+- Host app: `OrlixTerminal`
 - Architecture port: `arch/orlix`
 - Orlix driver subtree: `drivers/orlix`
 - Host mediation: `OrlixHostAdapter`
@@ -28,6 +32,8 @@ Inside already scoped directories, do not redundantly prefix filenames with `orl
 
 The iOS app is the host container. It starts the Orlix bootloader. The bootloader prepares Linux-shaped boot inputs and transfers control into the Orlix Linux architecture port. After boot, upstream Linux owns Linux behavior.
 
+The kernel does not provide a shell, package layer, libc surface, syscall facade, or runtime management API. Shells and packages are normal Orlix Linux userspace binaries linked against OrlixMLibC and executed through Linux mechanisms such as `execve()`.
+
 High-level flow:
 
 ```text
@@ -38,7 +44,8 @@ iOS app
   -> start_kernel()
   -> upstream Linux subsystems
   -> init
-  -> Linux userspace
+  -> OrlixMLibC-backed Linux userspace
+  -> shell and packages
 ```
 
 Upstream Linux owns:
@@ -71,6 +78,8 @@ Orlix-specific drivers own transport and backend mechanics only where upstream L
 
 `OrlixHostAdapter` owns private iOS and Darwin mechanics only.
 
+`OrlixMLibC` owns the libc implementation for Orlix Linux userspace. It may have an Orlix sysdeps identity where mlibc requires one, but that sysdeps layer must call Linux-shaped syscalls and expose Linux-compatible behavior.
+
 ## Source And Build Model
 
 Upstream Linux source is generated input:
@@ -98,6 +107,22 @@ Build/OrlixKernel/linux-<version>-port
 
 If a change must survive regeneration, move it back to `Linux/ports/orlix`.
 
+`OrlixMLibC` is a top-level component in this repository. It tracks upstream mlibc through generated/read-only upstream input plus durable Orlix sysdeps, configs, and patches under `OrlixMLibC/`.
+
+OrlixMLibC consumes kernel UAPI only through the standard Linux `headers_install` output for `ARCH=orlix`. That disposable artifact lives under:
+
+```text
+Build/OrlixMLibC/kernel-headers/<profile>/
+```
+
+The userspace-consumable include root is:
+
+```text
+Build/OrlixMLibC/kernel-headers/<profile>/include
+```
+
+Do not copy Linux syscall numbers, ioctl payloads, structs, constants, flags, or UAPI definitions into OrlixMLibC checked-in headers. Linux owns those definitions.
+
 Normal builds default to:
 
 ```text
@@ -116,9 +141,11 @@ make build-linux-kernel PROFILE=appstore
 make build-linux-kernel PROFILE=development
 ```
 
-`OrlixKernel.xcframework` packaging must happen early enough to support iOS-hosted Linux execution proof and must depend on a real Linux build artifact. Boot-stub packaging is not product proof.
+`OrlixKernel.xcframework` packaging must happen early enough to support iOS-hosted kernel-interface proof and later product runtime proof, and must depend on a real Linux build artifact. Boot-stub packaging is not product proof.
 
 The App Store and development profiles should validate the same product scope. Development may enable explicit debug and testing affordances, but it must not drift into a broader Linux-visible product shape. Milestones that claim iOS packaging, boot, runtime, or Linux behavior must validate the same XCTest suite and assertions across App Store and development profiles on both `iphoneos` and `iphonesimulator`.
+
+Orlix userspace ABI is profile-invariant. App Store, development, simulator, CI, and debug builds may produce separate artifacts, but installed UAPI headers, syscall numbers, errno values, signal ABI, ioctl payloads, userspace-visible struct layouts, OrlixMLibC ABI, dynamic-loader contract, package ABI, and observable Linux userspace behavior must remain the same. Profile-specific paths, signing, diagnostics, tracing, assertions, host mediation, and test knobs are allowed only when they do not alter product ABI. Profile ABI drift is release-blocking.
 
 Test-only kernel config overlays may enable KUnit, kselftest support, KUnit debugfs, and proof collection affordances for both App Store and development proof builds. Those overlays do not change the normal product profile configs.
 
@@ -210,6 +237,14 @@ The serial-style console is available for early, debug, or fallback use. The vir
 
 Use normal Linux package and execution mechanisms first.
 
+Orlix Linux userspace binaries are built for Orlix's Linux userspace ABI, linked against OrlixMLibC, and hosted by the iOS app only as packaging or storage mechanics. They are not Darwin/iOS ABI executables and are not launched by iOS as app binaries.
+
+The near-term build mode is host-contained: an iOS/macOS-hosted toolchain produces Orlix Linux userspace binaries for bundling or installation into Orlix Linux storage. Self-hosted builds inside running Orlix Linux are a future capability after enough userspace exists.
+
+OrlixMLibC aims for glibc/musl source compatibility. Existing AArch64 Linux applications should build unpatched when pointed at the Orlix toolchain and sysroot, but the resulting binaries have OrlixMLibC/Orlix runtime identity.
+
+Native ELF execution means Linux `execve()` maps AArch64 ELF binaries and an OrlixMLibC dynamic linker as native CPU code. It is not CPU emulation. Existing non-Orlix glibc or musl binary compatibility is a future compatibility track; native Orlix ELF execution is required before product runtime proof.
+
 Package managers such as apt/dpkg verify packages and install files into the filesystem. After installation, execution is governed by normal Linux mechanisms:
 
 - filesystem permissions
@@ -218,6 +253,8 @@ Package managers such as apt/dpkg verify packages and install files into the fil
 - upstream security mechanisms when configured
 
 The App Store profile may allow downloaded binary packages only through curated, signed, profile-approved repositories with App Store-safe disclosure and policy checks. It is not an unrestricted arbitrary repository model.
+
+Bash is the first shell proof package. `/bin/sh` is rootfs policy, not kernel behavior. The third-party package proof ladder is jq, then curl, then zsh.
 
 Do not introduce a custom Orlix execution policy layer unless a concrete App Store or iOS host constraint cannot be represented with normal Linux package, mount, permission, MM, or upstream security mechanisms.
 
@@ -265,13 +302,23 @@ Proof must remain honest about what it proves.
 
 Kbuild `vmlinux` proof means upstream Linux is being built as Linux for `ARCH=orlix`.
 
-XCFramework packaging proof means the product packages a real Linux build artifact for the selected profile. This proof is required before iOS-hosted Linux test execution can advance.
+XCFramework packaging proof means the product packages a real Linux build artifact for the selected profile. This proof is required before iOS-hosted kernel-interface execution can advance.
 
 Boot proof means the bootloader hands Linux-shaped boot inputs into `arch/orlix` and reaches the intended Linux boot stage.
 
 Device proof means upstream Linux device classes bind and operate through Orlix transport and backend mechanics.
 
-Linux-native test execution proof means KUnit and kselftest are built as Linux artifacts and executed inside an Orlix Linux instance launched by the iOS host app. Darwin-hosted execution, VM/QEMU execution, repo-local shell harnesses, and standalone C contract binaries are not product proof. XCTest launches Orlix, verifies iOS packaging/host mechanics, collects KUnit output from the Linux kernel log path, and collects kselftest output from test-initramfs stdout on both `iphoneos` and `iphonesimulator`; both destinations must validate the same milestone scope. KUnit and kselftest remain the tests of record for Linux behavior.
+KUnit proves OrlixKernel internal behavior. Linux boot/no-init behavior proves that OrlixKernel reaches the normal Linux init handoff and fails Linux-accurately when no userspace exists.
+
+kselftest is Linux-owned source-tree test code executed from userspace against a running kernel. kselftests run through a temporary foreign-libc, nolibc, or other temporary harness are kernel-interface proof only. They are useful early signal, but they are not OrlixMLibC proof, final Orlix userspace ABI proof, package proof, or product runtime proof.
+
+OrlixMLibC libc proof comes from mlibc's own test suite configured for the Orlix sysdeps layer. Orlix syscall/UAPI proof comes from selected Linux kselftests rebuilt and rerun against OrlixMLibC.
+
+Product runtime proof begins only when OrlixMLibC-backed Linux userspace executes through OrlixKernel. Bash proves the first interactive POSIX shell environment. jq, curl, and zsh form the third-party package ladder.
+
+ADR 0017 governs product runtime claim promotion. Development may proceed in parallel, but claims must move in order: kernel dependency proof, kselftest kernel-interface proof, OrlixMLibC libc proof, OrlixMLibC-built syscall/UAPI proof, POSIX shell environment proof, and third-party package proof. Later proof does not replace earlier proof.
+
+Darwin-hosted execution, VM/QEMU execution, repo-local shell harnesses, standalone C contract binaries, fake shells, and local terminal backends are not product proof. XCTest may launch Orlix, verify iOS packaging and host mechanics, and collect Linux proof output on both `iphoneos` and `iphonesimulator`; both destinations must validate the same claimed scope.
 
 The test kernel may enable Linux debugfs and `CONFIG_KUNIT_DEBUGFS` for per-suite KUnit KTAP retrieval inside the test initramfs. This is a test affordance, not public product API.
 
@@ -293,9 +340,11 @@ Milestone 3: XCFramework Packaging
 
 Package a real Orlix Linux artifact into `OrlixKernel.xcframework` for the selected profile. Packaging boot stubs alone is not proof.
 
-Milestone 4: iOS-Hosted Linux Test Execution
+Milestone 4: iOS-Hosted Kernel-Interface Test Execution
 
-Launch packaged Orlix Linux from an iOS host app or test host, run Linux-native KUnit and kselftest inside Orlix Linux, and collect KUnit KTAP plus kselftest TAP from that Linux instance. Build-only KUnit or kselftest artifacts are preparatory evidence, not runtime proof.
+Launch packaged OrlixKernel from an iOS host app or test host and collect dependency proof from the running kernel path. This milestone may include KUnit output, Linux-accurate no-init boot failure, and selected Linux kselftests through a temporary foreign-libc or nolibc harness where useful.
+
+Milestone 4 does not prove OrlixMLibC correctness, final Orlix userspace ABI, POSIX shell behavior, third-party package compatibility, or product runtime readiness.
 
 Milestone 5: Boot To Virtio Probe
 
@@ -316,6 +365,22 @@ Provide minimal early console diagnostics, serial-style console support, upstrea
 Milestone 9: Remaining Virtio Devices
 
 Add virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. Split this milestone if it becomes too large.
+
+Milestone 10: OrlixMLibC Libc Proof
+
+Build OrlixMLibC from the top-level component, consume installed Orlix UAPI headers generated by Linux `headers_install`, and pass mlibc's own tests for the Orlix sysdeps layer. This milestone does not prove package compatibility by itself.
+
+Milestone 11: OrlixMLibC Syscall/UAPI Proof
+
+Rebuild and rerun selected Linux kselftests against OrlixMLibC. This promotes eligible temporary kernel-interface coverage into Orlix syscall and userspace ABI proof.
+
+Milestone 12: POSIX Shell Environment Proof
+
+Run Bash as normal Orlix Linux userspace through the terminal path. This milestone proves enough process, fd, tty, signal, path, environment, dynamic-loader, and exec behavior for an interactive POSIX shell environment.
+
+Milestone 13: Third-Party Package Ladder
+
+Build and run unpatched third-party packages as Orlix Linux userspace binaries in order: jq, then curl, then zsh. This is the package-compatibility proof ladder above kernel, libc, filesystem, terminal, networking, and process-model layers.
 
 Final cleanup:
 

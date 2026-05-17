@@ -4,9 +4,11 @@ These rules apply to every task in this repository unless explicitly overridden 
 
 ## Project Invariant
 
-Orlix compiles upstream Linux into an iOS-hosted `OrlixKernel.xcframework`. Orlix adapts Linux through Linux-native extension points, not by locally rewriting Linux core subsystems.
+Orlix compiles upstream Linux into an iOS-hosted `OrlixKernel.xcframework` and pairs it with `OrlixMLibC`, an mlibc-based libc for Orlix Linux userspace. Orlix adapts Linux through Linux-native extension points, not by locally rewriting Linux core subsystems.
 
 If a change makes Orlix less suitable for real Linux userspace, the change is wrong.
+
+OrlixKernel is Linux. It does not own shell behavior, libc behavior, package management, public syscall APIs, or a custom runtime facade. Shells and packages are normal Orlix Linux userspace binaries linked against OrlixMLibC and executed through Linux mechanisms.
 
 ## Working Rules
 
@@ -57,6 +59,14 @@ Host mechanics live only in:
 
 - `OrlixHostAdapter`
 
+Orlix userspace libc inputs live under:
+
+- `OrlixMLibC`
+
+Generated OrlixMLibC and userspace artifacts are disposable:
+
+- `Build/OrlixMLibC`
+
 The public product header lives in:
 
 - `OrlixKernel/include`
@@ -105,6 +115,16 @@ Use narrow owner seams:
 
 Virtio is for virtual devices. It is not the path for Linux MM policy, syscall semantics, task model, or executable-memory decisions.
 
+## OrlixMLibC Rule
+
+`OrlixMLibC` is a top-level component, not part of the Linux kernel port. It tracks upstream mlibc through generated/read-only upstream input plus durable Orlix sysdeps, configs, and patches.
+
+OrlixMLibC may have an Orlix sysdeps identity only where mlibc needs an OS-port hook. It must call Linux-shaped syscalls and expose glibc/musl source-compatible Linux behavior. Do not add an Orlix-specific application ABI.
+
+OrlixMLibC consumes kernel UAPI only through standard Linux `headers_install` output for `ARCH=orlix`, generated under `Build/OrlixMLibC/kernel-headers/<profile>/`. Do not commit copied Linux syscall numbers, ioctl payloads, structs, constants, flags, or UAPI definitions into OrlixMLibC.
+
+Orlix userspace ABI is profile-invariant. App Store, development, simulator, CI, and debug builds may produce separate artifacts, but installed UAPI headers, syscall numbers, errno values, signal ABI, ioctl payloads, userspace-visible struct layouts, OrlixMLibC ABI, dynamic-loader contract, package ABI, and observable Linux userspace behavior must remain the same. Profile ABI drift is a release-blocking error.
+
 ## Build And Proof Rule
 
 The first honest proof target is upstream Linux `vmlinux` for `ARCH=orlix`.
@@ -121,17 +141,35 @@ make build-linux-kernel PROFILE=development
 
 `OrlixKernel.xcframework` packaging must depend on a real Linux build artifact for the selected profile. Packaging boot stubs alone is not product proof.
 
+Work may happen in parallel, but product runtime claims must follow ADR 0017's promotion order:
+
+1. Kernel dependency proof
+2. Kselftest kernel-interface proof
+3. OrlixMLibC libc proof
+4. OrlixMLibC-built syscall/UAPI proof
+5. POSIX shell environment proof
+6. Third-party package ladder: jq, curl, zsh
+
+Do not claim product runtime readiness from KUnit, temporary kselftest, no-init boot logs, packaging, simulator launch, or a host-side harness.
+
 ## Test Rule
 
 Tests for the old local kernel prototype are migration reference only. They are not authoritative proof for the target architecture.
 
-New proof should focus on:
+New proof must be labeled by what it proves:
 
-- upstream Linux Kbuild behavior
-- Linux-native tests where applicable
-- boot and rootfs integration
-- Xcode packaging after a real Linux artifact exists
-- `OrlixHostAdapter` host-mechanics tests only for host mechanics
+- Kbuild `vmlinux` proof proves upstream Linux builds for `ARCH=orlix`.
+- XCFramework packaging proof proves a real Linux artifact is packaged, not that Linux booted or ran userspace.
+- KUnit proves OrlixKernel internal behavior.
+- Linux-accurate no-init behavior proves kernel dependency boot reached the normal init handoff without requiring libc.
+- kselftests through a temporary foreign-libc, nolibc, or other temporary harness prove kernel-interface behavior only.
+- mlibc's own tests prove OrlixMLibC libc behavior.
+- OrlixMLibC-built kselftests prove the OrlixMLibC-to-OrlixKernel syscall/UAPI path.
+- Bash proves the first interactive POSIX shell environment.
+- jq, curl, and zsh prove increasingly realistic third-party package compatibility.
+- XCTest proves iOS host integration, packaging, launch, proof-output collection, and narrow `OrlixHostAdapter` host mechanics.
+
+Do not use Darwin-hosted execution, VM/QEMU execution, repo-local shell harnesses, standalone C contract binaries, fake shells, sandbox shells, or local terminal backends as product proof.
 
 ## Documentation Rule
 
