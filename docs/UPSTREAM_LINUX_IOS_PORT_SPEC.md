@@ -76,7 +76,9 @@ Orlix-specific architecture code owns:
 
 Orlix-specific drivers own transport and backend mechanics only where upstream Linux needs a device or platform implementation.
 
-`OrlixHostAdapter` owns private iOS and Darwin mechanics only.
+`OrlixHostAdapter` owns private iOS and Darwin mechanics only. It may use Apple SDK, Darwin, POSIX, and host libc APIs internally, but those dependencies must not leak through contracts consumed by `OrlixKernel`, `arch/orlix`, or `drivers/orlix`.
+
+Kernel-visible HostAdapter contracts must remain freestanding and Linux-shaped. They must not require libc headers, Apple or Objective-C types, `FILE *`, `pthread_t`, `errno` contracts, POSIX fd contracts, `struct stat`, `DIR *`, malloc/free ownership conventions, dynamic-loader semantics, or host syscall ABI behavior.
 
 `OrlixMLibC` owns the libc implementation for Orlix Linux userspace. It may have an Orlix sysdeps identity where mlibc requires one, but that sysdeps layer must call Linux-shaped syscalls and expose Linux-compatible behavior.
 
@@ -275,6 +277,8 @@ Unavoidable iOS memory mechanics are adapted through narrow `arch/orlix` seams i
 - host synchronization mechanics
 - app lifecycle notifications
 - terminal and transport backends
+
+HostAdapter implementation files may use host libc and platform APIs privately. Headers and contracts visible to Linux-owned code must expose only Orlix-defined opaque handles, primitive scalar values, and explicit status enums.
 
 `OrlixHostAdapter` must not become a public libc surface, syscall interposition layer, package manager, Linux policy layer, or Linux ABI provider.
 
