@@ -62,7 +62,7 @@ make test type=kunit,kselftest
 make clean
 ```
 
-`make setup-env` fetches upstream Linux and generates the disposable Xcode project from `project.yml`. `make build` builds the app-hosted OrlixKernel iOS artifact. It must not build or require `vmlinux` as a normal artifact.
+`make setup-env` fetches upstream Linux and generates the disposable Xcode project from `project.yml`. `make build` exercises the current component build hooks: it builds the app-hosted OrlixKernel iOS artifact path and runs placeholder hooks for components that are not implemented yet. It does not build a real OrlixMLibC sysroot, prove terminal runtime behavior, or build or require `vmlinux` as a normal artifact.
 
 `PROFILE=appstore` is the default profile. Pass another profile only when you intentionally need it.
 
@@ -80,9 +80,9 @@ make kselftest PROFILE=appstore libc=orlixmlibc ORLIX_MLIBC_SYSROOT=Build/OrlixM
 
 `make prepare` materializes the generated upstream-plus-Orlix port tree and Kbuild output without requiring a standalone kernel image. `make headers_install` installs Linux UAPI headers into `Build/OrlixMLibC/kernel-headers/<profile>/include` and does not consume `vmlinux`.
 
-`make kunit` builds Linux KUnit-selected Orlix test objects. KUnit proves kernel-internal behavior only.
+`make kunit` currently builds Linux KUnit-selected Orlix test objects. That is useful dependency evidence, not iOS-hosted KUnit execution proof. KUnit proves kernel-internal behavior only after the hosted Linux proof path runs it and emits Linux-owned KUnit output.
 
-`make kselftest libc=linux` uses Linux's kselftest install shape with a temporary foreign-libc sysroot under `Build/OrlixKernel/kselftest/temporary/<profile>/`. It is kernel-interface coverage only, not OrlixMLibC proof, Orlix userspace ABI proof, shell proof, package proof, or product runtime proof.
+`make kselftest libc=linux` uses Linux's kselftest install shape with a temporary foreign-libc sysroot under `Build/OrlixKernel/kselftest/temporary/<profile>/`. Until those tests run against the iOS-hosted kernel, this is preparation only. Once run, it is kernel-interface coverage only, not OrlixMLibC proof, Orlix userspace ABI proof, shell proof, package proof, or product runtime proof.
 
 `make kselftest libc=orlixmlibc` uses a separate install path under `Build/OrlixMLibC/kselftest/<profile>/`. That lane requires an OrlixMLibC sysroot plus installed Orlix UAPI headers and is the later syscall/UAPI proof lane.
 
@@ -92,7 +92,7 @@ Both `iphoneos` and `iphonesimulator` are iOS proof destinations. Milestones mus
 
 XCTest suites are organized under project-local test trees. `OrlixKernel/Tests/XCTest/OrlixKernelHostProofTests` launches the bootloader-shaped product API, `OrlixKernel/Tests/XCTest/OrlixLinuxProofOutputParserTests` parses Linux-native KUnit and kselftest output fixtures under `OrlixKernel/Tests/Fixtures`, and `OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests` covers narrow host mechanics. Future OrlixMLibC and OrlixTerminal tests belong under `OrlixMLibC/Tests` and `OrlixTerminal/Tests`. They do not own Linux subsystem assertions.
 
-Milestone 5 boot-to-virtio-probe proof keeps the dependency chain honest. It verifies that generated profile DTS files describe virtio-mmio probe-shape devices, that the selected generated profile defconfig enables upstream OF, virtio-mmio, and virtio-block probe paths, and that Orlix architecture boot handoff state is covered by kernel dependency or kernel-interface proof.
+Milestone 5 boot-to-virtio-probe proof keeps the dependency chain honest. Static DTS, defconfig, and kselftest source inputs are preparatory only. The milestone is proved only when iOS-hosted Orlix Linux consumes the profile device tree and reaches the point where upstream virtio-mmio probing can be attempted.
 
 Milestone 5 does not prove `/dev/vda`, `/dev/vdb`, virtio-block request I/O, host-backed disk persistence, initramfs loading, OverlayFS root assembly, or general userspace boot.
 
@@ -135,7 +135,7 @@ The public product surface is bootloader-shaped. It should expose a minimal boot
 
 ## Current Proof Boundary
 
-The current blocking proof boundary is iOS-hosted kernel-interface execution. Real-artifact XCFramework packaging is a prerequisite, not product runtime proof.
+The current blocking proof boundary is iOS-hosted kernel-interface execution. The branch is source-layout and build-hook aligned, not runtime aligned. Real-artifact XCFramework packaging is a prerequisite, not product runtime proof.
 
 Success at this boundary means the iOS host launches packaged OrlixKernel and collects dependency proof from the running kernel path, such as KUnit output, Linux-accurate no-init behavior, or selected kselftests through a temporary harness. It does not mean OrlixMLibC, Bash, jq, curl, zsh, or product runtime compatibility is proved.
 

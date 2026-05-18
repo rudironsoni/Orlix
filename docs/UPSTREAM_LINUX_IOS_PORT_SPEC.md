@@ -148,6 +148,8 @@ Profile defconfigs are durable product-profile configs under `OrlixKernel/Source
 
 The repository Makefile is the command surface for repeatable local orchestration. It delegates to one Makefile per top-level project: `OrlixKernel/Makefile`, `OrlixHostAdapter/Makefile`, `OrlixMLibC/Makefile`, and `OrlixTerminal/Makefile`. The top-level public targets stay small and Linux-shaped: `all`, `build`, `setup-env`, `prepare`, `scripts`, `dtbs`, `headers_install`, `kunit`, `kselftest`, `kselftest-install`, `test`, `clean`, `mrproper`, `xcodeproj`, and `run`.
 
+`make build` means orchestration of the current component build hooks. It must not be described as proof that every component is implemented. Until OrlixMLibC has a real sysroot build and OrlixTerminal is backed by a Linux console path, their build hooks may be source-ownership or placeholder checks only.
+
 When Linux has a conventional target name, use that name. Orlix-specific dimensions should be variables such as `PROFILE=appstore`, `type=kunit,kselftest`, and `libc=linux` or `libc=orlixmlibc`, not new target names. Do not add milestone, proof-lane, or artifact-path names such as `build-temporary-*`, `stage-temporary-*`, `proof-kernel-*`, or `proof-ios-*` as normal user-facing targets.
 
 Proof labels are artifact metadata and log markers, not public Make targets. Internal Make plumbing may use private implementation targets, but docs and normal workflows should point users at the Linux-shaped public targets.
@@ -319,7 +321,7 @@ Use it only as migration reference. Migrate useful behavior by ownership into up
 
 Proof must remain honest about what it proves.
 
-App-hosted OrlixKernel build proof means the kernel integration that the iOS app will execute can be built for the selected profile and iOS destination.
+App-hosted OrlixKernel build proof means the kernel integration that the iOS app will execute can be built for the selected profile and iOS destination. A simulator-hosted result proves only the simulator destination unless the same scope has also passed on `iphoneos`.
 
 XCFramework or app packaging proof means the product packages or links the hosted OrlixKernel integration for the selected profile. This proof is required before iOS-hosted kernel-interface execution can advance, but it does not prove Linux booted or ran userspace.
 
@@ -327,7 +329,7 @@ Boot proof means the bootloader hands Linux-shaped boot inputs into `arch/orlix`
 
 Device proof means upstream Linux device classes bind and operate through Orlix transport and backend mechanics.
 
-KUnit proves OrlixKernel internal behavior. Linux boot/no-init behavior proves that OrlixKernel reaches the normal Linux init handoff and fails Linux-accurately when no userspace exists.
+KUnit proves OrlixKernel internal behavior when it runs in the hosted Linux proof path and emits Linux-owned KUnit output. Building KUnit-selected objects is useful dependency evidence, but it is not iOS-hosted KUnit execution proof. Linux boot/no-init behavior proves that OrlixKernel reaches the normal Linux init handoff and fails Linux-accurately when no userspace exists.
 
 kselftest is Linux-owned source-tree test code executed from userspace against a running kernel. kselftests run through a temporary foreign-libc, nolibc, or other temporary harness are kernel-interface proof only. They are useful early signal, but they are not OrlixMLibC proof, final Orlix userspace ABI proof, package proof, or product runtime proof.
 
@@ -345,7 +347,7 @@ Old local-kernel tests are migration reference. They are not proof of the target
 
 XCTest files quarantined under `LegacyOrlix/Tests/MigrationReference/LocalKernelPrototype/` are local-kernel migration reference. Retained XCTest should either launch packaged Orlix Linux and collect Linux test output or test narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions belong in KUnit or kselftest.
 
-Durable KUnit tests live in the Linux port overlay next to Linux-owned code and are selected by `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/.kunitconfig`. The repository entry point is `make kunit` or `make test type=kunit`.
+Durable KUnit tests live in the Linux port overlay next to Linux-owned code and are selected by `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/.kunitconfig`. The repository entry point is `make kunit` or `make test type=kunit`. Those targets may build KUnit-selected objects before hosted execution exists; do not promote that to hosted KUnit proof.
 
 Durable kselftests live under `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/` and run through upstream kselftest install plus `run_kselftest.sh -c orlix`. The repository entry point is `make kselftest`, `make kselftest-install`, or `make test type=kselftest`.
 
@@ -375,7 +377,7 @@ Milestone 4 does not prove OrlixMLibC correctness, final Orlix userspace ABI, PO
 
 Milestone 5: Boot To Virtio Probe
 
-Carry boot beyond prepared inputs so Linux consumes profile device tree data and reaches the point where upstream virtio-mmio probing can be attempted. Do not claim block-device creation, block I/O, root assembly, or userspace boot.
+Carry boot beyond prepared inputs so Linux consumes profile device tree data and reaches the point where upstream virtio-mmio probing can be attempted. Static DTS nodes, defconfig enablement, and kselftest source are input proof only. Do not claim virtio probe proof until the running hosted kernel consumes the DT and attempts the upstream virtio-mmio path. Do not claim block-device creation, block I/O, root assembly, or userspace boot.
 
 Milestone 6: Virtio Root Disks
 

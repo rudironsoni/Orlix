@@ -16,6 +16,26 @@ Tests for the local kernel prototype are migration reference, not authoritative 
 
 KUnit and kselftest are the tests of record for Linux-owned behavior and provide dependency proof before product runtime proof. Building those artifacts is only preparatory evidence.
 
+## Source-Layout Alignment
+
+Evidence that repository source and test ownership paths match the documented architecture. It does not imply that Linux boot, KUnit, kselftest, OrlixMLibC, terminal, or package runtime proof has passed.
+
+## Build Hook Alignment
+
+Evidence that Make targets delegate to the correct project-owned build hooks. It does not imply that every component has a completed implementation or sysroot.
+
+## App-Hosted Kernel Dependency/Build Proof
+
+Evidence that the app-hosted OrlixKernel integration can be built or entered through the bootloader-shaped host path while remaining honest about missing dependencies such as real `start_kernel()`.
+
+## Static Virtio Input Proof
+
+Evidence that DTS, defconfig, or kselftest source inputs describe the intended virtio shape. It is preparatory input proof only, not proof that a running hosted kernel consumed device tree data or probed virtio devices.
+
+## Temporary Start-Kernel Resolver
+
+The bring-up-only host resolver for `start_kernel()`. It is acceptable only while the real Mach-O-linked upstream Linux provider is absent and the boot path returns an honest unavailable status.
+
 ## Kselftest Kernel-Interface Proof
 
 Evidence from selected Linux-owned kselftests, executed from userspace against a running OrlixKernel, that kernel-exposed interfaces behave correctly.

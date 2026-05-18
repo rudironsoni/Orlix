@@ -27,7 +27,7 @@ OrlixBoot()
   -> real Mach-O-linked start_kernel()
 ```
 
-During bring-up, `start_kernel()` may remain unavailable and `OrlixBoot()` may return `ORLIX_BOOT_STATUS_UNAVAILABLE`. That is an app-hosted kernel dependency proof only. Runtime symbol lookup is a temporary bridge and must not become the final product design unless a specific Mach-O or framework constraint requires it.
+During bring-up, `start_kernel()` may remain unavailable and `OrlixBoot()` may return `ORLIX_BOOT_STATUS_UNAVAILABLE`. That is an app-hosted kernel dependency proof only. Runtime symbol lookup is a temporary bridge and must not become the final product design unless a specific Mach-O or framework constraint requires it. Keep `dlsym("start_kernel")` on the removal list: once the real upstream dependency chain and Mach-O section/linker policy can provide `start_kernel()`, use a direct symbol or an explicitly documented weak-symbol transition instead.
 
 ## Consequences
 
