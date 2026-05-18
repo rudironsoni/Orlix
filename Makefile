@@ -553,12 +553,14 @@ __macho-start-kernel-link-probe: __macho-start-kernel-dependency-probe __macho-l
 	status="$$probe_dir/link-status.txt"; \
 	log="$$probe_dir/link.log"; \
 	object="$$probe_dir/init_main.o"; \
+	bounds_object="$$probe_dir/section_bounds.o"; \
 	archive="$(ORLIX_KERNEL_MACHO_SIMULATOR_DIR)/$(ORLIX_KERNEL_MACHO_ARCHIVE_NAME)"; \
 	output="$$probe_dir/start_kernel_link.dylib"; \
 	[ -s "$$object" ] || { echo "missing compiled start_kernel probe object: $$object" >&2; exit 1; }; \
 	[ -s "$$archive" ] || { echo "missing Mach-O Linux simulator archive: $$archive" >&2; exit 1; }; \
+	/usr/bin/env -u SDKROOT "$$cc" -target "$(ORLIX_MACHO_IOS_SIMULATOR_TARGET)" -isysroot / -ffreestanding -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -c tools/investigations/macho-linux-build/start_kernel_section_bounds.c -o "$$bounds_object"; \
 	set +e; \
-	/usr/bin/env -u SDKROOT "$$cc" -target "$(ORLIX_MACHO_IOS_SIMULATOR_TARGET)" -isysroot / -dynamiclib -nostdlib -Wl,-undefined,error "$$object" "$$archive" -o "$$output" > "$$log" 2>&1; \
+	/usr/bin/env -u SDKROOT "$$cc" -target "$(ORLIX_MACHO_IOS_SIMULATOR_TARGET)" -isysroot / -dynamiclib -nostdlib -Wl,-undefined,error "$$object" "$$bounds_object" "$$archive" -o "$$output" > "$$log" 2>&1; \
 	rc="$$?"; \
 	set -e; \
 	if [ "$$rc" -eq 0 ]; then \
