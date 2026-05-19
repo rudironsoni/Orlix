@@ -354,7 +354,7 @@ __prepare-kbuild: __prepare-port
 		linux_section="$$1"; \
 		linker_pattern="$$2"; \
 		case "$$linux_section" in \
-			.init.text|.init.data|.init.setup|.initcall|.export_symbol|.data..percpu|.data..ro_after_init) ;; \
+			.init.text|.init.data|.init.setup|.initcall|.export_symbol|.data..percpu|.data..ro_after_init|.data.once) ;; \
 			*) echo "unknown Orlix product section-map class: $$linux_section" >&2; exit 1 ;; \
 		esac; \
 		if ! grep -F -q "$$linker_pattern" "$$linker_script"; then \
@@ -369,6 +369,7 @@ __prepare-kbuild: __prepare-port
 	validate_section_class '.export_symbol' '.export_symbol'; \
 	validate_section_class '.data..percpu' '.data..percpu'; \
 	validate_section_class '.data..ro_after_init' '.data..ro_after_init'; \
+	validate_section_class '.data.once' '.data.once'; \
 	{ \
 		printf '%s\t%s\t%s\t%s\t%s\n' 'linux_section' 'status' 'product_candidate' 'owner' 'notes'; \
 		printf '%s\t%s\t%s\t%s\t%s\n' '.init.text' 'blocked' '__TEXT,__init_text' 'vmlinux.lds' 'not consumed'; \
@@ -378,8 +379,9 @@ __prepare-kbuild: __prepare-port
 		printf '%s\t%s\t%s\t%s\t%s\n' '.export_symbol' 'blocked' 'none' 'export.h/modpost' 'discard/modpost semantics unresolved'; \
 		printf '%s\t%s\t%s\t%s\t%s\n' '.data..percpu' 'deferred' 'none' 'vmlinux.lds/percpu' 'requires percpu model'; \
 		printf '%s\t%s\t%s\t%s\t%s\n' '.data..ro_after_init' 'deferred' 'none' 'vmlinux.lds/cache' 'requires protection/lifetime model'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.data.once' 'blocked' 'none' 'vmlinux.lds' 'owned by upstream linker script; encountered through Linux headers; not consumed'; \
 	} > "$$section_map"; \
-	if ! awk -F '\t' 'NR == 1 { if ($$0 != "linux_section\tstatus\tproduct_candidate\towner\tnotes") exit 1; next } { if ($$2 != "blocked" && $$2 != "deferred") exit 1; count++ } END { exit count == 7 ? 0 : 1 }' "$$section_map"; then \
+	if ! awk -F '\t' 'NR == 1 { if ($$0 != "linux_section\tstatus\tproduct_candidate\towner\tnotes") exit 1; next } { if ($$2 != "blocked" && $$2 != "deferred") exit 1; count++ } END { exit count == 8 ? 0 : 1 }' "$$section_map"; then \
 		echo "Orlix product section map must contain only blocked or deferred rows" >&2; \
 		exit 1; \
 	fi; \
