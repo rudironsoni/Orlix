@@ -349,7 +349,50 @@ __prepare-kbuild: __prepare-port
 			exit 1; \
 		fi; \
 	done; \
+	section_map="$$build_dir/orlix-product-section-map.tsv"; \
+	validate_section_class() { \
+		linux_section="$$1"; \
+		linker_pattern="$$2"; \
+		case "$$linux_section" in \
+			.init.text|.init.data|.init.setup|.initcall|.export_symbol|.data..percpu|.data..ro_after_init) ;; \
+			*) echo "unknown Orlix product section-map class: $$linux_section" >&2; exit 1 ;; \
+		esac; \
+		if ! grep -F -q "$$linker_pattern" "$$linker_script"; then \
+			echo "section-map class $$linux_section is not present in generated Kbuild linker script" >&2; \
+			exit 1; \
+		fi; \
+	}; \
+	validate_section_class '.init.text' '.init.text'; \
+	validate_section_class '.init.data' '.init.data'; \
+	validate_section_class '.init.setup' '.init.setup'; \
+	validate_section_class '.initcall' '.initcall'; \
+	validate_section_class '.export_symbol' '.export_symbol'; \
+	validate_section_class '.data..percpu' '.data..percpu'; \
+	validate_section_class '.data..ro_after_init' '.data..ro_after_init'; \
+	{ \
+		printf '%s\t%s\t%s\t%s\t%s\n' 'linux_section' 'status' 'product_candidate' 'owner' 'notes'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.init.text' 'blocked' '__TEXT,__init_text' 'vmlinux.lds' 'not consumed'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.init.data' 'blocked' '__DATA,__init_data' 'vmlinux.lds' 'not consumed'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.init.setup' 'blocked' 'none' 'vmlinux.lds' 'requires boundaries'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.initcall' 'blocked' 'none' 'vmlinux.lds' 'requires ordering'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.export_symbol' 'blocked' 'none' 'export.h/modpost' 'discard/modpost semantics unresolved'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.data..percpu' 'deferred' 'none' 'vmlinux.lds/percpu' 'requires percpu model'; \
+		printf '%s\t%s\t%s\t%s\t%s\n' '.data..ro_after_init' 'deferred' 'none' 'vmlinux.lds/cache' 'requires protection/lifetime model'; \
+	} > "$$section_map"; \
+	if ! awk -F '\t' 'NR == 1 { if ($$0 != "linux_section\tstatus\tproduct_candidate\towner\tnotes") exit 1; next } { if ($$2 != "blocked" && $$2 != "deferred") exit 1; count++ } END { exit count == 7 ? 0 : 1 }' "$$section_map"; then \
+		echo "Orlix product section map must contain only blocked or deferred rows" >&2; \
+		exit 1; \
+	fi; \
+	if grep -F -q 'accepted' "$$section_map"; then \
+		echo "Orlix product section map must not accept section policy" >&2; \
+		exit 1; \
+	fi; \
+	if [ -e "$$build_dir/orlix-product-sections.h" ]; then \
+		echo "refusing generated product section header before section policy approval" >&2; \
+		exit 1; \
+	fi; \
 	echo "verified Orlix Kbuild linker script: $$linker_script"; \
+	echo "wrote Orlix product section map: $$section_map"; \
 	echo "prepared Orlix Kbuild output without a standalone image: $$build_dir (profile $(PROFILE))"
 
 __headers-install: __prepare-kbuild
