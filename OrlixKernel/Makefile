@@ -452,8 +452,8 @@ __kernel-archive: __prepare-kbuild
 		sections="$$contract_dir/$$obj_base.sections.txt"; \
 		symbols="$$contract_dir/$$obj_base.symbols.txt"; \
 		undefined="$$contract_dir/$$obj_base.undefined.txt"; \
-		unsupported_sections='sectname (\.init\.text|\.init\.data|\.init\.setup|\.initcall[^[:space:]]*\.init|\.data\.\.percpu|__ksymtab[^[:space:]]*|__kcrctab[^[:space:]]*|\.export_symbol|\.discard[^[:space:]]*|__ex_table|\.ex_table|\.exception[^[:space:]]*|\.data\.\.ro_after_init|__jump_table)'; \
-		unsupported_symbols='(^|[[:space:]])_+(__ksymtab|__kcrctab|__start___ksymtab|__stop___ksymtab|__start___kcrctab|__stop___kcrctab|__start_ro_after_init|__end_ro_after_init|__per_cpu_start|__per_cpu_end|__ex_table)([[:space:]]|$$)'; \
+		unsupported_sections='sectname (\.init\.text|\.init\.data|\.init\.setup|\.initcall[^[:space:]]*\.init|\.exit[^[:space:]]*|\.ref[^[:space:]]*|\.data\.\.percpu|\.data\.\.ro_after_init|\.export_symbol|\.discard[^[:space:]]*|\.ex_table|\.exception[^[:space:]]*|__head_text|__init_text|__init_data|__init_setup|__initcall[^[:space:]]*|__exit[^[:space:]]*|__ref[^[:space:]]*|__percpu|__ro_after_init|__ksymtab[^[:space:]]*|__kcrctab[^[:space:]]*|__export_symbol|__discard[^[:space:]]*|__ex_table|__jump_table)'; \
+		unsupported_symbols='(^|[[:space:]])_+(_sinittext|_einittext|__init_begin|__init_end|__setup_start|__setup_end|__initcall[^[:space:]]*|__con_initcall_start|__con_initcall_end|__per_cpu_load|__per_cpu_start|__per_cpu_end|__start_ro_after_init|__end_ro_after_init|__start___jump_table|__stop___jump_table|__ksymtab|__kcrctab|__start___ksymtab|__stop___ksymtab|__start___kcrctab|__stop___kcrctab|__ex_table)([[:space:]]|$$)'; \
 		unsupported_undefined='(^|[[:space:]])_+__(start|stop)_'; \
 		mkdir -p "$$contract_dir"; \
 		"$$otool_cmd" -l "$$obj" > "$$sections"; \
