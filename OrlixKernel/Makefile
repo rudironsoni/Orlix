@@ -34,7 +34,7 @@ ORLIX_KERNEL_SIMULATOR_ARCHIVE_DIR := $(ORLIX_KERNEL_ARCHIVE_ROOT)/iphonesimulat
 ORLIX_KERNEL_ARCHIVE_NAME := OrlixKernel.a
 ORLIX_IOS_TARGET := arm64-apple-ios
 ORLIX_IOS_SIMULATOR_TARGET := arm64-apple-ios-simulator
-ORLIX_KERNEL_LINUX_SOURCES := arch/$(LINUX_ARCH)/boot/boot.c
+ORLIX_KERNEL_LINUX_SOURCES := arch/$(LINUX_ARCH)/boot/boot.c arch/$(LINUX_ARCH)/kernel/setup.c
 ORLIX_KUNIT_BUILD_DIR := $(CURDIR)/Build/OrlixKernel/kunit/$(PROFILE)
 ORLIX_TEMPORARY_KSELFTEST_INSTALL_DIR := $(CURDIR)/Build/OrlixKernel/kselftest/temporary/$(PROFILE)
 ORLIX_TEMPORARY_TEST_INITRAMFS_DIR := $(CURDIR)/Build/OrlixKernel/test-initramfs/temporary/$(PROFILE)/OrlixTestInitramfs.bundle
@@ -496,6 +496,54 @@ __kernel-archive: __prepare-kbuild
 	for path in Build/OrlixKernel "$$root"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked kernel archive path: $$path" >&2; exit 1; fi; \
 	done; \
+	adapter_root="$(ORLIX_KERNEL_BUILD_DIR)/orlix-product-compile-adapter"; \
+	adapter_include="$$adapter_root/include"; \
+	for path in "$(ORLIX_KERNEL_BUILD_DIR)" "$$adapter_root" "$$adapter_include"; do \
+		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked product compile adapter path: $$path" >&2; exit 1; fi; \
+	done; \
+	config="$(ORLIX_KERNEL_BUILD_DIR)/.config"; \
+	[ -s "$$config" ] || { echo "missing generated Orlix kernel config for product archive: $$config" >&2; exit 1; }; \
+	smp_config="$$(grep -n '^CONFIG_SMP=' "$$config" || true)"; \
+	if grep -q '^CONFIG_SMP=y$$' "$$config"; then \
+		per_cpu_base_section='__DATA,__percpu'; \
+	else \
+		per_cpu_base_section='__DATA,__data'; \
+	fi; \
+	command -v perl >/dev/null 2>&1 || { echo "perl is required to generate the Orlix product compile adapter" >&2; exit 1; }; \
+	rm -rf "$$adapter_root"; \
+	mkdir -p "$$adapter_include/linux"; \
+	validate_line_once() { \
+		file="$$1"; \
+		line="$$2"; \
+		count="$$(grep -F -x -c "$$line" "$$file")"; \
+		if [ "$$count" != 1 ]; then echo "expected one exact product adapter validation line in $$file: $$line (found $$count)" >&2; exit 1; fi; \
+		echo "validated product adapter upstream text: $$file: $$line"; \
+	}; \
+	adapt_in_place() { \
+		file="$$1"; \
+		from="$$2"; \
+		to="$$3"; \
+		count="$$(grep -F -c "$$from" "$$file")"; \
+		if [ "$$count" != 1 ]; then echo "expected one product adapter match for $$from in $$file, found $$count" >&2; exit 1; fi; \
+		tmp="$$file.tmp"; \
+		FROM="$$from" TO="$$to" perl -0pe 'BEGIN { $$from = $$ENV{"FROM"}; $$to = $$ENV{"TO"}; } s/\Q$$from\E/$$to/g' "$$file" > "$$tmp"; \
+		if grep -F -q "$$from" "$$tmp"; then echo "product adapter did not replace $$from in $$file" >&2; exit 1; fi; \
+		mv "$$tmp" "$$file"; \
+		echo "rewrote product adapter section: $$file: $$from -> $$to"; \
+	}; \
+	cp "$(ORLIX_KERNEL_PORT_DIR)/include/linux/init.h" "$$adapter_include/linux/init.h"; \
+	cp "$(ORLIX_KERNEL_PORT_DIR)/include/linux/once_lite.h" "$$adapter_include/linux/once_lite.h"; \
+	init_text_line=$$'#define __init\t\t__section(".init.text") __cold  __latent_entropy __noinitretpoline'; \
+	init_data_line=$$'#define __initdata\t__section(".init.data")'; \
+	once_data_line=$$'\t\tstatic bool __section(".data.once") __already_done;\t\\'; \
+	validate_line_once "$$adapter_include/linux/init.h" "$$init_text_line"; \
+	validate_line_once "$$adapter_include/linux/init.h" "$$init_data_line"; \
+	validate_line_once "$$adapter_include/linux/once_lite.h" "$$once_data_line"; \
+	adapt_in_place "$$adapter_include/linux/init.h" '__section(".init.text")' '__section("__TEXT,__init_text")'; \
+	adapt_in_place "$$adapter_include/linux/init.h" '__section(".init.data")' '__section("__DATA,__init_data")'; \
+	adapt_in_place "$$adapter_include/linux/once_lite.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+	echo "active CONFIG_SMP for product archive: $${smp_config:-not set}"; \
+	echo "PER_CPU_BASE_SECTION for product archive: $$per_cpu_base_section"; \
 	mkdir -p "$$root"; \
 	{ for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do printf '%s\n' "$(ORLIX_KERNEL_PORT_DIR)/$$src_rel"; done; } > "$(ORLIX_KERNEL_ARCHIVE_MANIFEST)"; \
 	verify_kernel_archive_contract() { \
@@ -505,7 +553,10 @@ __kernel-archive: __prepare-kbuild
 		sections="$$contract_dir/$$obj_base.sections.txt"; \
 		symbols="$$contract_dir/$$obj_base.symbols.txt"; \
 		undefined="$$contract_dir/$$obj_base.undefined.txt"; \
-		unsupported_sections='sectname (\.init\.text|\.init\.data|\.init\.setup|\.initcall[^[:space:]]*\.init|\.exit[^[:space:]]*|\.ref[^[:space:]]*|\.data\.\.percpu|\.data\.\.ro_after_init|\.export_symbol|\.discard[^[:space:]]*|\.ex_table|\.exception[^[:space:]]*|__head_text|__init_text|__init_data|__init_setup|__initcall[^[:space:]]*|__exit[^[:space:]]*|__ref[^[:space:]]*|__percpu|__ro_after_init|__ksymtab[^[:space:]]*|__kcrctab[^[:space:]]*|__export_symbol|__discard[^[:space:]]*|__ex_table|__jump_table)'; \
+		unsupported_sections='sectname (\.init\.text|\.init\.data|\.init\.setup|\.initcall[^[:space:]]*\.init|\.exit[^[:space:]]*|\.ref[^[:space:]]*|\.data\.\.percpu|\.data\.\.ro_after_init|\.export_symbol|\.discard[^[:space:]]*|\.ex_table|\.exception[^[:space:]]*|__head_text|__init_text|__init_data|__data_once|__init_setup|__initcall[^[:space:]]*|__exit[^[:space:]]*|__ref[^[:space:]]*|__percpu|__ro_after_init|__ksymtab[^[:space:]]*|__kcrctab[^[:space:]]*|__export_symbol|__discard[^[:space:]]*|__ex_table|__jump_table)'; \
+		if [ "$$obj_base" = "arch_orlix_kernel_setup.c.o" ]; then \
+			unsupported_sections='sectname (\.init\.text|\.init\.data|\.init\.setup|\.initcall[^[:space:]]*\.init|\.exit[^[:space:]]*|\.ref[^[:space:]]*|\.data\.once|\.data\.\.percpu|\.data\.\.ro_after_init|\.export_symbol|\.discard[^[:space:]]*|\.ex_table|\.exception[^[:space:]]*|__head_text|__init_rodata|__init_setup|__initcall[^[:space:]]*|__exit[^[:space:]]*|__ref[^[:space:]]*|__ro_after_init|__ksymtab[^[:space:]]*|__kcrctab[^[:space:]]*|__export_symbol|__discard[^[:space:]]*|__ex_table|__jump_table)'; \
+		fi; \
 		unsupported_symbols='(^|[[:space:]])_+(_sinittext|_einittext|__init_begin|__init_end|__setup_start|__setup_end|__initcall[^[:space:]]*|__con_initcall_start|__con_initcall_end|__per_cpu_load|__per_cpu_start|__per_cpu_end|__start_ro_after_init|__end_ro_after_init|__start___jump_table|__stop___jump_table|__ksymtab|__kcrctab|__start___ksymtab|__stop___ksymtab|__start___kcrctab|__stop___kcrctab|__ex_table)([[:space:]]|$$)'; \
 		unsupported_undefined='(^|[[:space:]])_+__(start|stop)_'; \
 		mkdir -p "$$contract_dir"; \
@@ -518,6 +569,10 @@ __kernel-archive: __prepare-kbuild
 		fi; \
 		if grep -E "$$unsupported_symbols" "$$symbols"; then \
 			echo "OrlixKernel product object requires unsupported Linux section/export symbols: $$obj" >&2; \
+			exit 1; \
+		fi; \
+		if [ "$$obj_base" = "arch_orlix_kernel_setup.c.o" ] && grep -E '(^|[[:space:]])_+(__start_once|__end_once)([[:space:]]|$$)' "$$undefined"; then \
+			echo "OrlixKernel setup object references unsupported .data.once boundary symbols: $$obj" >&2; \
 			exit 1; \
 		fi; \
 		if grep -E "$$unsupported_undefined" "$$undefined"; then \
@@ -541,7 +596,7 @@ __kernel-archive: __prepare-kbuild
 			obj_name="$${src_rel//\//_}.o"; \
 			obj="$$obj_dir/$$obj_name"; \
 			dep="$$obj_dir/$${obj_name%.o}.d"; \
-			/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x c -ffreestanding -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -include "$(ORLIX_KERNEL_PORT_DIR)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_DIR)/include/linux/kconfig.h" -I"$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_DIR)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_DIR)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
+			/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x c -ffreestanding -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DPER_CPU_BASE_SECTION="\"$$per_cpu_base_section\"" -include "$(ORLIX_KERNEL_PORT_DIR)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_DIR)/include/linux/kconfig.h" -I"$$adapter_include" -I"$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_DIR)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_DIR)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
 			if grep -E '(/Applications/|/Library/Developer/CommandLineTools/SDKs/|/System/Library/Frameworks|/usr/include)' "$$dep"; then \
 				echo "Linux object included a host SDK or libc header: $$dep" >&2; \
 				exit 1; \
