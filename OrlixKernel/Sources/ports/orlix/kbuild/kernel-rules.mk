@@ -100,6 +100,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/namei.c \
 	fs/file.c \
 	fs/file_table.c \
+	fs/filesystems.c \
+	fs/libfs.c \
 	fs/open.c \
 	fs/proc/generic.c \
 	fs/proc/inode.c \
