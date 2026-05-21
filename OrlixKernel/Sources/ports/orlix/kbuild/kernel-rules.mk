@@ -37,6 +37,7 @@ ORLIX_IOS_SIMULATOR_TARGET := arm64-apple-ios-simulator
 ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(LINUX_ARCH)/boot/boot.c \
 	arch/$(LINUX_ARCH)/kernel/setup.c \
+	arch/$(LINUX_ARCH)/mm/delay.c \
 	init/version.c \
 	init/main.c \
 	init/init_task.c \
@@ -62,6 +63,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/crc32.c \
 	lib/siphash.c \
 	lib/seq_buf.c \
+	lib/sort.c \
 	kernel/time/time.c \
 	kernel/time/timeconv.c \
 	mm/memblock.c \
