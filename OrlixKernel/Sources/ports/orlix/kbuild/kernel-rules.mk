@@ -43,6 +43,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	init/init_task.c \
 	init/calibrate.c \
 	init/initramfs.c \
+	kernel/async.c \
 	kernel/params.c \
 	kernel/panic.c \
 	kernel/printk/printk.c \
