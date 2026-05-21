@@ -97,6 +97,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/dcache.c \
 	fs/d_path.c \
 	fs/inode.c \
+	fs/namespace.c \
 	fs/namei.c \
 	fs/file.c \
 	fs/file_table.c \
