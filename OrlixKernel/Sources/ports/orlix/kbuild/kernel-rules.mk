@@ -59,6 +59,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/kallsyms.c \
 	lib/string.c \
 	lib/string_helpers.c \
+	lib/strncpy_from_user.c \
+	lib/strnlen_user.c \
 	lib/ratelimit.c \
 	lib/vsprintf.c \
 	lib/ctype.c \
