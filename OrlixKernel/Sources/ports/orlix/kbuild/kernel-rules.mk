@@ -89,7 +89,10 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/d_path.c \
 	fs/open.c \
 	fs/proc/generic.c \
+	fs/proc/inode.c \
 	fs/proc/proc_sysctl.c \
+	fs/proc/root.c \
+	fs/proc/util.c \
 	fs/seq_file.c \
 	lib/fdt.c \
 	lib/fdt_ro.c \
