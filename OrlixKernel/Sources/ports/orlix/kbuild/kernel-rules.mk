@@ -186,6 +186,28 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/sort.c \
 	lib/sbitmap.c \
 	lib/flex_proportions.c \
+	lib/bcd.c \
+	lib/parser.c \
+	lib/random32.c \
+	lib/clz_ctz.c \
+	lib/bsearch.c \
+	lib/lwq.c \
+	lib/memweight.c \
+	lib/kfifo.c \
+	lib/rhashtable.c \
+	lib/base64.c \
+	lib/once.c \
+	lib/usercopy.c \
+	lib/rcuref.c \
+	lib/bucket_locks.c \
+	lib/generic-radix-tree.c \
+	lib/group_cpus.c \
+	lib/nlattr.c \
+	lib/dynamic_queue_limits.c \
+	lib/net_utils.c \
+	lib/dim/dim.c \
+	lib/dim/net_dim.c \
+	lib/dim/rdma_dim.c \
 	kernel/time/alarmtimer.c \
 	kernel/time/clockevents.c \
 	kernel/time/clocksource.c \
