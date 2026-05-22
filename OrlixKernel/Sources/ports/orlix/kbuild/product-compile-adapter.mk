@@ -14,7 +14,6 @@ ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__TEXT,__literal8 \
 	__TEXT,__literal16 \
 	__TEXT,__init_text \
-	__TEXT,__init_rodata \
 	__TEXT,__ref_text \
 	__TEXT,__exit_text \
 	__TEXT,__sched_text \
@@ -23,6 +22,8 @@ ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__TEXT,__irqentry_text \
 	__TEXT,__softirq_text \
 	__TEXT,__dtb_init \
+	__DATA_CONST,__const \
+	__DATA_CONST,__init_rodata \
 	__DATA,__data \
 	__DATA,__const \
 	__DATA,__bss \
@@ -328,7 +329,7 @@ cp "$$linux_root/include/asm-generic/bitsperlong.h" "$$adapter_include/asm/bitsp
 cp "$$linux_root/include/net/net_debug.h" "$$adapter_include/net/net_debug.h"; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.text")' '__section("__TEXT,__init_text")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.data")' '__section("__DATA,__init_data")'; \
-replace_once "$$adapter_include/linux/init.h" '__section(".init.rodata")' '__section("__TEXT,__init_rodata")'; \
+replace_once "$$adapter_include/linux/init.h" '__section(".init.rodata")' '__section("__DATA_CONST,__init_rodata")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".ref.text")' '__section("__TEXT,__ref_text")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".ref.data")' '__section("__DATA,__ref_data")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".exit.text")' '__section("__TEXT,__exit_text")'; \
@@ -516,7 +517,7 @@ orlix_product_adapter_generate_kallsyms() { \
 	if grep -q '^CONFIG_KALLSYMS_ALL=y$$' "$$config"; then kallsyms_flags="$$kallsyms_flags --all-symbols"; fi; \
 	if grep -q '^CONFIG_KALLSYMS_ABSOLUTE_PERCPU=y$$' "$$config"; then kallsyms_flags="$$kallsyms_flags --absolute-percpu"; fi; \
 	"$$kallsyms_tool" $$kallsyms_flags "$$sysmap" > "$$linux_asm"; \
-	perl -pe 's/^\t\.section \.rodata, "a"$$/\t.section __TEXT,__const/; s/^\.globl (kallsyms_[A-Za-z0-9_]+)/.globl _$$1/; s/^(kallsyms_[A-Za-z0-9_]+):/_$$1:/; s/\bPTR\t_text\b/PTR\t__text/g;' "$$linux_asm" > "$$kallsyms_src"; \
+	perl -pe 's/^\t\.section \.rodata, "a"$$/\t.section __DATA_CONST,__const/; s/^\.globl (kallsyms_[A-Za-z0-9_]+)/.globl _$$1/; s/^(kallsyms_[A-Za-z0-9_]+):/_$$1:/; s/\bPTR\t_text\b/PTR\t__text/g;' "$$linux_asm" > "$$kallsyms_src"; \
 	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler-with-cpp -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -nostdinc -D__KERNEL__ -include "linux/kconfig.h" -I"$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_DIR)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_DIR)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -c "$$kallsyms_src" -o "$$kallsyms_obj"; \
 	orlix_product_adapter_verify_object_contract "$$kallsyms_obj"; \
 	for symbol in _kallsyms_num_syms _kallsyms_names _kallsyms_markers _kallsyms_token_table _kallsyms_token_index _kallsyms_offsets _kallsyms_relative_base _kallsyms_seqs_of_names; do "$$nm_cmd" -m "$$kallsyms_obj" | grep -F -q "$$symbol" || { echo "product kallsyms object missing symbol: $$symbol" >&2; exit 1; }; done; \
