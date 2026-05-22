@@ -58,6 +58,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/user.c \
 	kernel/user_namespace.c \
 	kernel/kallsyms.c \
+	security/commoncap.c \
 	lib/string.c \
 	lib/string_helpers.c \
 	lib/strncpy_from_user.c \
