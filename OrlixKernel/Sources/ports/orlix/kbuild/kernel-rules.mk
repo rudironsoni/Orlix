@@ -86,6 +86,11 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/locking/rwsem.c \
 	kernel/locking/percpu-rwsem.c \
 	kernel/locking/rtmutex_api.c \
+	kernel/futex/core.c \
+	kernel/futex/syscalls.c \
+	kernel/futex/pi.c \
+	kernel/futex/requeue.c \
+	kernel/futex/waitwake.c \
 	kernel/printk/printk.c \
 	kernel/printk/printk_safe.c \
 	kernel/printk/nbcon.c \
