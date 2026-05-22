@@ -8,6 +8,7 @@ final class TerminalViewController: UIViewController {
     private static let defaultBootProfileName = "appstore"
 
     private var didStartBoot = false
+    private let bootQueue = DispatchQueue(label: "org.orlix.terminal.boot", qos: .userInitiated)
     private lazy var terminalView = TerminalView(frame: .zero)
     private lazy var terminalSession = InMemoryTerminalSession(
         write: { _ in },
@@ -77,10 +78,14 @@ final class TerminalViewController: UIViewController {
         terminalSession.receive("OrlixTerminal\r\n")
         let profile = Self.defaultBootProfileName
         terminalSession.receive("Starting Orlix bootloader with the \(Self.profileDisplayName(profile)) profile.\r\n")
-        let status = profile.withCString { OrlixTerminalBootProfileNamed($0) }
-        terminalSession.receive(
-            String(cString: OrlixTerminalBootStatusMessage(status)) + "\r\n"
-        )
+        bootQueue.async { [weak self] in
+            let status = profile.withCString { OrlixTerminalBootProfileNamed($0) }
+            DispatchQueue.main.async { [weak self] in
+                self?.terminalSession.receive(
+                    String(cString: OrlixTerminalBootStatusMessage(status)) + "\r\n"
+                )
+            }
+        }
     }
 
     private static func profileDisplayName(_ profile: String) -> String {
@@ -230,9 +235,7 @@ extension TerminalViewController:
 
     func terminalDidResize(columns _: Int, rows _: Int) {}
 
-    func terminalDidClose(processAlive _: Bool) {
-        ApplicationExitController.requestExit()
-    }
+    func terminalDidClose(processAlive _: Bool) {}
 }
 
 private extension UIColor {
