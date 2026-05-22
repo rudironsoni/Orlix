@@ -250,20 +250,44 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/fs_parser.c \
 	fs/fsopen.c \
 	fs/fs_struct.c \
+	fs/fs_types.c \
+	fs/fs-writeback.c \
 	fs/filesystems.c \
 	fs/init.c \
+	fs/ioctl.c \
+	fs/kernel_read_file.c \
 	fs/libfs.c \
 	fs/locks.c \
 	fs/mnt_idmapping.c \
+	fs/nsfs.c \
 	fs/open.c \
 	fs/pipe.c \
+	fs/pidfs.c \
 	fs/pnode.c \
+	fs/proc_namespace.c \
 	fs/notify/dnotify/dnotify.c \
+	fs/readdir.c \
 	fs/read_write.c \
+	fs/remap_range.c \
+	fs/select.c \
+	fs/splice.c \
+	fs/stack.c \
 	fs/stat.c \
+	fs/statfs.c \
 	fs/super.c \
+	fs/sync.c \
 	fs/utimes.c \
 	fs/xattr.c \
+	fs/buffer.c \
+	fs/mpage.c \
+	fs/eventpoll.c \
+	fs/signalfd.c \
+	fs/timerfd.c \
+	fs/eventfd.c \
+	fs/aio.c \
+	fs/coredump.c \
+	fs/drop_caches.c \
+	fs/sysctls.c \
 	fs/kernfs/dir.c \
 	fs/kernfs/file.c \
 	fs/kernfs/inode.c \
