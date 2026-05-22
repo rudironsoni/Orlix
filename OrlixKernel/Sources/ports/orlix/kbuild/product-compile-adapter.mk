@@ -112,6 +112,7 @@ linux_root="$(ORLIX_KERNEL_PORT_DIR)"; \
 for required in \
 	"$$linux_root/include/linux/init.h" \
 	"$$linux_root/include/linux/linkage.h" \
+	"$$linux_root/include/linux/module.h" \
 	"$$linux_root/include/linux/moduleparam.h" \
 	"$$linux_root/include/linux/compiler.h" \
 	"$$linux_root/include/linux/compiler_types.h" \
@@ -161,6 +162,7 @@ require_text "$$linux_root/include/linux/cache.h" '__section(".data..ro_after_in
 	require_text "$$linux_root/include/linux/interrupt.h" '# define __irq_entry	 __section(".irqentry.text")'; \
 	require_text "$$linux_root/include/linux/interrupt.h" '#define __softirq_entry  __section(".softirqentry.text")'; \
 	require_text "$$linux_root/include/linux/mmdebug.h" '__section(".data.once")'; \
+	require_text "$$linux_root/include/linux/module.h" '__section("__modver")'; \
 	require_text "$$linux_root/include/linux/once.h" '__section(".data.once")'; \
 	require_text "$$linux_root/include/linux/percpu-defs.h" 'PER_CPU_BASE_SECTION'; \
 	require_text "$$linux_root/include/linux/sched/debug.h" '__section(".sched.text")'; \
@@ -253,6 +255,7 @@ replace_all() { \
 }; \
 cp "$$linux_root/include/linux/init.h" "$$adapter_include/linux/init.h"; \
 cp "$$linux_root/include/linux/linkage.h" "$$adapter_include/linux/linkage.h"; \
+cp "$$linux_root/include/linux/module.h" "$$adapter_include/linux/module.h"; \
 cp "$$linux_root/include/linux/moduleparam.h" "$$adapter_include/linux/moduleparam.h"; \
 cp "$$linux_root/include/linux/compiler.h" "$$adapter_include/linux/compiler.h"; \
 cp "$$linux_root/include/linux/compiler_types.h" "$$adapter_include/linux/compiler_types.h"; \
@@ -290,6 +293,7 @@ replace_once "$$adapter_include/linux/init_task.h" '__section(".data..init_threa
 replace_once "$$adapter_include/linux/interrupt.h" '# define __irq_entry	 __section(".irqentry.text")' '# define __irq_entry	 __section("__TEXT,__irqentry_text")'; \
 replace_once "$$adapter_include/linux/interrupt.h" '#define __softirq_entry  __section(".softirqentry.text")' '#define __softirq_entry  __section("__TEXT,__softirq_text")'; \
 replace_all "$$adapter_include/linux/mmdebug.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+replace_once "$$adapter_include/linux/module.h" '__section("__modver")' '__section("__DATA,__modver")'; \
 replace_once "$$adapter_include/linux/moduleparam.h" '__section(".modinfo")' '__section("__DATA,__modinfo")'; \
 replace_once "$$adapter_include/linux/moduleparam.h" '__section("__param")' '__section("__DATA,__param")'; \
 replace_all "$$adapter_include/linux/once.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
