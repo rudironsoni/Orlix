@@ -4,8 +4,7 @@ ORLIX_PRODUCT_ADAPTER_CFLAGS := -O2 -fshort-wchar -DPER_CPU_BASE_SECTION=\"__DAT
 ORLIX_PRODUCT_PAYLOAD_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-payloads.o
 ORLIX_PRODUCT_BOUNDARY_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-boundaries.o
 ORLIX_PRODUCT_KALLSYMS_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-kallsyms.o
-ORLIX_PRODUCT_ORDER_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-section-order.o
-ORLIX_PRODUCT_BOUNDARY_OBJECTS := $(ORLIX_PRODUCT_ORDER_OBJECT) $(ORLIX_PRODUCT_PAYLOAD_OBJECT) $(ORLIX_PRODUCT_BOUNDARY_OBJECT) $(ORLIX_PRODUCT_KALLSYMS_OBJECT)
+ORLIX_PRODUCT_BOUNDARY_OBJECTS := $(ORLIX_PRODUCT_PAYLOAD_OBJECT) $(ORLIX_PRODUCT_BOUNDARY_OBJECT) $(ORLIX_PRODUCT_KALLSYMS_OBJECT)
 
 ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__TEXT,__text \
@@ -40,12 +39,7 @@ ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__DATA,__ro_after_init \
 	__DATA,__page_data \
 	__DATA,__page_bss \
-	__DATA,__sched_stop \
-	__DATA,__sched_dl \
-	__DATA,__sched_rt \
-	__DATA,__sched_fair \
-	__DATA,__sched_ext \
-	__DATA,__sched_idle \
+	__DATA,__sched_class \
 	__DATA,__ref_data \
 	__DATA,__cacheline \
 	__DATA,__percpu \
@@ -59,6 +53,7 @@ ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__DATA,__rmem_tbl \
 	__DATA,__rmem_end \
 	__DATA,__orlix_bnd \
+	__DATA,__initcalls \
 	__DATA,__initcall_e \
 	__DATA,__initcall0 \
 	__DATA,__initcall0s \
@@ -398,7 +393,7 @@ replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure __crc32c_le_base(u3
 	replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure crc32_be_base(u32, unsigned char const *, size_t) __alias(crc32_be);' 'u32 __pure crc32_be_base(u32 crc, unsigned char const *p, size_t len) { return crc32_be(crc, p, len); }'; \
 	perl -0pi -e 'my $$changed = s/void blake2s_compress\(struct blake2s_state \*state, const u8 \*block,\n\s*size_t nblocks, const u32 inc\)\n\s*__weak __alias\(blake2s_compress_generic\);/void blake2s_compress(struct blake2s_state *state, const u8 *block,\n\t\t      size_t nblocks, const u32 inc)\n{\n\tblake2s_compress_generic(state, block, nblocks, inc);\n}/; die "failed to replace Linux blake2s weak alias for Mach-O\n" unless $$changed == 1;' "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
 	replace_once "$$adapter_root/source/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");' '__used __section("__DATA,__rmem_end");'; \
-replace_once "$$adapter_root/source/kernel/sched/sched.h" '__section("__" #name "_sched_class")' '__section("__DATA,__sched_" #name)'; \
+replace_once "$$adapter_root/source/kernel/sched/sched.h" '__section("__" #name "_sched_class")' '__section("__DATA,__sched_class")'; \
 replace_all "$$adapter_root/source/mm/internal.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
 echo "generated Orlix product adapter sources: $$adapter_root/source"
 endef
@@ -464,43 +459,6 @@ orlix_product_adapter_verify_object_contract() { \
 	if "$$otool_cmd" -l "$$obj" | grep -E 'segname \.(init|exit|ref|discard|export_symbol|modinfo)'; then echo "Orlix product object leaked GNU/Linux section spelling into Mach-O segment: $$obj" >&2; exit 1; fi; \
 	if "$$otool_cmd" -l "$$obj" | grep -E 'sectname \.(init|exit|ref|discard|export_symbol|modinfo)'; then echo "Orlix product object leaked GNU/Linux section spelling into Mach-O section: $$obj" >&2; exit 1; fi; \
 	if "$$nm_cmd" -m "$$obj" | grep -E '(^|[[:space:]])_+(__DISABLE_EXPORTS|HAVE_ARCH_COMPILER_H)([[:space:]]|$$)'; then echo "Orlix product object uses forbidden adapter escape symbol: $$obj" >&2; exit 1; fi; \
-};
-endef
-
-define orlix_product_adapter_generate_ordering
-orlix_product_adapter_generate_ordering() { \
-	platform="$$1"; \
-	target="$$2"; \
-	shift 2; \
-	product_objects=("$${@}"); \
-	order_src="$(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-section-order.S"; \
-	order_obj="$(ORLIX_PRODUCT_ORDER_OBJECT)"; \
-	section_names="$$(for obj in "$${product_objects[@]}"; do "$$otool_cmd" -l "$$obj" | awk '/sectname / { section=$$2; next } /segname / { segment=$$2; if (section != "") print segment "," section; section="" }'; done | sort -u)"; \
-	section_present() { \
-		segment="$$1"; section="$$2"; \
-		printf '%s\n' "$$section_names" | awk -v needle="$$segment,$$section" '$$0 == needle { found = 1 } END { exit found ? 0 : 1 }'; \
-	}; \
-	order_needed=0; \
-	for section in __sched_stop __sched_dl __sched_rt __sched_fair __sched_ext __sched_idle; do \
-		if section_present __DATA "$$section"; then order_needed=1; fi; \
-	done; \
-	for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do \
-		if section_present __DATA "$$section"; then order_needed=1; fi; \
-	done; \
-	if [ "$$order_needed" -eq 0 ]; then return 0; fi; \
-	{ \
-		printf '%s\n' '/* generated Build-only Mach-O section-order projection for Linux linker-script ordered classes */'; \
-		for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do \
-			if section_present __DATA "$$section"; then printf '.section __DATA,%s\n' "$$section"; fi; \
-		done; \
-		for section in __sched_stop __sched_dl __sched_rt __sched_fair __sched_ext __sched_idle; do \
-			if section_present __DATA "$$section"; then printf '.section __DATA,%s\n' "$$section"; fi; \
-		done; \
-	} > "$$order_src"; \
-	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler -c "$$order_src" -o "$$order_obj"; \
-	orlix_product_adapter_verify_object_contract "$$order_obj"; \
-	objs=("$$order_obj" "$${objs[@]}"); \
-	echo "generated Orlix product section-order object: $$order_obj ($$platform)"; \
 };
 endef
 
@@ -644,13 +602,9 @@ orlix_product_adapter_generate_boundaries() { \
 	}; \
 	emit_sched_class_range_if_needed() { \
 		if undefined_symbol_present ___sched_class_highest || undefined_symbol_present ___sched_class_lowest; then \
-			first=""; last=""; \
-			for section in __sched_stop __sched_dl __sched_rt __sched_fair __sched_ext __sched_idle; do \
-				if section_present __DATA "$$section"; then [ -n "$$first" ] || first="$$section"; last="$$section"; fi; \
-			done; \
-			if [ -n "$$first" ]; then \
-				emit_alias ___sched_class_highest "$$(section_label start __DATA "$$first")"; \
-				emit_alias ___sched_class_lowest "$$(section_label end __DATA "$$last")"; \
+			if section_present __DATA __sched_class; then \
+				emit_alias ___sched_class_highest "$$(section_label start __DATA __sched_class)"; \
+				emit_alias ___sched_class_lowest "$$(section_label end __DATA __sched_class)"; \
 			else \
 				emit_empty_pair ___sched_class_highest ___sched_class_lowest; \
 			fi; \
@@ -696,38 +650,19 @@ orlix_product_adapter_generate_boundaries() { \
 			printf '%s\n' '.p2align 3'; \
 		fi; \
 	}; \
-	initcall_cursor=""; \
-	first_present_initcall_section() { \
-		for section in "$${@}"; do \
-			if section_present __DATA "$$section"; then printf '%s' "$$section"; return 0; fi; \
-		done; \
-		return 1; \
-	}; \
-	last_present_initcall_section() { \
-		last=""; \
-		for section in "$${@}"; do \
-			if section_present __DATA "$$section"; then last="$$section"; fi; \
-		done; \
-		[ -n "$$last" ] || return 1; \
-		printf '%s' "$$last"; \
-	}; \
-	emit_initcall_group_boundary() { \
-		symbol="$$1"; shift; \
-		first="$$(first_present_initcall_section "$${@}" || true)"; \
-		if [ -n "$$first" ]; then \
-			emit_alias "$$symbol" "$$(section_label start __DATA "$$first")"; \
-			last="$$(last_present_initcall_section "$${@}")"; \
-			initcall_cursor="$$(section_label end __DATA "$$last")"; \
-		elif [ -n "$$initcall_cursor" ]; then \
-			emit_alias "$$symbol" "$$initcall_cursor"; \
-		else \
+	initcall_symbols="$$(for obj in "$${product_objects[@]}"; do "$$nm_cmd" -m "$$obj" | awk '/\(__DATA,__initcall_e\)/ && $$NF ~ /^___initcall____/ { print "__initcall_e", $$NF; next } /\(__DATA,__initcall0\)/ && $$NF ~ /^___initcall____/ { print "__initcall0", $$NF; next } /\(__DATA,__initcall0s\)/ && $$NF ~ /^___initcall____/ { print "__initcall0s", $$NF; next } /\(__DATA,__initcall1\)/ && $$NF ~ /^___initcall____/ { print "__initcall1", $$NF; next } /\(__DATA,__initcall1s\)/ && $$NF ~ /^___initcall____/ { print "__initcall1s", $$NF; next } /\(__DATA,__initcall2\)/ && $$NF ~ /^___initcall____/ { print "__initcall2", $$NF; next } /\(__DATA,__initcall2s\)/ && $$NF ~ /^___initcall____/ { print "__initcall2s", $$NF; next } /\(__DATA,__initcall3\)/ && $$NF ~ /^___initcall____/ { print "__initcall3", $$NF; next } /\(__DATA,__initcall3s\)/ && $$NF ~ /^___initcall____/ { print "__initcall3s", $$NF; next } /\(__DATA,__initcall4\)/ && $$NF ~ /^___initcall____/ { print "__initcall4", $$NF; next } /\(__DATA,__initcall4s\)/ && $$NF ~ /^___initcall____/ { print "__initcall4s", $$NF; next } /\(__DATA,__initcall5\)/ && $$NF ~ /^___initcall____/ { print "__initcall5", $$NF; next } /\(__DATA,__initcall5s\)/ && $$NF ~ /^___initcall____/ { print "__initcall5s", $$NF; next } /\(__DATA,__initcallrf\)/ && $$NF ~ /^___initcall____/ { print "__initcallrf", $$NF; next } /\(__DATA,__initcallrfs\)/ && $$NF ~ /^___initcall____/ { print "__initcallrfs", $$NF; next } /\(__DATA,__initcall6\)/ && $$NF ~ /^___initcall____/ { print "__initcall6", $$NF; next } /\(__DATA,__initcall6s\)/ && $$NF ~ /^___initcall____/ { print "__initcall6s", $$NF; next } /\(__DATA,__initcall7\)/ && $$NF ~ /^___initcall____/ { print "__initcall7", $$NF; next } /\(__DATA,__initcall7s\)/ && $$NF ~ /^___initcall____/ { print "__initcall7s", $$NF; next }'; done)"; \
+	has_product_initcalls() { [ -n "$$initcall_symbols" ]; }; \
+	emit_initcall_start_boundary() { \
+		symbol="$$1"; section="$$2"; \
+		if has_product_initcalls || undefined_symbol_present "$$symbol"; then \
+			printf '.section __DATA,%s\n' "$$section"; \
+			printf '%s\n' '.p2align 3'; \
 			emit_label "$$symbol"; \
-			initcall_cursor="$$symbol"; \
 		fi; \
 	}; \
 	emit_initcall_end_boundary() { \
 		symbol="$$1"; \
-		if [ -n "$$initcall_cursor" ]; then emit_alias "$$symbol" "$$initcall_cursor"; else emit_label "$$symbol"; initcall_cursor="$$symbol"; fi; \
+		if has_product_initcalls; then emit_alias "$$symbol" "$$(section_label end __DATA __initcalls)"; else emit_label "$$symbol"; fi; \
 	}; \
 	mkdir -p "$$(dirname "$$boundary_src")"; \
 	{ \
@@ -751,17 +686,19 @@ orlix_product_adapter_generate_boundaries() { \
 		emit_section_pair_if_needed __sinittext __einittext __TEXT __init_text; \
 		emit_empty_pair_if_needed ___init_begin ___init_end; \
 		emit_section_pair_if_needed ___setup_start ___setup_end __DATA __init_setup; \
-		if section_name_matches '^__initcall' || undefined_symbol_present ___initcall_start || undefined_symbol_present ___initcall_end; then \
-			emit_initcall_group_boundary ___initcall_start __initcall_e; \
-			emit_initcall_group_boundary ___initcall0_start __initcall0 __initcall0s; \
-			emit_initcall_group_boundary ___initcall1_start __initcall1 __initcall1s; \
-			emit_initcall_group_boundary ___initcall2_start __initcall2 __initcall2s; \
-			emit_initcall_group_boundary ___initcall3_start __initcall3 __initcall3s; \
-			emit_initcall_group_boundary ___initcall4_start __initcall4 __initcall4s; \
-			emit_initcall_group_boundary ___initcall5_start __initcall5 __initcall5s __initcallrf __initcallrfs; \
-			emit_initcall_group_boundary ___initcall6_start __initcall6 __initcall6s; \
-			emit_initcall_group_boundary ___initcall7_start __initcall7 __initcall7s; \
+		if has_product_initcalls || undefined_symbol_present ___initcall_start || undefined_symbol_present ___initcall_end; then \
+			emit_initcall_start_boundary ___initcall_start __initcall_e; \
+			emit_initcall_start_boundary ___initcall0_start __initcall0; \
+			emit_initcall_start_boundary ___initcall1_start __initcall1; \
+			emit_initcall_start_boundary ___initcall2_start __initcall2; \
+			emit_initcall_start_boundary ___initcall3_start __initcall3; \
+			emit_initcall_start_boundary ___initcall4_start __initcall4; \
+			emit_initcall_start_boundary ___initcall5_start __initcall5; \
+			emit_initcall_start_boundary ___initcall6_start __initcall6; \
+			emit_initcall_start_boundary ___initcall7_start __initcall7; \
 			emit_initcall_end_boundary ___initcall_end; \
+			printf '%s\n' '.section __DATA,__orlix_bnd'; \
+			printf '%s\n' '.p2align 3'; \
 		else \
 			for symbol in ___initcall_start ___initcall0_start ___initcall1_start ___initcall2_start ___initcall3_start ___initcall4_start ___initcall5_start ___initcall6_start ___initcall7_start ___initcall_end; do emit_symbol_if_needed "$$symbol"; done; \
 		fi; \
@@ -801,10 +738,70 @@ orlix_product_adapter_finalize_archive() { \
 	mkdir -p "$$link_root"; \
 	objects_rsp="$$link_root/objects.rsp"; \
 	linked_obj="$$link_root/orlix-product-kernel.o"; \
+	order_file="$$link_root/orlix-product-order-file.txt"; \
 	printf '%s\n' "$${product_objects[@]}" > "$$objects_rsp"; \
-	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -nostdlib -Wl,-r -Wl,-o,"$$linked_obj" @"$$objects_rsp"; \
+	: > "$$order_file"; \
+	initcall_symbols="$$(for obj in "$${product_objects[@]}"; do "$$nm_cmd" -m "$$obj" | awk '/\(__DATA,__initcall_e\)/ && $$NF ~ /^___initcall____/ { print "__initcall_e", $$NF; next } /\(__DATA,__initcall0\)/ && $$NF ~ /^___initcall____/ { print "__initcall0", $$NF; next } /\(__DATA,__initcall0s\)/ && $$NF ~ /^___initcall____/ { print "__initcall0s", $$NF; next } /\(__DATA,__initcall1\)/ && $$NF ~ /^___initcall____/ { print "__initcall1", $$NF; next } /\(__DATA,__initcall1s\)/ && $$NF ~ /^___initcall____/ { print "__initcall1s", $$NF; next } /\(__DATA,__initcall2\)/ && $$NF ~ /^___initcall____/ { print "__initcall2", $$NF; next } /\(__DATA,__initcall2s\)/ && $$NF ~ /^___initcall____/ { print "__initcall2s", $$NF; next } /\(__DATA,__initcall3\)/ && $$NF ~ /^___initcall____/ { print "__initcall3", $$NF; next } /\(__DATA,__initcall3s\)/ && $$NF ~ /^___initcall____/ { print "__initcall3s", $$NF; next } /\(__DATA,__initcall4\)/ && $$NF ~ /^___initcall____/ { print "__initcall4", $$NF; next } /\(__DATA,__initcall4s\)/ && $$NF ~ /^___initcall____/ { print "__initcall4s", $$NF; next } /\(__DATA,__initcall5\)/ && $$NF ~ /^___initcall____/ { print "__initcall5", $$NF; next } /\(__DATA,__initcall5s\)/ && $$NF ~ /^___initcall____/ { print "__initcall5s", $$NF; next } /\(__DATA,__initcallrf\)/ && $$NF ~ /^___initcall____/ { print "__initcallrf", $$NF; next } /\(__DATA,__initcallrfs\)/ && $$NF ~ /^___initcall____/ { print "__initcallrfs", $$NF; next } /\(__DATA,__initcall6\)/ && $$NF ~ /^___initcall____/ { print "__initcall6", $$NF; next } /\(__DATA,__initcall6s\)/ && $$NF ~ /^___initcall____/ { print "__initcall6s", $$NF; next } /\(__DATA,__initcall7\)/ && $$NF ~ /^___initcall____/ { print "__initcall7", $$NF; next } /\(__DATA,__initcall7s\)/ && $$NF ~ /^___initcall____/ { print "__initcall7s", $$NF; next }'; done)"; \
+	expected_initcall_order="$$(for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do printf '%s\n' "$$initcall_symbols" | awk -v section="$$section" '$$1 == section { print $$2 }'; done)"; \
+	initcall_entries_for_section() { section="$$1"; printf '%s\n' "$$initcall_symbols" | awk -v section="$$section" '$$1 == section { print $$2 }'; }; \
+	append_initcall_order_section() { section="$$1"; boundary="$${2-}"; if [ -n "$$boundary" ]; then printf '%s\n' "$$boundary"; fi; initcall_entries_for_section "$$section"; }; \
+	if [ -n "$$expected_initcall_order" ]; then \
+		{ \
+			append_initcall_order_section __initcall_e ___initcall_start; \
+			append_initcall_order_section __initcall0 ___initcall0_start; \
+			append_initcall_order_section __initcall0s; \
+			append_initcall_order_section __initcall1 ___initcall1_start; \
+			append_initcall_order_section __initcall1s; \
+			append_initcall_order_section __initcall2 ___initcall2_start; \
+			append_initcall_order_section __initcall2s; \
+			append_initcall_order_section __initcall3 ___initcall3_start; \
+			append_initcall_order_section __initcall3s; \
+			append_initcall_order_section __initcall4 ___initcall4_start; \
+			append_initcall_order_section __initcall4s; \
+			append_initcall_order_section __initcall5 ___initcall5_start; \
+			append_initcall_order_section __initcall5s; \
+			append_initcall_order_section __initcallrf; \
+			append_initcall_order_section __initcallrfs; \
+			append_initcall_order_section __initcall6 ___initcall6_start; \
+			append_initcall_order_section __initcall6s; \
+			append_initcall_order_section __initcall7 ___initcall7_start; \
+			append_initcall_order_section __initcall7s; \
+		} >> "$$order_file"; \
+	fi; \
+	class_symbol_present() { symbol="$$1"; for obj in "$${product_objects[@]}"; do "$$nm_cmd" "$$obj" | awk -v symbol="$$symbol" 'NF >= 3 && $$3 == symbol { found = 1 } END { exit found ? 0 : 1 }' && return 0; done; return 1; }; \
+	expected_sched_order="$$(for symbol in _stop_sched_class _dl_sched_class _rt_sched_class _fair_sched_class _ext_sched_class _idle_sched_class; do if class_symbol_present "$$symbol"; then printf '%s\n' "$$symbol"; fi; done)"; \
+	if [ -n "$$expected_sched_order" ]; then printf '%s\n' "$$expected_sched_order" >> "$$order_file"; fi; \
+	link_order_args=(); \
+	link_rename_args=(); \
+	if [ -n "$$expected_initcall_order" ]; then \
+		for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do \
+			link_rename_args+=(-Wl,-rename_section,__DATA,"$$section",__DATA,__initcalls); \
+		done; \
+	fi; \
+	if [ -s "$$order_file" ]; then link_order_args=(-Wl,-order_file,"$$order_file"); fi; \
+	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -nostdlib -Wl,-r "$${link_rename_args[@]}" "$${link_order_args[@]}" -Wl,-o,"$$linked_obj" @"$$objects_rsp"; \
 	orlix_product_adapter_verify_object_contract "$$linked_obj"; \
-	"$$otool_cmd" -l "$$linked_obj" | awk 'BEGIN { split("__initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s", ordered, " "); for (i = 1; i <= length(ordered); i++) rank[ordered[i]] = i } /sectname / { section = $$2; next } /segname / { segment = $$2; if (segment == "__DATA" && section != "") sections[++count] = section; section = "" } END { first = 0; last = 0; previous = 0; for (i = 1; i <= count; i++) if (sections[i] in rank) { if (!first) first = i; last = i } if (!first) exit 0; for (i = first; i <= last; i++) { section = sections[i]; if (!(section in rank)) { printf "non-initcall Mach-O section %s appears inside Linux initcall range\n", section > "/dev/stderr"; bad = 1; continue } if (rank[section] < previous) { printf "Linux initcall Mach-O section order regressed at %s\n", section > "/dev/stderr"; bad = 1 } previous = rank[section] } exit bad ? 1 : 0 }' || { echo "Orlix product linked object violates Linux initcall section ordering: $$linked_obj" >&2; exit 1; }; \
+	if [ -n "$$expected_initcall_order" ]; then \
+		actual_order="$$( "$$nm_cmd" -n -m "$$linked_obj" | awk 'index($$0, "(__DATA,__initcalls)") && $$NF ~ /^___initcall____/ { print $$NF }' )"; \
+		if [ "$$actual_order" != "$$expected_initcall_order" ]; then \
+			echo "Orlix product linked object violates Linux initcall symbol ordering: $$linked_obj" >&2; \
+			printf 'expected:\\n%s\\nactual:\\n%s\\n' "$$expected_initcall_order" "$$actual_order" >&2; \
+			exit 1; \
+		fi; \
+		if "$$nm_cmd" -u "$$linked_obj" | awk '$$NF ~ /^___initcall____/ { bad = 1 } END { exit bad ? 0 : 1 }'; then \
+			echo "Orlix product linked object leaked undefined local initcall entry aliases: $$linked_obj" >&2; \
+			exit 1; \
+		fi; \
+		"$$otool_cmd" -l "$$linked_obj" | awk '/sectname / { section = $$2; next } /segname / { if ($$2 == "__DATA" && section ~ /^__initcall/ && section != "__initcalls") { printf "unmerged Linux initcall Mach-O section %s remains after product link\n", section > "/dev/stderr"; bad = 1 } section = "" } END { exit bad ? 1 : 0 }' || { echo "Orlix product linked object did not merge Linux initcall sections: $$linked_obj" >&2; exit 1; }; \
+	fi; \
+	if [ -n "$$expected_sched_order" ]; then \
+		actual_order="$$( "$$nm_cmd" -n "$$linked_obj" | awk 'NF >= 3 && $$3 ~ /^_(stop|dl|rt|fair|ext|idle)_sched_class$$/ { print $$3 }' )"; \
+		if [ "$$actual_order" != "$$expected_sched_order" ]; then \
+			echo "Orlix product linked object violates Linux scheduler class ordering: $$linked_obj" >&2; \
+			printf 'expected:\\n%s\\nactual:\\n%s\\n' "$$expected_sched_order" "$$actual_order" >&2; \
+			exit 1; \
+		fi; \
+	fi; \
 	"$$ar_cmd" rcs "$$archive" "$$linked_obj"; \
 };
 endef

@@ -423,6 +423,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/tty/vt/consolemap.c \
 	drivers/tty/vt/consolemap_deftbl.c \
 	drivers/video/console/dummycon.c \
+	drivers/orlix/tty/console.c \
 	drivers/input/input.c \
 	drivers/input/input-compat.c \
 	drivers/input/input-mt.c \
@@ -1221,7 +1222,6 @@ __kernel-archive: __prepare-kbuild
 	$(call orlix_product_adapter_verify_object_contract) \
 	$(call orlix_product_adapter_source_resolver) \
 	$(call orlix_product_adapter_generate_payloads) \
-	$(call orlix_product_adapter_generate_ordering) \
 	$(call orlix_product_adapter_generate_boundaries) \
 	$(call orlix_product_adapter_generate_kallsyms) \
 	$(call orlix_product_adapter_finalize_archive) \
@@ -1265,7 +1265,6 @@ __kernel-archive: __prepare-kbuild
 			objs+=("$$obj"); \
 		done; \
 		orlix_product_adapter_generate_payloads "$$platform" "$$target"; \
-		orlix_product_adapter_generate_ordering "$$platform" "$$target" "$${objs[@]}"; \
 		orlix_product_adapter_generate_boundaries "$$platform" "$$target" "$${objs[@]}"; \
 		orlix_product_adapter_generate_kallsyms "$$platform" "$$target" "$${objs[@]}"; \
 		orlix_product_adapter_finalize_archive "$$platform" "$$target" "$$archive" "$${objs[@]}"; \
