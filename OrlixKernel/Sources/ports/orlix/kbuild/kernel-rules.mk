@@ -44,6 +44,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(LINUX_ARCH)/kernel/time.c \
 	arch/$(LINUX_ARCH)/kernel/traps.c \
 	arch/$(LINUX_ARCH)/mm/delay.c \
+	arch/$(LINUX_ARCH)/mm/init.c \
 	init/version.c \
 	init/main.c \
 	init/init_task.c \
@@ -139,6 +140,15 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	ipc/namespace.c \
 	ipc/mq_sysctl.c \
 	security/commoncap.c \
+	security/min_addr.c \
+	crypto/api.c \
+	crypto/cipher.c \
+	crypto/compress.c \
+	crypto/algapi.c \
+	crypto/scatterwalk.c \
+	crypto/proc.c \
+	crypto/ahash.c \
+	crypto/shash.c \
 	lib/is_single_threaded.c \
 	lib/kobject_uevent.c \
 	lib/kobject.c \
@@ -184,6 +194,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/crypto/chacha.c \
 	lib/crypto/blake2s.c \
 	lib/crypto/blake2s-generic.c \
+	lib/crypto/sha1.c \
 	lib/math/div64.c \
 	lib/math/gcd.c \
 	lib/math/lcm.c \
@@ -247,6 +258,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/generic-radix-tree.c \
 	lib/group_cpus.c \
 	lib/nlattr.c \
+	lib/devres.c \
+	lib/checksum.c \
 	lib/dynamic_queue_limits.c \
 	lib/net_utils.c \
 	lib/dim/dim.c \
@@ -325,6 +338,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	mm/swapfile.c \
 	mm/swap_slots.c \
 	mm/dmapool.c \
+	mm/migrate.c \
 	block/bdev.c \
 	block/fops.c \
 	block/bio.c \
@@ -379,6 +393,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/base/firmware_loader/main.c \
 	drivers/base/firmware_loader/builtin/main.c \
 	drivers/char/random.c \
+	drivers/net/loopback.c \
 	drivers/of/base.c \
 	drivers/of/cpu.c \
 	drivers/of/device.c \

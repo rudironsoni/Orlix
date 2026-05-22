@@ -35,6 +35,8 @@ ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__DATA,__param \
 	__DATA,__data_once \
 	__DATA,__ro_after_init \
+	__DATA,__page_data \
+	__DATA,__page_bss \
 	__DATA,__sched_stop \
 	__DATA,__sched_dl \
 	__DATA,__sched_rt \
@@ -153,6 +155,8 @@ require_text "$$linux_root/include/linux/init.h" '__section(".exitcall.exit")'; 
 require_text "$$linux_root/include/linux/init.h" 'extern initcall_entry_t __initcall_start[];'; \
 require_text "$$linux_root/include/linux/linkage.h" '#define cond_syscall(x)	asm('; \
 require_text "$$linux_root/include/linux/linkage.h" '".weak " __stringify(x) "\n\t"'; \
+require_text "$$linux_root/include/linux/linkage.h" '#define __page_aligned_data	__section(".data..page_aligned") __aligned(PAGE_SIZE)'; \
+require_text "$$linux_root/include/linux/linkage.h" '#define __page_aligned_bss	__section(".bss..page_aligned") __aligned(PAGE_SIZE)'; \
 require_text "$$linux_root/include/linux/moduleparam.h" '__used __section("__param")'; \
 require_text "$$linux_root/include/linux/moduleparam.h" 'extern const struct kernel_param __start___param[], __stop___param[];'; \
 require_text "$$linux_root/include/linux/compiler.h" '__section(".discard.addressable")'; \
@@ -195,6 +199,8 @@ require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.export_symbol)
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" 'RESERVEDMEM_OF_TABLES()'; \
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" 'KEEP(*(__##name##_of_table_end))'; \
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '* [_sdata, _edata] is the data section'; \
+	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.data..page_aligned)'; \
+	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.bss..page_aligned)'; \
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" 'BOUNDED_SECTION_PRE_LABEL(.builtin_fw, _builtin_fw, __start, __end)'; \
 	require_text "$$linux_root/arch/$(LINUX_ARCH)/kernel/vmlinux.lds.S" 'jiffies = jiffies_64;'; \
 	require_text "$$linux_root/init/Makefile" 'obj-$$(CONFIG_BLK_DEV_INITRD)   += initramfs.o'; \
@@ -222,6 +228,7 @@ for pattern in \
 	'__setup_start = .;' '__setup_end = .;' '__init_begin = .;' '__init_end = .;' \
 	'__start_rodata = .;' '__end_rodata = .;' \
 	'_sdata = .;' '_edata = .;' '.builtin_fw' '__start_builtin_fw = .;' '__end_builtin_fw = .;' \
+	'.data..page_aligned' '.bss..page_aligned' \
 	'__start_notes = .;' 'KEEP(*(.note.*))' '__stop_notes = .;' \
 	'__sched_class_highest = .;' '*(__fair_sched_class)' '__sched_class_lowest = .;' \
 	'*(.noinstr.text)' '*(.cpuidle.text)' \
@@ -293,6 +300,10 @@ replace_once "$$adapter_include/linux/init.h" '__section(".exit.data")' '__secti
 replace_once "$$adapter_include/linux/init.h" '__section(".exitcall.exit")' '__section("__DATA,__exitcall")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.setup")' '__section("__DATA,__init_setup")'; \
 perl -0pi -e 'my $$changed = s/#define cond_syscall\(x\)\s+asm\(\s*\\\n\t"\.weak " __stringify\(x\) "\\n\\t"\s*\\\n\t"\.set  " __stringify\(x\) ","\s*\\\n\t\t __stringify\(sys_ni_syscall\)\)/#define cond_syscall(x) asmlinkage long x(void) __attribute__((weak)); asmlinkage long x(void) { return sys_ni_syscall(); }/; die "failed to replace Linux cond_syscall for Mach-O\n" unless $$changed == 1;' "$$adapter_include/linux/linkage.h"; \
+replace_once "$$adapter_include/linux/linkage.h" '__section(".data..page_aligned")' '__section("__DATA,__page_data")'; \
+replace_once "$$adapter_include/linux/linkage.h" '__section(".bss..page_aligned")' '__section("__DATA,__page_bss")'; \
+replace_once "$$adapter_include/linux/linkage.h" '.section ".data..page_aligned", "aw"' '.section __DATA,__page_data'; \
+replace_once "$$adapter_include/linux/linkage.h" '.section ".bss..page_aligned", "aw"' '.section __DATA,__page_bss'; \
 perl -0pi -e 'my $$defs = join("\n", q{#define __orlix_product_initcall_section_early "__DATA,__initcall_e"}, q{#define __orlix_product_initcall_section_con "__DATA,__con_initcall"}, q{#define __orlix_product_initcall_section_0 "__DATA,__initcall0"}, q{#define __orlix_product_initcall_section_0s "__DATA,__initcall0s"}, q{#define __orlix_product_initcall_section_1 "__DATA,__initcall1"}, q{#define __orlix_product_initcall_section_1s "__DATA,__initcall1s"}, q{#define __orlix_product_initcall_section_2 "__DATA,__initcall2"}, q{#define __orlix_product_initcall_section_2s "__DATA,__initcall2s"}, q{#define __orlix_product_initcall_section_3 "__DATA,__initcall3"}, q{#define __orlix_product_initcall_section_3s "__DATA,__initcall3s"}, q{#define __orlix_product_initcall_section_4 "__DATA,__initcall4"}, q{#define __orlix_product_initcall_section_4s "__DATA,__initcall4s"}, q{#define __orlix_product_initcall_section_5 "__DATA,__initcall5"}, q{#define __orlix_product_initcall_section_5s "__DATA,__initcall5s"}, q{#define __orlix_product_initcall_section_rootfs "__DATA,__initcallrf"}, q{#define __orlix_product_initcall_section_rootfss "__DATA,__initcallrfs"}, q{#define __orlix_product_initcall_section_6 "__DATA,__initcall6"}, q{#define __orlix_product_initcall_section_6s "__DATA,__initcall6s"}, q{#define __orlix_product_initcall_section_7 "__DATA,__initcall7"}, q{#define __orlix_product_initcall_section_7s "__DATA,__initcall7s"}) . "\n"; my $$inserted = s/\n#ifdef CONFIG_LTO_CLANG\n/\n$$defs\n#ifdef CONFIG_LTO_CLANG\n/; die "failed to insert Orlix initcall section map\n" unless $$inserted == 1; my $$section_defs = s/#define __initcall_section\(__sec, __iid\)\s*\\\n\t(?:#__sec "\.init\.\." #__iid|#__sec "\.init")/#define __initcall_section(__sec, __iid) __sec/g; die "expected two Linux initcall section definitions, found $$section_defs\n" unless $$section_defs == 2; my $$initcalls = s/\.initcall##id/__orlix_product_initcall_section_##id/g; die "expected one initcall token-paste replacement, found $$initcalls\n" unless $$initcalls == 1; my $$con = s/\.con_initcall/__orlix_product_initcall_section_con/g; die "expected one console initcall replacement, found $$con\n" unless $$con == 1;' "$$adapter_include/linux/init.h"; \
 replace_once "$$adapter_include/linux/compiler.h" '__section(".discard.addressable")' '__section("__DATA,__discard_addr")'; \
 replace_once "$$adapter_include/linux/compiler_types.h" '#define noinstr __noinstr_section(".noinstr.text")' '#define noinstr __noinstr_section("__TEXT,__noinstr_text")'; \
