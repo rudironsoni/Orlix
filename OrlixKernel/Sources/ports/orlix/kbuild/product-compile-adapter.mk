@@ -484,9 +484,15 @@ orlix_product_adapter_generate_ordering() { \
 	for section in __sched_stop __sched_dl __sched_rt __sched_fair __sched_ext __sched_idle; do \
 		if section_present __DATA "$$section"; then order_needed=1; fi; \
 	done; \
+	for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do \
+		if section_present __DATA "$$section"; then order_needed=1; fi; \
+	done; \
 	if [ "$$order_needed" -eq 0 ]; then return 0; fi; \
 	{ \
 		printf '%s\n' '/* generated Build-only Mach-O section-order projection for Linux linker-script ordered classes */'; \
+		for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do \
+			if section_present __DATA "$$section"; then printf '.section __DATA,%s\n' "$$section"; fi; \
+		done; \
 		for section in __sched_stop __sched_dl __sched_rt __sched_fair __sched_ext __sched_idle; do \
 			if section_present __DATA "$$section"; then printf '.section __DATA,%s\n' "$$section"; fi; \
 		done; \
@@ -798,6 +804,7 @@ orlix_product_adapter_finalize_archive() { \
 	printf '%s\n' "$${product_objects[@]}" > "$$objects_rsp"; \
 	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -nostdlib -Wl,-r -Wl,-o,"$$linked_obj" @"$$objects_rsp"; \
 	orlix_product_adapter_verify_object_contract "$$linked_obj"; \
+	"$$otool_cmd" -l "$$linked_obj" | awk 'BEGIN { split("__initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s", ordered, " "); for (i = 1; i <= length(ordered); i++) rank[ordered[i]] = i } /sectname / { section = $$2; next } /segname / { segment = $$2; if (segment == "__DATA" && section != "") sections[++count] = section; section = "" } END { first = 0; last = 0; previous = 0; for (i = 1; i <= count; i++) if (sections[i] in rank) { if (!first) first = i; last = i } if (!first) exit 0; for (i = first; i <= last; i++) { section = sections[i]; if (!(section in rank)) { printf "non-initcall Mach-O section %s appears inside Linux initcall range\n", section > "/dev/stderr"; bad = 1; continue } if (rank[section] < previous) { printf "Linux initcall Mach-O section order regressed at %s\n", section > "/dev/stderr"; bad = 1 } previous = rank[section] } exit bad ? 1 : 0 }' || { echo "Orlix product linked object violates Linux initcall section ordering: $$linked_obj" >&2; exit 1; }; \
 	"$$ar_cmd" rcs "$$archive" "$$linked_obj"; \
 };
 endef
