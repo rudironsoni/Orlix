@@ -7,6 +7,7 @@ config ORLIX
 	select OF
 	select HAS_IOMEM
 	select HAS_DMA
+	select ARCH_WANT_FRAME_POINTERS
 
 config 64BIT
 	bool

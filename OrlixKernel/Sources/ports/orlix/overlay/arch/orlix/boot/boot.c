@@ -26,7 +26,8 @@ static __attribute__((noreturn)) void arch_boot_start_kernel(void)
 	unsigned long stack_top = (unsigned long)init_stack + THREAD_SIZE;
 	void (*entry)(void) = start_kernel;
 
-	asm volatile("mov sp, %0\n"
+	asm volatile("mov x29, xzr\n"
+		     "mov sp, %0\n"
 		     "blr %1\n"
 		     "brk #0\n"
 		     :

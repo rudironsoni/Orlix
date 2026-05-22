@@ -1,9 +1,45 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
+#include <linux/kernel.h>
 #include <linux/printk.h>
 #include <linux/sched.h>
 #include <linux/sched/debug.h>
+#include <linux/sched/task_stack.h>
 #include <asm/ptrace.h>
+#include <asm/processor.h>
+
+#define ORLIX_MAX_STACK_FRAMES 64
+
+struct orlix_stack_frame {
+	unsigned long fp;
+	unsigned long lr;
+};
+
+static unsigned long orlix_current_frame_pointer(void)
+{
+	unsigned long fp;
+
+	asm volatile("mov %0, x29" : "=r" (fp));
+	return fp;
+}
+
+static int orlix_stack_frame_valid(const struct task_struct *task,
+				   const struct orlix_stack_frame *frame)
+{
+	unsigned long stack_low;
+	unsigned long stack_high;
+	unsigned long frame_addr = (unsigned long)frame;
+
+	if (!task || !frame)
+		return 0;
+
+	stack_low = (unsigned long)task_stack_page(task);
+	stack_high = stack_low + THREAD_SIZE;
+
+	return !(frame_addr & 0xf) &&
+	       frame_addr >= stack_low &&
+	       frame_addr + sizeof(*frame) <= stack_high;
+}
 
 void show_regs(struct pt_regs *regs)
 {
@@ -32,8 +68,41 @@ void show_regs(struct pt_regs *regs)
 
 void show_stack(struct task_struct *task, unsigned long *sp, const char *loglvl)
 {
-	(void)task;
+	const char *level = loglvl ? loglvl : KERN_DEFAULT;
+	struct orlix_stack_frame *frame;
+	unsigned int depth;
+	unsigned int printed = 0;
+
 	(void)sp;
-	printk("%sOrlix stack unwinding is not implemented\n",
-	       loglvl ? loglvl : KERN_DEFAULT);
+
+	if (!task)
+		task = current;
+
+	if (task == current)
+		frame = (struct orlix_stack_frame *)orlix_current_frame_pointer();
+	else
+		frame = (struct orlix_stack_frame *)task->thread.cpu_context.fp;
+
+	printk("%sCall Trace:\n", level);
+	for (depth = 0; depth < ORLIX_MAX_STACK_FRAMES; depth++) {
+		struct orlix_stack_frame *next;
+		unsigned long lr;
+
+		if (!orlix_stack_frame_valid(task, frame))
+			break;
+
+		lr = frame->lr;
+		if (__kernel_text_address(lr)) {
+			printk("%s[<%016lx>]\n", level, lr);
+			printed++;
+		}
+
+		next = (struct orlix_stack_frame *)frame->fp;
+		if (next <= frame)
+			break;
+		frame = next;
+	}
+
+	if (!printed)
+		printk("%s  <no reliable frame records>\n", level);
 }
