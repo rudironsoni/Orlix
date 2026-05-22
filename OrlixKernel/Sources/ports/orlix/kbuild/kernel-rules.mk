@@ -162,6 +162,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/dec_and_lock.c \
 	lib/debug_locks.c \
 	lib/lockref.c \
+	lib/logic_pio.c \
 	lib/siphash.c \
 	lib/seq_buf.c \
 	lib/sort.c \
@@ -211,10 +212,15 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/base/firmware_loader/builtin/main.c \
 	drivers/of/base.c \
 	drivers/of/cpu.c \
+	drivers/of/device.c \
 	drivers/of/fdt.c \
+	drivers/of/fdt_address.c \
 	drivers/of/kobj.c \
+	drivers/of/module.c \
 	drivers/of/of_reserved_mem.c \
+	drivers/of/platform.c \
 	drivers/of/property.c \
+	drivers/of/address.c \
 	fs/anon_inodes.c \
 	fs/attr.c \
 	fs/bad_inode.c \
