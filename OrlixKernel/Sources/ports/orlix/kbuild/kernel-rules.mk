@@ -204,6 +204,29 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/decompress_unlzo.c \
 	lib/decompress_unlz4.c \
 	lib/decompress_unzstd.c \
+	lib/xxhash.c \
+	lib/zlib_inflate/inffast.c \
+	lib/zlib_inflate/inflate.c \
+	lib/zlib_inflate/infutil.c \
+	lib/zlib_inflate/inftrees.c \
+	lib/zlib_inflate/inflate_syms.c \
+	lib/lzo/lzo1x_decompress_safe.c \
+	lib/lz4/lz4_decompress.c \
+	lib/xz/xz_dec_syms.c \
+	lib/xz/xz_dec_stream.c \
+	lib/xz/xz_dec_lzma2.c \
+	lib/xz/xz_dec_bcj.c \
+	lib/zstd/zstd_common_module.c \
+	lib/zstd/common/debug.c \
+	lib/zstd/common/entropy_common.c \
+	lib/zstd/common/error_private.c \
+	lib/zstd/common/fse_decompress.c \
+	lib/zstd/common/zstd_common.c \
+	lib/zstd/zstd_decompress_module.c \
+	lib/zstd/decompress/huf_decompress.c \
+	lib/zstd/decompress/zstd_ddict.c \
+	lib/zstd/decompress/zstd_decompress.c \
+	lib/zstd/decompress/zstd_decompress_block.c \
 	lib/sort.c \
 	lib/sbitmap.c \
 	lib/flex_proportions.c \
@@ -352,6 +375,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/base/property.c \
 	drivers/base/cacheinfo.c \
 	drivers/base/swnode.c \
+	drivers/base/devtmpfs.c \
 	drivers/base/firmware_loader/main.c \
 	drivers/base/firmware_loader/builtin/main.c \
 	drivers/char/random.c \
@@ -429,6 +453,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/coredump.c \
 	fs/drop_caches.c \
 	fs/sysctls.c \
+	fs/ramfs/inode.c \
+	fs/ramfs/file-mmu.c \
 	io_uring/io_uring.c \
 	io_uring/opdef.c \
 	io_uring/kbuf.c \
