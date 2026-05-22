@@ -193,11 +193,62 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/time/timekeeping.c \
 	kernel/time/timer.c \
 	kernel/time/timer_list.c \
+	mm/filemap.c \
+	mm/mempool.c \
+	mm/oom_kill.c \
+	mm/fadvise.c \
 	mm/maccess.c \
+	mm/page-writeback.c \
+	mm/folio-compat.c \
+	mm/readahead.c \
+	mm/swap.c \
+	mm/truncate.c \
+	mm/vmscan.c \
+	mm/shrinker.c \
+	mm/shmem.c \
+	mm/util.c \
+	mm/mmzone.c \
+	mm/vmstat.c \
+	mm/backing-dev.c \
+	mm/mm_init.c \
+	mm/percpu.c \
+	mm/slab_common.c \
+	mm/compaction.c \
+	mm/show_mem.c \
+	mm/interval_tree.c \
 	mm/list_lru.c \
+	mm/workingset.c \
+	mm/debug.c \
+	mm/gup.c \
+	mm/mmap_lock.c \
+	mm/highmem.c \
+	mm/memory.c \
+	mm/mincore.c \
+	mm/mlock.c \
+	mm/mmap.c \
+	mm/mmu_gather.c \
+	mm/mprotect.c \
+	mm/mremap.c \
+	mm/msync.c \
+	mm/page_vma_mapped.c \
+	mm/pagewalk.c \
+	mm/pgtable-generic.c \
+	mm/rmap.c \
+	mm/vmalloc.c \
+	mm/vma.c \
+	mm/process_vm_access.c \
+	mm/mseal.c \
+	mm/page_alloc.c \
+	mm/init-mm.c \
 	mm/memblock.c \
 	mm/memfd.c \
-	mm/util.c \
+	mm/slub.c \
+	mm/madvise.c \
+	mm/page_io.c \
+	mm/swap_state.c \
+	mm/swapfile.c \
+	mm/swap_slots.c \
+	mm/dmapool.c \
 	drivers/base/component.c \
 	drivers/base/core.c \
 	drivers/base/bus.c \

@@ -91,10 +91,12 @@ done; \
 rm -rf "$$adapter_root"; \
 	mkdir -p "$$adapter_include/linux"; \
 	mkdir -p "$$adapter_include/linux/sched"; \
+	mkdir -p "$$adapter_include/net"; \
 	mkdir -p "$$adapter_root/source/lib"; \
 	mkdir -p "$$adapter_root/source/lib/crypto"; \
 	mkdir -p "$$adapter_root/source/drivers/of"; \
 	mkdir -p "$$adapter_root/source/kernel/sched"; \
+	mkdir -p "$$adapter_root/source/mm"; \
 $(call orlix_product_adapter_validate_linux_truth); \
 $(call orlix_product_adapter_validate_macho_projection); \
 $(call orlix_product_adapter_generate_headers); \
@@ -118,13 +120,17 @@ for required in \
 	"$$linux_root/include/linux/elfnote.h" \
 	"$$linux_root/include/linux/init_task.h" \
 	"$$linux_root/include/linux/interrupt.h" \
+	"$$linux_root/include/linux/mmdebug.h" \
+	"$$linux_root/include/linux/once.h" \
 	"$$linux_root/include/linux/percpu-defs.h" \
 	"$$linux_root/include/linux/sched/debug.h" \
 	"$$linux_root/include/linux/syscalls.h" \
+	"$$linux_root/include/net/net_debug.h" \
 	"$$linux_root/include/asm-generic/percpu.h" \
 	"$$linux_root/include/asm-generic/vmlinux.lds.h" \
 	"$$linux_root/arch/$(LINUX_ARCH)/kernel/vmlinux.lds.S" \
 	"$$linux_root/kernel/sched/sched.h" \
+	"$$linux_root/mm/internal.h" \
 	"$$linux_root/drivers/of/Makefile" \
 	"$$linux_root/usr/Makefile" \
 	"$$linux_root/lib/crypto/blake2s-generic.c" \
@@ -150,15 +156,18 @@ require_text "$$linux_root/include/linux/compiler_types.h" '#define noinstr __no
 require_text "$$linux_root/include/linux/compiler_types.h" '#define __cpuidle __noinstr_section(".cpuidle.text")'; \
 require_text "$$linux_root/include/linux/export.h" '.section ".export_symbol","a"'; \
 require_text "$$linux_root/include/linux/cache.h" '__section(".data..ro_after_init")'; \
-require_text "$$linux_root/include/linux/elfnote.h" '__attribute__((section(".note." name),'; \
-require_text "$$linux_root/include/linux/init_task.h" '__section(".data..init_thread_info")'; \
-require_text "$$linux_root/include/linux/interrupt.h" '# define __irq_entry	 __section(".irqentry.text")'; \
-require_text "$$linux_root/include/linux/interrupt.h" '#define __softirq_entry  __section(".softirqentry.text")'; \
-require_text "$$linux_root/include/linux/percpu-defs.h" 'PER_CPU_BASE_SECTION'; \
-require_text "$$linux_root/include/linux/sched/debug.h" '__section(".sched.text")'; \
-require_text "$$linux_root/include/linux/sched/debug.h" 'extern char __sched_text_start[], __sched_text_end[];'; \
-require_text "$$linux_root/include/linux/syscalls.h" '__attribute__((alias(__stringify(__se_sys##name))))'; \
-require_text "$$linux_root/include/asm-generic/percpu.h" '#ifndef PER_CPU_BASE_SECTION'; \
+	require_text "$$linux_root/include/linux/elfnote.h" '__attribute__((section(".note." name),'; \
+	require_text "$$linux_root/include/linux/init_task.h" '__section(".data..init_thread_info")'; \
+	require_text "$$linux_root/include/linux/interrupt.h" '# define __irq_entry	 __section(".irqentry.text")'; \
+	require_text "$$linux_root/include/linux/interrupt.h" '#define __softirq_entry  __section(".softirqentry.text")'; \
+	require_text "$$linux_root/include/linux/mmdebug.h" '__section(".data.once")'; \
+	require_text "$$linux_root/include/linux/once.h" '__section(".data.once")'; \
+	require_text "$$linux_root/include/linux/percpu-defs.h" 'PER_CPU_BASE_SECTION'; \
+	require_text "$$linux_root/include/linux/sched/debug.h" '__section(".sched.text")'; \
+	require_text "$$linux_root/include/linux/sched/debug.h" 'extern char __sched_text_start[], __sched_text_end[];'; \
+	require_text "$$linux_root/include/linux/syscalls.h" '__attribute__((alias(__stringify(__se_sys##name))))'; \
+	require_text "$$linux_root/include/net/net_debug.h" '__section(".data.once")'; \
+	require_text "$$linux_root/include/asm-generic/percpu.h" '#ifndef PER_CPU_BASE_SECTION'; \
 require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '#define COMMON_DISCARDS'; \
 require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.discard.*)'; \
 require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.export_symbol)'; \
@@ -182,6 +191,7 @@ require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.export_symbol)
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" 'KEEP(*(__##name##_of_table_end))'; \
 	require_text "$$linux_root/arch/$(LINUX_ARCH)/kernel/vmlinux.lds.S" 'jiffies = jiffies_64;'; \
 	require_text "$$linux_root/kernel/sched/sched.h" '__section("__" #name "_sched_class")'; \
+	require_text "$$linux_root/mm/internal.h" '__section(".data.once")'; \
 	require_text "$$linux_root/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");'; \
 	require_text "$$linux_root/drivers/of/Makefile" 'empty_root.dtb.o'; \
 	require_text "$$linux_root/usr/Makefile" 'obj-$$(CONFIG_BLK_DEV_INITRD) := initramfs_data.o'; \
@@ -233,6 +243,14 @@ replace_once() { \
 	FROM="$$from" TO="$$to" perl -0pe 'BEGIN { $$from = $$ENV{"FROM"}; $$to = $$ENV{"TO"}; } s/\Q$$from\E/$$to/g' "$$file" > "$$tmp"; \
 	mv "$$tmp" "$$file"; \
 }; \
+replace_all() { \
+	file="$$1"; from="$$2"; to="$$3"; \
+	count="$$(TEXT="$$from" perl -0ne 'BEGIN { $$text = $$ENV{"TEXT"}; $$count = 0; } $$count += () = /\Q$$text\E/g; END { print $$count; }' "$$file")"; \
+	if [ "$$count" -lt 1 ]; then echo "expected adapter replacement in $$file: $$from" >&2; exit 1; fi; \
+	tmp="$$file.tmp"; \
+	FROM="$$from" TO="$$to" perl -0pe 'BEGIN { $$from = $$ENV{"FROM"}; $$to = $$ENV{"TO"}; } s/\Q$$from\E/$$to/g' "$$file" > "$$tmp"; \
+	mv "$$tmp" "$$file"; \
+}; \
 cp "$$linux_root/include/linux/init.h" "$$adapter_include/linux/init.h"; \
 cp "$$linux_root/include/linux/linkage.h" "$$adapter_include/linux/linkage.h"; \
 cp "$$linux_root/include/linux/moduleparam.h" "$$adapter_include/linux/moduleparam.h"; \
@@ -243,10 +261,13 @@ cp "$$linux_root/include/linux/cache.h" "$$adapter_include/linux/cache.h"; \
 cp "$$linux_root/include/linux/elfnote.h" "$$adapter_include/linux/elfnote.h"; \
 cp "$$linux_root/include/linux/init_task.h" "$$adapter_include/linux/init_task.h"; \
 cp "$$linux_root/include/linux/interrupt.h" "$$adapter_include/linux/interrupt.h"; \
+cp "$$linux_root/include/linux/mmdebug.h" "$$adapter_include/linux/mmdebug.h"; \
+cp "$$linux_root/include/linux/once.h" "$$adapter_include/linux/once.h"; \
 cp "$$linux_root/include/linux/percpu-defs.h" "$$adapter_include/linux/percpu-defs.h"; \
 cp "$$linux_root/include/linux/sched/debug.h" "$$adapter_include/linux/sched/debug.h"; \
 cp "$$linux_root/include/linux/syscalls.h" "$$adapter_include/linux/syscalls.h"; \
 cp "$$linux_root/include/linux/once_lite.h" "$$adapter_include/linux/once_lite.h"; \
+cp "$$linux_root/include/net/net_debug.h" "$$adapter_include/net/net_debug.h"; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.text")' '__section("__TEXT,__init_text")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.data")' '__section("__DATA,__init_data")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.rodata")' '__section("__TEXT,__init_rodata")'; \
@@ -268,11 +289,14 @@ replace_once "$$adapter_include/linux/elfnote.h" '__attribute__((section(".note.
 replace_once "$$adapter_include/linux/init_task.h" '__section(".data..init_thread_info")' '__section("__DATA,__init_tinfo")'; \
 replace_once "$$adapter_include/linux/interrupt.h" '# define __irq_entry	 __section(".irqentry.text")' '# define __irq_entry	 __section("__TEXT,__irqentry_text")'; \
 replace_once "$$adapter_include/linux/interrupt.h" '#define __softirq_entry  __section(".softirqentry.text")' '#define __softirq_entry  __section("__TEXT,__softirq_text")'; \
+replace_all "$$adapter_include/linux/mmdebug.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
 replace_once "$$adapter_include/linux/moduleparam.h" '__section(".modinfo")' '__section("__DATA,__modinfo")'; \
 replace_once "$$adapter_include/linux/moduleparam.h" '__section("__param")' '__section("__DATA,__param")'; \
+replace_all "$$adapter_include/linux/once.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
 replace_once "$$adapter_include/linux/once_lite.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
 replace_once "$$adapter_include/linux/percpu-defs.h" '__section(".discard")' '__section("__DATA,__discard")'; \
 replace_once "$$adapter_include/linux/sched/debug.h" '__section(".sched.text")' '__section("__TEXT,__sched_text")'; \
+replace_all "$$adapter_include/net/net_debug.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
 perl -0pi -e 'my $$cast = s/#define __SC_ARGS\(t, a\)\ta\n/#define __SC_ARGS(t, a)\ta\n#define __SC_LONG_CAST(t, a) (__typeof(__builtin_choose_expr(__TYPE_IS_LL(t), 0LL, 0L)))(a)\n/; die "failed to insert Orlix syscall cast helper\n" unless $$cast == 1; my $$alias = s/asmlinkage long sys##name\(__MAP\(x,__SC_DECL,__VA_ARGS__\)\)\s*\\\n\t\t__attribute__\(\(alias\(__stringify\(__se_sys##name\)\)\)\);\s*\\/asmlinkage long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));\t\\\n\tasmlinkage long sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));\t\\\n\tasmlinkage long sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))\t\\\n\t{\t\t\t\t\t\t\t\t\\\n\t\treturn __se_sys##name(__MAP(x,__SC_LONG_CAST,__VA_ARGS__));\\\n\t}\t\t\t\t\t\t\t\t\\/; die "failed to replace Linux syscall alias for Mach-O\n" unless $$alias == 1;' "$$adapter_include/linux/syscalls.h"; \
 perl -0pi -e 's/#define PER_CPU_SHARED_ALIGNED_SECTION "\.\.shared_aligned"/#define PER_CPU_SHARED_ALIGNED_SECTION ""/g; s/#define PER_CPU_ALIGNED_SECTION "\.\.shared_aligned"/#define PER_CPU_ALIGNED_SECTION ""/g;' "$$adapter_include/linux/percpu-defs.h"; \
 	echo "generated Orlix product adapter headers: $$adapter_include"
@@ -284,6 +308,11 @@ adapter_root="$(ORLIX_PRODUCT_ADAPTER_ROOT)"; \
 	cp "$$linux_root/lib/crc32.c" "$$adapter_root/source/lib/crc32.c"; \
 	cp "$$linux_root/lib/crypto/blake2s-generic.c" "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
 	cp "$$linux_root/drivers/of/of_reserved_mem.c" "$$adapter_root/source/drivers/of/of_reserved_mem.c"; \
+	cp "$$linux_root/mm/page_alloc.c" "$$adapter_root/source/mm/page_alloc.c"; \
+	cp "$$linux_root/mm/internal.h" "$$adapter_root/source/mm/internal.h"; \
+	cp "$$linux_root/mm/vma.h" "$$adapter_root/source/mm/vma.h"; \
+	cp "$$linux_root/mm/shuffle.h" "$$adapter_root/source/mm/shuffle.h"; \
+	cp "$$linux_root/mm/page_reporting.h" "$$adapter_root/source/mm/page_reporting.h"; \
 for sched_src in core.c fair.c build_policy.c build_utility.c; do cp "$$linux_root/kernel/sched/$$sched_src" "$$adapter_root/source/kernel/sched/$$sched_src"; done; \
 cp "$$linux_root/kernel/sched/sched.h" "$$adapter_root/source/kernel/sched/sched.h"; \
 replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure crc32_le_base(u32, unsigned char const *, size_t) __alias(crc32_le);' 'u32 __pure crc32_le_base(u32 crc, unsigned char const *p, size_t len) { return crc32_le(crc, p, len); }'; \
@@ -292,6 +321,7 @@ replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure __crc32c_le_base(u3
 	perl -0pi -e 'my $$changed = s/void blake2s_compress\(struct blake2s_state \*state, const u8 \*block,\n\s*size_t nblocks, const u32 inc\)\n\s*__weak __alias\(blake2s_compress_generic\);/void blake2s_compress(struct blake2s_state *state, const u8 *block,\n\t\t      size_t nblocks, const u32 inc)\n{\n\tblake2s_compress_generic(state, block, nblocks, inc);\n}/; die "failed to replace Linux blake2s weak alias for Mach-O\n" unless $$changed == 1;' "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
 	replace_once "$$adapter_root/source/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");' '__used __section("__DATA,__rmem_end");'; \
 replace_once "$$adapter_root/source/kernel/sched/sched.h" '__section("__" #name "_sched_class")' '__section("__DATA,__sched_" #name)'; \
+replace_all "$$adapter_root/source/mm/internal.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
 echo "generated Orlix product adapter sources: $$adapter_root/source"
 endef
 
@@ -303,6 +333,7 @@ orlix_product_adapter_source_for() { \
 		kernel/sched/core.c|kernel/sched/fair.c|kernel/sched/build_policy.c|kernel/sched/build_utility.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/$$src_rel" ;; \
 		lib/crypto/blake2s-generic.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/lib/crypto/blake2s-generic.c" ;; \
 		lib/crc32.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/lib/crc32.c" ;; \
+		mm/page_alloc.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/mm/page_alloc.c" ;; \
 		*) printf '%s\n' "$(ORLIX_KERNEL_PORT_DIR)/$$src_rel" ;; \
 	esac; \
 };
