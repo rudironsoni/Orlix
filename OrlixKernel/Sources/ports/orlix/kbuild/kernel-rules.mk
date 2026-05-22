@@ -45,6 +45,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(LINUX_ARCH)/kernel/time.c \
 	arch/$(LINUX_ARCH)/kernel/traps.c \
 	arch/$(LINUX_ARCH)/mm/delay.c \
+	arch/$(LINUX_ARCH)/mm/iomem.c \
 	arch/$(LINUX_ARCH)/mm/init.c \
 	init/version.c \
 	init/main.c \
@@ -456,6 +457,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/of/platform.c \
 	drivers/of/property.c \
 	drivers/of/address.c \
+	drivers/orlix/virtio/mmio.c \
 	drivers/virtio/virtio.c \
 	drivers/virtio/virtio_ring.c \
 	drivers/virtio/virtio_anchor.c \

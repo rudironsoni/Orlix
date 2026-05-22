@@ -16,7 +16,7 @@ settings:
 packages:
   GhosttyKit:
     url: https://github.com/Lakr233/libghostty-spm.git
-    branch: main
+    exactVersion: 1.1.5
 targets:
   OrlixKernel:
     type: framework

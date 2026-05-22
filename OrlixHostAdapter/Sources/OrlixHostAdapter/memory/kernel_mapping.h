@@ -17,4 +17,8 @@ __attribute__((visibility("hidden"))) void *orlix_host_ioremap(
 __attribute__((visibility("hidden"))) void orlix_host_iounmap(
     void *mapped_address);
 
+__attribute__((visibility("hidden"))) int orlix_host_iomem_physical_address(
+    const void *mapped_address,
+    unsigned long *physical_address);
+
 #endif

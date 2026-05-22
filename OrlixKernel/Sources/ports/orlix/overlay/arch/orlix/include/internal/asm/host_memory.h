@@ -10,5 +10,7 @@ void orlix_host_kernel_unmap_pages(unsigned long target_address,
 void *orlix_host_ioremap(unsigned long physical_address,
 			 unsigned long length);
 void orlix_host_iounmap(void *mapped_address);
+int orlix_host_iomem_physical_address(const void *mapped_address,
+				      unsigned long *physical_address);
 
 #endif /* _INTERNAL_ASM_ORLIX_HOST_MEMORY_H */

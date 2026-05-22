@@ -8,6 +8,7 @@
 
 struct OrlixHostIOMapping {
     void *address;
+    unsigned long physical_address;
     vm_size_t length;
     struct OrlixHostIOMapping *next;
 };
@@ -100,6 +101,7 @@ __attribute__((visibility("hidden"))) void *orlix_host_ioremap(
 
     memset((void *)mapped, 0, rounded_length);
     mapping->address = (void *)mapped;
+    mapping->physical_address = physical_address;
     mapping->length = rounded_length;
     mapping->next = OrlixHostIOMappings;
     OrlixHostIOMappings = mapping;
@@ -130,4 +132,31 @@ __attribute__((visibility("hidden"))) void orlix_host_iounmap(
 
         cursor = &mapping->next;
     }
+}
+
+__attribute__((visibility("hidden"))) int orlix_host_iomem_physical_address(
+    const void *mapped_address,
+    unsigned long *physical_address)
+{
+    const unsigned char *address = mapped_address;
+    struct OrlixHostIOMapping *mapping = OrlixHostIOMappings;
+
+    if (!address || !physical_address) {
+        return -1;
+    }
+
+    while (mapping) {
+        const unsigned char *base = mapping->address;
+        const unsigned char *end = base + mapping->length;
+
+        if (address >= base && address < end) {
+            *physical_address = mapping->physical_address +
+                                (unsigned long)(address - base);
+            return 0;
+        }
+
+        mapping = mapping->next;
+    }
+
+    return -1;
 }
