@@ -92,6 +92,7 @@ rm -rf "$$adapter_root"; \
 	mkdir -p "$$adapter_include/linux"; \
 	mkdir -p "$$adapter_include/linux/sched"; \
 	mkdir -p "$$adapter_root/source/lib"; \
+	mkdir -p "$$adapter_root/source/lib/crypto"; \
 	mkdir -p "$$adapter_root/source/drivers/of"; \
 	mkdir -p "$$adapter_root/source/kernel/sched"; \
 $(call orlix_product_adapter_validate_linux_truth); \
@@ -126,6 +127,7 @@ for required in \
 	"$$linux_root/kernel/sched/sched.h" \
 	"$$linux_root/drivers/of/Makefile" \
 	"$$linux_root/usr/Makefile" \
+	"$$linux_root/lib/crypto/blake2s-generic.c" \
 	"$$linux_root/scripts/mod/modpost.c" \
 	"$$linux_root/scripts/link-vmlinux.sh"; do \
 	[ -s "$$required" ] || { echo "missing Linux truth input: $$required" >&2; exit 1; }; \
@@ -183,6 +185,8 @@ require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.export_symbol)
 	require_text "$$linux_root/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");'; \
 	require_text "$$linux_root/drivers/of/Makefile" 'empty_root.dtb.o'; \
 	require_text "$$linux_root/usr/Makefile" 'obj-$$(CONFIG_BLK_DEV_INITRD) := initramfs_data.o'; \
+	require_text "$$linux_root/lib/crypto/blake2s-generic.c" 'void blake2s_compress(struct blake2s_state *state, const u8 *block,'; \
+	require_text "$$linux_root/lib/crypto/blake2s-generic.c" '__weak __alias(blake2s_compress_generic);'; \
 	require_text "$$linux_root/lib/crc32.c" 'u32 __pure crc32_le_base(u32, unsigned char const *, size_t) __alias(crc32_le);'; \
 	require_text "$$linux_root/lib/crc32.c" 'u32 __pure __crc32c_le_base(u32, unsigned char const *, size_t) __alias(__crc32c_le);'; \
 	require_text "$$linux_root/lib/crc32.c" 'u32 __pure crc32_be_base(u32, unsigned char const *, size_t) __alias(crc32_be);'; \
@@ -276,15 +280,17 @@ endef
 
 define orlix_product_adapter_generate_sources
 adapter_root="$(ORLIX_PRODUCT_ADAPTER_ROOT)"; \
-linux_root="$(ORLIX_KERNEL_PORT_DIR)"; \
-cp "$$linux_root/lib/crc32.c" "$$adapter_root/source/lib/crc32.c"; \
-cp "$$linux_root/drivers/of/of_reserved_mem.c" "$$adapter_root/source/drivers/of/of_reserved_mem.c"; \
+	linux_root="$(ORLIX_KERNEL_PORT_DIR)"; \
+	cp "$$linux_root/lib/crc32.c" "$$adapter_root/source/lib/crc32.c"; \
+	cp "$$linux_root/lib/crypto/blake2s-generic.c" "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
+	cp "$$linux_root/drivers/of/of_reserved_mem.c" "$$adapter_root/source/drivers/of/of_reserved_mem.c"; \
 for sched_src in core.c fair.c build_policy.c build_utility.c; do cp "$$linux_root/kernel/sched/$$sched_src" "$$adapter_root/source/kernel/sched/$$sched_src"; done; \
 cp "$$linux_root/kernel/sched/sched.h" "$$adapter_root/source/kernel/sched/sched.h"; \
 replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure crc32_le_base(u32, unsigned char const *, size_t) __alias(crc32_le);' 'u32 __pure crc32_le_base(u32 crc, unsigned char const *p, size_t len) { return crc32_le(crc, p, len); }'; \
 replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure __crc32c_le_base(u32, unsigned char const *, size_t) __alias(__crc32c_le);' 'u32 __pure __crc32c_le_base(u32 crc, unsigned char const *p, size_t len) { return __crc32c_le(crc, p, len); }'; \
-replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure crc32_be_base(u32, unsigned char const *, size_t) __alias(crc32_be);' 'u32 __pure crc32_be_base(u32 crc, unsigned char const *p, size_t len) { return crc32_be(crc, p, len); }'; \
-replace_once "$$adapter_root/source/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");' '__used __section("__DATA,__rmem_end");'; \
+	replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure crc32_be_base(u32, unsigned char const *, size_t) __alias(crc32_be);' 'u32 __pure crc32_be_base(u32 crc, unsigned char const *p, size_t len) { return crc32_be(crc, p, len); }'; \
+	perl -0pi -e 'my $$changed = s/void blake2s_compress\(struct blake2s_state \*state, const u8 \*block,\n\s*size_t nblocks, const u32 inc\)\n\s*__weak __alias\(blake2s_compress_generic\);/void blake2s_compress(struct blake2s_state *state, const u8 *block,\n\t\t      size_t nblocks, const u32 inc)\n{\n\tblake2s_compress_generic(state, block, nblocks, inc);\n}/; die "failed to replace Linux blake2s weak alias for Mach-O\n" unless $$changed == 1;' "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
+	replace_once "$$adapter_root/source/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");' '__used __section("__DATA,__rmem_end");'; \
 replace_once "$$adapter_root/source/kernel/sched/sched.h" '__section("__" #name "_sched_class")' '__section("__DATA,__sched_" #name)'; \
 echo "generated Orlix product adapter sources: $$adapter_root/source"
 endef
@@ -295,6 +301,7 @@ orlix_product_adapter_source_for() { \
 	case "$$src_rel" in \
 		drivers/of/of_reserved_mem.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/drivers/of/of_reserved_mem.c" ;; \
 		kernel/sched/core.c|kernel/sched/fair.c|kernel/sched/build_policy.c|kernel/sched/build_utility.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/$$src_rel" ;; \
+		lib/crypto/blake2s-generic.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/lib/crypto/blake2s-generic.c" ;; \
 		lib/crc32.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/lib/crc32.c" ;; \
 		*) printf '%s\n' "$(ORLIX_KERNEL_PORT_DIR)/$$src_rel" ;; \
 	esac; \

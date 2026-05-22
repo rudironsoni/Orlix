@@ -161,6 +161,9 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/crc32.c \
 	lib/dec_and_lock.c \
 	lib/debug_locks.c \
+	lib/crypto/chacha.c \
+	lib/crypto/blake2s.c \
+	lib/crypto/blake2s-generic.c \
 	lib/lockref.c \
 	lib/logic_pio.c \
 	lib/siphash.c \
@@ -210,6 +213,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/base/swnode.c \
 	drivers/base/firmware_loader/main.c \
 	drivers/base/firmware_loader/builtin/main.c \
+	drivers/char/random.c \
 	drivers/of/base.c \
 	drivers/of/cpu.c \
 	drivers/of/device.c \
