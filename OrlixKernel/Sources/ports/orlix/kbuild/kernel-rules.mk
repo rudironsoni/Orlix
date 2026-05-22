@@ -400,6 +400,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/base/devtmpfs.c \
 	drivers/base/firmware_loader/main.c \
 	drivers/base/firmware_loader/builtin/main.c \
+	drivers/char/mem.c \
 	drivers/char/random.c \
 	drivers/net/loopback.c \
 	drivers/tty/tty_io.c \

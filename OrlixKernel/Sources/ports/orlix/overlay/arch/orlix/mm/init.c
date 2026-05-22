@@ -10,6 +10,7 @@
 #include <linux/pfn.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
+#include <internal/asm/host_memory.h>
 
 pgd_t swapper_pg_dir[PTRS_PER_PGD] __page_aligned_bss;
 phys_addr_t orlix_phys_ram_base __ro_after_init;
@@ -65,3 +66,54 @@ void __init mem_init(void)
 #endif
 	memblock_free_all();
 }
+
+#if defined(ORLIX_APP_HOSTED_BOOT)
+static int orlix_sync_kernel_page(unsigned long address)
+{
+	pgd_t *pgd = pgd_offset_k(address);
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *pte;
+	pte_t entry;
+	void *source;
+
+	if (pgd_none(*pgd) || pgd_bad(*pgd))
+		goto unmap;
+
+	p4d = p4d_offset(pgd, address);
+	if (p4d_none(*p4d) || p4d_bad(*p4d))
+		goto unmap;
+
+	pud = pud_offset(p4d, address);
+	if (pud_none(*pud) || pud_bad(*pud))
+		goto unmap;
+
+	pmd = pmd_offset(pud, address);
+	if (pmd_none(*pmd) || pmd_bad(*pmd))
+		goto unmap;
+
+	pte = pte_offset_kernel(pmd, address);
+	entry = READ_ONCE(*pte);
+	if (!pte_present(entry))
+		goto unmap;
+
+	source = __va(PFN_PHYS(pte_pfn(entry)));
+	return orlix_host_kernel_map_page(address, source, PAGE_SIZE);
+
+unmap:
+	orlix_host_kernel_unmap_pages(address, PAGE_SIZE);
+	return 0;
+}
+
+void arch_sync_kernel_mappings(unsigned long start, unsigned long end)
+{
+	unsigned long address;
+
+	for (address = start; address < end; address += PAGE_SIZE) {
+		if (orlix_sync_kernel_page(address))
+			panic("Orlix: failed to synchronize hosted kernel mapping %#lx\n",
+			      address);
+	}
+}
+#endif

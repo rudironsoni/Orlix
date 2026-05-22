@@ -17,9 +17,10 @@ static os_log_t OrlixHostConsoleLog(void)
 }
 
 __attribute__((visibility("hidden"))) void orlix_host_console_write(
-    const char *bytes,
+    const void *bytes,
     unsigned long length)
 {
+    const char *text = bytes;
     unsigned long offset;
 
     if (!bytes || length == 0) {
@@ -37,7 +38,7 @@ __attribute__((visibility("hidden"))) void orlix_host_console_write(
                          OS_LOG_TYPE_INFO,
                          "%{public}.*s",
                          chunk_length,
-                         bytes + offset);
+                         text + offset);
         offset += (unsigned long)chunk_length;
     }
 }

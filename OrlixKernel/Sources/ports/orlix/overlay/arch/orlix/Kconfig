@@ -3,6 +3,7 @@ config ORLIX
 	default y
 	select GENERIC_IRQ_SHOW
 	select HAVE_PAGE_SIZE_4KB
+	select HAVE_PAGE_SIZE_16KB
 	select OF
 	select HAS_IOMEM
 	select HAS_DMA
