@@ -126,6 +126,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/open.c \
 	fs/pipe.c \
 	fs/pnode.c \
+	fs/notify/dnotify/dnotify.c \
 	fs/read_write.c \
 	fs/stat.c \
 	fs/super.c \
