@@ -351,7 +351,14 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/pidfs.c \
 	fs/pnode.c \
 	fs/proc_namespace.c \
+	fs/notify/fsnotify.c \
+	fs/notify/notification.c \
+	fs/notify/group.c \
+	fs/notify/mark.c \
+	fs/notify/fdinfo.c \
 	fs/notify/dnotify/dnotify.c \
+	fs/notify/inotify/inotify_fsnotify.c \
+	fs/notify/inotify/inotify_user.c \
 	fs/readdir.c \
 	fs/read_write.c \
 	fs/remap_range.c \
