@@ -113,6 +113,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/cgroup/freezer.c \
 	kernel/cgroup/namespace.c \
 	kernel/cgroup/rstat.c \
+	kernel/bpf/core.c \
 	kernel/rcu/sync.c \
 	kernel/rcu/srcutiny.c \
 	kernel/rcu/tiny.c \
