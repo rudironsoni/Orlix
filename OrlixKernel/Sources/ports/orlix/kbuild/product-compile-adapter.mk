@@ -256,17 +256,19 @@ require_text "$$linux_root/scripts/kallsyms.c" 'Usage: kallsyms [--all-symbols] 
 require_text "$$linux_root/scripts/kallsyms.c" 'printf("\t.section .rodata, \"a\"\n");'; \
 require_text "$$linux_root/scripts/kallsyms.c" 'output_label("kallsyms_num_syms");'; \
 require_text "$$linux_root/scripts/kallsyms.c" 'output_label("kallsyms_relative_base");'; \
+thread_size="$$(awk '/^#define[[:space:]]+THREAD_SIZE[[:space:]]+/ { value=$$0; sub(/^.*_AC[(]/, "", value); sub(/,.*/, "", value); print value; exit }' "$$linux_root/arch/$(LINUX_ARCH)/include/asm/thread_info.h")"; \
+case "$$thread_size" in ''|*[!0-9]*) echo "unable to extract numeric THREAD_SIZE for product init stack truth" >&2; exit 1 ;; esac; \
 for pattern in \
 	'.init.text' '.init.data' '.init.rodata' '.ref.text' '.init.setup' \
 	'.exit.text' '.exit.data' '.exitcall.exit' \
 	'jiffies = jiffies_64;' \
 	'__setup_start = .;' '__setup_end = .;' '__init_begin = .;' '__init_end = .;' \
-	'init_stack = .;' '. = __start_init_stack + (16384);' \
+	'init_stack = .;' ". = __start_init_stack + ($$thread_size);" \
 	'__start_rodata = .;' '__end_rodata = .;' \
 	'_sdata = .;' '_edata = .;' '.builtin_fw' '__start_builtin_fw = .;' '__end_builtin_fw = .;' \
 	'.data..page_aligned' '.bss..page_aligned' \
 	'__start_notes = .;' 'KEEP(*(.note.*))' '__stop_notes = .;' \
-	'__sched_class_highest = .;' '*(__fair_sched_class)' '__sched_class_lowest = .;' \
+	'__sched_class_highest = .;' '*(__stop_sched_class)' '*(__dl_sched_class)' '*(__rt_sched_class)' '*(__fair_sched_class)' '*(__ext_sched_class)' '*(__idle_sched_class)' '__sched_class_lowest = .;' \
 	'*(.noinstr.text)' '*(.cpuidle.text)' \
 	'__irqentry_text_start = .;' '*(.irqentry.text)' '__softirqentry_text_start = .;' '*(.softirqentry.text)' \
 	'__initcall_start = .;' '__initcall_end = .;' '__param' '.data.once' '.data..ro_after_init' \
@@ -540,6 +542,12 @@ orlix_product_adapter_generate_boundaries() { \
 	undefined_symbols="$$(for candidate in "$${product_objects[@]}"; do "$$nm_cmd" -u "$$candidate" | awk 'NF { print $$NF }'; done | LC_ALL=C sort -u)"; \
 	thread_size="$$(awk '/^#define[[:space:]]+THREAD_SIZE[[:space:]]+/ { value=$$0; sub(/^.*_AC[(]/, "", value); sub(/,.*/, "", value); print value; exit }' "$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include/asm/thread_info.h")"; \
 	case "$$thread_size" in ''|*[!0-9]*) echo "unable to extract numeric THREAD_SIZE for product init stack" >&2; exit 1 ;; esac; \
+	thread_align=0; thread_align_value="$$thread_size"; \
+	while [ "$$thread_align_value" -gt 1 ]; do \
+		if [ $$((thread_align_value % 2)) -ne 0 ]; then echo "THREAD_SIZE must be a power of two: $$thread_size" >&2; exit 1; fi; \
+		thread_align=$$((thread_align + 1)); \
+		thread_align_value=$$((thread_align_value / 2)); \
+	done; \
 	list_has_line() { list="$$1"; needle="$$2"; printf '%s\n' "$$list" | awk -v needle="$$needle" '$$0 == needle { found = 1 } END { exit found ? 0 : 1 }'; }; \
 	section_present() { \
 		segment="$$1"; section="$$2"; \
@@ -626,13 +634,12 @@ orlix_product_adapter_generate_boundaries() { \
 				emit_alias _init_thread_union "$$init_stack_start"; \
 				emit_alias _init_stack "$$init_stack_start"; \
 				printf '%s\n' '.section __DATA,__init_tinfo'; \
-				printf '%s\n' '.p2align 14'; \
+				printf '.p2align %s\n' "$$thread_align"; \
 				printf '%s\n' '.globl ___end_init_stack'; \
 				printf '%s\n' '___end_init_stack:'; \
-				printf '.space %s\n' "$$thread_size"; \
 			else \
 				printf '%s\n' '.section __DATA,__init_tinfo'; \
-				printf '%s\n' '.p2align 14'; \
+				printf '.p2align %s\n' "$$thread_align"; \
 				printf '%s\n' '.globl ___start_init_stack'; \
 				printf '%s\n' '___start_init_stack:'; \
 				printf '%s\n' '.globl _init_thread_union'; \
@@ -680,10 +687,16 @@ orlix_product_adapter_generate_boundaries() { \
 		symbol="$$1"; \
 		if [ -n "$$initcall_cursor" ]; then emit_alias "$$symbol" "$$initcall_cursor"; else emit_label "$$symbol"; initcall_cursor="$$symbol"; fi; \
 	}; \
+	emit_product_section_ordering() { \
+		for section in __sched_stop __sched_dl __sched_rt __sched_fair __sched_ext __sched_idle; do \
+			if section_present __DATA "$$section"; then printf '.section __DATA,%s\n' "$$section"; fi; \
+		done; \
+	}; \
 	mkdir -p "$$(dirname "$$boundary_src")"; \
 	{ \
 		printf '%s\n' '/* generated Build-only product-link boundary glue for the Mach-O OrlixKernel product */'; \
 		printf '%s\n' '/* Only undefined Linux linker-script boundary symbols requested by the current object set are emitted. */'; \
+		emit_product_section_ordering; \
 		printf '%s\n' '.section __DATA,__orlix_bnd'; \
 		printf '%s\n' '.p2align 3'; \
 		printf '%s\n' '/* __init_begin/__init_end are conservative until init-memory reclaim semantics exist. */'; \
@@ -734,7 +747,7 @@ orlix_product_adapter_generate_boundaries() { \
 	} > "$$boundary_src"; \
 	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler -c "$$boundary_src" -o "$$boundary_obj"; \
 	for symbol in _jiffies _init_stack _init_thread_union ___start_init_stack ___end_init_stack __sdata __edata ___init_begin ___init_end ___cpuidle_text_start ___cpuidle_text_end ___irqentry_text_start ___irqentry_text_end ___noinstr_text_start ___noinstr_text_end ___sched_text_start ___sched_text_end ___softirqentry_text_start ___softirqentry_text_end ___start_rodata ___end_rodata ___sched_class_highest ___sched_class_lowest ___setup_start ___setup_end ___initcall_start ___initcall0_start ___initcall1_start ___initcall2_start ___initcall3_start ___initcall4_start ___initcall5_start ___initcall6_start ___initcall7_start ___initcall_end ___con_initcall_start ___con_initcall_end ___start_once ___end_once ___start_ro_after_init ___end_ro_after_init ___start_builtin_fw ___end_builtin_fw ___per_cpu_start ___per_cpu_end ___bss_start ___bss_stop ___start___param ___stop___param ___start___modver ___stop___modver ___start_notes ___stop_notes ___start___ksymtab ___stop___ksymtab ___start___kcrctab ___stop___kcrctab ___start___ex_table ___stop___ex_table ___start___jump_table ___stop___jump_table ___start___bug_table ___stop___bug_table; do if undefined_symbol_present "$$symbol"; then "$$nm_cmd" -m "$$boundary_obj" | grep -F -q "$$symbol" || { echo "product boundary object missing requested symbol: $$symbol" >&2; exit 1; }; fi; done; \
-	objs+=("$$boundary_obj"); \
+	objs=("$$boundary_obj" "$${objs[@]}"); \
 	echo "generated Orlix product boundary object: $$boundary_obj"; \
 };
 endef

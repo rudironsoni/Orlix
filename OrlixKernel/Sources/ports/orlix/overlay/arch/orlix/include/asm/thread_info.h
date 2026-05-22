@@ -6,8 +6,8 @@
 
 #include <linux/const.h>
 
-#define THREAD_SIZE_ORDER	2
-#define THREAD_SIZE		(_AC(16384, UL))
+#define THREAD_SIZE_ORDER	3
+#define THREAD_SIZE		(_AC(32768, UL))
 
 #ifndef __ASSEMBLY__
 
