@@ -31,6 +31,7 @@
 	intc: interrupt-controller {
 		compatible = "orlix,host-intc";
 		interrupt-controller;
+		#address-cells = <0>;
 		#interrupt-cells = <1>;
 	};
 

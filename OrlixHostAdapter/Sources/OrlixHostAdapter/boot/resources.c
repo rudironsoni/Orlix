@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+static char OrlixHostSelectedRootBlockPath[PATH_MAX];
+static unsigned long long OrlixHostSelectedRootBlockBytes;
+
 static const char *OrlixHostRootImageResourceForIdentifier(const char *identifier)
 {
     if (!identifier) {
@@ -66,6 +69,34 @@ static int OrlixHostCopyPayloadResourcePath(const char *resource,
         return -1;
     }
 
+    return 0;
+}
+
+static int OrlixHostResourceFileSize(const char *path,
+                                     unsigned long long *size)
+{
+    FILE *file;
+    long length;
+
+    if (!path || !size) {
+        return -1;
+    }
+
+    file = fopen(path, "rb");
+    if (!file) {
+        return -1;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return -1;
+    }
+    length = ftell(file);
+    fclose(file);
+    if (length <= 0) {
+        return -1;
+    }
+
+    *size = (unsigned long long)length;
     return 0;
 }
 
@@ -147,6 +178,107 @@ __attribute__((visibility("hidden"))) int OrlixHostLoadRootImageResource(
     }
 
     return OrlixHostLoadKernelPayloadResource(resource, loaded);
+}
+
+__attribute__((visibility("hidden"))) int OrlixHostSelectRootBlockImage(
+    const char *identifier)
+{
+    const char *resource = OrlixHostRootImageResourceForIdentifier(identifier);
+    unsigned long long size = 0;
+    char path[PATH_MAX];
+
+    OrlixHostSelectedRootBlockPath[0] = '\0';
+    OrlixHostSelectedRootBlockBytes = 0;
+
+    if (!resource) {
+        return -1;
+    }
+    if (OrlixHostCopyPayloadResourcePath(resource, path, sizeof(path)) != 0) {
+        return -1;
+    }
+    if (OrlixHostResourceFileSize(path, &size) != 0) {
+        return -1;
+    }
+
+    memcpy(OrlixHostSelectedRootBlockPath, path, strlen(path) + 1);
+    OrlixHostSelectedRootBlockBytes = size;
+    return 0;
+}
+
+__attribute__((visibility("hidden"))) int orlix_host_block_capacity(
+    unsigned int device,
+    unsigned long long *sectors)
+{
+    if (device != 0 || !sectors || OrlixHostSelectedRootBlockPath[0] == '\0') {
+        return -1;
+    }
+
+    *sectors = (OrlixHostSelectedRootBlockBytes + 511ULL) / 512ULL;
+    return *sectors ? 0 : -1;
+}
+
+__attribute__((visibility("hidden"))) int orlix_host_block_read(
+    unsigned int device,
+    unsigned long long sector,
+    void *buffer,
+    unsigned int length)
+{
+    FILE *file;
+    unsigned long long offset;
+    unsigned long long capacity_bytes;
+    unsigned long long available;
+    unsigned int file_read_length;
+    size_t read_count;
+
+    if (device != 0 || !buffer || !length ||
+        OrlixHostSelectedRootBlockPath[0] == '\0' ||
+        sector > ULLONG_MAX / 512ULL) {
+        return -1;
+    }
+
+    offset = sector * 512ULL;
+    capacity_bytes = ((OrlixHostSelectedRootBlockBytes + 511ULL) / 512ULL) * 512ULL;
+    if (offset > capacity_bytes ||
+        length > capacity_bytes - offset ||
+        offset > (unsigned long long)LONG_MAX) {
+        return -1;
+    }
+
+    memset(buffer, 0, length);
+    if (offset >= OrlixHostSelectedRootBlockBytes) {
+        return 0;
+    }
+
+    available = OrlixHostSelectedRootBlockBytes - offset;
+    file_read_length = length;
+    if (available < file_read_length) {
+        file_read_length = (unsigned int)available;
+    }
+    file = fopen(OrlixHostSelectedRootBlockPath, "rb");
+    if (!file) {
+        return -1;
+    }
+    if (fseek(file, (long)offset, SEEK_SET) != 0) {
+        fclose(file);
+        return -1;
+    }
+
+    read_count = fread(buffer, 1, file_read_length, file);
+    fclose(file);
+    return read_count == file_read_length ? 0 : -1;
+}
+
+__attribute__((visibility("hidden"))) int orlix_host_block_write(
+    unsigned int device,
+    unsigned long long sector,
+    const void *buffer,
+    unsigned int length)
+{
+    (void)device;
+    (void)sector;
+    (void)buffer;
+    (void)length;
+    return -1;
 }
 
 __attribute__((visibility("hidden"))) void OrlixHostFreeResource(

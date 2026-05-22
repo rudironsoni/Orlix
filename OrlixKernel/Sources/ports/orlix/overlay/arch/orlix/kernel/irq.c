@@ -46,5 +46,5 @@ int orlix_irq_dispatch(unsigned int hwirq)
 	if (!orlix_irq_domain)
 		return -ENODEV;
 
-	return generic_handle_domain_irq(orlix_irq_domain, hwirq);
+	return generic_handle_domain_irq_safe(orlix_irq_domain, hwirq);
 }

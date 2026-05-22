@@ -14,6 +14,25 @@ __attribute__((visibility("hidden"))) int OrlixHostLoadRootImageResource(
     const char *identifier,
     struct OrlixHostResource *loaded);
 
+__attribute__((visibility("hidden"))) int OrlixHostSelectRootBlockImage(
+    const char *identifier);
+
+__attribute__((visibility("hidden"))) int orlix_host_block_capacity(
+    unsigned int device,
+    unsigned long long *sectors);
+
+__attribute__((visibility("hidden"))) int orlix_host_block_read(
+    unsigned int device,
+    unsigned long long sector,
+    void *buffer,
+    unsigned int length);
+
+__attribute__((visibility("hidden"))) int orlix_host_block_write(
+    unsigned int device,
+    unsigned long long sector,
+    const void *buffer,
+    unsigned int length);
+
 __attribute__((visibility("hidden"))) void OrlixHostFreeResource(
     struct OrlixHostResource *resource);
 
