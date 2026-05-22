@@ -74,6 +74,9 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/locking/rtmutex_api.c \
 	kernel/printk/printk.c \
 	kernel/printk/printk_safe.c \
+	kernel/printk/nbcon.c \
+	kernel/printk/printk_ringbuffer.c \
+	kernel/printk/sysctl.c \
 	kernel/sched/core.c \
 	kernel/sched/fair.c \
 	kernel/sched/build_policy.c \
@@ -113,6 +116,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/strncpy_from_user.c \
 	lib/strnlen_user.c \
 	lib/ratelimit.c \
+	lib/dump_stack.c \
 	lib/vsprintf.c \
 	lib/ctype.c \
 	lib/cmdline.c \
