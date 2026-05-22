@@ -47,6 +47,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/capability.c \
 	kernel/cred.c \
 	kernel/cpu.c \
+	kernel/exit.c \
 	kernel/notifier.c \
 	kernel/groups.c \
 	kernel/params.c \
