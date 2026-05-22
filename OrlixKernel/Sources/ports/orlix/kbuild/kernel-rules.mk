@@ -156,6 +156,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/klist.c \
 	lib/string.c \
 	lib/string_helpers.c \
+	lib/buildid.c \
 	lib/strncpy_from_user.c \
 	lib/strnlen_user.c \
 	lib/ratelimit.c \
@@ -408,6 +409,14 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/tty/tty_jobctrl.c \
 	drivers/tty/n_null.c \
 	drivers/tty/pty.c \
+	drivers/tty/vt/vt_ioctl.c \
+	drivers/tty/vt/vc_screen.c \
+	drivers/tty/vt/selection.c \
+	drivers/tty/vt/keyboard.c \
+	drivers/tty/vt/vt.c \
+	drivers/tty/vt/defkeymap.c \
+	drivers/tty/vt/consolemap.c \
+	drivers/tty/vt/consolemap_deftbl.c \
 	drivers/of/base.c \
 	drivers/of/cpu.c \
 	drivers/of/device.c \
@@ -484,6 +493,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/sysctls.c \
 	fs/ramfs/inode.c \
 	fs/ramfs/file-mmu.c \
+	fs/devpts/inode.c \
 	fs/iomap/trace.c \
 	fs/iomap/iter.c \
 	fs/iomap/buffered-io.c \
@@ -777,6 +787,7 @@ LINUX_SED ?=
 LINUX_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
 LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/tools/linux_host_compat/include
 ORLIX_KERNEL_CC ?= clang
+ORLIX_KERNEL_HOSTCC ?= cc
 ORLIX_KERNEL_AR ?= llvm-ar
 ORLIX_KERNEL_NM ?= nm
 ORLIX_KERNEL_OTOOL ?= otool
@@ -1149,6 +1160,7 @@ __kunit: __prepare-kbuild
 __kernel-archive: __prepare-kbuild
 	@set -euo pipefail; \
 	cc="$(ORLIX_KERNEL_CC)"; \
+	hostcc="$(ORLIX_KERNEL_HOSTCC)"; \
 	ar_cmd="$(ORLIX_KERNEL_AR)"; \
 	nm_cmd="$(ORLIX_KERNEL_NM)"; \
 	otool_cmd="$(ORLIX_KERNEL_OTOOL)"; \
@@ -1156,6 +1168,7 @@ __kernel-archive: __prepare-kbuild
 	PATH="$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
 	export PATH; \
 	command -v "$$cc" >/dev/null 2>&1 || { echo "clang is required for OrlixKernel archive builds; set ORLIX_KERNEL_CC=/path/to/clang" >&2; exit 1; }; \
+	command -v "$$hostcc" >/dev/null 2>&1 || { echo "host C compiler is required for OrlixKernel archive builds; set ORLIX_KERNEL_HOSTCC=/path/to/cc" >&2; exit 1; }; \
 	command -v "$$ar_cmd" >/dev/null 2>&1 || { echo "llvm-ar is required for OrlixKernel archives; set ORLIX_KERNEL_AR=/path/to/llvm-ar" >&2; exit 1; }; \
 	command -v "$$nm_cmd" >/dev/null 2>&1 || { echo "nm is required to verify OrlixKernel archive symbols; set ORLIX_KERNEL_NM=/path/to/nm" >&2; exit 1; }; \
 	command -v "$$otool_cmd" >/dev/null 2>&1 || { echo "otool is required to verify OrlixKernel archive contracts; set ORLIX_KERNEL_OTOOL=/path/to/otool" >&2; exit 1; }; \

@@ -98,6 +98,7 @@ rm -rf "$$adapter_root"; \
 	mkdir -p "$$adapter_root/source/lib"; \
 	mkdir -p "$$adapter_root/source/lib/crypto"; \
 	mkdir -p "$$adapter_root/source/drivers/of"; \
+	mkdir -p "$$adapter_root/source/drivers/tty/vt"; \
 	mkdir -p "$$adapter_root/source/kernel/sched"; \
 	mkdir -p "$$adapter_root/source/mm"; \
 $(call orlix_product_adapter_validate_linux_truth); \
@@ -137,8 +138,13 @@ for required in \
 	"$$linux_root/kernel/sched/sched.h" \
 	"$$linux_root/mm/internal.h" \
 	"$$linux_root/drivers/of/Makefile" \
+	"$$linux_root/drivers/tty/vt/Makefile" \
+	"$$linux_root/drivers/tty/vt/conmakehash.c" \
+	"$$linux_root/drivers/tty/vt/cp437.uni" \
+	"$$linux_root/drivers/tty/vt/defkeymap.c_shipped" \
 	"$$linux_root/usr/Makefile" \
 	"$$linux_root/lib/Makefile" \
+	"$$linux_root/lib/buildid.c" \
 	"$$linux_root/lib/crypto/blake2s-generic.c" \
 	"$$linux_root/scripts/mod/modpost.c" \
 	"$$linux_root/scripts/link-vmlinux.sh"; do \
@@ -211,9 +217,20 @@ require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.export_symbol)
 	require_text "$$linux_root/mm/internal.h" '__section(".data.once")'; \
 	require_text "$$linux_root/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");'; \
 	require_text "$$linux_root/drivers/of/Makefile" 'empty_root.dtb.o'; \
+	require_text "$$linux_root/drivers/tty/vt/Makefile" 'obj-$$(CONFIG_VT)'; \
+	require_text "$$linux_root/drivers/tty/vt/Makefile" 'vt_ioctl.o vc_screen.o'; \
+	require_text "$$linux_root/drivers/tty/vt/Makefile" 'selection.o keyboard.o'; \
+	require_text "$$linux_root/drivers/tty/vt/Makefile" 'vt.o defkeymap.o'; \
+	require_text "$$linux_root/drivers/tty/vt/Makefile" 'obj-$$(CONFIG_CONSOLE_TRANSLATIONS)	+= consolemap.o consolemap_deftbl.o'; \
+	require_text "$$linux_root/drivers/tty/vt/Makefile" 'cmd_conmk = $$(obj)/conmakehash $$< > $$@'; \
+	require_text "$$linux_root/drivers/tty/vt/Makefile" '$$(obj)/defkeymap.o:  $$(obj)/defkeymap.c'; \
+	require_text "$$linux_root/drivers/tty/vt/conmakehash.c" 'dfont_unicount[%d]'; \
+	require_text "$$linux_root/drivers/tty/vt/defkeymap.c_shipped" 'unsigned short plain_map[NR_KEYS]'; \
 	require_text "$$linux_root/usr/Makefile" 'obj-$$(CONFIG_BLK_DEV_INITRD) := initramfs_data.o'; \
 	require_text "$$linux_root/lib/Makefile" 'lib-y := ctype.o string.o vsprintf.o cmdline.o \'; \
 	require_text "$$linux_root/lib/Makefile" 'is_single_threaded.o plist.o decompress.o kobject_uevent.o \'; \
+	require_text "$$linux_root/lib/Makefile" 'buildid.o objpool.o union_find.o'; \
+	require_text "$$linux_root/lib/buildid.c" 'unsigned char vmlinux_build_id[BUILD_ID_SIZE_MAX] __ro_after_init;'; \
 	require_text "$$linux_root/lib/Makefile" 'lib-$$(CONFIG_DECOMPRESS_GZIP) += decompress_inflate.o'; \
 	require_text "$$linux_root/lib/Makefile" 'lib-$$(CONFIG_DECOMPRESS_ZSTD) += decompress_unzstd.o'; \
 	require_text "$$linux_root/lib/crypto/blake2s-generic.c" 'void blake2s_compress(struct blake2s_state *state, const u8 *block,'; \
@@ -338,6 +355,13 @@ adapter_root="$(ORLIX_PRODUCT_ADAPTER_ROOT)"; \
 	cp "$$linux_root/lib/crc32.c" "$$adapter_root/source/lib/crc32.c"; \
 	cp "$$linux_root/lib/crypto/blake2s-generic.c" "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
 	cp "$$linux_root/drivers/of/of_reserved_mem.c" "$$adapter_root/source/drivers/of/of_reserved_mem.c"; \
+	cp "$$linux_root/drivers/tty/vt/defkeymap.c_shipped" "$$adapter_root/source/drivers/tty/vt/defkeymap.c"; \
+	host_tool_dir="$$adapter_root/host-tools"; \
+	mkdir -p "$$host_tool_dir"; \
+	hostcc="$${hostcc:-cc}"; \
+	"$$hostcc" "$$linux_root/drivers/tty/vt/conmakehash.c" -o "$$host_tool_dir/conmakehash"; \
+	"$$host_tool_dir/conmakehash" "$$linux_root/drivers/tty/vt/cp437.uni" > "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c"; \
+	[ -s "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c" ] || { echo "failed to generate Linux VT console map table" >&2; exit 1; }; \
 	cp "$$linux_root/mm/page_alloc.c" "$$adapter_root/source/mm/page_alloc.c"; \
 	cp "$$linux_root/mm/internal.h" "$$adapter_root/source/mm/internal.h"; \
 	cp "$$linux_root/mm/vma.h" "$$adapter_root/source/mm/vma.h"; \
@@ -360,6 +384,7 @@ orlix_product_adapter_source_for() { \
 	src_rel="$$1"; \
 	case "$$src_rel" in \
 		drivers/of/of_reserved_mem.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/drivers/of/of_reserved_mem.c" ;; \
+		drivers/tty/vt/defkeymap.c|drivers/tty/vt/consolemap_deftbl.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/$$src_rel" ;; \
 		kernel/sched/core.c|kernel/sched/fair.c|kernel/sched/build_policy.c|kernel/sched/build_utility.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/$$src_rel" ;; \
 		lib/crypto/blake2s-generic.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/lib/crypto/blake2s-generic.c" ;; \
 		lib/crc32.c) printf '%s\n' "$(ORLIX_PRODUCT_ADAPTER_ROOT)/source/lib/crc32.c" ;; \
