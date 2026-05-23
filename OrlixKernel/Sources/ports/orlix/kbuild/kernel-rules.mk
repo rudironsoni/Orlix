@@ -1586,5 +1586,65 @@ __ios-simulator-framework: __kernel-payload __kernel-archive
 
 __ios-simulator-xcframework: __ios-simulator-framework
 	@set -euo pipefail; \
-	./scripts/package-orlixkernel-simulator-xcframework.sh --framework "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)" --output "$(ORLIX_KERNEL_XCFRAMEWORK)"; \
-	./scripts/verify-orlixkernel-simulator-xcframework.sh --xcframework "$(ORLIX_KERNEL_XCFRAMEWORK)" --profile "$(PROFILE)" --linux-version "$(LINUX_VERSION)" --linux-arch "$(LINUX_ARCH)"
+	framework="$(ORLIX_IOS_SIMULATOR_FRAMEWORK)"; \
+	xcframework="$(ORLIX_KERNEL_XCFRAMEWORK)"; \
+	case "$$xcframework" in \
+		"$(CURDIR)/Build/OrlixKernel/xcframework/OrlixKernel.xcframework"|Build/OrlixKernel/xcframework/OrlixKernel.xcframework) ;; \
+		*) echo "refusing to write simulator XCFramework outside Build/OrlixKernel/xcframework: $$xcframework" >&2; exit 1 ;; \
+	esac; \
+	[ -d "$$framework" ] || { echo "missing simulator framework: $$framework" >&2; exit 1; }; \
+	if [ -L Build ] || [ -L Build/OrlixKernel ] || [ -L Build/OrlixKernel/xcframework ] || [ -L "$$xcframework" ]; then \
+		echo "refusing to package simulator XCFramework through symlinked Build path" >&2; \
+		exit 1; \
+	fi; \
+	for required in "$$framework/OrlixKernel" "$$framework/Info.plist"; do \
+		[ -s "$$required" ] || { echo "missing non-empty framework input: $$required" >&2; exit 1; }; \
+	done; \
+	xcframework_parent="$$(dirname "$$xcframework")"; \
+	rm -rf "$$xcframework"; \
+	mkdir -p "$$xcframework_parent" "$$xcframework/ios-arm64-simulator"; \
+	cp -R "$$framework" "$$xcframework/ios-arm64-simulator/OrlixKernel.framework"; \
+	{ \
+		printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'; \
+		printf '%s\n' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'; \
+		printf '%s\n' '<plist version="1.0">'; \
+		printf '%s\n' '<dict>'; \
+		printf '%s\n' '    <key>AvailableLibraries</key>'; \
+		printf '%s\n' '    <array>'; \
+		printf '%s\n' '        <dict>'; \
+		printf '%s\n' '            <key>LibraryIdentifier</key>'; \
+		printf '%s\n' '            <string>ios-arm64-simulator</string>'; \
+		printf '%s\n' '            <key>LibraryPath</key>'; \
+		printf '%s\n' '            <string>OrlixKernel.framework</string>'; \
+		printf '%s\n' '            <key>SupportedArchitectures</key>'; \
+		printf '%s\n' '            <array>'; \
+		printf '%s\n' '                <string>arm64</string>'; \
+		printf '%s\n' '            </array>'; \
+		printf '%s\n' '            <key>SupportedPlatform</key>'; \
+		printf '%s\n' '            <string>ios</string>'; \
+		printf '%s\n' '            <key>SupportedPlatformVariant</key>'; \
+		printf '%s\n' '            <string>simulator</string>'; \
+		printf '%s\n' '        </dict>'; \
+		printf '%s\n' '    </array>'; \
+		printf '%s\n' '    <key>CFBundlePackageType</key>'; \
+		printf '%s\n' '    <string>XFWK</string>'; \
+		printf '%s\n' '    <key>XCFrameworkFormatVersion</key>'; \
+		printf '%s\n' '    <string>1.0</string>'; \
+		printf '%s\n' '</dict>'; \
+		printf '%s\n' '</plist>'; \
+	} > "$$xcframework/Info.plist"; \
+	payload="$$xcframework/ios-arm64-simulator/OrlixKernel.framework/OrlixKernelPayload.bundle"; \
+	for required in \
+		"$$xcframework/Info.plist" \
+		"$$xcframework/ios-arm64-simulator/OrlixKernel.framework/Info.plist" \
+		"$$xcframework/ios-arm64-simulator/OrlixKernel.framework/OrlixKernel" \
+		"$$payload/Info.plist" \
+		"$$payload/arch/$(LINUX_ARCH)/boot/dts/appstore.dtb" \
+		"$$payload/arch/$(LINUX_ARCH)/boot/dts/development.dtb"; do \
+		[ -s "$$required" ] || { echo "missing non-empty XCFramework input: $$required" >&2; exit 1; }; \
+	done; \
+	plutil -lint \
+		"$$xcframework/Info.plist" \
+		"$$xcframework/ios-arm64-simulator/OrlixKernel.framework/Info.plist" \
+		"$$payload/Info.plist" >/dev/null; \
+	echo "packaged and verified simulator OrlixKernel XCFramework: $$xcframework (profile $(PROFILE))"
