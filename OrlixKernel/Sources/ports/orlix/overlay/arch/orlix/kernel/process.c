@@ -19,7 +19,6 @@ extern struct task_struct *orlix_cpu_switch_context(struct orlix_cpu_context *pr
 						    struct orlix_cpu_context *next,
 						    struct task_struct *last);
 #if defined(ORLIX_APP_HOSTED_BOOT)
-void orlix_sync_current_user_mappings(struct pt_regs *regs);
 static __noreturn void orlix_hosted_enter_user(unsigned long pc,
 					       unsigned long sp);
 #endif
@@ -64,14 +63,17 @@ static __noreturn void orlix_hosted_enter_user(unsigned long pc,
 					       unsigned long sp)
 {
 	unsigned long kernel_sp;
+	unsigned long user_tls;
 
 	asm volatile("mov %0, sp" : "=r"(kernel_sp));
 	orlix_hosted_save_kernel_stack(kernel_sp);
+	user_tls = orlix_hosted_prepare_user_entry();
 	asm volatile(
+	"	msr	tpidr_el0, %2\n"
 	"	mov	sp, %0\n"
 	"	br	%1\n"
 	:
-	: "r"(sp), "r"(pc)
+	: "r"(sp), "r"(pc), "r"(user_tls)
 	: "memory");
 	unreachable();
 }
@@ -96,6 +98,9 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	regs->sp = sp;
 	regs->pstate = PSR_MODE_EL0t;
 	regs->syscallno = NO_SYSCALL;
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	current->thread.user_tls = 0;
+#endif
 }
 
 void flush_thread(void)

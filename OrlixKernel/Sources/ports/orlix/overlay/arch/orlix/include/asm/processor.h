@@ -54,6 +54,9 @@ struct orlix_cpu_context {
 
 struct thread_struct {
 	struct orlix_cpu_context cpu_context;
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	unsigned long user_tls;
+#endif
 };
 
 #define INIT_THREAD			\
