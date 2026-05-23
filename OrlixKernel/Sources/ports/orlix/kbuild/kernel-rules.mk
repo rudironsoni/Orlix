@@ -14,7 +14,7 @@ PROFILE ?= appstore
 ORLIX_PROFILES := appstore development
 
 type ?= kunit
-libc ?= linux
+libc ?= orlixmlibc
 
 LINUX_UPSTREAM_DIR ?= OrlixKernel/Sources/upstream/linux-$(LINUX_VERSION)
 LINUX_CLONE_CACHE_DIR ?= .cache/linux-clone
@@ -34,14 +34,17 @@ ORLIX_KERNEL_SIMULATOR_ARCHIVE_DIR := $(ORLIX_KERNEL_ARCHIVE_ROOT)/iphonesimulat
 ORLIX_KERNEL_ARCHIVE_NAME := OrlixKernel.a
 ORLIX_IOS_TARGET := arm64-apple-ios
 ORLIX_IOS_SIMULATOR_TARGET := arm64-apple-ios-simulator
+ORLIX_HOSTED_SYSCALL_GATE_ADDRESS ?= 0x00006ffff0000000
 ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(LINUX_ARCH)/boot/boot.c \
 	arch/$(LINUX_ARCH)/kernel/cpuinfo.c \
+	arch/$(LINUX_ARCH)/kernel/hosted_exec.c \
 	arch/$(LINUX_ARCH)/kernel/irq.c \
 	arch/$(LINUX_ARCH)/kernel/process.c \
 	arch/$(LINUX_ARCH)/kernel/ptrace.c \
 	arch/$(LINUX_ARCH)/kernel/reboot.c \
 	arch/$(LINUX_ARCH)/kernel/setup.c \
+	arch/$(LINUX_ARCH)/kernel/syscall.c \
 	arch/$(LINUX_ARCH)/kernel/time.c \
 	arch/$(LINUX_ARCH)/kernel/traps.c \
 	arch/$(LINUX_ARCH)/mm/delay.c \
@@ -858,11 +861,6 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/fdt_empty_tree.c \
 	lib/fdt_addresses.c
 ORLIX_KUNIT_BUILD_DIR := $(CURDIR)/Build/OrlixKernel/kunit/$(PROFILE)
-ORLIX_TEMPORARY_KSELFTEST_INSTALL_DIR := $(CURDIR)/Build/OrlixKernel/kselftest/temporary/$(PROFILE)
-ORLIX_TEMPORARY_TEST_INITRAMFS_DIR := $(CURDIR)/Build/OrlixKernel/test-initramfs/temporary/$(PROFILE)/OrlixTestInitramfs.bundle
-ORLIX_TEMPORARY_INIT_EXEC_PROBE := $(ORLIX_TEMPORARY_KSELFTEST_INSTALL_DIR)/orlix/init_exec_probe
-ORLIX_TEMPORARY_INIT_EXEC_SOURCE := $(ORLIX_KERNEL_PORT_DIR)/tools/testing/selftests/orlix/init_exec_probe.c
-ORLIX_TEMPORARY_INIT_EXEC_BASE := 0x0000600000000000
 ORLIX_MLIBC_KERNEL_HEADERS_DIR := $(CURDIR)/Build/OrlixMLibC/kernel-headers/$(PROFILE)
 ORLIX_MLIBC_SYSROOT ?= Build/OrlixMLibC/sysroot/$(PROFILE)
 ORLIX_MLIBC_KSELFTEST_INSTALL_DIR := $(CURDIR)/Build/OrlixMLibC/kselftest/$(PROFILE)
@@ -895,14 +893,7 @@ ORLIX_KERNEL_OTOOL ?= otool
 
 TEST_TYPES := $(strip $(subst $(comma),$(space),$(type)))
 
-ifeq ($(libc),linux)
-KSELFTEST_SYSROOT :=
-KSELFTEST_INSTALL_DIR := $(ORLIX_TEMPORARY_KSELFTEST_INSTALL_DIR)
-KSELFTEST_INITRAMFS_DIR := $(ORLIX_TEMPORARY_TEST_INITRAMFS_DIR)
-KSELFTEST_HEADER_FLAGS :=
-KSELFTEST_PROOF_LABEL := temporary-kselftest-kernel-interface
-KSELFTEST_PREREQS := prepare
-else ifeq ($(libc),orlixmlibc)
+ifeq ($(libc),orlixmlibc)
 KSELFTEST_SYSROOT := $(ORLIX_MLIBC_SYSROOT)
 KSELFTEST_INSTALL_DIR := $(ORLIX_MLIBC_KSELFTEST_INSTALL_DIR)
 KSELFTEST_INITRAMFS_DIR := $(ORLIX_MLIBC_TEST_INITRAMFS_DIR)
@@ -921,10 +912,8 @@ endif
 ORLIX_KERNEL_TEST_INITRAMFS_INPUT :=
 ORLIX_KERNEL_PAYLOAD_PREREQS :=
 ifneq (,$(filter kselftest,$(TEST_TYPES)))
-ifeq ($(libc),linux)
 ORLIX_KERNEL_TEST_INITRAMFS_INPUT := $(KSELFTEST_INITRAMFS_DIR)/rootfs/initramfs.cpio.gz
 ORLIX_KERNEL_PAYLOAD_PREREQS := kselftest
-endif
 endif
 
 include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
@@ -940,15 +929,16 @@ help:
 	@printf '%s\n' '  test                      run test type(s), default: type=kunit'
 	@printf '%s\n' '  test type=kunit           build Linux KUnit-selected Orlix tests'
 	@printf '%s\n' '  test type=kunit,kselftest build KUnit and Linux kselftest artifacts'
-	@printf '%s\n' '  kselftest libc=linux      package a temporary raw-syscall /init exec probe'
-	@printf '%s\n' '  kselftest libc=orlixmlibc install OrlixMLibC kselftests'
+	@printf '%s\n' '  kselftest                 install OrlixMLibC-built kselftests'
 	@printf '%s\n' '  headers_install           install Linux UAPI headers for OrlixMLibC'
 	@printf '%s\n' '  clean                     remove normal generated outputs'
 	@printf '%s\n' '  mrproper                  remove all generated local outputs'
 
 setup-env: __bootstrap-linux-upstream xcodeproj
 
-build: __ios-simulator-xcframework
+build:
+	@$(MAKE) -f OrlixKernel/Makefile clean PROFILE="$(PROFILE)"
+	@$(MAKE) -f OrlixKernel/Makefile __ios-simulator-xcframework PROFILE="$(PROFILE)"
 
 prepare scripts dtbs: __prepare-kbuild
 
@@ -1000,14 +990,22 @@ run: __kernel-payload
 
 clean:
 	@set -euo pipefail; \
+	upstream_dir="$(LINUX_UPSTREAM_DIR)"; \
+	expected_upstream_dir="OrlixKernel/Sources/upstream/linux-$(LINUX_VERSION)"; \
 	port_dir="$(ORLIX_KERNEL_PORT_DIR)"; \
 	expected_port_dir="Build/OrlixKernel/linux-$(LINUX_VERSION)-port"; \
+	if [ "$$upstream_dir" != "$$expected_upstream_dir" ]; then \
+		echo "Linux upstream directory must be $$expected_upstream_dir: $$upstream_dir" >&2; \
+		exit 1; \
+	fi; \
 	if [ "$$port_dir" != "$$expected_port_dir" ]; then \
 		echo "Orlix kernel port tree must be $$expected_port_dir: $$port_dir" >&2; \
 		exit 1; \
 	fi; \
 	for path in \
+		OrlixKernel/Sources/upstream \
 		"$$port_dir" \
+		"$$upstream_dir" \
 		Build/OrlixKernel/build \
 		Build/OrlixKernel/kunit \
 		Build/OrlixKernel/kselftest \
@@ -1018,11 +1016,14 @@ clean:
 		Build/OrlixKernel/tool-shims \
 		Build/OrlixKernel/xcframework \
 		Build/OrlixMLibC/kernel-headers \
+		Build/OrlixMLibC/build \
 		Build/OrlixMLibC/kselftest \
+		Build/OrlixMLibC/sysroot \
 		Build/OrlixMLibC/test-initramfs \
+		Build/OrlixMLibC/upstream \
 		.deriveddata/OrlixSystem-sim; do \
 		if [ -L "$$path" ]; then echo "refusing to clean symlinked path: $$path" >&2; exit 1; fi; \
-		rm -rf "$$path"; \
+		if [ "$$path" != OrlixKernel/Sources/upstream ]; then rm -rf "$$path"; fi; \
 	done; \
 	echo "cleaned generated build outputs"
 
@@ -1401,7 +1402,7 @@ __verify-framework-symbols:
 __kselftest-install: __validate-profile
 	@set -euo pipefail; \
 	selected_libc="$(libc)"; \
-	case "$$selected_libc" in linux|orlixmlibc) ;; *) echo "unsupported libc=$$selected_libc (expected linux or orlixmlibc)" >&2; exit 1 ;; esac; \
+	case "$$selected_libc" in orlixmlibc) ;; *) echo "unsupported libc=$$selected_libc (expected orlixmlibc)" >&2; exit 1 ;; esac; \
 	install_dir="$(KSELFTEST_INSTALL_DIR)"; \
 	proof_label="$(KSELFTEST_PROOF_LABEL)"; \
 	linux_llvm_bin="$(LINUX_LLVM_BIN)"; \
@@ -1413,55 +1414,35 @@ __kselftest-install: __validate-profile
 	export PATH; \
 	rm -rf "$$install_dir"; \
 	mkdir -p "$$(dirname "$$install_dir")"; \
-	if [ "$$selected_libc" = linux ]; then \
-		cc="$(ORLIX_KERNEL_CC)"; \
-		command -v "$$cc" >/dev/null 2>&1 || { echo "clang is required to build the Orlix raw-syscall init exec probe" >&2; exit 1; }; \
-		init_source="$(ORLIX_TEMPORARY_INIT_EXEC_SOURCE)"; \
-		init_binary="$(ORLIX_TEMPORARY_INIT_EXEC_PROBE)"; \
-		page_shift="$$(sed -n 's/^CONFIG_PAGE_SHIFT=//p' "$(ORLIX_KERNEL_BUILD_DIR)/.config")"; \
-		case "$$page_shift" in ''|*[!0-9]*) echo "missing numeric CONFIG_PAGE_SHIFT in $(ORLIX_KERNEL_BUILD_DIR)/.config" >&2; exit 1 ;; esac; \
-		elf_page_size="$$((1 << page_shift))"; \
-		[ -s "$$init_source" ] || { echo "missing Orlix raw-syscall init exec probe source: $$init_source" >&2; exit 1; }; \
-		mkdir -p "$$(dirname "$$init_binary")"; \
-		"$$cc" --target=aarch64-linux-gnu -fuse-ld=lld \
-			-Os -fno-asynchronous-unwind-tables -fno-ident -fno-stack-protector \
-			-ffreestanding -nostdlib -static -Wl,--build-id=none \
-			-Wl,-z,max-page-size=$$elf_page_size -Wl,--image-base=$(ORLIX_TEMPORARY_INIT_EXEC_BASE) \
-			-I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated/uapi" \
-			-I"$(ORLIX_KERNEL_PORT_DIR)/arch/$(LINUX_ARCH)/include/uapi" \
-			-I"$(ORLIX_KERNEL_PORT_DIR)/include/uapi" \
-			-o "$$init_binary" "$$init_source"; \
-		[ -s "$$init_binary" ] || { echo "missing built Orlix raw-syscall init exec probe: $$init_binary" >&2; exit 1; }; \
-		printf 'proof_lane=%s\n' "$$proof_label" > "$$install_dir/proof_lane.txt"; \
-		echo "built Orlix raw-syscall init exec probe: $$init_binary"; \
-	else \
-		sysroot="$(KSELFTEST_SYSROOT)"; \
-		header_flags="$(KSELFTEST_HEADER_FLAGS)"; \
-		case "$$sysroot" in /*) ;; *) sysroot="$(CURDIR)/$$sysroot" ;; esac; \
-		[ -d "$$sysroot" ] || { echo "missing kselftest sysroot: $$sysroot" >&2; exit 1; }; \
-		linux_make="$(LINUX_MAKE)"; \
-		if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
-		if [ -z "$$linux_make" ]; then echo "GNU Make >= 4.0 is required by Linux kselftest; install gmake or set LINUX_MAKE=/path/to/gmake" >&2; exit 1; fi; \
-		command -v clang >/dev/null 2>&1 || { echo "clang is required to build Linux kselftest artifacts" >&2; exit 1; }; \
-		"$$linux_make" -C "$(ORLIX_KERNEL_PORT_DIR)/tools/testing/selftests" \
-			O="$(ORLIX_KERNEL_BUILD_DIR)" \
-			TARGETS=orlix \
-			KSFT_INSTALL_PATH="$$install_dir" \
-			ARCH="$(ORLIX_KSELFTEST_ARCH)" \
-			LLVM=1 \
-			FORCE_TARGETS=1 \
-			USERCFLAGS="--sysroot=$$sysroot $$header_flags" \
-			USERLDFLAGS="--sysroot=$$sysroot -static -fuse-ld=lld" \
-			install; \
-		printf 'proof_lane=%s\n' "$$proof_label" > "$$install_dir/proof_lane.txt"; \
-		[ -s "$$install_dir/run_kselftest.sh" ] || { echo "missing installed kselftest runner" >&2; exit 1; }; \
-		echo "installed Orlix kselftests: $$install_dir (libc $$selected_libc)"; \
-	fi
+	sysroot="$(KSELFTEST_SYSROOT)"; \
+	header_flags="$(KSELFTEST_HEADER_FLAGS)"; \
+	case "$$sysroot" in /*) ;; *) sysroot="$(CURDIR)/$$sysroot" ;; esac; \
+	[ -d "$$sysroot" ] || { echo "missing OrlixMLibC sysroot: $$sysroot; run make -f OrlixMLibC/Makefile build PROFILE=$(PROFILE)" >&2; exit 1; }; \
+	orlix_crt_flags="$$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o"; \
+	orlix_ldlibs="-Wl,--start-group $$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
+	linux_make="$(LINUX_MAKE)"; \
+	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
+	if [ -z "$$linux_make" ]; then echo "GNU Make >= 4.0 is required by Linux kselftest; install gmake or set LINUX_MAKE=/path/to/gmake" >&2; exit 1; fi; \
+	command -v clang >/dev/null 2>&1 || { echo "clang is required to build Linux kselftest artifacts" >&2; exit 1; }; \
+	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_DIR)/tools/testing/selftests" \
+		O="$(ORLIX_KERNEL_BUILD_DIR)" \
+		TARGETS=orlix \
+		KSFT_INSTALL_PATH="$$install_dir" \
+		ARCH="$(ORLIX_KSELFTEST_ARCH)" \
+		LLVM=1 \
+		FORCE_TARGETS=1 \
+		USERCFLAGS="--sysroot=$$sysroot $$header_flags" \
+		USERLDFLAGS="--sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections $$orlix_crt_flags" \
+		LDLIBS="$$orlix_ldlibs" \
+		install; \
+	printf 'proof_lane=%s\n' "$$proof_label" > "$$install_dir/proof_lane.txt"; \
+	[ -s "$$install_dir/run_kselftest.sh" ] || { echo "missing installed kselftest runner" >&2; exit 1; }; \
+	echo "installed OrlixMLibC-built kselftests: $$install_dir"
 
 __kselftest-initramfs: kselftest-install
 	@set -euo pipefail; \
 	selected_libc="$(libc)"; \
-	case "$$selected_libc" in linux|orlixmlibc) ;; *) echo "unsupported libc=$$selected_libc (expected linux or orlixmlibc)" >&2; exit 1 ;; esac; \
+	case "$$selected_libc" in orlixmlibc) ;; *) echo "unsupported libc=$$selected_libc (expected orlixmlibc)" >&2; exit 1 ;; esac; \
 	install_dir="$(KSELFTEST_INSTALL_DIR)"; \
 	output="$(KSELFTEST_INITRAMFS_DIR)"; \
 	proof_label="$(KSELFTEST_PROOF_LABEL)"; \
@@ -1476,14 +1457,10 @@ __kselftest-initramfs: kselftest-install
 	output_parent="$$(dirname "$$output")"; \
 	rm -rf "$$output"; \
 	mkdir -p "$$output_parent" "$$output/rootfs"; \
-	if [ "$$selected_libc" != linux ]; then \
-		echo "OrlixMLibC kselftest initramfs requires an OrlixMLibC-built static runner; no shell /init is generated here" >&2; \
-		exit 1; \
-	fi; \
-	init_binary="$(ORLIX_TEMPORARY_INIT_EXEC_PROBE)"; \
 	gen_init_cpio="$(ORLIX_KERNEL_BUILD_DIR)/usr/gen_init_cpio"; \
 	cpio_list="$$output/initramfs.list"; \
-	[ -s "$$init_binary" ] || { echo "missing Orlix raw-syscall init exec probe: $$init_binary" >&2; exit 1; }; \
+	init_binary="$$install_dir/orlix/init_exec_probe"; \
+	[ -s "$$init_binary" ] || { echo "missing OrlixMLibC-built /init test binary: $$init_binary" >&2; exit 1; }; \
 	[ -x "$$gen_init_cpio" ] || { echo "missing executable Linux gen_init_cpio: $$gen_init_cpio" >&2; exit 1; }; \
 	{ \
 		printf '%s\n' 'dir /dev 755 0 0'; \

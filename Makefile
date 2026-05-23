@@ -23,6 +23,7 @@ setup-env xcodeproj:
 	@$(KERNEL_MAKE) $@
 
 build:
+	@$(MAKE) clean
 	@$(KERNEL_MAKE) build
 	@$(HOSTADAPTER_MAKE) build
 	@$(MLIBC_MAKE) build

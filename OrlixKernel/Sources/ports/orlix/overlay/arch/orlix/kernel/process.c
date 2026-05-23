@@ -7,6 +7,7 @@
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/panic.h>
+#include <asm/hosted_exec.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 
@@ -62,6 +63,10 @@ asm(
 static __noreturn void orlix_hosted_enter_user(unsigned long pc,
 					       unsigned long sp)
 {
+	unsigned long kernel_sp;
+
+	asm volatile("mov %0, sp" : "=r"(kernel_sp));
+	orlix_hosted_save_kernel_stack(kernel_sp);
 	asm volatile(
 	"	mov	sp, %0\n"
 	"	br	%1\n"

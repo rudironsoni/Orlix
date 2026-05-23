@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#ifndef _ASM_ORLIX_HOSTED_EXEC_H
+#define _ASM_ORLIX_HOSTED_EXEC_H
+
+#include <linux/types.h>
+
+struct pt_regs;
+
+#if defined(ORLIX_APP_HOSTED_BOOT)
+void orlix_hosted_save_kernel_stack(unsigned long sp);
+int orlix_hosted_sync_syscall_gate(void);
+long orlix_hosted_syscall_dispatch(unsigned long scno, unsigned long arg0,
+				   unsigned long arg1, unsigned long arg2,
+				   unsigned long arg3, unsigned long arg4,
+				   unsigned long arg5, unsigned long user_sp);
+#endif
+
+long orlix_syscall_dispatch(struct pt_regs *regs);
+
+#endif /* _ASM_ORLIX_HOSTED_EXEC_H */

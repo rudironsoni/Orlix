@@ -11,6 +11,8 @@
 #include <linux/sched.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
+#include <asm/hosted_exec.h>
+#include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <internal/asm/host_memory.h>
 
@@ -192,5 +194,9 @@ void orlix_sync_current_user_mappings(struct pt_regs *regs)
 		}
 	}
 	mmap_read_unlock(mm);
+
+	if (orlix_hosted_sync_syscall_gate())
+		panic("Orlix: failed to synchronize hosted syscall gate %#lx\n",
+		      ORLIX_HOSTED_SYSCALL_GATE);
 }
 #endif

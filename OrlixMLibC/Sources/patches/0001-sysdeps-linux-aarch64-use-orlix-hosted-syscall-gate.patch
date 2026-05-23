@@ -1,0 +1,223 @@
+diff --git a/sysdeps/linux/aarch64/arch-syscall.cpp b/sysdeps/linux/aarch64/arch-syscall.cpp
+index b178538f..b73041b5 100644
+--- a/sysdeps/linux/aarch64/arch-syscall.cpp
++++ b/sysdeps/linux/aarch64/arch-syscall.cpp
+@@ -3,115 +3,56 @@
+ 
+ using sc_word_t = __sc_word_t;
+ 
++#ifndef ORLIX_HOSTED_SYSCALL_GATE_ADDRESS
++#	error "ORLIX_HOSTED_SYSCALL_GATE_ADDRESS must be provided by the OrlixMLibC build"
++#endif
++
++namespace {
++	using orlix_syscall_gate_t = sc_word_t (*)(sc_word_t, sc_word_t, sc_word_t,
++			sc_word_t, sc_word_t, sc_word_t, sc_word_t);
++
++	sc_word_t orlix_do_syscall(sc_word_t sc, sc_word_t arg1 = 0, sc_word_t arg2 = 0,
++			sc_word_t arg3 = 0, sc_word_t arg4 = 0, sc_word_t arg5 = 0,
++			sc_word_t arg6 = 0) {
++		auto gate = reinterpret_cast<orlix_syscall_gate_t>(
++				static_cast<sc_word_t>(ORLIX_HOSTED_SYSCALL_GATE_ADDRESS));
++		return gate(sc, arg1, arg2, arg3, arg4, arg5, arg6);
++	}
++}
++
+ sc_word_t __do_syscall0(long sc) {
+-	register int sc_reg asm("x8") = sc;
+-	register sc_word_t ret asm("x0");
+-	asm volatile ("svc 0" : "=r"(ret) : "r"(sc_reg) : "memory");
+-	return ret;
++	return orlix_do_syscall(sc);
+ }
+ 
+ sc_word_t __do_syscall1(long sc,
+ 		sc_word_t arg1) {
+-	register int sc_reg asm("x8") = sc;
+-	register sc_word_t arg1_reg asm("x0") = arg1;
+-	register sc_word_t ret asm("x0");
+-	asm volatile ("svc 0" : "=r"(ret) :
+-			"r"(sc_reg),
+-			"r"(arg1_reg)
+-			: "memory");
+-	return ret;
++	return orlix_do_syscall(sc, arg1);
+ }
+ 
+ sc_word_t __do_syscall2(long sc,
+ 		sc_word_t arg1, sc_word_t arg2) {
+-	register int sc_reg asm("x8") = sc;
+-	register sc_word_t arg1_reg asm("x0") = arg1;
+-	register sc_word_t arg2_reg asm("x1") = arg2;
+-	register sc_word_t ret asm("x0");
+-	asm volatile ("svc 0" : "=r"(ret) :
+-			"r"(sc_reg),
+-			"r"(arg1_reg),
+-			"r"(arg2_reg)
+-			: "memory");
+-	return ret;
++	return orlix_do_syscall(sc, arg1, arg2);
+ }
+ 
+ sc_word_t __do_syscall3(long sc,
+ 		sc_word_t arg1, sc_word_t arg2, sc_word_t arg3) {
+-	register int sc_reg asm("x8") = sc;
+-	register sc_word_t arg1_reg asm("x0") = arg1;
+-	register sc_word_t arg2_reg asm("x1") = arg2;
+-	register sc_word_t arg3_reg asm("x2") = arg3;
+-	register sc_word_t ret asm("x0");
+-	asm volatile ("svc 0" : "=r"(ret) :
+-			"r"(sc_reg),
+-			"r"(arg1_reg),
+-			"r"(arg2_reg),
+-			"r"(arg3_reg)
+-			: "memory");
+-	return ret;
++	return orlix_do_syscall(sc, arg1, arg2, arg3);
+ }
+ 
+ sc_word_t __do_syscall4(long sc,
+ 		sc_word_t arg1, sc_word_t arg2, sc_word_t arg3,
+ 		sc_word_t arg4) {
+-	register int sc_reg asm("x8") = sc;
+-	register sc_word_t arg1_reg asm("x0") = arg1;
+-	register sc_word_t arg2_reg asm("x1") = arg2;
+-	register sc_word_t arg3_reg asm("x2") = arg3;
+-	register sc_word_t arg4_reg asm("x3") = arg4;
+-	register sc_word_t ret asm("x0");
+-	asm volatile ("svc 0" : "=r"(ret) :
+-			"r"(sc_reg),
+-			"r"(arg1_reg),
+-			"r"(arg2_reg),
+-			"r"(arg3_reg),
+-			"r"(arg4_reg)
+-			: "memory");
+-	return ret;
++	return orlix_do_syscall(sc, arg1, arg2, arg3, arg4);
+ }
+ 
+ sc_word_t __do_syscall5(long sc,
+ 		sc_word_t arg1, sc_word_t arg2, sc_word_t arg3,
+ 		sc_word_t arg4, sc_word_t arg5) {
+-	register int sc_reg asm("x8") = sc;
+-	register sc_word_t arg1_reg asm("x0") = arg1;
+-	register sc_word_t arg2_reg asm("x1") = arg2;
+-	register sc_word_t arg3_reg asm("x2") = arg3;
+-	register sc_word_t arg4_reg asm("x3") = arg4;
+-	register sc_word_t arg5_reg asm("x4") = arg5;
+-	register sc_word_t ret asm("x0");
+-	asm volatile ("svc 0" : "=r"(ret) :
+-			"r"(sc_reg),
+-			"r"(arg1_reg),
+-			"r"(arg2_reg),
+-			"r"(arg3_reg),
+-			"r"(arg4_reg),
+-			"r"(arg5_reg)
+-			: "memory");
+-	return ret;
++	return orlix_do_syscall(sc, arg1, arg2, arg3, arg4, arg5);
+ }
+ 
+ sc_word_t __do_syscall6(long sc,
+ 		sc_word_t arg1, sc_word_t arg2, sc_word_t arg3,
+ 		sc_word_t arg4, sc_word_t arg5, sc_word_t arg6) {
+-	register int sc_reg asm("x8") = sc;
+-	register sc_word_t arg1_reg asm("x0") = arg1;
+-	register sc_word_t arg2_reg asm("x1") = arg2;
+-	register sc_word_t arg3_reg asm("x2") = arg3;
+-	register sc_word_t arg4_reg asm("x3") = arg4;
+-	register sc_word_t arg5_reg asm("x4") = arg5;
+-	register sc_word_t arg6_reg asm("x5") = arg6;
+-	register sc_word_t ret asm("x0");
+-	asm volatile ("svc 0" : "=r"(ret) :
+-			"r"(sc_reg),
+-			"r"(arg1_reg),
+-			"r"(arg2_reg),
+-			"r"(arg3_reg),
+-			"r"(arg4_reg),
+-			"r"(arg5_reg),
+-			"r"(arg6_reg)
+-			: "memory"
+-			);
+-	return ret;
++	return orlix_do_syscall(sc, arg1, arg2, arg3, arg4, arg5, arg6);
+ }
+diff --git a/sysdeps/linux/aarch64/cp_syscall.S b/sysdeps/linux/aarch64/cp_syscall.S
+index 98690c73..1c2ef9b5 100644
+--- a/sysdeps/linux/aarch64/cp_syscall.S
++++ b/sysdeps/linux/aarch64/cp_syscall.S
+@@ -4,14 +4,6 @@
+ .global __mlibc_syscall_end
+ .type __mlibc_do_asm_cp_syscall, "function"
+ __mlibc_do_asm_cp_syscall:
+-	mov x8, x0
+-	mov x0, x1
+-	mov x1, x2
+-	mov x2, x3
+-	mov x3, x4
+-	mov x4, x5
+-	mov x5, x6
+-
+ 	mrs x7, tpidr_el0
+ 	ldr w7, [x7, #-80] // Tcb::cancelBits. See asserts in tcb.hpp.
+ __mlibc_syscall_begin:
+@@ -20,7 +12,8 @@ __mlibc_syscall_begin:
+ 	and x7, x7, x9
+ 	cmp x7, x9
+ 	b.eq cancel
+-	svc 0
++	ldr x16, =ORLIX_HOSTED_SYSCALL_GATE_ADDRESS
++	blr x16
+ __mlibc_syscall_end:
+ 	ret
+ 
+@@ -28,4 +21,3 @@ cancel:
+ 	bl __mlibc_do_cancel
+ 	brk #0
+ .section .note.GNU-stack,"",%progbits
+-
+diff --git a/sysdeps/linux/aarch64/signals.S b/sysdeps/linux/aarch64/signals.S
+index 923d8d77..863cd849 100644
+--- a/sysdeps/linux/aarch64/signals.S
++++ b/sysdeps/linux/aarch64/signals.S
+@@ -6,7 +6,7 @@ __mlibc_signal_restore:
+ .global __mlibc_signal_restore_rt
+ .type __mlibc_signal_restore_rt, @function
+ __mlibc_signal_restore_rt:
+-	mov x8,#139 // SYS_rt_sigreturn
+-	svc 0
++	mov x0,#139 // SYS_rt_sigreturn
++	ldr x16, =ORLIX_HOSTED_SYSCALL_GATE_ADDRESS
++	blr x16
+ .section .note.GNU-stack,"",%progbits
+-
+diff --git a/sysdeps/linux/aarch64/thread_entry.S b/sysdeps/linux/aarch64/thread_entry.S
+index a47a0486..cbca9d2a 100644
+--- a/sysdeps/linux/aarch64/thread_entry.S
++++ b/sysdeps/linux/aarch64/thread_entry.S
+@@ -7,13 +7,13 @@ __mlibc_spawn_thread:
+ 	//           syscall(NR_clone, flags, stack, ptid, tls, ctid)
+ 	//                         x8,    x0,    x1,   x2,  x3,   x4
+ 
+-	// Swap x3 <-> x4
+-	mov x5, x4
+-	mov x4, x3
+-	mov x3, x5
+-
+-	mov x8, 220 // NR_clone
+-	svc 0
++	mov x5, x3
++	mov x3, x2
++	mov x2, x1
++	mov x1, x0
++	mov x0, 220 // NR_clone
++	ldr x16, =ORLIX_HOSTED_SYSCALL_GATE_ADDRESS
++	blr x16
+ 	cbnz x0, .parent
+ 
+ 	ldp x0, x1, [sp], #16
+@@ -24,4 +24,3 @@ __mlibc_spawn_thread:
+ .parent:
+ 	ret
+ .section .note.GNU-stack,"",%progbits
+-
