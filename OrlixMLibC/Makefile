@@ -141,7 +141,16 @@ MLIBC_TEST_POSIX_CASES := \
 	posix/strdupa \
 	posix/mkstemp \
 	posix/pthread_atfork \
+	posix/pthread_attr \
+	posix/pthread_barrier \
+	posix/pthread_cond \
+	posix/pthread_cond_signal \
 	posix/pthread_create \
+	posix/pthread_key \
+	posix/pthread_mutex \
+	posix/pthread_rwlock \
+	posix/pthread_spin \
+	posix/pthread_thread_local \
 	posix/shm \
 	posix/swab \
 	posix/select \
