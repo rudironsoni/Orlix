@@ -10,6 +10,7 @@ config ORLIX
 	select HAS_IOMEM
 	select HAS_DMA
 	select ARCH_WANT_FRAME_POINTERS
+	select CLONE_BACKWARDS
 	select GENERIC_CPU_DEVICES
 
 config 64BIT

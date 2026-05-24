@@ -35,10 +35,11 @@ MLIBC_RTLIB := $(MLIBC_RTLIB_DIR)/liborlix_compiler_rt.a
 MLIBC_LOCK_ROOT := $(REPO_ROOT)/Build/OrlixMLibC/locks
 ORLIX_HOSTED_SYSCALL_GATE_ADDRESS ?= 0x00006ffff0000000
 ORLIX_HOSTED_USER_BASE_ADDRESS ?= 0x0000600000000000
+ORLIX_HOSTED_PAGE_SIZE ?= 16384
 # Apple arm64 reserves x18 for the host platform; Orlix-built Linux ELF keeps it unavailable to user code.
 MLIBC_HOSTED_EXEC_FIXED_REGISTER_FLAGS := -ffixed-x18
 MLIBC_HOSTED_EXEC_CODEGEN_FLAGS := -femulated-tls $(MLIBC_HOSTED_EXEC_FIXED_REGISTER_FLAGS)
-MLIBC_HOSTED_EXEC_MESON_ARGS := '-DORLIX_HOSTED_EXEC=1', '-DORLIX_HOSTED_SYSCALL_GATE_ADDRESS=$(ORLIX_HOSTED_SYSCALL_GATE_ADDRESS)', '-femulated-tls', '-ffixed-x18', '-ffunction-sections', '-fdata-sections'
+MLIBC_HOSTED_EXEC_MESON_ARGS := '-DORLIX_HOSTED_EXEC=1', '-DORLIX_HOSTED_SYSCALL_GATE_ADDRESS=$(ORLIX_HOSTED_SYSCALL_GATE_ADDRESS)', '-DORLIX_HOSTED_PAGE_SIZE=$(ORLIX_HOSTED_PAGE_SIZE)', '-femulated-tls', '-ffixed-x18', '-ffunction-sections', '-fdata-sections'
 MLIBC_LLVM_PREFIX ?= $(firstword $(wildcard /opt/homebrew/opt/llvm/bin) $(wildcard /usr/local/opt/llvm/bin))
 MLIBC_CC ?= clang
 MLIBC_CXX ?= clang++
@@ -140,6 +141,7 @@ MLIBC_TEST_POSIX_CASES := \
 	posix/strdupa \
 	posix/mkstemp \
 	posix/pthread_atfork \
+	posix/pthread_create \
 	posix/shm \
 	posix/swab \
 	posix/select \
@@ -275,6 +277,12 @@ __build: __write-cross-file
 	command -v "$(NINJA)" >/dev/null 2>&1 || { echo "ninja is required to build OrlixMLibC" >&2; exit 1; }; \
 	$(MAKE) -f "$(PROJECT_DIR)/Makefile" __ensure-kernel-headers PROFILE="$(PROFILE)"; \
 	[ -d "$(MLIBC_KERNEL_HEADERS)" ] || { echo "missing installed Orlix Linux UAPI headers: $(MLIBC_KERNEL_HEADERS)" >&2; exit 1; }; \
+	kernel_config="$(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/.config"; \
+	[ -s "$$kernel_config" ] || { echo "missing generated OrlixKernel config: $$kernel_config" >&2; exit 1; }; \
+	kernel_page_shift="$$(sed -n 's/^CONFIG_PAGE_SHIFT=//p' "$$kernel_config" | tail -n 1)"; \
+	[ -n "$$kernel_page_shift" ] || { echo "missing CONFIG_PAGE_SHIFT in $$kernel_config" >&2; exit 1; }; \
+	kernel_page_size="$$((1 << kernel_page_shift))"; \
+	[ "$$kernel_page_size" = "$(ORLIX_HOSTED_PAGE_SIZE)" ] || { echo "OrlixMLibC page size $(ORLIX_HOSTED_PAGE_SIZE) does not match OrlixKernel page size $$kernel_page_size from $$kernel_config" >&2; exit 1; }; \
 	rm -rf "$(MLIBC_BUILD_DIR)" "$(MLIBC_SYSROOT)"; \
 	mkdir -p "$(MLIBC_BUILD_DIR)" "$(MLIBC_SYSROOT)"; \
 	mkdir -p "$(dir $(MLIBC_BUILD_KERNEL_HEADERS))"; \
