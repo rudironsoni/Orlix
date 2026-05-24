@@ -34,6 +34,8 @@ The iOS app is the host container. It starts the Orlix bootloader. The bootloade
 
 The kernel does not provide a shell, package layer, libc surface, syscall facade, or runtime management API. Shells and packages are normal Orlix Linux userspace binaries linked against OrlixMLibC and executed through Linux mechanisms such as `execve()`.
 
+Host reality is iOS-only, private, sandboxed mediation. The physical host is not a Linux kernel, but host limitations must not define the Linux-facing contract. Anything iOS cannot provide natively is virtualized inside Orlix through Linux-owned architecture or driver paths unless an unavoidable exception is documented.
+
 High-level flow:
 
 ```text
@@ -66,8 +68,8 @@ Orlix-specific architecture code owns:
 - boot handoff
 - setup and machine description
 - syscall entry mechanics
-- task context substrate
-- signal frame support
+- task context substrate, including hosted process virtualization when required
+- signal frame support and signal virtualization when required
 - user access model
 - MM and permission adaptation
 - clock and timer glue
@@ -231,7 +233,7 @@ Orlix-specific transport and backend code lives under `drivers/orlix`. Its inter
 
 The first transport model is virtio-mmio-shaped. Profile device trees should describe normal virtio-mmio-style devices where practical.
 
-Do not create custom Orlix block, network, random, console, or filesystem drivers when upstream virtio classes satisfy the requirement.
+Use virtio as much as possible for device-like host mediation. Do not create custom Orlix block, network, random, console, or filesystem drivers when upstream virtio classes satisfy the requirement.
 
 ## Storage And Root Filesystem
 
@@ -312,6 +314,8 @@ HostAdapter implementation files under `OrlixHostAdapter/Sources` may use host l
 `OrlixHostAdapter` must not become a public libc surface, syscall interposition layer, package manager, Linux policy layer, or Linux ABI provider.
 
 Linux semantics stay in upstream Linux, `arch/orlix`, and Linux-native driver paths.
+
+Processes, signals, process groups, sessions, mounts, namespaces, cgroups, seccomp, ptrace, and related Linux facilities are Linux-facing behavior. If iOS cannot supply a matching native primitive privately, Orlix virtualizes the behavior inside Linux-owned Orlix kernel paths rather than leaking the host limitation to userspace.
 
 ## Lifecycle Model
 

@@ -420,6 +420,10 @@ Unavoidable iOS memory mechanics are reached through narrow `arch/orlix`-owned s
 
 Non-device host mechanics such as clocks, timers, execution substrate, low-level memory mapping, lifecycle notification, and very-early entropy may use narrow `arch/orlix`-owned seams into `OrlixHostAdapter`. Device-like runtime services should use virtio where possible.
 
+## Host Reality Rule
+
+The physical host is iOS only, private, and sandboxed. Host limits are implementation constraints, not Linux-facing behavior. Processes, signals, process groups, sessions, mounts, namespaces, cgroups, seccomp, ptrace, and related facilities are virtualized inside Orlix when iOS cannot supply matching private mechanics, and device-like mediation uses virtio wherever upstream Linux has a fitting class.
+
 ## Lifecycle Ownership
 
 App lifecycle handling is split between `arch/orlix` for unavoidable suspend/resume and timekeeping consequences, and standard Linux-visible power-management or event mechanisms for userspace observability when needed. A custom lifecycle character device is not the default target.

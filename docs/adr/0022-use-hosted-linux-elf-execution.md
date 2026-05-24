@@ -13,6 +13,8 @@ Orlix has two different products that must not be collapsed into one runtime fac
 
 The iOS app and XNU/Darwin remain the physical host environment. That does not make Darwin the Orlix userspace ABI. Orlix userspace must see Linux UAPI and Linux syscall behavior owned by `OrlixKernel`.
 
+The host is iOS only, app-sandboxed, and privately mediated through Orlix-owned seams. Host constraints are implementation inputs, not the Linux userspace contract.
+
 ## Decision
 
 The primary userspace and package format is Linux ELF for AArch64, linked against OrlixMLibC. OrlixMLibC uses upstream mlibc's Linux sysdeps model and standard Linux UAPI headers installed from `OrlixKernel`; it does not define a custom Orlix application ABI.
@@ -35,6 +37,8 @@ XNU/Darwin
 ```
 
 `OrlixHostAdapter` may provide host mechanics such as executable mapping, page protection changes, host thread primitives, timers, exception transport, and app lifecycle notification. It must not decode Linux syscall numbers, own Linux syscall policy, or expose Darwin/POSIX/libc contracts to Linux-owned kernel code.
+
+Processes, signals, process groups, sessions, and similar execution semantics are virtualized inside `OrlixKernel` when iOS cannot provide equivalent private mechanics. Device-like mediation should use upstream virtio classes and Orlix virtio transport/backend code wherever possible.
 
 The hosted-exec substrate is internal to `arch/orlix` and must be designed so future execution engines can be added behind the same kernel-owned boundary. TCTI JIT-less ISA-on-ISA execution and WASM support are deferred. They must not change the primary Linux ELF ABI, OrlixMLibC's Linux sysdeps contract, or the OrlixKernel syscall semantics.
 
