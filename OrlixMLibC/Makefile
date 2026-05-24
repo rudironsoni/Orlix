@@ -151,6 +151,7 @@ MLIBC_TEST_POSIX_CASES := \
 	posix/memccpy \
 	posix/strfmon \
 	posix/sig2str \
+	posix/sigsetjmp \
 	posix/inet_aton \
 	posix/protoent \
 	posix/lfind \
