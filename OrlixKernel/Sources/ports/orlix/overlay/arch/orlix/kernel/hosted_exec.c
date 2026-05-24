@@ -7,6 +7,7 @@
 #include <linux/mm.h>
 #include <linux/panic.h>
 #include <linux/sched.h>
+#include <linux/sched/task.h>
 #include <linux/sched/task_stack.h>
 #include <linux/signal.h>
 #include <linux/string.h>
@@ -44,7 +45,7 @@ static void __noreturn orlix_hosted_user_trap_entry(int signal_number,
 
 	pr_info("Orlix: hosted user trap signal %d at pc %#lx\n",
 		signal_number, user_pc);
-	do_exit(exit_code);
+	do_group_exit(exit_code);
 }
 
 asm(

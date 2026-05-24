@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 700
+
 #include "OrlixHostAdapter/runtime/trap.h"
 
 #include <signal.h>
