@@ -354,11 +354,16 @@ index a07ed53e..8e44b30f 100644
  #ifndef MLIBC_BUILDING_RTLD
  extern "C" long __do_syscall_ret(unsigned long ret) {
  	if(ret > -4096UL) {
-@@ -180,6 +272,7 @@ int Sysdeps<TcbSet>::operator()(void *pointer) {
+@@ -180,6 +272,12 @@ int Sysdeps<TcbSet>::operator()(void *pointer) {
  #elif defined (__aarch64__)
  	uintptr_t thread_data = reinterpret_cast<uintptr_t>(pointer) + sizeof(Tcb) - 0x10;
  	asm volatile ("msr tpidr_el0, %0" :: "r"(thread_data));
 +	asm volatile ("isb" ::: "memory");
++#if defined(ORLIX_HOSTED_EXEC)
++	auto ret = do_syscall(SYS_gettid);
++	if(int e = sc_error(ret); e)
++		return e;
++#endif
  #elif defined (__m68k__)
  	auto ret = do_syscall(__NR_set_thread_area, (uintptr_t)pointer + 0x7000 + sizeof(Tcb));
  	if(int e = sc_error(ret); e)

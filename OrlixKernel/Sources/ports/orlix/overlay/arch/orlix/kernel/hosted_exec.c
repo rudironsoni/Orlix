@@ -328,6 +328,8 @@ void orlix_hosted_capture_host_context(void)
 {
 	if (orlix_host_user_trap_install(ORLIX_HOSTED_USER_BASE,
 					 ORLIX_HOSTED_STACK_TOP,
+					 ORLIX_HOSTED_SYSCALL_GATE,
+					 PAGE_SIZE,
 					 &orlix_hosted_kernel_sp,
 					 &orlix_hosted_active_user_tls,
 					 &orlix_hosted_user_active,

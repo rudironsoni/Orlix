@@ -29,6 +29,8 @@ typedef void (*orlix_host_user_trap_entry_t)(int signal_number,
 
 int orlix_host_user_trap_install(unsigned long user_base,
 				 unsigned long user_limit,
+				 unsigned long syscall_gate,
+				 unsigned long syscall_gate_size,
 				 const unsigned long *kernel_sp,
 				 const unsigned long *active_user_tls,
 				 unsigned long *user_active,
