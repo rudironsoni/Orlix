@@ -15,6 +15,7 @@
 #include <asm/page.h>
 #include <internal/asm/host_block.h>
 #include <internal/asm/host_console.h>
+#include <internal/asm/host_entropy.h>
 #include <internal/asm/irq.h>
 #include <internal/asm/virtio_mmio.h>
 
@@ -27,6 +28,7 @@
 #define ORLIX_VIRTIO_MMIO_CONSOLE_INPUT_POLL_MS 10
 #define ORLIX_VIRTIO_BLK_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
 #define ORLIX_VIRTIO_CONSOLE_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
+#define ORLIX_VIRTIO_RNG_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
 
 struct orlix_virtio_mmio_queue {
 	u32 num;
@@ -78,6 +80,12 @@ static struct orlix_virtio_mmio_slot orlix_virtio_mmio_slots[] = {
 		.device_id = VIRTIO_ID_CONSOLE,
 		.device_identifier = "orlix-console0",
 	},
+	{
+		.base = 0x10001600UL,
+		.irq = 35,
+		.device_id = VIRTIO_ID_RNG,
+		.device_identifier = "orlix-rng0",
+	},
 };
 
 static struct orlix_virtio_mmio_slot *
@@ -126,6 +134,7 @@ orlix_virtio_mmio_device_present(const struct orlix_virtio_mmio_slot *slot)
 	case VIRTIO_ID_BLOCK:
 		return orlix_virtio_mmio_block_capacity(slot, &sectors);
 	case VIRTIO_ID_CONSOLE:
+	case VIRTIO_ID_RNG:
 		return true;
 	default:
 		return false;
@@ -145,6 +154,8 @@ static u64 orlix_virtio_mmio_device_features(
 		       (slot->read_only ? (1ULL << VIRTIO_BLK_F_RO) : 0);
 	case VIRTIO_ID_CONSOLE:
 		return ORLIX_VIRTIO_CONSOLE_BASE_FEATURES;
+	case VIRTIO_ID_RNG:
+		return ORLIX_VIRTIO_RNG_BASE_FEATURES;
 	default:
 		return 0;
 	}
@@ -506,6 +517,82 @@ static void orlix_virtio_mmio_process_console_output_queue(
 	}
 }
 
+static void orlix_virtio_mmio_process_rng_desc(
+	const struct vring_desc *desc,
+	unsigned int head,
+	unsigned int *written)
+{
+	unsigned int descriptor_index = head;
+	unsigned int guard;
+
+	if (head >= ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+		return;
+
+	for (guard = 0; guard < ORLIX_VIRTIO_MMIO_QUEUE_SIZE; guard++) {
+		void *buffer;
+		u32 length;
+		u16 flags;
+		u64 address;
+		unsigned long copied;
+
+		if (descriptor_index >= ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+			return;
+
+		length = orlix_vring_read32(desc[descriptor_index].len);
+		flags = orlix_vring_read16(desc[descriptor_index].flags);
+		address = orlix_vring_read64(desc[descriptor_index].addr);
+
+		if (!(flags & VRING_DESC_F_WRITE))
+			return;
+
+		buffer = orlix_virtio_mmio_guest_ptr(address, length);
+		if (!buffer)
+			return;
+
+		copied = orlix_host_entropy_read(buffer, length);
+		*written += copied;
+		if (copied < length)
+			return;
+
+		if (!(flags & VRING_DESC_F_NEXT))
+			return;
+
+		descriptor_index = orlix_vring_read16(desc[descriptor_index].next);
+	}
+}
+
+static void orlix_virtio_mmio_process_rng_queue(
+	struct orlix_virtio_mmio_slot *slot,
+	u32 queue_index)
+{
+	struct orlix_virtio_mmio_queue *queue;
+	struct vring_desc *desc;
+	struct vring_avail *avail;
+
+	if (queue_index != 0 || queue_index >= ARRAY_SIZE(slot->queues))
+		return;
+
+	queue = &slot->queues[queue_index];
+	if (!queue->ready || !queue->num || queue->num > ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+		return;
+
+	desc = orlix_virtio_mmio_guest_ptr(
+		queue->desc, sizeof(struct vring_desc) * queue->num);
+	avail = orlix_virtio_mmio_guest_ptr(queue->avail, sizeof(*avail));
+	if (!desc || !avail)
+		return;
+
+	while (queue->last_avail != orlix_vring_read16(avail->idx)) {
+		unsigned int head =
+			orlix_vring_read16(avail->ring[queue->last_avail % queue->num]);
+		unsigned int written = 0;
+
+		orlix_virtio_mmio_process_rng_desc(desc, head, &written);
+		orlix_virtio_mmio_push_used(slot, queue, head, written);
+		queue->last_avail++;
+	}
+}
+
 static void orlix_virtio_mmio_notify_queue(
 	struct orlix_virtio_mmio_slot *slot,
 	u32 queue_index)
@@ -525,6 +612,11 @@ static void orlix_virtio_mmio_notify_queue(
 			orlix_virtio_mmio_process_console_output_queue(slot,
 								       queue_index);
 		}
+		return;
+	}
+
+	if (slot->device_id == VIRTIO_ID_RNG) {
+		orlix_virtio_mmio_process_rng_queue(slot, queue_index);
 		return;
 	}
 

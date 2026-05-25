@@ -51,4 +51,4 @@ Build defaults, profile device trees, defconfigs, public boot enums, terminal pr
 
 Release package behavior is conservative until an App Store-safe downloadable package channel is separately designed. Orlix can still develop package build recipes and proof packages, but release does not become an unrestricted executable-code download surface.
 
-Virtio-rng is the next virtio-first service after the existing block and console work. Virtio-net follows after rng. External directory mounts follow after root/storage policy is stable.
+Virtio-rng follows the existing block and console work through upstream Linux `virtio-rng` and the hwrng core, with Orlix supplying only the private host entropy backend behind the virtio transport. Virtio-net follows after rng. External directory mounts follow after root/storage policy is stable.

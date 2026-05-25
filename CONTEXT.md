@@ -522,7 +522,7 @@ The eighth milestone for the upstream-Linux iOS port. It provides minimal early 
 
 ## Virtio Devices Milestone
 
-The ninth milestone for the upstream-Linux iOS port. It adds remaining virtio-first devices such as virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. It may be split if the scope becomes too large.
+The ninth milestone for the upstream-Linux iOS port. It adds remaining virtio-first devices such as virtio-rng, virtio-net, and external directory mounts through virtio-fs or 9p where feasible. The virtio-rng slice uses upstream `virtio-rng` and Linux hwrng; virtio-net and external directory mounts remain later slices. It may be split if the scope becomes too large.
 
 ## Root Overlay
 

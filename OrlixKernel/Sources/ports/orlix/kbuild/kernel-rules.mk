@@ -487,7 +487,10 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/base/firmware_loader/builtin/main.c \
 	drivers/block/virtio_blk.c \
 	drivers/char/mem.c \
+	drivers/char/misc.c \
 	drivers/char/random.c \
+	drivers/char/hw_random/core.c \
+	drivers/char/hw_random/virtio-rng.c \
 	drivers/char/virtio_console.c \
 	drivers/net/loopback.c \
 	drivers/tty/hvc/hvc_console.c \

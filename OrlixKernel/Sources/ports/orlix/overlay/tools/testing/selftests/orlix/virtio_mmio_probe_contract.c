@@ -78,13 +78,31 @@ static void expect_virtio_mmio_node(const char *node, uint32_t address,
 			  "virtio-mmio node has expected interrupt");
 }
 
+static bool hwrng_device_returns_data(void)
+{
+	unsigned char buffer[32];
+	int fd = open("/dev/hwrng", O_RDONLY | O_NONBLOCK);
+	ssize_t nread;
+
+	if (fd < 0)
+		return false;
+
+	nread = read(fd, buffer, sizeof(buffer));
+	close(fd);
+	return nread > 0;
+}
+
 int main(void)
 {
-	orlix_test_plan(9);
+	orlix_test_plan(13);
 
 	expect_virtio_mmio_node("virtio@10001000", 0x10001000, 32);
 	expect_virtio_mmio_node("virtio@10001200", 0x10001200, 33);
 	expect_virtio_mmio_node("virtio@10001400", 0x10001400, 34);
+	expect_virtio_mmio_node("virtio@10001600", 0x10001600, 35);
+
+	orlix_test_result(hwrng_device_returns_data(),
+			  "upstream hwrng device returns virtio-backed entropy");
 
 	orlix_test_exit();
 }

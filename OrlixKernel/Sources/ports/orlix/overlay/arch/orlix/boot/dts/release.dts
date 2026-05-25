@@ -55,4 +55,11 @@
 		interrupts = <34>;
 		status = "okay";
 	};
+
+	virtio_rng: virtio@10001600 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0x10001600 0x0 0x200>;
+		interrupts = <35>;
+		status = "okay";
+	};
 };
