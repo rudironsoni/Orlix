@@ -117,10 +117,12 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(LINUX_ARCH)/kernel/ptrace.c \
 	arch/$(LINUX_ARCH)/kernel/reboot.c \
 	arch/$(LINUX_ARCH)/kernel/setup.c \
+	arch/$(LINUX_ARCH)/kernel/signal.c \
 	arch/$(LINUX_ARCH)/kernel/syscall.c \
 	arch/$(LINUX_ARCH)/kernel/time.c \
 	arch/$(LINUX_ARCH)/kernel/traps.c \
 	arch/$(LINUX_ARCH)/mm/delay.c \
+	arch/$(LINUX_ARCH)/mm/fault.c \
 	arch/$(LINUX_ARCH)/mm/iomem.c \
 	arch/$(LINUX_ARCH)/mm/init.c \
 	arch/$(LINUX_ARCH)/mm/uaccess.c \

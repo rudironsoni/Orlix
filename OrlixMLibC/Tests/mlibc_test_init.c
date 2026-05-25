@@ -136,9 +136,21 @@ static int run_test(const char *label, const char *path)
 		return -1;
 	if (waitpid(child, &status, 0) != child)
 		return -1;
+	if (WIFEXITED(status)) {
+		int code = WEXITSTATUS(status);
+
+		if (code)
+			printf("# %s exited with status %d\n", label, code);
+		return code;
+	}
+	if (WIFSIGNALED(status))
+		printf("# %s killed by signal %d\n", label, WTERMSIG(status));
+	else
+		printf("# %s ended with wait status 0x%x\n", label, status);
+	fflush(stdout);
 	if (!WIFEXITED(status))
 		return -1;
-	return WEXITSTATUS(status);
+	return -1;
 }
 
 static void run_tests(char *data, size_t size)

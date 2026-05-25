@@ -59,13 +59,14 @@ asm(
 void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
 {
 	unsigned long kernel_sp;
+	unsigned long user_tls = current->thread.user_tls;
 
 	asm volatile("mov %0, sp" : "=r"(kernel_sp));
 	orlix_hosted_save_kernel_stack(kernel_sp);
-	orlix_hosted_prepare_user_entry();
 
 	asm volatile(
 	"	mov	x9, %0\n"
+	"	mov	x12, %1\n"
 	"	ldr	x10, [x9, #%c[pc_offset]]\n"
 	"	ldr	x11, [x9, #%c[sp_offset]]\n"
 	"	ldr	x8, [x9, #%c[x8_offset]]\n"
@@ -79,10 +80,17 @@ void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
 	"	ldp	x4, x5, [x9, #%c[x4_offset]]\n"
 	"	ldp	x2, x3, [x9, #%c[x2_offset]]\n"
 	"	ldp	x0, x1, [x9, #%c[x0_offset]]\n"
+	"	msr	tpidr_el0, x12\n"
+	"	isb\n"
+	"	mrs	x12, tpidr_el0\n"
+	"	adrp	x13, _orlix_hosted_user_active@PAGE\n"
+	"	mov	x14, #1\n"
+	"	str	x14, [x13, _orlix_hosted_user_active@PAGEOFF]\n"
 	"	mov	sp, x11\n"
 	"	br	x10\n"
 	:
 	: "r"(regs),
+	  "r"(user_tls),
 	  [pc_offset] "i"(offsetof(struct pt_regs, pc)),
 	  [sp_offset] "i"(offsetof(struct pt_regs, sp)),
 	  [x8_offset] "i"(offsetof(struct pt_regs, regs[8])),
@@ -143,6 +151,12 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 		if (args->stack)
 			childregs->sp = args->stack;
 #if defined(ORLIX_APP_HOSTED_BOOT)
+		/*
+		 * The syscall gate snapshots userspace TLS at the Linux syscall
+		 * boundary.  Deeper kernel code must use that saved value: hosted
+		 * trap transport can run while the hardware TLS register belongs to
+		 * the iOS host thread.
+		 */
 		p->thread.user_tls = current->thread.user_tls;
 		if (args->flags & CLONE_SETTLS)
 			p->thread.user_tls = args->tls;

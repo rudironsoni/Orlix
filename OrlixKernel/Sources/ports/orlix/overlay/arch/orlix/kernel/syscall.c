@@ -8,7 +8,9 @@
 #include <linux/unistd.h>
 #include <asm/hosted_exec.h>
 #include <asm/ptrace.h>
+#include <asm/signal.h>
 #include <asm/syscall.h>
+#include <asm/time.h>
 
 #undef __SYSCALL
 #define __SYSCALL(nr, call)	[nr] = (call),
@@ -29,8 +31,7 @@ SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 }
 
 asmlinkage long sys_ni_syscall(void);
-
-#define sys_rt_sigreturn sys_ni_syscall
+asmlinkage long sys_rt_sigreturn(void);
 
 void * const sys_call_table[__NR_syscalls] = {
 #include <asm/syscall_table_64.h>
@@ -53,6 +54,9 @@ long orlix_syscall_dispatch(struct pt_regs *regs)
 	}
 
 	syscall_set_return_value(current, regs, 0, ret);
-	forget_syscall(regs);
+	orlix_timer_poll();
+	orlix_exit_to_user_mode_work(regs);
+	if (in_syscall(regs))
+		forget_syscall(regs);
 	return regs->regs[0];
 }

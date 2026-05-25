@@ -1,4 +1,5 @@
 #include "OrlixHostAdapter/terminal/console.h"
+#include "OrlixHostAdapter/runtime/host_tls.h"
 
 #include <fcntl.h>
 #include <limits.h>
@@ -64,11 +65,13 @@ __attribute__((visibility("hidden"))) void orlix_host_console_write(
 {
     const char *text = bytes;
     unsigned long offset;
+    unsigned long active_tls;
 
     if (!bytes || length == 0) {
         return;
     }
 
+    active_tls = OrlixHostEnterHostTls();
     (void)write(STDERR_FILENO, bytes, (size_t)length);
     OrlixHostConsoleWriteFileDescriptor(bytes, length);
 
@@ -85,4 +88,5 @@ __attribute__((visibility("hidden"))) void orlix_host_console_write(
                          text + offset);
         offset += (unsigned long)chunk_length;
     }
+    OrlixHostLeaveHostTls(active_tls);
 }

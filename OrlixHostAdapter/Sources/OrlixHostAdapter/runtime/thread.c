@@ -1,4 +1,5 @@
 #include "OrlixHostAdapter/runtime/thread.h"
+#include "OrlixHostAdapter/runtime/host_tls.h"
 #include "OrlixHostAdapter/runtime/time.h"
 
 #include <errno.h>
@@ -12,9 +13,12 @@ static void orlix_host_thread_sleep_ns(unsigned long long delay_ns)
         .tv_sec = (time_t)(delay_ns / 1000000000ULL),
         .tv_nsec = (long)(delay_ns % 1000000000ULL),
     };
+    unsigned long active_tls = OrlixHostEnterHostTls();
 
     while (nanosleep(&delay, &delay) == -1 && errno == EINTR) {
     }
+
+    OrlixHostLeaveHostTls(active_tls);
 }
 
 __attribute__((visibility("hidden"))) void orlix_host_thread_idle(void)
