@@ -28,6 +28,7 @@ struct OrlixHostUserTrapState {
     unsigned long user_base;
     unsigned long user_limit;
     const unsigned long *kernel_sp;
+    const unsigned long *active_user_tls;
     unsigned long *user_active;
     orlix_host_user_trap_entry_t entry;
     thread_act_t target_thread;
@@ -37,7 +38,6 @@ struct OrlixHostUserTrapState {
 static struct OrlixHostUserTrapState OrlixHostUserTrap;
 static struct orlix_host_user_trap_frame OrlixHostUserTrapFrame;
 static struct orlix_host_user_trap_frame OrlixHostUserResumeFrame;
-static orlix_host_user_resume_entry_t OrlixHostUserResumeEntry;
 static atomic_bool OrlixHostUserResumePending;
 static bool OrlixHostUserTrapInstalled;
 static bool OrlixHostUserTimerStarted;
@@ -50,6 +50,28 @@ static bool OrlixHostUserTrapContains(unsigned long pc)
            OrlixHostUserTrap.user_base < OrlixHostUserTrap.user_limit &&
            pc >= OrlixHostUserTrap.user_base &&
            pc < OrlixHostUserTrap.user_limit;
+}
+
+static bool OrlixHostUserTrapValidUserTls(unsigned long tls)
+{
+    return OrlixHostUserTrap.user_base < OrlixHostUserTrap.user_limit &&
+           tls >= OrlixHostUserTrap.user_base &&
+           tls < OrlixHostUserTrap.user_limit;
+}
+
+static unsigned long OrlixHostUserTrapActiveTls(void)
+{
+    unsigned long tls;
+
+    if (!OrlixHostUserTrap.active_user_tls) {
+        return 0;
+    }
+
+    tls = __atomic_load_n(OrlixHostUserTrap.active_user_tls, __ATOMIC_ACQUIRE);
+    if (OrlixHostUserTrapValidUserTls(tls)) {
+        return tls;
+    }
+    return 0;
 }
 
 static bool OrlixHostUserTrapIsUserActive(void)
@@ -74,6 +96,25 @@ static void OrlixHostWriteTls(unsigned long tls)
         :
         : "r"(tls)
         : "memory");
+}
+
+static unsigned long OrlixHostUserTrapCurrentTls(void)
+{
+    unsigned long tls = OrlixHostReadTls();
+    unsigned long active_tls;
+
+    if (OrlixHostUserTrapValidUserTls(tls)) {
+        return tls;
+    }
+
+    if (OrlixHostUserTrap.host_tls && tls == OrlixHostUserTrap.host_tls) {
+        active_tls = OrlixHostUserTrapActiveTls();
+        if (active_tls) {
+            return active_tls;
+        }
+    }
+
+    return tls;
 }
 
 unsigned long OrlixHostEnterHostTls(void)
@@ -122,6 +163,50 @@ static void OrlixHostUserTrapReraise(int signal_number)
     raise(signal_number);
 }
 
+static void OrlixHostUserTrapSaveNeon(const arm_neon_state64_t *neon)
+{
+    for (unsigned int index = 0; index < 32; index++) {
+        __uint128_t value = neon->__v[index];
+
+        OrlixHostUserTrapFrame.simd[index * 2] = (uint64_t)value;
+        OrlixHostUserTrapFrame.simd[index * 2 + 1] = (uint64_t)(value >> 64);
+    }
+
+    OrlixHostUserTrapFrame.fpsr = neon->__fpsr;
+    OrlixHostUserTrapFrame.fpcr = neon->__fpcr;
+    OrlixHostUserTrapFrame.frame_flags |= ORLIX_HOST_USER_FRAME_HAS_SIMD;
+}
+
+static void OrlixHostUserTrapLoadNeon(
+    arm_neon_state64_t *neon,
+    const struct orlix_host_user_trap_frame *frame)
+{
+    for (unsigned int index = 0; index < 32; index++) {
+        neon->__v[index] =
+            ((__uint128_t)frame->simd[index * 2 + 1] << 64) |
+            (__uint128_t)frame->simd[index * 2];
+    }
+
+    neon->__fpsr = (uint32_t)frame->fpsr;
+    neon->__fpcr = (uint32_t)frame->fpcr;
+}
+
+static void OrlixHostUserTrapLoadMachFrame(
+    arm_thread_state64_t *state,
+    const struct orlix_host_user_trap_frame *frame)
+{
+    for (unsigned int index = 0; index < 29; index++) {
+        state->__x[index] = (uint64_t)frame->regs[index];
+    }
+
+    state->__fp = (uint64_t)frame->regs[29];
+    state->__lr = (uint64_t)frame->regs[30];
+    state->__sp = (uint64_t)frame->sp;
+    state->__pc = (uint64_t)frame->pc;
+    state->__cpsr = (uint32_t)frame->pstate;
+    state->__pad = 0;
+}
+
 static void OrlixHostUserTrapSaveFrame(mcontext_t machine_context)
 {
     for (unsigned int index = 0; index < 29; index++) {
@@ -136,9 +221,11 @@ static void OrlixHostUserTrapSaveFrame(mcontext_t machine_context)
     OrlixHostUserTrapFrame.fault_flags = 0;
     OrlixHostUserTrapFrame.user_tls = 0;
     OrlixHostUserTrapFrame.frame_flags = 0;
+    OrlixHostUserTrapSaveNeon(&machine_context->__ns);
 }
 
-static void OrlixHostUserTrapSaveMachFrame(const arm_thread_state64_t *state)
+static void OrlixHostUserTrapSaveMachFrame(const arm_thread_state64_t *state,
+                                           const arm_neon_state64_t *neon)
 {
     for (unsigned int index = 0; index < 29; index++) {
         OrlixHostUserTrapFrame.regs[index] = (unsigned long)state->__x[index];
@@ -152,6 +239,7 @@ static void OrlixHostUserTrapSaveMachFrame(const arm_thread_state64_t *state)
     OrlixHostUserTrapFrame.fault_flags = 0;
     OrlixHostUserTrapFrame.user_tls = 0;
     OrlixHostUserTrapFrame.frame_flags = 0;
+    OrlixHostUserTrapSaveNeon(neon);
 }
 
 static void OrlixHostUserTrapSetFrameTls(unsigned long user_tls)
@@ -166,7 +254,11 @@ static void OrlixHostUserTimerEntry(
     struct orlix_host_user_trap_frame *frame,
     orlix_host_user_trap_entry_t entry)
 {
-    unsigned long user_tls = OrlixHostReadTls();
+    unsigned long user_tls = OrlixHostUserTrapActiveTls();
+
+    if (!user_tls) {
+        user_tls = OrlixHostReadTls();
+    }
 
     OrlixHostWriteTls(OrlixHostUserTrap.host_tls);
     frame->user_tls = user_tls;
@@ -199,7 +291,7 @@ static void OrlixHostUserTrapHandler(int signal_number,
         return;
     }
 
-    user_tls = OrlixHostReadTls();
+    user_tls = OrlixHostUserTrapCurrentTls();
     OrlixHostWriteTls(OrlixHostUserTrap.host_tls);
     __atomic_store_n(OrlixHostUserTrap.user_active, 0, __ATOMIC_RELEASE);
 
@@ -238,7 +330,7 @@ static void OrlixHostUserTimerSleep(unsigned long long delay_ns)
 static bool OrlixHostUserResumeRedirect(void)
 {
     arm_thread_state64_t state;
-    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+    arm_neon_state64_t neon;
     kern_return_t status;
 
     if (!atomic_load_explicit(&OrlixHostUserResumePending, memory_order_acquire)) {
@@ -250,14 +342,17 @@ static bool OrlixHostUserResumeRedirect(void)
         return false;
     }
 
-    status = thread_get_state(OrlixHostUserTrap.target_thread,
-                              ARM_THREAD_STATE64,
-                              (thread_state_t)&state,
-                              &count);
-    if (status == KERN_SUCCESS && count == ARM_THREAD_STATE64_COUNT &&
-        OrlixHostUserResumeEntry) {
-        state.__x[0] = (uint64_t)&OrlixHostUserResumeFrame;
-        state.__pc = (uint64_t)OrlixHostUserResumeEntry;
+    status = KERN_SUCCESS;
+    if (OrlixHostUserResumeFrame.frame_flags & ORLIX_HOST_USER_FRAME_HAS_SIMD) {
+        OrlixHostUserTrapLoadNeon(&neon, &OrlixHostUserResumeFrame);
+        status = thread_set_state(OrlixHostUserTrap.target_thread,
+                                  ARM_NEON_STATE64,
+                                  (thread_state_t)&neon,
+                                  ARM_NEON_STATE64_COUNT);
+    }
+
+    if (status == KERN_SUCCESS) {
+        OrlixHostUserTrapLoadMachFrame(&state, &OrlixHostUserResumeFrame);
         status = thread_set_state(OrlixHostUserTrap.target_thread,
                                   ARM_THREAD_STATE64,
                                   (thread_state_t)&state,
@@ -265,9 +360,11 @@ static bool OrlixHostUserResumeRedirect(void)
     }
 
     if (status == KERN_SUCCESS) {
-        atomic_store_explicit(&OrlixHostUserResumePending, false,
-                              memory_order_release);
+        __atomic_store_n(OrlixHostUserTrap.user_active, 1, __ATOMIC_RELEASE);
     }
+
+    atomic_store_explicit(&OrlixHostUserResumePending, false,
+                          memory_order_release);
 
     (void)thread_resume(OrlixHostUserTrap.target_thread);
     return status == KERN_SUCCESS;
@@ -275,21 +372,32 @@ static bool OrlixHostUserResumeRedirect(void)
 
 static bool OrlixHostUserTimerRedirect(arm_thread_state64_t *state)
 {
+    arm_neon_state64_t neon;
+    mach_msg_type_number_t neon_count = ARM_NEON_STATE64_COUNT;
     unsigned long user_pc = (unsigned long)state->__pc;
     unsigned long kernel_sp;
+    kern_return_t status;
 
     if (!OrlixHostUserTrapContains(user_pc)) {
         return false;
     }
-
-    __atomic_store_n(OrlixHostUserTrap.user_active, 0, __ATOMIC_RELEASE);
 
     kernel_sp = *OrlixHostUserTrap.kernel_sp;
     if (!kernel_sp) {
         return false;
     }
 
-    OrlixHostUserTrapSaveMachFrame(state);
+    status = thread_get_state(OrlixHostUserTrap.target_thread,
+                              ARM_NEON_STATE64,
+                              (thread_state_t)&neon,
+                              &neon_count);
+    if (status != KERN_SUCCESS || neon_count != ARM_NEON_STATE64_COUNT) {
+        return false;
+    }
+
+    __atomic_store_n(OrlixHostUserTrap.user_active, 0, __ATOMIC_RELEASE);
+
+    OrlixHostUserTrapSaveMachFrame(state, &neon);
     state->__x[0] = (uint64_t)ORLIX_HOST_USER_TRAP_TIMER;
     state->__x[1] = (uint64_t)&OrlixHostUserTrapFrame;
     state->__x[2] = (uint64_t)OrlixHostUserTrap.entry;
@@ -348,19 +456,22 @@ __attribute__((visibility("hidden"))) int orlix_host_user_trap_install(
     unsigned long user_base,
     unsigned long user_limit,
     const unsigned long *kernel_sp,
+    const unsigned long *active_user_tls,
     unsigned long *user_active,
     orlix_host_user_trap_entry_t entry)
 {
     const int signals[] = { SIGTRAP, SIGILL, SIGBUS, SIGSEGV, SIGABRT };
     struct sigaction action;
 
-    if (!kernel_sp || !user_active || !entry || user_base >= user_limit) {
+    if (!kernel_sp || !active_user_tls || !user_active || !entry ||
+        user_base >= user_limit) {
         return -1;
     }
 
     OrlixHostUserTrap.user_base = user_base;
     OrlixHostUserTrap.user_limit = user_limit;
     OrlixHostUserTrap.kernel_sp = kernel_sp;
+    OrlixHostUserTrap.active_user_tls = active_user_tls;
     OrlixHostUserTrap.user_active = user_active;
     OrlixHostUserTrap.entry = entry;
     OrlixHostUserTrap.target_thread = pthread_mach_thread_np(pthread_self());
@@ -411,17 +522,17 @@ __attribute__((visibility("hidden"))) int orlix_host_user_trap_start_timer(unsig
 }
 
 __attribute__((visibility("hidden"), noreturn)) void orlix_host_user_trap_resume(
-    orlix_host_user_resume_entry_t resume_entry,
     const struct orlix_host_user_trap_frame *frame)
 {
-    (void)OrlixHostEnterHostTls();
-
-    if (!resume_entry || !frame) {
+    if (!frame) {
+        (void)OrlixHostEnterHostTls();
         _exit(127);
     }
 
     OrlixHostUserResumeFrame = *frame;
-    OrlixHostUserResumeEntry = resume_entry;
+    if (frame->frame_flags & ORLIX_HOST_USER_FRAME_HAS_TLS) {
+        OrlixHostWriteTls(frame->user_tls);
+    }
     atomic_store_explicit(&OrlixHostUserResumePending, true,
                           memory_order_release);
 
@@ -430,5 +541,6 @@ __attribute__((visibility("hidden"), noreturn)) void orlix_host_user_trap_resume
         __asm__ volatile("yield");
     }
 
+    (void)OrlixHostEnterHostTls();
     _exit(127);
 }

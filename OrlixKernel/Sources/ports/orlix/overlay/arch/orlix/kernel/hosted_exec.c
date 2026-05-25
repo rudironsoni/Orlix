@@ -24,6 +24,7 @@
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
 unsigned long orlix_hosted_kernel_sp;
+unsigned long orlix_hosted_active_user_tls;
 unsigned long orlix_hosted_user_active;
 unsigned long orlix_hosted_entry_user_pc;
 unsigned long orlix_hosted_entry_user_callee[12];
@@ -66,6 +67,7 @@ static void orlix_hosted_restore_user_tls(void)
 	unsigned long user_tls = current->thread.user_tls;
 	unsigned long hw_tls;
 
+	WRITE_ONCE(orlix_hosted_active_user_tls, user_tls);
 	asm volatile(
 	"	msr	tpidr_el0, %0\n"
 	"	isb\n"
@@ -89,15 +91,20 @@ static bool orlix_hosted_valid_user_tls(unsigned long user_tls)
 		user_tls < ORLIX_HOSTED_STACK_TOP;
 }
 
-static void orlix_hosted_apply_frame_user_tls(
+static void orlix_hosted_apply_frame_user_state(
 	const struct orlix_host_user_trap_frame *frame)
 {
-	if (!(frame->frame_flags & ORLIX_HOST_USER_FRAME_HAS_TLS))
-		return;
-	if (!orlix_hosted_valid_user_tls(frame->user_tls))
-		return;
+	if ((frame->frame_flags & ORLIX_HOST_USER_FRAME_HAS_TLS) &&
+	    orlix_hosted_valid_user_tls(frame->user_tls))
+		current->thread.user_tls = frame->user_tls;
 
-	current->thread.user_tls = frame->user_tls;
+	if (frame->frame_flags & ORLIX_HOST_USER_FRAME_HAS_SIMD) {
+		memcpy(current->thread.user_simd, frame->simd,
+		       sizeof(current->thread.user_simd));
+		current->thread.user_fpsr = frame->fpsr;
+		current->thread.user_fpcr = frame->fpcr;
+		current->thread.user_simd_valid = 1;
+	}
 }
 
 void orlix_hosted_preserve_user_tls(void)
@@ -143,55 +150,14 @@ static void orlix_hosted_save_trap_frame(
 	frame->fault_flags = 0;
 	frame->user_tls = current->thread.user_tls;
 	frame->frame_flags = ORLIX_HOST_USER_FRAME_HAS_TLS;
-}
 
-static void __noreturn orlix_hosted_trap_resume_entry(
-	const struct orlix_host_user_trap_frame *frame)
-{
-	unsigned long user_tls = current->thread.user_tls;
-
-	asm volatile(
-	"	mov	x9, %0\n"
-	"	mov	x12, %1\n"
-	"	ldr	x10, [x9, #%c[pc_offset]]\n"
-	"	ldr	x11, [x9, #%c[sp_offset]]\n"
-	"	ldr	x8, [x9, #%c[x8_offset]]\n"
-	"	ldp	x19, x20, [x9, #%c[x19_offset]]\n"
-	"	ldp	x21, x22, [x9, #%c[x21_offset]]\n"
-	"	ldp	x23, x24, [x9, #%c[x23_offset]]\n"
-	"	ldp	x25, x26, [x9, #%c[x25_offset]]\n"
-	"	ldp	x27, x28, [x9, #%c[x27_offset]]\n"
-	"	ldp	x29, x30, [x9, #%c[x29_offset]]\n"
-	"	ldp	x6, x7, [x9, #%c[x6_offset]]\n"
-	"	ldp	x4, x5, [x9, #%c[x4_offset]]\n"
-	"	ldp	x2, x3, [x9, #%c[x2_offset]]\n"
-	"	ldp	x0, x1, [x9, #%c[x0_offset]]\n"
-	"	msr	tpidr_el0, x12\n"
-	"	isb\n"
-	"	mrs	x12, tpidr_el0\n"
-	"	adrp	x13, _orlix_hosted_user_active@PAGE\n"
-	"	mov	x14, #1\n"
-	"	str	x14, [x13, _orlix_hosted_user_active@PAGEOFF]\n"
-	"	mov	sp, x11\n"
-	"	br	x10\n"
-	:
-	: "r"(frame),
-	  "r"(user_tls),
-	  [pc_offset] "i"(offsetof(struct orlix_host_user_trap_frame, pc)),
-	  [sp_offset] "i"(offsetof(struct orlix_host_user_trap_frame, sp)),
-	  [x8_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[8])),
-	  [x19_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[19])),
-	  [x21_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[21])),
-	  [x23_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[23])),
-	  [x25_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[25])),
-	  [x27_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[27])),
-	  [x29_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[29])),
-	  [x6_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[6])),
-	  [x4_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[4])),
-	  [x2_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[2])),
-	  [x0_offset] "i"(offsetof(struct orlix_host_user_trap_frame, regs[0]))
-	: "memory");
-	unreachable();
+	if (current->thread.user_simd_valid) {
+		memcpy(frame->simd, current->thread.user_simd,
+		       sizeof(frame->simd));
+		frame->fpsr = current->thread.user_fpsr;
+		frame->fpcr = current->thread.user_fpcr;
+		frame->frame_flags |= ORLIX_HOST_USER_FRAME_HAS_SIMD;
+	}
 }
 
 static void __noreturn orlix_hosted_resume_current_user(struct pt_regs *regs)
@@ -201,8 +167,8 @@ static void __noreturn orlix_hosted_resume_current_user(struct pt_regs *regs)
 	orlix_sync_current_user_mappings(regs);
 	orlix_hosted_save_current_kernel_stack();
 	orlix_hosted_save_trap_frame(&resume_frame, regs);
-	orlix_host_user_trap_resume(orlix_hosted_trap_resume_entry,
-				    &resume_frame);
+	WRITE_ONCE(orlix_hosted_active_user_tls, resume_frame.user_tls);
+	orlix_host_user_trap_resume(&resume_frame);
 }
 
 static void __noreturn orlix_hosted_user_trap_entry(
@@ -213,7 +179,7 @@ static void __noreturn orlix_hosted_user_trap_entry(
 	long exit_code = signal_number & 0x7f;
 
 	orlix_hosted_restore_trap_frame(regs, frame);
-	orlix_hosted_apply_frame_user_tls(frame);
+	orlix_hosted_apply_frame_user_state(frame);
 
 	if (signal_number == ORLIX_HOST_USER_TRAP_TIMER) {
 		orlix_timer_poll();
@@ -357,6 +323,7 @@ void orlix_hosted_capture_host_context(void)
 	if (orlix_host_user_trap_install(ORLIX_HOSTED_USER_BASE,
 					 ORLIX_HOSTED_STACK_TOP,
 					 &orlix_hosted_kernel_sp,
+					 &orlix_hosted_active_user_tls,
 					 &orlix_hosted_user_active,
 					 orlix_hosted_user_trap_entry))
 		panic("Orlix: failed to install hosted user trap transport\n");

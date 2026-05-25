@@ -5,10 +5,13 @@
 #include <linux/sched/signal.h>
 #include <linux/signal.h>
 #include <asm/hosted_exec.h>
+#include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <internal/asm/host_trap.h>
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
+extern unsigned long orlix_hosted_active_user_tls;
+
 static void orlix_force_user_fault_signal(unsigned long address,
 					  unsigned long fault_flags,
 					  int si_code)
@@ -80,6 +83,9 @@ retry:
 bad_area:
 	mmap_read_unlock(mm);
 bad_area_nosemaphore:
+		pr_info("Orlix: user fault pc=%#llx sp=%#llx addr=%#lx flags=%#lx si=%d task_tls=%#lx active_tls=%#lx\n",
+			regs->pc, regs->sp, address, fault_flags, si_code,
+			current->thread.user_tls, orlix_hosted_active_user_tls);
 	orlix_force_user_fault_signal(address, fault_flags, si_code);
 	return 0;
 

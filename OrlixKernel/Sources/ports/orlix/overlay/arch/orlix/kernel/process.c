@@ -56,6 +56,8 @@ asm(
 	);
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
+extern unsigned long orlix_hosted_active_user_tls;
+
 void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
 {
 	unsigned long kernel_sp;
@@ -83,6 +85,8 @@ void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
 	"	msr	tpidr_el0, x12\n"
 	"	isb\n"
 	"	mrs	x12, tpidr_el0\n"
+	"	adrp	x13, _orlix_hosted_active_user_tls@PAGE\n"
+	"	str	x12, [x13, _orlix_hosted_active_user_tls@PAGEOFF]\n"
 	"	adrp	x13, _orlix_hosted_user_active@PAGE\n"
 	"	mov	x14, #1\n"
 	"	str	x14, [x13, _orlix_hosted_user_active@PAGEOFF]\n"
@@ -130,12 +134,22 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	regs->syscallno = NO_SYSCALL;
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	current->thread.user_tls = 0;
+	memset(current->thread.user_simd, 0, sizeof(current->thread.user_simd));
+	current->thread.user_fpsr = 0;
+	current->thread.user_fpcr = 0;
+	current->thread.user_simd_valid = 1;
 #endif
 }
 
 void flush_thread(void)
 {
-	/* Orlix has no TLS/FPU/vector state to reset yet. */
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	current->thread.user_tls = 0;
+	memset(current->thread.user_simd, 0, sizeof(current->thread.user_simd));
+	current->thread.user_fpsr = 0;
+	current->thread.user_fpcr = 0;
+	current->thread.user_simd_valid = 1;
+#endif
 }
 
 int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
@@ -143,6 +157,13 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	struct pt_regs *childregs = task_pt_regs(p);
 
 	memset(&p->thread.cpu_context, 0, sizeof(p->thread.cpu_context));
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	p->thread.user_tls = 0;
+	memset(p->thread.user_simd, 0, sizeof(p->thread.user_simd));
+	p->thread.user_fpsr = 0;
+	p->thread.user_fpcr = 0;
+	p->thread.user_simd_valid = 0;
+#endif
 
 	if (!args->fn) {
 		*childregs = *task_pt_regs(current);
@@ -160,6 +181,11 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 		p->thread.user_tls = current->thread.user_tls;
 		if (args->flags & CLONE_SETTLS)
 			p->thread.user_tls = args->tls;
+		memcpy(p->thread.user_simd, current->thread.user_simd,
+		       sizeof(p->thread.user_simd));
+		p->thread.user_fpsr = current->thread.user_fpsr;
+		p->thread.user_fpcr = current->thread.user_fpcr;
+		p->thread.user_simd_valid = current->thread.user_simd_valid;
 #endif
 	} else {
 		memset(childregs, 0, sizeof(*childregs));

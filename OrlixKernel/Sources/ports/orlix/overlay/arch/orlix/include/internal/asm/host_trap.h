@@ -8,12 +8,16 @@
 #define ORLIX_HOST_USER_FAULT_EXEC	(1UL << 1)
 #define ORLIX_HOST_USER_FAULT_BUS	(1UL << 2)
 #define ORLIX_HOST_USER_FRAME_HAS_TLS	(1UL << 0)
+#define ORLIX_HOST_USER_FRAME_HAS_SIMD	(1UL << 1)
 
 struct orlix_host_user_trap_frame {
 	unsigned long regs[31];
 	unsigned long sp;
 	unsigned long pc;
 	unsigned long pstate;
+	unsigned long simd[64];
+	unsigned long fpsr;
+	unsigned long fpcr;
 	unsigned long fault_address;
 	unsigned long fault_flags;
 	unsigned long user_tls;
@@ -22,16 +26,15 @@ struct orlix_host_user_trap_frame {
 
 typedef void (*orlix_host_user_trap_entry_t)(int signal_number,
 					     const struct orlix_host_user_trap_frame *frame);
-typedef void (*orlix_host_user_resume_entry_t)(
-	const struct orlix_host_user_trap_frame *frame);
 
 int orlix_host_user_trap_install(unsigned long user_base,
 				 unsigned long user_limit,
 				 const unsigned long *kernel_sp,
+				 const unsigned long *active_user_tls,
 				 unsigned long *user_active,
 				 orlix_host_user_trap_entry_t entry);
 int orlix_host_user_trap_start_timer(unsigned long long period_ns);
-void orlix_host_user_trap_resume(orlix_host_user_resume_entry_t resume_entry,
+void orlix_host_user_trap_resume(
 	const struct orlix_host_user_trap_frame *frame) __attribute__((noreturn));
 
 #endif /* _INTERNAL_ASM_ORLIX_HOST_TRAP_H */

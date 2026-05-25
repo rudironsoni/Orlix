@@ -214,6 +214,9 @@ MLIBC_TEST_LINUX_CASES := \
 	linux/utmpx \
 	linux/xattr
 MLIBC_TEST_CASES ?= $(MLIBC_TEST_ANSI_CASES) $(MLIBC_TEST_POSIX_CASES) $(MLIBC_TEST_BSD_CASES) $(MLIBC_TEST_GLIBC_CASES) $(MLIBC_TEST_LINUX_CASES)
+# Runtime-log polling uses 0.1s ticks. Scale with the selected upstream mlibc
+# tests so a full suite is not cut off by the focused-case timeout.
+MLIBC_TEST_RUN_WAIT_TICKS ?= $(shell expr 600 + $(words $(MLIBC_TEST_CASES)) \* 50)
 MLIBC_COMPILER_RT_BUILTINS := \
 	addtf3.c \
 	aarch64/fp_mode.c \
@@ -345,7 +348,7 @@ __test-run: __test-initramfs
 	[ -n "$$runtime_log" ] || { echo "missing OrlixTerminal runtime log path in $$run_log" >&2; exit 1; }; \
 	for _ in $$(seq 1 50); do [ -s "$$runtime_log" ] && break; sleep 0.1; done; \
 	[ -s "$$runtime_log" ] || { echo "missing OrlixTerminal runtime log: $$runtime_log" >&2; exit 1; }; \
-	for _ in $$(seq 1 600); do \
+	for _ in $$(seq 1 $(MLIBC_TEST_RUN_WAIT_TICKS)); do \
 		if grep -E -q '(^|[^[:alnum:]])not ok[[:space:]][0-9]|Kernel panic|Out of memory|oom-killer|Assertion .* failed' "$$runtime_log"; then break; fi; \
 		grep -F -q 'ORLIX-MLIBC-TEST-END' "$$runtime_log" && break; \
 		sleep 0.1; \
