@@ -23,6 +23,14 @@ BASH_VERSION ?= 5.3
 BASH_URL ?= https://ftp.gnu.org/gnu/bash/bash-$(BASH_VERSION).tar.gz
 BASH_SHA256 ?= 0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba
 
+COREUTILS_VERSION ?= 8.32
+COREUTILS_URL ?= https://ftp.gnu.org/gnu/coreutils/coreutils-$(COREUTILS_VERSION).tar.xz
+COREUTILS_SHA256 ?= 4458d8de7849df44ccab15e16b1548b285224dbba5f08fac070c1c0e0bcc4cfa
+
+GREP_VERSION ?= 3.12
+GREP_URL ?= https://ftp.gnu.org/gnu/grep/grep-$(GREP_VERSION).tar.xz
+GREP_SHA256 ?= 2649b27c0e90e632eadcd757be06c6e9a4f48d941de51e7c0f83ff76408a07b9
+
 ORLIXOS_BUILD_ROOT := $(REPO_ROOT)/Build/OrlixOS
 ORLIXOS_UPSTREAM_DIR := $(ORLIXOS_BUILD_ROOT)/upstream
 ORLIXOS_SRC_DIR := $(ORLIXOS_BUILD_ROOT)/src
@@ -41,6 +49,18 @@ ORLIXOS_BASH_SRC_DIR := $(ORLIXOS_SRC_DIR)/bash-$(BASH_VERSION)
 ORLIXOS_BASH_SOURCE_STAMP := $(ORLIXOS_BASH_SRC_DIR)/.orlix-source-ready
 ORLIXOS_BASH_BUILD_DIR := $(ORLIXOS_PACKAGE_BUILD_DIR)/bash-$(BASH_VERSION)
 ORLIXOS_BASH_BINARY := $(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/bash
+ORLIXOS_COREUTILS_ARCHIVE := $(ORLIXOS_UPSTREAM_DIR)/coreutils-$(COREUTILS_VERSION).tar.xz
+ORLIXOS_COREUTILS_ARCHIVE_STAMP := $(ORLIXOS_UPSTREAM_DIR)/coreutils-$(COREUTILS_VERSION).sha256-ok
+ORLIXOS_COREUTILS_SRC_DIR := $(ORLIXOS_SRC_DIR)/coreutils-$(COREUTILS_VERSION)
+ORLIXOS_COREUTILS_SOURCE_STAMP := $(ORLIXOS_COREUTILS_SRC_DIR)/.orlix-source-ready
+ORLIXOS_COREUTILS_BUILD_DIR := $(ORLIXOS_PACKAGE_BUILD_DIR)/coreutils-$(COREUTILS_VERSION)
+ORLIXOS_CAT_BINARY := $(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat
+ORLIXOS_GREP_ARCHIVE := $(ORLIXOS_UPSTREAM_DIR)/grep-$(GREP_VERSION).tar.xz
+ORLIXOS_GREP_ARCHIVE_STAMP := $(ORLIXOS_UPSTREAM_DIR)/grep-$(GREP_VERSION).sha256-ok
+ORLIXOS_GREP_SRC_DIR := $(ORLIXOS_SRC_DIR)/grep-$(GREP_VERSION)
+ORLIXOS_GREP_SOURCE_STAMP := $(ORLIXOS_GREP_SRC_DIR)/.orlix-source-ready
+ORLIXOS_GREP_BUILD_DIR := $(ORLIXOS_PACKAGE_BUILD_DIR)/grep-$(GREP_VERSION)
+ORLIXOS_GREP_BINARY := $(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/grep
 ORLIXOS_INIT_SOURCE := $(PROJECT_DIR)/Sources/init/init.c
 ORLIXOS_INIT_BINARY := $(ORLIXOS_PACKAGE_INSTALL_DIR)/sbin/init
 ORLIXOS_ROOT_INIT_SOURCE := $(PROJECT_DIR)/Sources/init/rootinit.c
@@ -57,6 +77,7 @@ ORLIXOS_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname 
 ORLIXOS_AR ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-ar,llvm-ar)
 ORLIXOS_RANLIB ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-ranlib,llvm-ranlib)
 ORLIXOS_STRIP ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-strip,llvm-strip)
+ORLIXOS_PACKAGE_CFLAGS := -O2 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -include limits.h
 
 .PHONY: all help build rootfs clean mrproper
 
@@ -68,7 +89,7 @@ help:
 	@printf '%s\n' '  rootfs   build the immutable OrlixOS base root tree'
 	@printf '%s\n' '  clean    remove generated OrlixOS outputs'
 
-build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_INIT_BINARY)
+build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_CAT_BINARY) $(ORLIXOS_GREP_BINARY) $(ORLIXOS_INIT_BINARY)
 
 rootfs: $(ORLIXOS_ROOTFS_PROOF)
 
@@ -98,6 +119,60 @@ $(ORLIXOS_BASH_SOURCE_STAMP): $(ORLIXOS_BASH_ARCHIVE_STAMP)
 	tar -xzf "$(ORLIXOS_BASH_ARCHIVE)" -C "$(ORLIXOS_SRC_DIR)"; \
 	touch "$(ORLIXOS_BASH_SOURCE_STAMP)"; \
 	echo "extracted Bash source: $(ORLIXOS_BASH_SRC_DIR)"
+
+$(ORLIXOS_COREUTILS_ARCHIVE):
+	@set -euo pipefail; \
+	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
+	done; \
+	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch coreutils source" >&2; exit 1; }; \
+	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify coreutils source" >&2; exit 1; }; \
+	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
+	if [ ! -s "$(ORLIXOS_COREUTILS_ARCHIVE)" ]; then curl -fL "$(COREUTILS_URL)" -o "$(ORLIXOS_COREUTILS_ARCHIVE)"; fi; \
+	echo "upstream coreutils archive ready: $(ORLIXOS_COREUTILS_ARCHIVE)"
+
+$(ORLIXOS_COREUTILS_ARCHIVE_STAMP): $(ORLIXOS_COREUTILS_ARCHIVE)
+	@set -euo pipefail; \
+	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify coreutils source" >&2; exit 1; }; \
+	printf '%s  %s\n' "$(COREUTILS_SHA256)" "$(ORLIXOS_COREUTILS_ARCHIVE)" | shasum -a 256 -c - >/dev/null; \
+	mkdir -p "$(dir $(ORLIXOS_COREUTILS_ARCHIVE_STAMP))"; \
+	touch "$(ORLIXOS_COREUTILS_ARCHIVE_STAMP)"; \
+	echo "upstream coreutils ready: $(ORLIXOS_COREUTILS_ARCHIVE)"
+
+$(ORLIXOS_COREUTILS_SOURCE_STAMP): $(ORLIXOS_COREUTILS_ARCHIVE_STAMP)
+	@set -euo pipefail; \
+	rm -rf "$(ORLIXOS_COREUTILS_SRC_DIR)"; \
+	mkdir -p "$(ORLIXOS_SRC_DIR)"; \
+	tar -xJf "$(ORLIXOS_COREUTILS_ARCHIVE)" -C "$(ORLIXOS_SRC_DIR)"; \
+	touch "$(ORLIXOS_COREUTILS_SOURCE_STAMP)"; \
+	echo "extracted coreutils source: $(ORLIXOS_COREUTILS_SRC_DIR)"
+
+$(ORLIXOS_GREP_ARCHIVE):
+	@set -euo pipefail; \
+	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
+	done; \
+	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch grep source" >&2; exit 1; }; \
+	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify grep source" >&2; exit 1; }; \
+	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
+	if [ ! -s "$(ORLIXOS_GREP_ARCHIVE)" ]; then curl -fL "$(GREP_URL)" -o "$(ORLIXOS_GREP_ARCHIVE)"; fi; \
+	echo "upstream grep archive ready: $(ORLIXOS_GREP_ARCHIVE)"
+
+$(ORLIXOS_GREP_ARCHIVE_STAMP): $(ORLIXOS_GREP_ARCHIVE)
+	@set -euo pipefail; \
+	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify grep source" >&2; exit 1; }; \
+	printf '%s  %s\n' "$(GREP_SHA256)" "$(ORLIXOS_GREP_ARCHIVE)" | shasum -a 256 -c - >/dev/null; \
+	mkdir -p "$(dir $(ORLIXOS_GREP_ARCHIVE_STAMP))"; \
+	touch "$(ORLIXOS_GREP_ARCHIVE_STAMP)"; \
+	echo "upstream grep ready: $(ORLIXOS_GREP_ARCHIVE)"
+
+$(ORLIXOS_GREP_SOURCE_STAMP): $(ORLIXOS_GREP_ARCHIVE_STAMP)
+	@set -euo pipefail; \
+	rm -rf "$(ORLIXOS_GREP_SRC_DIR)"; \
+	mkdir -p "$(ORLIXOS_SRC_DIR)"; \
+	tar -xJf "$(ORLIXOS_GREP_ARCHIVE)" -C "$(ORLIXOS_SRC_DIR)"; \
+	touch "$(ORLIXOS_GREP_SOURCE_STAMP)"; \
+	echo "extracted grep source: $(ORLIXOS_GREP_SRC_DIR)"
 
 $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB):
 	@set -euo pipefail; \
@@ -136,6 +211,71 @@ $(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	file "$(ORLIXOS_BASH_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_BASH_BINARY)" >&2; exit 1; }; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=bash\nversion=%s\nsha256=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(BASH_VERSION)" "$(BASH_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.proof"; \
 	echo "built Orlix Linux Bash package input: $(ORLIXOS_BASH_BINARY)"
+
+$(ORLIXOS_CAT_BINARY): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+	@set -euo pipefail; \
+	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
+	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
+	rtlib="$(ORLIXOS_MLIBC_RTLIB)"; \
+	[ -s "$$sysroot/usr/lib/libc.a" ] || { echo "missing OrlixMLibC libc archive: $$sysroot/usr/lib/libc.a" >&2; exit 1; }; \
+	[ -d "$$headers" ] || { echo "missing Orlix Linux UAPI headers: $$headers" >&2; exit 1; }; \
+	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_CC)" >/dev/null 2>&1 || { echo "clang is required to build coreutils; set ORLIXOS_CC=/path/to/clang" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_AR)" >/dev/null 2>&1 || { echo "llvm-ar is required to build coreutils; set ORLIXOS_AR=/path/to/llvm-ar" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_RANLIB)" >/dev/null 2>&1 || { echo "llvm-ranlib is required to build coreutils; set ORLIXOS_RANLIB=/path/to/llvm-ranlib" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package coreutils; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
+	rm -rf "$(ORLIXOS_COREUTILS_BUILD_DIR)" "$(ORLIXOS_CAT_BINARY)"; \
+	mkdir -p "$(ORLIXOS_COREUTILS_BUILD_DIR)" "$(dir $(ORLIXOS_CAT_BINARY))"; \
+	cd "$(ORLIXOS_COREUTILS_BUILD_DIR)"; \
+	export CC="$(ORLIXOS_CC) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -femulated-tls -ffixed-x18 -fno-pie"; \
+	export CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS)"; \
+	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
+	export LIBS="$$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $$rtlib -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
+	export AR="$(ORLIXOS_AR)"; \
+	export RANLIB="$(ORLIXOS_RANLIB)"; \
+	export gl_cv_func_getopt_gnu=yes; \
+	export gl_cv_func_getopt_long_gnu=yes; \
+	"$(ORLIXOS_COREUTILS_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --without-selinux --disable-acl --disable-xattr --disable-libcap --disable-gcc-warnings; \
+	$(MAKE) -j1 lib/stdio.h lib/fcntl.h lib/limits.h lib/sys/stat.h lib/wchar.h lib/locale.h lib/string.h lib/time.h lib/unistr.h lib/unitypes.h lib/uniwidth.h lib/fnmatch.h lib/selinux/selinux.h lib/selinux/context.h lib/configmake.h src/version.h src/version.c src/cat; \
+	rm -f lib/getopt.h lib/getopt-cdefs.h; \
+	$(MAKE) -j1 src/cat; \
+	cp "$(ORLIXOS_COREUTILS_BUILD_DIR)/src/cat" "$(ORLIXOS_CAT_BINARY)"; \
+	"$(ORLIXOS_STRIP)" "$(ORLIXOS_CAT_BINARY)"; \
+	file "$(ORLIXOS_CAT_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_CAT_BINARY)" >&2; exit 1; }; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=coreutils\nprogram=cat\nversion=%s\nsha256=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(COREUTILS_VERSION)" "$(COREUTILS_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/coreutils-cat.proof"; \
+	echo "built Orlix Linux coreutils cat package input: $(ORLIXOS_CAT_BINARY)"
+
+$(ORLIXOS_GREP_BINARY): $(ORLIXOS_GREP_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+	@set -euo pipefail; \
+	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
+	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
+	rtlib="$(ORLIXOS_MLIBC_RTLIB)"; \
+	[ -s "$$sysroot/usr/lib/libc.a" ] || { echo "missing OrlixMLibC libc archive: $$sysroot/usr/lib/libc.a" >&2; exit 1; }; \
+	[ -d "$$headers" ] || { echo "missing Orlix Linux UAPI headers: $$headers" >&2; exit 1; }; \
+	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_CC)" >/dev/null 2>&1 || { echo "clang is required to build grep; set ORLIXOS_CC=/path/to/clang" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_AR)" >/dev/null 2>&1 || { echo "llvm-ar is required to build grep; set ORLIXOS_AR=/path/to/llvm-ar" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_RANLIB)" >/dev/null 2>&1 || { echo "llvm-ranlib is required to build grep; set ORLIXOS_RANLIB=/path/to/llvm-ranlib" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package grep; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
+	rm -rf "$(ORLIXOS_GREP_BUILD_DIR)" "$(ORLIXOS_GREP_BINARY)"; \
+	mkdir -p "$(ORLIXOS_GREP_BUILD_DIR)" "$(dir $(ORLIXOS_GREP_BINARY))"; \
+	cd "$(ORLIXOS_GREP_BUILD_DIR)"; \
+	export CC="$(ORLIXOS_CC) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -femulated-tls -ffixed-x18 -fno-pie"; \
+	export CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS)"; \
+	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
+	export LIBS="$$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $$rtlib -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
+	export AR="$(ORLIXOS_AR)"; \
+	export RANLIB="$(ORLIXOS_RANLIB)"; \
+	export gl_cv_func_getopt_gnu=yes; \
+	export gl_cv_func_getopt_long_gnu=yes; \
+	"$(ORLIXOS_GREP_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --disable-perl-regexp --disable-gcc-warnings; \
+	$(MAKE) -C lib -j1 all; \
+	$(MAKE) -C src -j1 grep; \
+	cp "$(ORLIXOS_GREP_BUILD_DIR)/src/grep" "$(ORLIXOS_GREP_BINARY)"; \
+	"$(ORLIXOS_STRIP)" "$(ORLIXOS_GREP_BINARY)"; \
+	file "$(ORLIXOS_GREP_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_GREP_BINARY)" >&2; exit 1; }; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=grep\nversion=%s\nsha256=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(GREP_VERSION)" "$(GREP_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/grep.proof"; \
+	echo "built Orlix Linux grep package input: $(ORLIXOS_GREP_BINARY)"
 
 $(ORLIXOS_INIT_BINARY): $(ORLIXOS_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
 	@set -euo pipefail; \
@@ -194,7 +334,7 @@ $(ORLIXOS_INITRAMFS_CPIO): $(ORLIXOS_ROOT_INIT_BINARY) $(ORLIXOS_MANIFEST)
 	[ -s "$$output" ] || { echo "missing generated OrlixOS initramfs: $$output" >&2; exit 1; }; \
 	echo "built OrlixOS product initramfs: $$output"
 
-$(ORLIXOS_ROOTFS_PROOF): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST)
+$(ORLIXOS_ROOTFS_PROOF): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_CAT_BINARY) $(ORLIXOS_GREP_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST)
 	@set -euo pipefail; \
 	root_tree="$(ORLIXOS_BASE_ROOT_TREE)"; \
 	state_tree="$(ORLIXOS_STATE_ROOT_TREE)"; \
@@ -207,6 +347,8 @@ $(ORLIXOS_ROOTFS_PROOF): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS
 	mkdir -p "$$root_tree/bin" "$$root_tree/dev" "$$root_tree/etc" "$$root_tree/proc" "$$root_tree/root" "$$root_tree/run" "$$root_tree/sbin" "$$root_tree/sys" "$$root_tree/tmp" "$$root_tree/usr/bin" "$$root_tree/usr/share/orlixos" "$$root_tree/var/tmp"; \
 	mkdir -p "$$state_tree/upper" "$$state_tree/work"; \
 	install -m 0755 "$(ORLIXOS_BASH_BINARY)" "$$root_tree/bin/bash"; \
+	install -m 0755 "$(ORLIXOS_CAT_BINARY)" "$$root_tree/bin/cat"; \
+	install -m 0755 "$(ORLIXOS_GREP_BINARY)" "$$root_tree/bin/grep"; \
 	install -m 0755 "$(ORLIXOS_INIT_BINARY)" "$$root_tree/sbin/init"; \
 	ln -s bash "$$root_tree/bin/sh"; \
 	printf '%s\n' 'root:x:0:0:root:/root:/bin/sh' > "$$root_tree/etc/passwd"; \
@@ -228,7 +370,7 @@ $(ORLIXOS_ROOTFS_PROOF): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS
 	chmod 0700 "$$root_tree/root"; \
 	chmod 1777 "$$root_tree/tmp" "$$root_tree/var/tmp"; \
 	chmod 0755 "$$state_tree" "$$state_tree/upper" "$$state_tree/work"; \
-	printf 'profile=%s\ndistribution=%s\nchannel=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\ninitramfs=%s\nbase_root_tree=%s\nstate_root_tree=%s\ninit=/sbin/init\nshell=/bin/sh\npackages=%s\npackage_proof_ladder=%s\nbash_version=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_ROOT_MODES)" "$(ORLIXOS_PROFILE_ROOT_MODE)" "$(ORLIXOS_BASE_ROOT_DEVICE)" "$(ORLIXOS_STATE_ROOT_DEVICE)" "$(ORLIXOS_INITRAMFS_CPIO)" "$$root_tree" "$$state_tree" "$(ORLIXOS_PROFILE_PACKAGES)" "$(ORLIXOS_PACKAGE_PROOF_LADDER)" "$(BASH_VERSION)" > "$(ORLIXOS_ROOTFS_PROOF)"; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\ninitramfs=%s\nbase_root_tree=%s\nstate_root_tree=%s\ninit=/sbin/init\nshell=/bin/sh\npackages=%s\npackage_proof_ladder=%s\nbash_version=%s\ncoreutils_version=%s\ngrep_version=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_ROOT_MODES)" "$(ORLIXOS_PROFILE_ROOT_MODE)" "$(ORLIXOS_BASE_ROOT_DEVICE)" "$(ORLIXOS_STATE_ROOT_DEVICE)" "$(ORLIXOS_INITRAMFS_CPIO)" "$$root_tree" "$$state_tree" "$(ORLIXOS_PROFILE_PACKAGES)" "$(ORLIXOS_PACKAGE_PROOF_LADDER)" "$(BASH_VERSION)" "$(COREUTILS_VERSION)" "$(GREP_VERSION)" > "$(ORLIXOS_ROOTFS_PROOF)"; \
 	echo "built OrlixOS base root tree: $$root_tree"
 
 clean:
