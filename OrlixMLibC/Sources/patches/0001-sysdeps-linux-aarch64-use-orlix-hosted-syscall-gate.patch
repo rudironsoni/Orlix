@@ -255,7 +255,7 @@ diff --git i/sysdeps/linux/generic/sysdeps.cpp w/sysdeps/linux/generic/sysdeps.c
 index a07ed53e..8e44b30f 100644
 --- i/sysdeps/linux/generic/sysdeps.cpp
 +++ w/sysdeps/linux/generic/sysdeps.cpp
-@@ -44,6 +44,98 @@
+@@ -44,6 +44,99 @@
  #include "generic-helpers/netlink.hpp"
  #endif
  
@@ -269,7 +269,7 @@ index a07ed53e..8e44b30f 100644
 +};
 +
 +struct orlix_emutls_record {
-+	uintptr_t thread_pointer;
++	uintptr_t thread_id;
 +	orlix_emutls_object *object;
 +	void *address;
 +	orlix_emutls_record *next;
@@ -278,11 +278,12 @@ index a07ed53e..8e44b30f 100644
 +orlix_emutls_record *orlix_emutls_records;
 +unsigned int orlix_emutls_lock_word;
 +
-+uintptr_t orlix_current_thread_pointer()
++uintptr_t orlix_current_thread_id()
 +{
-+	uintptr_t thread_pointer;
-+	asm volatile ("mrs %0, tpidr_el0" : "=r"(thread_pointer));
-+	return thread_pointer;
++	auto ret = mlibc::do_syscall(SYS_gettid);
++	if (mlibc::sc_error(ret))
++		__builtin_trap();
++	return static_cast<uintptr_t>(mlibc::sc_int_result<long>(ret));
 +}
 +
 +void orlix_emutls_lock()
@@ -327,11 +328,11 @@ index a07ed53e..8e44b30f 100644
 +
 +extern "C" void *__emutls_get_address(orlix_emutls_object *object)
 +{
-+	uintptr_t thread_pointer = orlix_current_thread_pointer();
++	uintptr_t thread_id = orlix_current_thread_id();
 +
 +	orlix_emutls_lock();
 +	for (orlix_emutls_record *record = orlix_emutls_records; record; record = record->next) {
-+		if (record->thread_pointer == thread_pointer && record->object == object) {
++		if (record->thread_id == thread_id && record->object == object) {
 +			void *address = record->address;
 +			orlix_emutls_unlock();
 +			return address;
@@ -341,7 +342,7 @@ index a07ed53e..8e44b30f 100644
 +	void *address = orlix_emutls_allocate_storage(object);
 +	orlix_emutls_record *record =
 +			static_cast<orlix_emutls_record *>(orlix_emutls_mmap(sizeof(orlix_emutls_record)));
-+	record->thread_pointer = thread_pointer;
++	record->thread_id = thread_id;
 +	record->object = object;
 +	record->address = address;
 +	record->next = orlix_emutls_records;
