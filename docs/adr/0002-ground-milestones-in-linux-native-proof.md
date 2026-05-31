@@ -40,7 +40,7 @@ Orlix follows upstream kselftest timeout semantics. Do not add a `settings` file
 
 The XCTest proof runner should not pass `run_kselftest.sh --override-timeout` initially. Add a runner override only when the controlled iOS proof environment shows a concrete need.
 
-Repo-local shell scripts and standalone C contract tests are not milestone proof for Orlix. Existing local-kernel XCTest files under `LegacyOrlix/Tests/MigrationReference/LocalKernelPrototype/` are migration reference unless they are rewritten as an iOS-hosted Orlix Linux harness under an owning project `Tests` tree or narrow `OrlixHostAdapter/Tests` host-mechanics tests.
+Repo-local shell scripts and standalone C contract tests are not milestone proof for Orlix. Retired local-kernel XCTest coverage must not be restored as proof unless rewritten as an iOS-hosted Orlix Linux harness under an owning project `Tests` tree or narrow `OrlixHostAdapter/Tests` host-mechanics tests.
 
 The port will be planned and executed as focused milestones because later layers must not depend on untested claims from earlier layers.
 

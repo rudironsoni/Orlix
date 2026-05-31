@@ -1,7 +1,0 @@
-#ifndef ORLIXKERNELTESTS_CREDENTIALCONTRACT_H
-#define ORLIXKERNELTESTS_CREDENTIALCONTRACT_H
-
-int credential_contract_alloc_cred_with_defaults(void);
-int credential_contract_cred_reference_counting(void);
-
-#endif

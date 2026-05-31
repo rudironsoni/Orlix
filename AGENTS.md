@@ -99,9 +99,9 @@ The public product header lives in:
 
 ## Local Kernel Prototype Rule
 
-Legacy local-kernel prototype code lives under `LegacyOrlix/`. It is not a target implementation path.
+Legacy local-kernel prototype code has been retired from the tracked source tree. It is not a target implementation path.
 
-Do not add new Linux subsystem behavior there. Read `LegacyOrlix/` only as migration reference. Useful behavior must move by ownership into upstream Linux, `arch/orlix`, Linux-native drivers, boot code, or host-adapter seams. `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` must not reappear.
+Do not restore `LegacyOrlix/` or add new local Linux subsystem behavior. Useful behavior must move by ownership into upstream Linux, `arch/orlix`, Linux-native drivers, boot code, or host-adapter seams. `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` must not reappear.
 
 ## Virtio-First Rule
 
@@ -204,14 +204,14 @@ Select Orlix-specific scope with variables such as `PROFILE=release`, `type=kuni
 
 ## Test Rule
 
-Tests for the old local kernel prototype are migration reference only. They are not authoritative proof for the target architecture.
+Tests for the old local kernel prototype have been retired from the tracked source tree. They are not authoritative proof for the target architecture and must not be restored as product proof.
 
 Target test ownership is split by proof lane:
 
 - KUnit lives in Linux-owned overlay paths such as `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/<owner>_test.c` and `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/**/<owner>_test.c`, selected by `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/.kunitconfig`.
 - kselftest lives under `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/`. Selected kselftests must build against OrlixMLibC and run through upstream kselftest install plus `run_kselftest.sh -c orlix`; do not add a separate nolibc/raw-syscall `/init` lane.
 - XCTest lives under project-local `Tests/XCTest/` trees: `OrlixKernel/Tests/XCTest`, `OrlixHostAdapter/Tests/XCTest`, `OrlixMLibC/Tests/XCTest` when needed, and `OrlixTerminal/Tests/XCTest` when needed. XCTest owns iOS host launch, packaging, output collection, parser behavior, and narrow `OrlixHostAdapter` mechanics only.
-- Local prototype tests live only under `LegacyOrlix/Tests/MigrationReference/LocalKernelPrototype/` until migrated or deleted.
+- Local prototype tests must not be reintroduced as target proof; migrate needed coverage to KUnit, kselftest, or owning XCTest targets.
 
 OrlixMLibC-built kselftests use `Build/OrlixMLibC/kselftest/<profile>/` and the proof label `orlixmlibc-kselftest-syscall-uapi`.
 

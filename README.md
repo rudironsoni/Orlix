@@ -32,7 +32,7 @@ OrlixTerminal/Tests
 
 Each project has its own `Makefile`; the top-level `Makefile` orchestrates calls into those project Makefiles.
 
-Legacy local-kernel prototype code is quarantined under `LegacyOrlix/`. It is not the target architecture and is not product proof. Do not add new Linux subsystem behavior there or restore `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime`. Useful behavior should be migrated by ownership into upstream Linux-native paths.
+The legacy local-kernel prototype has been retired from the tracked source tree. It is not the target architecture and is not product proof. Do not restore `LegacyOrlix/`, `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime`. Useful behavior belongs by ownership in upstream Linux-native paths.
 
 ## Proof Model
 

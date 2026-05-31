@@ -333,11 +333,11 @@ Future saved-image support should use Linux hibernation/resume semantics. Hibern
 
 ## Local Kernel Prototype Migration
 
-`LegacyOrlix/` contains the quarantined local kernel prototype and old migration-reference tests. It is not a target architecture path.
+The legacy local kernel prototype and old migration-reference tests have been retired from the tracked source tree. They are not target architecture paths.
 
-No new Linux subsystem behavior belongs there.
+No new Linux subsystem behavior belongs in a restored local prototype tree.
 
-Use it only as migration reference. Migrate useful behavior by ownership into upstream Linux-native paths, `arch/orlix`, `drivers/orlix`, boot code, or host-adapter seams. Delete remaining prototype material when equivalent target paths exist or the behavior is intentionally dropped. `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` must not reappear.
+Useful behavior belongs by ownership in upstream Linux-native paths, `arch/orlix`, `drivers/orlix`, boot code, or host-adapter seams. `LegacyOrlix/`, `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` must not reappear.
 
 ## Proof Model
 
@@ -365,9 +365,9 @@ Darwin-hosted execution, VM/QEMU execution, repo-local shell harnesses, standalo
 
 The test kernel may enable Linux debugfs and `CONFIG_KUNIT_DEBUGFS` for per-suite KUnit KTAP retrieval inside the test initramfs. This is a test affordance, not public product API.
 
-Old local-kernel tests are migration reference. They are not proof of the target architecture.
+Old local-kernel tests are retired. They are not proof of the target architecture.
 
-XCTest files quarantined under `LegacyOrlix/Tests/MigrationReference/LocalKernelPrototype/` are local-kernel migration reference. Retained XCTest should either launch packaged Orlix Linux and collect Linux test output or test narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions belong in KUnit or kselftest.
+Retained XCTest should either launch packaged Orlix Linux and collect Linux test output or test narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions belong in KUnit or kselftest.
 
 Durable KUnit tests live in the Linux port overlay next to Linux-owned code and are selected by `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/.kunitconfig`. The repository entry point is `make kunit` or `make test type=kunit`. Those targets may build KUnit-selected objects before hosted execution exists; do not promote that to hosted KUnit proof.
 
@@ -435,4 +435,4 @@ Build and run unpatched third-party packages as Orlix Linux userspace binaries i
 
 Final cleanup:
 
-Delete remaining `LegacyOrlix/` material after migration or intentional retirement. `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` should stay absent.
+The remaining `LegacyOrlix/` material has been deleted after migration or intentional retirement. `LegacyOrlix/`, `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` should stay absent.

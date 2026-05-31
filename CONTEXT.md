@@ -2,15 +2,15 @@
 
 ## Local Kernel Prototype
 
-The quarantined implementation tree under `LegacyOrlix/OrlixKernel/`. It is not part of the target architecture. Its useful behavior must be migrated into upstream Linux-native extension points under `arch/orlix`, `OrlixKernel/Sources/ports/orlix/overlay`, and `drivers/orlix`; `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` must not reappear.
+The retired local kernel prototype formerly tracked under `LegacyOrlix/OrlixKernel/`. It is not part of the target architecture. Useful behavior must live in upstream Linux-native extension points under `arch/orlix`, `OrlixKernel/Sources/ports/orlix/overlay`, and `drivers/orlix`; `LegacyOrlix/`, `OrlixKernel/fs`, `OrlixKernel/kernel`, and `OrlixKernel/runtime` must not reappear.
 
 ## No-New-Local-Kernel-Work Rule
 
-No new Linux subsystem behavior should be added to `LegacyOrlix/` or restored under `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime`. Migration may read from legacy directories for behavior reference, but target work belongs in upstream Linux, `arch/orlix`, Linux-native drivers, boot, or host-adapter seams.
+No new Linux subsystem behavior should be restored under `LegacyOrlix/`, `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime`. Target work belongs in upstream Linux, `arch/orlix`, Linux-native drivers, boot, or host-adapter seams.
 
 ## Test Migration Rule
 
-Tests for the local kernel prototype are migration reference, not authoritative proof for the target architecture. New proof should be KUnit for kernel-internal Linux behavior, kselftest for Linux user-visible behavior, and XCTest for iOS-hosted launch, packaging, Linux test-output collection, and narrow `OrlixHostAdapter` host mechanics.
+Tests for the retired local kernel prototype are not authoritative proof for the target architecture. New proof should be KUnit for kernel-internal Linux behavior, kselftest for Linux user-visible behavior, and XCTest for iOS-hosted launch, packaging, Linux test-output collection, and narrow `OrlixHostAdapter` host mechanics.
 
 ## Linux-Native Test Proof
 
@@ -268,9 +268,9 @@ The iOS Mach-O framework or static-library surface inside each `OrlixKernel.xcfr
 
 Private Linux-shaped boot data or generated kernel inputs consumed by the app-hosted OrlixKernel runtime. Payload data is not canonical proof by itself; proof comes from executing the hosted runtime on iOS.
 
-## Local-Kernel XCTest Reference
+## Retired Local-Kernel XCTest Reference
 
-The quarantined coverage under `LegacyOrlix/Tests/MigrationReference/LocalKernelPrototype/` for the old local kernel prototype. It is migration reference only; Linux subsystem assertions should move to KUnit or kselftest, while retained XCTest should cover iOS-hosted Orlix launch, Linux test-output collection, packaging, or narrow host mechanics.
+The retired XCTest coverage formerly under `LegacyOrlix/Tests/MigrationReference/LocalKernelPrototype/` for the old local kernel prototype. Linux subsystem assertions should move to KUnit or kselftest, while retained XCTest should cover iOS-hosted Orlix launch, Linux test-output collection, packaging, or narrow host mechanics.
 
 ## iOS-Hosted Kernel-Interface Test Execution
 
