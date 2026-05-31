@@ -24,7 +24,7 @@ The generated project may depend on `libghostty-spm` for terminal UI packages ne
 
 The full iOS proof matrix should run through repository automation using the Linux-shaped Make surface and XcodeBuildMCP, not implicitly through a generic fast local test target or a separate public command for every milestone.
 
-The generated Xcode project must support both `iphoneos` and `iphonesimulator` destinations. Both are iOS proof destinations and must validate the same milestone scope. They package and launch an `ARCH=orlix` Linux artifact; they do not redefine the Linux build target as an Apple iOS ABI.
+The generated Xcode project must support both `iphoneos` and `iphonesimulator` destinations. Both are iOS proof destinations and must validate the same milestone scope. They package and launch the app-hosted Orlix Linux artifact; they do not redefine the Linux build target as an Apple iOS ABI.
 
 The initial `OrlixKernel.xcframework` slice set is `ios-arm64` for physical devices and `ios-arm64-simulator` for Apple Silicon Simulator. Intel Simulator support is not part of the initial target set.
 

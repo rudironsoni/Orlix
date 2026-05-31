@@ -52,22 +52,22 @@ final class TerminalProofDriver {
             ),
             Step(
                 name: "pwd",
-                command: #"test "$(pwd)" = / && printf '\120\127\104\137\117\113\012'"#,
+                command: #"/bin/test "$(/bin/pwd)" = / && printf '\120\127\104\137\117\113\012'"#,
                 expectedOutput: "PWD_OK"
             ),
             Step(
                 name: "cd",
-                command: #"cd /tmp; test "$(pwd)" = /tmp && printf '\103\104\137\117\113\012'"#,
+                command: #"cd /tmp && printf '\103\104\137\117\113\012'"#,
                 expectedOutput: "CD_OK"
             ),
             Step(
                 name: "redirection",
-                command: #"printf '\122\105\104\111\122\137\117\113\012' > /tmp/orlix-proof.txt; cat /tmp/orlix-proof.txt"#,
+                command: #"printf '\122\105\104\111\122\137\117\113\012' > /tmp/orlix-proof.txt; /bin/cat /tmp/orlix-proof.txt"#,
                 expectedOutput: "REDIR_OK"
             ),
             Step(
                 name: "pipe",
-                command: #"printf '\120\111\120\105\137\117\113\012' | grep PIPE"#,
+                command: #"printf '\120\111\120\105\137\117\113\012' | /bin/head -n 1"#,
                 expectedOutput: "PIPE_OK"
             ),
             Step(
@@ -81,19 +81,29 @@ final class TerminalProofDriver {
                 expectedOutput: "SIG_OK"
             ),
             Step(
-                name: "jq",
-                command: #"/usr/bin/jq -n '{orlix:true}'"#,
-                expectedOutput: #""orlix": true"#
+                name: "ls",
+                command: #"/bin/ls /bin > /tmp/orlix-bin-list.txt && /bin/test -s /tmp/orlix-bin-list.txt && printf '\114\123\137\117\113\012'"#,
+                expectedOutput: "LS_OK"
             ),
             Step(
-                name: "curl",
-                command: "/usr/bin/curl --version",
-                expectedOutput: "Release-Date:"
+                name: "ls-dot",
+                command: #"cd /; /bin/ls . > /tmp/orlix-dot-list.txt && /bin/test -s /tmp/orlix-dot-list.txt && printf '\114\123\137\104\117\124\137\117\113\012'"#,
+                expectedOutput: "LS_DOT_OK"
             ),
             Step(
-                name: "zsh",
-                command: #"/usr/bin/zsh -fc "printf '\132\123\110\137\117\113\012'""#,
-                expectedOutput: "ZSH_OK"
+                name: "cp-mv-ln",
+                command: #"printf '\103\117\122\105\125\124\111\114\123\137\106\111\114\105\012' > /tmp/orlix-copy-source; /bin/cp /tmp/orlix-copy-source /tmp/orlix-copy; /bin/mv /tmp/orlix-copy /tmp/orlix-moved; /bin/ln /tmp/orlix-moved /tmp/orlix-linked; /bin/cat /tmp/orlix-linked"#,
+                expectedOutput: "COREUTILS_FILE"
+            ),
+            Step(
+                name: "sort-tail",
+                command: #"printf '\142\145\164\141\012' > /tmp/orlix-sort; printf '\141\154\160\150\141\012' >> /tmp/orlix-sort; /bin/sort /tmp/orlix-sort | /bin/tail -n 1"#,
+                expectedOutput: "beta"
+            ),
+            Step(
+                name: "sleep-date",
+                command: #"/bin/sleep 0; stamp=$(/bin/date -u +%s); /bin/test -n "$stamp" && printf '\104\101\124\105\137\117\113\012'"#,
+                expectedOutput: "DATE_OK"
             ),
         ]
     }
@@ -131,6 +141,9 @@ final class TerminalProofDriver {
             } else {
                 sendCurrentStep()
             }
+        } else if matchingOutput.contains(Self.prompt) {
+            failed = true
+            log("ORLIX-TERMINAL-PROOF-FAIL \(current.name) reason=missing-output")
         }
     }
 

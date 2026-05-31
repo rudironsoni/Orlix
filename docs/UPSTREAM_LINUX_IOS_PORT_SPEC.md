@@ -132,7 +132,7 @@ Build/OrlixMLibC/upstream/mlibc
 
 Durable Orlix sysdeps, configs, and patches live under `OrlixMLibC/Sources/`. Its tests live under `OrlixMLibC/Tests/`.
 
-OrlixMLibC consumes kernel UAPI only through the standard Linux `headers_install` output for `ARCH=orlix`. That disposable artifact lives under:
+OrlixMLibC consumes kernel UAPI only through the standard Linux `headers_install` output for upstream `ARCH=arm64`. That disposable artifact lives under:
 
 ```text
 Build/OrlixMLibC/kernel-headers/<profile>/

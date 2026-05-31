@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 /*
- * Retained only for explicit manual `make ... ARCH=orlix vmlinux` Linux
+ * Retained only for explicit manual standalone vmlinux Linux
  * Kbuild compatibility experiments. The Orlix proof path is app-hosted and
  * does not build or consume this standalone image path.
  */

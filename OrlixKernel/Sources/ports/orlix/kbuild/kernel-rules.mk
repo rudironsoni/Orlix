@@ -7,7 +7,8 @@ space := $(empty) $(empty)
 comma := ,
 
 LINUX_VERSION ?= 6.12
-LINUX_ARCH ?= orlix
+ORLIX_PORT_ARCH ?= orlix
+LINUX_UAPI_ARCH ?= arm64
 LINUX_TAG ?= v$(LINUX_VERSION)
 LINUX_REMOTE ?= https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
 ORLIX_HEADERS_INSTALL_JOBS ?= 1
@@ -108,24 +109,24 @@ fi
 endef
 
 ORLIX_KERNEL_LINUX_SOURCES := \
-	arch/$(LINUX_ARCH)/boot/boot.c \
-	arch/$(LINUX_ARCH)/kernel/cpuinfo.c \
-	arch/$(LINUX_ARCH)/kernel/hosted_exec.c \
-	arch/$(LINUX_ARCH)/kernel/idle.c \
-	arch/$(LINUX_ARCH)/kernel/irq.c \
-	arch/$(LINUX_ARCH)/kernel/process.c \
-	arch/$(LINUX_ARCH)/kernel/ptrace.c \
-	arch/$(LINUX_ARCH)/kernel/reboot.c \
-	arch/$(LINUX_ARCH)/kernel/setup.c \
-	arch/$(LINUX_ARCH)/kernel/signal.c \
-	arch/$(LINUX_ARCH)/kernel/syscall.c \
-	arch/$(LINUX_ARCH)/kernel/time.c \
-	arch/$(LINUX_ARCH)/kernel/traps.c \
-	arch/$(LINUX_ARCH)/mm/delay.c \
-	arch/$(LINUX_ARCH)/mm/fault.c \
-	arch/$(LINUX_ARCH)/mm/iomem.c \
-	arch/$(LINUX_ARCH)/mm/init.c \
-	arch/$(LINUX_ARCH)/mm/uaccess.c \
+	arch/$(ORLIX_PORT_ARCH)/boot/boot.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/cpuinfo.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/idle.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/irq.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/process.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/ptrace.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/reboot.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/setup.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/signal.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/syscall.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/time.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/traps.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/delay.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/fault.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/iomem.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/init.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/uaccess.c \
 	init/version.c \
 	init/main.c \
 	init/init_task.c \
@@ -1011,7 +1012,7 @@ endif
 
 include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1184,7 +1185,16 @@ __bootstrap-linux-upstream:
 	fi; \
 	echo "upstream Linux ready: $$upstream_dir ($$checked_tag, clone cache $$clone_cache)"
 
-__validate-profile:
+__validate-linux-abi:
+	@set -euo pipefail; \
+	[ "$(LINUX_UAPI_ARCH)" = arm64 ] || { echo "LINUX_UAPI_ARCH must remain upstream Linux arm64, got: $(LINUX_UAPI_ARCH)" >&2; exit 1; }; \
+	pattern='ARCH[[:space:]]*=[[:space:]]*"?or''lix'; \
+	if rg -n "$$pattern" AGENTS.md docs OrlixMLibC OrlixOS OrlixKernel/Sources/ports/orlix --glob '!kbuild/kernel-rules.mk'; then \
+		echo "do not use an Orlix-specific Kbuild architecture as the Linux ABI; Orlix uses upstream Linux arm64 UAPI and aarch64-linux-gnu userspace" >&2; \
+		exit 1; \
+	fi
+
+__validate-profile: __validate-linux-abi
 	@set -euo pipefail; \
 	profile="$(PROFILE)"; \
 	case " $(ORLIX_PROFILES) " in \
@@ -1231,8 +1241,9 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 		[ "$$port_inputs_changed" -eq 0 ] && \
 		grep -Fxq "linux_version=$(LINUX_VERSION)" "$$port_stamp" && \
 		grep -Fxq "profile=$(PROFILE)" "$$port_stamp" && \
+		grep -Fxq "linux_uapi_arch=$(LINUX_UAPI_ARCH)" "$$port_stamp" && \
 		[ -s "$$port_dir/Makefile" ] && \
-		[ -s "$$port_dir/arch/$(LINUX_ARCH)/configs/defconfig" ] && \
+		[ -s "$$port_dir/arch/$(ORLIX_PORT_ARCH)/configs/defconfig" ] && \
 		[ -s "$$port_dir/include/linux/init.h" ] && \
 		[ -s "$$port_dir/init/Kconfig" ] && \
 		[ -s "$$port_dir/usr/Kconfig" ] && \
@@ -1258,8 +1269,16 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 		git -C "$$upstream_dir" checkout-index --force --stdin --prefix="$(CURDIR)/$$port_tmp_dir/" < "$$port_filelist"; \
 	done; \
 	cp -R "$$overlay_dir/." "$$port_tmp_dir"; \
-	mkdir -p "$$port_tmp_dir/arch/$(LINUX_ARCH)/configs"; \
-	cp "$$profile_config" "$$port_tmp_dir/arch/$(LINUX_ARCH)/configs/defconfig"; \
+	uapi_arch="$(LINUX_UAPI_ARCH)"; \
+	uapi_source="$$upstream_dir/arch/$$uapi_arch/include/uapi/asm"; \
+	uapi_target="$$port_tmp_dir/arch/$(ORLIX_PORT_ARCH)/include/uapi/asm"; \
+	[ -d "$$uapi_source" ] || { echo "missing upstream Linux UAPI source for $$uapi_arch: $$uapi_source" >&2; exit 1; }; \
+	rm -rf "$$uapi_target"; \
+	mkdir -p "$$(dirname "$$uapi_target")"; \
+	cp -R "$$uapi_source" "$$uapi_target"; \
+	echo "using upstream Linux $$uapi_arch UAPI headers for arch/$(ORLIX_PORT_ARCH)"; \
+	mkdir -p "$$port_tmp_dir/arch/$(ORLIX_PORT_ARCH)/configs"; \
+	cp "$$profile_config" "$$port_tmp_dir/arch/$(ORLIX_PORT_ARCH)/configs/defconfig"; \
 	if [ -d "$$patch_dir" ]; then \
 		for patch in "$$patch_dir"/*.patch "$$patch_dir"/*.diff; do \
 			[ -e "$$patch" ] || continue; \
@@ -1279,7 +1298,7 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 	fi; \
 	for required_port_file in \
 		"$$port_tmp_dir/Makefile" \
-		"$$port_tmp_dir/arch/$(LINUX_ARCH)/configs/defconfig" \
+		"$$port_tmp_dir/arch/$(ORLIX_PORT_ARCH)/configs/defconfig" \
 		"$$port_tmp_dir/include/linux/init.h" \
 		"$$port_tmp_dir/init/Kconfig" \
 		"$$port_tmp_dir/usr/Kconfig" \
@@ -1289,7 +1308,7 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 		"$$port_tmp_dir/tools/testing/selftests/lib.mk"; do \
 		[ -s "$$required_port_file" ] || { echo "missing materialized Orlix Linux port input: $$required_port_file" >&2; exit 1; }; \
 	done; \
-	{ printf 'linux_version=%s\n' "$(LINUX_VERSION)"; printf 'profile=%s\n' "$(PROFILE)"; } > "$$port_tmp_dir/.orlix-port-profile"; \
+	{ printf 'linux_version=%s\n' "$(LINUX_VERSION)"; printf 'profile=%s\n' "$(PROFILE)"; printf 'linux_uapi_arch=%s\n' "$(LINUX_UAPI_ARCH)"; } > "$$port_tmp_dir/.orlix-port-profile"; \
 	mv "$$port_tmp_dir" "$$port_dir"; \
 	echo "prepared Orlix kernel port tree: $$port_dir (profile $(PROFILE))"
 
@@ -1314,9 +1333,9 @@ __prepare-kbuild: __prepare-port
 		[ "$$ready_stamp" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
 		[ -s "$$build_dir/.config" ] && \
 		[ -s "$$build_dir/include/generated/autoconf.h" ] && \
-		[ -s "$$build_dir/arch/$(LINUX_ARCH)/kernel/vmlinux.lds" ] && \
-		[ -s "$$build_dir/arch/$(LINUX_ARCH)/boot/dts/release.dtb" ] && \
-		[ -s "$$build_dir/arch/$(LINUX_ARCH)/boot/dts/development.dtb" ] && \
+		[ -s "$$build_dir/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds" ] && \
+		[ -s "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/release.dtb" ] && \
+		[ -s "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/development.dtb" ] && \
 		[ -s "$$build_dir/drivers/of/empty_root.dtb" ] && \
 		[ -x "$$build_dir/usr/gen_init_cpio" ] && \
 		[ -s "$$build_dir/usr/initramfs_inc_data" ]; then \
@@ -1360,30 +1379,30 @@ __prepare-kbuild: __prepare-port
 		[ ! -e "$$build_dir" ] || { echo "failed to remove disposable Orlix Kbuild output: $$build_dir" >&2; exit 1; }; \
 		mkdir -p "$$build_dir"; \
 	fi; \
-	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" defconfig; \
-	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" prepare scripts dtbs arch/$(LINUX_ARCH)/kernel/vmlinux.lds drivers/of/empty_root.dtb.o lib/crc32.o; \
+	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" defconfig; \
+	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" prepare scripts dtbs arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds drivers/of/empty_root.dtb.o lib/crc32.o; \
 	for dtb in release development; do \
-		[ -f "$$build_dir/arch/$(LINUX_ARCH)/boot/dts/$$dtb.dtb" ] || { echo "missing profile DTB: $$build_dir/arch/$(LINUX_ARCH)/boot/dts/$$dtb.dtb" >&2; exit 1; }; \
+		[ -f "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" ] || { echo "missing profile DTB: $$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" >&2; exit 1; }; \
 	done; \
 	[ -s "$$build_dir/drivers/of/empty_root.dtb" ] || { echo "missing generated empty-root DTB: $$build_dir/drivers/of/empty_root.dtb" >&2; exit 1; }; \
 	mkdir -p "$$build_dir/usr"; \
 	gen_init_cpio="$$build_dir/usr/gen_init_cpio"; \
-	initramfs_list="$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/boot/initramfs/no-init.list"; \
+	initramfs_list="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/boot/initramfs/no-init.list"; \
 	"$(ORLIX_KERNEL_HOSTCC)" -O2 -Wall -Wmissing-prototypes -Wstrict-prototypes -o "$$gen_init_cpio" "$(ORLIX_KERNEL_PORT_ABS)/usr/gen_init_cpio.c"; \
 	[ -x "$$gen_init_cpio" ] || { echo "missing executable Linux gen_init_cpio: $$gen_init_cpio" >&2; exit 1; }; \
 	[ -s "$$initramfs_list" ] || { echo "missing Orlix no-init initramfs list: $$initramfs_list" >&2; exit 1; }; \
-	grep -Fxq 'CONFIG_INITRAMFS_SOURCE="$$(srctree)/arch/$(LINUX_ARCH)/boot/initramfs/no-init.list"' "$$build_dir/.config" || { echo "unexpected CONFIG_INITRAMFS_SOURCE; update Orlix initramfs generation policy" >&2; exit 1; }; \
+	grep -Fxq 'CONFIG_INITRAMFS_SOURCE="$$(srctree)/arch/$(ORLIX_PORT_ARCH)/boot/initramfs/no-init.list"' "$$build_dir/.config" || { echo "unexpected CONFIG_INITRAMFS_SOURCE; update Orlix initramfs generation policy" >&2; exit 1; }; \
 	grep -Fxq 'CONFIG_INITRAMFS_COMPRESSION_GZIP=y' "$$build_dir/.config" || { echo "unexpected CONFIG_INITRAMFS_COMPRESSION policy; update Orlix initramfs generation policy" >&2; exit 1; }; \
 	"$$gen_init_cpio" "$$initramfs_list" > "$$build_dir/usr/initramfs_data.cpio"; \
 	gzip -n -c "$$build_dir/usr/initramfs_data.cpio" > "$$build_dir/usr/initramfs_inc_data"; \
 	[ -s "$$build_dir/usr/initramfs_inc_data" ] || { echo "missing generated initramfs input: $$build_dir/usr/initramfs_inc_data" >&2; exit 1; }; \
-	linker_script="$$build_dir/arch/$(LINUX_ARCH)/kernel/vmlinux.lds"; \
+	linker_script="$$build_dir/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds"; \
 	[ -s "$$linker_script" ] || { echo "missing generated Orlix Kbuild linker script: $$linker_script" >&2; exit 1; }; \
 	printf 'profile=%s\nlinux_version=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" > "$$ready_stamp"; \
 	echo "verified Orlix Kbuild linker script: $$linker_script"; \
 	echo "prepared Orlix Kbuild output without a standalone image: $$build_dir (profile $(PROFILE))"
 
-__headers-install: __prepare-kbuild
+__headers-install: __prepare-port
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
 	linux_make="$(LINUX_MAKE)"; \
@@ -1415,11 +1434,14 @@ __headers-install: __prepare-kbuild
 	done; \
 	header_install_dir="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)"; \
 	header_install_stamp="$$header_install_dir/.orlix-headers-ready"; \
+	uapi_build_dir="$(ORLIX_KERNEL_BUILD_DIR)-uapi-$(LINUX_UAPI_ARCH)"; \
 	if [ -L "$$header_install_dir" ]; then echo "refusing to clean symlinked OrlixMLibC kernel header path: $$header_install_dir" >&2; exit 1; fi; \
-	header_staging_parent="$(ORLIX_KERNEL_BUILD_DIR)/usr"; \
+	for path in "$$uapi_build_dir" "$$(dirname "$$uapi_build_dir")"; do \
+		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked Linux UAPI build path: $$path" >&2; exit 1; fi; \
+	done; \
+	header_staging_parent="$$uapi_build_dir/usr"; \
 	header_staging="$$header_staging_parent/include"; \
 	if [ -s "$$header_install_stamp" ] && \
-		[ "$$header_install_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
 		[ "$$header_install_stamp" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
 		[ -d "$$header_install_dir/include" ]; then \
 		echo "reusing installed Orlix UAPI headers: $$header_install_dir/include"; \
@@ -1452,9 +1474,9 @@ __headers-install: __prepare-kbuild
 	mkdir -p "$$header_staging"; \
 	for uapi_root in \
 		"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" \
-		"$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/include/uapi" \
-		"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" \
-		"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated/uapi"; do \
+		"$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_UAPI_ARCH)/include/uapi" \
+		"$$uapi_build_dir/include/generated/uapi" \
+		"$$uapi_build_dir/arch/$(LINUX_UAPI_ARCH)/include/generated/uapi"; do \
 		[ -d "$$uapi_root" ] || continue; \
 		(cd "$$uapi_root" && find . -type d -print) | while IFS= read -r rel_dir; do \
 			rel_dir="$${rel_dir#./}"; \
@@ -1462,9 +1484,10 @@ __headers-install: __prepare-kbuild
 			mkdir -p "$$header_staging/$$rel_dir"; \
 		done; \
 	done; \
-	env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS "$$linux_make" -j"$(ORLIX_HEADERS_INSTALL_JOBS)" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KERNEL_BUILD_DIR)" ARCH="$(LINUX_ARCH)" LLVM=1 INSTALL_HDR_PATH="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)" headers_install; \
+	mkdir -p "$$uapi_build_dir"; \
+	env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS "$$linux_make" -j"$(ORLIX_HEADERS_INSTALL_JOBS)" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$uapi_build_dir" ARCH="$(LINUX_UAPI_ARCH)" LLVM=1 INSTALL_HDR_PATH="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)" headers_install; \
 	[ -d "$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" ] || { echo "missing installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" >&2; exit 1; }; \
-	printf 'profile=%s\nlinux_version=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" > "$$header_install_stamp"; \
+	printf 'profile=%s\nlinux_version=%s\nlinux_uapi_arch=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(LINUX_UAPI_ARCH)" > "$$header_install_stamp"; \
 	echo "installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include"
 
 __kunit: __prepare-kbuild
@@ -1500,9 +1523,9 @@ __kunit: __prepare-kbuild
 	sed --version >/dev/null 2>&1 || { echo "GNU sed is required by Linux KUnit builds" >&2; exit 1; }; \
 	rm -rf "$(ORLIX_KUNIT_BUILD_DIR)"; \
 	mkdir -p "$(ORLIX_KUNIT_BUILD_DIR)"; \
-	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" defconfig; \
-	"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$(ORLIX_KUNIT_BUILD_DIR)" "$(ORLIX_KUNIT_BUILD_DIR)/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/.kunitconfig"; \
-	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(LINUX_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" olddefconfig arch/$(LINUX_ARCH)/boot/boot_test.o; \
+	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" defconfig; \
+	"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$(ORLIX_KUNIT_BUILD_DIR)" "$(ORLIX_KUNIT_BUILD_DIR)/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
+	"$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -include linux_arm_elf_compat.h -D_UUID_T" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
 __kernel-archive:
@@ -1637,7 +1660,7 @@ __kernel-archive:
 			fi; \
 			if [ "$$needs_build" -eq 1 ]; then \
 				printf '  ORLIXCC %s %s\n' "$$platform" "$$src_rel" >&2; \
-				/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DKBUILD_MODNAME=\"$$kbuild_name\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
+				/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DKBUILD_MODNAME=\"$$kbuild_name\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
 				if grep -E '(/Applications/|/Library/Developer/CommandLineTools/SDKs/|/System/Library/Frameworks|/usr/include)' "$$dep"; then \
 					echo "Linux object included a host SDK or libc header: $$dep" >&2; \
 					exit 1; \
@@ -1763,7 +1786,7 @@ __kselftest-install: __prepare-kbuild $(KSELFTEST_PREREQS) __validate-profile
 	case "$$sysroot" in /*) ;; *) sysroot="$(CURDIR)/$$sysroot" ;; esac; \
 	[ -d "$$sysroot" ] || { echo "missing OrlixMLibC sysroot: $$sysroot; run make -f OrlixMLibC/Makefile build PROFILE=$(PROFILE)" >&2; exit 1; }; \
 	hosted_user_base="$(ORLIX_HOSTED_USER_BASE_ADDRESS)"; \
-	processor_header="$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/include/asm/processor.h"; \
+	processor_header="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/asm/processor.h"; \
 	grep -Eq "^[[:space:]]*#define[[:space:]]+ORLIX_HOSTED_USER_BASE[[:space:]]+\\($$hosted_user_base" "$$processor_header" || { echo "Orlix kselftest link base $$hosted_user_base does not match ORLIX_HOSTED_USER_BASE in $$processor_header" >&2; exit 1; }; \
 	orlix_crt_flags="$$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o"; \
 	orlix_ldlibs="-Wl,--start-group $$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
@@ -1848,7 +1871,7 @@ __kselftest-initramfs:
 		printf '%s\n' '    <key>CFBundleVersion</key>'; \
 		printf '%s\n' '    <string>1</string>'; \
 		printf '%s\n' '    <key>OrlixLinuxArch</key>'; \
-		printf '%s\n' '    <string>$(LINUX_ARCH)</string>'; \
+		printf '%s\n' '    <string>$(ORLIX_PORT_ARCH)</string>'; \
 		printf '%s\n' '    <key>OrlixLinuxVersion</key>'; \
 		printf '%s\n' '    <string>$(LINUX_VERSION)</string>'; \
 		printf '%s\n' '    <key>OrlixProfile</key>'; \
@@ -1878,7 +1901,7 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	base_root_tree_input="$(ORLIX_KERNEL_BASE_ROOT_TREE_INPUT)"; \
 	state_root_tree_input="$(ORLIX_KERNEL_STATE_ROOT_TREE_INPUT)"; \
 	case "$$rootfs_input" in \
-		"$(CURDIR)"/Build/OrlixKernel/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixMLibC/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixOS/rootfs/*/rootfs/initramfs.cpio.gz|"$(ORLIX_KERNEL_BUILD_DIR)"/usr/initramfs_inc_data) ;; \
+		"$(CURDIR)"/Build/OrlixKernel/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixMLibC/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixOS/test-initramfs/*/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixOS/rootfs/*/rootfs/initramfs.cpio.gz|"$(ORLIX_KERNEL_BUILD_DIR)"/usr/initramfs_inc_data) ;; \
 		*) echo "refusing to package root initramfs outside Orlix Build roots: $$rootfs_input" >&2; exit 1 ;; \
 	esac; \
 	if [ -n "$$base_root_tree_input" ]; then \
@@ -1918,8 +1941,8 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	fi; \
 	payload_stamp="$$output/.orlix-payload-ready"; \
 	if [ -s "$$payload_stamp" ] && \
-		[ "$$payload_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/boot/dts/release.dtb" ] && \
-		[ "$$payload_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/boot/dts/development.dtb" ] && \
+		[ "$$payload_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/boot/dts/release.dtb" ] && \
+		[ "$$payload_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/boot/dts/development.dtb" ] && \
 		[ "$$payload_stamp" -nt "$$rootfs_input" ] && \
 		[ "$$payload_stamp" -nt "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" ] && \
 		[ "$$(sed -n 's/^rootfs_input=//p' "$$payload_stamp")" = "$$rootfs_input" ] && \
@@ -1933,8 +1956,8 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		[ "$$(sed -n 's/^base_root_device=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_BASE_ROOT_DEVICE)" ] && \
 		[ "$$(sed -n 's/^state_root_device=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_STATE_ROOT_DEVICE)" ] && \
 		[ -s "$$output/Info.plist" ] && \
-		[ -s "$$output/arch/$(LINUX_ARCH)/boot/dts/release.dtb" ] && \
-		[ -s "$$output/arch/$(LINUX_ARCH)/boot/dts/development.dtb" ] && \
+		[ -s "$$output/arch/$(ORLIX_PORT_ARCH)/boot/dts/release.dtb" ] && \
+		[ -s "$$output/arch/$(ORLIX_PORT_ARCH)/boot/dts/development.dtb" ] && \
 		[ -s "$$output/rootfs/initramfs.cpio.gz" ] && \
 		[ -s "$$output/rootfs/base.ext4" ] && \
 		[ -s "$$output/rootfs/state.ext4" ]; then \
@@ -1942,11 +1965,11 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		exit 0; \
 	fi; \
 	rm -rf "$$output"; \
-	mkdir -p "$$output/arch/$(LINUX_ARCH)/boot/dts"; \
+	mkdir -p "$$output/arch/$(ORLIX_PORT_ARCH)/boot/dts"; \
 	for dtb in release development; do \
-		input="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/boot/dts/$$dtb.dtb"; \
+		input="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb"; \
 		[ -s "$$input" ] || { echo "missing non-empty profile DTB: $$input" >&2; exit 1; }; \
-		cp "$$input" "$$output/arch/$(LINUX_ARCH)/boot/dts/$$dtb.dtb"; \
+		cp "$$input" "$$output/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb"; \
 	done; \
 	mkdir -p "$$output/rootfs"; \
 	cp "$$rootfs_input" "$$output/rootfs/initramfs.cpio.gz"; \
@@ -1992,7 +2015,7 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		printf '%s\n' '    <key>CFBundleVersion</key>'; \
 		printf '%s\n' '    <string>1</string>'; \
 		printf '%s\n' '    <key>OrlixLinuxArch</key>'; \
-		printf '%s\n' '    <string>$(LINUX_ARCH)</string>'; \
+		printf '%s\n' '    <string>$(ORLIX_PORT_ARCH)</string>'; \
 		printf '%s\n' '    <key>OrlixLinuxVersion</key>'; \
 		printf '%s\n' '    <string>$(LINUX_VERSION)</string>'; \
 		printf '%s\n' '    <key>OrlixSelectedProfile</key>'; \
@@ -2090,8 +2113,8 @@ __ios-simulator-xcframework: __ios-simulator-framework
 		"$$xcframework/ios-arm64-simulator/OrlixKernel.framework/Info.plist" \
 		"$$xcframework/ios-arm64-simulator/OrlixKernel.framework/OrlixKernel" \
 		"$$payload/Info.plist" \
-		"$$payload/arch/$(LINUX_ARCH)/boot/dts/release.dtb" \
-		"$$payload/arch/$(LINUX_ARCH)/boot/dts/development.dtb"; do \
+		"$$payload/arch/$(ORLIX_PORT_ARCH)/boot/dts/release.dtb" \
+		"$$payload/arch/$(ORLIX_PORT_ARCH)/boot/dts/development.dtb"; do \
 		[ -s "$$required" ] || { echo "missing non-empty XCFramework input: $$required" >&2; exit 1; }; \
 	done; \
 	plutil -lint \

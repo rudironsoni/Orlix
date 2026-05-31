@@ -163,7 +163,7 @@ Linux kernel internal helper sources are not libc permission slips. Add them to 
 
 OrlixMLibC may have an Orlix sysdeps identity only where mlibc needs an OS-port hook. It must call Linux-shaped syscalls and expose glibc/musl source-compatible Linux behavior. Do not add an Orlix-specific application ABI.
 
-OrlixMLibC consumes kernel UAPI only through standard Linux `headers_install` output for `ARCH=orlix`, generated under `Build/OrlixMLibC/kernel-headers/<profile>/`. Do not commit copied Linux syscall numbers, ioctl payloads, structs, constants, flags, or UAPI definitions into OrlixMLibC.
+OrlixMLibC consumes kernel UAPI only through standard Linux `headers_install` output for upstream `ARCH=arm64`, generated under `Build/OrlixMLibC/kernel-headers/<profile>/`. Do not commit copied Linux syscall numbers, ioctl payloads, structs, constants, flags, or UAPI definitions into OrlixMLibC.
 
 Orlix userspace ABI is profile-invariant. App Store, development, simulator, CI, and debug builds may produce separate artifacts, but installed UAPI headers, syscall numbers, errno values, signal ABI, ioctl payloads, userspace-visible struct layouts, OrlixMLibC ABI, dynamic-loader contract, package ABI, and observable Linux userspace behavior must remain the same. Profile ABI drift is a release-blocking error.
 

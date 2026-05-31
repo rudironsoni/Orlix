@@ -131,6 +131,7 @@ MLIBC_TEST_POSIX_CASES := \
 	posix/wcwidth \
 	posix/basename \
 	posix/regex \
+	posix/renameat2 \
 	posix/readv-writev \
 	posix/string \
 	posix/if_indextoname \
@@ -173,6 +174,7 @@ MLIBC_TEST_POSIX_CASES := \
 	posix/wcpcpy \
 	posix/wcpncpy \
 	posix/vfork \
+	posix/wait3 \
 	posix/waitid \
 	posix/getwchar \
 	posix/strcoll_l \

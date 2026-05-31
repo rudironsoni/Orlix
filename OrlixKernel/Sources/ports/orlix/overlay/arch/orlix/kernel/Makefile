@@ -1,4 +1,4 @@
-# Retained only for explicit manual `make ... ARCH=orlix vmlinux` Linux
+# Retained only for explicit manual standalone vmlinux Linux
 # Kbuild compatibility checks. Normal Orlix proof does not build or
 # consume this linked-image path.
 extra-y += vmlinux.lds

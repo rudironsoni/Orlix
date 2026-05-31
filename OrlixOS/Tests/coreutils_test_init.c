@@ -1,0 +1,232 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+static char test_list[131072];
+static unsigned int test_index;
+static unsigned int test_failures;
+static unsigned int test_skips;
+static const unsigned int test_timeout_seconds = 120;
+
+static char *const test_envp[] = {
+	"HOME=/root",
+	"LANG=C",
+	"LC_ALL=C",
+	"PATH=/coreutils-build/src:/bin:/usr/bin",
+	"SHELL=/bin/bash",
+	"CONFIG_SHELL=/bin/bash",
+	"srcdir=/coreutils",
+	"top_srcdir=/coreutils",
+	"abs_srcdir=/coreutils",
+	"abs_top_srcdir=/coreutils",
+	"abs_top_builddir=/coreutils-build",
+	"CONFIG_HEADER=/coreutils-build/lib/config.h",
+	"VERSION=9.11",
+	"PACKAGE_VERSION=9.11",
+	"PERL=/usr/bin/perl",
+	"AWK=awk",
+	"EGREP=grep -E",
+	"EXEEXT=",
+	"MAKE=make",
+	"TMPDIR=/tmp",
+	"VERBOSE=no",
+	NULL,
+};
+
+static void park_init(void)
+{
+	for (;;)
+		(void)pause();
+}
+
+static void test_result(const char *state, const char *name)
+{
+	test_index++;
+	if (!strcmp(state, "not ok"))
+		test_failures++;
+	if (!strcmp(state, "ok # SKIP"))
+		test_skips++;
+	printf("%s %u - %s\n", state, test_index, name);
+	fflush(stdout);
+}
+
+static bool read_file(const char *path, char *buffer, size_t capacity,
+		      size_t *size)
+{
+	FILE *file;
+
+	file = fopen(path, "r");
+	if (!file)
+		return false;
+	*size = fread(buffer, 1, capacity - 1, file);
+	buffer[*size] = '\0';
+	fclose(file);
+	return true;
+}
+
+static unsigned int count_tests(char *data, size_t size)
+{
+	unsigned int count = 0;
+	char *cursor = data;
+
+	while (cursor < data + size) {
+		char *newline = strchr(cursor, '\n');
+
+		if (!newline)
+			newline = data + size;
+		if (newline > cursor && *cursor != '#')
+			count++;
+		cursor = newline + 1;
+	}
+	return count;
+}
+
+static void ensure_runtime_filesystems(void)
+{
+	(void)mkdir("/proc", 0555);
+	(void)mkdir("/tmp", 01777);
+	(void)mkdir("/dev", 0755);
+	(void)mount("proc", "/proc", "proc", 0, NULL);
+	(void)mount("tmpfs", "/tmp", "tmpfs", 0, "mode=1777");
+	(void)mount("devtmpfs", "/dev", "devtmpfs", 0, NULL);
+	(void)chdir("/coreutils-build");
+}
+
+static int run_test(const char *name)
+{
+	pid_t child;
+	int status;
+	const char *interpreter = "/bin/bash";
+	char test_path[512];
+	char workdir[512];
+
+	snprintf(test_path, sizeof(test_path), "/coreutils/%s", name);
+	snprintf(workdir, sizeof(workdir), "/tmp/coreutils-test-%u", test_index + 1);
+	(void)mkdir(workdir, 0700);
+	if (strlen(name) > 3 && !strcmp(name + strlen(name) - 3, ".pl"))
+		interpreter = "/usr/bin/perl";
+
+	printf("# exec %s %s\n", interpreter, test_path);
+	fflush(stdout);
+
+	child = fork();
+	if (child == 0) {
+		char *const argv[] = {
+			(char *)interpreter,
+			test_path,
+			NULL,
+		};
+
+		if (chdir("/coreutils-build") != 0)
+			_exit(125);
+		execve(argv[0], argv, test_envp);
+		dprintf(STDERR_FILENO, "# execve %s failed for %s: %s (%d)\n",
+			argv[0], test_path, strerror(errno), errno);
+		_exit(127);
+	}
+	if (child < 0)
+		return -1;
+	for (unsigned int elapsed = 0;; elapsed++) {
+		pid_t waited = waitpid(child, &status, WNOHANG);
+
+		if (waited == child)
+			break;
+		if (waited < 0)
+			return -1;
+		if (elapsed >= test_timeout_seconds) {
+			printf("# %s timed out after %u seconds\n", name,
+			       test_timeout_seconds);
+			fflush(stdout);
+			(void)kill(child, SIGKILL);
+			for (unsigned int reap_wait = 0; reap_wait < 5; reap_wait++) {
+				if (waitpid(child, &status, WNOHANG) == child)
+					break;
+				sleep(1);
+			}
+			return 124;
+		}
+		sleep(1);
+	}
+	if (WIFEXITED(status)) {
+		int exit_status = WEXITSTATUS(status);
+
+		if (exit_status != 0)
+			printf("# %s exited with status %d\n", name, exit_status);
+		fflush(stdout);
+		return exit_status;
+	}
+	if (WIFSIGNALED(status))
+		printf("# %s killed by signal %d\n", name, WTERMSIG(status));
+	else
+		printf("# %s ended with wait status 0x%x\n", name, status);
+	fflush(stdout);
+	return -1;
+}
+
+static void run_tests(char *data, size_t size)
+{
+	char *cursor = data;
+
+	while (cursor < data + size) {
+		char *line = cursor;
+		char *newline = strchr(cursor, '\n');
+		int result;
+
+		if (!newline)
+			newline = data + size;
+		*newline = '\0';
+		if (*line != '\0' && *line != '#') {
+			result = run_test(line);
+			if (result == 0)
+				test_result("ok", line);
+			else if (result == 77)
+				test_result("ok # SKIP", line);
+			else
+				test_result("not ok", line);
+		}
+		cursor = newline + 1;
+	}
+}
+
+int main(void)
+{
+	size_t list_size = 0;
+	unsigned int test_count = 0;
+	bool have_list;
+
+	puts("ORLIX-COREUTILS-TEST-INIT");
+	ensure_runtime_filesystems();
+
+	have_list = read_file("/coreutils-test-list.txt", test_list,
+			      sizeof(test_list), &list_size);
+	if (have_list)
+		test_count = count_tests(test_list, list_size);
+
+	printf("TAP version 13\n1..%u\n", test_count + 1);
+	test_result(have_list && test_count > 0 ? "ok" : "not ok",
+		    "installed upstream coreutils test list is readable");
+	if (have_list) {
+		have_list = read_file("/coreutils-test-list.txt", test_list,
+				      sizeof(test_list), &list_size);
+		if (have_list)
+			run_tests(test_list, list_size);
+	}
+	printf("ORLIX-COREUTILS-TEST-END failures=%u skips=%u total=%u\n",
+	       test_failures, test_skips, test_index);
+	fflush(stdout);
+
+	if (getpid() == 1)
+		park_init();
+	return test_failures ? EXIT_FAILURE : EXIT_SUCCESS;
+}

@@ -94,7 +94,7 @@ done; \
 adapter_stamp="$$adapter_root/.orlix-product-adapter-ready"; \
 if [ -s "$$adapter_stamp" ] && \
 	[ "$$adapter_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
-	[ "$$adapter_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/kernel/vmlinux.lds" ] && \
+	[ "$$adapter_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds" ] && \
 	[ -s "$$adapter_include/linux/init.h" ] && \
 	[ -s "$$adapter_include/linux/cache.h" ] && \
 	[ -s "$$adapter_include/linux/compiler.h" ] && \
@@ -127,7 +127,7 @@ endef
 
 define orlix_product_adapter_validate_linux_truth
 config="$(ORLIX_KERNEL_BUILD_DIR)/.config"; \
-lds="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/kernel/vmlinux.lds"; \
+lds="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds"; \
 linux_root="$(ORLIX_KERNEL_PORT_ABS)"; \
 [ -s "$$config" ] || { echo "missing generated Orlix kernel config: $$config" >&2; exit 1; }; \
 [ -s "$$lds" ] || { echo "missing generated Orlix linker script: $$lds" >&2; exit 1; }; \
@@ -150,12 +150,12 @@ for required in \
 	"$$linux_root/include/linux/sched/debug.h" \
 	"$$linux_root/include/linux/syscalls.h" \
 	"$$linux_root/include/net/net_debug.h" \
-	"$$linux_root/arch/$(LINUX_ARCH)/include/uapi/asm/bitsperlong.h" \
+	"$$linux_root/arch/$(ORLIX_PORT_ARCH)/include/uapi/asm/bitsperlong.h" \
 	"$$linux_root/include/asm-generic/percpu.h" \
 	"$$linux_root/include/asm-generic/bitsperlong.h" \
 	"$$linux_root/include/asm-generic/vmlinux.lds.h" \
 	"$$linux_root/include/uapi/asm-generic/bitsperlong.h" \
-	"$$linux_root/arch/$(LINUX_ARCH)/kernel/vmlinux.lds.S" \
+	"$$linux_root/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds.S" \
 	"$$linux_root/init/Makefile" \
 	"$$linux_root/kernel/sched/sched.h" \
 	"$$linux_root/mm/internal.h" \
@@ -206,8 +206,8 @@ require_text "$$linux_root/include/linux/cache.h" '__section(".data..ro_after_in
 	require_text "$$linux_root/include/linux/sched/debug.h" 'extern char __sched_text_start[], __sched_text_end[];'; \
 	require_text "$$linux_root/include/linux/syscalls.h" '__attribute__((alias(__stringify(__se_sys##name))))'; \
 	require_text "$$linux_root/include/net/net_debug.h" '__section(".data.once")'; \
-	require_text "$$linux_root/arch/$(LINUX_ARCH)/include/uapi/asm/bitsperlong.h" '#define __BITS_PER_LONG 64'; \
-	require_text "$$linux_root/arch/$(LINUX_ARCH)/include/uapi/asm/bitsperlong.h" '#include <asm-generic/bitsperlong.h>'; \
+	require_text "$$linux_root/arch/$(ORLIX_PORT_ARCH)/include/uapi/asm/bitsperlong.h" '#define __BITS_PER_LONG 64'; \
+	require_text "$$linux_root/arch/$(ORLIX_PORT_ARCH)/include/uapi/asm/bitsperlong.h" '#include <asm-generic/bitsperlong.h>'; \
 	require_text "$$linux_root/include/asm-generic/percpu.h" '#ifndef PER_CPU_BASE_SECTION'; \
 	require_text "$$linux_root/include/asm-generic/bitsperlong.h" '#define BITS_PER_LONG 64'; \
 	require_text "$$linux_root/include/asm-generic/bitsperlong.h" '#include <uapi/asm-generic/bitsperlong.h>'; \
@@ -239,7 +239,7 @@ require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.export_symbol)
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.data..page_aligned)'; \
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.bss..page_aligned)'; \
 	require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" 'BOUNDED_SECTION_PRE_LABEL(.builtin_fw, _builtin_fw, __start, __end)'; \
-	require_text "$$linux_root/arch/$(LINUX_ARCH)/kernel/vmlinux.lds.S" 'jiffies = jiffies_64;'; \
+	require_text "$$linux_root/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds.S" 'jiffies = jiffies_64;'; \
 	require_text "$$linux_root/init/Makefile" 'obj-$$(CONFIG_BLK_DEV_INITRD)   += initramfs.o'; \
 	require_text "$$linux_root/init/Makefile" 'mounts-$$(CONFIG_BLK_DEV_INITRD)	+= do_mounts_initrd.o'; \
 	require_text "$$linux_root/kernel/sched/sched.h" '__section("__" #name "_sched_class")'; \
@@ -276,7 +276,7 @@ require_text "$$linux_root/scripts/kallsyms.c" 'Usage: kallsyms [--all-symbols] 
 require_text "$$linux_root/scripts/kallsyms.c" 'printf("\t.section .rodata, \"a\"\n");'; \
 require_text "$$linux_root/scripts/kallsyms.c" 'output_label("kallsyms_num_syms");'; \
 require_text "$$linux_root/scripts/kallsyms.c" 'output_label("kallsyms_relative_base");'; \
-thread_size="$$(awk '/^#define[[:space:]]+THREAD_SIZE[[:space:]]+/ { value=$$0; sub(/^.*_AC[(]/, "", value); sub(/,.*/, "", value); print value; exit }' "$$linux_root/arch/$(LINUX_ARCH)/include/asm/thread_info.h")"; \
+thread_size="$$(awk '/^#define[[:space:]]+THREAD_SIZE[[:space:]]+/ { value=$$0; sub(/^.*_AC[(]/, "", value); sub(/,.*/, "", value); print value; exit }' "$$linux_root/arch/$(ORLIX_PORT_ARCH)/include/asm/thread_info.h")"; \
 case "$$thread_size" in ''|*[!0-9]*) echo "unable to extract numeric THREAD_SIZE for product init stack truth" >&2; exit 1 ;; esac; \
 for pattern in \
 	'.init.text' '.init.data' '.init.rodata' '.ref.text' '.init.setup' \
@@ -546,7 +546,7 @@ orlix_product_adapter_generate_kallsyms() { \
 	if grep -q '^CONFIG_KALLSYMS_ABSOLUTE_PERCPU=y$$' "$$config"; then kallsyms_flags="$$kallsyms_flags --absolute-percpu"; fi; \
 	"$$kallsyms_tool" $$kallsyms_flags "$$sysmap" > "$$linux_asm"; \
 	perl -pe 's/^\t\.section \.rodata, "a"$$/\t.section __DATA_CONST,__const/; s/^\.globl (kallsyms_[A-Za-z0-9_]+)/.globl _$$1/; s/^(kallsyms_[A-Za-z0-9_]+):/_$$1:/; s/\bPTR\t_text\b/PTR\t__text/g;' "$$linux_asm" > "$$kallsyms_src"; \
-	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler-with-cpp -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -nostdinc -D__KERNEL__ -include "linux/kconfig.h" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(LINUX_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -c "$$kallsyms_src" -o "$$kallsyms_obj"; \
+	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler-with-cpp -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -nostdinc -D__KERNEL__ -include "linux/kconfig.h" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -c "$$kallsyms_src" -o "$$kallsyms_obj"; \
 	orlix_product_adapter_verify_object_contract "$$kallsyms_obj"; \
 	for symbol in _kallsyms_num_syms _kallsyms_names _kallsyms_markers _kallsyms_token_table _kallsyms_token_index _kallsyms_offsets _kallsyms_relative_base _kallsyms_seqs_of_names; do "$$nm_cmd" -m "$$kallsyms_obj" | grep -F -q "$$symbol" || { echo "product kallsyms object missing symbol: $$symbol" >&2; exit 1; }; done; \
 	objs+=("$$kallsyms_obj"); \
@@ -571,7 +571,7 @@ orlix_product_adapter_generate_boundaries() { \
 	present_sections="$$(for candidate in "$${product_objects[@]}"; do object_sections_for "$$candidate"; done | LC_ALL=C sort -u)"; \
 	present_section_names="$$(printf '%s\n' "$$present_sections" | awk -F, 'NF == 2 { print $$2 }' | LC_ALL=C sort -u)"; \
 	undefined_symbols="$$(for candidate in "$${product_objects[@]}"; do object_undefined_for "$$candidate"; done | LC_ALL=C sort -u)"; \
-	thread_size="$$(awk '/^#define[[:space:]]+THREAD_SIZE[[:space:]]+/ { value=$$0; sub(/^.*_AC[(]/, "", value); sub(/,.*/, "", value); print value; exit }' "$(ORLIX_KERNEL_PORT_ABS)/arch/$(LINUX_ARCH)/include/asm/thread_info.h")"; \
+	thread_size="$$(awk '/^#define[[:space:]]+THREAD_SIZE[[:space:]]+/ { value=$$0; sub(/^.*_AC[(]/, "", value); sub(/,.*/, "", value); print value; exit }' "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/asm/thread_info.h")"; \
 	case "$$thread_size" in ''|*[!0-9]*) echo "unable to extract numeric THREAD_SIZE for product init stack" >&2; exit 1 ;; esac; \
 	thread_align=0; thread_align_value="$$thread_size"; \
 	while [ "$$thread_align_value" -gt 1 ]; do \
