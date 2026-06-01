@@ -24,8 +24,9 @@ BASH_URL ?= https://ftp.gnu.org/gnu/bash/bash-$(BASH_VERSION).tar.gz
 BASH_SHA256 ?= 0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba
 
 COREUTILS_VERSION ?= 9.11
-COREUTILS_URL ?= https://ftp.gnu.org/gnu/coreutils/coreutils-$(COREUTILS_VERSION).tar.xz
-COREUTILS_SHA256 ?= 394024eda0a5955217ceda9cd1201e65dc8fa3aa29c2951135a49521d57c3cc3
+COREUTILS_GIT_URL ?= https://github.com/coreutils/coreutils.git
+COREUTILS_GIT_REF ?= v$(COREUTILS_VERSION)
+COREUTILS_GIT_COMMIT ?= c01fd163a47468a8296fb369f5233853bb551bb6
 
 GREP_VERSION ?= 3.12
 GREP_URL ?= https://ftp.gnu.org/gnu/grep/grep-$(GREP_VERSION).tar.xz
@@ -61,6 +62,7 @@ ZSH_SHA256 ?= 9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5
 ORLIXOS_BUILD_ROOT := $(REPO_ROOT)/Build/OrlixOS
 ORLIXOS_UPSTREAM_DIR := $(ORLIXOS_BUILD_ROOT)/upstream
 ORLIXOS_SRC_DIR := $(ORLIXOS_BUILD_ROOT)/src
+ORLIXOS_COREUTILS_BOOTSTRAP_PATH ?= /opt/homebrew/opt/bison/bin:/opt/homebrew/opt/coreutils/libexec/gnubin:$(PATH)
 ORLIXOS_PACKAGE_BUILD_DIR := $(ORLIXOS_BUILD_ROOT)/build/$(PROFILE)
 ORLIXOS_PACKAGE_INSTALL_DIR := $(ORLIXOS_BUILD_ROOT)/packages/$(PROFILE)
 ORLIXOS_ROOTFS_DIR := $(ORLIXOS_BUILD_ROOT)/rootfs/$(PROFILE)
@@ -76,8 +78,6 @@ ORLIXOS_BASH_SRC_DIR := $(ORLIXOS_SRC_DIR)/bash-$(BASH_VERSION)
 ORLIXOS_BASH_SOURCE_STAMP := $(ORLIXOS_BASH_SRC_DIR)/.orlix-source-ready
 ORLIXOS_BASH_BUILD_DIR := $(ORLIXOS_PACKAGE_BUILD_DIR)/bash-$(BASH_VERSION)
 ORLIXOS_BASH_BINARY := $(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/bash
-ORLIXOS_COREUTILS_ARCHIVE := $(ORLIXOS_UPSTREAM_DIR)/coreutils-$(COREUTILS_VERSION).tar.xz
-ORLIXOS_COREUTILS_ARCHIVE_STAMP := $(ORLIXOS_UPSTREAM_DIR)/coreutils-$(COREUTILS_VERSION).sha256-ok
 ORLIXOS_COREUTILS_SRC_DIR := $(ORLIXOS_SRC_DIR)/coreutils-$(COREUTILS_VERSION)
 ORLIXOS_COREUTILS_SOURCE_STAMP := $(ORLIXOS_COREUTILS_SRC_DIR)/.orlix-source-ready
 ORLIXOS_COREUTILS_BUILD_DIR := $(ORLIXOS_PACKAGE_BUILD_DIR)/coreutils-$(COREUTILS_VERSION)
@@ -159,7 +159,7 @@ ORLIXOS_READELF ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-readelf,llv
 ORLIXOS_OBJDUMP ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-objdump,llvm-objdump)
 ORLIXOS_PACKAGE_CFLAGS := -O2 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -include limits.h
 
-.PHONY: all help build rootfs test coreutils-test clean mrproper
+.PHONY: all help build rootfs test coreutils-test clean mrproper __coreutils-source FORCE
 
 all: rootfs
 
@@ -215,32 +215,30 @@ $(ORLIXOS_BASH_SOURCE_STAMP): $(ORLIXOS_BASH_ARCHIVE_STAMP)
 	touch "$(ORLIXOS_BASH_SOURCE_STAMP)"; \
 	echo "extracted Bash source: $(ORLIXOS_BASH_SRC_DIR)"
 
-$(ORLIXOS_COREUTILS_ARCHIVE):
+__coreutils-source: $(ORLIXOS_COREUTILS_SOURCE_STAMP)
+
+$(ORLIXOS_COREUTILS_SOURCE_STAMP): FORCE
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_SRC_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
-	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch coreutils source" >&2; exit 1; }; \
-	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify coreutils source" >&2; exit 1; }; \
-	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
-	if [ ! -s "$(ORLIXOS_COREUTILS_ARCHIVE)" ]; then curl -fL "$(COREUTILS_URL)" -o "$(ORLIXOS_COREUTILS_ARCHIVE)"; fi; \
-	echo "upstream coreutils archive ready: $(ORLIXOS_COREUTILS_ARCHIVE)"
-
-$(ORLIXOS_COREUTILS_ARCHIVE_STAMP): $(ORLIXOS_COREUTILS_ARCHIVE)
-	@set -euo pipefail; \
-	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify coreutils source" >&2; exit 1; }; \
-	printf '%s  %s\n' "$(COREUTILS_SHA256)" "$(ORLIXOS_COREUTILS_ARCHIVE)" | shasum -a 256 -c - >/dev/null; \
-	mkdir -p "$(dir $(ORLIXOS_COREUTILS_ARCHIVE_STAMP))"; \
-	touch "$(ORLIXOS_COREUTILS_ARCHIVE_STAMP)"; \
-	echo "upstream coreutils ready: $(ORLIXOS_COREUTILS_ARCHIVE)"
-
-$(ORLIXOS_COREUTILS_SOURCE_STAMP): $(ORLIXOS_COREUTILS_ARCHIVE_STAMP)
-	@set -euo pipefail; \
+	export PATH="$(ORLIXOS_COREUTILS_BOOTSTRAP_PATH)"; \
+	command -v git >/dev/null 2>&1 || { echo "git is required to clone Coreutils source" >&2; exit 1; }; \
+	command -v autoconf >/dev/null 2>&1 || { echo "autoconf is required to bootstrap Coreutils from git" >&2; exit 1; }; \
+	command -v automake >/dev/null 2>&1 || { echo "automake is required to bootstrap Coreutils from git" >&2; exit 1; }; \
+	command -v autopoint >/dev/null 2>&1 || { echo "autopoint is required to bootstrap Coreutils from git" >&2; exit 1; }; \
+	command -v bison >/dev/null 2>&1 || { echo "GNU bison is required to bootstrap Coreutils from git" >&2; exit 1; }; \
+	command -v makeinfo >/dev/null 2>&1 || { echo "makeinfo is required to bootstrap Coreutils from git" >&2; exit 1; }; \
+	command -v texi2pdf >/dev/null 2>&1 || { echo "texi2pdf is required to bootstrap Coreutils from git" >&2; exit 1; }; \
 	rm -rf "$(ORLIXOS_COREUTILS_SRC_DIR)"; \
 	mkdir -p "$(ORLIXOS_SRC_DIR)"; \
-	tar -xJf "$(ORLIXOS_COREUTILS_ARCHIVE)" -C "$(ORLIXOS_SRC_DIR)"; \
+	git clone --depth 1 --branch "$(COREUTILS_GIT_REF)" --recurse-submodules --shallow-submodules "$(COREUTILS_GIT_URL)" "$(ORLIXOS_COREUTILS_SRC_DIR)"; \
+	actual="$$(git -C "$(ORLIXOS_COREUTILS_SRC_DIR)" rev-parse HEAD)"; \
+	[ "$$actual" = "$(COREUTILS_GIT_COMMIT)" ] || { echo "Coreutils clone resolved $$actual, expected $(COREUTILS_GIT_COMMIT)" >&2; exit 1; }; \
+	cd "$(ORLIXOS_COREUTILS_SRC_DIR)"; \
+	./bootstrap --skip-po --no-git --gnulib-srcdir=gnulib; \
 	touch "$(ORLIXOS_COREUTILS_SOURCE_STAMP)"; \
-	echo "extracted coreutils source: $(ORLIXOS_COREUTILS_SRC_DIR)"
+	echo "freshly cloned upstream Coreutils source: $(ORLIXOS_COREUTILS_SRC_DIR) ($(COREUTILS_GIT_REF) $(COREUTILS_GIT_COMMIT))"
 
 $(ORLIXOS_GREP_ARCHIVE):
 	@set -euo pipefail; \
@@ -510,6 +508,7 @@ $(ORLIXOS_COREUTILS_PROOF): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SY
 	export LIBS="$$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $$rtlib -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
 	export AR="$(ORLIXOS_AR)"; \
 	export RANLIB="$(ORLIXOS_RANLIB)"; \
+	export PATH="$(ORLIXOS_COREUTILS_BOOTSTRAP_PATH)"; \
 	export gl_cv_func_getopt_gnu=yes; \
 	export gl_cv_func_getopt_long_gnu=yes; \
 	export gl_cv_func_strtod_works=yes; \
@@ -520,7 +519,7 @@ $(ORLIXOS_COREUTILS_PROOF): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SY
 		"$(ORLIXOS_STRIP)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; \
 		file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" >&2; exit 1; }; \
 	done; \
-	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=coreutils\nprograms=%s\nversion=%s\nsha256=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_COREUTILS_PROGRAMS)" "$(COREUTILS_VERSION)" "$(COREUTILS_SHA256)" > "$(ORLIXOS_COREUTILS_PROOF)"; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=coreutils\nprograms=%s\nversion=%s\ngit_url=%s\ngit_ref=%s\ngit_commit=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_COREUTILS_PROGRAMS)" "$(COREUTILS_VERSION)" "$(COREUTILS_GIT_URL)" "$(COREUTILS_GIT_REF)" "$(COREUTILS_GIT_COMMIT)" > "$(ORLIXOS_COREUTILS_PROOF)"; \
 	echo "built Orlix Linux coreutils package inputs: $(ORLIXOS_COREUTILS_PROGRAMS)"
 
 $(ORLIXOS_COREUTILS_TEST_LIST): $(ORLIXOS_COREUTILS_PROOF)

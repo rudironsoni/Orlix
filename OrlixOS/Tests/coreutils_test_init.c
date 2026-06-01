@@ -25,6 +25,7 @@ static char *const test_envp[] = {
 	"LANG=C",
 	"LC_ALL=C",
 	"PATH=/coreutils-build/src:/bin:/usr/bin",
+	"PWD=/coreutils-build",
 	"SHELL=/bin/bash",
 	"CONFIG_SHELL=/bin/bash",
 	"srcdir=/coreutils",
@@ -112,13 +113,10 @@ static int run_test(const char *name)
 	int status;
 	const char *interpreter = "/bin/bash";
 	char test_path[512];
-	char workdir[512];
 	struct timespec start_time;
 	bool is_perl = strlen(name) > 3 && !strcmp(name + strlen(name) - 3, ".pl");
 
 	snprintf(test_path, sizeof(test_path), "/coreutils/%s", name);
-	snprintf(workdir, sizeof(workdir), "/tmp/coreutils-test-%u", test_index + 1);
-	(void)mkdir(workdir, 0700);
 	if (is_perl)
 		interpreter = "/usr/bin/perl";
 
@@ -145,8 +143,12 @@ static int run_test(const char *name)
 		};
 		char *const *argv = is_perl ? perl_argv : shell_argv;
 
-		if (chdir("/coreutils-build") != 0)
+		if (chdir("/coreutils-build") != 0) {
+			dprintf(STDERR_FILENO,
+				"# chdir /coreutils-build failed for %s: %s (%d)\n",
+				test_path, strerror(errno), errno);
 			_exit(125);
+		}
 		execve(argv[0], argv, test_envp);
 		dprintf(STDERR_FILENO, "# execve %s failed for %s: %s (%d)\n",
 			argv[0], test_path, strerror(errno), errno);

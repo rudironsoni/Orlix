@@ -41,6 +41,8 @@ static struct OrlixHostUserTrapState OrlixHostUserTrap;
 static struct orlix_host_user_trap_frame OrlixHostUserTrapFrame;
 static struct orlix_host_user_trap_frame OrlixHostUserResumeFrame;
 static atomic_bool OrlixHostUserResumePending;
+static pthread_mutex_t OrlixHostUserTimerMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t OrlixHostUserTimerCond = PTHREAD_COND_INITIALIZER;
 static bool OrlixHostUserTrapInstalled;
 static bool OrlixHostUserTimerStarted;
 static unsigned long long OrlixHostUserTimerPeriodNs = ORLIX_HOST_USER_TIMER_NS;
@@ -454,13 +456,40 @@ static void OrlixHostUserTrapHandler(int signal_number,
 
 static void OrlixHostUserTimerSleep(unsigned long long delay_ns)
 {
-    struct timespec delay = {
-        .tv_sec = (time_t)(delay_ns / 1000000000ULL),
-        .tv_nsec = (long)(delay_ns % 1000000000ULL),
-    };
+    struct timespec deadline;
 
-    while (nanosleep(&delay, &delay) == -1) {
+    if (atomic_load_explicit(&OrlixHostUserResumePending, memory_order_acquire)) {
+        return;
     }
+
+    if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) {
+        return;
+    }
+    deadline.tv_sec += (time_t)(delay_ns / 1000000000ULL);
+    deadline.tv_nsec += (long)(delay_ns % 1000000000ULL);
+    if (deadline.tv_nsec >= 1000000000L) {
+        deadline.tv_sec++;
+        deadline.tv_nsec -= 1000000000L;
+    }
+
+    (void)pthread_mutex_lock(&OrlixHostUserTimerMutex);
+    if (!atomic_load_explicit(&OrlixHostUserResumePending,
+                              memory_order_acquire)) {
+        while (pthread_cond_timedwait(&OrlixHostUserTimerCond,
+                                      &OrlixHostUserTimerMutex,
+                                      &deadline) == 0 &&
+               !atomic_load_explicit(&OrlixHostUserResumePending,
+                                     memory_order_acquire)) {
+        }
+    }
+    (void)pthread_mutex_unlock(&OrlixHostUserTimerMutex);
+}
+
+static void OrlixHostUserTimerWake(void)
+{
+    (void)pthread_mutex_lock(&OrlixHostUserTimerMutex);
+    (void)pthread_cond_signal(&OrlixHostUserTimerCond);
+    (void)pthread_mutex_unlock(&OrlixHostUserTimerMutex);
 }
 
 static bool OrlixHostUserResumeRedirect(void)
@@ -498,7 +527,6 @@ static bool OrlixHostUserResumeRedirect(void)
     if (status == KERN_SUCCESS) {
         __atomic_store_n(OrlixHostUserTrap.user_active, 1, __ATOMIC_RELEASE);
     }
-
     atomic_store_explicit(&OrlixHostUserResumePending, false,
                           memory_order_release);
 
@@ -563,6 +591,9 @@ static void *OrlixHostUserTimerMain(void *context)
         }
 
         OrlixHostUserTimerSleep(OrlixHostUserTimerPeriodNs);
+        if (OrlixHostUserResumeRedirect()) {
+            continue;
+        }
         if (!OrlixHostUserTrap.entry || !OrlixHostUserTrapIsUserActive()) {
             continue;
         }
@@ -684,6 +715,7 @@ __attribute__((visibility("hidden"), noreturn)) void orlix_host_user_trap_resume
     }
     atomic_store_explicit(&OrlixHostUserResumePending, true,
                           memory_order_release);
+    OrlixHostUserTimerWake();
 
     while (atomic_load_explicit(&OrlixHostUserResumePending,
                                 memory_order_acquire)) {

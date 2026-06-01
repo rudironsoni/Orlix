@@ -233,20 +233,47 @@ unmap:
 	return ret ? ret : -EFAULT;
 }
 
+static int orlix_sync_current_user_stack_window(unsigned long start,
+						unsigned long end);
+
+#define ORLIX_HOSTED_STACK_ENTRY_WINDOW_PAGES	4
+
 void orlix_sync_current_user_mappings(struct pt_regs *regs)
 {
 	struct mm_struct *mm = current->mm;
 	unsigned long sp_page = regs->sp & PAGE_MASK;
+	unsigned long stack_access_page = regs->sp ?
+		((regs->sp - 1) & PAGE_MASK) : 0;
+	unsigned long stack_window_page = 0;
 
 	if (!mm)
 		panic("Orlix: current task has no user mm for pc %#llx\n",
 		      regs->pc);
 
+	/*
+	 * Darwin cannot reliably deliver the hosted trap signal if the first
+	 * user stack access faults on the same unmapped stack needed for signal
+	 * delivery. Keep the writable user stack VMA mirrored before user entry.
+	 */
 	if (regs->pc && regs->pc < TASK_SIZE &&
 	    orlix_sync_current_user_mapping_page(regs->pc))
 		panic("Orlix: failed to synchronize hosted user pc %#llx\n",
 		      regs->pc);
-	if (sp_page && orlix_sync_current_user_mapping_page(sp_page))
+
+	if (stack_access_page >
+	    ORLIX_HOSTED_STACK_ENTRY_WINDOW_PAGES * PAGE_SIZE)
+		stack_window_page = stack_access_page -
+			ORLIX_HOSTED_STACK_ENTRY_WINDOW_PAGES * PAGE_SIZE;
+
+	if (stack_access_page &&
+	    orlix_sync_current_user_stack_window(stack_window_page ?
+						stack_window_page :
+						stack_access_page,
+						stack_access_page + PAGE_SIZE))
+		panic("Orlix: failed to synchronize hosted user stack window %#lx\n",
+		      stack_access_page);
+	if (sp_page != stack_access_page &&
+	    orlix_sync_current_user_mapping_page(sp_page))
 		panic("Orlix: failed to synchronize hosted user sp page %#lx\n",
 		      sp_page);
 
@@ -267,6 +294,26 @@ int orlix_sync_current_user_mapping_page(unsigned long address)
 		return 0;
 
 	return orlix_sync_user_page(mm, address, page);
+}
+
+static int orlix_sync_current_user_stack_window(unsigned long start,
+						unsigned long end)
+{
+	unsigned long page;
+	int ret;
+
+	if (!start || start >= TASK_SIZE || start >= end)
+		return 0;
+	if (end > TASK_SIZE)
+		end = TASK_SIZE;
+
+	for (page = start; page < end; page += PAGE_SIZE) {
+		ret = orlix_sync_current_user_mapping_page(page);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
 }
 
 #define ORLIX_HOSTED_FAULT_WINDOW_PAGES	16
