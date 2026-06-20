@@ -2,6 +2,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -92,11 +93,27 @@ static bool mountinfo_reports_virtiofs(void)
 	       orlix_contains(buffer, (size_t)size, " - virtiofs ");
 }
 
+static bool mounted_root_rejects_create_with_erofs(void)
+{
+	int fd;
+
+	errno = 0;
+	fd = open(ORLIX_VIRTIOFS_MOUNTPOINT "/orlix-create-probe",
+		  O_WRONLY | O_CREAT | O_EXCL, 0644);
+	if (fd >= 0) {
+		close(fd);
+		unlink(ORLIX_VIRTIOFS_MOUNTPOINT "/orlix-create-probe");
+		return false;
+	}
+
+	return errno == EROFS;
+}
+
 int main(void)
 {
 	bool mounted = false;
 
-	orlix_test_plan(6);
+	orlix_test_plan(7);
 
 	orlix_test_result(
 		read_file_equals("/sys/fs/virtiofs/virtio0/tag", ORLIX_VIRTIOFS_TAG),
@@ -115,6 +132,8 @@ int main(void)
 				  "mountinfo reports the mounted virtio-fs root");
 		orlix_test_result(mounted_root_can_readdir(),
 				  "mounted virtio-fs root supports readdir");
+		orlix_test_result(mounted_root_rejects_create_with_erofs(),
+				  "mounted virtio-fs root rejects create with EROFS");
 		umount(ORLIX_VIRTIOFS_MOUNTPOINT);
 	} else {
 		orlix_test_result(false,
@@ -123,6 +142,8 @@ int main(void)
 				  "mountinfo reports the mounted virtio-fs root");
 		orlix_test_result(false,
 				  "mounted virtio-fs root supports readdir");
+		orlix_test_result(false,
+				  "mounted virtio-fs root rejects create with EROFS");
 	}
 
 	orlix_test_exit();

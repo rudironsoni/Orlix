@@ -10,6 +10,37 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-20 - Extend virtio-fs mount probe to verify read-only create semantics
+
+Checkpoint: strengthened the Linux kselftest proof artifact for read-only
+virtio-fs host-folder behavior. `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+now attempts `open(O_CREAT | O_EXCL)` under the mounted `orlix-host0`
+`virtiofs` root and requires the normal Linux error `EROFS`. This ties the
+future app-hosted mount proof to the read-only FUSE opcode behavior already
+implemented in the Orlix virtio-fs backend, while staying entirely on Linux
+syscalls and libc behavior. No custom ABI, pseudo-file control path, host path,
+host fd, HostAdapter slot, or Foundation object is exposed to Linux userspace.
+
+Evidence:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0 after rebuilding the updated probe.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  found the packaged probe in both generated artifacts.
+- `rtk rg -n "orlix_test_plan\\(7\\)|rejects create with EROFS|mounted_root_rejects_create_with_erofs|O_CREAT" OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+  confirmed the probe now plans seven assertions and includes the read-only
+  create check.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+- `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, OK.
+- `rtk git diff --check` exited 0.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=410`, `Code=61`), so this
+checkpoint does not claim app-hosted execution, virtio-fs mount success in the
+hosted runtime, OCI rootfs attachment, OCI lifecycle, or product readiness.
+
 ### 2026-06-20 - Extend virtio-fs mount probe to verify mountinfo
 
 Checkpoint: strengthened the Linux kselftest proof artifact for the standard
