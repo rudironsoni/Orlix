@@ -155,6 +155,17 @@ static bool selected_test_matches(const char *name, size_t name_len)
 	       orlix_memcmp(selected_test, name, name_len) == 0;
 }
 
+static bool default_test_is_runnable(const char *name, size_t name_len)
+{
+	static const char crossboot_verify[] =
+		"environment_state_crossboot_verify_probe";
+
+	if (selected_test[0])
+		return true;
+	return name_len != sizeof(crossboot_verify) - 1 ||
+	       orlix_memcmp(name, crossboot_verify, name_len) != 0;
+}
+
 static void build_test_path(char *path, size_t capacity, const char *name,
 			    size_t name_len)
 {
@@ -209,7 +220,8 @@ static unsigned int count_orlix_tests(const char *data, size_t size)
 
 		if (parse_orlix_test(data + line_start, pos - line_start,
 				     &name, &name_len) &&
-		    selected_test_matches(name, name_len))
+		    selected_test_matches(name, name_len) &&
+		    default_test_is_runnable(name, name_len))
 			count++;
 		line_start = pos + 1;
 	}
@@ -230,7 +242,8 @@ static void run_orlix_tests(const char *data, size_t size)
 
 		if (parse_orlix_test(data + line_start, pos - line_start,
 				     &name, &name_len) &&
-		    selected_test_matches(name, name_len)) {
+		    selected_test_matches(name, name_len) &&
+		    default_test_is_runnable(name, name_len)) {
 			int result = run_test(name, name_len);
 
 			orlix_test_result(result == 0, name);

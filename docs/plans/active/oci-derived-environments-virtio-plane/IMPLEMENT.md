@@ -10,6 +10,573 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-20 - Complete read-only virtio-fs open lifecycle opcodes
+
+Checkpoint: made the Orlix virtio-fs backend less brittle for normal Linux
+mount/read userspace by handling additional standard FUSE request opcodes in
+`OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`.
+Read-only close/sync lifecycle requests now complete successfully through
+standard FUSE replies: `FUSE_RELEASE`, `FUSE_FLUSH`, `FUSE_FSYNC`,
+`FUSE_RELEASEDIR`, and `FUSE_FSYNCDIR`. Mutating filesystem requests now fail
+deliberately with `-EROFS`: `FUSE_SETATTR`, `FUSE_SYMLINK`, `FUSE_MKNOD`,
+`FUSE_MKDIR`, `FUSE_UNLINK`, `FUSE_RMDIR`, `FUSE_RENAME`, `FUSE_LINK`,
+`FUSE_WRITE`, `FUSE_SETXATTR`, `FUSE_REMOVEXATTR`, `FUSE_CREATE`, and
+`FUSE_FALLOCATE`.
+
+This keeps the Linux-visible surface as the upstream FUSE protocol. It does not
+add an Orlix syscall, custom ioctl, pseudo-file control plane, HostAdapter slot,
+host path, host fd, Foundation object, or any other custom Linux ABI.
+
+Evidence:
+
+- Sandboxed `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  compiled through `drivers/orlix/virtio/mmio.c` and then failed only at the
+  known late Xcode framework cache boundary under `/Volumes/1TB/Xcode/Caches`.
+- Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  exited 0.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  found the packaged mount probe in both generated artifacts.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+- `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, OK.
+- `rtk git diff --check` exited 0.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=410`, `Code=61`), so this
+checkpoint does not claim app-hosted execution, virtio-fs mount success in the
+hosted runtime, host-backed traversal success in the hosted runtime, OCI rootfs
+attachment, OCI lifecycle, or product runtime readiness.
+
+### 2026-06-20 - Add virtio-fs mount kselftest probe artifact
+
+Checkpoint: added a Linux kselftest probe for the standard virtio-fs mount path
+needed by OCI-derived host-folder and image-environment work. The new
+`OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+test stays in the Linux surface: it checks the upstream virtio-fs tag at
+`/sys/fs/virtiofs/virtio0/tag`, creates a Linux mountpoint under `/tmp`, mounts
+`orlix-host0` with filesystem type `virtiofs`, verifies the mounted root is a
+directory, performs a normal `readdir()` against the mounted root, and unmounts.
+This adds proof coverage for the Linux mount/request path without adding any
+custom Orlix userspace ABI or HostAdapter-visible API.
+
+Wiring: added `virtio_fs_mount_probe` to
+`OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`
+so it is included in the OrlixMLibC-built kselftest bundle.
+
+Evidence:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0 after compiling the new probe.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`
+  found the probe in the generated kselftest list, the generated test initramfs
+  bundle manifest, and the durable Orlix kselftest Makefile.
+- `rtk ls Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`
+  showed the generated bundle with `rootfs/`, `Info.plist`, and
+  `initramfs.list`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=410`, `Code=61`), so this
+checkpoint does not claim that the new probe has run app-hosted, does not claim
+virtio-fs mount success in the hosted runtime, does not claim OCI rootfs
+attachment, and does not claim product runtime readiness.
+
+### 2026-06-20 - Host-backed virtio-fs first nested traversal layer
+
+Checkpoint: extended the Linux-owned Orlix virtio-fs/FUSE backend with one
+nested host-backed directory layer while keeping the Linux-visible surface as
+standard upstream FUSE behavior. `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c`
+now provides hidden/private HostAdapter helpers
+`orlix_host_directory_read_child_entry()`,
+`orlix_host_directory_read_child_file()`, and
+`orlix_host_directory_read_child_link()` alongside the existing root-entry
+helpers. `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.h` declares
+those helpers as hidden symbols, and
+`OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/internal/asm/host_directory.h`
+declares the matching OrlixKernel-internal private host seam. These declarations
+are not Linux UAPI and do not expose host paths, host file descriptors,
+Foundation objects, HostAdapter slots, or a custom ABI to Linux userspace.
+
+Kernel work: `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+now encodes first-layer child node IDs under host-backed directory entries and
+serves child `LOOKUP`, `GETATTR`, `READDIR`, `READDIRPLUS`, `OPEN`, `READ`,
+`READLINK`, and `ACCESS` through normal FUSE request/reply payloads. The
+Linux-facing contract remains virtio-fs/FUSE only; HostAdapter is still only a
+private provider of bytes and sanitized metadata behind the device backend.
+
+Scope limit: this proves only the first nested traversal substrate for
+host-backed virtio-fs entries. It is not arbitrary-depth traversal, not
+write/create/unlink/rename support, not OCI layer extraction, not OCI rootfs
+attachment, not OCI lifecycle, not registry pull, not cgroup/resource behavior,
+not runtime networking, and not product runtime readiness.
+
+Evidence:
+
+- `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -fobjc-arc -DORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=16384 -I OrlixHostAdapter/Sources OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c`
+  exited 0.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  first compiled through `drivers/orlix/virtio/mmio.c` in the sandbox and then
+  exited 0 with the required filesystem access for the late Xcode framework
+  cache step.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0 and left
+  `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+- `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, OK.
+- `rtk git diff --check` exited 0.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=410`, `Code=61`), so there
+is still no app-hosted virtio-fs mount proof, no app-hosted host-backed
+traversal/read proof, and no app-hosted OCI environment proof from this
+checkpoint.
+
+- 2026-06-20 checkpoint: added host-backed symlink `READLINK` support behind
+  the standard virtio-fs queue.
+  - Change: `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c` now
+    exposes hidden `orlix_host_directory_read_link()` for the hosted kernel. It
+    resolves a registered host-directory entry by private slot/index, refuses
+    non-symlink entries, validates the final path with `lstat()`, calls
+    `readlink()` inside HostAdapter, and returns bounded target bytes to the
+    hosted kernel.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/internal/asm/host_directory.h`
+    declares the private host symlink-read call for OrlixKernel internals only.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+    now answers `FUSE_READLINK` for host-backed symlink entries by copying the
+    HostAdapter-returned link target into the standard FUSE response payload.
+  - Linux-surface rule: Linux userspace still sees only upstream FUSE
+    operations and symlink target bytes. It never receives a host path, Darwin
+    file descriptor, HostAdapter slot/index, Foundation object, or
+    Orlix-specific ABI.
+  - Scope: this completes the first read-only regular-file plus symlink data
+    path for registered host-directory root entries. It still does not implement
+    writes, create/unlink/rename, nested directory traversal, stable hardlink
+    identity, OCI layer extraction, OCI rootfs attachment, or lifecycle tooling.
+  - Evidence: `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -fobjc-arc
+    -DORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=16384 -I OrlixHostAdapter/Sources
+    OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c` exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build
+    PROFILE=release` compiled through the kernel path in the sandbox and failed
+    only at the known late `/Volumes/1TB/Xcode/Caches` framework cache boundary.
+    The same command rerun with escalation exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest
+    PROFILE=release` exited 0 and produced
+    `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+  - Non-claims: this does not prove a virtio-fs mount, host-backed readlink in
+    an app-hosted session, OCI rootfs attachment, OCI lifecycle, registry pull,
+    cgroups, networking runtime behavior, or product runtime readiness.
+    App-hosted proof is still blocked by the local CoreSimulator service state.
+
+- 2026-06-20 checkpoint: added read-only host-backed regular-file reads behind
+  the standard virtio-fs queue.
+  - Change: `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c` now
+    exposes hidden `orlix_host_directory_read_file()` for the hosted kernel. It
+    resolves a registered host-directory entry by private slot/index, refuses
+    non-regular files, validates the final path with `lstat()`, opens the file
+    inside HostAdapter, and returns bounded bytes to the hosted kernel.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/internal/asm/host_directory.h`
+    declares the private host-file read call for OrlixKernel internals only.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+    now answers `FUSE_OPEN` for host-backed regular files with a synthetic
+    FUSE file handle and answers `FUSE_READ` by copying file bytes into the
+    standard FUSE response payload.
+  - Linux-surface rule: Linux userspace still sees only upstream FUSE
+    operations and byte streams. It never receives a host path, Darwin file
+    descriptor, HostAdapter slot/index, Foundation object, or Orlix-specific
+    ABI.
+  - Scope: this is read-only regular-file substrate for a registered
+    host-directory root. It does not yet implement writes, create/unlink/rename,
+    symlink `READLINK`, nested directory traversal, stable hardlink identity,
+    OCI layer extraction, OCI rootfs attachment, or lifecycle tooling.
+  - Evidence: `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -fobjc-arc
+    -DORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=16384 -I OrlixHostAdapter/Sources
+    OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c` exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build
+    PROFILE=release` compiled through `drivers/orlix/virtio/mmio.c` in the
+    sandbox and failed only at the known late `/Volumes/1TB/Xcode/Caches`
+    framework cache boundary. The same command rerun with escalation exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest
+    PROFILE=release` exited 0 and produced
+    `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+  - Non-claims: this does not prove a virtio-fs mount, host-backed file read in
+    an app-hosted session, OCI rootfs attachment, OCI lifecycle, registry pull,
+    cgroups, networking runtime behavior, or product runtime readiness.
+    App-hosted proof is still blocked by the local CoreSimulator service state.
+
+- 2026-06-20 checkpoint: introduced private HostAdapter-backed directory
+  enumeration into the Linux-owned virtio-fs backend.
+  - Change: `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c` now
+    exposes hidden `orlix_host_directory_read_entry()` for the hosted kernel. It
+    enumerates a registered host-directory slot by index, skips `.` and `..`,
+    uses `lstat()` internally, and returns sanitized name/type/mode/size/inode
+    metadata without returning the host path to Linux.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/internal/asm/host_directory.h`
+    defines the private Orlix kernel-to-HostAdapter metadata shape. This is not
+    Linux UAPI.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+    now uses that private host-directory seam behind the existing virtio-fs
+    queue. Root `FUSE_LOOKUP`, `FUSE_GETATTR`, `FUSE_READDIR`, and
+    `FUSE_READDIRPLUS` can expose registered host-directory entries as ordinary
+    FUSE inode metadata and directory records.
+  - Linux-surface rule: Linux userspace still sees only upstream FUSE
+    request/response structures and normal inode metadata. The host path,
+    HostAdapter slot, Darwin file descriptor, Foundation object, and any
+    Orlix-specific ABI remain hidden behind `OrlixHostAdapter`.
+  - Scope: this is metadata/enumeration substrate only. It does not yet implement
+    FUSE file open, read, write, symlink readlink, directory traversal below the
+    root, OCI layer extraction, OCI rootfs attachment, or lifecycle tooling.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build
+    PROFILE=release` compiled through the kernel path in the sandbox and failed
+    only at the known late `/Volumes/1TB/Xcode/Caches` framework cache boundary.
+    The same command rerun with escalation exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest
+    PROFILE=release` exited 0 and produced
+    `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+  - Evidence: `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -fobjc-arc
+    -DORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=16384 -I OrlixHostAdapter/Sources
+    OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c` exited 0.
+  - Blocker: `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme
+    OrlixHostAdapterTests -sdk iphonesimulator -configuration Debug build`
+    could not proceed because CoreSimulator still returns connection errors.
+  - Non-claims: this does not prove a virtio-fs mount, host file open/read/write,
+    OCI rootfs attachment, OCI lifecycle, registry pull, cgroups, networking
+    runtime behavior, or product runtime readiness. App-hosted proof is still
+    blocked by the local CoreSimulator service state.
+
+- 2026-06-20 checkpoint: added standard root `FUSE_ACCESS` and
+  `FUSE_READDIRPLUS` handling to the Linux-owned virtio-fs queue backend.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+    now answers root `FUSE_ACCESS` with read-only directory semantics and emits
+    `struct fuse_direntplus` records for `.` and `..` from `FUSE_READDIRPLUS`.
+  - Linux-surface rule: this uses upstream FUSE opcodes and UAPI structures
+    only. It does not add a Linux-visible Orlix ABI, Darwin path, host file
+    descriptor, HostAdapter resource identifier, Foundation object, or
+    host-storage capability.
+  - Scope: this remains a host-neutral virtio-fs protocol substrate for an
+    empty synthetic root. It moves ordinary Linux traversal closer to a normal
+    FUSE mount path but still does not expose OCI image contents or host
+    directory entries.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build
+    PROFILE=release` compiled through the kernel path in the sandbox and failed
+    only at the known late `/Volumes/1TB/Xcode/Caches` framework cache boundary.
+    The same command rerun with escalation exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest
+    PROFILE=release` exited 0 and produced
+    `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+  - Non-claims: this does not prove a virtio-fs mount, host-directory
+    enumeration, OCI rootfs attachment, file open/read/write, HostAdapter-backed
+    filesystem data, OCI lifecycle, registry pull, cgroups, networking runtime
+    behavior, or product runtime readiness. App-hosted proof is still blocked by
+    the local CoreSimulator service state.
+
+- 2026-06-20 checkpoint: added standard root `FUSE_LOOKUP` and offset-aware
+  root `FUSE_READDIR` entries to the Linux-owned virtio-fs queue backend.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+    now fills a single synthetic root directory attribute through a shared
+    helper, answers `FUSE_LOOKUP` for `.` and `..` with `struct fuse_entry_out`,
+    returns `-ENOENT` for other root lookups, and emits aligned
+    `struct fuse_dirent` records for `.` and `..` from `FUSE_READDIR`.
+  - Linux-surface rule: the behavior uses upstream FUSE request/response
+    structures only. It still exposes no Darwin path, host file descriptor,
+    HostAdapter identifier, Foundation object, or Orlix-specific Linux ABI.
+  - Scope: this is still a minimal, host-neutral root directory substrate for
+    virtio-fs protocol bring-up. It does not enumerate host files and does not
+    map OCI image contents into the guest.
+  - Evidence: after the final code adjustment,
+    `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+    compiled through `drivers/orlix/virtio/mmio.c` in the sandbox and failed
+    only at the known late `/Volumes/1TB/Xcode/Caches` framework cache
+    boundary. The same command rerun with escalation exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest
+    PROFILE=release` exited 0 and produced
+    `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+  - Non-claims: this does not prove a virtio-fs mount, host-directory
+    enumeration, OCI rootfs attachment, file open/read/write, HostAdapter-backed
+    filesystem data, OCI lifecycle, registry pull, cgroups, networking runtime
+    behavior, or product runtime readiness. App-hosted proof is still blocked by
+    the local CoreSimulator service state.
+
+- 2026-06-20 checkpoint: added standard `FUSE_STATFS` handling to the
+  Linux-owned virtio-fs queue backend.
+  - Change: `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+    now answers `FUSE_STATFS` with `struct fuse_statfs_out` from the upstream
+    Linux FUSE UAPI.
+  - Linux-surface rule: the response is host-neutral. It advertises 4096-byte
+    block and fragment sizes plus `NAME_MAX`, leaves capacity/count fields at
+    zero, and does not expose Darwin paths, host file descriptors, host storage
+    capacity, or an Orlix-specific ABI.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build
+    PROFILE=release` first compiled through the kernel path in the sandbox and
+    then failed only at the known late `/Volumes/1TB/Xcode/Caches` framework
+    cache boundary. The same command rerun with escalation exited 0.
+  - Evidence: `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest
+    PROFILE=release` exited 0 and produced
+    `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+  - Non-claims: this does not prove a virtio-fs mount, non-empty readdir,
+    lookup, file read/write, HostAdapter-backed host-directory enumeration,
+    OCI rootfs attachment, OCI runtime lifecycle, registry pull, cgroups,
+    networking runtime behavior, or product runtime readiness. App-hosted proof
+    is still blocked by the local CoreSimulator service state.
+
+- 2026-06-20 checkpoint: completed standard no-reply FUSE requests on the
+  virtio-fs queue.
+  - Linux-owned change:
+    - `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+      now completes `FUSE_FORGET` and `FUSE_BATCH_FORGET` by consuming the
+      descriptor chain and publishing a zero-length used-ring entry.
+    - This matches the upstream FUSE contract for no-reply forget requests and
+      prevents the internal virtio-fs queue from stalling on requests that have
+      no response descriptor.
+  - Boundary notes:
+    - This remains standard Linux virtio-fs/FUSE device behavior below the
+      Linux userspace ABI.
+    - No host path, host fd, Darwin/Foundation object, POSIX host header,
+      HostAdapter resource identifier, custom syscall, custom ioctl,
+      pseudo-file, or Orlix-specific Linux ABI was added.
+  - Validation:
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+    - Sandboxed result: kernel compilation completed and later failed in the
+      known simulator framework/cache step under `/Volumes/1TB/Xcode/Caches`.
+    - Escalated rerun of the same release build exited 0.
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+    - Result: exited 0 and packaged
+      `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+    - `rtk git diff --check`
+    - Result: passed.
+    - `rtk python3 .codex/hooks/compact_plan_check.py`
+    - Result: exited 0 with the known stale pending/blocked warning in this
+      plan.
+    - `rtk python3 -m unittest discover .codex/hooks/tests`
+    - Result: 32 tests passed.
+    - `rtk python3 -m unittest discover .codex/rules/tests`
+    - Result: 5 tests passed.
+  - Runtime proof remains blocked:
+    - `rtk xcrun simctl list devices available` still fails with
+      CoreSimulatorService connection refusal.
+    - No claim is made that virtio-fs mounts work, that non-empty
+      `FUSE_READDIR`, `FUSE_LOOKUP`, file read/write, HostAdapter file
+      operations, or OCI host-folder behavior are complete.
+
+- 2026-06-20 checkpoint: added minimal root directory operations for the
+  standard virtio-fs/FUSE path.
+  - Linux-owned change:
+    - `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+      now recognizes `FUSE_OPENDIR`, `FUSE_READDIR`, and `FUSE_RELEASEDIR`
+      for `FUSE_ROOT_ID` on the `VIRTIO_ID_FS` request queue.
+    - `FUSE_OPENDIR` returns a standard `struct fuse_open_out` with the root
+      handle. `FUSE_READDIR` currently returns an empty directory payload
+      after the standard FUSE output header. `FUSE_RELEASEDIR` succeeds.
+  - Boundary notes:
+    - This remains standard Linux virtio-fs/FUSE device behavior below the
+      Linux userspace ABI.
+    - No host path, host fd, Darwin/Foundation object, POSIX host header,
+      HostAdapter resource identifier, custom syscall, custom ioctl,
+      pseudo-file, or Orlix-specific Linux ABI was added.
+    - This is an empty root-directory scaffold. It does not expose imported or
+      host-backed files yet.
+  - Validation:
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+    - Sandboxed result: kernel compilation completed and later failed in the
+      known simulator framework/cache step under `/Volumes/1TB/Xcode/Caches`.
+    - Escalated rerun of the same release build exited 0.
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+    - Result: exited 0 and packaged
+      `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+    - `rtk git diff --check`
+    - Result: passed.
+    - `rtk python3 .codex/hooks/compact_plan_check.py`
+    - Result: exited 0 with the known stale pending/blocked warning in this
+      plan.
+    - `rtk python3 -m unittest discover .codex/hooks/tests`
+    - Result: 32 tests passed.
+    - `rtk python3 -m unittest discover .codex/rules/tests`
+    - Result: 5 tests passed.
+  - Runtime proof remains blocked:
+    - `rtk xcrun simctl list devices available` still fails with
+      CoreSimulatorService connection refusal.
+    - No claim is made that virtio-fs mounts work, that non-empty
+      `FUSE_READDIR`, `FUSE_LOOKUP`, file read/write, HostAdapter file
+      operations, or OCI host-folder behavior are complete.
+
+- 2026-06-20 checkpoint: added the first root metadata response needed by the
+  standard virtio-fs/FUSE mount path.
+  - Linux-owned change:
+    - `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+      now recognizes `FUSE_GETATTR` for `FUSE_ROOT_ID` on the `VIRTIO_ID_FS`
+      request queue.
+    - The response uses upstream FUSE UAPI structures:
+      `struct fuse_out_header` plus `struct fuse_attr_out`.
+    - The backend reports a minimal read-only root directory with inode
+      `FUSE_ROOT_ID`, mode `S_IFDIR | 0555`, link count `2`, and block size
+      `4096`.
+  - Boundary notes:
+    - This remains standard Linux virtio-fs/FUSE device behavior below the
+      Linux userspace ABI.
+    - No host path, host fd, Darwin/Foundation object, POSIX host header,
+      HostAdapter resource identifier, custom syscall, custom ioctl,
+      pseudo-file, or Orlix-specific Linux ABI was added.
+    - This is not a real filesystem implementation yet; it only lets the
+      upstream FUSE client receive root directory metadata after the handshake.
+  - Validation:
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+    - Sandboxed result: kernel compilation completed and later failed in the
+      known simulator framework/cache step under `/Volumes/1TB/Xcode/Caches`.
+    - Escalated rerun of the same release build exited 0.
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+    - Result: exited 0 and packaged
+      `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+    - `rtk git diff --check`
+    - Result: passed.
+    - `rtk python3 .codex/hooks/compact_plan_check.py`
+    - Result: exited 0 with the known stale pending/blocked warning in this
+      plan.
+    - `rtk python3 -m unittest discover .codex/hooks/tests`
+    - Result: 32 tests passed.
+    - `rtk python3 -m unittest discover .codex/rules/tests`
+    - Result: 5 tests passed.
+  - Runtime proof remains blocked:
+    - `rtk xcrun simctl list devices available` still fails with
+      CoreSimulatorService connection refusal.
+    - No claim is made that virtio-fs mounts work, that `FUSE_LOOKUP`,
+      `FUSE_OPENDIR`, `FUSE_READDIR`, file read/write, HostAdapter file
+      operations, or OCI host-folder behavior are complete.
+
+- 2026-06-20 checkpoint: taught the internal virtio-fs backend to complete the
+  required FUSE initialization handshake.
+  - Linux-owned change:
+    - `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+      now recognizes `FUSE_INIT` requests on the `VIRTIO_ID_FS` request queue.
+    - The response uses the upstream FUSE UAPI: `struct fuse_out_header` plus
+      `struct fuse_init_out`, preserving the request `unique` value and
+      returning conservative limits (`max_write = 4096`, `max_pages = 1`,
+      `time_gran = 1`, `max_background = 1`, `congestion_threshold = 1`).
+    - `FUSE_DESTROY` now completes successfully. Other operations continue to
+      return `-ENOSYS` through the standard FUSE error path until real
+      HostAdapter-backed file operations are added.
+  - Boundary notes:
+    - This remains below the Linux userspace ABI as standard virtio-fs/FUSE
+      device behavior.
+    - No Darwin path, Foundation object, POSIX host header, host file
+      descriptor, private HostAdapter resource identifier, custom syscall,
+      custom ioctl, pseudo-file, or Orlix-specific Linux ABI was added.
+  - Validation:
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+    - Sandboxed result: kernel compilation completed far enough to produce
+      `Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a`, then failed in
+      the later simulator framework/cache step under `/Volumes/1TB/Xcode/Caches`.
+    - Escalated rerun of the same release build exited 0.
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+    - Result: exited 0 and packaged
+      `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+    - `rtk git diff --check`
+    - Result: passed.
+    - `rtk python3 .codex/hooks/compact_plan_check.py`
+    - Result: exited 0 with the known stale pending/blocked warning in this
+      plan.
+    - `rtk python3 -m unittest discover .codex/hooks/tests`
+    - Result: 32 tests passed.
+    - `rtk python3 -m unittest discover .codex/rules/tests`
+    - Result: 5 tests passed.
+  - Runtime proof remains blocked:
+    - `rtk xcrun simctl list devices available` still fails with
+      CoreSimulatorService connection refusal.
+    - No claim is made that virtio-fs mounts work, that root inode/lookup/getattr
+      semantics exist, that HostAdapter file operations are implemented, or that
+      OCI host-folder behavior is complete.
+
+- 2026-06-20 checkpoint: advanced the HostAdapter-backed virtio-fs substrate
+  without adding a Linux-visible Orlix ABI.
+  - Linux-owned change:
+    - `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+      now dispatches `VIRTIO_ID_FS` queue notifications into a virtio-fs
+      request-queue handler.
+    - The handler walks the standard virtqueue descriptor chain, reads the
+      FUSE request header, writes a standard `struct fuse_out_header`, preserves
+      the request `unique` value, and completes the used ring entry.
+    - Unsupported operations currently return `-ENOSYS` through the normal FUSE
+      response path. This is intentionally a backend substrate checkpoint, not
+      a mount-success checkpoint.
+  - Boundary notes:
+    - No Darwin path, Foundation object, host file descriptor, or HostAdapter
+      resource identifier is exposed to Linux userspace.
+    - No custom syscall, ioctl, pseudo-file, or Orlix-specific Linux ABI was
+      added.
+    - The Linux surface remains upstream virtio-fs/FUSE through
+      `VIRTIO_ID_FS`.
+  - Validation:
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+    - Result: exited 0 and packaged
+      `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+    - Sandboxed result: kernel archive was produced at
+      `Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a`, then the later
+      simulator framework/cache step failed outside the sandbox.
+    - Escalated rerun of the same release build exited 0. The log reached
+      `drivers/orlix/virtio/mmio.c`, upstream `drivers/net/virtio_net.c`,
+      `drivers/net/net_failover.c`, FUSE, and `fs/fuse/virtio_fs.c` compile
+      stages before completing.
+    - `rtk git diff --check`
+    - Result: passed.
+  - Runtime proof remains blocked:
+    - `rtk xcrun simctl list devices available` still fails with
+      CoreSimulatorService connection refusal.
+    - No claim is made that virtio-fs mounts work, that HostAdapter file
+      operations are implemented, or that OCI host-folder behavior is complete.
+
+- 2026-06-20 checkpoint: kept the OCI/virtio substrate work on the Linux
+  surface after the default kselftest rootfs run failed before the new
+  virtio-fs tag proof.
+  - Failure observed:
+    - `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession test`
+    - Result: the test executed but failed on
+      `not ok 2 - cross-boot state marker survives fresh boot boundary`.
+      This happened before the `virtio_mmio_probe_contract` result could be
+      used as proof.
+    - Log:
+      `/Users/rudironsoni/Library/Application Support/rtk/tee/1781970422_xcodebuild_-project_OrlixSystem_xcodepro.log`.
+  - Linux-owned fix:
+    - `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/kselftest_init.c`
+      now excludes `environment_state_crossboot_verify_probe` from the default
+      all-probes list unless it is explicitly selected through
+      `orlix.kselftest=environment_state_crossboot_verify_probe`.
+    - Rationale: the cross-boot verifier is a two-boot proof with a prior
+      write-boot precondition. Running it in the omnibus rootfs test creates a
+      false negative and does not prove Linux persistence. The explicit
+      selected test path remains intact.
+    - This is test-runner selection only. It adds no custom ABI, no host-visible
+      Linux surface, and no iOS-side policy.
+  - Validation so far:
+    - `rtk git diff --check`
+    - Result: passed.
+    - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+    - Result: exited 0 and packaged
+      `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+      Using `TMPDIR=/private/tmp` avoids the sandboxed
+      `/Volumes/1TB/Xcode/tmp` patch temp-file denial.
+    - `rtk python3 .codex/hooks/compact_plan_check.py`
+    - Result: exited 0 with the known stale pending/blocked warning in this
+      plan.
+    - `rtk python3 -m unittest discover .codex/hooks/tests`
+    - Result: 32 tests passed.
+    - `rtk python3 -m unittest discover .codex/rules/tests`
+    - Result: 5 tests passed.
+  - Runtime proof is still blocked:
+    - Re-running the focused XCTest is blocked by local CoreSimulatorService
+      availability, not by an Orlix runtime result.
+    - `rtk xcrun simctl list devices available` and
+      `rtk xcrun simctl list runtimes` both fail with CoreSimulator connection
+      refusal after restarting simulator processes.
+    - No claim is made yet that the app-hosted `virtio_mmio_probe_contract`
+      passes, that virtio-fs mounts work, or that the HostAdapter virtio-fs
+      backend exists.
+
 ### 2026-06-12 Named session state-image reuse prerequisite proof
 
 **What happened:**

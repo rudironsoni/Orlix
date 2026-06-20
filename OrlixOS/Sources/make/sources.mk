@@ -434,11 +434,12 @@ $(ORLIXOS_LIBSELINUX_ARCHIVE_STAMP): $(ORLIXOS_LIBSELINUX_ARCHIVE)
 	touch "$(ORLIXOS_LIBSELINUX_ARCHIVE_STAMP)"; \
 	echo "upstream libselinux ready: $(ORLIXOS_LIBSELINUX_ARCHIVE)"
 
-$(ORLIXOS_LIBSELINUX_SOURCE_STAMP): $(ORLIXOS_LIBSELINUX_ARCHIVE_STAMP)
+$(ORLIXOS_LIBSELINUX_SOURCE_STAMP): $(ORLIXOS_LIBSELINUX_ARCHIVE_STAMP) $(PROJECT_DIR)/Sources/patches/libselinux-3.10-strong-pthread-once.patch $(PROJECT_DIR)/Sources/make/sources.mk
 	@set -euo pipefail; \
 	rm -rf "$(ORLIXOS_LIBSELINUX_SRC_DIR)"; \
 	mkdir -p "$(ORLIXOS_SRC_DIR)"; \
 	tar -xzf "$(ORLIXOS_LIBSELINUX_ARCHIVE)" -C "$(ORLIXOS_SRC_DIR)"; \
+	patch -d "$(ORLIXOS_SRC_DIR)" -p0 < "$(PROJECT_DIR)/Sources/patches/libselinux-3.10-strong-pthread-once.patch"; \
 	touch "$(ORLIXOS_LIBSELINUX_SOURCE_STAMP)"; \
 	echo "extracted libselinux source: $(ORLIXOS_LIBSELINUX_SRC_DIR)"
 

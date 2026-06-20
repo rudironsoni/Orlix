@@ -1,0 +1,25 @@
+--- libselinux-3.10/src/selinux_internal.h
++++ libselinux-3.10/src/selinux_internal.h
+@@ -16,7 +16,14 @@
+ 
+ /* Call handler iff the first call.  */
++#ifdef LIBSELINUX_USE_STRONG_PTHREAD_ONCE
+ #define __selinux_once(ONCE_CONTROL, INIT_FUNCTION)	\
+ 	do {						\
++		if (pthread_once != NULL)		\
++			pthread_once (&(ONCE_CONTROL), (INIT_FUNCTION));  \
++	} while (0)
++#else
++#define __selinux_once(ONCE_CONTROL, INIT_FUNCTION)	\
++	do {						\
+ 		if (pthread_once != NULL)		\
+ 			pthread_once (&(ONCE_CONTROL), (INIT_FUNCTION));  \
+ 		else if ((ONCE_CONTROL) == PTHREAD_ONCE_INIT) {		  \
+@@ -25,6 +31,7 @@
+ 			(ONCE_CONTROL) = 2;		\
+ 		}					\
+ 	} while (0)
++#endif
+ 
+ /* Pthread key macros */
+ #define __selinux_key_create(KEY, DESTRUCTOR)	\
