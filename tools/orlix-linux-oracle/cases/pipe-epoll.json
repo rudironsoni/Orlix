@@ -1,0 +1,22 @@
+{
+  "id": "pipe-epoll",
+  "description": "Compare Linux pipe epoll registration, readiness, payload, and hangup behavior.",
+  "fixture": "fixtures/pipe_epoll_probe.c",
+  "command": [
+    "/oracle/pipe_epoll_probe"
+  ],
+  "environment": {
+    "LC_ALL": "C"
+  },
+  "workingDirectory": "/oracle/work",
+  "compare": {
+    "stdout": false,
+    "stderr": true,
+    "exitStatus": true,
+    "signal": true,
+    "errnoEvents": false,
+    "statEntries": false,
+    "mutations": false,
+    "observations": true
+  }
+}

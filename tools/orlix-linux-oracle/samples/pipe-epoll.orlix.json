@@ -1,0 +1,22 @@
+{
+  "caseID": "pipe-epoll",
+  "runner": "orlix",
+  "stdout": "",
+  "stderr": "",
+  "exitStatus": 0,
+  "signal": null,
+  "errnoEvents": [],
+  "statEntries": [],
+  "mutations": [],
+  "observations": {
+    "pipe-created": "ok",
+    "epoll-created": "ok",
+    "empty-read-eagain": "ok",
+    "read-end-registered": "ok",
+    "empty-epoll-timeout": "ok",
+    "write-end-writable": "ok",
+    "read-end-readable": "ok",
+    "read-payload": "ok",
+    "read-end-hangup": "ok"
+  }
+}
