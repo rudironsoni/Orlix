@@ -8961,16 +8961,12 @@ Goal:
 
 Changes:
 
-- `tools/orlix-linux-oracle/tests/test_orlix_linux_oracle.py`
-  - Added unittest coverage for `path-errno` case validation.
-  - Added matching Linux-vs-Orlix sample comparison coverage.
-  - Added drift-sample comparison coverage, asserting the comparator fails and
-    reports `errnoEvents differ`.
-  - Added Orlix kselftest log conversion coverage, comparing structured output
-    to the checked-in Orlix sample while normalizing optional nil `signal`
-    encoding.
+- `tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Added Swift-native oracle self-test coverage for `path-errno` case
+    validation, matching Linux-vs-Orlix sample comparison, drift-sample
+    comparison failure, and Orlix kselftest log conversion.
 - `tools/orlix-linux-oracle/README.md`
-  - Documented the local regression test command.
+  - Documented the Swift-native local regression test command.
 - `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
   - Updated current proved state for local oracle-tool regression coverage.
 
@@ -8984,8 +8980,8 @@ Evidence:
   - Result: exited 0 and wrote the converted Orlix result.
 - `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/path-errno.json --linux-result tools/orlix-linux-oracle/samples/path-errno.linux.json --orlix-result /private/tmp/path-errno.orlix.current.json`
   - Result: exited 0, output `case path-errno matches`.
-- `rtk python3 -m unittest discover tools/orlix-linux-oracle/tests`
-  - Result: ran 4 tests, OK.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test`
+  - Result: exited 0, output `oracle self-test passed`.
 
 Explicit non-claims:
 
@@ -9003,3 +8999,68 @@ Current status:
 - Next substrate work should add broader oracle cases or app-hosted Orlix
   evidence for entered environments before any OCI Runtime lifecycle or product
   claims.
+
+## 2026-06-20 fd-exec Linux oracle case expansion
+
+Goal:
+
+- Extend Linux oracle coverage toward the plan's fd inheritance and
+  close-on-exec substrate gap before OCI Runtime lifecycle or product `orlix run`
+  claims.
+- Reuse the existing Orlix-owned `fd_exec_probe` semantics instead of changing
+  kernel behavior in this checkpoint.
+
+Changes:
+
+- `tools/orlix-linux-oracle/cases/fd-exec.json`
+  - Added a second oracle case for fd inheritance and close-on-exec behavior
+    across `exec`.
+- `tools/orlix-linux-oracle/fixtures/fd_exec_probe.c`
+  - Added a Linux-runner fixture that emits structured observation JSON for pipe
+    creation, default non-close-on-exec fd state, `FD_CLOEXEC` marking, child
+    exec start, inherited fd read, close-on-exec `EBADF`, and child exit.
+- `tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Added generic observation-line parsing.
+  - Added `fd-exec` Linux fixture result construction.
+  - Added `fd-exec` Orlix kselftest log conversion based on existing
+    `fd_exec_probe` output markers.
+  - Removed the former `path-errno`-only guard from `linux-result-from-fixture`
+    and `orlix-result-from-log`, replacing it with case-specific dispatch.
+- `tools/orlix-linux-oracle/samples/`
+  - Added matching Linux and Orlix fd-exec result samples.
+  - Added fd-exec drift sample.
+  - Added representative Orlix fd-exec kselftest log sample.
+- `tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Extended Swift-native oracle self-test coverage to include fd-exec case
+    validation, matching comparison, drift detection, and Orlix log conversion.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Updated current proved state for the second oracle case.
+
+Evidence:
+
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test`
+  - Result: exited 0, output `oracle self-test passed`.
+- `rtk swiftc -parse tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Result: exited 0.
+- `rtk clang -fsyntax-only -Wall -Wextra tools/orlix-linux-oracle/fixtures/fd_exec_probe.c`
+  - Result: exited 0.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/fd-exec.json`
+  - Result: exited 0, output `case fd-exec is valid`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/fd-exec.json --linux-result tools/orlix-linux-oracle/samples/fd-exec.linux.json --orlix-result tools/orlix-linux-oracle/samples/fd-exec.orlix.json`
+  - Result: exited 0, output `case fd-exec matches`.
+
+Explicit non-claims:
+
+- This does not prove a fresh real-Linux fd-exec run, a fresh app-hosted Orlix
+  fd-exec runtime run, imported-environment fd behavior, OCI Runtime lifecycle
+  compliance, product `orlix run`, registry pull, host-folder mounts, virtio-fs,
+  networking, cgroups, native performance, real-device behavior, or App Store
+  acceptance.
+
+Current status:
+
+- Active plan remains in progress.
+- Linux oracle tooling now covers two local cases: `path-errno` and `fd-exec`.
+- The next substrate step should turn more existing Orlix kselftest probes into
+  oracle cases or capture fresh app-hosted Orlix evidence when simulator access
+  is available.

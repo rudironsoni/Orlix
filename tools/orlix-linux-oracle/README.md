@@ -33,7 +33,7 @@ The first scope is deterministic syscall and filesystem behavior:
 Run local oracle tool regression tests:
 
 ```bash
-python3 -m unittest discover tools/orlix-linux-oracle/tests
+swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test
 ```
 
 Validate a case file:
