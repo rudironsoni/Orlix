@@ -10,6 +10,35 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-20 - Extend virtio-fs mount probe to verify mountinfo
+
+Checkpoint: strengthened the Linux kselftest proof artifact for the standard
+virtio-fs mount path. `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+now checks `/proc/self/mountinfo` after mounting `orlix-host0` as `virtiofs` and
+requires Linux to report the mounted root with filesystem type `virtiofs`. This
+moves the future app-hosted proof beyond a bare successful `mount(2)` return and
+into Linux's normal VFS mount table surface, without adding any custom ABI or
+host-visible control plane.
+
+Evidence:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0 after rebuilding the updated probe.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+  found the packaged probe in the generated kselftest list and test initramfs
+  bundle.
+- `rtk rg -n "mountinfo reports the mounted virtio-fs root|orlix_test_plan\\(6\\)|mountinfo_reports_virtiofs" OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+  confirmed the probe now plans six assertions and includes the mountinfo
+  assertion.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+- `rtk git diff --check` exited 0.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=409`, `Code=61`), so this
+checkpoint does not claim app-hosted execution, virtio-fs mount success in the
+hosted runtime, OCI rootfs attachment, OCI lifecycle, or product readiness.
+
 ### 2026-06-20 - Complete read-only virtio-fs open lifecycle opcodes
 
 Checkpoint: made the Orlix virtio-fs backend less brittle for normal Linux
