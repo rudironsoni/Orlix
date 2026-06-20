@@ -39,6 +39,11 @@
 #define ORLIX_VIRTIO_MMIO_FS_HOST_SCAN_LIMIT 1024
 #define ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_BASE 4096
 #define ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE 1024
+#define ORLIX_VIRTIO_MMIO_SEEK_SET 0
+#define ORLIX_VIRTIO_MMIO_SEEK_CUR 1
+#define ORLIX_VIRTIO_MMIO_SEEK_END 2
+#define ORLIX_VIRTIO_MMIO_SEEK_DATA 3
+#define ORLIX_VIRTIO_MMIO_SEEK_HOLE 4
 #define ORLIX_VIRTIO_BLK_BASE_FEATURES \
 	((1ULL << VIRTIO_F_VERSION_1) | (1ULL << VIRTIO_RING_F_INDIRECT_DESC) | \
 	 (1ULL << VIRTIO_BLK_F_FLUSH))
@@ -792,6 +797,42 @@ static bool orlix_virtio_mmio_fs_child_index(
 	*entry_index = child_offset % ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
 	return *parent_entry_index < ORLIX_VIRTIO_MMIO_FS_HOST_SCAN_LIMIT &&
 	       *entry_index < ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
+}
+
+static bool orlix_virtio_mmio_fs_read_node_entry(
+	u64 nodeid,
+	struct orlix_host_directory_entry *host_entry)
+{
+	unsigned int entry_index;
+	unsigned int parent_entry_index;
+
+	if (orlix_virtio_mmio_fs_host_index(nodeid, &entry_index))
+		return orlix_host_directory_read_entry(
+			       ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+			       entry_index, host_entry) == 0;
+
+	if (orlix_virtio_mmio_fs_child_index(nodeid, &parent_entry_index,
+					     &entry_index))
+		return orlix_host_directory_read_child_entry(
+			       ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+			       parent_entry_index, entry_index,
+			       host_entry) == 0;
+
+	return false;
+}
+
+static bool orlix_virtio_mmio_fs_regular_file_size(u64 nodeid, u64 *size)
+{
+	struct orlix_host_directory_entry host_entry;
+
+	if (!orlix_virtio_mmio_fs_read_node_entry(nodeid, &host_entry))
+		return false;
+
+	if (host_entry.type != ORLIX_HOST_DIRECTORY_ENTRY_REGULAR)
+		return false;
+
+	*size = host_entry.size;
+	return true;
 }
 
 static u32 orlix_virtio_mmio_fs_host_type_mode(u8 type)
@@ -1686,6 +1727,52 @@ static void orlix_virtio_mmio_process_fs_queue(
 
 					memset(xattr_out, 0, sizeof(*xattr_out));
 					written = sizeof(*out) + sizeof(*xattr_out);
+				}
+			} else if (in->opcode == FUSE_LSEEK &&
+				   in_capacity >= sizeof(*in) + sizeof(struct fuse_lseek_in) &&
+				   out_capacity >= sizeof(*out) + sizeof(struct fuse_lseek_out)) {
+				const struct fuse_lseek_in *lseek_in = (void *)(in + 1);
+				struct fuse_lseek_out *lseek_out = (void *)(out + 1);
+				s64 offset = (s64)lseek_in->offset;
+				u64 file_size = 0;
+				u64 result = 0;
+
+				memset(lseek_out, 0, sizeof(*lseek_out));
+				if (!orlix_virtio_mmio_fs_regular_file_size(in->nodeid,
+									    &file_size)) {
+					out->error = -EINVAL;
+				} else if (offset < 0 &&
+					   lseek_in->whence != ORLIX_VIRTIO_MMIO_SEEK_END) {
+					out->error = -EINVAL;
+				} else if (lseek_in->whence == ORLIX_VIRTIO_MMIO_SEEK_SET) {
+					result = (u64)offset;
+				} else if (lseek_in->whence == ORLIX_VIRTIO_MMIO_SEEK_CUR) {
+					result = (u64)offset;
+				} else if (lseek_in->whence == ORLIX_VIRTIO_MMIO_SEEK_END) {
+					if (offset < 0 && (u64)(-offset) > file_size) {
+						out->error = -EINVAL;
+					} else {
+						result = offset < 0 ?
+							 file_size - (u64)(-offset) :
+							 file_size + (u64)offset;
+					}
+				} else if (lseek_in->whence == ORLIX_VIRTIO_MMIO_SEEK_DATA) {
+					if ((u64)offset >= file_size)
+						out->error = -ENXIO;
+					else
+						result = (u64)offset;
+				} else if (lseek_in->whence == ORLIX_VIRTIO_MMIO_SEEK_HOLE) {
+					if ((u64)offset > file_size)
+						out->error = -ENXIO;
+					else
+						result = file_size;
+				} else {
+					out->error = -EINVAL;
+				}
+
+				if (out->error == 0) {
+					lseek_out->offset = result;
+					written = sizeof(*out) + sizeof(*lseek_out);
 				}
 			} else if (in->opcode == FUSE_STATFS &&
 				   out_capacity >= sizeof(*out) +
