@@ -10,6 +10,46 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-20 - Add statx metadata replies to virtio-fs backend
+
+Checkpoint: added standard FUSE `FUSE_STATX` handling to
+`OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`. The
+backend now translates the same Linux-visible attributes already served by
+`GETATTR` into `struct fuse_statx` replies for the virtio-fs root, registered
+host-backed root entries, and first-layer child entries. This gives modern
+Linux userspace a normal `statx(2)` metadata path for host-backed virtio-fs
+nodes without introducing a custom ABI.
+
+This remains upstream FUSE protocol behavior below Linux userspace. It does not
+expose host paths, host fds, HostAdapter slots, Foundation objects, pseudo-file
+control paths, custom syscalls, or custom ioctls.
+
+Evidence:
+
+- Sandboxed `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  compiled through the modified `drivers/orlix/virtio/mmio.c` and then failed
+  only at the known late Xcode framework cache boundary under
+  `/Volumes/1TB/Xcode/Caches`.
+- Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  exited 0.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0.
+- `rtk rg -n "FUSE_STATX|fuse_statx|STATX_BASIC_STATS|fill_fs_statx" OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+  found the statx helper and request branch.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  confirmed the kselftest bundle still contains the virtio-fs mount probe.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+- `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, OK.
+- `rtk git diff --check` exited 0.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=410`, `Code=61`), so this
+checkpoint does not claim app-hosted execution, virtio-fs mount success in the
+hosted runtime, statx behavior in the hosted runtime, OCI rootfs attachment,
+OCI lifecycle, or product readiness.
+
 ### 2026-06-20 - Add regular-file lseek support to virtio-fs backend
 
 Checkpoint: added standard FUSE `FUSE_LSEEK` handling to
