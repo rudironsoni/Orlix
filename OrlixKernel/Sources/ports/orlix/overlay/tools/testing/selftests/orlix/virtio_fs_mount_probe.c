@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/xattr.h>
 #include <unistd.h>
 
 #include "orlix_kselftest_user.h"
@@ -109,11 +111,97 @@ static bool mounted_root_rejects_create_with_erofs(void)
 	return errno == EROFS;
 }
 
+static bool mounted_root_supports_statx(void)
+{
+	struct statx status;
+
+	return syscall(SYS_statx, AT_FDCWD, ORLIX_VIRTIOFS_MOUNTPOINT,
+		       AT_SYMLINK_NOFOLLOW, STATX_TYPE | STATX_MODE, &status) == 0 &&
+	       (status.stx_mask & STATX_TYPE) != 0 &&
+	       S_ISDIR(status.stx_mode);
+}
+
+static bool mounted_root_has_empty_xattr_list(void)
+{
+	errno = 0;
+	return listxattr(ORLIX_VIRTIOFS_MOUNTPOINT, NULL, 0) == 0;
+}
+
+static bool mounted_root_reports_missing_xattr(void)
+{
+	errno = 0;
+	return getxattr(ORLIX_VIRTIOFS_MOUNTPOINT, "user.orlix-missing",
+			NULL, 0) < 0 &&
+	       errno == ENODATA;
+}
+
+static bool build_mount_child_path(char *path, size_t path_size, const char *name)
+{
+	const char *prefix = ORLIX_VIRTIOFS_MOUNTPOINT "/";
+	size_t offset = 0;
+
+	while (prefix[offset] != '\0') {
+		if (offset + 1 >= path_size)
+			return false;
+		path[offset] = prefix[offset];
+		offset++;
+	}
+
+	while (*name != '\0') {
+		if (offset + 1 >= path_size)
+			return false;
+		path[offset++] = *name++;
+	}
+
+	path[offset] = '\0';
+	return true;
+}
+
+static bool mounted_regular_file_supports_lseek(void)
+{
+	DIR *directory;
+	struct dirent *entry;
+	char path[512];
+	int fd = -1;
+	bool saw_regular_file = false;
+	bool result = false;
+
+	directory = opendir(ORLIX_VIRTIOFS_MOUNTPOINT);
+	if (!directory)
+		return false;
+
+	while ((entry = readdir(directory)) != NULL) {
+		struct stat status;
+
+		if (entry->d_name[0] == '.')
+			continue;
+
+		if (!build_mount_child_path(path, sizeof(path), entry->d_name))
+			continue;
+
+		if (stat(path, &status) != 0 || !S_ISREG(status.st_mode))
+			continue;
+
+		saw_regular_file = true;
+		fd = open(path, O_RDONLY);
+		if (fd < 0)
+			continue;
+
+		errno = 0;
+		result = lseek(fd, 0, SEEK_END) == status.st_size;
+		close(fd);
+		break;
+	}
+
+	closedir(directory);
+	return !saw_regular_file || result;
+}
+
 int main(void)
 {
 	bool mounted = false;
 
-	orlix_test_plan(7);
+	orlix_test_plan(11);
 
 	orlix_test_result(
 		read_file_equals("/sys/fs/virtiofs/virtio0/tag", ORLIX_VIRTIOFS_TAG),
@@ -134,6 +222,14 @@ int main(void)
 				  "mounted virtio-fs root supports readdir");
 		orlix_test_result(mounted_root_rejects_create_with_erofs(),
 				  "mounted virtio-fs root rejects create with EROFS");
+		orlix_test_result(mounted_root_supports_statx(),
+				  "mounted virtio-fs root supports statx");
+		orlix_test_result(mounted_root_has_empty_xattr_list(),
+				  "mounted virtio-fs root reports an empty xattr list");
+		orlix_test_result(mounted_root_reports_missing_xattr(),
+				  "mounted virtio-fs root reports missing xattrs");
+		orlix_test_result(mounted_regular_file_supports_lseek(),
+				  "mounted virtio-fs regular files support lseek when present");
 		umount(ORLIX_VIRTIOFS_MOUNTPOINT);
 	} else {
 		orlix_test_result(false,
@@ -144,6 +240,14 @@ int main(void)
 				  "mounted virtio-fs root supports readdir");
 		orlix_test_result(false,
 				  "mounted virtio-fs root rejects create with EROFS");
+		orlix_test_result(false,
+				  "mounted virtio-fs root supports statx");
+		orlix_test_result(false,
+				  "mounted virtio-fs root reports an empty xattr list");
+		orlix_test_result(false,
+				  "mounted virtio-fs root reports missing xattrs");
+		orlix_test_result(false,
+				  "mounted virtio-fs regular files support lseek when present");
 	}
 
 	orlix_test_exit();
