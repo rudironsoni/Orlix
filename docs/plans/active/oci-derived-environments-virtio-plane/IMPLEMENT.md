@@ -10600,9 +10600,9 @@ Validation:
 
 Non-claims:
 
-- This does not claim OrlixOS sidecar generation/lowering yet. OrlixOS still
-  needs to register OCI/tar-derived `OrlixRootfsTarManifestEntry.extendedAttributes`
-  through the private HostAdapter metadata path.
+- This now has an OrlixOS sidecar/lowering path for OCI/tar-derived
+  `OrlixRootfsTarManifestEntry.extendedAttributes`; it still does not claim
+  app-hosted virtio-fs xattr runtime success.
 - This does not claim app-hosted virtio-fs xattr runtime success, because
   CoreSimulator remains unavailable locally.
 - This does not expose any custom Linux ABI. Linux userspace still sees only
@@ -10616,6 +10616,57 @@ Current status:
 - Green local proof: HostAdapter C/XCTest syntax checks, escalated release
   OrlixKernel build, kselftest packaging, hook tests, rules tests, and
   whitespace check.
-- Still open: OrlixOS sidecar/lowering from OCI/tar-derived
-  `extendedAttributes` into the private HostAdapter metadata path, followed by
-  app-hosted runtime proof when CoreSimulator is available.
+- Still open: app-hosted runtime proof of OCI/tar-derived xattrs through virtio-fs
+  when CoreSimulator is available, plus arbitrary-depth virtio-fs traversal and
+  OCI runtime lifecycle work after the Linux substrate proof ladder.
+
+## 2026-06-21 - OrlixOS OCI/tar xattr lowering into HostAdapter metadata
+
+Status: implemented and syntax-verified; app-hosted runtime execution remains
+blocked by local CoreSimulator availability.
+
+Scope:
+
+- Added `OrlixHostDirectoryExtendedAttribute` in OrlixOS as the deterministic sidecar/lowering
+  object for Linux xattr metadata parsed from `OrlixRootfsTarManifestEntry.extendedAttributes`.
+- The lowering path accepts only Linux xattr namespaces: `security.*`, `system.*`, `trusted.*`,
+  and `user.*`.
+- The lowering path rejects host/Darwin metadata such as `com.apple.*`, absolute paths, parent
+  traversal, and empty host-directory identifiers.
+- `OrlixEnvironmentRootImage.materialized(...)` now carries default-empty host-directory xattr
+  metadata so existing callers keep their current behavior.
+- `OrlixOSPayload.registerMaterializedRootImage(...)` now registers that metadata through the
+  private HostAdapter `orlix_host_resources_register_host_directory_xattr(...)` path after the
+  existing root image resource registration succeeds.
+- If private xattr metadata registration fails, OrlixOS clears the HostAdapter root-image table
+  and fails registration rather than leaving a partially registered environment.
+- Added OrlixOS XCTest source coverage for deterministic lowering, Linux namespace filtering,
+  Darwin-name rejection, path normalization, absolute/path-traversal rejection, and raw value
+  byte preservation.
+
+Validation:
+
+- `rtk python3 -c 'import json, subprocess; payload={"hook_event_name":"PostToolUse","tool_name":"read","tool_input":{"path":"AGENTS.md docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md docs/plans/active/oci-derived-environments-virtio-plane/IMPLEMENT.md"}}; subprocess.run(["python3", ".codex/hooks/plan_context_guard.py"], input=json.dumps(payload), text=True, check=True)'`
+  exited 0 before this plan edit.
+- Escalated `TMPDIR=/private/tmp rtk xcrun --sdk iphonesimulator swiftc -parse -module-cache-path /private/tmp/orlix-swift-module-cache -I OrlixOS/Sources/Session OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixOS.swift`
+  exited 0.
+- Escalated `rtk proxy sh -c 'TMPDIR=/private/tmp xcrun --sdk iphonesimulator swiftc -parse -module-cache-path /private/tmp/orlix-swift-module-cache -I OrlixOS/Sources/Session OrlixOS/Sources/Session/*.swift OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift >/private/tmp/orlix-swift-parse.out 2>&1 && echo PARSE_OK || { echo PARSE_FAIL; tail -n 40 /private/tmp/orlix-swift-parse.out; }'`
+  printed `PARSE_OK`.
+
+Non-claims:
+
+- This does not claim app-hosted virtio-fs xattr runtime success; CoreSimulator remains the local
+  blocker for that proof.
+- This does not claim arbitrary-depth virtio-fs traversal, OCI runtime lifecycle, registry pull,
+  networking/cgroup runtime success, or product runtime readiness.
+- This does not add a Linux-visible custom ABI. Linux userspace still sees standard
+  `listxattr(2)`/`getxattr(2)` behavior through virtio-fs/FUSE.
+
+Current status:
+
+- Latest coherent checkpoint: OrlixOS now lowers OCI/tar-derived Linux xattr metadata into the
+  private HostAdapter host-directory metadata registration path for materialized root images.
+- Green local proof: OrlixOS Swift source/test parse checks for the lowering path, plus the prior
+  HostAdapter/kernel virtio-fs xattr substrate checks recorded above.
+- Still open: app-hosted runtime proof when CoreSimulator is available, arbitrary-depth virtio-fs
+  traversal, and OCI runtime lifecycle work after Linux substrate proof.
