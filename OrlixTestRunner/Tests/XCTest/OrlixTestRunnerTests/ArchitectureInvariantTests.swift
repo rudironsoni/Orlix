@@ -149,6 +149,47 @@ final class ArchitectureInvariantTests: XCTestCase {
         }
     }
 
+    func testOrlixKernelProductSourceListIncludesVirtioEnvironmentDrivers() throws {
+        let sourceListPath = "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk"
+        let sourceList = try String(contentsOf: root.appendingPathComponent(sourceListPath))
+        let requiredSources = [
+            "drivers/block/virtio_blk.c",
+            "drivers/char/virtio_console.c",
+            "drivers/char/hw_random/virtio-rng.c",
+            "drivers/net/net_failover.c",
+            "drivers/net/virtio_net.c",
+            "fs/fuse/dev.c",
+            "fs/fuse/dir.c",
+            "fs/fuse/file.c",
+            "fs/fuse/inode.c",
+            "fs/fuse/control.c",
+            "fs/fuse/xattr.c",
+            "fs/fuse/acl.c",
+            "fs/fuse/readdir.c",
+            "fs/fuse/ioctl.c",
+            "fs/fuse/iomode.c",
+            "fs/fuse/passthrough.c",
+            "fs/fuse/virtio_fs.c",
+            "net/core/failover.c"
+        ]
+        let missing = requiredSources.filter { !sourceList.contains($0) }
+
+        XCTAssertTrue(
+            missing.isEmpty,
+            "\(sourceListPath) missing virtio environment source inputs: \(missing.joined(separator: ", "))"
+        )
+    }
+
+    func testOrlixKernelSimulatorTargetStaysArm64() throws {
+        let projectPath = "project.yml"
+        let project = try String(contentsOf: root.appendingPathComponent(projectPath))
+
+        XCTAssertTrue(
+            project.contains("ARCHS[sdk=iphonesimulator*]: arm64"),
+            "\(projectPath) must keep OrlixKernel simulator builds arm64-only; the kernel archive and HostAdapter trap plane are arm64"
+        )
+    }
+
     private func sourceFiles(under relativePaths: [String]) throws -> [URL] {
         let manager = FileManager.default
         var urls: [URL] = []

@@ -524,6 +524,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	drivers/char/hw_random/virtio-rng.c \
 	drivers/char/virtio_console.c \
 	drivers/net/loopback.c \
+	drivers/net/net_failover.c \
+	drivers/net/virtio_net.c \
 	drivers/tty/hvc/hvc_console.c \
 	drivers/tty/tty_io.c \
 	drivers/tty/n_tty.c \
@@ -715,6 +717,18 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	fs/overlayfs/export.c \
 	fs/overlayfs/params.c \
 	fs/overlayfs/xattrs.c \
+	fs/fuse/dev.c \
+	fs/fuse/dir.c \
+	fs/fuse/file.c \
+	fs/fuse/inode.c \
+	fs/fuse/control.c \
+	fs/fuse/xattr.c \
+	fs/fuse/acl.c \
+	fs/fuse/readdir.c \
+	fs/fuse/ioctl.c \
+	fs/fuse/iomode.c \
+	fs/fuse/passthrough.c \
+	fs/fuse/virtio_fs.c \
 	io_uring/io_uring.c \
 	io_uring/opdef.c \
 	io_uring/kbuf.c \
@@ -777,6 +791,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	net/core/tso.c \
 	net/core/sock_reuseport.c \
 	net/core/fib_notifier.c \
+	net/core/failover.c \
 	net/core/xdp.c \
 	net/core/flow_offload.c \
 	net/core/gro.c \
@@ -1832,7 +1847,7 @@ __verify-xcodegen-boundary:
 		echo "generated Xcode project references disposable Linux port source" >&2; \
 		exit 1; \
 	fi; \
-	if grep -R 'OrlixKernel/Sources/ports/orlix/overlay/.*\.c' "$$project"; then \
+	if grep -R 'path = .*OrlixKernel/Sources/ports/orlix/overlay/.*\.c' "$$project"; then \
 		echo "generated Xcode project references Linux overlay C source" >&2; \
 		exit 1; \
 	fi; \

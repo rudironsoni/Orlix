@@ -68,6 +68,7 @@ Current proved state:
   directory comparison samples, drift detection, Linux fixture syntax, and
   Orlix kselftest log conversion.
 - OrlixKernel release and development profile defconfigs enable upstream virtio-net and virtio-fs/FUSE prerequisites: `CONFIG_VIRTIO_NET=y`, `CONFIG_FUSE_FS=y`, `CONFIG_VIRTIO_FS=y`.
+- OrlixKernel product archive source selection now includes the upstream virtio-net, `net_failover`/generic failover, FUSE core, FUSE passthrough, and virtio-fs sources required by the selected profile dependencies, with a release build proof.
 - OrlixTestRunner architecture invariants pin the virtio/container-environment substrate config set across both profile defconfigs.
 - OrlixHostAdapter has private opaque host-directory resource registration and lookup plumbing for future virtio-fs backends, with tests for absolute directory validation and path-shaped identifier rejection.
 - OrlixOS named environment session selection API exists.
