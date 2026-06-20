@@ -22,6 +22,7 @@ LLVM_PROJECT_UPSTREAM_DIR := $(REPO_ROOT)/Build/OrlixMLibC/upstream/llvm-project
 MLIBC_BUILD_DIR := $(REPO_ROOT)/Build/OrlixMLibC/build/$(PROFILE)
 MLIBC_SYSROOT := $(REPO_ROOT)/Build/OrlixMLibC/sysroot/$(PROFILE)
 MLIBC_CROSS_FILE := $(REPO_ROOT)/Build/OrlixMLibC/cross/$(PROFILE)-orlix-aarch64-linux.cross
+MLIBC_NATIVE_FILE := $(REPO_ROOT)/Build/OrlixMLibC/cross/$(PROFILE)-host.native
 MLIBC_TARGET_INCLUDE_DIR := $(REPO_ROOT)/Build/OrlixMLibC/target-include/$(PROFILE)
 MLIBC_TARGET_ARCH_DEFS := $(MLIBC_TARGET_INCLUDE_DIR)/mlibc/arch-defs.hpp
 MLIBC_PATCH_DIR := $(PROJECT_DIR)/Sources/patches
@@ -51,6 +52,9 @@ MLIBC_HOSTED_EXEC_MESON_CPP_ARGS := '-include', '$(MLIBC_TARGET_ARCH_DEFS)', '-f
 MLIBC_LLVM_PREFIX ?= $(firstword $(wildcard /opt/homebrew/opt/llvm/bin) $(wildcard /usr/local/opt/llvm/bin))
 MLIBC_CC ?= clang
 MLIBC_CXX ?= clang++
+MLIBC_HOST_CC ?= clang
+MLIBC_HOST_CXX ?= clang++
+MLIBC_HOST_SDKROOT ?= $(shell xcrun --sdk macosx --show-sdk-path 2>/dev/null)
 MLIBC_AR ?= $(if $(MLIBC_LLVM_PREFIX),$(MLIBC_LLVM_PREFIX)/llvm-ar,llvm-ar)
 MLIBC_STRIP ?= $(if $(MLIBC_LLVM_PREFIX),$(MLIBC_LLVM_PREFIX)/llvm-strip,llvm-strip)
 MESON ?= meson
@@ -314,8 +318,9 @@ __build: __write-cross-file
 	mkdir -p "$(dir $(MLIBC_BUILD_KERNEL_HEADERS))"; \
 	cp -R "$(MLIBC_KERNEL_HEADERS)" "$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	[ -d "$(MLIBC_BUILD_KERNEL_HEADERS)" ] || { echo "missing OrlixMLibC build-local Linux UAPI headers: $(MLIBC_BUILD_KERNEL_HEADERS)" >&2; exit 1; }; \
-	"$(MESON)" setup "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
+	env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
 		--cross-file "$(MLIBC_CROSS_FILE)" \
+		--native-file "$(MLIBC_NATIVE_FILE)" \
 		--prefix /usr \
 		-Ddefault_library=static \
 		-Dheaders_only=false \
@@ -641,6 +646,11 @@ __write-cross-file: __apply-mlibc-patches
 	} > "$(MLIBC_TARGET_ARCH_DEFS)"; \
 	{ \
 		printf '%s\n' '[binaries]'; \
+		printf "c = ['%s', '-isysroot', '%s']\n" "$(MLIBC_HOST_CC)" "$(MLIBC_HOST_SDKROOT)"; \
+		printf "cpp = ['%s', '-isysroot', '%s']\n" "$(MLIBC_HOST_CXX)" "$(MLIBC_HOST_SDKROOT)"; \
+	} > "$(MLIBC_NATIVE_FILE)"; \
+	{ \
+		printf '%s\n' '[binaries]'; \
 		printf "c = ['%s', '--target=aarch64-linux-gnu']\n" "$(MLIBC_CC)"; \
 		printf "cpp = ['%s', '--target=aarch64-linux-gnu']\n" "$(MLIBC_CXX)"; \
 		printf "ar = '%s'\n" "$(MLIBC_AR)"; \
@@ -662,3 +672,4 @@ __write-cross-file: __apply-mlibc-patches
 		printf "%s\n" "cpp_link_args = ['-fuse-ld=lld']"; \
 	} > "$(MLIBC_CROSS_FILE)"; \
 	echo "wrote OrlixMLibC mlibc cross file: $(MLIBC_CROSS_FILE)"
+	@echo "wrote OrlixMLibC Meson native file: $(MLIBC_NATIVE_FILE)"

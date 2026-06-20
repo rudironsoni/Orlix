@@ -12,6 +12,25 @@ __attribute__((visibility("default"))) int orlix_host_resources_set_payload_root
 
 __attribute__((visibility("default"))) int orlix_host_resources_clear_root_images(void);
 
+#include <stdint.h>
+
+#define ORLIX_HOST_DIRECTORY_NAME_MAX 255
+
+enum OrlixHostDirectoryEntryType {
+    OrlixHostDirectoryEntryUnknown = 0,
+    OrlixHostDirectoryEntryRegular = 1,
+    OrlixHostDirectoryEntryDirectory = 2,
+    OrlixHostDirectoryEntrySymlink = 3,
+};
+
+struct OrlixHostDirectoryEntry {
+    uint64_t inode;
+    uint64_t size;
+    uint32_t mode;
+    uint8_t type;
+    char name[ORLIX_HOST_DIRECTORY_NAME_MAX + 1];
+};
+
 __attribute__((visibility("default"))) int orlix_host_resources_register_root_image(
     const char *identifier,
     const char *initrd_bundle_name,
@@ -57,6 +76,40 @@ __attribute__((visibility("hidden"))) int OrlixHostCopyHostDirectoryPath(
     char *path,
     unsigned long path_size,
     unsigned int *read_only);
+
+__attribute__((visibility("hidden"))) int orlix_host_directory_read_entry(
+    unsigned int directory,
+    unsigned int entry_index,
+    struct OrlixHostDirectoryEntry *entry);
+__attribute__((visibility("hidden"))) int orlix_host_directory_read_child_entry(
+    unsigned int directory,
+    unsigned int parent_entry_index,
+    unsigned int entry_index,
+    struct OrlixHostDirectoryEntry *entry);
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_file(
+    unsigned int directory,
+    unsigned int entry_index,
+    uint64_t offset,
+    void *buffer,
+    uint32_t length);
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_child_file(
+    unsigned int directory,
+    unsigned int parent_entry_index,
+    unsigned int entry_index,
+    uint64_t offset,
+    void *buffer,
+    uint32_t length);
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_link(
+    unsigned int directory,
+    unsigned int entry_index,
+    void *buffer,
+    uint32_t length);
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_child_link(
+    unsigned int directory,
+    unsigned int parent_entry_index,
+    unsigned int entry_index,
+    void *buffer,
+    uint32_t length);
 
 __attribute__((visibility("hidden"))) int orlix_host_block_capacity(
     unsigned int device,
