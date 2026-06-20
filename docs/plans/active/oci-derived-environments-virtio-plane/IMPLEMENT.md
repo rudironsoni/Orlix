@@ -9515,3 +9515,44 @@ Current status:
 - The stale previous next-step line above is superseded: do not continue standalone oracle conversion.
 - Durable kernel profile inputs now include upstream virtio-fs/FUSE and virtio-net prerequisites.
 - Next implementation slice should add the HostAdapter opaque host-directory resource registration primitive or Orlix virtio-fs transport/backend path, then prove Linux-owned mount behavior through the app-hosted Orlix path.
+
+## 2026-06-20 HostAdapter opaque host-directory resource plumbing
+
+Goal:
+- Advance host-folder mount substrate without moving Linux pathname, VFS, or mount semantics into `OrlixHostAdapter` or `OrlixOS`.
+- Provide private HostAdapter registration plumbing that a future Orlix virtio-fs backend can consume by opaque identifier.
+
+Changes:
+- `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.h`
+  - Added app-private SPI to clear and register host-directory resources by opaque identifier.
+  - Added hidden lookup `OrlixHostCopyHostDirectoryPath` for future HostAdapter-backed device/backend code.
+- `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c`
+  - Added a locked host-directory resource table separate from root image state.
+  - Validates directory IDs as opaque identifiers, rejecting path separators and parent references.
+  - Validates host paths as existing absolute directories, rejecting relative paths, parent references, and regular files.
+  - Stores only HostAdapter-private host paths; no Linux target path or mount policy is decided here.
+- `OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests/OrlixHostAdapterTests.m`
+  - Added tests for successful opaque registration and lookup.
+  - Added tests rejecting path-shaped IDs, relative host paths, parent references, and file paths.
+
+Evidence:
+- `rtk xcrun clang -fsyntax-only -I OrlixHostAdapter/Sources OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c`
+  - Result: exited 0.
+- `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -fobjc-arc -DORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=16384 -I OrlixHostAdapter/Sources -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests/OrlixHostAdapterTests.m`
+  - Result: exited 0.
+- Focused iOS Simulator XCTest command:
+  - `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixHostAdapterTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim -only-testing:OrlixHostAdapterTests/OrlixHostAdapterTests/testHostDirectoryResourcesRegisterOpaqueIdentifiers -only-testing:OrlixHostAdapterTests/OrlixHostAdapterTests/testHostDirectoryResourcesRejectUnsafePathsAndIdentifiers test`
+  - Sandboxed result: exited 74 before test execution because CoreSimulator and SwiftPM cache access were denied.
+  - Escalated rerun was rejected by environment policy, so no simulator XCTest pass is claimed.
+
+Non-claims:
+- This does not prove Linux can mount a host-backed directory.
+- This does not prove virtio-fs device negotiation, FUSE requests, inode behavior, file I/O, rename/unlink, or mount namespace behavior.
+- This does not expose raw host paths to Linux userspace or make them Linux-visible truth.
+- This does not prove OCI Runtime lifecycle/config compliance, product `orlix run`, registry pull, networking, cgroup enforcement, native performance, real-device behavior, App Store acceptance, or arbitrary imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- HostAdapter now has the opaque host-directory registration primitive needed by future virtio-fs/backend work.
+- OrlixOS still fails closed on non-empty environment mounts through `missingLinuxMountBackend`; that remains correct until Linux-owned mount behavior exists.
+- Next implementation slice should connect this primitive to an Orlix virtio-fs transport/backend path or add the Linux-owned mount proof scaffold that consumes it.

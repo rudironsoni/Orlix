@@ -34,6 +34,13 @@ __attribute__((visibility("default"))) int orlix_host_resources_register_root_im
     unsigned int state_block_device,
     unsigned long long state_block_minimum_bytes);
 
+__attribute__((visibility("default"))) int orlix_host_resources_clear_host_directories(void);
+
+__attribute__((visibility("default"))) int orlix_host_resources_register_host_directory(
+    const char *identifier,
+    const char *host_path,
+    unsigned int read_only);
+
 __attribute__((visibility("hidden"))) int OrlixHostLoadKernelPayloadResource(
     const char *resource,
     struct OrlixHostResource *loaded);
@@ -44,6 +51,12 @@ __attribute__((visibility("hidden"))) int OrlixHostLoadInitrdResource(
 
 __attribute__((visibility("hidden"))) int OrlixHostSelectBootBlockImages(
     const char *identifier);
+
+__attribute__((visibility("hidden"))) int OrlixHostCopyHostDirectoryPath(
+    const char *identifier,
+    char *path,
+    unsigned long path_size,
+    unsigned int *read_only);
 
 __attribute__((visibility("hidden"))) int orlix_host_block_capacity(
     unsigned int device,

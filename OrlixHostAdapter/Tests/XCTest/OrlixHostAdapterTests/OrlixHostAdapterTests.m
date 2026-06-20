@@ -4,6 +4,7 @@
 #include "OrlixHostAdapter/boot/resources.h"
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
 
+#include <limits.h>
 #include <mach/mach.h>
 #include <mach/vm_page_size.h>
 #include <stdlib.h>
@@ -328,6 +329,93 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
             1,
             1024),
         0);
+}
+
+- (void)testHostDirectoryResourcesRegisterOpaqueIdentifiers {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSURL *root = [NSURL fileURLWithPath:[NSTemporaryDirectory()
+        stringByAppendingPathComponent:NSUUID.UUID.UUIDString]
+                            isDirectory:YES];
+    NSURL *hostDirectory = [root URLByAppendingPathComponent:@"Shared"
+                                                 isDirectory:YES];
+    XCTAssertTrue([fileManager createDirectoryAtURL:hostDirectory
+                        withIntermediateDirectories:YES
+                                         attributes:nil
+                                              error:nil]);
+
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+    XCTAssertEqual(orlix_host_resources_register_host_directory(
+                       "documents", hostDirectory.fileSystemRepresentation, 1),
+                   0);
+
+    char path[PATH_MAX] = { 0 };
+    unsigned int readOnly = 0;
+    XCTAssertEqual(OrlixHostCopyHostDirectoryPath("documents",
+                                                 path,
+                                                 sizeof(path),
+                                                 &readOnly),
+                   0);
+    XCTAssertEqual(strcmp(path, hostDirectory.fileSystemRepresentation), 0);
+    XCTAssertEqual(readOnly, 1U);
+
+    [fileManager removeItemAtURL:root error:nil];
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+}
+
+- (void)testHostDirectoryResourcesRejectUnsafePathsAndIdentifiers {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSURL *root = [NSURL fileURLWithPath:[NSTemporaryDirectory()
+        stringByAppendingPathComponent:NSUUID.UUID.UUIDString]
+                            isDirectory:YES];
+    NSURL *hostDirectory = [root URLByAppendingPathComponent:@"Shared"
+                                                 isDirectory:YES];
+    NSURL *hostFile = [root URLByAppendingPathComponent:@"file.txt"
+                                           isDirectory:NO];
+    XCTAssertTrue([fileManager createDirectoryAtURL:hostDirectory
+                        withIntermediateDirectories:YES
+                                         attributes:nil
+                                              error:nil]);
+    XCTAssertTrue([@"x" writeToURL:hostFile
+                        atomically:YES
+                          encoding:NSUTF8StringEncoding
+                             error:nil]);
+
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory(
+                          "../documents",
+                          hostDirectory.fileSystemRepresentation,
+                          0),
+                      0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory(
+                          "mnt/documents",
+                          hostDirectory.fileSystemRepresentation,
+                          0),
+                      0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory(
+                          "documents",
+                          "relative/path",
+                          0),
+                      0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory(
+                          "documents",
+                          "/tmp/../Documents",
+                          0),
+                      0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory(
+                          "documents",
+                          hostFile.fileSystemRepresentation,
+                          0),
+                      0);
+
+    char path[PATH_MAX] = { 0 };
+    XCTAssertNotEqual(OrlixHostCopyHostDirectoryPath("documents",
+                                                    path,
+                                                    sizeof(path),
+                                                    NULL),
+                      0);
+
+    [fileManager removeItemAtURL:root error:nil];
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
 }
 
 @end

@@ -69,6 +69,7 @@ Current proved state:
   Orlix kselftest log conversion.
 - OrlixKernel release and development profile defconfigs enable upstream virtio-net and virtio-fs/FUSE prerequisites: `CONFIG_VIRTIO_NET=y`, `CONFIG_FUSE_FS=y`, `CONFIG_VIRTIO_FS=y`.
 - OrlixTestRunner architecture invariants pin the virtio/container-environment substrate config set across both profile defconfigs.
+- OrlixHostAdapter has private opaque host-directory resource registration and lookup plumbing for future virtio-fs backends, with tests for absolute directory validation and path-shaped identifier rejection.
 - OrlixOS named environment session selection API exists.
 - End-to-end named environment runtime entry selects the copied root and
   descriptor argv/env/cwd/uid/gid defaults on iOS Simulator.

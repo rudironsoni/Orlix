@@ -15,6 +15,7 @@
 #define ORLIX_HOST_BLOCK_SECTOR_SIZE 512ULL
 #define ORLIX_HOST_MAX_BLOCK_DEVICES 8
 #define ORLIX_HOST_MAX_ROOT_IMAGES 8
+#define ORLIX_HOST_MAX_HOST_DIRECTORIES 16
 
 static char OrlixHostSelectedBlockPaths[ORLIX_HOST_MAX_BLOCK_DEVICES][PATH_MAX];
 static unsigned long long OrlixHostSelectedBlockBytes[ORLIX_HOST_MAX_BLOCK_DEVICES];
@@ -22,6 +23,7 @@ static int OrlixHostSelectedBlockWritable[ORLIX_HOST_MAX_BLOCK_DEVICES];
 static os_unfair_lock OrlixHostPayloadRootLock = OS_UNFAIR_LOCK_INIT;
 static char OrlixHostPayloadRootPath[PATH_MAX];
 static os_unfair_lock OrlixHostRootImagesLock = OS_UNFAIR_LOCK_INIT;
+static os_unfair_lock OrlixHostDirectoriesLock = OS_UNFAIR_LOCK_INIT;
 
 struct OrlixHostRootImage {
     char identifier[PATH_MAX];
@@ -39,6 +41,24 @@ struct OrlixHostRootImage {
 static struct OrlixHostRootImage
     OrlixHostRootImages[ORLIX_HOST_MAX_ROOT_IMAGES];
 static unsigned int OrlixHostRootImageCount;
+
+struct OrlixHostDirectoryResource {
+    char identifier[PATH_MAX];
+    char host_path[PATH_MAX];
+    unsigned int read_only;
+};
+
+static struct OrlixHostDirectoryResource
+    OrlixHostDirectories[ORLIX_HOST_MAX_HOST_DIRECTORIES];
+static unsigned int OrlixHostDirectoryCount;
+
+static int OrlixHostCopyRequiredDirectoryPath(char *target,
+                                              size_t target_size,
+                                              const char *source);
+
+static int OrlixHostCopyRequiredOpaqueIdentifier(char *target,
+                                                 size_t target_size,
+                                                 const char *source);
 
 static int OrlixHostPathContainsParentReference(const char *path)
 {
@@ -107,6 +127,18 @@ static int OrlixHostCopyRequiredResource(char *target,
     if (OrlixHostPathContainsParentReference(source)) {
         return -1;
     }
+    return OrlixHostCopyRequiredString(target, target_size, source);
+}
+
+static int OrlixHostCopyRequiredOpaqueIdentifier(char *target,
+                                                 size_t target_size,
+                                                 const char *source)
+{
+    if (!source || strchr(source, '/') || strchr(source, '\\') ||
+        OrlixHostPathContainsParentReference(source)) {
+        return -1;
+    }
+
     return OrlixHostCopyRequiredString(target, target_size, source);
 }
 
@@ -195,6 +227,89 @@ __attribute__((visibility("default"))) int orlix_host_resources_clear_root_image
     OrlixHostRootImageCount = 0;
     os_unfair_lock_unlock(&OrlixHostRootImagesLock);
     return 0;
+}
+
+__attribute__((visibility("default"))) int orlix_host_resources_clear_host_directories(void)
+{
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    memset(OrlixHostDirectories, 0, sizeof(OrlixHostDirectories));
+    OrlixHostDirectoryCount = 0;
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+    return 0;
+}
+
+__attribute__((visibility("default"))) int orlix_host_resources_register_host_directory(
+    const char *identifier,
+    const char *host_path,
+    unsigned int read_only)
+{
+    struct OrlixHostDirectoryResource resource = { 0 };
+    unsigned int index;
+    unsigned int target_index;
+
+    if (OrlixHostCopyRequiredOpaqueIdentifier(resource.identifier,
+                                              sizeof(resource.identifier),
+                                              identifier) != 0 ||
+        OrlixHostCopyRequiredDirectoryPath(resource.host_path,
+                                           sizeof(resource.host_path),
+                                           host_path) != 0) {
+        return -1;
+    }
+    resource.read_only = read_only ? 1U : 0U;
+
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    target_index = OrlixHostDirectoryCount;
+    for (index = 0; index < OrlixHostDirectoryCount; index++) {
+        if (strcmp(OrlixHostDirectories[index].identifier,
+                   resource.identifier) == 0) {
+            target_index = index;
+            break;
+        }
+    }
+    if (target_index >= ORLIX_HOST_MAX_HOST_DIRECTORIES) {
+        os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+        return -1;
+    }
+
+    OrlixHostDirectories[target_index] = resource;
+    if (target_index == OrlixHostDirectoryCount) {
+        OrlixHostDirectoryCount++;
+    }
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+    return 0;
+}
+
+__attribute__((visibility("hidden"))) int OrlixHostCopyHostDirectoryPath(
+    const char *identifier,
+    char *path,
+    unsigned long path_size,
+    unsigned int *read_only)
+{
+    unsigned int index;
+
+    if (!identifier || !path || path_size == 0) {
+        return -1;
+    }
+
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    for (index = 0; index < OrlixHostDirectoryCount; index++) {
+        if (strcmp(OrlixHostDirectories[index].identifier, identifier) == 0) {
+            if (OrlixHostCopyRequiredString(
+                    path,
+                    (size_t)path_size,
+                    OrlixHostDirectories[index].host_path) != 0) {
+                os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+                return -1;
+            }
+            if (read_only) {
+                *read_only = OrlixHostDirectories[index].read_only;
+            }
+            os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+            return 0;
+        }
+    }
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+    return -1;
 }
 
 static int OrlixHostRegisterRootImage(struct OrlixHostRootImage *root_image)
@@ -356,6 +471,24 @@ static int OrlixHostCopyPayloadResourcePath(const char *resource,
 
     written = snprintf(path, path_size, "%s/%s", payload_root, resource);
     if (written < 0 || (size_t)written >= path_size) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int OrlixHostCopyRequiredDirectoryPath(char *target,
+                                              size_t target_size,
+                                              const char *source)
+{
+    struct stat state;
+
+    if (OrlixHostAbsolutePathContainsParentReference(source) ||
+        OrlixHostCopyRequiredString(target, target_size, source) != 0) {
+        return -1;
+    }
+
+    if (stat(target, &state) != 0 || !S_ISDIR(state.st_mode)) {
         return -1;
     }
 
