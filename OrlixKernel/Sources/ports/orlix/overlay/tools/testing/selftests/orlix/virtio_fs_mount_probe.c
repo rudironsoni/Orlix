@@ -78,11 +78,25 @@ static bool mounted_root_can_readdir(void)
 	return saw_dot;
 }
 
+static bool mountinfo_reports_virtiofs(void)
+{
+	char buffer[4096];
+	ssize_t size;
+
+	size = orlix_read_file("/proc/self/mountinfo", buffer,
+			       sizeof(buffer), false);
+	if (size <= 0)
+		return false;
+
+	return orlix_contains(buffer, (size_t)size, ORLIX_VIRTIOFS_MOUNTPOINT) &&
+	       orlix_contains(buffer, (size_t)size, " - virtiofs ");
+}
+
 int main(void)
 {
 	bool mounted = false;
 
-	orlix_test_plan(5);
+	orlix_test_plan(6);
 
 	orlix_test_result(
 		read_file_equals("/sys/fs/virtiofs/virtio0/tag", ORLIX_VIRTIOFS_TAG),
@@ -97,12 +111,16 @@ int main(void)
 	if (mounted) {
 		orlix_test_result(mounted_root_is_directory(),
 				  "mounted virtio-fs root is a directory");
+		orlix_test_result(mountinfo_reports_virtiofs(),
+				  "mountinfo reports the mounted virtio-fs root");
 		orlix_test_result(mounted_root_can_readdir(),
 				  "mounted virtio-fs root supports readdir");
 		umount(ORLIX_VIRTIOFS_MOUNTPOINT);
 	} else {
 		orlix_test_result(false,
 				  "mounted virtio-fs root is a directory");
+		orlix_test_result(false,
+				  "mountinfo reports the mounted virtio-fs root");
 		orlix_test_result(false,
 				  "mounted virtio-fs root supports readdir");
 	}
