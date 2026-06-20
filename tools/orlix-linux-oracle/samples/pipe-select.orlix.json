@@ -1,0 +1,21 @@
+{
+  "caseID": "pipe-select",
+  "runner": "orlix",
+  "stdout": "",
+  "stderr": "",
+  "exitStatus": 0,
+  "signal": null,
+  "errnoEvents": [],
+  "statEntries": [],
+  "mutations": [],
+  "observations": {
+    "pipe-created": "ok",
+    "empty-read-eagain": "ok",
+    "empty-select-timeout": "ok",
+    "write-end-writable": "ok",
+    "read-end-readable": "ok",
+    "read-payload": "ok",
+    "readable-after-writer-close": "ok",
+    "read-eof": "ok"
+  }
+}

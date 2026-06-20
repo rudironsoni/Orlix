@@ -9147,3 +9147,85 @@ Current status:
   `pseudo_fs_probe`, or `mount_namespace_probe` into Swift/C-only oracle cases,
   then capture fresh app-hosted Orlix evidence when simulator access is
   available.
+
+## 2026-06-20 pipe-select Linux oracle case expansion
+
+Goal:
+- Extend Linux oracle coverage toward plan's fd readiness substrate gap after
+  `pipe-poll` and before OCI Runtime lifecycle, feature reporting, and product
+  `orlix run` claims.
+- Keep project-side oracle tooling Swift/C/JSON/log only; do not add Python to
+  `tools/` or any iOS/app runtime path.
+- Reuse existing Orlix-owned `pipe_select_probe` semantics instead changing
+  kernel behavior in this checkpoint.
+
+Changes:
+- `tools/orlix-linux-oracle/cases/pipe-select.json`
+  - Added fourth oracle case for nonblocking pipe read `EAGAIN`,
+    zero-timeout `select`, writable/readable readiness, payload read, and EOF
+    after writer close.
+- `tools/orlix-linux-oracle/fixtures/pipe_select_probe.c`
+  - Added Linux-runner fixture emits structured observation JSON for pipe
+    creation, empty-read `EAGAIN`, empty-select timeout, write-end readiness,
+    read-end readiness after write, payload read, read-end readability after
+    writer close, and EOF read.
+- `tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Added `pipe-select` Linux fixture result construction.
+  - Added `pipe-select` Orlix kselftest log conversion based on existing
+    `pipe_select_probe` output markers.
+  - Extended Swift-native `self-test` coverage for case validation, matching
+    comparison, drift detection, and Orlix log conversion.
+- `tools/orlix-linux-oracle/samples/`
+  - Added matching Linux and Orlix `pipe-select` result samples.
+  - Added deliberate `pipe-select` drift sample.
+  - Added representative Orlix `pipe_select_probe` kselftest log sample.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Updated current proved state to include the fourth local oracle case.
+
+Evidence:
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test`
+  - Result: exited 0, output `oracle self-test passed`.
+- `rtk swiftc -parse tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Result: exited 0.
+- `rtk clang -fsyntax-only -Wall -Wextra tools/orlix-linux-oracle/fixtures/pipe_select_probe.c`
+  - Result: exited 0.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/pipe-select.json`
+  - Result: exited 0, output `case pipe-select is valid`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pipe-select.json --linux-result tools/orlix-linux-oracle/samples/pipe-select.linux.json --orlix-result tools/orlix-linux-oracle/samples/pipe-select.orlix.json`
+  - Result: exited 0, output `case pipe-select matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift orlix-result-from-log --case tools/orlix-linux-oracle/cases/pipe-select.json --log tools/orlix-linux-oracle/samples/pipe-select.orlix-kselftest.log --output /private/tmp/pipe-select.orlix.generated.json`
+  - Result: exited 0, output `wrote Orlix result for case pipe-select: /private/tmp/pipe-select.orlix.generated.json`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pipe-select.json --linux-result tools/orlix-linux-oracle/samples/pipe-select.linux.json --orlix-result /private/tmp/pipe-select.orlix.generated.json`
+  - Result: exited 0, output `case pipe-select matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pipe-select.json --linux-result tools/orlix-linux-oracle/samples/pipe-select.linux.json --orlix-result tools/orlix-linux-oracle/samples/pipe-select.orlix-drift.json`
+  - Result: exited 2 as expected for deliberate drift sample, output `oracle comparison failed: - observations differ`.
+- `rtk git diff --check`
+  - Result: exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py`
+  - Result: exited 0 with historical warning `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+- `rtk python3 -m unittest discover .codex/hooks/tests`
+  - Result: ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests`
+  - Result: ran 5 tests, OK.
+- `rtk rg -n "python|pytest|unittest|\\.py" tools/orlix-linux-oracle`
+  - Result: exited 1 with no matches, confirming no Python references under project oracle tooling.
+
+Non-claims:
+- This proves local oracle-tool regression coverage and fixture syntax only.
+- This does not prove fresh real-Linux oracle execution, fresh app-hosted Orlix
+  runtime execution, imported-environment `select` readiness, `poll`, `epoll`,
+  PTY readiness, socket readiness, signal-interrupted `select`, nonzero timeout
+  precision, pipe capacity behavior, partial writes, multiple live
+  environments, OCI Runtime lifecycle compliance, product `orlix run`,
+  registry pull, host-folder mounts, virtio-fs, networking, cgroups, native
+  performance, real-device behavior, App Store acceptance, or arbitrary
+  imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- Linux oracle tooling now covers four local cases: `path-errno`, `fd-exec`,
+  `pipe-poll`, and `pipe-select`.
+- Next substrate work should continue converting existing Orlix kselftest
+  probes such as `pipe_epoll_probe`, `signal_wait_probe`, `pseudo_fs_probe`, or
+  `mount_namespace_probe` into Swift/C-only oracle cases, then capture fresh
+  app-hosted Orlix evidence when simulator access is available.
