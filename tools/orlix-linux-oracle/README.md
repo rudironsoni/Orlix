@@ -30,6 +30,12 @@ The first scope is deterministic syscall and filesystem behavior:
 
 ## Commands
 
+Run local oracle tool regression tests:
+
+```bash
+python3 -m unittest discover tools/orlix-linux-oracle/tests
+```
+
 Validate a case file:
 
 ```bash

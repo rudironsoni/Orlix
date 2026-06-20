@@ -8786,3 +8786,220 @@ Handoff:
 - The next useful substrate steps remain Linux oracle expansion, host-folder
   mounts through Linux mount behavior, virtio-fs, networking, cgroups, and
   native performance baselines.
+
+## 2026-06-20 imported root archive-path and hard-link fidelity
+
+Goal:
+
+- Tighten OrlixOS imported-root image fidelity before any OCI Runtime lifecycle,
+  feature-reporting, product `orlix run`, registry pull, virtio-fs, networking,
+  cgroup, or runtime-readiness claim.
+- Keep this checkpoint at the OrlixOS image-input and materialization boundary.
+
+Changes:
+
+- `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`
+  - Added `testRootfsTarManifestReaderParsesUstarPrefixPaths`, proving ustar
+    `prefix` plus `name` archive paths are represented as normalized imported
+    root manifest paths.
+  - Added `testOCIImageLayoutImporterPreservesUstarPrefixPaths`, proving the
+    same prefixed path shape survives OCI layer import into the staging tree and
+    base-image metadata command stream.
+  - Extended the local tar fixture helper with a `prefix` field written to the
+    ustar header prefix field.
+  - Added `testOCIImageLayoutImporterPreservesHardLinksIntoMaterializationInput`,
+    proving OCI hard links are represented in the manifest and remain hard links
+    in both the staging tree and the base image materialization input tree.
+- `OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift`
+  - Replaced the base-tree preparation copy with a recursive copy that preserves
+    hard-link topology by tracking source device/inode identity and recreating
+    later occurrences with `linkItem`.
+  - Kept symlinks as symlinks and directories as directories. Linux special
+    files remain metadata-only through the existing debugfs command path.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Updated current proved state for ustar-prefixed archive paths and OCI
+    hard-link materialization input fidelity.
+
+Evidence:
+
+- Static Swift parse gates:
+  - `rtk swiftc -parse -I OrlixOS/Sources/Session OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift`
+  - Result: exited 0.
+  - `rtk swiftc -parse -I OrlixOS/Sources/Session OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`
+  - Result: exited 0.
+- Harness/static gates:
+  - `rtk git diff --check`
+  - Result: exited 0.
+  - `rtk python3 -m unittest discover .codex/hooks/tests`
+  - Result: ran 32 tests, OK.
+  - `rtk python3 -m unittest discover .codex/rules/tests`
+  - Result: ran 5 tests, OK.
+  - `rtk python3 .codex/hooks/compact_plan_check.py`
+  - Result: exited 0.
+- Focused OrlixOS simulator test attempt:
+  - `rtk timeout 900 xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testRootfsTarManifestReaderParsesUstarPrefixPaths -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIImageLayoutImporterPreservesUstarPrefixPaths -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIImageLayoutImporterPreservesHardLinksIntoMaterializationInput test`
+  - Result: exited 74 before test execution.
+  - Failure reason: sandboxed Xcode could not access CoreSimulator and SwiftPM
+    cache state. Output included `CoreSimulatorService connection became
+    invalid`, no permission to save `org.swift.swiftpm` in `Caches`, and I/O
+    error reading `/Volumes/1TB/Xcode/tmp/_Volumes_1TB_Xcode_SourcePackages_workspace-state.json.lock`.
+  - Escalation for the earlier focused Xcode run was rejected by policy, so no
+    simulator green claim is made for this checkpoint.
+
+Review and delegation:
+
+- User authorized use of all available agents, skills, commands, and MCPs.
+- Used `orlix-dynamic-workflows` guidance and multi-agent MCP:
+  - Reviewer pass confirmed this work must be named narrowly as archive-path
+    and import/materialization fidelity, not broad metadata or runtime fidelity.
+  - Explorer pass identified OCI hard-link topology into materialization input
+    as a high-value remaining imported-root fidelity gap.
+
+Explicit non-claims:
+
+- This does not prove OCI Runtime lifecycle compliance, product `orlix run`,
+  registry pull, runtime Linux `stat(2)` fidelity, runtime hard-link behavior
+  inside a booted Orlix environment, real-device behavior, full Linux substrate
+  readiness, host-folder mounts, virtio-fs, networking, cgroups, native
+  performance, or App Store acceptance.
+
+Current conclusion:
+
+- OrlixOS imported-root fidelity is stronger for ustar-prefixed archive paths
+  and OCI hard links through materialization input preparation.
+- Focused simulator execution remains unverified in this sandbox because
+  CoreSimulator and SwiftPM cache access failed before test execution.
+- Continue with Linux oracle expansion, host-folder mounts through Linux mount
+  behavior, virtio-fs, networking, cgroups, and native performance baselines
+  before OCI Runtime lifecycle or product `orlix run` claims.
+
+Current status:
+
+- Active plan remains in progress.
+- Latest local checkpoint changed OrlixOS import/materialization fidelity and
+  plan logs only.
+- Simulator test execution was attempted here but did not reach test execution
+  because sandboxed Xcode lacked CoreSimulator and SwiftPM cache access.
+
+Addendum:
+
+- Tightened the base-tree recursive copy after local review so source directory
+  permissions and modification dates are restored after recursively copying
+  children. This avoids trading hard-link topology preservation for weaker
+  directory metadata fidelity in the materialization input tree.
+- Extended `testEnvironmentImageMaterializationPlanMatchesProductExt4Shape` to
+  assert non-default staging directory mode and modification date survive into
+  `base-tree`.
+- Additional static evidence after this addendum:
+  - `rtk swiftc -parse -I OrlixOS/Sources/Session OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift`
+  - Result: exited 0.
+  - `rtk swiftc -parse -I OrlixOS/Sources/Session OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`
+  - Result: exited 0.
+  - `rtk git diff --check`
+  - Result: exited 0.
+- Added temporary executable verifier outside the repo at
+  `/private/tmp/orlix_materialization_verifier.swift` to exercise
+  `prepareInputTrees()` directly without Xcode or CoreSimulator.
+- Local executable verifier evidence:
+  - `rtk swiftc -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift /private/tmp/orlix_materialization_verifier.swift -o /private/tmp/orlix_materialization_verifier`
+  - Result: exited 0.
+  - `rtk /private/tmp/orlix_materialization_verifier`
+  - Result: exited 0, output `materialization verifier passed`.
+  - Coverage: local verifier creates a staging root with a directory carrying
+    non-default mode and mtime, a regular file with a hard link, and a symlink;
+    then verifies the base-tree materialization input preserves directory
+    metadata, hard-link inode identity, and symlink destination.
+
+Addendum:
+
+- Added `testOCIImageLayoutImporterReplacesLowerDirectoryTreeWithRegularFile`
+  to cover OCI layer replacement where an upper-layer regular file replaces a
+  lower-layer directory tree at the same path.
+- The test asserts manifest pruning, staging-tree replacement, lower-descendant
+  removal, and generated materialization metadata command absence for removed
+  descendants.
+- Updated `PLAN.md` current proved state for this narrow imported-root image
+  fidelity case.
+- Added temporary executable verifier outside repo at
+  `/private/tmp/orlix_imported_root_fidelity_verifier.swift` to exercise this
+  replacement path without Xcode or CoreSimulator.
+- Local executable verifier evidence:
+  - `rtk swiftc -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift /private/tmp/orlix_imported_root_fidelity_verifier.swift -o /private/tmp/orlix_imported_root_fidelity_verifier`
+  - Result: exited 0.
+  - `rtk /private/tmp/orlix_imported_root_fidelity_verifier`
+  - Result: exited 0, output `imported root fidelity verifier passed`.
+- Coverage: local verifier builds a minimal OCI layout with a lower layer
+  directory tree at `var/lib/app` and an upper layer regular file at the same
+  path, then verifies manifest, staging tree, and metadata-command behavior.
+- This remains OrlixOS import/materialization fidelity only. It does not prove
+  runtime Linux path replacement behavior inside a booted environment, OCI
+  Runtime lifecycle compliance, product `orlix run`, registry pull, host-folder
+  mounts, virtio-fs, networking, cgroups, native performance, real-device
+  behavior, or App Store acceptance.
+
+Current status:
+
+- Active plan remains in progress.
+- Latest checkpoint stays in OrlixOS imported-root image fidelity:
+  archive prefix paths, hard-link materialization input, directory metadata
+  preservation, and upper-layer regular-file replacement of a lower directory
+  tree are covered by local static/verifier gates.
+- Focused simulator execution remains unverified in this sandbox because
+  CoreSimulator SwiftPM cache access failed before test execution.
+- Continue Linux substrate proof and Linux oracle expansion before OCI Runtime
+  lifecycle, feature reporting, product `orlix run`, registry pull, virtio-fs,
+  networking, cgroups, or native performance claims.
+
+## 2026-06-20 Linux oracle tool regression gate
+
+Goal:
+
+- Strengthen the Linux oracle expansion lane before using oracle comparisons as
+  evidence for OCI-derived environment substrate behavior.
+- Keep this as Mac-local tooling coverage only. It does not create new runtime
+  Linux proof and does not link oracle tooling into iOS runtime targets.
+
+Changes:
+
+- `tools/orlix-linux-oracle/tests/test_orlix_linux_oracle.py`
+  - Added unittest coverage for `path-errno` case validation.
+  - Added matching Linux-vs-Orlix sample comparison coverage.
+  - Added drift-sample comparison coverage, asserting the comparator fails and
+    reports `errnoEvents differ`.
+  - Added Orlix kselftest log conversion coverage, comparing structured output
+    to the checked-in Orlix sample while normalizing optional nil `signal`
+    encoding.
+- `tools/orlix-linux-oracle/README.md`
+  - Documented the local regression test command.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Updated current proved state for local oracle-tool regression coverage.
+
+Evidence:
+
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/path-errno.json`
+  - Result: exited 0, output `case path-errno is valid`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/path-errno.json --linux-result tools/orlix-linux-oracle/samples/path-errno.linux.json --orlix-result tools/orlix-linux-oracle/samples/path-errno.orlix.json`
+  - Result: exited 0, output `case path-errno matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift orlix-result-from-log --case tools/orlix-linux-oracle/cases/path-errno.json --log tools/orlix-linux-oracle/samples/path-errno.orlix-kselftest.log --output /private/tmp/path-errno.orlix.current.json`
+  - Result: exited 0 and wrote the converted Orlix result.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/path-errno.json --linux-result tools/orlix-linux-oracle/samples/path-errno.linux.json --orlix-result /private/tmp/path-errno.orlix.current.json`
+  - Result: exited 0, output `case path-errno matches`.
+- `rtk python3 -m unittest discover tools/orlix-linux-oracle/tests`
+  - Result: ran 4 tests, OK.
+
+Explicit non-claims:
+
+- This does not prove a fresh real-Linux oracle run, a fresh Orlix runtime run,
+  imported-environment path behavior, OCI Runtime lifecycle behavior, feature
+  reporting, product `orlix run`, registry pull, host-folder mounts, virtio-fs,
+  networking, cgroups, native performance, real-device behavior, or App Store
+  acceptance.
+
+Current status:
+
+- Active plan remains in progress.
+- Linux oracle tooling now has a local regression gate for the existing
+  `path-errno` oracle case and samples.
+- Next substrate work should add broader oracle cases or app-hosted Orlix
+  evidence for entered environments before any OCI Runtime lifecycle or product
+  claims.
