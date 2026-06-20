@@ -17,6 +17,7 @@
 #define ORLIX_HOST_MAX_BLOCK_DEVICES 8
 #define ORLIX_HOST_MAX_ROOT_IMAGES 8
 #define ORLIX_HOST_MAX_HOST_DIRECTORIES 16
+#define ORLIX_HOST_MAX_HOST_DIRECTORY_XATTRS 128
 
 static char OrlixHostSelectedBlockPaths[ORLIX_HOST_MAX_BLOCK_DEVICES][PATH_MAX];
 static unsigned long long OrlixHostSelectedBlockBytes[ORLIX_HOST_MAX_BLOCK_DEVICES];
@@ -49,9 +50,20 @@ struct OrlixHostDirectoryResource {
     unsigned int read_only;
 };
 
+struct OrlixHostDirectoryXattrResource {
+    char identifier[PATH_MAX];
+    char relative_path[PATH_MAX];
+    char name[ORLIX_HOST_DIRECTORY_XATTR_NAME_MAX + 1];
+    uint8_t value[ORLIX_HOST_DIRECTORY_XATTR_VALUE_MAX];
+    uint32_t value_length;
+};
+
 static struct OrlixHostDirectoryResource
     OrlixHostDirectories[ORLIX_HOST_MAX_HOST_DIRECTORIES];
 static unsigned int OrlixHostDirectoryCount;
+static struct OrlixHostDirectoryXattrResource
+    OrlixHostDirectoryXattrs[ORLIX_HOST_MAX_HOST_DIRECTORY_XATTRS];
+static unsigned int OrlixHostDirectoryXattrCount;
 
 static int OrlixHostCopyRequiredDirectoryPath(char *target,
                                               size_t target_size,
@@ -60,6 +72,13 @@ static int OrlixHostCopyRequiredDirectoryPath(char *target,
 static int OrlixHostCopyRequiredOpaqueIdentifier(char *target,
                                                  size_t target_size,
                                                  const char *source);
+static int OrlixHostCopyRequiredRelativePath(char *target,
+                                             size_t target_size,
+                                             const char *source);
+static int OrlixHostCopyRequiredLinuxXattrName(char *target,
+                                               size_t target_size,
+                                               const char *source);
+static int OrlixHostDirectoryIdentifierIndexLocked(const char *identifier);
 
 static int OrlixHostPathContainsParentReference(const char *path)
 {
@@ -176,6 +195,89 @@ static int OrlixHostCopyRequiredBlockFilePath(char *target,
     return 0;
 }
 
+static int OrlixHostCopyRequiredRelativePath(char *target,
+                                             size_t target_size,
+                                             const char *source)
+{
+    size_t length;
+
+    if (!target || target_size == 0 || !source || source[0] == '\0') {
+        return -1;
+    }
+    if (source[0] == '/' || OrlixHostPathContainsParentReference(source)) {
+        return -1;
+    }
+
+    length = strlen(source);
+    if (length >= target_size) {
+        return -1;
+    }
+
+    memcpy(target, source, length + 1);
+    return 0;
+}
+
+static int OrlixHostLinuxXattrNameHasAllowedPrefix(const char *source)
+{
+    static const char *const prefixes[] = {
+        "security.",
+        "system.",
+        "trusted.",
+        "user.",
+    };
+    size_t index;
+
+    for (index = 0; index < sizeof(prefixes) / sizeof(prefixes[0]); index++) {
+        size_t prefix_length = strlen(prefixes[index]);
+
+        if (strncmp(source, prefixes[index], prefix_length) == 0 &&
+            source[prefix_length] != '\0') {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int OrlixHostCopyRequiredLinuxXattrName(char *target,
+                                               size_t target_size,
+                                               const char *source)
+{
+    size_t length;
+
+    if (!target || target_size == 0 || !source || source[0] == '\0') {
+        return -1;
+    }
+    if (!OrlixHostLinuxXattrNameHasAllowedPrefix(source)) {
+        return -1;
+    }
+
+    length = strlen(source);
+    if (length >= target_size) {
+        return -1;
+    }
+
+    memcpy(target, source, length + 1);
+    return 0;
+}
+
+static int OrlixHostDirectoryIdentifierIndexLocked(const char *identifier)
+{
+    unsigned int index;
+
+    if (!identifier || identifier[0] == '\0') {
+        return -1;
+    }
+
+    for (index = 0; index < OrlixHostDirectoryCount; index++) {
+        if (strcmp(OrlixHostDirectories[index].identifier, identifier) == 0) {
+            return (int)index;
+        }
+    }
+
+    return -1;
+}
+
 static int OrlixHostCopyRootImageForIdentifier(
     const char *identifier,
     struct OrlixHostRootImage *root_image)
@@ -235,6 +337,8 @@ __attribute__((visibility("default"))) int orlix_host_resources_clear_host_direc
     os_unfair_lock_lock(&OrlixHostDirectoriesLock);
     memset(OrlixHostDirectories, 0, sizeof(OrlixHostDirectories));
     OrlixHostDirectoryCount = 0;
+    memset(OrlixHostDirectoryXattrs, 0, sizeof(OrlixHostDirectoryXattrs));
+    OrlixHostDirectoryXattrCount = 0;
     os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
     return 0;
 }
@@ -275,6 +379,69 @@ __attribute__((visibility("default"))) int orlix_host_resources_register_host_di
     OrlixHostDirectories[target_index] = resource;
     if (target_index == OrlixHostDirectoryCount) {
         OrlixHostDirectoryCount++;
+    }
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+    return 0;
+}
+
+__attribute__((visibility("default"))) int orlix_host_resources_register_host_directory_xattr(
+    const char *identifier,
+    const char *relative_path,
+    const char *name,
+    const void *value,
+    uint32_t value_length)
+{
+    struct OrlixHostDirectoryXattrResource resource;
+    unsigned int target_index;
+    unsigned int index;
+
+    memset(&resource, 0, sizeof(resource));
+    if (OrlixHostCopyRequiredOpaqueIdentifier(resource.identifier,
+                                              sizeof(resource.identifier),
+                                              identifier) != 0 ||
+        OrlixHostCopyRequiredRelativePath(resource.relative_path,
+                                          sizeof(resource.relative_path),
+                                          relative_path) != 0 ||
+        OrlixHostCopyRequiredLinuxXattrName(resource.name,
+                                            sizeof(resource.name),
+                                            name) != 0 ||
+        value_length > sizeof(resource.value) ||
+        (value_length > 0 && !value)) {
+        return -1;
+    }
+
+    if (value_length > 0) {
+        memcpy(resource.value, value, value_length);
+    }
+    resource.value_length = value_length;
+
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    if (OrlixHostDirectoryIdentifierIndexLocked(resource.identifier) < 0) {
+        os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+        return -1;
+    }
+
+    target_index = OrlixHostDirectoryXattrCount;
+    for (index = 0; index < OrlixHostDirectoryXattrCount; index++) {
+        if (strcmp(OrlixHostDirectoryXattrs[index].identifier,
+                   resource.identifier) == 0 &&
+            strcmp(OrlixHostDirectoryXattrs[index].relative_path,
+                   resource.relative_path) == 0 &&
+            strcmp(OrlixHostDirectoryXattrs[index].name,
+                   resource.name) == 0) {
+            target_index = index;
+            break;
+        }
+    }
+
+    if (target_index >= ORLIX_HOST_MAX_HOST_DIRECTORY_XATTRS) {
+        os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+        return -1;
+    }
+
+    OrlixHostDirectoryXattrs[target_index] = resource;
+    if (target_index == OrlixHostDirectoryXattrCount) {
+        OrlixHostDirectoryXattrCount++;
     }
     os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
     return 0;
@@ -1333,6 +1500,125 @@ __attribute__((visibility("hidden"))) long orlix_host_directory_read_link(
     read_count = readlink(entry_path, buffer, length);
     OrlixHostLeaveHostTls(active_tls);
     return read_count >= 0 ? (long)read_count : -1;
+}
+
+__attribute__((visibility("hidden"))) long orlix_host_directory_list_xattr(
+    unsigned int directory,
+    const char *relative_path,
+    char *buffer,
+    uint64_t capacity)
+{
+    char checked_relative_path[PATH_MAX];
+    uint64_t required = 0;
+    unsigned int index;
+
+    if (OrlixHostCopyRequiredRelativePath(checked_relative_path,
+                                          sizeof(checked_relative_path),
+                                          relative_path) != 0) {
+        return -1;
+    }
+
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    if (directory >= OrlixHostDirectoryCount ||
+        OrlixHostDirectories[directory].identifier[0] == '\0') {
+        os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+        return -1;
+    }
+
+    for (index = 0; index < OrlixHostDirectoryXattrCount; index++) {
+        const struct OrlixHostDirectoryXattrResource *xattr =
+            &OrlixHostDirectoryXattrs[index];
+
+        if (strcmp(xattr->identifier,
+                   OrlixHostDirectories[directory].identifier) != 0 ||
+            strcmp(xattr->relative_path, checked_relative_path) != 0) {
+            continue;
+        }
+
+        required += strlen(xattr->name) + 1;
+    }
+
+    if (buffer && capacity > 0) {
+        uint64_t offset = 0;
+
+        if (capacity < required) {
+            os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+            return -2;
+        }
+
+        for (index = 0; index < OrlixHostDirectoryXattrCount; index++) {
+            const struct OrlixHostDirectoryXattrResource *xattr =
+                &OrlixHostDirectoryXattrs[index];
+            size_t name_length;
+
+            if (strcmp(xattr->identifier,
+                       OrlixHostDirectories[directory].identifier) != 0 ||
+                strcmp(xattr->relative_path, checked_relative_path) != 0) {
+                continue;
+            }
+
+            name_length = strlen(xattr->name) + 1;
+            memcpy(buffer + offset, xattr->name, name_length);
+            offset += name_length;
+        }
+    }
+
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+    return (long)required;
+}
+
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_xattr(
+    unsigned int directory,
+    const char *relative_path,
+    const char *name,
+    void *buffer,
+    uint64_t capacity)
+{
+    char checked_relative_path[PATH_MAX];
+    char checked_name[ORLIX_HOST_DIRECTORY_XATTR_NAME_MAX + 1];
+    unsigned int index;
+
+    if (OrlixHostCopyRequiredRelativePath(checked_relative_path,
+                                          sizeof(checked_relative_path),
+                                          relative_path) != 0 ||
+        OrlixHostCopyRequiredLinuxXattrName(checked_name,
+                                            sizeof(checked_name),
+                                            name) != 0) {
+        return -1;
+    }
+
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    if (directory >= OrlixHostDirectoryCount ||
+        OrlixHostDirectories[directory].identifier[0] == '\0') {
+        os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+        return -1;
+    }
+
+    for (index = 0; index < OrlixHostDirectoryXattrCount; index++) {
+        const struct OrlixHostDirectoryXattrResource *xattr =
+            &OrlixHostDirectoryXattrs[index];
+
+        if (strcmp(xattr->identifier,
+                   OrlixHostDirectories[directory].identifier) != 0 ||
+            strcmp(xattr->relative_path, checked_relative_path) != 0 ||
+            strcmp(xattr->name, checked_name) != 0) {
+            continue;
+        }
+
+        if (buffer && capacity > 0) {
+            if (capacity < xattr->value_length) {
+                os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+                return -2;
+            }
+            memcpy(buffer, xattr->value, xattr->value_length);
+        }
+
+        os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+        return (long)xattr->value_length;
+    }
+
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+    return -1;
 }
 
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_child_file(

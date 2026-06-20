@@ -10544,3 +10544,78 @@ Non-claims:
   metadata such as OCI/tar-derived `security.capability` through standard
   `FUSE_LISTXATTR` and `FUSE_GETXATTR`, without exposing Darwin xattrs or any
   custom Orlix ABI.
+## 2026-06-21 - Private Linux xattr metadata path for virtio-fs
+
+Status: implemented and build-verified; app-hosted runtime execution remains
+blocked by local CoreSimulator availability.
+
+Scope:
+
+- Added a private HostAdapter metadata registration path for host-directory
+  Linux xattrs:
+  - `orlix_host_resources_register_host_directory_xattr(...)` accepts explicit
+    metadata keyed by host-directory identifier, relative Linux path, xattr
+    name, and raw value bytes.
+  - The accepted xattr names are Linux namespaces only: `security.*`,
+    `system.*`, `trusted.*`, and `user.*`.
+  - Relative paths are rejected if absolute or parent-traversing.
+  - Darwin names such as `com.apple.*` are rejected; HostAdapter does not read
+    or translate Darwin filesystem xattrs.
+  - Metadata is cleared with the host-directory resource table.
+- Added hidden HostAdapter query helpers for the kernel/virtio-fs path:
+  - `orlix_host_directory_list_xattr(...)`
+  - `orlix_host_directory_read_xattr(...)`
+- Extended the durable Orlix virtio-fs backend in
+  `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c` so
+  standard `FUSE_LISTXATTR` and `FUSE_GETXATTR` can answer from the private
+  HostAdapter metadata table:
+  - size probes return `struct fuse_getxattr_out.size`;
+  - undersized buffers return `-ERANGE`;
+  - missing attributes return `-ENODATA`;
+  - successful value/name-list reads return the normal FUSE payload bytes.
+- Kept `FUSE_SETXATTR` and `FUSE_REMOVEXATTR` on the read-only mutation path.
+- Added HostAdapter XCTest source coverage for registering Linux xattrs,
+  rejecting Darwin/unsafe metadata, listing names, reading exact raw bytes, and
+  clearing metadata with host directories.
+
+Validation:
+
+- `rtk python3 -c 'import json, subprocess; payload={"hook_event_name":"PostToolUse","tool_name":"read","tool_input":{"path":"AGENTS.md docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md docs/plans/active/oci-derived-environments-virtio-plane/IMPLEMENT.md"}}; subprocess.run(["python3", ".codex/hooks/plan_context_guard.py"], input=json.dumps(payload), text=True, check=True)'`
+  exited 0 before this plan edit.
+- `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -IOrlixHostAdapter/Sources OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c`
+  exited 0.
+- `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -fobjc-arc -DORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=16384 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -IOrlixHostAdapter/Sources -I. -F/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests/OrlixHostAdapterTests.m`
+  exited 0.
+- Sandboxed `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  compiled through the touched Orlix virtio driver but failed only at the
+  known `/Volumes/1TB/Xcode/Caches` sandbox write.
+- Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  exited 0 after the FUSE xattr handler patch.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0 after the FUSE xattr handler patch.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  still reports the virtio-fs probe in the kselftest list and initramfs
+  manifest.
+- `rtk git diff --check` exited 0.
+
+Non-claims:
+
+- This does not claim OrlixOS sidecar generation/lowering yet. OrlixOS still
+  needs to register OCI/tar-derived `OrlixRootfsTarManifestEntry.extendedAttributes`
+  through the private HostAdapter metadata path.
+- This does not claim app-hosted virtio-fs xattr runtime success, because
+  CoreSimulator remains unavailable locally.
+- This does not expose any custom Linux ABI. Linux userspace still sees only
+  normal `listxattr(2)`/`getxattr(2)` through upstream virtio-fs/FUSE behavior.
+
+Current status:
+
+- Latest coherent checkpoint: private HostAdapter Linux xattr metadata
+  registration plus standard FUSE `GETXATTR`/`LISTXATTR` responses in the
+  Orlix virtio-fs backend.
+- Green local proof: HostAdapter C/XCTest syntax checks, escalated release
+  OrlixKernel build, kselftest packaging, hook tests, rules tests, and
+  whitespace check.
+- Still open: OrlixOS sidecar/lowering from OCI/tar-derived
+  `extendedAttributes` into the private HostAdapter metadata path, followed by
+  app-hosted runtime proof when CoreSimulator is available.
