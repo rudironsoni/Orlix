@@ -1,0 +1,20 @@
+{
+  "caseID": "fd-exec",
+  "runner": "linux",
+  "stdout": "",
+  "stderr": "",
+  "exitStatus": 0,
+  "signal": null,
+  "errnoEvents": [],
+  "statEntries": [],
+  "mutations": [],
+  "observations": {
+    "pipe-created": "ok",
+    "fd-without-cloexec": "ok",
+    "fd-marked-cloexec": "ok",
+    "child-started": "ok",
+    "inherited-read": "ok",
+    "cloexec-ebadf": "ok",
+    "exec-child-exit": "ok"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "fd-exec",
+  "description": "Compare fd inheritance and close-on-exec behavior across exec.",
+  "fixture": "fixtures/fd_exec_probe.c",
+  "command": [
+    "/oracle/fd_exec_probe"
+  ],
+  "environment": {
+    "LC_ALL": "C"
+  },
+  "workingDirectory": "/oracle/work",
+  "compare": {
+    "stdout": false,
+    "stderr": true,
+    "exitStatus": true,
+    "signal": true,
+    "errnoEvents": false,
+    "statEntries": false,
+    "mutations": false,
+    "observations": true
+  }
+}

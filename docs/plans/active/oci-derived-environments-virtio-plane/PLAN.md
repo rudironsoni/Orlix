@@ -43,6 +43,9 @@ Current proved state:
 - Linux oracle scaffold has local regression coverage for path-errno case
   validation, matching comparison, drift detection, and Orlix kselftest log
   conversion.
+- Linux oracle scaffold has a second fd-exec case covering fd inheritance and
+  close-on-exec comparison samples, drift detection, Linux fixture syntax, and
+  Orlix kselftest log conversion.
 - OrlixOS named environment session selection API exists.
 - End-to-end named environment runtime entry selects the copied root and
   descriptor argv/env/cwd/uid/gid defaults on iOS Simulator.

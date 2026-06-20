@@ -196,6 +196,11 @@ struct RawErrnoEvent: Decodable {
     let expected: Int
 }
 
+struct RawObservation: Decodable {
+    let observation: String
+    let value: String
+}
+
 func pathErrnoEvents(from jsonLines: [String]) throws -> [OracleResult.ErrnoEvent] {
     let decoder = JSONDecoder()
 
@@ -216,6 +221,26 @@ func pathErrnoEvents(from jsonLines: [String]) throws -> [OracleResult.ErrnoEven
             name: errnoName(raw.errno)
         )
     }
+}
+
+func observations(from jsonLines: [String]) throws -> [String: String] {
+    let decoder = JSONDecoder()
+    var result: [String: String] = [:]
+
+    for line in jsonLines {
+        let raw = try decoder.decode(
+            RawObservation.self,
+            from: Data(line.utf8)
+        )
+        guard result[raw.observation] == nil else {
+            throw OracleError.invalidLog(
+                "duplicate observation \(raw.observation)"
+            )
+        }
+        result[raw.observation] = raw.value
+    }
+
+    return result
 }
 
 func pathErrnoResult(
@@ -258,6 +283,45 @@ func pathErrnoResult(
     )
 }
 
+let fdExecObservationKeys: Set<String> = [
+    "pipe-created",
+    "fd-without-cloexec",
+    "fd-marked-cloexec",
+    "child-started",
+    "inherited-read",
+    "cloexec-ebadf",
+    "exec-child-exit"
+]
+
+func fdExecResult(
+    runner: String,
+    stdout: String,
+    stderr: String,
+    exitStatus: Int?,
+    signal: String?,
+    observations: [String: String]
+) throws -> OracleResult {
+    let missing = fdExecObservationKeys.subtracting(observations.keys)
+    guard missing.isEmpty else {
+        throw OracleError.invalidLog(
+            "missing fd-exec observations: \(missing.sorted().joined(separator: ", "))"
+        )
+    }
+
+    return OracleResult(
+        caseID: "fd-exec",
+        runner: runner,
+        stdout: stdout,
+        stderr: stderr,
+        exitStatus: exitStatus,
+        signal: signal,
+        errnoEvents: [],
+        statEntries: [],
+        mutations: [],
+        observations: observations
+    )
+}
+
 func oracleBlock(caseID: String, in log: String) throws -> [String] {
     let begin = "ORLIX-ORACLE-BEGIN \(caseID)"
     let end = "ORLIX-ORACLE-END \(caseID)"
@@ -289,6 +353,111 @@ func pathErrnoResultFromOrlixLog(_ log: String) throws -> OracleResult {
         exitStatus: 0,
         signal: nil,
         jsonLines: jsonLines
+    )
+}
+
+func resultFromLinuxFixture(
+    testCase: OracleCase,
+    stdout: String,
+    stderr: String,
+    exitStatus: Int?,
+    signal: String?
+) throws -> OracleResult {
+    switch testCase.id {
+    case "path-errno":
+        return try pathErrnoResult(
+            runner: "linux",
+            stdout: stdout,
+            stderr: stderr,
+            exitStatus: exitStatus,
+            signal: signal,
+            jsonLines: jsonObjectLines(from: stdout)
+        )
+    case "fd-exec":
+        return try fdExecResult(
+            runner: "linux",
+            stdout: stdout,
+            stderr: stderr,
+            exitStatus: exitStatus,
+            signal: signal,
+            observations: observations(from: jsonObjectLines(from: stdout))
+        )
+    default:
+        throw OracleError.invalidCase(
+            "linux-result-from-fixture does not support \(testCase.id)"
+        )
+    }
+}
+
+func resultFromOrlixLog(testCase: OracleCase, log: String) throws -> OracleResult {
+    switch testCase.id {
+    case "path-errno":
+        return try pathErrnoResultFromOrlixLog(log)
+    case "fd-exec":
+        return try fdExecResultFromOrlixLog(log)
+    default:
+        throw OracleError.invalidCase(
+            "orlix-result-from-log does not support \(testCase.id)"
+        )
+    }
+}
+
+func fdExecObservation(
+    _ log: String,
+    _ marker: String,
+    _ observation: String
+) -> (String, String) {
+    (observation, log.contains(marker) ? "ok" : "missing")
+}
+
+func fdExecResultFromOrlixLog(_ log: String) throws -> OracleResult {
+    var observed = Dictionary(
+        uniqueKeysWithValues: [
+            fdExecObservation(
+                log,
+                "pipe creates descriptor pairs",
+                "pipe-created"
+            ),
+            fdExecObservation(
+                log,
+                "fcntl reports descriptor without close-on-exec",
+                "fd-without-cloexec"
+            ),
+            fdExecObservation(
+                log,
+                "fcntl marks selected descriptor close-on-exec",
+                "fd-marked-cloexec"
+            ),
+            fdExecObservation(log, "ORLIX-FD-EXEC-CHILD", "child-started"),
+            fdExecObservation(
+                log,
+                "ORLIX-FD-INHERITED-READ-OK",
+                "inherited-read"
+            ),
+            fdExecObservation(
+                log,
+                "ORLIX-FD-CLOEXEC-EBADF-OK",
+                "cloexec-ebadf"
+            ),
+            fdExecObservation(
+                log,
+                "exec closes close-on-exec descriptor",
+                "exec-child-exit"
+            )
+        ]
+    )
+
+    if !log.contains("fd_exec_probe") || !log.contains("ORLIX-FD-EXEC-PROBE") {
+        observed["fd-exec-log"] = "missing"
+    }
+
+    return try fdExecResult(
+        runner: "orlix",
+        stdout: "",
+        stderr: "",
+        exitStatus: 0,
+        signal: nil,
+        observations: observed
     )
 }
 
@@ -325,12 +494,6 @@ func runLinuxFixture(
     workdirPath: String
 ) throws -> OracleResult {
     try requireLinuxHost()
-
-    guard testCase.id == "path-errno" else {
-        throw OracleError.invalidCase(
-            "linux-result-from-fixture currently supports path-errno only"
-        )
-    }
 
     try FileManager.default.createDirectory(
         atPath: workdirPath,
@@ -373,22 +536,105 @@ func runLinuxFixture(
         )
     }
 
-    return try pathErrnoResult(
-        runner: "linux",
+    return try resultFromLinuxFixture(
+        testCase: testCase,
         stdout: stdout,
         stderr: stderr,
         exitStatus: exitStatus,
-        signal: signal,
-        jsonLines: jsonObjectLines(from: stdout)
+        signal: signal
     )
+}
+
+func repositoryPath(_ relativePath: String) -> String {
+    URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent(relativePath)
+        .path
+}
+
+func expectComparisonFailure(
+    _ testCase: OracleCase,
+    linux: OracleResult,
+    orlix: OracleResult
+) throws {
+    do {
+        try compare(testCase, linux: linux, orlix: orlix)
+    } catch OracleError.mismatches {
+        return
+    }
+
+    throw OracleError.runnerFailed(
+        "expected oracle drift for case \(testCase.id)"
+    )
+}
+
+func selfTestCase(
+    casePath: String,
+    linuxResultPath: String,
+    orlixResultPath: String,
+    driftResultPath: String,
+    orlixLogPath: String
+) throws {
+    let testCase = try readJSON(OracleCase.self, at: casePath)
+    try validateCase(testCase)
+
+    let linux = try readJSON(OracleResult.self, at: linuxResultPath)
+    let orlix = try readJSON(OracleResult.self, at: orlixResultPath)
+    try compare(testCase, linux: linux, orlix: orlix)
+
+    let drift = try readJSON(OracleResult.self, at: driftResultPath)
+    try expectComparisonFailure(testCase, linux: linux, orlix: drift)
+
+    let log = try String(contentsOfFile: orlixLogPath, encoding: .utf8)
+    let converted = try resultFromOrlixLog(testCase: testCase, log: log)
+    try compare(testCase, linux: linux, orlix: converted)
+}
+
+func runSelfTest() throws {
+    try selfTestCase(
+        casePath: repositoryPath("tools/orlix-linux-oracle/cases/path-errno.json"),
+        linuxResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/path-errno.linux.json"
+        ),
+        orlixResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/path-errno.orlix.json"
+        ),
+        driftResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/path-errno.orlix-drift.json"
+        ),
+        orlixLogPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/path-errno.orlix-kselftest.log"
+        )
+    )
+    try selfTestCase(
+        casePath: repositoryPath("tools/orlix-linux-oracle/cases/fd-exec.json"),
+        linuxResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/fd-exec.linux.json"
+        ),
+        orlixResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/fd-exec.orlix.json"
+        ),
+        driftResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/fd-exec.orlix-drift.json"
+        ),
+        orlixLogPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/fd-exec.orlix-kselftest.log"
+        )
+    )
+
+    print("oracle self-test passed")
 }
 
 func run(arguments: [String]) throws {
     guard let command = arguments.first else {
-        throw OracleError.usage("usage: validate-case <case.json> | linux-result-from-fixture --case <case.json> --fixture <binary> --workdir <dir> --output <result.json> | orlix-result-from-log --case <case.json> --log <log.txt> --output <result.json> | compare --case <case.json> --linux-result <result.json> --orlix-result <result.json>")
+        throw OracleError.usage("usage: self-test | validate-case <case.json> | linux-result-from-fixture --case <case.json> --fixture <binary> --workdir <dir> --output <result.json> | orlix-result-from-log --case <case.json> --log <log.txt> --output <result.json> | compare --case <case.json> --linux-result <result.json> --orlix-result <result.json>")
     }
 
     switch command {
+    case "self-test":
+        guard arguments.count == 1 else {
+            throw OracleError.usage("usage: self-test")
+        }
+        try runSelfTest()
     case "validate-case":
         guard arguments.count == 2 else {
             throw OracleError.usage("usage: validate-case <case.json>")
@@ -422,13 +668,8 @@ func run(arguments: [String]) throws {
         }
         let testCase = try readJSON(OracleCase.self, at: casePath)
         try validateCase(testCase)
-        guard testCase.id == "path-errno" else {
-            throw OracleError.invalidCase(
-                "orlix-result-from-log currently supports path-errno only"
-            )
-        }
         let log = try String(contentsOfFile: logPath, encoding: .utf8)
-        let result = try pathErrnoResultFromOrlixLog(log)
+        let result = try resultFromOrlixLog(testCase: testCase, log: log)
         try writeJSON(result, to: outputPath)
         print("wrote Orlix result for case \(testCase.id): \(outputPath)")
     case "compare":
