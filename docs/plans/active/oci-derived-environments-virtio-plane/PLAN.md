@@ -62,6 +62,11 @@ Current proved state:
   handler execution, blocked-signal pending state, unblocked pending-signal
   handler execution, waitpid signal-termination status comparison samples,
   drift detection, Linux fixture syntax, and Orlix kselftest log conversion.
+- Linux oracle scaffold has a seventh pseudo-fs case covering procfs, sysfs,
+  devtmpfs, devpts, tmpfs mountinfo shape, `/proc/self` readability, core
+  device-node character types, PTY allocation through ptmx, virtio sysfs
+  directory comparison samples, drift detection, Linux fixture syntax, and
+  Orlix kselftest log conversion.
 - OrlixOS named environment session selection API exists.
 - End-to-end named environment runtime entry selects the copied root and
   descriptor argv/env/cwd/uid/gid defaults on iOS Simulator.
