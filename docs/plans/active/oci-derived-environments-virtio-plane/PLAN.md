@@ -50,6 +50,10 @@ Current proved state:
   read `EAGAIN`, zero-timeout poll, writable/readable readiness, payload read,
   hangup comparison samples, drift detection, Linux fixture syntax, and Orlix
   kselftest log conversion.
+- Linux oracle scaffold has a fourth pipe-select case covering nonblocking pipe
+  read `EAGAIN`, zero-timeout select, writable/readable readiness, payload
+  read, EOF-after-writer-close comparison samples, drift detection, Linux
+  fixture syntax, and Orlix kselftest log conversion.
 - OrlixOS named environment session selection API exists.
 - End-to-end named environment runtime entry selects the copied root and
   descriptor argv/env/cwd/uid/gid defaults on iOS Simulator.

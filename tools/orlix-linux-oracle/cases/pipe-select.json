@@ -1,0 +1,22 @@
+{
+  "id": "pipe-select",
+  "description": "Compare Linux pipe nonblocking read, select readiness, payload, and EOF behavior.",
+  "fixture": "fixtures/pipe_select_probe.c",
+  "command": [
+    "/oracle/pipe_select_probe"
+  ],
+  "environment": {
+    "LC_ALL": "C"
+  },
+  "workingDirectory": "/oracle/work",
+  "compare": {
+    "stdout": false,
+    "stderr": true,
+    "exitStatus": true,
+    "signal": true,
+    "errnoEvents": false,
+    "statEntries": false,
+    "mutations": false,
+    "observations": true
+  }
+}

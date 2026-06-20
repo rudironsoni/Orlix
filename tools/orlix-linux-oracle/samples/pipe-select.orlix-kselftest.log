@@ -1,0 +1,21 @@
+ORLIX-KSELFTEST-INIT
+TAP version 13
+1..5
+ok 1 - procfs mounted for kselftest
+ok 2 - sysfs mounted for kselftest
+ok 3 - devtmpfs mounted for kselftest
+ok 4 - installed Orlix kselftest list is readable
+# exec /orlix/pipe_select_probe
+ORLIX-PIPE-SELECT-PROBE
+TAP version 13
+1..8
+ok 1 - pipe creates nonblocking read descriptor select
+ok 2 - empty nonblocking pipe read returns EAGAIN before select
+ok 3 - empty pipe read select times out
+ok 4 - pipe write end selects writable
+ok 5 - pipe read end selects readable after write
+ok 6 - pipe read returns selected payload
+ok 7 - pipe read end selects readable after writer closes
+ok 8 - pipe read returns EOF after selected writer close
+ok 5 - pipe_select_probe
+ORLIX-KSELFTEST-END
