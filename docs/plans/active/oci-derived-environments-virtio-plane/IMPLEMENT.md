@@ -10,6 +10,50 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-20 - Add regular-file lseek support to virtio-fs backend
+
+Checkpoint: added standard FUSE `FUSE_LSEEK` handling to
+`OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c` for
+host-backed regular-file nodes. The backend now resolves regular file size
+through the existing private host-directory metadata seam and answers normal
+Linux seek requests without exposing host paths or file descriptors. The
+implementation treats host-backed files as non-sparse: `SEEK_SET` and
+`SEEK_CUR` return the supplied offset, `SEEK_END` resolves relative to the known
+file size, `SEEK_DATA` returns the requested offset before EOF, and `SEEK_HOLE`
+reports EOF as the hole. Invalid nodes, non-regular nodes, invalid negative
+offsets, and offsets beyond the data/hole contract return Linux errors.
+
+This is standard FUSE protocol behavior below Linux userspace. It does not add
+an Orlix syscall, ioctl, pseudo-file control plane, HostAdapter slot, host path,
+host fd, Foundation object, or any custom Linux ABI.
+
+Evidence:
+
+- Sandboxed `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  compiled through the modified `drivers/orlix/virtio/mmio.c` and then failed
+  only at the known late Xcode framework cache boundary under
+  `/Volumes/1TB/Xcode/Caches`.
+- Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  exited 0.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0.
+- `grep -n "FUSE_LSEEK\\|fuse_lseek\\|ORLIX_VIRTIO_MMIO_SEEK\\|orlix_virtio_mmio_fs_regular_file_size\\|ENXIO" OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+  confirmed the seek constants, regular-file-size helper, and `FUSE_LSEEK`
+  branch are present.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  confirmed the kselftest bundle still contains the virtio-fs mount probe.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+- `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, OK.
+- `rtk git diff --check` exited 0.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=409`, `Code=61`), so this
+checkpoint does not claim app-hosted execution, virtio-fs mount success in the
+hosted runtime, lseek behavior in the hosted runtime, OCI rootfs attachment,
+OCI lifecycle, or product readiness.
+
 ### 2026-06-20 - Add empty xattr responses to read-only virtio-fs backend
 
 Checkpoint: extended the Orlix virtio-fs backend with standard read-only FUSE
