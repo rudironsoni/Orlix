@@ -9315,3 +9315,82 @@ Current status:
   probes such as `signal_wait_probe`, `pseudo_fs_probe`, or
   `mount_namespace_probe` into Swift/C-only oracle cases, then capture fresh
   app-hosted Orlix evidence when simulator access is available.
+
+## 2026-06-20 signal-wait Linux oracle case expansion
+
+Goal:
+- Extend Linux oracle coverage toward plan's signal, wait, and reaping
+  substrate gap after fd readiness cases, before OCI Runtime lifecycle,
+  feature reporting, and product `orlix run` claims.
+- Keep project-side oracle tooling Swift/C/JSON/log only; do not add Python to
+  `tools/` or any iOS/app runtime path.
+- Reuse existing Orlix-owned `signal_wait_probe` semantics instead changing
+  kernel behavior in this checkpoint.
+
+Changes:
+- `tools/orlix-linux-oracle/cases/signal-wait.json`
+  - Added sixth oracle case for delivered signal handler execution,
+    blocked-signal pending state, unblocked pending-signal handler execution,
+    and waitpid signal-termination status.
+- `tools/orlix-linux-oracle/fixtures/signal_wait_probe.c`
+  - Added Linux-runner fixture emits structured observation JSON for SIGUSR1
+    handler delivery, SIGUSR2 pending state while blocked, SIGUSR2 handler
+    delivery after unblock, and child SIGTERM status observed through
+    `waitpid`.
+- `tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Added `signal-wait` Linux fixture result construction.
+  - Added `signal-wait` Orlix kselftest log conversion based on existing
+    `signal_wait_probe` output markers.
+  - Extended Swift-native `self-test` coverage for case validation, matching
+    comparison, drift detection, and Orlix log conversion.
+- `tools/orlix-linux-oracle/samples/`
+  - Added matching Linux and Orlix `signal-wait` result samples.
+  - Added deliberate `signal-wait` drift sample.
+  - Added representative Orlix `signal_wait_probe` kselftest log sample.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Updated current proved state to include the sixth local oracle case.
+
+Evidence:
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test`
+  - Result: exited 0, output `oracle self-test passed`.
+- `rtk swiftc -parse tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Result: exited 0.
+- `rtk clang -fsyntax-only -Wall -Wextra tools/orlix-linux-oracle/fixtures/signal_wait_probe.c`
+  - Result: exited 0.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/signal-wait.json`
+  - Result: exited 0, output `case signal-wait is valid`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/signal-wait.json --linux-result tools/orlix-linux-oracle/samples/signal-wait.linux.json --orlix-result tools/orlix-linux-oracle/samples/signal-wait.orlix.json`
+  - Result: exited 0, output `case signal-wait matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift orlix-result-from-log --case tools/orlix-linux-oracle/cases/signal-wait.json --log tools/orlix-linux-oracle/samples/signal-wait.orlix-kselftest.log --output /private/tmp/signal-wait.orlix.generated.json`
+  - Result: exited 0, output `wrote Orlix result for case signal-wait: /private/tmp/signal-wait.orlix.generated.json`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/signal-wait.json --linux-result tools/orlix-linux-oracle/samples/signal-wait.linux.json --orlix-result /private/tmp/signal-wait.orlix.generated.json`
+  - Result: exited 0, output `case signal-wait matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/signal-wait.json --linux-result tools/orlix-linux-oracle/samples/signal-wait.linux.json --orlix-result tools/orlix-linux-oracle/samples/signal-wait.orlix-drift.json`
+  - Result: exited 2 as expected for deliberate drift sample, output `oracle comparison failed: - observations differ`.
+- `rtk python3 .codex/hooks/compact_plan_check.py`
+  - Result: exited 0 with historical warning `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+- `rtk python3 -m unittest discover .codex/hooks/tests`
+  - Result: ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests`
+  - Result: ran 5 tests, OK.
+- `rtk rg -n "python|pytest|unittest|\\.py" tools/orlix-linux-oracle`
+  - Result: exited 1 with no matches, confirming no Python references under project oracle tooling.
+
+Non-claims:
+- This proves local oracle-tool regression coverage and fixture syntax only.
+- This does not prove fresh real-Linux oracle execution, fresh app-hosted Orlix
+  runtime execution, imported-environment signal/wait behavior, signal masks
+  across `execve`, process groups, terminal-generated signals, zombie reaping
+  under an imported init, multiple live environments, OCI Runtime lifecycle
+  compliance, product `orlix run`, registry pull, host-folder mounts, virtio-fs,
+  networking, cgroups, native performance, real-device behavior, App Store
+  acceptance, or arbitrary imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- Linux oracle tooling now covers six local cases: `path-errno`, `fd-exec`,
+  `pipe-poll`, `pipe-select`, `pipe-epoll`, and `signal-wait`.
+- Next substrate work should continue converting existing Orlix kselftest
+  probes such as `pseudo_fs_probe` or `mount_namespace_probe` into Swift/C-only
+  oracle cases, then capture fresh app-hosted Orlix evidence when simulator
+  access is available.

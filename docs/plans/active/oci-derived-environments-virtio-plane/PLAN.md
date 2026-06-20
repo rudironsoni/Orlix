@@ -58,6 +58,10 @@ Current proved state:
   creation, pipe read-end registration, empty timeout, writable/readable
   readiness, payload read, hangup comparison samples, drift detection, Linux
   fixture syntax, and Orlix kselftest log conversion.
+- Linux oracle scaffold has a sixth signal-wait case covering delivered signal
+  handler execution, blocked-signal pending state, unblocked pending-signal
+  handler execution, waitpid signal-termination status comparison samples,
+  drift detection, Linux fixture syntax, and Orlix kselftest log conversion.
 - OrlixOS named environment session selection API exists.
 - End-to-end named environment runtime entry selects the copied root and
   descriptor argv/env/cwd/uid/gid defaults on iOS Simulator.

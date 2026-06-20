@@ -1,0 +1,17 @@
+ORLIX-KSELFTEST-INIT
+TAP version 13
+1..5
+ok 1 - procfs mounted for kselftest
+ok 2 - sysfs mounted for kselftest
+ok 3 - devtmpfs mounted for kselftest
+ok 4 - installed Orlix kselftest list is readable
+# exec /orlix/signal_wait_probe
+ORLIX-SIGNAL-WAIT-PROBE
+TAP version 13
+1..4
+ok 1 - signal handler runs delivered signal
+ok 2 - blocked signal remains pending
+ok 3 - unblocked pending signal runs handler
+ok 4 - waitpid observes signal termination status
+ok 5 - signal_wait_probe
+ORLIX-KSELFTEST-END
