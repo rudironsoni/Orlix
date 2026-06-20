@@ -1,0 +1,23 @@
+ORLIX-KSELFTEST-INIT
+TAP version 13
+1..5
+ok 1 - procfs mounted for kselftest
+ok 2 - sysfs mounted for kselftest
+ok 3 - devtmpfs mounted for kselftest
+ok 4 - installed Orlix kselftest list is readable
+# exec /orlix/pseudo_fs_probe
+ORLIX-PSEUDO-FS-PROBE
+TAP version 13
+1..10
+ok 1 - mountinfo exposes procfs at /proc
+ok 2 - mountinfo exposes sysfs at /sys
+ok 3 - mountinfo exposes devtmpfs at /dev
+ok 4 - mountinfo exposes devpts at /dev/pts
+ok 5 - mountinfo exposes tmpfs at /tmp
+ok 6 - proc self status fd mounts readable
+ok 7 - core dev nodes are Linux character devices
+ok 8 - devpts mountpoint is directory
+ok 9 - devpts allocates a PTY master through ptmx
+ok 10 - sysfs exposes virtio device directory
+ok 5 - pseudo_fs_probe
+ORLIX-KSELFTEST-END

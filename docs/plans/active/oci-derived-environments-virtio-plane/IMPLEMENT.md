@@ -9394,3 +9394,82 @@ Current status:
   probes such as `pseudo_fs_probe` or `mount_namespace_probe` into Swift/C-only
   oracle cases, then capture fresh app-hosted Orlix evidence when simulator
   access is available.
+
+## 2026-06-20 pseudo-fs Linux oracle case expansion
+
+Goal:
+- Extend Linux oracle coverage toward plan's `/proc`, `/sys`, `/dev`, devpts,
+  and tmpfs substrate gap before OCI Runtime lifecycle, feature reporting, and
+  product `orlix run` claims.
+- Keep project-side oracle tooling Swift/C/JSON/log only; do not add Python to
+  `tools/` or any iOS/app runtime path.
+- Reuse existing Orlix-owned `pseudo_fs_probe` semantics instead changing
+  kernel behavior in this checkpoint.
+
+Changes:
+- `tools/orlix-linux-oracle/cases/pseudo-fs.json`
+  - Added seventh oracle case for procfs, sysfs, devtmpfs, devpts, tmpfs,
+    `/proc/self` readability, core device nodes, PTY master allocation through
+    ptmx, and virtio sysfs directory shape in the declared fixture environment.
+- `tools/orlix-linux-oracle/fixtures/pseudo_fs_probe.c`
+  - Added read-only Linux-runner fixture emits structured observation JSON for
+    the same pseudo-filesystem checks covered by existing Orlix
+    `pseudo_fs_probe`.
+- `tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Added `pseudo-fs` Linux fixture result construction.
+  - Added `pseudo-fs` Orlix kselftest log conversion based on existing
+    `pseudo_fs_probe` output markers.
+  - Extended Swift-native `self-test` coverage for case validation, matching
+    comparison, drift detection, and Orlix log conversion.
+- `tools/orlix-linux-oracle/samples/`
+  - Added matching Linux and Orlix `pseudo-fs` result samples.
+  - Added deliberate `pseudo-fs` drift sample.
+  - Added representative Orlix `pseudo_fs_probe` kselftest log sample.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Updated current proved state to include the seventh local oracle case.
+
+Evidence:
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test`
+  - Result: exited 0, output `oracle self-test passed`.
+- `rtk swiftc -parse tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Result: exited 0.
+- `rtk clang -fsyntax-only -Wall -Wextra tools/orlix-linux-oracle/fixtures/pseudo_fs_probe.c`
+  - Result: exited 0.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/pseudo-fs.json`
+  - Result: exited 0, output `case pseudo-fs is valid`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pseudo-fs.json --linux-result tools/orlix-linux-oracle/samples/pseudo-fs.linux.json --orlix-result tools/orlix-linux-oracle/samples/pseudo-fs.orlix.json`
+  - Result: exited 0, output `case pseudo-fs matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift orlix-result-from-log --case tools/orlix-linux-oracle/cases/pseudo-fs.json --log tools/orlix-linux-oracle/samples/pseudo-fs.orlix-kselftest.log --output /private/tmp/pseudo-fs.orlix.generated.json`
+  - Result: exited 0, output `wrote Orlix result for case pseudo-fs: /private/tmp/pseudo-fs.orlix.generated.json`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pseudo-fs.json --linux-result tools/orlix-linux-oracle/samples/pseudo-fs.linux.json --orlix-result /private/tmp/pseudo-fs.orlix.generated.json`
+  - Result: exited 0, output `case pseudo-fs matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pseudo-fs.json --linux-result tools/orlix-linux-oracle/samples/pseudo-fs.linux.json --orlix-result tools/orlix-linux-oracle/samples/pseudo-fs.orlix-drift.json`
+  - Result: exited 2 as expected for deliberate drift sample, output `oracle comparison failed: - observations differ`.
+- `rtk git diff --check`
+  - Result: exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py`
+  - Result: exited 0 with historical warning `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+- `rtk python3 -m unittest discover .codex/hooks/tests`
+  - Result: ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests`
+  - Result: ran 5 tests, OK.
+- `rtk rg -n "python|pytest|unittest|\\.py" tools/orlix-linux-oracle`
+  - Result: exited 1 with no matches, confirming no Python references under project oracle tooling.
+
+Non-claims:
+- This proves local oracle-tool regression coverage and fixture syntax only.
+- This does not prove fresh real-Linux oracle execution, fresh app-hosted Orlix
+  runtime execution, imported-environment pseudo-filesystem behavior, mount
+  namespace isolation, `/proc` completeness, `/sys` completeness, PTY runtime
+  behavior beyond ptmx allocation, multiple live environments, OCI Runtime
+  lifecycle compliance, product `orlix run`, registry pull, host-folder mounts,
+  virtio-fs, networking, cgroups, native performance, real-device behavior, App
+  Store acceptance, or arbitrary imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- Linux oracle tooling now covers seven local cases: `path-errno`, `fd-exec`,
+  `pipe-poll`, `pipe-select`, `pipe-epoll`, `signal-wait`, and `pseudo-fs`.
+- Next substrate work should continue converting `mount_namespace_probe` into a
+  Swift/C-only oracle case, then capture fresh app-hosted Orlix evidence when
+  simulator access is available.
