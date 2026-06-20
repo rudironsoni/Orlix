@@ -1,0 +1,22 @@
+{
+  "id": "pipe-poll",
+  "description": "Compare Linux pipe nonblocking read, poll readiness, payload, and hangup behavior.",
+  "fixture": "fixtures/pipe_poll_probe.c",
+  "command": [
+    "/oracle/pipe_poll_probe"
+  ],
+  "environment": {
+    "LC_ALL": "C"
+  },
+  "workingDirectory": "/oracle/work",
+  "compare": {
+    "stdout": false,
+    "stderr": true,
+    "exitStatus": true,
+    "signal": true,
+    "errnoEvents": false,
+    "statEntries": false,
+    "mutations": false,
+    "observations": true
+  }
+}
