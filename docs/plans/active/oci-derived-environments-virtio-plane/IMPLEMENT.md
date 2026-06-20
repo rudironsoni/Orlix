@@ -9556,3 +9556,96 @@ Current status:
 - HostAdapter now has the opaque host-directory registration primitive needed by future virtio-fs/backend work.
 - OrlixOS still fails closed on non-empty environment mounts through `missingLinuxMountBackend`; that remains correct until Linux-owned mount behavior exists.
 - Next implementation slice should connect this primitive to an Orlix virtio-fs transport/backend path or add the Linux-owned mount proof scaffold that consumes it.
+
+## 2026-06-20 upstream virtio-net and virtio-fs source-list closure
+
+Goal:
+- Keep the virtio environment substrate Linux-owned by compiling the upstream
+  Linux sources selected by the Orlix profile configuration.
+- Close the product archive link gap caused by enabling `CONFIG_VIRTIO_NET`,
+  `CONFIG_FUSE_FS`, and `CONFIG_VIRTIO_FS` without adding their selected
+  upstream dependency objects to the OrlixKernel source list.
+- Keep the Xcode wrapper target aligned with the arm64 kernel archive and
+  HostAdapter trap plane without introducing a Linux ABI change.
+
+Changes:
+- `OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk`
+  - Added upstream `drivers/net/virtio_net.c`.
+  - Added upstream `drivers/net/net_failover.c` and `net/core/failover.c`
+    because release configuration selects `CONFIG_NET_FAILOVER=y` and
+    `CONFIG_FAILOVER=y`.
+  - Added upstream FUSE core, FUSE passthrough, and `fs/fuse/virtio_fs.c`
+    sources required by `CONFIG_FUSE_FS=y`, `CONFIG_FUSE_PASSTHROUGH=y`, and
+    `CONFIG_VIRTIO_FS=y`.
+  - Tightened the generated Xcode project boundary grep so it checks actual
+    `path = ... OrlixKernel/Sources/ports/orlix/overlay/*.c` source entries
+    instead of matching shell-script text inside the generated project.
+- `project.yml`
+  - Set `ARCHS[sdk=iphonesimulator*]: arm64` for `OrlixKernel`, matching the
+    arm64 Orlix Linux archive and the arm64 HostAdapter trap implementation.
+- `OrlixTestRunner/Tests/XCTest/OrlixTestRunnerTests/ArchitectureInvariantTests.swift`
+  - Added `testOrlixKernelProductSourceListIncludesVirtioEnvironmentDrivers`
+    to pin the upstream virtio block, console, rng, virtio-net,
+    `net_failover`, generic failover, FUSE, FUSE passthrough, and virtio-fs
+    product source-list inputs.
+  - Added `testOrlixKernelSimulatorTargetStaysArm64`.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Recorded the source-list closure in the current proved state.
+
+Evidence:
+- Earlier direct Xcode proof exposed the missing upstream dependencies:
+  - `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernel -configuration Debug -destination 'generic/platform=iOS Simulator' clean build`
+  - Result after arm64 target alignment: HostAdapter x86_64 compile failures
+    disappeared, then link failed on upstream-selected symbols including
+    `net_failover_create`, `net_failover_destroy`, and FUSE passthrough
+    symbols.
+- Upstream ownership evidence:
+  - `Build/OrlixKernel/src/linux-6.12-port/drivers/net/Makefile:92`
+    contains `obj-$(CONFIG_NET_FAILOVER) += net_failover.o`.
+  - `Build/OrlixKernel/src/linux-6.12-port/net/core/Makefile:41`
+    contains `obj-$(CONFIG_FAILOVER) += failover.o`.
+  - `Build/OrlixKernel/src/linux-6.12-port/drivers/net/virtio_net.c:6597`
+    calls `net_failover_create(vi->dev)`.
+  - `Build/OrlixKernel/src/linux-6.12-port/fs/fuse/Makefile` selects
+    passthrough and virtio-fs objects for the enabled FUSE/virtio-fs config.
+- Release build proof:
+  - `rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  - Result: exited 0.
+- Xcode project generation proof:
+  - `rtk make -f OrlixKernel/Makefile xcodeproj`
+  - Result: exited 0 and reported
+    `verified generated Xcode project does not compile Linux-owned sources`.
+- Static validation:
+  - `rtk swiftc -parse OrlixTestRunner/Tests/XCTest/OrlixTestRunnerTests/ArchitectureInvariantTests.swift`
+  - Result: initial sandboxed run failed with `permissionDenied`; escalated
+    rerun exited 0.
+  - `rtk git diff --check`
+  - Result: exited 0.
+  - `rtk python3 .codex/hooks/compact_plan_check.py`
+  - Result: exited 0.
+  - `rtk python3 -m unittest discover .codex/hooks/tests`
+  - Result: ran 32 tests, OK.
+  - `rtk python3 -m unittest discover .codex/rules/tests`
+  - Result: ran 5 tests, OK.
+
+Non-claims:
+- This does not prove virtio-net devices bind, packets move, rtnetlink works,
+  `/proc/net` is complete, or networking is product-ready.
+- This does not prove virtio-fs mounts work.
+- This does not prove a HostAdapter virtio-fs backend exists.
+- This does not prove FUSE request handling, inode behavior, file I/O,
+  rename/unlink, mount namespace behavior, or host-folder mounts.
+- This does not prove OCI Runtime config parsing, lifecycle compliance,
+  feature reporting, product `orlix run`, registry pull, cgroup enforcement,
+  native performance, real-device behavior, App Store acceptance, or arbitrary
+  imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- The current checkpoint proves the release product source list is aligned
+  with the selected upstream Linux virtio-net and virtio-fs/FUSE dependencies.
+- `net_failover` is upstream Linux paravirtual network failover support pulled
+  in by `virtio_net`; it is not an Orlix custom ABI or host leakage.
+- Next implementation should continue at the Linux-owned virtio device/backend
+  path or a kselftest-style mount/network proof scaffold before any OCI
+  lifecycle, feature report, `orlix run`, or registry pull work.

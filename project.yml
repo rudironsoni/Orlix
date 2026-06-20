@@ -62,6 +62,7 @@ targets:
         OTHER_LDFLAGS:
           - $(inherited)
           - $(SRCROOT)/Build/OrlixKernel/$(ORLIX_PROFILE)/$(PLATFORM_NAME)/OrlixKernel.a
+        ARCHS[sdk=iphonesimulator*]: arm64
         GCC_PREPROCESSOR_DEFINITIONS:
           - $(inherited)
           - ORLIX_APP_HOSTED_BOOT=1
