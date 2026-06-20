@@ -9473,3 +9473,45 @@ Current status:
 - Next substrate work should continue converting `mount_namespace_probe` into a
   Swift/C-only oracle case, then capture fresh app-hosted Orlix evidence when
   simulator access is available.
+
+## 2026-06-20 virtio environment substrate profile enablement
+
+Goal:
+- Stop oracle-only expansion and advance the actual Orlix substrate for OCI-derived environments.
+- Enable upstream Linux profile prerequisites for future virtio-fs external folders and virtio-net networking without moving Linux semantics into OrlixOS or OrlixHostAdapter.
+
+Changes:
+- `OrlixKernel/Sources/ports/orlix/configs/release_defconfig`
+  - Enabled `CONFIG_VIRTIO_NET=y`.
+  - Enabled `CONFIG_FUSE_FS=y`.
+  - Enabled `CONFIG_VIRTIO_FS=y`.
+- `OrlixKernel/Sources/ports/orlix/configs/development_defconfig`
+  - Enabled the same virtio-net and virtio-fs/FUSE prerequisites so release and development profiles do not drift.
+- `OrlixTestRunner/Tests/XCTest/OrlixTestRunnerTests/ArchitectureInvariantTests.swift`
+  - Added `testOrlixKernelProfilesEnableVirtioEnvironmentSubstrate` to pin the required virtio, block, console, rng, net, FUSE, virtio-fs, ext4, overlay, namespace, network namespace, and cgroup config symbols across both profile defconfigs.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Recorded this substrate prerequisite and clarified that further oracle work is not the next standalone direction.
+
+Evidence:
+- `rtk swiftc -parse OrlixTestRunner/Tests/XCTest/OrlixTestRunnerTests/ArchitectureInvariantTests.swift`
+  - Result: exited 0.
+- `rtk rg -n "CONFIG_(VIRTIO_NET|FUSE_FS|VIRTIO_FS)=y" OrlixKernel/Sources/ports/orlix/configs/release_defconfig OrlixKernel/Sources/ports/orlix/configs/development_defconfig`
+  - Result: exited 0 and found all three symbols in both profile defconfigs.
+- `rtk git diff --check`
+  - Result: exited 0.
+- Focused iOS Simulator XCTest command:
+  - `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim -only-testing:OrlixTestRunnerTests/ArchitectureInvariantTests/testOrlixKernelProfilesEnableVirtioEnvironmentSubstrate test`
+  - Sandboxed result: exited 74 before test execution because CoreSimulator and SwiftPM cache access were denied.
+  - Escalated rerun was rejected by environment policy, so no simulator XCTest pass is claimed.
+
+Non-claims:
+- This does not prove virtio-fs mounts work.
+- This does not prove a HostAdapter virtio-fs backend exists.
+- This does not prove virtio-net devices bind, packet I/O works, or networking is product-ready.
+- This does not prove OCI Runtime lifecycle/config compliance, product `orlix run`, registry pull, cgroup enforcement, native performance, real-device behavior, App Store acceptance, or arbitrary imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- The stale previous next-step line above is superseded: do not continue standalone oracle conversion.
+- Durable kernel profile inputs now include upstream virtio-fs/FUSE and virtio-net prerequisites.
+- Next implementation slice should add the HostAdapter opaque host-directory resource registration primitive or Orlix virtio-fs transport/backend path, then prove Linux-owned mount behavior through the app-hosted Orlix path.

@@ -113,6 +113,42 @@ final class ArchitectureInvariantTests: XCTestCase {
         XCTAssertTrue(hits.isEmpty, hits.joined(separator: "\n"))
     }
 
+    func testOrlixKernelProfilesEnableVirtioEnvironmentSubstrate() throws {
+        let requiredSymbols = [
+            "CONFIG_VIRTIO=y",
+            "CONFIG_VIRTIO_MMIO=y",
+            "CONFIG_VIRTIO_BLK=y",
+            "CONFIG_VIRTIO_CONSOLE=y",
+            "CONFIG_HW_RANDOM_VIRTIO=y",
+            "CONFIG_VIRTIO_NET=y",
+            "CONFIG_FUSE_FS=y",
+            "CONFIG_VIRTIO_FS=y",
+            "CONFIG_EXT4_FS=y",
+            "CONFIG_OVERLAY_FS=y",
+            "CONFIG_NAMESPACES=y",
+            "CONFIG_NET_NS=y",
+            "CONFIG_CGROUPS=y"
+        ]
+        let profileConfigs = [
+            "OrlixKernel/Sources/ports/orlix/configs/release_defconfig",
+            "OrlixKernel/Sources/ports/orlix/configs/development_defconfig"
+        ]
+
+        for relativePath in profileConfigs {
+            let url = root.appendingPathComponent(relativePath)
+            let lines = Set(
+                try String(contentsOf: url)
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+            )
+            let missing = requiredSymbols.filter { !lines.contains($0) }
+            XCTAssertTrue(
+                missing.isEmpty,
+                "\(relativePath) missing virtio environment substrate symbols: \(missing.joined(separator: ", "))"
+            )
+        }
+    }
+
     private func sourceFiles(under relativePaths: [String]) throws -> [URL] {
         let manager = FileManager.default
         var urls: [URL] = []
