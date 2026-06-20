@@ -10499,3 +10499,48 @@ Current status:
   environment so the app-hosted kselftest can run, or implement the real
   HostAdapter-backed virtio-fs request path and then prove mount behavior
   through the app-hosted Orlix path.
+## 2026-06-20 - Virtio-fs standard syscall probe coverage
+
+Status: implemented and packaged; app-hosted runtime execution still blocked by
+CoreSimulator availability.
+
+Scope:
+
+- Extended the durable Orlix kselftest
+  `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+  to cover additional standard Linux syscall behavior over the existing
+  virtio-fs mount:
+  - `statx(2)` on the mounted root, using libc/user-visible statx definitions
+    through `<sys/stat.h>` instead of kernel-internal UAPI struct inclusion.
+  - `listxattr(2)` empty-list behavior for the mounted root.
+  - `getxattr(2)` missing-name behavior returning `ENODATA`.
+  - `lseek(2)` on mounted regular files when a regular-file fixture is present.
+- Kept the proof on Linux-visible APIs only. No Orlix syscall, ioctl, custom
+  ABI, host path, HostAdapter slot, or Darwin attribute is exposed to Linux
+  userspace.
+- Avoided formatted I/O in the kselftest after `snprintf(3)` pulled mlibc
+  long-double formatting support into the static link; the probe now builds
+  child paths with bounded byte copies.
+
+Validation:
+
+- `rtk python3 -c 'import json, subprocess; payload={"hook_event_name":"PostToolUse","tool_name":"read","tool_input":{"path":"AGENTS.md docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md docs/plans/active/oci-derived-environments-virtio-plane/IMPLEMENT.md"}}; subprocess.run(["python3", ".codex/hooks/plan_context_guard.py"], input=json.dumps(payload), text=True, check=True)'`
+  exited 0 before this plan edit.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  completed far enough to regenerate and package
+  `Build/OrlixMLibC/kselftest/release/orlix/virtio_fs_mount_probe`.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  reported the probe in the kselftest list and initramfs manifest.
+- `rtk ls -l Build/OrlixMLibC/kselftest/release/orlix/virtio_fs_mount_probe`
+  reported a packaged executable.
+- `rtk git diff --check` exited 0.
+
+Non-claims:
+
+- This does not claim app-hosted virtio-fs mount success, because CoreSimulator
+  remains unavailable locally.
+- This does not claim non-empty OCI-derived xattr passthrough yet. The next
+  kernel/HostAdapter-facing substrate step should carry imported Linux xattr
+  metadata such as OCI/tar-derived `security.capability` through standard
+  `FUSE_LISTXATTR` and `FUSE_GETXATTR`, without exposing Darwin xattrs or any
+  custom Orlix ABI.
