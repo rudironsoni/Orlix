@@ -453,12 +453,14 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public let baseImageURL: URL
     public let stateImageURL: URL
     public let bootConfig: OrlixBootConfig
+    public let hostDirectoryExtendedAttributes: [OrlixHostDirectoryExtendedAttribute]
 
     public static func materialized(
         descriptor: OrlixEnvironmentDescriptor,
         layout: OrlixEnvironmentStorageLayout,
         bootProfile: OrlixBootProfile = .development,
         kernelCommandLine: String? = defaultKernelCommandLine,
+        hostDirectoryExtendedAttributes: [OrlixHostDirectoryExtendedAttribute] = [],
         fileManager: FileManager = .default
     ) throws -> OrlixEnvironmentRootImage {
         guard descriptor.id == layout.environmentID else {
@@ -491,7 +493,8 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
                 profile: bootProfile,
                 kernelCommandLine: resolvedCommandLine,
                 rootImageIdentifier: descriptor.rootImageIdentifier
-            )
+            ),
+            hostDirectoryExtendedAttributes: hostDirectoryExtendedAttributes
         )
     }
 

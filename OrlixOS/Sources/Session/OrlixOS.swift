@@ -46,6 +46,15 @@ private func orlix_host_resources_register_root_image_files(
     _ stateBlockMinimumBytes: UInt64
 ) -> CInt
 
+@_silgen_name("orlix_host_resources_register_host_directory_xattr")
+private func orlix_host_resources_register_host_directory_xattr(
+    _ identifier: UnsafePointer<CChar>,
+    _ relativePath: UnsafePointer<CChar>,
+    _ name: UnsafePointer<CChar>,
+    _ value: UnsafeRawPointer?,
+    _ valueLength: UInt32
+) -> CInt
+
 private struct COrlixBootConfig {
     var profile: CInt
     var kernelCommandLine: UnsafePointer<CChar>?
@@ -393,10 +402,44 @@ enum OrlixOSPayload {
                 }
             }
         }
-        if !registered {
+        let metadataRegistered = registered
+            && registerHostDirectoryExtendedAttributes(rootImage.hostDirectoryExtendedAttributes)
+        if !metadataRegistered {
             _ = orlix_host_resources_clear_root_images()
         }
-        return registered
+        return metadataRegistered
+    }
+
+    private static func registerHostDirectoryExtendedAttributes(
+        _ attributes: [OrlixHostDirectoryExtendedAttribute]
+    ) -> Bool {
+        for attribute in attributes {
+            guard attribute.value.count <= Int(UInt32.max) else {
+                return false
+            }
+
+            let registered = attribute.identifier.withCString { identifier in
+                attribute.relativePath.withCString { relativePath in
+                    attribute.name.withCString { name in
+                        attribute.value.withUnsafeBytes { bytes in
+                            orlix_host_resources_register_host_directory_xattr(
+                                identifier,
+                                relativePath,
+                                name,
+                                bytes.baseAddress,
+                                UInt32(attribute.value.count)
+                            )
+                        }
+                    }
+                }
+            }
+
+            guard registered == 0 else {
+                return false
+            }
+        }
+
+        return true
     }
 
     private static var productResources: ProductRootResources? {

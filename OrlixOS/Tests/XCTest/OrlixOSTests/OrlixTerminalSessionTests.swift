@@ -5621,6 +5621,103 @@ final class OrlixTerminalSessionTests: XCTestCase {
         }
         return output
     }
+
+    func testRootfsManifestXattrsLowerToHostDirectoryMetadata() {
+        let manifest = [
+            OrlixRootfsTarManifestEntry(
+                path: "./usr/bin/tool",
+                size: 4,
+                mode: 0o100755,
+                uid: 0,
+                gid: 0,
+                type: .regularFile,
+                linkName: nil,
+                extendedAttributes: [
+                    "user.comment": "hello",
+                    "security.capability": "cap"
+                ]
+            )
+        ]
+
+        let lowered = OrlixHostDirectoryExtendedAttribute.lowering(
+            identifier: "orlix-host0",
+            manifest: manifest
+        )
+
+        XCTAssertEqual(
+            lowered,
+            [
+                OrlixHostDirectoryExtendedAttribute(
+                    identifier: "orlix-host0",
+                    relativePath: "usr/bin/tool",
+                    name: "security.capability",
+                    value: Data("cap".utf8)
+                ),
+                OrlixHostDirectoryExtendedAttribute(
+                    identifier: "orlix-host0",
+                    relativePath: "usr/bin/tool",
+                    name: "user.comment",
+                    value: Data("hello".utf8)
+                )
+            ].compactMap { $0 }
+        )
+    }
+
+    func testRootfsManifestXattrLoweringRejectsHostAndInvalidMetadata() {
+        let manifest = [
+            OrlixRootfsTarManifestEntry(
+                path: "/absolute",
+                size: 0,
+                mode: 0o100644,
+                uid: 0,
+                gid: 0,
+                type: .regularFile,
+                linkName: nil,
+                extendedAttributes: ["user.comment": "absolute"]
+            ),
+            OrlixRootfsTarManifestEntry(
+                path: "var/../escape",
+                size: 0,
+                mode: 0o100644,
+                uid: 0,
+                gid: 0,
+                type: .regularFile,
+                linkName: nil,
+                extendedAttributes: ["security.capability": "escape"]
+            ),
+            OrlixRootfsTarManifestEntry(
+                path: "etc/config",
+                size: 0,
+                mode: 0o100644,
+                uid: 0,
+                gid: 0,
+                type: .regularFile,
+                linkName: nil,
+                extendedAttributes: [
+                    "com.apple.quarantine": "host",
+                    "linux.invalid": "not-a-linux-xattr",
+                    "trusted.overlay.opaque": "y"
+                ]
+            )
+        ]
+
+        let lowered = OrlixHostDirectoryExtendedAttribute.lowering(
+            identifier: "orlix-host0",
+            manifest: manifest
+        )
+
+        XCTAssertEqual(
+            lowered,
+            [
+                OrlixHostDirectoryExtendedAttribute(
+                    identifier: "orlix-host0",
+                    relativePath: "etc/config",
+                    name: "trusted.overlay.opaque",
+                    value: Data("y".utf8)
+                )
+            ].compactMap { $0 }
+        )
+    }
 }
 
 private final class DataRecorder: @unchecked Sendable {
