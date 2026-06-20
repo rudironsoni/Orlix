@@ -10,6 +10,45 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-20 - Add empty xattr responses to read-only virtio-fs backend
+
+Checkpoint: extended the Orlix virtio-fs backend with standard read-only FUSE
+xattr behavior in `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`.
+`FUSE_GETXATTR` now returns `-ENODATA`, and `FUSE_LISTXATTR` reports an empty
+xattr list using the normal FUSE size/data reply convention. Mutating xattr
+operations remain part of the existing read-only `-EROFS` path.
+
+This keeps the Linux-visible surface as upstream FUSE behavior and avoids a
+custom Orlix ABI. No host path, host fd, HostAdapter slot, Foundation object,
+pseudo-file control plane, or Orlix-specific syscall/ioctl is exposed to Linux
+userspace.
+
+Evidence:
+
+- Sandboxed `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  compiled through the modified `drivers/orlix/virtio/mmio.c` and then failed
+  only at the known late Xcode framework cache boundary under
+  `/Volumes/1TB/Xcode/Caches`.
+- Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  exited 0.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0.
+- `rtk rg -n "FUSE_GETXATTR|FUSE_LISTXATTR|ENODATA|fuse_getxattr_out" OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+  confirmed the backend branches.
+- `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  confirmed the kselftest bundle still contains the virtio-fs mount probe.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  stale-status warning for this file.
+- `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, OK.
+- `rtk git diff --check` exited 0.
+
+Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
+fails to connect to CoreSimulator (`Code=53`, `Code=410`, `Code=61`), so this
+checkpoint does not claim app-hosted execution, virtio-fs mount success in the
+hosted runtime, xattr syscall behavior in the hosted runtime, OCI rootfs
+attachment, OCI lifecycle, or product readiness.
+
 ### 2026-06-20 - Extend virtio-fs mount probe to verify read-only create semantics
 
 Checkpoint: strengthened the Linux kselftest proof artifact for read-only

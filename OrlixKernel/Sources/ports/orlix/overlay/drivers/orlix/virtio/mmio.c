@@ -1672,6 +1672,21 @@ static void orlix_virtio_mmio_process_fs_queue(
 				out->error = 0;
 			} else if (orlix_virtio_mmio_fs_readonly_opcode(in->opcode)) {
 				out->error = -EROFS;
+			} else if (in->opcode == FUSE_GETXATTR &&
+				   in_capacity >= sizeof(*in) + sizeof(struct fuse_getxattr_in)) {
+				out->error = -ENODATA;
+			} else if (in->opcode == FUSE_LISTXATTR &&
+				   in_capacity >= sizeof(*in) + sizeof(struct fuse_getxattr_in)) {
+				const struct fuse_getxattr_in *xattr_in = (void *)(in + 1);
+
+				out->error = 0;
+				if (xattr_in->size == 0 &&
+				    out_capacity >= sizeof(*out) + sizeof(struct fuse_getxattr_out)) {
+					struct fuse_getxattr_out *xattr_out = (void *)(out + 1);
+
+					memset(xattr_out, 0, sizeof(*xattr_out));
+					written = sizeof(*out) + sizeof(*xattr_out);
+				}
 			} else if (in->opcode == FUSE_STATFS &&
 				   out_capacity >= sizeof(*out) +
 						   sizeof(struct fuse_statfs_out)) {
