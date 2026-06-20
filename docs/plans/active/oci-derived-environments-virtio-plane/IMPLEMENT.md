@@ -9649,3 +9649,103 @@ Current status:
 - Next implementation should continue at the Linux-owned virtio device/backend
   path or a kselftest-style mount/network proof scaffold before any OCI
   lifecycle, feature report, `orlix run`, or registry pull work.
+
+## 2026-06-20 virtio-fs host-folder device-shape scaffold
+
+Goal:
+- Advance the Linux-owned host-folder mount substrate by exposing a standard
+  upstream virtio-fs device shape through the existing Orlix virtio-mmio plane.
+- Keep the Linux-visible surface upstream-shaped: `virtio,mmio`,
+  `VIRTIO_ID_FS`, `struct virtio_fs_config`, a mount tag, and normal Linux
+  sysfs registration.
+- Avoid claiming or implementing host filesystem semantics before a real
+  HostAdapter-backed FUSE request backend exists.
+
+Changes:
+- `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`
+  - Added an internal virtio-mmio slot at `0x10001800`, IRQ `36`, device ID
+    `VIRTIO_ID_FS`, and tag `orlix-host0`.
+  - Added device-specific config reads for upstream `struct virtio_fs_config`:
+    tag bytes and `num_request_queues = 1`.
+  - Added `VIRTIO_F_VERSION_1` as the only advertised virtio-fs feature.
+  - Guarded queue dispatch so non-block devices never fall through into the
+    virtio-blk request handler.
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/boot/dts/release.dts`
+  and `development.dts`
+  - Added `virtio_hostfs: virtio@10001800` with upstream `virtio,mmio`
+    compatible string, register range `0x200`, interrupt `36`, and opaque
+    `orlix,device-role = "host-folder"`.
+- `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_mmio_probe_contract.c`
+  - Extended the device-tree contract to include the new virtio-fs mmio node.
+  - Added a Linux-owned assertion that upstream virtio-fs registers tag
+    `orlix-host0` under `/sys/fs/virtiofs/*/tag`.
+- `OrlixTestRunner/Tests/XCTest/OrlixTestRunnerTests/ArchitectureInvariantTests.swift`
+  - Added an invariant pinning the host-folder virtio-mmio DTS fragments in
+    both release and development profiles.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Recorded the device-shape scaffold as build-proved only and kept
+    app-hosted tag registration in not-proved state.
+
+Evidence:
+- Release build:
+  - `rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  - Sandboxed result: failed in `__prepare-port` because `patch` could not
+    create a temp file under `/Volumes/1TB/Xcode/tmp`.
+  - Escalated rerun result: exited 0.
+- Generated-tree evidence after release build:
+  - `rtk rg -n "VIRTIO_ID_FS|orlix-host0" Build/OrlixKernel/src/linux-6.12-port/drivers/orlix/virtio/mmio.c`
+  - Result: found the generated `VIRTIO_ID_FS` slot and `orlix-host0` tag.
+  - `rtk rg -n "virtio@10001800|orlix,device-role" Build/OrlixKernel/src/linux-6.12-port/arch/orlix/boot/dts`
+  - Result: found the generated release and development DTS host-folder
+    virtio-mmio nodes.
+  - `rtk rg -n "virtiofs_tag_is_registered|orlix-host0" Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/virtio_mmio_probe_contract.c`
+  - Result: found the generated kselftest tag assertion.
+- Static checks:
+  - `rtk swiftc -parse OrlixTestRunner/Tests/XCTest/OrlixTestRunnerTests/ArchitectureInvariantTests.swift`
+  - Sandboxed result: failed with `permissionDenied`.
+  - Escalated rerun result: exited 0.
+  - `rtk git diff --check`
+  - Result: exited 0.
+  - `rtk python3 .codex/hooks/compact_plan_check.py`
+  - Result: exited 0 with the pre-existing historical warning that
+    `IMPLEMENT.md` has stale pending/blocked status contradicted by later
+    green status.
+  - `rtk python3 -m unittest discover .codex/hooks/tests`
+  - Result: ran 32 tests, OK.
+  - `rtk python3 -m unittest discover .codex/rules/tests`
+  - Result: ran 5 tests, OK.
+- Focused app-hosted runtime proof attempt:
+  - `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession test`
+  - Sandboxed result: failed before test execution due CoreSimulator access.
+  - Escalated rerun result: failed before test execution during build,
+    while rebuilding kernel headers for the OrlixMLibC sysroot. Host tool
+    `scripts/basic/fixdep` aborted with `DYLD_ROOT_PATH not set for simulator
+    program`.
+  - Full log:
+    `/Users/rudironsoni/Library/Application Support/rtk/tee/1781966989_xcodebuild_-project_OrlixSystem_xcodepro.log`.
+
+Non-claims:
+- This does not prove the app-hosted `virtio_mmio_probe_contract` assertion
+  for `/sys/fs/virtiofs/*/tag` passes.
+- This does not prove virtio-fs mounts work.
+- This does not prove FUSE request handling, inode behavior, file I/O,
+  rename/unlink, mount namespace behavior, host-folder mounts, or security-
+  scoped folder access.
+- This does not prove a HostAdapter virtio-fs request backend exists.
+- This does not prove virtio-net devices bind, packets move, rtnetlink works,
+  `/proc/net` is complete, or networking is product-ready.
+- This does not prove OCI Runtime config parsing, lifecycle compliance,
+  feature reporting, product `orlix run`, registry pull, cgroup enforcement,
+  native performance, real-device behavior, App Store acceptance, or arbitrary
+  imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- OrlixKernel now has a standard virtio-fs device-shape scaffold in durable
+  source and the release product build accepts it.
+- Runtime proof is still missing because the focused iOS Simulator XCTest did
+  not reach test execution.
+- Next implementation should either fix the Xcode/kernel-header host-tool
+  environment so the app-hosted kselftest can run, or implement the real
+  HostAdapter-backed virtio-fs request path and then prove mount behavior
+  through the app-hosted Orlix path.

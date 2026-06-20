@@ -92,17 +92,37 @@ static bool hwrng_device_returns_data(void)
 	return nread > 0;
 }
 
+static bool virtiofs_tag_is_registered(void)
+{
+	char path[] = "/sys/fs/virtiofs/virtio0/tag";
+	char buffer[64];
+	size_t size;
+	char digit;
+
+	for (digit = '0'; digit <= '9'; digit++) {
+		path[23] = digit;
+		if (orlix_read_file(path, buffer, sizeof(buffer), &size) == 0 &&
+		    orlix_contains(buffer, size, "orlix-host0"))
+			return true;
+	}
+
+	return false;
+}
+
 int main(void)
 {
-	orlix_test_plan(13);
+	orlix_test_plan(17);
 
 	expect_virtio_mmio_node("virtio@10001000", 0x10001000, 32);
 	expect_virtio_mmio_node("virtio@10001200", 0x10001200, 33);
 	expect_virtio_mmio_node("virtio@10001400", 0x10001400, 34);
 	expect_virtio_mmio_node("virtio@10001600", 0x10001600, 35);
+	expect_virtio_mmio_node("virtio@10001800", 0x10001800, 36);
 
 	orlix_test_result(hwrng_device_returns_data(),
 			  "upstream hwrng device returns virtio-backed entropy");
+	orlix_test_result(virtiofs_tag_is_registered(),
+			  "upstream virtio-fs device registers the Orlix host-folder tag");
 
 	orlix_test_exit();
 }

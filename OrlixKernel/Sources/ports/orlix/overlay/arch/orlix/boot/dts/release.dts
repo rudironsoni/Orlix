@@ -66,4 +66,12 @@
 		interrupts = <35>;
 		status = "okay";
 	};
+
+	virtio_hostfs: virtio@10001800 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0x10001800 0x0 0x200>;
+		interrupts = <36>;
+		orlix,device-role = "host-folder";
+		status = "okay";
+	};
 };
