@@ -1,0 +1,22 @@
+{
+  "id": "signal-wait",
+  "description": "Compare Linux signal delivery, pending blocked signals, unblocking, and waitpid signal status.",
+  "fixture": "fixtures/signal_wait_probe.c",
+  "command": [
+    "/oracle/signal_wait_probe"
+  ],
+  "environment": {
+    "LC_ALL": "C"
+  },
+  "workingDirectory": "/oracle/work",
+  "compare": {
+    "stdout": false,
+    "stderr": true,
+    "exitStatus": true,
+    "signal": true,
+    "errnoEvents": false,
+    "statEntries": false,
+    "mutations": false,
+    "observations": true
+  }
+}
