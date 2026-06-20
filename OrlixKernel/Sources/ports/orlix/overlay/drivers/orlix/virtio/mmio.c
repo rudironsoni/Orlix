@@ -12,6 +12,7 @@
 #include <linux/workqueue.h>
 #include <linux/virtio_ids.h>
 #include <uapi/linux/virtio_blk.h>
+#include <uapi/linux/virtio_fs.h>
 #include <uapi/linux/virtio_mmio.h>
 #include <uapi/linux/virtio_ring.h>
 #include <asm/page.h>
@@ -33,6 +34,8 @@
 	 (1ULL << VIRTIO_BLK_F_FLUSH))
 #define ORLIX_VIRTIO_CONSOLE_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
 #define ORLIX_VIRTIO_RNG_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
+#define ORLIX_VIRTIO_FS_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
+#define ORLIX_VIRTIO_FS_REQUEST_QUEUES 1U
 
 struct orlix_virtio_mmio_queue {
 	u32 num;
@@ -99,6 +102,12 @@ static struct orlix_virtio_mmio_slot orlix_virtio_mmio_slots[] = {
 		.device_id = VIRTIO_ID_RNG,
 		.device_identifier = "orlix-rng0",
 	},
+	{
+		.base = 0x10001800UL,
+		.irq = 36,
+		.device_id = VIRTIO_ID_FS,
+		.device_identifier = "orlix-host0",
+	},
 };
 
 static struct orlix_virtio_mmio_slot *
@@ -148,6 +157,7 @@ orlix_virtio_mmio_device_present(const struct orlix_virtio_mmio_slot *slot)
 		return orlix_virtio_mmio_block_capacity(slot, &sectors);
 	case VIRTIO_ID_CONSOLE:
 	case VIRTIO_ID_RNG:
+	case VIRTIO_ID_FS:
 		return true;
 	default:
 		return false;
@@ -169,6 +179,57 @@ static u64 orlix_virtio_mmio_device_features(
 		return ORLIX_VIRTIO_CONSOLE_BASE_FEATURES;
 	case VIRTIO_ID_RNG:
 		return ORLIX_VIRTIO_RNG_BASE_FEATURES;
+	case VIRTIO_ID_FS:
+		return ORLIX_VIRTIO_FS_BASE_FEATURES;
+	default:
+		return 0;
+	}
+}
+
+static u32 orlix_virtio_mmio_fs_config_read32(
+	const struct orlix_virtio_mmio_slot *slot,
+	unsigned long config_offset)
+{
+	u8 bytes[sizeof(u32)] = {};
+	__le32 request_queues = cpu_to_le32(ORLIX_VIRTIO_FS_REQUEST_QUEUES);
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(bytes); i++) {
+		unsigned long offset = config_offset + i;
+
+		if (offset < sizeof_field(struct virtio_fs_config, tag)) {
+			if (offset < strlen(slot->device_identifier))
+				bytes[i] = slot->device_identifier[offset];
+			continue;
+		}
+
+		offset -= sizeof_field(struct virtio_fs_config, tag);
+		if (offset < sizeof(request_queues))
+			bytes[i] = ((u8 *)&request_queues)[offset];
+	}
+
+	return (u32)bytes[0] | ((u32)bytes[1] << 8) |
+	       ((u32)bytes[2] << 16) | ((u32)bytes[3] << 24);
+}
+
+static u32 orlix_virtio_mmio_config_read32(
+	const struct orlix_virtio_mmio_slot *slot,
+	unsigned long config_offset)
+{
+	unsigned long long sectors;
+
+	switch (slot->device_id) {
+	case VIRTIO_ID_BLOCK:
+		if (!orlix_virtio_mmio_block_capacity(slot, &sectors))
+			return 0;
+		if (config_offset == offsetof(struct virtio_blk_config, capacity))
+			return (u32)sectors;
+		if (config_offset ==
+		    offsetof(struct virtio_blk_config, capacity) + sizeof(u32))
+			return (u32)(sectors >> 32);
+		return 0;
+	case VIRTIO_ID_FS:
+		return orlix_virtio_mmio_fs_config_read32(slot, config_offset);
 	default:
 		return 0;
 	}
@@ -690,6 +751,9 @@ static void orlix_virtio_mmio_process_queue(
 		return;
 	}
 
+	if (slot->device_id != VIRTIO_ID_BLOCK)
+		return;
+
 	queue = &slot->queues[queue_index];
 	if (!queue->ready || !queue->num || queue->num > ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
 		return;
@@ -761,7 +825,6 @@ bool orlix_virtio_mmio_read32(unsigned long physical_address, u32 *value)
 	struct orlix_virtio_mmio_slot *slot;
 	struct orlix_virtio_mmio_queue *queue;
 	unsigned long offset;
-	unsigned long long sectors;
 	u64 features;
 
 	slot = orlix_virtio_mmio_find_slot(physical_address, &offset);
@@ -769,6 +832,12 @@ bool orlix_virtio_mmio_read32(unsigned long physical_address, u32 *value)
 		return false;
 
 	queue = orlix_virtio_mmio_selected_queue(slot);
+
+	if (offset >= VIRTIO_MMIO_CONFIG) {
+		*value = orlix_virtio_mmio_config_read32(
+			slot, offset - VIRTIO_MMIO_CONFIG);
+		return true;
+	}
 
 	switch (offset) {
 	case VIRTIO_MMIO_MAGIC_VALUE:
@@ -821,14 +890,6 @@ bool orlix_virtio_mmio_read32(unsigned long physical_address, u32 *value)
 		break;
 	case VIRTIO_MMIO_QUEUE_USED_HIGH:
 		*value = queue ? (u32)(queue->used >> 32) : 0;
-		break;
-	case VIRTIO_MMIO_CONFIG + offsetof(struct virtio_blk_config, capacity):
-		*value = orlix_virtio_mmio_block_capacity(slot, &sectors) ?
-			 (u32)sectors : 0;
-		break;
-	case VIRTIO_MMIO_CONFIG + offsetof(struct virtio_blk_config, capacity) + 4:
-		*value = orlix_virtio_mmio_block_capacity(slot, &sectors) ?
-			 (u32)(sectors >> 32) : 0;
 		break;
 	case VIRTIO_MMIO_SHM_LEN_LOW:
 	case VIRTIO_MMIO_SHM_LEN_HIGH:

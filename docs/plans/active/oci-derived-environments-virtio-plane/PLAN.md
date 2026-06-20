@@ -69,6 +69,7 @@ Current proved state:
   Orlix kselftest log conversion.
 - OrlixKernel release and development profile defconfigs enable upstream virtio-net and virtio-fs/FUSE prerequisites: `CONFIG_VIRTIO_NET=y`, `CONFIG_FUSE_FS=y`, `CONFIG_VIRTIO_FS=y`.
 - OrlixKernel product archive source selection now includes the upstream virtio-net, `net_failover`/generic failover, FUSE core, FUSE passthrough, and virtio-fs sources required by the selected profile dependencies, with a release build proof.
+- OrlixKernel durable virtio-mmio input now declares a standard upstream virtio-fs host-folder device shape: a `virtio,mmio` device-tree node at `0x10001800`, an internal `VIRTIO_ID_FS` slot, tag `orlix-host0`, one request queue, and a kselftest contract assertion for `/sys/fs/virtiofs/*/tag`. Release build proof exists; app-hosted runtime proof for the tag assertion is still pending.
 - OrlixTestRunner architecture invariants pin the virtio/container-environment substrate config set across both profile defconfigs.
 - OrlixHostAdapter has private opaque host-directory resource registration and lookup plumbing for future virtio-fs backends, with tests for absolute directory validation and path-shaped identifier rejection.
 - OrlixOS named environment session selection API exists.
@@ -89,6 +90,7 @@ Current not-proved state:
 - Multiple live environments inside one already-running OrlixKernel.
 - Runtime host-folder mount backend.
 - virtio-fs.
+- App-hosted virtio-fs tag registration proof.
 - Registry pull.
 - Product `orlix run`.
 - OCI Runtime Spec lifecycle compliance.

@@ -190,6 +190,30 @@ final class ArchitectureInvariantTests: XCTestCase {
         )
     }
 
+    func testOrlixKernelDeviceTreesExposeVirtioFsHostFolderNode() throws {
+        let deviceTreePaths = [
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/boot/dts/release.dts",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/boot/dts/development.dts"
+        ]
+
+        for relativePath in deviceTreePaths {
+            let deviceTree = try String(contentsOf: root.appendingPathComponent(relativePath))
+            let requiredFragments = [
+                "virtio_hostfs: virtio@10001800",
+                "compatible = \"virtio,mmio\";",
+                "reg = <0x0 0x10001800 0x0 0x200>;",
+                "interrupts = <36>;",
+                "orlix,device-role = \"host-folder\";"
+            ]
+            let missing = requiredFragments.filter { !deviceTree.contains($0) }
+
+            XCTAssertTrue(
+                missing.isEmpty,
+                "\(relativePath) missing virtio-fs host-folder node fragments: \(missing.joined(separator: ", "))"
+            )
+        }
+    }
+
     private func sourceFiles(under relativePaths: [String]) throws -> [URL] {
         let manager = FileManager.default
         var urls: [URL] = []
