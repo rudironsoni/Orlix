@@ -314,6 +314,18 @@ let pipeSelectObservationKeys: Set<String> = [
     "read-eof"
 ]
 
+let pipeEpollObservationKeys: Set<String> = [
+    "pipe-created",
+    "epoll-created",
+    "empty-read-eagain",
+    "read-end-registered",
+    "empty-epoll-timeout",
+    "write-end-writable",
+    "read-end-readable",
+    "read-payload",
+    "read-end-hangup"
+]
+
 func fdExecResult(
     runner: String,
     stdout: String,
@@ -389,6 +401,35 @@ func pipeSelectResult(
 
     return OracleResult(
         caseID: "pipe-select",
+        runner: runner,
+        stdout: stdout,
+        stderr: stderr,
+        exitStatus: exitStatus,
+        signal: signal,
+        errnoEvents: [],
+        statEntries: [],
+        mutations: [],
+        observations: observations
+    )
+}
+
+func pipeEpollResult(
+    runner: String,
+    stdout: String,
+    stderr: String,
+    exitStatus: Int?,
+    signal: String?,
+    observations: [String: String]
+) throws -> OracleResult {
+    let missing = pipeEpollObservationKeys.subtracting(observations.keys)
+    guard missing.isEmpty else {
+        throw OracleError.invalidLog(
+            "missing pipe-epoll observations: \(missing.sorted().joined(separator: ", "))"
+        )
+    }
+
+    return OracleResult(
+        caseID: "pipe-epoll",
         runner: runner,
         stdout: stdout,
         stderr: stderr,
@@ -479,6 +520,15 @@ func resultFromLinuxFixture(
             signal: signal,
             observations: observations(from: jsonObjectLines(from: stdout))
         )
+    case "pipe-epoll":
+        return try pipeEpollResult(
+            runner: "linux",
+            stdout: stdout,
+            stderr: stderr,
+            exitStatus: exitStatus,
+            signal: signal,
+            observations: observations(from: jsonObjectLines(from: stdout))
+        )
     default:
         throw OracleError.invalidCase(
             "linux-result-from-fixture does not support \(testCase.id)"
@@ -496,6 +546,8 @@ func resultFromOrlixLog(testCase: OracleCase, log: String) throws -> OracleResul
         return try pipePollResultFromOrlixLog(log)
     case "pipe-select":
         return try pipeSelectResultFromOrlixLog(log)
+    case "pipe-epoll":
+        return try pipeEpollResultFromOrlixLog(log)
     default:
         throw OracleError.invalidCase(
             "orlix-result-from-log does not support \(testCase.id)"
@@ -668,6 +720,71 @@ func pipeSelectResultFromOrlixLog(_ log: String) throws -> OracleResult {
     }
 
     return try pipeSelectResult(
+        runner: "orlix",
+        stdout: "",
+        stderr: "",
+        exitStatus: 0,
+        signal: nil,
+        observations: observed
+    )
+}
+
+func pipeEpollResultFromOrlixLog(_ log: String) throws -> OracleResult {
+    var observed = Dictionary(
+        uniqueKeysWithValues: [
+            fdExecObservation(
+                log,
+                "pipe creates nonblocking read descriptor epoll",
+                "pipe-created"
+            ),
+            fdExecObservation(
+                log,
+                "epoll_create1 returns epoll descriptor",
+                "epoll-created"
+            ),
+            fdExecObservation(
+                log,
+                "empty nonblocking pipe read returns EAGAIN before epoll",
+                "empty-read-eagain"
+            ),
+            fdExecObservation(
+                log,
+                "epoll_ctl adds pipe read end",
+                "read-end-registered"
+            ),
+            fdExecObservation(
+                log,
+                "empty pipe read epoll times out",
+                "empty-epoll-timeout"
+            ),
+            fdExecObservation(
+                log,
+                "pipe write end epolls writable",
+                "write-end-writable"
+            ),
+            fdExecObservation(
+                log,
+                "pipe read end epolls readable after write",
+                "read-end-readable"
+            ),
+            fdExecObservation(
+                log,
+                "pipe read returns epoll payload",
+                "read-payload"
+            ),
+            fdExecObservation(
+                log,
+                "pipe read end epolls hangup after writer closes",
+                "read-end-hangup"
+            )
+        ]
+    )
+
+    if !log.contains("pipe_epoll_probe") || !log.contains("ORLIX-PIPE-EPOLL-PROBE") {
+        observed["pipe-epoll-log"] = "missing"
+    }
+
+    return try pipeEpollResult(
         runner: "orlix",
         stdout: "",
         stderr: "",
@@ -865,6 +982,21 @@ func runSelfTest() throws {
         ),
         orlixLogPath: repositoryPath(
             "tools/orlix-linux-oracle/samples/pipe-select.orlix-kselftest.log"
+        )
+    )
+    try selfTestCase(
+        casePath: repositoryPath("tools/orlix-linux-oracle/cases/pipe-epoll.json"),
+        linuxResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/pipe-epoll.linux.json"
+        ),
+        orlixResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/pipe-epoll.orlix.json"
+        ),
+        driftResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/pipe-epoll.orlix-drift.json"
+        ),
+        orlixLogPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/pipe-epoll.orlix-kselftest.log"
         )
     )
 

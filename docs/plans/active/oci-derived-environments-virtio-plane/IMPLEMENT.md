@@ -9229,3 +9229,89 @@ Current status:
   probes such as `pipe_epoll_probe`, `signal_wait_probe`, `pseudo_fs_probe`, or
   `mount_namespace_probe` into Swift/C-only oracle cases, then capture fresh
   app-hosted Orlix evidence when simulator access is available.
+
+## 2026-06-20 pipe-epoll Linux oracle case expansion
+
+Goal:
+- Extend Linux oracle coverage toward plan's fd readiness substrate gap after
+  `pipe-poll` and `pipe-select`, before OCI Runtime lifecycle, feature
+  reporting, and product `orlix run` claims.
+- Keep project-side oracle tooling Swift/C/JSON/log only; do not add Python to
+  `tools/` or any iOS/app runtime path.
+- Reuse existing Orlix-owned `pipe_epoll_probe` semantics instead changing
+  kernel behavior in this checkpoint.
+
+Changes:
+- `tools/orlix-linux-oracle/cases/pipe-epoll.json`
+  - Added fifth oracle case for epoll descriptor creation, pipe read-end
+    registration, empty timeout, writable/readable readiness, payload read, and
+    hangup behavior.
+- `tools/orlix-linux-oracle/fixtures/pipe_epoll_probe.c`
+  - Added Linux-runner fixture emits structured observation JSON for pipe
+    creation, `epoll_create1`, empty-read `EAGAIN`, `epoll_ctl` read-end
+    registration, empty epoll timeout, write-end readiness, read-end readiness,
+    payload read, and hangup after writer close.
+  - Added non-Linux syntax stubs for epoll declarations so macOS
+    `clang -fsyntax-only` can parse the Linux fixture without changing Linux
+    runner behavior.
+- `tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Added `pipe-epoll` Linux fixture result construction.
+  - Added `pipe-epoll` Orlix kselftest log conversion based on existing
+    `pipe_epoll_probe` output markers.
+  - Extended Swift-native `self-test` coverage for case validation, matching
+    comparison, drift detection, and Orlix log conversion.
+- `tools/orlix-linux-oracle/samples/`
+  - Added matching Linux and Orlix `pipe-epoll` result samples.
+  - Added deliberate `pipe-epoll` drift sample.
+  - Added representative Orlix `pipe_epoll_probe` kselftest log sample.
+- `docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md`
+  - Updated current proved state to include the fifth local oracle case.
+
+Evidence:
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test`
+  - Result: exited 0, output `oracle self-test passed`.
+- `rtk swiftc -parse tools/orlix-linux-oracle/orlix-linux-oracle.swift`
+  - Result: exited 0.
+- `rtk clang -fsyntax-only -Wall -Wextra tools/orlix-linux-oracle/fixtures/pipe_epoll_probe.c`
+  - Initial result: exited 1 on macOS because `<sys/epoll.h>` is Linux-only.
+  - After adding non-Linux syntax stubs: exited 0.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/pipe-epoll.json`
+  - Result: exited 0, output `case pipe-epoll is valid`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pipe-epoll.json --linux-result tools/orlix-linux-oracle/samples/pipe-epoll.linux.json --orlix-result tools/orlix-linux-oracle/samples/pipe-epoll.orlix.json`
+  - Result: exited 0, output `case pipe-epoll matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift orlix-result-from-log --case tools/orlix-linux-oracle/cases/pipe-epoll.json --log tools/orlix-linux-oracle/samples/pipe-epoll.orlix-kselftest.log --output /private/tmp/pipe-epoll.orlix.generated.json`
+  - Result: exited 0, output `wrote Orlix result for case pipe-epoll: /private/tmp/pipe-epoll.orlix.generated.json`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pipe-epoll.json --linux-result tools/orlix-linux-oracle/samples/pipe-epoll.linux.json --orlix-result /private/tmp/pipe-epoll.orlix.generated.json`
+  - Result: exited 0, output `case pipe-epoll matches`.
+- `rtk swift tools/orlix-linux-oracle/orlix-linux-oracle.swift compare --case tools/orlix-linux-oracle/cases/pipe-epoll.json --linux-result tools/orlix-linux-oracle/samples/pipe-epoll.linux.json --orlix-result tools/orlix-linux-oracle/samples/pipe-epoll.orlix-drift.json`
+  - Result: exited 2 as expected for deliberate drift sample, output `oracle comparison failed: - observations differ`.
+- `rtk git diff --check`
+  - Result: exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py`
+  - Result: exited 0 with historical warning `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+- `rtk python3 -m unittest discover .codex/hooks/tests`
+  - Result: ran 32 tests, OK.
+- `rtk python3 -m unittest discover .codex/rules/tests`
+  - Result: ran 5 tests, OK.
+- `rtk rg -n "python|pytest|unittest|\\.py" tools/orlix-linux-oracle`
+  - Result: exited 1 with no matches, confirming no Python references under project oracle tooling.
+
+Non-claims:
+- This proves local oracle-tool regression coverage and fixture syntax only.
+- This does not prove fresh real-Linux oracle execution, fresh app-hosted Orlix
+  runtime execution, imported-environment `epoll` readiness, PTY readiness,
+  socket readiness, edge-triggered epoll, signal-interrupted `epoll_wait`,
+  nonzero timeout precision, pipe capacity behavior, partial writes, multiple
+  live environments, OCI Runtime lifecycle compliance, product `orlix run`,
+  registry pull, host-folder mounts, virtio-fs, networking, cgroups, native
+  performance, real-device behavior, App Store acceptance, or arbitrary
+  imported binary compatibility.
+
+Current status:
+- Active plan remains in progress.
+- Linux oracle tooling now covers five local cases: `path-errno`, `fd-exec`,
+  `pipe-poll`, `pipe-select`, and `pipe-epoll`.
+- Next substrate work should continue converting existing Orlix kselftest
+  probes such as `signal_wait_probe`, `pseudo_fs_probe`, or
+  `mount_namespace_probe` into Swift/C-only oracle cases, then capture fresh
+  app-hosted Orlix evidence when simulator access is available.
