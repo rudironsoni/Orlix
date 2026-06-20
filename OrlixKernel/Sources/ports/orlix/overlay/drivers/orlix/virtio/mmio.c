@@ -799,6 +799,101 @@ static bool orlix_virtio_mmio_fs_child_index(
 	       *entry_index < ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
 }
 
+static bool orlix_virtio_mmio_fs_append_name(char *path,
+					     size_t capacity,
+					     size_t *offset,
+					     const char *name)
+{
+	size_t name_length = strlen(name);
+
+	if (*offset + name_length >= capacity)
+		return false;
+
+	memcpy(path + *offset, name, name_length);
+	*offset += name_length;
+	path[*offset] = '\0';
+	return true;
+}
+
+static bool orlix_virtio_mmio_fs_node_relative_path(u64 nodeid,
+						    char *path,
+						    size_t capacity)
+{
+	struct orlix_host_directory_entry parent_entry;
+	struct orlix_host_directory_entry host_entry;
+	unsigned int parent_entry_index;
+	unsigned int entry_index;
+	size_t offset = 0;
+
+	if (capacity == 0)
+		return false;
+
+	if (nodeid == FUSE_ROOT_ID) {
+		if (capacity <= 1)
+			return false;
+		path[0] = '.';
+		path[1] = '\0';
+		return true;
+	}
+
+	if (orlix_virtio_mmio_fs_host_index(nodeid, &entry_index)) {
+		if (orlix_host_directory_read_entry(
+			    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+			    entry_index, &host_entry) != 0)
+			return false;
+
+		path[0] = '\0';
+		return orlix_virtio_mmio_fs_append_name(path, capacity,
+							&offset,
+							host_entry.name);
+	}
+
+	if (orlix_virtio_mmio_fs_child_index(nodeid, &parent_entry_index,
+					     &entry_index)) {
+		if (orlix_host_directory_read_entry(
+			    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+			    parent_entry_index, &parent_entry) != 0 ||
+		    orlix_host_directory_read_child_entry(
+			    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+			    parent_entry_index, entry_index, &host_entry) != 0)
+			return false;
+
+		path[0] = '\0';
+		return orlix_virtio_mmio_fs_append_name(path, capacity,
+							&offset,
+							parent_entry.name) &&
+		       orlix_virtio_mmio_fs_append_name(path, capacity,
+							&offset, "/") &&
+		       orlix_virtio_mmio_fs_append_name(path, capacity,
+							&offset,
+							host_entry.name);
+	}
+
+	return false;
+}
+
+static const char *orlix_virtio_mmio_fs_xattr_name(
+	const struct fuse_in_header *in,
+	u32 in_capacity,
+	u32 *name_length)
+{
+	const char *name;
+	u32 remaining;
+	u32 length;
+
+	if (in_capacity <= sizeof(*in) + sizeof(struct fuse_getxattr_in))
+		return NULL;
+
+	name = (const char *)(in + 1) + sizeof(struct fuse_getxattr_in);
+	remaining = in_capacity - sizeof(*in) - sizeof(struct fuse_getxattr_in);
+	length = strnlen(name, remaining);
+	if (length == remaining)
+		return NULL;
+
+	*name_length = length;
+	return name;
+}
+
 static bool orlix_virtio_mmio_fs_read_node_entry(
 	u64 nodeid,
 	struct orlix_host_directory_entry *host_entry)
@@ -1779,18 +1874,88 @@ static void orlix_virtio_mmio_process_fs_queue(
 				out->error = -EROFS;
 			} else if (in->opcode == FUSE_GETXATTR &&
 				   in_capacity >= sizeof(*in) + sizeof(struct fuse_getxattr_in)) {
-				out->error = -ENODATA;
+				const struct fuse_getxattr_in *xattr_in = (void *)(in + 1);
+				struct fuse_getxattr_out *xattr_out = (void *)(out + 1);
+				char relative_path[PATH_MAX];
+				const char *name;
+				u32 name_length = 0;
+				long value_length;
+
+				name = orlix_virtio_mmio_fs_xattr_name(in, in_capacity,
+								       &name_length);
+				if (!name || name_length == 0 ||
+				    !orlix_virtio_mmio_fs_node_relative_path(
+					    in->nodeid, relative_path,
+					    sizeof(relative_path))) {
+					out->error = -EINVAL;
+				} else {
+					value_length = orlix_host_directory_read_xattr(
+						ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+						relative_path, name, NULL, 0);
+					if (value_length < 0) {
+						out->error = -ENODATA;
+					} else if (xattr_in->size == 0 &&
+						   out_capacity >= sizeof(*out) + sizeof(*xattr_out)) {
+						memset(xattr_out, 0, sizeof(*xattr_out));
+						xattr_out->size = (u32)value_length;
+						out->error = 0;
+						written = sizeof(*out) + sizeof(*xattr_out);
+					} else if (xattr_in->size < value_length) {
+						out->error = -ERANGE;
+					} else if (out_capacity < sizeof(*out) + value_length) {
+						out->error = -EINVAL;
+					} else {
+						value_length = orlix_host_directory_read_xattr(
+							ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+							relative_path, name, out + 1,
+							value_length);
+						out->error = value_length >= 0 ? 0 : -ENODATA;
+						if (value_length >= 0)
+							written = sizeof(*out) + value_length;
+					}
+				}
 			} else if (in->opcode == FUSE_LISTXATTR &&
 				   in_capacity >= sizeof(*in) + sizeof(struct fuse_getxattr_in)) {
 				const struct fuse_getxattr_in *xattr_in = (void *)(in + 1);
+				struct fuse_getxattr_out *xattr_out = (void *)(out + 1);
+				char relative_path[PATH_MAX];
+				long list_length;
 
-				out->error = 0;
-				if (xattr_in->size == 0 &&
-				    out_capacity >= sizeof(*out) + sizeof(struct fuse_getxattr_out)) {
-					struct fuse_getxattr_out *xattr_out = (void *)(out + 1);
-
-					memset(xattr_out, 0, sizeof(*xattr_out));
-					written = sizeof(*out) + sizeof(*xattr_out);
+				if (!orlix_virtio_mmio_fs_node_relative_path(
+					    in->nodeid, relative_path,
+					    sizeof(relative_path))) {
+					out->error = -EINVAL;
+				} else {
+					list_length = orlix_host_directory_list_xattr(
+						ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+						relative_path, NULL, 0);
+					if (list_length < 0) {
+						out->error = -ENODATA;
+					} else if (xattr_in->size == 0 &&
+						   out_capacity >= sizeof(*out) + sizeof(*xattr_out)) {
+						memset(xattr_out, 0, sizeof(*xattr_out));
+						xattr_out->size = (u32)list_length;
+						out->error = 0;
+						written = sizeof(*out) + sizeof(*xattr_out);
+					} else if (xattr_in->size < list_length) {
+						out->error = -ERANGE;
+					} else if (list_length == 0) {
+						out->error = 0;
+					} else if (out_capacity < sizeof(*out) + list_length) {
+						out->error = -EINVAL;
+					} else {
+						list_length = orlix_host_directory_list_xattr(
+							ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+							relative_path, (char *)(out + 1),
+							list_length);
+						if (list_length == -2) {
+							out->error = -ERANGE;
+						} else {
+							out->error = list_length >= 0 ? 0 : -ENODATA;
+							if (list_length >= 0)
+								written = sizeof(*out) + list_length;
+						}
+					}
 				}
 			} else if (in->opcode == FUSE_LSEEK &&
 				   in_capacity >= sizeof(*in) + sizeof(struct fuse_lseek_in) &&

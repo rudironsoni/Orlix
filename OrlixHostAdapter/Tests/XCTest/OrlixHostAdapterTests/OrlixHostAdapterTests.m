@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <XCTest/XCTest.h>
 
+#include <string.h>
 #include "OrlixHostAdapter/boot/resources.h"
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
 
@@ -360,6 +361,106 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
 
     [fileManager removeItemAtURL:root error:nil];
     XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+}
+
+- (void)testHostDirectoryResourcesRegisterLinuxXattrMetadata {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSURL *root = [[NSURL fileURLWithPath:NSTemporaryDirectory()]
+        URLByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
+    const uint8_t capability[] = { 0x01, 0x02, 0x03, 0x04 };
+    const char comment[] = "hello";
+    char list[64];
+    uint8_t value[8];
+
+    XCTAssertTrue([fileManager createDirectoryAtURL:root
+                        withIntermediateDirectories:YES
+                                         attributes:nil
+                                              error:nil]);
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+    XCTAssertEqual(orlix_host_resources_register_host_directory(
+                       "oci-root",
+                       [[root path] UTF8String],
+                       1),
+                   0);
+
+    XCTAssertEqual(orlix_host_resources_register_host_directory_xattr(
+                       "oci-root",
+                       "bin/tool",
+                       "security.capability",
+                       capability,
+                       sizeof(capability)),
+                   0);
+    XCTAssertEqual(orlix_host_resources_register_host_directory_xattr(
+                       "oci-root",
+                       "bin/tool",
+                       "user.comment",
+                       comment,
+                       (uint32_t)(sizeof(comment) - 1)),
+                   0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory_xattr(
+                          "oci-root",
+                          "bin/tool",
+                          "com.apple.quarantine",
+                          comment,
+                          (uint32_t)(sizeof(comment) - 1)),
+                      0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory_xattr(
+                          "missing",
+                          "bin/tool",
+                          "user.comment",
+                          comment,
+                          (uint32_t)(sizeof(comment) - 1)),
+                      0);
+    XCTAssertNotEqual(orlix_host_resources_register_host_directory_xattr(
+                          "oci-root",
+                          "/bin/tool",
+                          "user.comment",
+                          comment,
+                          (uint32_t)(sizeof(comment) - 1)),
+                      0);
+
+    long listLength = orlix_host_directory_list_xattr(0, "bin/tool", NULL, 0);
+    XCTAssertEqual(listLength,
+                   (long)(strlen("security.capability") + 1 +
+                          strlen("user.comment") + 1));
+    XCTAssertEqual(orlix_host_directory_list_xattr(0, "bin/tool", list, 4), -2);
+    XCTAssertEqual(orlix_host_directory_list_xattr(0,
+                                                   "bin/tool",
+                                                   list,
+                                                   sizeof(list)),
+                   listLength);
+    XCTAssertNotEqual(memmem(list,
+                             (size_t)listLength,
+                             "security.capability",
+                             strlen("security.capability")),
+                      NULL);
+    XCTAssertNotEqual(memmem(list,
+                             (size_t)listLength,
+                             "user.comment",
+                             strlen("user.comment")),
+                      NULL);
+
+    XCTAssertEqual(orlix_host_directory_read_xattr(
+                       0, "bin/tool", "security.capability", NULL, 0),
+                   (long)sizeof(capability));
+    XCTAssertEqual(orlix_host_directory_read_xattr(
+                       0, "bin/tool", "security.capability", value, 1),
+                   -2);
+    XCTAssertEqual(orlix_host_directory_read_xattr(
+                       0,
+                       "bin/tool",
+                       "security.capability",
+                       value,
+                       sizeof(value)),
+                   (long)sizeof(capability));
+    XCTAssertEqual(memcmp(value, capability, sizeof(capability)), 0);
+    XCTAssertEqual(orlix_host_directory_read_xattr(
+                       0, "bin/tool", "user.missing", value, sizeof(value)),
+                   -1);
+
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+    XCTAssertEqual(orlix_host_directory_list_xattr(0, "bin/tool", NULL, 0), -1);
+    [fileManager removeItemAtURL:root error:nil];
 }
 
 - (void)testHostDirectoryResourcesRejectUnsafePathsAndIdentifiers {

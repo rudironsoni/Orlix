@@ -15,6 +15,8 @@ __attribute__((visibility("default"))) int orlix_host_resources_clear_root_image
 #include <stdint.h>
 
 #define ORLIX_HOST_DIRECTORY_NAME_MAX 255
+#define ORLIX_HOST_DIRECTORY_XATTR_NAME_MAX 255
+#define ORLIX_HOST_DIRECTORY_XATTR_VALUE_MAX 4096
 
 enum OrlixHostDirectoryEntryType {
     OrlixHostDirectoryEntryUnknown = 0,
@@ -59,6 +61,12 @@ __attribute__((visibility("default"))) int orlix_host_resources_register_host_di
     const char *identifier,
     const char *host_path,
     unsigned int read_only);
+__attribute__((visibility("default"))) int orlix_host_resources_register_host_directory_xattr(
+    const char *identifier,
+    const char *relative_path,
+    const char *name,
+    const void *value,
+    uint32_t value_length);
 
 __attribute__((visibility("hidden"))) int OrlixHostLoadKernelPayloadResource(
     const char *resource,
@@ -110,6 +118,17 @@ __attribute__((visibility("hidden"))) long orlix_host_directory_read_child_link(
     unsigned int entry_index,
     void *buffer,
     uint32_t length);
+__attribute__((visibility("hidden"))) long orlix_host_directory_list_xattr(
+    unsigned int directory,
+    const char *relative_path,
+    char *buffer,
+    uint64_t capacity);
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_xattr(
+    unsigned int directory,
+    const char *relative_path,
+    const char *name,
+    void *buffer,
+    uint64_t capacity);
 
 __attribute__((visibility("hidden"))) int orlix_host_block_capacity(
     unsigned int device,

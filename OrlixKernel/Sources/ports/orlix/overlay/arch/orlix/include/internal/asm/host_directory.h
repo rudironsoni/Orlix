@@ -49,5 +49,14 @@ long orlix_host_directory_read_child_link(unsigned int directory,
 					  unsigned int entry_index,
 					  void *buffer,
 					  u32 length);
+long orlix_host_directory_list_xattr(unsigned int directory,
+				     const char *relative_path,
+				     char *buffer,
+				     u64 capacity);
+long orlix_host_directory_read_xattr(unsigned int directory,
+				     const char *relative_path,
+				     const char *name,
+				     void *buffer,
+				     u64 capacity);
 
 #endif /* _ORLIX_INTERNAL_ASM_HOST_DIRECTORY_H */
