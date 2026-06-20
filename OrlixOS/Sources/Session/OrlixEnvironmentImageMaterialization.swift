@@ -56,10 +56,12 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
             baseTreeDirectory,
             fileManager: fileManager
         )
+        var copiedHardLinks: [FileIdentity: URL] = [:]
         try copyDirectoryContents(
             from: stagingRootDirectory,
             to: baseTreeDirectory,
-            fileManager: fileManager
+            fileManager: fileManager,
+            copiedHardLinks: &copiedHardLinks
         )
         try ensureBaseRootDirectories(fileManager: fileManager)
 
@@ -320,17 +322,84 @@ private func replaceDirectory(
 private func copyDirectoryContents(
     from source: URL,
     to destination: URL,
-    fileManager: FileManager
+    fileManager: FileManager,
+    copiedHardLinks: inout [FileIdentity: URL]
 ) throws {
     let contents = try fileManager.contentsOfDirectory(
         at: source,
         includingPropertiesForKeys: nil
     )
     for item in contents {
-        try fileManager.copyItem(
-            at: item,
-            to: destination.appendingPathComponent(item.lastPathComponent)
-        )
+        let target = destination.appendingPathComponent(item.lastPathComponent)
+        let attributes = try fileManager.attributesOfItem(atPath: item.path)
+
+        if attributes[.type] as? FileAttributeType == .typeDirectory {
+            try fileManager.createDirectory(
+                at: target,
+                withIntermediateDirectories: true
+            )
+            try copyDirectoryContents(
+                from: item,
+                to: target,
+                fileManager: fileManager,
+                copiedHardLinks: &copiedHardLinks
+            )
+            try applyCopiedAttributes(attributes, to: target, fileManager: fileManager)
+            continue
+        }
+
+        if attributes[.type] as? FileAttributeType == .typeSymbolicLink {
+            let destinationPath = try fileManager.destinationOfSymbolicLink(
+                atPath: item.path
+            )
+            try fileManager.createSymbolicLink(
+                atPath: target.path,
+                withDestinationPath: destinationPath
+            )
+            continue
+        }
+
+        if let identity = FileIdentity(attributes: attributes),
+           let existingTarget = copiedHardLinks[identity]
+        {
+            try fileManager.linkItem(at: existingTarget, to: target)
+            continue
+        }
+
+        try fileManager.copyItem(at: item, to: target)
+        if let identity = FileIdentity(attributes: attributes) {
+            copiedHardLinks[identity] = target
+        }
+    }
+}
+
+private func applyCopiedAttributes(
+    _ attributes: [FileAttributeKey: Any],
+    to target: URL,
+    fileManager: FileManager
+) throws {
+    var copiedAttributes: [FileAttributeKey: Any] = [:]
+    copiedAttributes[.posixPermissions] = attributes[.posixPermissions]
+    copiedAttributes[.modificationDate] = attributes[.modificationDate]
+
+    if !copiedAttributes.isEmpty {
+        try fileManager.setAttributes(copiedAttributes, ofItemAtPath: target.path)
+    }
+}
+
+private struct FileIdentity: Hashable {
+    let device: UInt64
+    let inode: UInt64
+
+    init?(attributes: [FileAttributeKey: Any]) {
+        guard let device = attributes[.systemNumber] as? NSNumber,
+              let inode = attributes[.systemFileNumber] as? NSNumber
+        else {
+            return nil
+        }
+
+        self.device = device.uint64Value
+        self.inode = inode.uint64Value
     }
 }
 

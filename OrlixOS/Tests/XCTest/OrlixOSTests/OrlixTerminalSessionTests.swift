@@ -1454,12 +1454,20 @@ final class OrlixTerminalSessionTests: XCTestCase {
         )
         let stagingRoot = layout.importScratchDirectory
             .appendingPathComponent("staging-root", isDirectory: true)
+        let sourceEtcModificationDate = Date(timeIntervalSince1970: 1_234_567_890)
         try FileManager.default.createDirectory(
             at: stagingRoot.appendingPathComponent("etc", isDirectory: true),
             withIntermediateDirectories: true
         )
         try Data("ID=alpine\n".utf8).write(
             to: stagingRoot.appendingPathComponent("etc/os-release")
+        )
+        try FileManager.default.setAttributes(
+            [
+                .posixPermissions: NSNumber(value: 0o701),
+                .modificationDate: sourceEtcModificationDate
+            ],
+            ofItemAtPath: stagingRoot.appendingPathComponent("etc").path
         )
 
         let plan = try OrlixEnvironmentImageMaterializationPlan.plan(
@@ -1481,6 +1489,20 @@ final class OrlixTerminalSessionTests: XCTestCase {
                     .appendingPathComponent("etc/os-release")
             ),
             "ID=alpine\n"
+        )
+        let copiedEtcAttributes = try FileManager.default.attributesOfItem(
+            atPath: plan.baseTreeDirectory.appendingPathComponent("etc").path
+        )
+        XCTAssertEqual(
+            copiedEtcAttributes[.posixPermissions] as? NSNumber,
+            NSNumber(value: 0o701)
+        )
+        let copiedEtcModificationDate = try XCTUnwrap(
+            copiedEtcAttributes[.modificationDate] as? Date
+        )
+        XCTAssertLessThan(
+            abs(copiedEtcModificationDate.timeIntervalSince(sourceEtcModificationDate)),
+            1.0
         )
         XCTAssertTrue(
             FileManager.default.fileExists(
@@ -2278,6 +2300,36 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commands.contains("mknod initctl p"))
         XCTAssertTrue(
             commands.contains("set_inode_field /run/initctl mode 010755")
+        )
+    }
+
+    func testRootfsTarManifestReaderParsesUstarPrefixPaths() throws {
+        let payload = Data("prefixed\n".utf8)
+        let data = tarArchive(entries: [
+            TarFixtureEntry(
+                path: "os-release",
+                prefix: "usr/lib",
+                payload: payload,
+                uid: 1000,
+                gid: 100
+            )
+        ])
+
+        let entries = try OrlixRootfsTarManifestReader().readManifest(from: data)
+
+        XCTAssertEqual(
+            entries,
+            [
+                OrlixRootfsTarManifestEntry(
+                    path: "usr/lib/os-release",
+                    size: UInt64(payload.count),
+                    mode: 0o755,
+                    uid: 1000,
+                    gid: 100,
+                    type: .regularFile,
+                    linkName: nil
+                )
+            ]
         )
     }
 
@@ -3976,6 +4028,54 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertFalse(metadataCommands.contains(#""/var/cache/old""#))
     }
 
+    func testOCIImageLayoutImporterPreservesUstarPrefixPaths() throws {
+        let root = temporaryRegistryRoot()
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: root.appendingPathComponent(
+                "Application Support/Orlix",
+                isDirectory: true
+            ),
+            cacheRoot: root.appendingPathComponent(
+                "Caches/Orlix",
+                isDirectory: true
+            ),
+            scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+        )
+        let layer = tarArchive(entries: [
+            TarFixtureEntry(
+                path: "os-release",
+                prefix: "usr/lib",
+                payload: Data("ID=orlix-prefix-proof\n".utf8)
+            )
+        ])
+        let layout = try writeOCILayout(layerData: [layer])
+
+        let result = try OrlixOCIImageLayoutImporter().importLayout(
+            at: layout.root,
+            environmentID: "alpine-ustar-prefix",
+            registry: registry,
+            rootImageIdentifier: "orlix.env.alpine-ustar-prefix"
+        )
+
+        XCTAssertEqual(result.manifest.map(\.path), ["usr/lib/os-release"])
+        XCTAssertEqual(
+            try String(
+                contentsOf: result.stagingRootDirectory
+                    .appendingPathComponent("usr/lib/os-release")
+            ),
+            "ID=orlix-prefix-proof\n"
+        )
+
+        let metadataCommands = try String(
+            contentsOf: result.materializationPlan.baseMetadataCommandsURL
+        )
+        XCTAssertTrue(
+            metadataCommands.contains(
+                #"set_inode_field "/usr/lib/os-release" mode 0100755"#
+            )
+        )
+    }
+
     func testOCIImageLayoutImporterPreservesChildrenWhenDirectoryEntryComesLater()
         throws
     {
@@ -4026,6 +4126,96 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(
             metadataCommands.contains(#"set_inode_field "/etc" mode 040755"#)
         )
+    }
+
+    func testOCIImageLayoutImporterReplacesLowerDirectoryTreeWithRegularFile()
+        throws
+    {
+        let root = temporaryRegistryRoot()
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: root.appendingPathComponent(
+                "Application Support/Orlix",
+                isDirectory: true
+            ),
+            cacheRoot: root.appendingPathComponent(
+                "Caches/Orlix",
+                isDirectory: true
+            ),
+            scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+        )
+        let lowerLayer = tarArchive(entries: [
+            TarFixtureEntry(path: "var/", type: "5"),
+            TarFixtureEntry(path: "var/lib/", type: "5"),
+            TarFixtureEntry(path: "var/lib/app/", type: "5"),
+            TarFixtureEntry(
+                path: "var/lib/app/old",
+                payload: Data("lower-old\n".utf8)
+            ),
+            TarFixtureEntry(path: "var/lib/app/nested/", type: "5"),
+            TarFixtureEntry(
+                path: "var/lib/app/nested/old",
+                payload: Data("lower-nested-old\n".utf8)
+            )
+        ])
+        let upperLayer = tarArchive(entries: [
+            TarFixtureEntry(
+                path: "var/lib/app",
+                payload: Data("upper-file\n".utf8)
+            )
+        ])
+        let layout = try writeOCILayout(layerData: [lowerLayer, upperLayer])
+
+        let result = try OrlixOCIImageLayoutImporter().importLayout(
+            at: layout.root,
+            environmentID: "alpine-directory-replaced-by-file",
+            registry: registry,
+            rootImageIdentifier: "orlix.env.alpine-directory-replaced-by-file"
+        )
+
+        XCTAssertEqual(
+            result.manifest.map(\.path),
+            ["var", "var/lib", "var/lib/app"]
+        )
+        XCTAssertEqual(result.manifest.last?.type, .regularFile)
+        XCTAssertEqual(
+            try String(
+                contentsOf: result.stagingRootDirectory
+                    .appendingPathComponent("var/lib/app")
+            ),
+            "upper-file\n"
+        )
+        var isDirectory = ObjCBool(false)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: result.stagingRootDirectory
+                    .appendingPathComponent("var/lib/app").path,
+                isDirectory: &isDirectory
+            )
+        )
+        XCTAssertFalse(isDirectory.boolValue)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: result.stagingRootDirectory
+                    .appendingPathComponent("var/lib/app/old").path
+            )
+        )
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: result.stagingRootDirectory
+                    .appendingPathComponent("var/lib/app/nested/old").path
+            )
+        )
+
+        let metadataCommands = try String(
+            contentsOf: result.materializationPlan.baseMetadataCommandsURL
+        )
+        XCTAssertTrue(
+            metadataCommands.contains(
+                #"set_inode_field "/var/lib/app" mode 0100755"#
+            )
+        )
+        XCTAssertFalse(metadataCommands.contains("var/lib/app/old"))
+        XCTAssertFalse(metadataCommands.contains("var/lib/app/nested"))
     }
 
     func testOCIImageLayoutImporterHonorsWhiteoutOrderWithinLayer()
@@ -4596,6 +4786,73 @@ final class OrlixTerminalSessionTests: XCTestCase {
         )
     }
 
+    func testOCIImageLayoutImporterPreservesHardLinksIntoMaterializationInput()
+        throws
+    {
+        let root = temporaryRegistryRoot()
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: root.appendingPathComponent(
+                "Application Support/Orlix",
+                isDirectory: true
+            ),
+            cacheRoot: root.appendingPathComponent(
+                "Caches/Orlix",
+                isDirectory: true
+            ),
+            scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+        )
+        let layer = tarArchive(entries: [
+            TarFixtureEntry(
+                path: "usr/bin/busybox",
+                payload: Data("busybox\n".utf8)
+            ),
+            TarFixtureEntry(
+                path: "bin/sh",
+                type: "1",
+                linkName: "usr/bin/busybox"
+            )
+        ])
+        let layout = try writeOCILayout(layerData: [layer])
+
+        let result = try OrlixOCIImageLayoutImporter().importLayout(
+            at: layout.root,
+            environmentID: "alpine-hardlink",
+            registry: registry,
+            rootImageIdentifier: "orlix.env.alpine-hardlink"
+        )
+
+        XCTAssertEqual(result.manifest.map(\.path), ["usr/bin/busybox", "bin/sh"])
+        XCTAssertEqual(result.manifest[0].type, .regularFile)
+        XCTAssertEqual(result.manifest[1].type, .hardLink)
+        XCTAssertEqual(result.manifest[1].linkName, "usr/bin/busybox")
+
+        let stagingOriginal = try FileManager.default.attributesOfItem(
+            atPath: result.stagingRootDirectory
+                .appendingPathComponent("usr/bin/busybox").path
+        )
+        let stagingHardLink = try FileManager.default.attributesOfItem(
+            atPath: result.stagingRootDirectory
+                .appendingPathComponent("bin/sh").path
+        )
+        XCTAssertEqual(
+            stagingOriginal[.systemFileNumber] as? NSNumber,
+            stagingHardLink[.systemFileNumber] as? NSNumber
+        )
+
+        let baseTreeOriginal = try FileManager.default.attributesOfItem(
+            atPath: result.materializationPlan.baseTreeDirectory
+                .appendingPathComponent("usr/bin/busybox").path
+        )
+        let baseTreeHardLink = try FileManager.default.attributesOfItem(
+            atPath: result.materializationPlan.baseTreeDirectory
+                .appendingPathComponent("bin/sh").path
+        )
+        XCTAssertEqual(
+            baseTreeOriginal[.systemFileNumber] as? NSNumber,
+            baseTreeHardLink[.systemFileNumber] as? NSNumber
+        )
+    }
+
     func testOCIImageLayoutImporterAppliesGNUSparsePAXMap() throws {
         let root = temporaryRegistryRoot()
         let registry = OrlixEnvironmentRegistry(
@@ -4978,6 +5235,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
 
     private struct TarFixtureEntry {
         var path: String
+        var prefix: String = ""
         var type: Unicode.Scalar = "0"
         var linkName: String = ""
         var payload: Data = Data()
@@ -5056,6 +5314,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
                 at: 337,
                 length: 8
             )
+            write(entry.prefix, into: &header, at: 345, length: 155)
             let checksum = header.reduce(UInt64(0)) { $0 + UInt64($1) }
             writeOctal(checksum, into: &header, at: 148, length: 8)
             data.append(header)

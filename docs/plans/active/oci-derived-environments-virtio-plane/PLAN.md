@@ -40,12 +40,22 @@ Current proved state:
   `/proc/self/cgroup` reports the unified root, and `cgroup.procs` accepts the
   current task.
 - Linux oracle scaffold exists.
+- Linux oracle scaffold has local regression coverage for path-errno case
+  validation, matching comparison, drift detection, and Orlix kselftest log
+  conversion.
 - OrlixOS named environment session selection API exists.
 - End-to-end named environment runtime entry selects the copied root and
   descriptor argv/env/cwd/uid/gid defaults on iOS Simulator.
 - Rootfs tar and OCI layout import carry archive mtime into materialization
   metadata commands for the generated ext4 root image.
+- Rootfs tar and OCI layout import preserve ustar-prefixed archive paths into
+  manifest, staging tree, and materialization metadata command coverage.
+- OCI layout import preserves hard-link topology from layer staging into the base
+  image materialization input tree.
 
+- OCI layout import preserves upper-layer regular-file replacement of a lower
+  directory tree through manifest pruning, staging tree, and materialization
+  metadata command coverage.
 Current not-proved state:
 
 - Multiple live environments inside one already-running OrlixKernel.
