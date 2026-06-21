@@ -1523,6 +1523,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		if let readonlyPaths = linux.readonlyPaths, !readonlyPaths.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.readonlyPaths")
 		}
+		if let sysctl = linux.sysctl, !sysctl.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.sysctl")
+		}
 		if linux.mountLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
 		}
@@ -1585,6 +1588,7 @@ private struct OCIRuntimeLinux: Decodable {
 	let seccomp: OCIRuntimeSeccomp?
 	let maskedPaths: [String]?
 	let readonlyPaths: [String]?
+	let sysctl: [String: String]?
 	let mountLabel: String?
 	let cgroupsPath: String?
 	let netDevices: [OCIRuntimeNetDevice]?

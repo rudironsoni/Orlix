@@ -5894,6 +5894,7 @@ extension OrlixTerminalSessionTests {
 			("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
 			("maskedPaths", #""maskedPaths": ["/proc/kcore"]"#),
 			("readonlyPaths", #""readonlyPaths": ["/proc/sys"]"#),
+			("sysctl", #""sysctl": { "net.ipv4.ip_forward": "1" }"#),
 			("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
 			("cgroupsPath", #""cgroupsPath": "/orlix/demo""#),
 			("netDevices", #""netDevices": [{ "name": "eth0" }]"#)
