@@ -96,6 +96,7 @@ struct orlix_virtio_mmio_desc_chain {
 
 struct orlix_virtio_mmio_fs_path_node {
 	bool used;
+	u64 lookup_count;
 	char relative_path[PATH_MAX];
 };
 
@@ -933,10 +934,12 @@ static bool orlix_virtio_mmio_fs_path_for_nodeid(u64 nodeid, char *path,
 }
 
 static bool orlix_virtio_mmio_fs_path_nodeid_for_path(const char *path,
+						      bool counted_lookup,
 						      u64 *nodeid)
 {
 	unsigned int index;
 	unsigned int candidate;
+	unsigned int reusable = ORLIX_VIRTIO_MMIO_FS_PATH_NODE_LIMIT;
 	unsigned long flags;
 	size_t length;
 
@@ -951,6 +954,11 @@ static bool orlix_virtio_mmio_fs_path_nodeid_for_path(const char *path,
 		if (orlix_virtio_mmio_fs_path_nodes[index].used &&
 		    strcmp(orlix_virtio_mmio_fs_path_nodes[index].relative_path,
 			   path) == 0) {
+			if (counted_lookup &&
+			    orlix_virtio_mmio_fs_path_nodes[index].lookup_count !=
+				    ~0ULL)
+				orlix_virtio_mmio_fs_path_nodes[index]
+					.lookup_count++;
 			*nodeid = orlix_virtio_mmio_fs_path_nodeid(index);
 			spin_unlock_irqrestore(
 				&orlix_virtio_mmio_fs_path_nodes_lock, flags);
@@ -961,14 +969,26 @@ static bool orlix_virtio_mmio_fs_path_nodeid_for_path(const char *path,
 	for (index = 0; index < ORLIX_VIRTIO_MMIO_FS_PATH_NODE_LIMIT; index++) {
 		candidate = (orlix_virtio_mmio_fs_next_path_node + index) %
 			    ORLIX_VIRTIO_MMIO_FS_PATH_NODE_LIMIT;
-		if (orlix_virtio_mmio_fs_path_nodes[candidate].used)
+		if (orlix_virtio_mmio_fs_path_nodes[candidate].used) {
+			if (reusable == ORLIX_VIRTIO_MMIO_FS_PATH_NODE_LIMIT &&
+			    orlix_virtio_mmio_fs_path_nodes[candidate]
+					    .lookup_count == 0)
+				reusable = candidate;
 			continue;
-		memcpy(orlix_virtio_mmio_fs_path_nodes[candidate].relative_path,
+		}
+		reusable = candidate;
+		break;
+	}
+
+	if (reusable != ORLIX_VIRTIO_MMIO_FS_PATH_NODE_LIMIT) {
+		memcpy(orlix_virtio_mmio_fs_path_nodes[reusable].relative_path,
 		       path, length + 1);
-		orlix_virtio_mmio_fs_path_nodes[candidate].used = true;
+		orlix_virtio_mmio_fs_path_nodes[reusable].used = true;
+		orlix_virtio_mmio_fs_path_nodes[reusable].lookup_count =
+			counted_lookup ? 1 : 0;
 		orlix_virtio_mmio_fs_next_path_node =
-			(candidate + 1) % ORLIX_VIRTIO_MMIO_FS_PATH_NODE_LIMIT;
-		*nodeid = orlix_virtio_mmio_fs_path_nodeid(candidate);
+			(reusable + 1) % ORLIX_VIRTIO_MMIO_FS_PATH_NODE_LIMIT;
+		*nodeid = orlix_virtio_mmio_fs_path_nodeid(reusable);
 		spin_unlock_irqrestore(&orlix_virtio_mmio_fs_path_nodes_lock,
 				       flags);
 		return true;
@@ -998,6 +1018,59 @@ static const char *orlix_virtio_mmio_fs_xattr_name(
 
 	*name_length = length;
 	return name;
+}
+
+static void orlix_virtio_mmio_fs_forget_path_nodeid(u64 nodeid, u64 nlookup)
+{
+	unsigned int path_index;
+	unsigned long flags;
+
+	if (nlookup == 0 ||
+	    !orlix_virtio_mmio_fs_path_index(nodeid, &path_index))
+		return;
+
+	spin_lock_irqsave(&orlix_virtio_mmio_fs_path_nodes_lock, flags);
+	if (orlix_virtio_mmio_fs_path_nodes[path_index].used) {
+		if (nlookup >=
+		    orlix_virtio_mmio_fs_path_nodes[path_index].lookup_count) {
+			orlix_virtio_mmio_fs_path_nodes[path_index].lookup_count =
+				0;
+			orlix_virtio_mmio_fs_path_nodes[path_index].used = false;
+			orlix_virtio_mmio_fs_path_nodes[path_index]
+				.relative_path[0] = '\0';
+		} else {
+			orlix_virtio_mmio_fs_path_nodes[path_index].lookup_count -=
+				nlookup;
+		}
+	}
+	spin_unlock_irqrestore(&orlix_virtio_mmio_fs_path_nodes_lock, flags);
+}
+
+static void orlix_virtio_mmio_fs_forget_from_request(
+	const struct fuse_in_header *in,
+	u32 in_capacity)
+{
+	if (in->opcode == FUSE_FORGET &&
+	    in_capacity >= sizeof(*in) + sizeof(struct fuse_forget_in)) {
+		const struct fuse_forget_in *forget = (const void *)(in + 1);
+
+		orlix_virtio_mmio_fs_forget_path_nodeid(in->nodeid,
+							forget->nlookup);
+	} else if (in->opcode == FUSE_BATCH_FORGET &&
+		   in_capacity >= sizeof(*in) +
+					  sizeof(struct fuse_batch_forget_in)) {
+		const struct fuse_batch_forget_in *batch = (const void *)(in + 1);
+		const struct fuse_forget_one *forget =
+			(const void *)(batch + 1);
+		u32 available = in_capacity - sizeof(*in) - sizeof(*batch);
+		u32 count = min_t(u32, batch->count,
+				  available / sizeof(*forget));
+		u32 index;
+
+		for (index = 0; index < count; index++)
+			orlix_virtio_mmio_fs_forget_path_nodeid(
+				forget[index].nodeid, forget[index].nlookup);
+	}
 }
 
 static bool orlix_virtio_mmio_fs_read_node_entry(
@@ -1654,6 +1727,8 @@ static void orlix_virtio_mmio_process_fs_queue(
 		if (in && !out &&
 		    (in->opcode == FUSE_FORGET ||
 		     in->opcode == FUSE_BATCH_FORGET)) {
+			orlix_virtio_mmio_fs_forget_from_request(in,
+								 in_capacity);
 			orlix_virtio_mmio_push_used(slot, queue, head, 0);
 		} else if (in && out) {
 			unsigned int written = sizeof(*out);
@@ -1759,6 +1834,7 @@ static void orlix_virtio_mmio_process_fs_queue(
 							   &host_entry) == 0 &&
 						   orlix_virtio_mmio_fs_path_nodeid_for_path(
 							   child_path,
+							   true,
 							   &path_nodeid)) {
 						orlix_virtio_mmio_fill_fs_path_entry(
 							entry, path_nodeid,
@@ -2222,6 +2298,7 @@ orlix_virtio_mmio_fs_done_readlink:
 							    sizeof(child_path)) ||
 						    !orlix_virtio_mmio_fs_path_nodeid_for_path(
 							    child_path,
+							    false,
 							    &child_nodeid) ||
 						    !orlix_virtio_mmio_append_fs_path_dirent(
 							    out, out_capacity,
@@ -2322,6 +2399,7 @@ orlix_virtio_mmio_fs_done_readlink:
 							    sizeof(child_path)) ||
 						    !orlix_virtio_mmio_fs_path_nodeid_for_path(
 							    child_path,
+							    true,
 							    &child_nodeid) ||
 						    !orlix_virtio_mmio_append_fs_path_direntplus(
 							    out, out_capacity,
