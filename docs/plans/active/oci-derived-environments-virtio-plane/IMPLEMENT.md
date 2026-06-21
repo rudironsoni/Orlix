@@ -11756,3 +11756,39 @@ Non-claims:
 Current status:
 
 Latest checkpoint: OrlixMLibC now exposes `mq_close(3)` and the IPC namespace probe builds against that POSIX surface. Runtime execution of the bundled probes remains pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - OCI Runtime Sysctl Rejection
+
+Status: parser guard added for OCI runtime `linux.sysctl`.
+
+Changes:
+
+- Added `sysctl` decoding to `OCIRuntimeLinux` in `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- `OrlixOCIRuntimeConfigDescriptor.parse` now rejects non-empty `linux.sysctl` with `unsupportedLinuxFeature("linux.sysctl")`.
+- Added `sysctl` to the unsupported Linux feature table in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Rationale:
+
+- Orlix cannot silently accept OCI runtime sysctl requests until it can apply them through normal Linux mechanisms inside the correct namespace/session context.
+- This keeps the OCI runtime parser fail-closed and deterministic without claiming support for Linux sysctl application.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` completed with warnings only in the visible output.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is parser/source/build evidence only; it is not runtime sysctl application support.
+- This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
+- No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+
+Current status:
+
+Latest checkpoint: OCI runtime configs with non-empty `linux.sysctl` now fail closed instead of being silently ignored. Runtime execution of the bundled probes and app-hosted OCI-derived sessions remains pending before any OCI runtime readiness claim.
