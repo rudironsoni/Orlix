@@ -188,6 +188,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         kernelCommandLineSuffix: "orlix.kselftest=time_namespace_probe"
     )
 
+    static let kernelIPCNamespace = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=ipc_namespace_probe"
+    )
+
     static let kernelPathErrno = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
