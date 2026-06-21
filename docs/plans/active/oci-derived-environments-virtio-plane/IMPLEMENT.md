@@ -11539,3 +11539,43 @@ Handoff:
 
 - Current status: OCI-derived environment substrate coverage now includes build-installed Orlix Linux probes for UTS, PID, IPC, mount, network, and cgroup surfaces.
 - Continue by running the kselftest initramfs in the app/simulator harness when CoreSimulator is responsive and recording TAP results for `namespace_probe` and `ipc_namespace_probe` before claiming namespace runtime proof.
+
+## 2026-06-21 - POSIX Mqueue IPC Namespace Coverage
+
+Status: kernel selftest build/install/package checkpoint accepted; runtime execution still unproven.
+
+Changes:
+
+- Extended `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/ipc_namespace_probe.c` to cover POSIX message queue names in IPC namespaces.
+- The new subtest uses the Linux/POSIX mqueue surface available in the OrlixMLibC sysroot:
+  - `mq_open(3)` and `mq_unlink(3)` for named POSIX queues.
+  - `unshare(CLONE_NEWIPC)`, `fork(2)`, and `waitpid(2)` to compare parent and child IPC namespace state.
+  - `close(2)` for queue descriptors because the current OrlixMLibC `mqueue.h` exposes `mqd_t` as `int` and declares `mq_open`/`mq_unlink`, but does not currently declare `mq_close`.
+- The probe now checks SysV shared memory keys, SysV message queue keys, and POSIX message queue names.
+
+Validation:
+
+- First escalated `rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release` failed compiling `ipc_namespace_probe.c` because `mq_close` is not declared by the current OrlixMLibC `mqueue.h`.
+- Verified `Build/OrlixMLibC/sysroot/release/usr/include/mqueue.h` declares `mqd_t` as `int` and declares `mq_open`/`mq_unlink`, but not `mq_close`.
+- Replaced `mq_close` with `close(2)`.
+- Escalated `rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release` then completed; output included existing Linux build warnings.
+- Escalated `rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed with exit 0 and printed `packaged kselftest initramfs: .../Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `grep -n "ipc_namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt` showed `11:orlix:ipc_namespace_probe`.
+- `grep -n "ipc_namespace_probe" Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` showed `18:file /orlix/ipc_namespace_probe ... 755 0 0`.
+- `test -x Build/OrlixMLibC/kselftest/release/orlix/ipc_namespace_probe` passed and printed `ipc_namespace_probe executable installed`.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the pre-existing warning: `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+
+Non-claims:
+
+- This does not prove `ipc_namespace_probe` passes at runtime in simulator or on device.
+- This does not claim OrlixMLibC has a complete POSIX mqueue API; this checkpoint intentionally avoids adding libc API surface.
+- This does not prove OCI Runtime lifecycle compliance, app-hosted OCI rootfs execution, or ADR 0017 runtime readiness.
+- This does not add any custom ABI, HostAdapter API, Docker/runc path, or Apple container runtime.
+
+Handoff:
+
+- Current status: the build-installed IPC namespace probe now covers SysV shared memory, SysV message queues, and POSIX message queue namespace isolation.
+- Continue by running the kselftest initramfs in the app/simulator harness when CoreSimulator is responsive and recording TAP results for `ipc_namespace_probe` before claiming runtime IPC namespace proof.

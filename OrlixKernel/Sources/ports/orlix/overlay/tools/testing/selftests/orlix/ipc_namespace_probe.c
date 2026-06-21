@@ -2,6 +2,8 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
+#include <fcntl.h>
+#include <mqueue.h>
 #include <sched.h>
 #include <stdbool.h>
 #include <sys/ipc.h>
@@ -14,6 +16,7 @@
 
 #define ORLIX_IPC_SHM_KEY ((key_t)0x4f53484d)
 #define ORLIX_IPC_MSG_KEY ((key_t)0x4f4d5347)
+#define ORLIX_IPC_MQ_NAME "/orlix-ipc-namespace-probe"
 
 static void remove_shared_memory_key(key_t key)
 {
@@ -29,6 +32,11 @@ static void remove_message_queue_key(key_t key)
 
 	if (id >= 0)
 		(void)msgctl(id, IPC_RMID, NULL);
+}
+
+static void remove_posix_message_queue_name(const char *name)
+{
+	(void)mq_unlink(name);
 }
 
 static bool ipc_namespace_isolates_shared_memory_key(void)
@@ -111,12 +119,66 @@ static bool ipc_namespace_isolates_message_queue_key(void)
 	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
+static bool ipc_namespace_isolates_posix_message_queue_name(void)
+{
+	struct mq_attr attr = {
+		.mq_flags = 0,
+		.mq_maxmsg = 4,
+		.mq_msgsize = 16,
+		.mq_curmsgs = 0,
+	};
+	mqd_t parent_queue;
+	pid_t child;
+	int status;
+
+	remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
+	parent_queue = mq_open(ORLIX_IPC_MQ_NAME,
+			       O_CREAT | O_EXCL | O_RDWR, 0600, &attr);
+	if (parent_queue == (mqd_t)-1)
+		return false;
+
+	child = fork();
+	if (child < 0) {
+		(void)close(parent_queue);
+		remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
+		return false;
+	}
+	if (child == 0) {
+		mqd_t child_queue;
+
+		if (unshare(CLONE_NEWIPC) != 0)
+			_exit(1);
+		errno = 0;
+		if (mq_open(ORLIX_IPC_MQ_NAME, O_RDONLY) != (mqd_t)-1 ||
+		    errno != ENOENT)
+			_exit(2);
+		child_queue = mq_open(ORLIX_IPC_MQ_NAME,
+				      O_CREAT | O_EXCL | O_RDWR, 0600, &attr);
+		if (child_queue == (mqd_t)-1)
+			_exit(3);
+		(void)close(child_queue);
+		remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
+		_exit(0);
+	}
+
+	if (waitpid(child, &status, 0) != child) {
+		(void)close(parent_queue);
+		remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
+		return false;
+	}
+	(void)close(parent_queue);
+	remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
+	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
 int main(void)
 {
-	orlix_test_plan(2);
+	orlix_test_plan(3);
 	orlix_test_result(ipc_namespace_isolates_shared_memory_key(),
 			  "IPC namespace isolates SysV shared memory keys");
 	orlix_test_result(ipc_namespace_isolates_message_queue_key(),
 			  "IPC namespace isolates SysV message queue keys");
+	orlix_test_result(ipc_namespace_isolates_posix_message_queue_name(),
+			  "IPC namespace isolates POSIX message queue names");
 	orlix_test_exit();
 }
