@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+#include <dirent.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -92,26 +93,160 @@ static bool hwrng_device_returns_data(void)
 	return nread > 0;
 }
 
+static bool virtio_device_name(const char *name)
+{
+	return name[0] == 'v' && name[1] == 'i' && name[2] == 'r' &&
+	       name[3] == 't' && name[4] == 'i' && name[5] == 'o';
+}
+
+static bool build_virtio_device_path(char *path, size_t path_size,
+				     const char *name, const char *leaf)
+{
+	const char prefix[] = "/sys/bus/virtio/devices/";
+	size_t pos = 0;
+
+	for (size_t i = 0; prefix[i] != '\0'; i++) {
+		if (pos + 1 >= path_size)
+			return false;
+		path[pos++] = prefix[i];
+	}
+	for (size_t i = 0; name[i] != '\0'; i++) {
+		if (pos + 1 >= path_size)
+			return false;
+		path[pos++] = name[i];
+	}
+	if (pos + 1 >= path_size)
+		return false;
+	path[pos++] = '/';
+	for (size_t i = 0; leaf[i] != '\0'; i++) {
+		if (pos + 1 >= path_size)
+			return false;
+		path[pos++] = leaf[i];
+	}
+	path[pos] = '\0';
+	return true;
+}
+
+static bool build_virtio_device_id_path(char *path, size_t path_size,
+					const char *name)
+{
+	return build_virtio_device_path(path, path_size, name, "device");
+}
+
+static bool build_virtio_tag_path(char *path, size_t path_size,
+				  const char *name)
+{
+	return build_virtio_device_path(path, path_size, name, "tag");
+}
+
+static bool build_virtiofs_tag_path(char *path, size_t path_size,
+				    const char *name)
+{
+	const char prefix[] = "/sys/fs/virtiofs/";
+	const char suffix[] = "/tag";
+	size_t pos = 0;
+
+	for (size_t i = 0; prefix[i] != '\0'; i++) {
+		if (pos + 1 >= path_size)
+			return false;
+		path[pos++] = prefix[i];
+	}
+	for (size_t i = 0; name[i] != '\0'; i++) {
+		if (pos + 1 >= path_size)
+			return false;
+		path[pos++] = name[i];
+	}
+	for (size_t i = 0; suffix[i] != '\0'; i++) {
+		if (pos + 1 >= path_size)
+			return false;
+		path[pos++] = suffix[i];
+	}
+	path[pos] = '\0';
+	return true;
+}
+
+static bool virtio_bus_has_device(void)
+{
+	DIR *devices = opendir("/sys/bus/virtio/devices");
+	struct dirent *entry;
+	bool found = false;
+
+	if (!devices)
+		return false;
+	while ((entry = readdir(devices)) != NULL) {
+		if (virtio_device_name(entry->d_name)) {
+			found = true;
+			break;
+		}
+	}
+	closedir(devices);
+	return found;
+}
+
+static bool virtio_bus_has_fs_device(void)
+{
+	DIR *devices = opendir("/sys/bus/virtio/devices");
+	struct dirent *entry;
+	char path[128];
+	char buffer[64];
+	size_t size = 0;
+	bool found = false;
+
+	if (!devices)
+		return false;
+	while ((entry = readdir(devices)) != NULL) {
+		if (!virtio_device_name(entry->d_name))
+			continue;
+		if (!build_virtio_device_id_path(path, sizeof(path),
+						 entry->d_name))
+			continue;
+		if (orlix_read_file(path, buffer, sizeof(buffer), &size) == 0 &&
+		    (orlix_contains(buffer, size, "001a") ||
+		     orlix_contains(buffer, size, "26"))) {
+			found = true;
+			break;
+		}
+	}
+	closedir(devices);
+	return found;
+}
+
 static bool virtiofs_tag_is_registered(void)
 {
-	char path[] = "/sys/fs/virtiofs/virtio0/tag";
+	DIR *devices = opendir("/sys/fs/virtiofs");
+	struct dirent *entry;
+	char path[128];
 	char buffer[64];
-	size_t size;
-	char digit;
+	size_t size = 0;
 
-	for (digit = '0'; digit <= '9'; digit++) {
-		path[23] = digit;
+	if (!devices)
+		return false;
+
+	while ((entry = readdir(devices)) != NULL) {
+		if (entry->d_name[0] == '.')
+			continue;
+		orlix_write_all("# virtiofs instance ");
+		orlix_write_all(entry->d_name);
+		orlix_write_all("\n");
+		if (!build_virtiofs_tag_path(path, sizeof(path), entry->d_name))
+			continue;
 		if (orlix_read_file(path, buffer, sizeof(buffer), &size) == 0 &&
-		    orlix_contains(buffer, size, "orlix-host0"))
+		    orlix_contains(buffer, size, "orlix-host0")) {
+			orlix_write_all("# virtiofs tag path ");
+			orlix_write_all(path);
+			orlix_write_all("\n");
+			closedir(devices);
 			return true;
+		}
 	}
 
+	closedir(devices);
 	return false;
 }
 
 int main(void)
 {
-	orlix_test_plan(17);
+	orlix_test_plan(19);
 
 	expect_virtio_mmio_node("virtio@10001000", 0x10001000, 32);
 	expect_virtio_mmio_node("virtio@10001200", 0x10001200, 33);
@@ -121,8 +256,12 @@ int main(void)
 
 	orlix_test_result(hwrng_device_returns_data(),
 			  "upstream hwrng device returns virtio-backed entropy");
+	orlix_test_result(virtio_bus_has_device(),
+			  "upstream virtio bus exposes devices");
+	orlix_test_result(virtio_bus_has_fs_device(),
+			  "upstream virtio bus exposes the Orlix virtio-fs device");
 	orlix_test_result(virtiofs_tag_is_registered(),
-			  "upstream virtio-fs device registers the Orlix host-folder tag");
+			  "upstream virtio-fs device registers the Orlix host-folder tag orlix-host0");
 
 	orlix_test_exit();
 }
