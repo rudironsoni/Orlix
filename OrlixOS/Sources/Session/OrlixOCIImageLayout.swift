@@ -1800,3 +1800,40 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 		)
 	}
 }
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeSessionDescriptor: Equatable, Sendable {
+	public let id: String
+	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+	public let environment: OrlixEnvironmentDescriptor
+
+	public init(id: String,
+		    lifecycleState: OrlixOCIRuntimeLifecycleState,
+		    environment: OrlixEnvironmentDescriptor)
+	{
+		self.id = id
+		self.lifecycleState = lifecycleState
+		self.environment = environment
+	}
+}
+
+@_spi(OrlixPrivateTesting)
+public extension OrlixOCIRuntimeLifecycleController {
+	func sessionDescriptor(rootMount: OrlixEnvironmentRootMount)
+		throws -> OrlixOCIRuntimeSessionDescriptor
+	{
+		switch record.state {
+		case .created, .running, .stopped:
+			return OrlixOCIRuntimeSessionDescriptor(
+				id: record.id,
+				lifecycleState: record.state,
+				environment: config.environmentDescriptor(
+					id: record.id,
+					rootMount: rootMount
+				)
+			)
+		case .configured, .deleted:
+			throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
+		}
+	}
+}

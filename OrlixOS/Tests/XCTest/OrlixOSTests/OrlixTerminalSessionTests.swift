@@ -6103,6 +6103,75 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeLifecycleControllerProducesSessionDescriptor() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(Data("""
+		{
+		  "ociVersion" : "1.1.0",
+		  "root" : {
+		    "path" : "rootfs"
+		  },
+		  "process" : {
+		    "terminal" : true,
+		    "args" : ["/usr/bin/env", "sh"],
+		    "env" : [
+		      "HOME=/root",
+		      "PATH=/usr/bin:/bin",
+		      "TERM=xterm-256color"
+		    ],
+		    "cwd" : "/work",
+		    "user" : {
+		      "uid" : 1000,
+		      "gid" : 1000
+		    }
+		  }
+		}
+		""".utf8))
+		let controller = try OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-session-created",
+			bundlePath: "/bundles/oci-session-created"
+		).apply(.create)
+
+		let session = try controller.sessionDescriptor(rootMount: .defaultOverlay)
+
+		XCTAssertEqual(session.id, "oci-session-created")
+		XCTAssertEqual(session.lifecycleState, .created)
+		XCTAssertEqual(session.environment.id, "oci-session-created")
+		XCTAssertEqual(session.environment.source, .ociLayout)
+		XCTAssertEqual(session.environment.rootImageIdentifier, "rootfs")
+		XCTAssertEqual(session.environment.defaultCommand, ["/usr/bin/env", "sh"])
+		XCTAssertEqual(session.environment.defaultEnvironment["HOME"], "/root")
+		XCTAssertEqual(session.environment.defaultEnvironment["PATH"], "/usr/bin:/bin")
+		XCTAssertEqual(session.environment.defaultEnvironment["TERM"], "xterm-256color")
+		XCTAssertEqual(session.environment.defaultWorkingDirectory, "/work")
+		XCTAssertEqual(session.environment.defaultUserID, 1000)
+		XCTAssertEqual(session.environment.defaultGroupID, 1000)
+		XCTAssertEqual(session.environment.rootMount, .defaultOverlay)
+		XCTAssertEqual(session.environment.mounts, [])
+	}
+
+	func testOCIRuntimeLifecycleControllerRejectsUnavailableSessionDescriptors() throws {
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig()),
+			id: "oci-session-configured",
+			bundlePath: "/bundles/oci-session-configured"
+		)
+		XCTAssertThrowsError(try configured.sessionDescriptor(rootMount: .defaultOverlay)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.stateUnavailable(.configured)
+			)
+		}
+
+		let deleted = try configured.apply(.delete)
+		XCTAssertThrowsError(try deleted.sessionDescriptor(rootMount: .defaultOverlay)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.stateUnavailable(.deleted)
+			)
+		}
+	}
+
 	private func minimalOCIRuntimeConfig() -> Data {
 		Data(
 			"""
