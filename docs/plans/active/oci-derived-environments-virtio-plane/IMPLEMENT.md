@@ -11351,3 +11351,38 @@ Handoff:
 - Current status: OCI runtime config can now project a lifecycle-created/running/stopped record into the existing OrlixOS environment descriptor/session-selection data surface; this is source-level policy plumbing only.
 - Continue by wiring that descriptor into the existing OrlixOS session launch path only where it preserves Linux-owned process semantics and does not add HostAdapter or Linux-visible ABI.
 - Re-run targeted `OrlixOSTests` once CoreSimulator is responsive; the most recent available-simulator attempt was interrupted after several silent minutes and is not a pass.
+
+## 2026-06-21 - OCI Runtime Session Registry Launch Binding
+
+Status: source-level checkpoint accepted; targeted XCTest execution reached a simulator hang and is not claimed green.
+
+Changes:
+
+- Added an SPI-only `OrlixLinuxSession(ociRuntimeSession:registry:kernelCommandLine:terminal:)` convenience initializer in `OrlixOS/Sources/Session/OrlixOS.swift`.
+- The initializer delegates to the existing `OrlixLinuxSession(environmentID:registry:kernelCommandLine:terminal:)` materialized-root path using `ociRuntimeSession.environment.id`; it does not add a second runtime path, HostAdapter API, Linux-visible ABI, or host policy surface.
+- Added XCTest coverage in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` proving an OCI runtime session descriptor can be stored in the normal `OrlixEnvironmentRegistry` layout and used to construct an `OrlixLinuxSession` with the expected materialized root image fields and kernel command line.
+- Corrected the earlier OCI runtime lifecycle tests to use the compiled lifecycle API (`create()`/`delete()`), qualify enum cases where needed, avoid the fileprivate production environment encoder, and assert empty mounts without an ambiguous `[Any]` literal.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOS.swift` passed.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift /private/tmp/OrlixOCIRuntimeConfigParserCheck.swift` passed.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the pre-existing warning: `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeSessionDescriptorLaunchesThroughEnvironmentRegistry test` first exposed compile errors in the OCI runtime tests; after fixes, the command entered a silent running state for roughly two minutes and was interrupted with exit 130. XCTest execution is therefore not claimed.
+
+Non-claims:
+
+- This does not prove app-hosted OCI rootfs execution.
+- This does not prove OCI Runtime lifecycle compliance.
+- This does not prove Linux `execve`, exit-status, stdio, namespace, cgroup, or networking behavior for OCI-derived images.
+- This does not add or require a custom ABI, HostAdapter API, Apple container runtime, VM lifecycle, Docker/runc daemon, or Darwin-visible Linux policy.
+
+Handoff:
+
+- Current status: OCI runtime config can now become a lifecycle-created session descriptor and that descriptor can route into the existing OrlixOS registry/materialized-root `OrlixLinuxSession` construction path.
+- Continue by binding this session-construction path to the existing session launch/execution proof harness, then prove Linux-owned argv/env/cwd/user/stdio/exit behavior from inside the Linux surface when CoreSimulator is usable.
+- Re-run the targeted `OrlixOSTests` command above once CoreSimulator is responsive; do not claim XCTest green from the interrupted run.

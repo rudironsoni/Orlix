@@ -755,6 +755,21 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         self.init(materializedRootImage: rootImage, terminal: terminal)
     }
 
+    @_spi(OrlixPrivateTesting)
+    public convenience init(
+        ociRuntimeSession: OrlixOCIRuntimeSessionDescriptor,
+        registry: OrlixEnvironmentRegistry,
+        kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+        terminal: OrlixTerminalSession = OrlixTerminalSession()
+    ) throws {
+        try self.init(
+            environmentID: ociRuntimeSession.environment.id,
+            registry: registry,
+            kernelCommandLine: kernelCommandLine,
+            terminal: terminal
+        )
+    }
+
     public func boot() -> OrlixBootStatus {
         guard registerRootImagesForBoot() else {
             return .invalidConfig
