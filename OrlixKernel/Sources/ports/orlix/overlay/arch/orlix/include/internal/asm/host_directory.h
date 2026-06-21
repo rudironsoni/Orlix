@@ -25,10 +25,19 @@ int orlix_host_directory_read_entry(unsigned int directory,
 				    unsigned int entry_index,
 				    struct orlix_host_directory_entry *entry);
 int orlix_host_directory_read_child_entry(
-				    unsigned int directory,
-				    unsigned int parent_entry_index,
-				    unsigned int entry_index,
-				    struct orlix_host_directory_entry *entry);
+	unsigned int directory,
+	unsigned int parent_entry_index,
+	unsigned int entry_index,
+	struct orlix_host_directory_entry *entry);
+int orlix_host_directory_read_entry_at_path(
+	unsigned int directory,
+	const char *relative_path,
+	struct orlix_host_directory_entry *entry);
+int orlix_host_directory_read_directory_entry_at_path(
+	unsigned int directory,
+	const char *relative_path,
+	unsigned int entry_index,
+	struct orlix_host_directory_entry *entry);
 long orlix_host_directory_read_file(unsigned int directory,
 				    unsigned int entry_index,
 				    u64 offset,
@@ -36,14 +45,23 @@ long orlix_host_directory_read_file(unsigned int directory,
 				    u32 length);
 long orlix_host_directory_read_child_file(unsigned int directory,
 					  unsigned int parent_entry_index,
-					  unsigned int entry_index,
-					  u64 offset,
-					  void *buffer,
-					  u32 length);
+				      unsigned int entry_index,
+				      u64 offset,
+				      void *buffer,
+				      u32 length);
+long orlix_host_directory_read_file_at_path(unsigned int directory,
+					    const char *relative_path,
+					    u64 offset,
+					    void *buffer,
+					    u32 length);
 long orlix_host_directory_read_link(unsigned int directory,
 				    unsigned int entry_index,
 				    void *buffer,
 				    u32 length);
+long orlix_host_directory_read_link_at_path(unsigned int directory,
+					    const char *relative_path,
+					    void *buffer,
+					    u32 length);
 long orlix_host_directory_read_child_link(unsigned int directory,
 					  unsigned int parent_entry_index,
 					  unsigned int entry_index,

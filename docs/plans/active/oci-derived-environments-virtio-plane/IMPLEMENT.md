@@ -43,6 +43,11 @@ Evidence:
 - `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, OK.
 - `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, OK.
 - `rtk git diff --check` exited 0.
+- Sandboxed `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  compiled through the touched HostAdapter/kernel-header area and then failed at the known
+  `/Volumes/1TB/Xcode/Caches` sandbox write boundary.
+- Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release`
+  exited 0.
 
 Blocked proof: `rtk xcrun simctl list devices available | rtk head -20` still
 fails to connect to CoreSimulator (`Code=53`, `Code=410`, `Code=61`), so this
@@ -10670,3 +10675,51 @@ Current status:
   HostAdapter/kernel virtio-fs xattr substrate checks recorded above.
 - Still open: app-hosted runtime proof when CoreSimulator is available, arbitrary-depth virtio-fs
   traversal, and OCI runtime lifecycle work after Linux substrate proof.
+
+## 2026-06-21 - Private HostAdapter path reads for nested virtio-fs traversal
+
+Status: implemented and syntax-verified; not yet wired into the virtio-fs FUSE node model.
+
+Scope:
+
+- Added private HostAdapter host-directory APIs for relative-path-backed reads:
+  - `orlix_host_directory_read_entry_at_path(...)`
+  - `orlix_host_directory_read_directory_entry_at_path(...)`
+  - `orlix_host_directory_read_file_at_path(...)`
+  - `orlix_host_directory_read_link_at_path(...)`
+- Added matching OrlixKernel-internal declarations in
+  `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/internal/asm/host_directory.h`.
+- Reused HostAdapter relative-path validation for the new APIs, preserving rejection of absolute
+  paths and parent traversal.
+- Kept symlink metadata symlink-shaped by using host-side `lstat(2)` for entry metadata.
+- Added HostAdapter XCTest source coverage for nested relative path stat, nested file read,
+  nested symlink read, nested directory enumeration, and unsafe path rejection.
+
+Validation:
+
+- `rtk python3 -c 'import json, subprocess; payload={"hook_event_name":"PostToolUse","tool_name":"read","tool_input":{"path":"AGENTS.md docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md docs/plans/active/oci-derived-environments-virtio-plane/IMPLEMENT.md"}}; subprocess.run(["python3", ".codex/hooks/plan_context_guard.py"], input=json.dumps(payload), text=True, check=True)'`
+  exited 0 before this plan edit.
+- `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -IOrlixHostAdapter/Sources OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c`
+  exited 0.
+- `rtk xcrun --sdk iphonesimulator clang -fsyntax-only -fobjc-arc -DORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=16384 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -IOrlixHostAdapter/Sources -I. -F/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests/OrlixHostAdapterTests.m`
+  exited 0.
+- `rtk git diff --check` exited 0.
+
+Non-claims:
+
+- This does not claim arbitrary-depth virtio-fs traversal yet. The kernel FUSE node model still
+  needs to use these path-based primitives instead of the current first-child-layer indexing.
+- This does not claim app-hosted runtime success, OCI runtime lifecycle, registry pull,
+  networking/cgroup runtime success, or product runtime readiness.
+- This does not add a Linux-visible custom ABI; these APIs are private HostAdapter backing calls
+  for standard Linux VFS/FUSE traversal.
+
+Current status:
+
+- Latest coherent checkpoint: private HostAdapter relative-path primitives now support the nested
+  host-directory reads required by arbitrary-depth virtio-fs traversal.
+- Green local proof: HostAdapter C and XCTest source syntax checks, whitespace check, and
+  escalated release OrlixKernel build.
+- Still open: wire OrlixKernel virtio-fs FUSE node lookup/readdir/open/read/readlink paths to the
+  private path-based HostAdapter primitives, then prove with kselftest and app-hosted runtime when
+  CoreSimulator is available.

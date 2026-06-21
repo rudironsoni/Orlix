@@ -217,6 +217,84 @@ static int OrlixHostCopyRequiredRelativePath(char *target,
     return 0;
 }
 
+static int OrlixHostCopyDirectoryPathForIndex(unsigned int directory,
+                                              char *target,
+                                              size_t target_size)
+{
+    int result = -1;
+
+    if (!target || target_size == 0)
+        return -1;
+
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    if (directory < OrlixHostDirectoryCount &&
+        snprintf(target, target_size, "%s",
+                 OrlixHostDirectories[directory].host_path) <
+            (int)target_size)
+        result = 0;
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+
+    return result;
+}
+
+static int OrlixHostCopyDirectoryRelativeEntryPath(
+    unsigned int directory,
+    const char *relative_path,
+    char *target,
+    size_t target_size)
+{
+    char directory_path[PATH_MAX];
+    char normalized_relative_path[PATH_MAX];
+
+    if (!target || target_size == 0 ||
+        OrlixHostCopyDirectoryPathForIndex(directory, directory_path,
+                                           sizeof(directory_path)) != 0 ||
+        OrlixHostCopyRequiredRelativePath(normalized_relative_path,
+                                          sizeof(normalized_relative_path),
+                                          relative_path) != 0)
+        return -1;
+
+    if (strcmp(normalized_relative_path, ".") == 0) {
+        if (snprintf(target, target_size, "%s", directory_path) >=
+            (int)target_size)
+            return -1;
+    } else if (snprintf(target, target_size, "%s/%s", directory_path,
+                       normalized_relative_path) >= (int)target_size) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int OrlixHostFillDirectoryEntryFromPath(
+    const char *entry_path,
+    const char *linux_name,
+    struct OrlixHostDirectoryEntry *entry)
+{
+    struct stat state;
+
+    if (!entry_path || !linux_name || !entry ||
+        strlen(linux_name) > ORLIX_HOST_DIRECTORY_NAME_MAX ||
+        lstat(entry_path, &state) != 0)
+        return -1;
+
+    memset(entry, 0, sizeof(*entry));
+    entry->inode = (uint64_t)state.st_ino;
+    entry->size = (uint64_t)state.st_size;
+    entry->mode = (uint32_t)state.st_mode;
+    if (S_ISREG(state.st_mode))
+        entry->type = OrlixHostDirectoryEntryRegular;
+    else if (S_ISDIR(state.st_mode))
+        entry->type = OrlixHostDirectoryEntryDirectory;
+    else if (S_ISLNK(state.st_mode))
+        entry->type = OrlixHostDirectoryEntrySymlink;
+    else
+        entry->type = OrlixHostDirectoryEntryUnknown;
+    snprintf(entry->name, sizeof(entry->name), "%s", linux_name);
+
+    return 0;
+}
+
 static int OrlixHostLinuxXattrNameHasAllowedPrefix(const char *source)
 {
     static const char *const prefixes[] = {
@@ -1303,6 +1381,74 @@ __attribute__((visibility("hidden"))) int orlix_host_directory_read_entry(
     return result;
 }
 
+__attribute__((visibility("hidden"))) int orlix_host_directory_read_entry_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    struct OrlixHostDirectoryEntry *entry)
+{
+    char entry_path[PATH_MAX];
+    const char *name;
+
+    if (OrlixHostCopyDirectoryRelativeEntryPath(
+            directory, relative_path, entry_path, sizeof(entry_path)) != 0)
+        return -1;
+
+    name = strrchr(relative_path, '/');
+    if (name)
+        name++;
+    else
+        name = relative_path;
+    if (!name || strcmp(relative_path, ".") == 0)
+        name = ".";
+
+    return OrlixHostFillDirectoryEntryFromPath(entry_path, name, entry);
+}
+
+__attribute__((visibility("hidden"))) int
+orlix_host_directory_read_directory_entry_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    unsigned int entry_index,
+    struct OrlixHostDirectoryEntry *entry)
+{
+    char directory_path[PATH_MAX];
+    char entry_path[PATH_MAX];
+    DIR *stream;
+    struct dirent *dirent;
+    unsigned int visible_index = 0;
+    unsigned long active_tls;
+    int result = -1;
+
+    if (OrlixHostCopyDirectoryRelativeEntryPath(
+            directory, relative_path, directory_path, sizeof(directory_path)) !=
+        0)
+        return -1;
+
+    active_tls = OrlixHostEnterHostTls();
+    stream = opendir(directory_path);
+    if (!stream) {
+        OrlixHostLeaveHostTls(active_tls);
+        return -1;
+    }
+
+    while ((dirent = readdir(stream)) != NULL) {
+        if (strcmp(dirent->d_name, ".") == 0 ||
+            strcmp(dirent->d_name, "..") == 0)
+            continue;
+        if (visible_index++ != entry_index)
+            continue;
+        if (snprintf(entry_path, sizeof(entry_path), "%s/%s", directory_path,
+                     dirent->d_name) < (int)sizeof(entry_path))
+            result = OrlixHostFillDirectoryEntryFromPath(entry_path,
+                                                         dirent->d_name, entry);
+        break;
+    }
+
+    closedir(stream);
+    OrlixHostLeaveHostTls(active_tls);
+    return result;
+}
+
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_file(
     unsigned int directory,
     unsigned int entry_index,
@@ -1453,6 +1599,64 @@ __attribute__((visibility("hidden"))) int orlix_host_directory_read_child_entry(
     closedir(stream);
     OrlixHostLeaveHostTls(active_tls);
     return result;
+}
+
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_file_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    uint64_t offset,
+    void *buffer,
+    uint32_t length)
+{
+    char entry_path[PATH_MAX];
+    FILE *file;
+    unsigned long active_tls;
+    size_t read_count;
+    long result = -1;
+
+    if (!buffer ||
+        OrlixHostCopyDirectoryRelativeEntryPath(
+            directory, relative_path, entry_path, sizeof(entry_path)) != 0)
+        return -1;
+
+    active_tls = OrlixHostEnterHostTls();
+    file = fopen(entry_path, "rb");
+    if (!file) {
+        OrlixHostLeaveHostTls(active_tls);
+        return -1;
+    }
+
+    if (fseeko(file, (off_t)offset, SEEK_SET) == 0) {
+        read_count = fread(buffer, 1, length, file);
+        if (read_count > 0 || feof(file))
+            result = (long)read_count;
+    }
+
+    fclose(file);
+    OrlixHostLeaveHostTls(active_tls);
+    return result;
+}
+
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_link_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    void *buffer,
+    uint32_t length)
+{
+    char entry_path[PATH_MAX];
+    unsigned long active_tls;
+    ssize_t read_count;
+
+    if (!buffer ||
+        OrlixHostCopyDirectoryRelativeEntryPath(
+            directory, relative_path, entry_path, sizeof(entry_path)) != 0)
+        return -1;
+
+    active_tls = OrlixHostEnterHostTls();
+    read_count = readlink(entry_path, buffer, length);
+    OrlixHostLeaveHostTls(active_tls);
+
+    return read_count >= 0 ? (long)read_count : -1;
 }
 
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_link(
