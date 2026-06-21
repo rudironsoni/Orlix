@@ -11611,6 +11611,7 @@ Non-claims:
 - This is source/build/install/package evidence only; it is not a runtime-passed kselftest result.
 - This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
 - No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+
 ## 2026-06-21 - Cgroup Namespace Substrate Probe
 
 Status: build/install/package proof added for the OCI-relevant Linux cgroup namespace surface.
@@ -11643,3 +11644,42 @@ Non-claims:
 - This is source/build/install/package evidence only; it is not a runtime-passed kselftest result.
 - This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
 - No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+## 2026-06-21 - Time Namespace Substrate Probe
+
+Current status: build/install/package proof added for the OCI-relevant Linux time namespace surface; runtime execution proof is still pending.
+
+Changes:
+
+- Added `CONFIG_TIME_NS=y` to `OrlixKernel/Sources/ports/orlix/configs/development_defconfig`.
+- Added `CONFIG_TIME_NS=y` to `OrlixKernel/Sources/ports/orlix/configs/release_defconfig`.
+- Added `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/time_namespace_probe.c`.
+- Registered `time_namespace_probe` in `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`.
+
+Linux surface covered:
+
+- `unshare(CLONE_NEWTIME)` changes the Linux-visible `/proc/self/ns/time_for_children` namespace inode.
+- A forked child enters the unshared time namespace as observed through `/proc/self/ns/time`.
+- `/proc/self/timens_offsets` remains readable from a process with a new time namespace for children.
+
+Validation:
+
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk err make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed; output retained existing generated-kernel warnings.
+- `rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk grep -n "time_namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt` found `orlix:time_namespace_probe`.
+- `rtk grep -n "time_namespace_probe" Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` found the `/orlix/time_namespace_probe` entry.
+- `rtk test test -x Build/OrlixMLibC/kselftest/release/orlix/time_namespace_probe` passed.
+- `rtk grep -n "CONFIG_TIME_NS" Build/OrlixKernel OrlixKernel/Sources/ports/orlix/configs 2>/dev/null` found `CONFIG_TIME_NS=y` in the durable defconfigs and generated Linux port config copy.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warnings about older stale pending/blocked status and, before this checkpoint, no recent current-status marker.
+
+Non-claims:
+
+- This is source/build/install/package evidence only; it is not a runtime-passed kselftest result.
+- This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
+- No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+
+Current status:
+
+Latest checkpoint: time namespace substrate proof is built, installed, and packaged into the Orlix kselftest initramfs. Runtime execution of the bundled namespace probes remains pending before any OCI runtime readiness claim.
