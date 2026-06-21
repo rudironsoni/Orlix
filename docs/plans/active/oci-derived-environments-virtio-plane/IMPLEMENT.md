@@ -11901,3 +11901,40 @@ Non-claims:
 Current status:
 
 Latest checkpoint: OCI runtime configs requesting `root.readonly: true` now fail closed instead of being accepted as unenforced metadata. Runtime execution of bundled probes, read-only root enforcement, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - OCI Runtime Parser Fail-Open Sweep
+
+Status: parser guard sweep added for additional OCI runtime fields that Orlix does not yet implement or prove through Linux mechanisms.
+
+Changes:
+
+- `OrlixOCIRuntimeConfigParser` now decodes and rejects non-empty `domainname`, preserving Linux UTS namespace semantics instead of silently ignoring requested domain state.
+- Top-level non-Linux platform config blocks `solaris`, `windows`, `vm`, and `zOS` now reject with `unsupportedLinuxFeature`.
+- Process fields `oomScoreAdj`, `scheduler`, `ioPriority`, `execCPUAffinity`, `closeAdditionalFds`, and `user.umask` now reject until Orlix can apply them through Linux-visible process setup.
+- Mount `uidMappings` and `gidMappings` now reject until idmapped mount behavior is implemented and proven through Linux mechanisms.
+- Linux runtime fields `rootfsPropagation`, `personality`, `timeOffsets`, `unified`, `intelRdt`, `hugepageLimits`, and `rdma` now reject instead of being silently ignored.
+- Added XCTest coverage for each new fail-closed parser category in `OrlixTerminalSessionTests.swift`.
+
+Rationale:
+
+- These fields request Linux-visible kernel, namespace, process, mount, cgroup, or platform behavior. Accepting them without implementation would violate the project rule that Orlix expose a Linux-compatible surface with zero custom ABI and no host leakage.
+- The change stays in `OrlixOS` OCI import/session policy. It does not move Linux semantics into Swift, does not add a host-side Linux facade, and does not involve Docker, `runc`, Apple Containerization, Virtualization.framework, or a custom ABI.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` completed with warnings/build metadata only in the visible output.
+- `rtk err xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` completed without source error output.
+- `rtk git diff --check` passed.
+
+Non-claims:
+
+- This is parser/source/build evidence only; it is not OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, systemd image compatibility, or app-hosted OCI-derived execution proof.
+- This does not claim implementation of domainname, scheduling, I/O priority, CPU affinity, close-additional-fd behavior, umask, idmapped mounts, rootfs propagation, personality, time offsets, unified cgroup settings, Intel RDT, hugepages, RDMA, or non-Linux platform support.
+- No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+
+Current status:
+
+Latest checkpoint: additional OCI runtime fields that Orlix cannot yet honor through Linux mechanisms now fail closed instead of being silently ignored. Runtime execution of bundled probes, Linux-backed field implementation where needed, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
