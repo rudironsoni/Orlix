@@ -12,7 +12,7 @@
 
 #include "orlix_kselftest_user.h"
 
-#define OVERLAY_BASE "/mnt/orlix-overlayfs-probe"
+#define OVERLAY_BASE "/tmp/orlix-overlayfs-probe"
 #define OVERLAY_LOWER OVERLAY_BASE "/lower"
 #define OVERLAY_UPPER OVERLAY_BASE "/upper"
 #define OVERLAY_WORK OVERLAY_BASE "/work"

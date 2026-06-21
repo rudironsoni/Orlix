@@ -12966,3 +12966,56 @@ Current status:
   container credential policy, OCI Runtime Spec completion, seccomp/hooks,
   cgroup resource enforcement, external networking, virtio-net readiness,
   third-party package ladder readiness, or full product runtime readiness.
+## 2026-06-21 - App-hosted overlayfs proof through OrlixOS
+
+Ownership decision:
+
+Keep this checkpoint in OrlixKernel selftest proof and OrlixTestRunner app-hosted coverage. Overlayfs is a Linux VFS/filesystem surface required for OCI image layering; OrlixOS may use it for image-derived environment policy, but OrlixHostAdapter must not own overlayfs behavior or expose host-specific Linux ABI.
+
+Changes:
+
+- Added `OrlixUpstreamTestRunSpec.kernelOverlayFS` with `orlix.kselftest=overlayfs_probe`.
+- Added `OrlixKernelUpstreamTests/testOverlayFSProbeCompletesThroughOrlixOSTerminalSession`.
+- Changed `overlayfs_probe` workspace base from `/mnt/orlix-overlayfs-probe` to `/tmp/orlix-overlayfs-probe`.
+
+Reason for the probe fix:
+
+The first app-hosted run attached to XCTest successfully but failed inside Linux with:
+
+```text
+upstream failure marker found: not ok 1 - overlayfs mounts and reads lower files
+```
+
+The probe assumed `/mnt` existed in the kselftest initramfs. The Orlix kselftest init does guarantee `/tmp` as a mounted tmpfs, so the corrected probe uses `/tmp/orlix-overlayfs-probe` and still mounts its own tmpfs workspace before exercising overlayfs. This preserves Linux semantics and avoids adding HostAdapter policy, Darwin translation, or custom ABI.
+
+Verified behavior:
+
+- overlayfs mount succeeds.
+- lower-file lookup through the merged overlay succeeds.
+- copy-up preserves the lower file.
+- unlink hides lower files through overlayfs whiteout behavior.
+- The proof runs through OrlixOS app-hosted terminal-session execution, not a host-only unit harness.
+
+Commands:
+
+```sh
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testOverlayFSProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.21_23-20-23-+0200.xcresult
+testOverlayFSProbeCompletesThroughOrlixOSTerminalSession: Passed
+xcodebuild exit status: 0
+```

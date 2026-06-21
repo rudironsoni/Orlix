@@ -245,6 +245,15 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("user namespace exposes setgroups control"))
     }
 
+    func testOverlayFSProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelOverlayFS)
+        XCTAssertTrue(output.contains("overlayfs_probe"))
+        XCTAssertTrue(output.contains("overlayfs mounts and reads lower files"))
+        XCTAssertTrue(output.contains("overlayfs copy-up preserves lower files"))
+        XCTAssertTrue(output.contains("overlayfs unlink hides lower files"))
+        XCTAssertFalse(output.contains("/orlix/mount_namespace_probe"))
+    }
+
     func testPathErrnoProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelPathErrno)
 
