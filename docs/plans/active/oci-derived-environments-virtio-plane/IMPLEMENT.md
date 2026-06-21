@@ -12041,3 +12041,33 @@ Non-claims:
 Current status:
 
 Latest checkpoint: OCI `hostname` and `domainname` now flow from runtime config through OrlixOS metadata into Linux init, which applies them inside a private UTS namespace with Linux syscalls. App-hosted OCI-derived execution proof, broader OCI lifecycle behavior, and remaining Linux-backed field implementations remain pending before any OCI runtime readiness claim.
+### Checkpoint: OCI `process.user.umask` applied by Linux init
+
+Status: source/build/package checkpoint complete for the OCI `process.user.umask` slice.
+
+Implementation:
+
+- `OrlixOS` now carries OCI `process.user.umask` as `defaultUmask` on `OrlixOCIRuntimeConfigDescriptor` and `OrlixEnvironmentDescriptor`.
+- OCI runtime config parsing now accepts supported umask values and rejects values outside Linux mode bits (`> 0o777`) fail-closed as `process.user.umask`.
+- Materialized root images emit `orlix.umask=<value>` only when the OCI/environment descriptor supplies a umask.
+- `/sbin/init` reads `orlix.umask=` from the Linux command line and applies it with `umask(2)` before dropping gid/uid and before exec.
+- No `OrlixHostAdapter` change, Darwin-visible Linux facade, custom ABI, Docker daemon, `runc`, Apple Containerization, or Virtualization.framework dependency was introduced.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed with escalation for Swift compiler cache writes.
+- `xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` passed with explicit wrapper status `0`.
+- `make -f OrlixOS/Makefile rootfs PROFILE=release` passed with explicit wrapper status `0` after escalation for configured external cache/temp writes.
+- `strings Build/OrlixOS/packages/release/sbin/init | grep 'orlix.umask='` found `orlix.umask=` in the rebuilt packaged init binary.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is source/build/package evidence only; it is not app-hosted OCI-derived runtime proof.
+- This does not claim full OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, systemd image compatibility, or third-party package ladder readiness.
+- Unsupported OCI fields still fail closed unless and until implemented through Linux mechanisms and proven in the ADR 0017 order.

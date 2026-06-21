@@ -434,6 +434,8 @@ struct orlix_command_config {
 	int has_domainname;
 	unsigned long uid;
 	unsigned long gid;
+	unsigned long umask_value;
+	int has_umask;
 };
 
 static void selected_command_config(struct orlix_command_config *config)
@@ -520,6 +522,8 @@ static void selected_command_config(struct orlix_command_config *config)
 
 	(void)read_cmdline_unsigned("orlix.uid=", &config->uid);
 	(void)read_cmdline_unsigned("orlix.gid=", &config->gid);
+	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
+		config->has_umask = 1;
 	if (read_cmdline_decoded("orlix.hostname=", config->hostname,
 				 sizeof(config->hostname)) == 0 &&
 	    config->hostname[0] != '\0')
@@ -749,6 +753,8 @@ static pid_t start_command_on_pty(int master, int slave)
 	apply_uts_config(config);
 	if (chdir(config->cwd) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
+	if (config->has_umask)
+		(void)umask((mode_t)config->umask_value);
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: setgid failed\n");
 	if (config->uid != 0 && setuid((uid_t)config->uid) != 0)
