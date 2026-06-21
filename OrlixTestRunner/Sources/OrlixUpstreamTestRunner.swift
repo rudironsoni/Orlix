@@ -204,6 +204,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         kernelCommandLineSuffix: "orlix.kselftest=umask_probe"
     )
 
+    static let kernelReadonlyRoot = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=readonly_root_probe orlix.root.readonly=1"
+    )
+
     static let kernelEnvironmentStateWriteback = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

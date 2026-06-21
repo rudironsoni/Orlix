@@ -393,6 +393,15 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("ok - child umask changes stay process-local"))
     }
 
+    func testReadonlyRootProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelReadonlyRoot)
+
+        XCTAssertTrue(output.contains("readonly_root_probe"))
+        XCTAssertTrue(output.contains("orlix.root.readonly=1"))
+    }
+
     func testEnvironmentStateWritebackProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {

@@ -252,6 +252,41 @@ static void run_orlix_tests(const char *data, size_t size)
 	}
 }
 
+static bool cmdline_has_token(const char *token)
+{
+	char cmdline[1024];
+	size_t token_len;
+	size_t pos;
+	size_t nread;
+
+	if (orlix_read_file("/proc/cmdline", cmdline, sizeof(cmdline),
+			    &nread) != 0)
+		return false;
+	if (nread >= sizeof(cmdline))
+		nread = sizeof(cmdline) - 1;
+	cmdline[nread] = '\0';
+
+	token_len = orlix_strlen(token);
+	for (pos = 0; pos < nread;) {
+		while (pos < nread &&
+		       (cmdline[pos] == ' ' || cmdline[pos] == '\n' ||
+			cmdline[pos] == '\t'))
+			pos++;
+		if (pos + token_len <= nread &&
+		    orlix_memcmp(cmdline + pos, token, token_len) == 0 &&
+		    (pos + token_len == nread ||
+		     cmdline[pos + token_len] == ' ' ||
+		     cmdline[pos + token_len] == '\n' ||
+		     cmdline[pos + token_len] == '\t'))
+			return true;
+		while (pos < nread && cmdline[pos] != ' ' &&
+		       cmdline[pos] != '\n' && cmdline[pos] != '\t')
+			pos++;
+	}
+
+	return false;
+}
+
 int main(void)
 {
 	size_t list_size = 0;
@@ -283,6 +318,8 @@ int main(void)
 			  "tmpfs mounted at /tmp for kselftest");
 	orlix_test_result(have_list && test_count > 0,
 			  "installed Orlix kselftest list is readable");
+	if (cmdline_has_token("orlix.root.readonly=1"))
+		(void)mount(NULL, "/", NULL, MS_REMOUNT | MS_RDONLY, NULL);
 	if (have_list)
 		run_orlix_tests(test_list, list_size);
 	orlix_write_all("ORLIX-KSELFTEST-END\n");

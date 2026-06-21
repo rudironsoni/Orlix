@@ -1328,6 +1328,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			hostname: hostname,
 			domainname: domainname,
 			rootMount: rootMount,
+			rootReadonly: rootReadonly,
 			mounts: mounts
 		)
 	}
@@ -1385,7 +1386,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		let consoleSize = try Self.validatedConsoleSize(process.consoleSize,
 							       terminal: terminal)
 
-		try Self.rejectUnsupportedRootReadonly(config.root)
 		return OrlixOCIRuntimeConfigDescriptor(
 			ociVersion: config.ociVersion,
 			annotations: try Self.validatedAnnotations(config.annotations ?? [:]),
@@ -1533,12 +1533,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if config.zOS != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("zOS")
-		}
-	}
-
-	private static func rejectUnsupportedRootReadonly(_ root: OCIRuntimeRoot?) throws {
-		if root?.readonly == true {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("root.readonly")
 		}
 	}
 

@@ -12352,3 +12352,140 @@ Current status:
   slice; do not broaden this proof to OCI lifecycle, networking, cgroup
   resources, read-only roots, masked paths, registry pull, or third-party
   package readiness.
+## 2026-06-21 - OCI root.readonly Linux-visible enforcement
+
+Status: implemented and focused-proofed for the current OCI-derived environment slice.
+
+Scope completed:
+
+- `OrlixOCIRuntimeConfigParser` no longer rejects OCI `root.readonly: true`.
+- `OrlixOCIRuntimeConfigDescriptor.rootReadonly` is carried into `OrlixEnvironmentDescriptor.rootReadonly`.
+- `OrlixEnvironmentRootImage` adds the private boot token `orlix.root.readonly=1` when an environment descriptor requests a read-only root.
+- `OrlixOS/Sources/init/rootinit.c` handles `orlix.root.readonly=1` by mounting `/dev/vda` directly at `/newroot` as ext4 `MS_RDONLY` instead of assembling the writable overlay.
+- `kselftest_init` also handles `orlix.root.readonly=1` for the `orlix.root=initramfs-only` app-hosted kselftest path by remounting `/` read-only before executing selected tests.
+- Added `readonly_root_probe`, which verifies Linux-visible `/proc/self/mountinfo` root mount options and requires a write under `/` to fail with `EROFS`.
+- Added `OrlixKernelUpstreamTests/testReadonlyRootProbeCompletesThroughOrlixOSTerminalSession` as the app-hosted proof selector for `readonly_root_probe`.
+
+Important failure and fix:
+
+- First app-hosted attempt reached `readonly_root_probe` but failed with `not ok 1 - root mount is read-only in /proc/self/mountinfo`.
+- The kernel command line did include `orlix.root.readonly=1`, but the app-hosted proof boots `orlix.root=initramfs-only`, so the OrlixOS `rootinit` overlay path was not involved.
+- Fixed by applying the same private readonly boot token in `kselftest_init` before the selected Linux selftest runs.
+
+Validation evidence:
+
+```sh
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+```
+
+Result: completed; installed binaries verified:
+
+```text
+Build/OrlixMLibC/kselftest/release/orlix/kselftest_init  7.7M
+Build/OrlixMLibC/kselftest/release/orlix/readonly_root_probe  7.7M
+```
+
+```sh
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+```
+
+Result:
+
+```text
+packaged kselftest initramfs: Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle (libc orlixmlibc)
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:39:file /orlix/readonly_root_probe .../Build/OrlixMLibC/kselftest/release/orlix/readonly_root_probe 755 0 0
+```
+
+Xcode / Simulator environment gate, using the required wrapper PATH:
+
+```sh
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor
+```
+
+Result:
+
+```text
+OK xcode external storage doctor passed
+STATUS:0
+```
+
+```sh
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b
+```
+
+Result:
+
+```text
+Monitoring boot status for iPhone 17 (E65F0D05-980C-4368-8CDC-2D2BF3E05757).
+Device already booted, nothing to do.
+```
+
+Focused app-hosted proof:
+
+```sh
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+xcodebuild \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testReadonlyRootProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result bundle:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.21_19-38-57-+0200.xcresult
+RESULT=Passed PASSED=1 FAILED=0 TOTAL=1
+```
+
+Focused parser proof:
+
+```sh
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+xcodebuild \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserAcceptsRootReadonly \
+  test
+```
+
+Result bundle:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.21_19-41-02-+0200.xcresult
+RESULT=Passed PASSED=1 FAILED=0 TOTAL=1
+```
+
+Harness checks:
+
+```sh
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+```text
+git diff --check: STATUS 0
+.codex/hooks/tests: Ran 32 tests, OK
+.codex/rules/tests: Ran 5 tests, OK
+compact_plan_check.py: STATUS 0 with known stale-status warning
+```
+
+Not claimed:
+
+- Full OCI Runtime Spec compliance.
+- `linux.readonlyPaths` or `linux.maskedPaths`; both remain unsupported/fail-closed.
+- cgroups/resources, hooks, seccomp, mount labels, registry pulls, external networking, or full package ladder readiness.
+
+Current status / handoff:
+
+- `root.readonly` is now accepted and enforced for this slice through Linux mount state, with focused parser and app-hosted kselftest proof green.
+- Continue the active OCI-derived environments plan from the next unsupported OCI field or substrate proof item; do not broaden this checkpoint into a full OCI Runtime readiness claim.

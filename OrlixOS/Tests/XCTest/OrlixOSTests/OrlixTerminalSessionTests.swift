@@ -6008,7 +6008,7 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
-	func testOCIRuntimeConfigParserRejectsUnsupportedRootReadonly() throws {
+	func testOCIRuntimeConfigParserAcceptsRootReadonly() throws {
 		let config = Data("""
 		{
 		  "ociVersion": "1.1.0",
@@ -6021,12 +6021,9 @@ extension OrlixTerminalSessionTests {
 		}
 		""".utf8)
 
-		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
-			XCTAssertEqual(
-				error as? OrlixOCIRuntimeConfigError,
-				.unsupportedLinuxFeature("root.readonly")
-			)
-		}
+		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+
+		XCTAssertTrue(descriptor.rootReadonly)
 	}
 
 	func testOCIRuntimeConfigParserAcceptsHostnameAndDomainname() throws {
