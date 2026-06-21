@@ -12137,3 +12137,47 @@ Current status:
   through Linux mount semantics, readonly/masked paths through Linux mounts,
   cgroup resource enforcement, virtio-net Linux-visible netdev/socket proof,
   and full OCI lifecycle proof remain pending.
+
+### Checkpoint: Linux-side `umask(2)` process behavior proof
+
+Status: Linux-side source/build/package proof checkpoint complete for
+`umask(2)` behavior used by OCI `process.user.umask`.
+
+Implementation:
+
+- Added `orlix/umask_probe` under the durable Orlix Linux selftest overlay.
+- The probe verifies that Linux `umask(2)` masks file creation modes, masks
+  directory creation modes, survives `exec`, and that child process umask
+  changes do not leak back to the parent.
+- No `OrlixOS`, `OrlixHostAdapter`, custom ABI, host policy, or generated
+  upstream tree edit was introduced for this proof slice.
+
+Validation:
+
+- `cc -Wall -Wextra -Werror -o /tmp/orlix-umask-probe OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/umask_probe.c` passed with escalation for compiler temporary files.
+- `/tmp/orlix-umask-probe` passed on the host as a probe logic sanity check: file mode, directory mode, exec inheritance, and child-process isolation all reported `ok`.
+- `make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed with explicit wrapper status `0` after escalation for configured external cache/temp writes.
+- `file Build/OrlixMLibC/kselftest/release/orlix/umask_probe` reports a statically linked aarch64 ELF.
+- `grep -n 'umask_probe' Build/OrlixMLibC/kselftest/release/kselftest-list.txt` found `orlix:umask_probe`.
+- `make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed with explicit wrapper status `0`.
+- `grep -n 'umask_probe' Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` found the packaged `/orlix/umask_probe` entry.
+
+Non-claims:
+
+- This is Linux-side probe build/package evidence for `umask(2)` behavior; it
+  is not app-hosted OCI-derived runtime execution proof for
+  `process.user.umask`.
+- Full OCI Runtime lifecycle compliance, container runtime readiness, registry
+  pull support, external networking, systemd image compatibility, and
+  third-party package ladder readiness remain unclaimed.
+
+Current status:
+
+- Latest checkpoint: `orlix/umask_probe` now builds into the Orlix kselftest
+  package and test initramfs, proving Linux `umask(2)` file mode, directory
+  mode, exec inheritance, and parent/child isolation behavior used by OCI
+  `process.user.umask`.
+- Remaining work: app-hosted OCI-derived runtime execution proof, root readonly
+  through Linux mount semantics, readonly/masked paths through Linux mounts,
+  cgroup resource enforcement, virtio-net Linux-visible netdev/socket proof,
+  and full OCI lifecycle proof remain pending.
