@@ -5938,7 +5938,7 @@ extension OrlixTerminalSessionTests {
 	}
 
 	func testOCIRuntimeLifecycleControllerFollowsCreateStartKillDeleteOrder() throws {
-		let config = try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig())
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
 		let configured = OrlixOCIRuntimeLifecycleController(
 			config: config,
 			id: "oci-demo",
@@ -6162,7 +6162,7 @@ extension OrlixTerminalSessionTests {
 			cacheRoot: root.appendingPathComponent("Caches/Orlix"),
 			scratchRoot: root.appendingPathComponent("tmp/Orlix")
 		)
-		let config = try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig())
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
 		let controller = try OrlixOCIRuntimeLifecycleController(
 			config: config,
 			id: "oci-session-registry",
@@ -6194,7 +6194,18 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(materializedRootImage.rootImageIdentifier, sessionDescriptor.environment.rootImageIdentifier)
 		XCTAssertEqual(materializedRootImage.baseImageURL, layout.baseImageURL)
 		XCTAssertEqual(materializedRootImage.stateImageURL, layout.stateImageURL)
-		XCTAssertEqual(linuxSession.bootConfig.kernelCommandLine, "console=orlix-test")
+		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+		XCTAssertTrue(commandLine.contains("console=orlix-test"))
+		XCTAssertTrue(commandLine.contains("orlix.exec=/usr/bin/env"))
+		XCTAssertTrue(commandLine.contains("orlix.argv0=/usr/bin/env"))
+		XCTAssertTrue(commandLine.contains("orlix.argv1=sh"))
+		XCTAssertTrue(commandLine.contains("orlix.argv2=-lc"))
+		XCTAssertTrue(commandLine.contains("orlix.env0=HOME=/root"))
+		XCTAssertTrue(commandLine.contains("orlix.env1=PATH=/usr/bin:/bin"))
+		XCTAssertTrue(commandLine.contains("orlix.env2=TERM=xterm-256color"))
+		XCTAssertTrue(commandLine.contains("orlix.cwd=/work"))
+		XCTAssertTrue(commandLine.contains("orlix.uid=1000"))
+		XCTAssertTrue(commandLine.contains("orlix.gid=1000"))
 	}
 
 	func testOCIRuntimeLifecycleControllerRejectsUnavailableSessionDescriptors() throws {
@@ -6227,6 +6238,33 @@ extension OrlixTerminalSessionTests {
 			  "process": {
 			    "args": ["/bin/sh"],
 			    "cwd": "/"
+			  }
+			}
+			""".utf8
+		)
+	}
+
+	private func nonRootOCIRuntimeConfig() -> Data {
+		Data(
+			"""
+			{
+			  "ociVersion": "1.1.0",
+			  "root": {
+			    "path": "rootfs"
+			  },
+			  "process": {
+			    "terminal": true,
+			    "args": ["/usr/bin/env", "sh", "-lc"],
+			    "env": [
+			      "HOME=/root",
+			      "PATH=/usr/bin:/bin",
+			      "TERM=xterm-256color"
+			    ],
+			    "cwd": "/work",
+			    "user": {
+			      "uid": 1000,
+			      "gid": 1000
+			    }
 			  }
 			}
 			""".utf8

@@ -11386,3 +11386,45 @@ Handoff:
 - Current status: OCI runtime config can now become a lifecycle-created session descriptor and that descriptor can route into the existing OrlixOS registry/materialized-root `OrlixLinuxSession` construction path.
 - Continue by binding this session-construction path to the existing session launch/execution proof harness, then prove Linux-owned argv/env/cwd/user/stdio/exit behavior from inside the Linux surface when CoreSimulator is usable.
 - Re-run the targeted `OrlixOSTests` command above once CoreSimulator is responsive; do not claim XCTest green from the interrupted run.
+
+## 2026-06-21 - OCI Session Boot Command-Line Contract Proof
+
+Status: compile/build checkpoint accepted; simulator execution still unproven.
+
+Changes:
+
+- Extended `testOCIRuntimeSessionDescriptorLaunchesThroughEnvironmentRegistry` in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` to use a shared non-root OCI runtime config fixture.
+- The test now proves the OCI-derived `OrlixLinuxSession` materialized-root path carries OCI `process.args`, `process.env`, `process.cwd`, and `process.user.uid/gid` into the existing Orlix `/init` command-line contract:
+  - `orlix.exec=/usr/bin/env`
+  - `orlix.argv0=/usr/bin/env`
+  - `orlix.argv1=sh`
+  - `orlix.argv2=-lc`
+  - `orlix.env0=HOME=/root`
+  - `orlix.env1=PATH=/usr/bin:/bin`
+  - `orlix.env2=TERM=xterm-256color`
+  - `orlix.cwd=/work`
+  - `orlix.uid=1000`
+  - `orlix.gid=1000`
+- Added `nonRootOCIRuntimeConfig()` as the shared test fixture for OCI runtime session descriptor and registry/materialized-root proof.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift /private/tmp/OrlixOCIRuntimeConfigParserCheck.swift` passed.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` passed with exit 0, validating XCTest target compilation without simulator execution.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the pre-existing warning: `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+
+Non-claims:
+
+- This does not prove app-hosted execution of the OCI-derived rootfs.
+- This does not prove Linux `execve`, stdio, exit status, namespaces, cgroups, networking, or arbitrary imported binary compatibility.
+- This does not add a custom ABI or HostAdapter-visible session policy; it proves OrlixOS feeds the existing `/init` command-line handoff.
+- This does not satisfy ADR 0017 runtime readiness or OCI Runtime lifecycle compliance.
+
+Handoff:
+
+- Current status: OCI runtime config now reaches the existing OrlixOS registry/materialized-root session construction path and the existing `/init` command-line handoff for argv/env/cwd/uid/gid.
+- Continue by making this proof executable in the existing runtime harness once CoreSimulator is responsive, then move from command-line handoff proof to Linux-owned in-surface proof of `execve`, stdio, and exit status.
