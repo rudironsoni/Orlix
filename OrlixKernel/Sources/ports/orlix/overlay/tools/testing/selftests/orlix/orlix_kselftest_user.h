@@ -10,6 +10,7 @@
 
 static int orlix_test_index;
 static int orlix_test_failures;
+static int orlix_test_first_failure;
 
 static size_t orlix_strlen(const char *s)
 {
@@ -113,6 +114,26 @@ static void orlix_test_comment(const char *prefix, const char *name,
 	orlix_write_bytes(line, pos);
 }
 
+static void orlix_test_comment_uint(const char *prefix, unsigned int value)
+{
+	char digits[10];
+	size_t count = 0;
+
+	orlix_write_all("# ");
+	orlix_write_all(prefix);
+	if (value == 0) {
+		orlix_write_all("0\n");
+		return;
+	}
+	while (value > 0 && count < sizeof(digits)) {
+		digits[count++] = (char)('0' + (value % 10));
+		value /= 10;
+	}
+	while (count > 0)
+		orlix_write_bytes(&digits[--count], 1);
+	orlix_write_all("\n");
+}
+
 static void orlix_test_result(bool passed, const char *name)
 {
 	char line[256];
@@ -121,6 +142,8 @@ static void orlix_test_result(bool passed, const char *name)
 	orlix_test_index++;
 	if (!passed)
 		orlix_test_failures++;
+	if (!passed && orlix_test_first_failure == 0)
+		orlix_test_first_failure = orlix_test_index;
 
 	pos = orlix_append_cstr(line, pos, sizeof(line),
 				passed ? "ok " : "not ok ");
@@ -134,6 +157,8 @@ static void orlix_test_result(bool passed, const char *name)
 
 static void orlix_test_exit(void)
 {
+	if (orlix_test_first_failure > 0 && orlix_test_first_failure < 125)
+		_exit(orlix_test_first_failure);
 	_exit(orlix_test_failures ? 1 : 0);
 }
 

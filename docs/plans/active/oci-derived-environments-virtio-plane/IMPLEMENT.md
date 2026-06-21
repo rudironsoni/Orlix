@@ -13379,3 +13379,60 @@ The brittle hardcoded virtiofs sysfs device name is fixed in the durable
 selftest, and failing app-hosted upstream probes now retain more runner context.
 Full app-hosted virtio-fs mount proof remains pending. The broader OCI-derived
 environment and virtio plane plan remains active.
+
+## 2026-06-22 - Virtio-fs mount probe failure narrowed to child SIGSEGV
+
+Checkpoint: improved Orlix kselftest diagnostics so app-hosted upstream probe
+failures can distinguish normal child exit failures from signal termination.
+This narrowed the remaining `virtio_fs_mount_probe` failure from an opaque
+executable-level `not ok` to a child SIGSEGV.
+
+Changes:
+
+- `orlix_kselftest_user.h` now preserves the first failing internal TAP
+  assertion as the child process exit status when possible.
+- `kselftest_init.c` now emits TAP comments for non-zero child exit status and
+  child signal termination.
+- `virtio_fs_mount_probe.c` now emits TAP comments before its early virtiofs
+  tag/mount operations and mounted-operation checks.
+- The temporary focused XCTest gate for `virtio_fs_mount_probe` was not kept
+  because the app-hosted probe is still failing.
+
+Evidence:
+
+```text
+Focused app-hosted run:
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_01-51-05-+0200.xcresult
+
+Observed marker:
+child signal 11
+not ok 11 - virtio_fs_mount_probe
+```
+
+Existing app-hosted virtio MMIO contract gate after the diagnostic changes:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_01-54-24-+0200.xcresult
+testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession: passed
+xcodebuild exit status: 0
+```
+
+The failure happens before any `probe step ...` comment appears in the XCTest
+failure payload, so the crash is before the mounted-operation step comments,
+inside the early tag/mount setup path or before those comments are emitted to
+the captured stream.
+
+Non-claims:
+
+- This does not prove app-hosted `virtio_fs_mount_probe` success.
+- This does not prove OCI host-folder mount readiness.
+- This does not add a custom ABI or HostAdapter-visible shortcut.
+- The next checkpoint must fix the child SIGSEGV through Linux/FUSE behavior or
+  selftest correctness, then restore a focused app-hosted XCTest gate only when
+  the probe is green.
+
+Current status:
+
+The remaining virtio-fs mount blocker is now known to be child SIGSEGV in the
+app-hosted `virtio_fs_mount_probe` path. The broader OCI-derived environment
+and virtio plane plan remains active.
