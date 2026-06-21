@@ -10845,3 +10845,33 @@ Non-claims:
 - This is not product networking or external egress proof.
 - This is not registry pull proof.
 - This is not OCI lifecycle/runtime readiness.
+
+## 2026-06-21 - Cgroup v2 child lifecycle substrate probe
+
+Changed:
+
+- Extended `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/cgroup_v2_probe.c` from a root-only cgroup v2 smoke test to a 9-test Linux userspace probe.
+
+Scope:
+
+- The probe still uses only standard Linux filesystem and cgroup v2 operations.
+- It verifies `/proc/self/cgroup` reports the unified root and `/proc/self/mountinfo` reports `cgroup2` mounted at `/sys/fs/cgroup`.
+- It verifies `cgroup.controllers`, `cgroup.subtree_control`, and `cgroup.procs` are readable from the cgroup v2 root.
+- It verifies the current task can be written to root `cgroup.procs`.
+- It verifies a child cgroup directory can be created under `/sys/fs/cgroup`, the current task can be moved into that child through child `cgroup.procs`, the task can be moved back to root, and the empty child cgroup can be removed.
+
+Validation:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` completed and regenerated kselftest artifacts.
+- `rtk rg -n "cgroup v2 child cgroup accepts current task|cgroup v2 empty child cgroup can be removed|orlix_test_plan\\(9\\)" OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/cgroup_v2_probe.c Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/cgroup_v2_probe.c`
+  - Found the 9-test plan and child cgroup TAP labels in both durable overlay and generated Linux source.
+- `rtk rg -n "cgroup_v2_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  - `Build/OrlixMLibC/kselftest/release/kselftest-list.txt:2:orlix:cgroup_v2_probe`
+  - `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:9:file /orlix/cgroup_v2_probe ... 755 0 0`
+
+Non-claims:
+
+- This is not OCI lifecycle/runtime readiness.
+- This is not systemd image compatibility.
+- This is not proof of controller delegation, resource accounting, pressure metrics, or container policy.
+- This is not a custom Orlix cgroup API.
