@@ -10723,3 +10723,47 @@ Current status:
 - Still open: wire OrlixKernel virtio-fs FUSE node lookup/readdir/open/read/readlink paths to the
   private path-based HostAdapter primitives, then prove with kselftest and app-hosted runtime when
   CoreSimulator is available.
+## 2026-06-21 - Virtio-fs path-node metadata/open checkpoint
+
+- Kept this checkpoint in the Linux/virtio plane. No Python/product code, no iOS app runtime facade, no custom Linux ABI, and no HostAdapter leakage into the Linux surface.
+- Continued `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c` nested host-directory work:
+  - retained path-node allocation for nested FUSE lookup results backed by private HostAdapter relative paths;
+  - made the shared virtio-fs node metadata helper resolve path-node metadata through `orlix_host_directory_read_entry_at_path(...)`;
+  - added `FUSE_STATX` fallback for path nodes while preserving the Linux-visible inode as the FUSE node id;
+  - added non-root `FUSE_OPENDIR` support for directory nodes resolved through normal virtio-fs metadata;
+  - preserved private HostAdapter ownership for Darwin/iOS backing mechanics.
+- Verification:
+  - `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release` initially reached the known `/Volumes/1TB/Xcode/Caches` sandbox boundary after compiling far enough to check the earlier syntax issue.
+  - Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release` exited 0 after compiling `drivers/orlix/virtio/mmio.c`.
+  - Re-ran escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release` after the shared metadata/`STATX`/`OPENDIR` changes; it exited 0 after compiling `drivers/orlix/virtio/mmio.c`.
+  - `rtk git diff --check` exited 0.
+- Non-claims:
+  - This does not claim arbitrary-depth virtio-fs traversal is complete yet.
+  - Nested `READDIR`/`READDIRPLUS` still need a path-node dirent implementation using `orlix_host_directory_read_directory_entry_at_path(...)` before claiming nested directory enumeration.
+  - Nested xattrs below the first layer are not claimed; HostAdapter currently exposes registered xattr APIs by relative path through the existing xattr substrate, but there is no separate at-path xattr primitive added in this checkpoint.
+  - No app-hosted runtime, OCI lifecycle, registry pull, networking, cgroup, namespace, or product runtime readiness claim is made.
+## 2026-06-21 - Virtio-fs nested directory enumeration checkpoint
+
+- Continued the Linux/virtio substrate path in `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`; no iOS app/product runtime facade, no Python product code, no custom Linux ABI, and no HostAdapter leakage into Linux userspace.
+- Added path-node directory enumeration support:
+  - added internal helpers to construct nested relative paths and emit normal FUSE `dirent`/`direntplus` records for path-node children;
+  - extended non-root `FUSE_READDIR` to iterate path-node directories through private `orlix_host_directory_read_directory_entry_at_path(...)`;
+  - extended non-root `FUSE_READDIRPLUS` to return path-node child metadata through normal FUSE `entry_out` data;
+  - kept Linux-facing behavior as standard virtio-fs/FUSE/VFS operations.
+- Extended `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`:
+  - test plan count is now 12;
+  - added an opportunistic Linux-side nested directory check using normal `opendir(3)`, `readdir(3)`, and `statx(2)` on a discovered mounted child directory.
+- Verification:
+  - Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release` exited 0 after the `READDIR`/`READDIRPLUS` kernel changes.
+  - Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release` exited 0 after the kselftest probe change.
+  - Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` completed without reported failure.
+  - `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` found the probe in both the kselftest list and initramfs list.
+  - `rtk rg -n "mounted_nested_directory_supports_readdir_statx|orlix_test_plan\\(12\\)" Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/virtio_fs_mount_probe.c OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c` found the updated helper and plan count in both durable overlay and generated Linux copy.
+  - `rtk git diff --check` exited 0.
+  - `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, all OK.
+  - `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, all OK.
+  - `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known warning that this implementation log still contains older stale pending/blocked statuses contradicted by later green status.
+- Non-claims:
+  - This is still not an app-hosted runtime proof.
+  - The nested probe is opportunistic when the mounted host fixture contains a directory; a deterministic nested runtime fixture remains stronger evidence.
+  - No OCI lifecycle, registry pull, networking/cgroup/namespace runtime, or product runtime readiness claim is made.

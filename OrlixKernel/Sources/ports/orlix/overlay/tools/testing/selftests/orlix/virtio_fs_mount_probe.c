@@ -197,11 +197,54 @@ static bool mounted_regular_file_supports_lseek(void)
 	return !saw_regular_file || result;
 }
 
+static bool mounted_nested_directory_supports_readdir_statx(void)
+{
+	DIR *root;
+	DIR *nested;
+	struct dirent *entry;
+	char path[512];
+	bool saw_directory = false;
+	bool result = false;
+
+	root = opendir(ORLIX_VIRTIOFS_MOUNTPOINT);
+	if (!root)
+		return false;
+
+	while ((entry = readdir(root)) != NULL) {
+		struct stat status;
+		struct statx nested_status;
+
+		if (entry->d_name[0] == '.')
+			continue;
+		if (!build_mount_child_path(path, sizeof(path), entry->d_name))
+			continue;
+		if (stat(path, &status) != 0 || !S_ISDIR(status.st_mode))
+			continue;
+
+		saw_directory = true;
+		nested = opendir(path);
+		if (!nested)
+			break;
+
+		result = readdir(nested) != NULL &&
+			 syscall(SYS_statx, AT_FDCWD, path,
+				 AT_SYMLINK_NOFOLLOW,
+				 STATX_TYPE | STATX_MODE, &nested_status) == 0 &&
+			 (nested_status.stx_mask & STATX_TYPE) != 0 &&
+			 S_ISDIR(nested_status.stx_mode);
+		closedir(nested);
+		break;
+	}
+
+	closedir(root);
+	return !saw_directory || result;
+}
+
 int main(void)
 {
 	bool mounted = false;
 
-	orlix_test_plan(11);
+	orlix_test_plan(12);
 
 	orlix_test_result(
 		read_file_equals("/sys/fs/virtiofs/virtio0/tag", ORLIX_VIRTIOFS_TAG),
@@ -230,6 +273,9 @@ int main(void)
 				  "mounted virtio-fs root reports missing xattrs");
 		orlix_test_result(mounted_regular_file_supports_lseek(),
 				  "mounted virtio-fs regular files support lseek when present");
+		orlix_test_result(
+			mounted_nested_directory_supports_readdir_statx(),
+			"mounted virtio-fs nested directories support readdir and statx when present");
 		umount(ORLIX_VIRTIOFS_MOUNTPOINT);
 	} else {
 		orlix_test_result(false,
@@ -248,6 +294,9 @@ int main(void)
 				  "mounted virtio-fs root reports missing xattrs");
 		orlix_test_result(false,
 				  "mounted virtio-fs regular files support lseek when present");
+		orlix_test_result(
+			false,
+			"mounted virtio-fs nested directories support readdir and statx when present");
 	}
 
 	orlix_test_exit();
