@@ -1365,6 +1365,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		let mounts = try Self.validatedMounts(config.mounts ?? [])
 		try Self.rejectUnsupportedProcessFeatures(process)
 		try Self.rejectUnsupportedLinuxFeatures(config.linux)
+		try Self.rejectUnsupportedHooks(config.hooks)
 		let terminal = process.terminal ?? false
 		let consoleSize = try Self.validatedConsoleSize(process.consoleSize,
 							       terminal: terminal)
@@ -1426,6 +1427,30 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 
 		return annotations
+	}
+
+	private static func rejectUnsupportedHooks(_ hooks: OCIRuntimeHooks?) throws {
+		guard let hooks else {
+			return
+		}
+		if let prestart = hooks.prestart, !prestart.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hooks.prestart")
+		}
+		if let createRuntime = hooks.createRuntime, !createRuntime.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hooks.createRuntime")
+		}
+		if let createContainer = hooks.createContainer, !createContainer.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hooks.createContainer")
+		}
+		if let startContainer = hooks.startContainer, !startContainer.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hooks.startContainer")
+		}
+		if let poststart = hooks.poststart, !poststart.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hooks.poststart")
+		}
+		if let poststop = hooks.poststop, !poststop.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hooks.poststop")
+		}
 	}
 
 	private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
@@ -1541,10 +1566,27 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 private struct OCIRuntimeConfig: Decodable {
 	let ociVersion: String
 	let annotations: [String: String]?
+	let hooks: OCIRuntimeHooks?
 	let process: OCIRuntimeProcess?
 	let root: OCIRuntimeRoot?
 	let mounts: [OCIRuntimeMount]?
 	let linux: OCIRuntimeLinux?
+}
+
+private struct OCIRuntimeHooks: Decodable {
+	let prestart: [OCIRuntimeHook]?
+	let createRuntime: [OCIRuntimeHook]?
+	let createContainer: [OCIRuntimeHook]?
+	let startContainer: [OCIRuntimeHook]?
+	let poststart: [OCIRuntimeHook]?
+	let poststop: [OCIRuntimeHook]?
+}
+
+private struct OCIRuntimeHook: Decodable {
+	let path: String
+	let args: [String]?
+	let env: [String]?
+	let timeout: Int?
 }
 
 private struct OCIRuntimeProcess: Decodable {
