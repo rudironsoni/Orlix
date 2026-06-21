@@ -5819,6 +5819,14 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(report.feature(named: "seccomp")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "apparmor")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "selinux")?.status, .deterministicallyRejected)
+		XCTAssertEqual(
+			report.feature(named: "cgroupV2PidsController")?.status,
+			.implemented
+		)
+		XCTAssertEqual(
+			report.feature(named: "cgroupV2PidsController")?.proof,
+			"orlix:cgroup_pids_probe"
+		)
 		XCTAssertEqual(report.feature(named: "netDevices")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(

@@ -13263,3 +13263,56 @@ Non-claims:
 Current status: pids cgroup controller substrate is enabled in the Orlix Linux
 kernel build and proven through OrlixOS app-hosted execution. The broader
 OCI-derived environment and virtio plane plan remains active.
+
+## 2026-06-22 - OCI feature report advertises pids cgroup proof narrowly
+
+Updated the OrlixOS OCI runtime feature report to expose the newly proven pids
+cgroup substrate as a narrow implemented feature without widening OCI resource
+claims.
+
+Ownership:
+
+- `OrlixKernel` owns the Linux cgroup v2 pids controller behavior and proof.
+- `OrlixOS` owns truthful OCI feature reporting and deterministic feature
+  classification.
+- `OrlixHostAdapter` remains out of Linux-visible cgroup semantics.
+
+Changes:
+
+- Added `cgroupV2PidsController` to `OrlixOCIRuntimeFeatureReport.current` with
+  status `.implemented` and proof `orlix:cgroup_pids_probe`.
+- Added XCTest assertions that the narrow pids feature is implemented and points
+  at `orlix:cgroup_pids_probe`.
+
+Non-claims:
+
+- `linux.resources` remains rejected by `OrlixOCIRuntimeConfigParser`.
+- `linux.cgroupsPath` remains rejected.
+- Broad `cgroups` remains `.recognized`, not `.implemented`.
+- This does not claim memory, CPU, block I/O, freezer, cpuset, rdma, hugetlb,
+  misc, or full OCI resource policy support.
+
+Current status: OrlixOS feature reporting now reflects the proven Linux pids
+cgroup controller substrate narrowly and keeps broader cgroup/OCI resource
+claims fail-closed. The broader OCI-derived environment and virtio plane plan
+remains active.
+
+Current status:
+
+Latest checkpoint: OrlixOS OCI feature reporting now exposes
+`cgroupV2PidsController` as a narrow implemented feature with proof
+`orlix:cgroup_pids_probe`, while broad `cgroups`, `linux.resources`, and
+`linux.cgroupsPath` remain non-implemented or rejected.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_01-04-20-+0200.xcresult
+testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures: passed
+xcodebuild exit status: 0
+```
+
+Next status: the broader OCI-derived environment and virtio plane plan remains
+active. Do not claim full OCI runtime compliance, full cgroup resource support,
+seccomp, hooks, readonly or masked paths, sysctl application, registry pull, or
+external/shared networking from this checkpoint.
