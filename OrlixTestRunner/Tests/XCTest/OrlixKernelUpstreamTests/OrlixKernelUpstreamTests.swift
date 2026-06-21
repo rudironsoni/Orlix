@@ -266,6 +266,15 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertFalse(output.contains("/orlix/mount_namespace_probe"))
     }
 
+    func testIPCNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelIPCNamespace)
+        XCTAssertTrue(output.contains("ipc_namespace_probe"))
+        XCTAssertTrue(output.contains("IPC namespace isolates SysV shared memory keys"))
+        XCTAssertTrue(output.contains("IPC namespace isolates SysV message queue keys"))
+        XCTAssertTrue(output.contains("IPC namespace isolates POSIX message queue names"))
+        XCTAssertFalse(output.contains("/orlix/mount_namespace_probe"))
+    }
+
     func testPathErrnoProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelPathErrno)
 

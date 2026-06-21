@@ -13118,3 +13118,62 @@ Current status:
 - Latest pushed checkpoint before this work: `3b229e3a Prove overlayfs through OrlixOS`.
 - Current unpushed checkpoint proves the Linux time namespace substrate through OrlixOS app-hosted execution.
 - Next OCI-relevant candidates remain broader cgroup controller/resource enforcement, OCI readonly/masked path behavior, virtio-net/shared outbound networking, and OrlixOS OCI lifecycle policy gaps.
+## 2026-06-22 - App-hosted IPC namespace proof through OrlixOS
+
+Ownership decision:
+
+Keep this checkpoint in OrlixKernel selftest proof and OrlixTestRunner app-hosted coverage. IPC namespace behavior is a Linux namespace surface required by container runtimes; OrlixHostAdapter must not own IPC isolation policy or expose a custom host ABI to Linux userspace.
+
+Changes:
+
+- Added `OrlixUpstreamTestRunSpec.kernelIPCNamespace` with `orlix.kselftest=ipc_namespace_probe`.
+- Added `OrlixKernelUpstreamTests/testIPCNamespaceProbeCompletesThroughOrlixOSTerminalSession`.
+- No HostAdapter changes.
+- No Darwin IPC translation.
+- No custom Orlix ABI.
+
+Verified existing kernel prerequisites:
+
+```text
+CONFIG_SYSVIPC=y
+CONFIG_POSIX_MQUEUE=y
+CONFIG_NAMESPACES=y
+CONFIG_IPC_NS=y
+```
+
+Verified behavior:
+
+- IPC namespace isolates SysV shared memory keys.
+- IPC namespace isolates SysV message queue keys.
+- IPC namespace isolates POSIX message queue names.
+- The proof runs through OrlixOS app-hosted terminal-session execution, not a host-only unit harness.
+
+Commands:
+
+```sh
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testIPCNamespaceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_00-34-34-+0200.xcresult
+testIPCNamespaceProbeCompletesThroughOrlixOSTerminalSession: Passed
+xcodebuild exit status: 0
+```
+
+Current status:
+
+- Latest pushed checkpoint before this work: `6e0c6724 Prove Linux time namespace through OrlixOS`.
+- Current unpushed checkpoint proves Linux IPC namespace isolation through OrlixOS app-hosted execution.
+- Active OCI-derived environment work remains open. This does not claim full OCI runtime compliance, registry pull support, cgroup controller/resource enforcement, seccomp/hooks, shared outbound networking, or product runtime readiness.
