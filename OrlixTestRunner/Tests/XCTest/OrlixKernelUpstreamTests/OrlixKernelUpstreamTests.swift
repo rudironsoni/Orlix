@@ -236,6 +236,15 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("cgroup namespace keeps /proc/self/cgroup readable"))
     }
 
+    func testUserNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelUserNamespace)
+
+        XCTAssertTrue(output.contains("user_namespace_probe"))
+        XCTAssertTrue(output.contains("user namespace unshare changes /proc/self/ns/user"))
+        XCTAssertTrue(output.contains("user namespace exposes readable uid_map and gid_map"))
+        XCTAssertTrue(output.contains("user namespace exposes setgroups control"))
+    }
+
     func testPathErrnoProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelPathErrno)
 

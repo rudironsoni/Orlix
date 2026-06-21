@@ -12880,3 +12880,89 @@ Current status:
   enforcement, cgroup delegation policy, OCI Runtime Spec completion, seccomp
   or hooks support, external networking, virtio-net readiness, third-party
   package ladder readiness, or full product runtime readiness.
+
+## 2026-06-21 - App-hosted Linux user namespace proof
+
+Checkpoint:
+
+- Promoted the existing Linux-owned `user_namespace_probe` kselftest to an
+  app-hosted OrlixOS proof through
+  `OrlixUpstreamTestRunSpec.kernelUserNamespace`.
+- Added
+  `OrlixKernelUpstreamTests/testUserNamespaceProbeCompletesThroughOrlixOSTerminalSession`
+  to launch only `orlix.kselftest=user_namespace_probe` through the
+  wrapper-managed iPhone 17 simulator path.
+- Corrected the probe to match Linux user-namespace semantics: after
+  `unshare(CLONE_NEWUSER)`, uid/gid map files are required to exist and be
+  readable, but they are not required to be pre-populated before userspace
+  writes namespace mappings.
+- Kept the proof on Linux-visible surfaces:
+  - `unshare(CLONE_NEWUSER)` changes `/proc/self/ns/user`.
+  - `/proc/self/uid_map` and `/proc/self/gid_map` are readable.
+  - `/proc/self/setgroups` exists.
+
+Failure and correction:
+
+- Initial app-hosted run reached XCTest and failed inside Linux with:
+  `upstream failure marker found: not ok 2 - user namespace exposes uid_map
+  and gid_map`.
+- The kernel config already had `CONFIG_USER_NS=y` and upstream
+  `kernel/user_namespace.c` plus procfs user namespace paths are present.
+- The failure was the probe expecting map contents immediately after
+  unshare. The corrected proof checks readability/presence, preserving Linux
+  semantics without adding HostAdapter policy, a custom ABI, or host leakage.
+
+Commands:
+
+```sh
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcode-storage-doctor
+
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testUserNamespaceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Test-OrlixKernelUpstreamTests-2026.06.21_23-01-45-+0200.xcresult
+xcodebuild exit status: 0
+Testing started completed.
+```
+
+Harness checks:
+
+```sh
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+```text
+git diff --check: STATUS 0
+.codex/hooks/tests: Ran 32 tests, OK
+.codex/rules/tests: Ran 5 tests, OK
+compact_plan_check.py: STATUS 0 with known stale-status warning
+```
+
+Current status:
+
+- Linux-visible user namespace unshare, `/proc/self/ns/user`,
+  `/proc/self/uid_map`, `/proc/self/gid_map`, and `/proc/self/setgroups` now
+  have focused app-hosted kselftest evidence through the OrlixOS
+  terminal-session path.
+- This does not claim user/group mapping write support, nested-id policy,
+  container credential policy, OCI Runtime Spec completion, seccomp/hooks,
+  cgroup resource enforcement, external networking, virtio-net readiness,
+  third-party package ladder readiness, or full product runtime readiness.

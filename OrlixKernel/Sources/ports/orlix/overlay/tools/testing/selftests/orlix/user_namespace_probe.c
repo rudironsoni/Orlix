@@ -28,20 +28,18 @@ static bool child_exits_successfully(bool (*probe)(void))
 	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-static bool proc_file_has_content(const char *path)
+static bool proc_file_is_readable(const char *path)
 {
 	char byte;
 	int fd;
-	ssize_t nread;
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0)
 		return false;
 
-	nread = read(fd, &byte, 1);
+	(void)read(fd, &byte, 1);
 	close(fd);
-
-	return nread == 1;
+	return true;
 }
 
 static bool user_namespace_inode_changes_after_unshare(void)
@@ -66,8 +64,8 @@ static bool user_namespace_exposes_id_maps(void)
 	if (unshare(CLONE_NEWUSER) != 0)
 		return false;
 
-	return proc_file_has_content("/proc/self/uid_map") &&
-	       proc_file_has_content("/proc/self/gid_map");
+	return proc_file_is_readable("/proc/self/uid_map") &&
+	       proc_file_is_readable("/proc/self/gid_map");
 }
 
 static bool user_namespace_exposes_setgroups_control(void)
@@ -86,7 +84,7 @@ int main(void)
 		child_exits_successfully(user_namespace_inode_changes_after_unshare),
 		"user namespace unshare changes /proc/self/ns/user");
 	orlix_test_result(child_exits_successfully(user_namespace_exposes_id_maps),
-			  "user namespace exposes uid_map and gid_map");
+			  "user namespace exposes readable uid_map and gid_map");
 	orlix_test_result(
 		child_exits_successfully(user_namespace_exposes_setgroups_control),
 		"user namespace exposes setgroups control");
