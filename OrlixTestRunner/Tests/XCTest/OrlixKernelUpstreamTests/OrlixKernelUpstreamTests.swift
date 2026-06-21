@@ -402,6 +402,16 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("orlix.root.readonly=1"))
     }
 
+    func testHostnameDomainnameProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelHostnameDomainname)
+
+        XCTAssertTrue(output.contains("hostname_domainname_probe"))
+        XCTAssertTrue(output.contains("orlix.hostname=oci-host"))
+        XCTAssertTrue(output.contains("orlix.domainname=oci.example"))
+    }
+
     func testEnvironmentStateWritebackProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {

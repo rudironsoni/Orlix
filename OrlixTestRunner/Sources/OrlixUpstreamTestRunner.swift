@@ -212,6 +212,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         kernelCommandLineSuffix: "orlix.kselftest=readonly_root_probe orlix.root.readonly=1"
     )
 
+    static let kernelHostnameDomainname = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=hostname_domainname_probe orlix.hostname=oci-host orlix.domainname=oci.example"
+    )
+
     static let kernelEnvironmentStateWriteback = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

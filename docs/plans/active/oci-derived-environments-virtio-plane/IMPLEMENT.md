@@ -12489,3 +12489,114 @@ Current status / handoff:
 
 - `root.readonly` is now accepted and enforced for this slice through Linux mount state, with focused parser and app-hosted kselftest proof green.
 - Continue the active OCI-derived environments plan from the next unsupported OCI field or substrate proof item; do not broaden this checkpoint into a full OCI Runtime readiness claim.
+
+## 2026-06-21 - OCI hostname/domainname Linux-visible proof
+
+Status: implemented and focused-proofed for the OCI process identity slice.
+
+Scope completed:
+
+- Added durable OrlixMLibC patch `0003-linux-implement-domainname-sysdeps.patch`.
+- `getdomainname(3)` and `setdomainname(3)` no longer abort through mlibc's generic POSIX stubs; Linux sysdeps now use `SYS_uname` for `getdomainname` and `SYS_setdomainname` for `setdomainname`.
+- `kselftest_init` now applies `orlix.hostname=` and `orlix.domainname=` private boot tokens before selected Linux kselftests run.
+- Added `hostname_domainname_probe`, which proves the configured values through Linux-visible `gethostname(2)` and `getdomainname(2)` behavior.
+- Added `OrlixKernelUpstreamTests/testHostnameDomainnameProbeCompletesThroughOrlixOSTerminalSession` as the app-hosted proof selector.
+
+Important failure and fix:
+
+- First app-hosted attempt panicked PID 1 with mlibc's `setdomainname` stub:
+
+```text
+In function setdomainname, file .../options/posix/generic/unistd.cpp:1554
+__ensure(!"Not implemented") failed
+Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000005
+```
+
+- Ownership: this was an OrlixMLibC libc/sysdeps gap, not HostAdapter, app, or test-runner behavior.
+- Fix: added Linux sysdep-backed `getdomainname` / `setdomainname` support in OrlixMLibC and rebuilt the kselftest rootfs.
+
+Validation evidence:
+
+```sh
+rtk sh -c 'make -f OrlixKernel/Makefile kselftest-install PROFILE=release >/tmp/orlix-kselftest-install-hostname-status.log 2>&1; printf "STATUS:%s\n" "$?"'
+```
+
+Result:
+
+```text
+STATUS:0
+Build/OrlixMLibC/kselftest/release/orlix/hostname_domainname_probe  7.7M
+Build/OrlixMLibC/kselftest/release/orlix/kselftest_init  7.7M
+```
+
+```sh
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+```
+
+Result:
+
+```text
+packaged kselftest initramfs: Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle (libc orlixmlibc)
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:39:file /orlix/hostname_domainname_probe .../Build/OrlixMLibC/kselftest/release/orlix/hostname_domainname_probe 755 0 0
+```
+
+Xcode / Simulator environment gate:
+
+```sh
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor
+```
+
+Result:
+
+```text
+OK xcode external storage doctor passed
+STATUS:0
+```
+
+Focused app-hosted proof:
+
+```sh
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+xcodebuild \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testHostnameDomainnameProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result bundle:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.21_20-08-58-+0200.xcresult
+RESULT=Passed PASSED=1 FAILED=0 TOTAL=1
+```
+
+Harness checks:
+
+```sh
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+```text
+git diff --check: STATUS 0
+.codex/hooks/tests: Ran 32 tests, OK
+.codex/rules/tests: Ran 5 tests, OK
+compact_plan_check.py: STATUS 0 with known stale-status warning
+```
+
+Not claimed:
+
+- Full OCI Runtime Spec compliance.
+- OCI hooks, seccomp, cgroup resources, masked paths, readonly paths, registry pulls, networking, or full package ladder readiness.
+
+Current status / handoff:
+
+- `hostname` and `domainname` now have a focused Linux-visible proof through normal libc/Linux UTS APIs in the app-hosted kselftest path.
+- Continue from the remaining OCI Linux fields and virtio/network substrate items; do not treat this as broader OCI runtime readiness.

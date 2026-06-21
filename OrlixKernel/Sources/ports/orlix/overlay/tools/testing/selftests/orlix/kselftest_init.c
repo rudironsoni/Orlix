@@ -287,6 +287,59 @@ static bool cmdline_has_token(const char *token)
 	return false;
 }
 
+static bool cmdline_value(const char *key, char *value, size_t value_size)
+{
+	char cmdline[1024];
+	size_t key_len;
+	size_t nread;
+	size_t pos;
+	size_t out;
+
+	if (value_size == 0)
+		return false;
+	value[0] = '\0';
+
+	if (orlix_read_file("/proc/cmdline", cmdline, sizeof(cmdline),
+			    &nread) != 0)
+		return false;
+	if (nread >= sizeof(cmdline))
+		nread = sizeof(cmdline) - 1;
+	cmdline[nread] = '\0';
+
+	key_len = orlix_strlen(key);
+	for (pos = 0; pos < nread;) {
+		while (pos < nread &&
+		       (cmdline[pos] == ' ' || cmdline[pos] == '\n' ||
+			cmdline[pos] == '\t'))
+			pos++;
+		if (pos + key_len <= nread &&
+		    orlix_memcmp(cmdline + pos, key, key_len) == 0) {
+			pos += key_len;
+			for (out = 0; pos < nread && out + 1 < value_size &&
+			     cmdline[pos] != ' ' && cmdline[pos] != '\n' &&
+			     cmdline[pos] != '\t'; pos++, out++)
+				value[out] = cmdline[pos];
+			value[out] = '\0';
+			return out > 0;
+		}
+		while (pos < nread && cmdline[pos] != ' ' &&
+		       cmdline[pos] != '\n' && cmdline[pos] != '\t')
+			pos++;
+	}
+
+	return false;
+}
+
+static void apply_boot_identity_tokens(void)
+{
+	char value[128];
+
+	if (cmdline_value("orlix.hostname=", value, sizeof(value)))
+		(void)sethostname(value, orlix_strlen(value));
+	if (cmdline_value("orlix.domainname=", value, sizeof(value)))
+		(void)setdomainname(value, orlix_strlen(value));
+}
+
 int main(void)
 {
 	size_t list_size = 0;
@@ -320,6 +373,7 @@ int main(void)
 			  "installed Orlix kselftest list is readable");
 	if (cmdline_has_token("orlix.root.readonly=1"))
 		(void)mount(NULL, "/", NULL, MS_REMOUNT | MS_RDONLY, NULL);
+	apply_boot_identity_tokens();
 	if (have_list)
 		run_orlix_tests(test_list, list_size);
 	orlix_write_all("ORLIX-KSELFTEST-END\n");
