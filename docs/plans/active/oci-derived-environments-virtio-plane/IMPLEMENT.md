@@ -11466,3 +11466,37 @@ Handoff:
 
 - Current status: OCI session construction, command-line generation, and `/init` key consumption are now guarded at source/build level.
 - Continue by turning the source/build proof into a runtime proof once the simulator harness is usable: boot an OCI-derived session, observe `/init` execute the requested command through Linux mechanisms, and collect stdout/stderr/exit-status evidence from the Linux surface.
+
+## 2026-06-21 - UTS and PID Namespace Substrate Probe
+
+Status: kernel selftest build/install checkpoint accepted; runtime execution still unproven.
+
+Changes:
+
+- Added `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/namespace_probe.c`.
+- Registered `namespace_probe` in `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`.
+- The probe uses Linux syscalls only:
+  - `unshare(CLONE_NEWUTS)`, `sethostname(2)`, and `gethostname(2)` prove a private UTS namespace can carry an independent hostname.
+  - `unshare(CLONE_NEWPID)`, `fork(2)`, `getpid(2)`, and `waitpid(2)` prove the first child in a new PID namespace observes PID 1.
+
+Validation:
+
+- Initial sandboxed `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` failed because the sandbox could not write `/Volumes/1TB/Xcode/tmp/patch...`; the run was interrupted and retried with escalation.
+- Escalated `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` progressed through upstream Linux generated headers with existing macro redefinition warnings.
+- Escalated `rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed with exit 0.
+- `rtk rg -n "namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list Build/OrlixMLibC/kselftest/release` showed:
+  - `Build/OrlixMLibC/kselftest/release/kselftest-list.txt:13:orlix:namespace_probe`
+  - `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:20:file /orlix/namespace_probe ...`
+- `rtk git diff --check` passed.
+
+Non-claims:
+
+- This does not prove the namespace probe passes at runtime in the simulator or on device.
+- This does not prove OCI Runtime lifecycle compliance.
+- This does not prove user, mount, IPC, cgroup, or network namespace behavior beyond the UTS/PID substrate checks in the new probe.
+- This does not add any Orlix-specific Linux ABI, HostAdapter API, Docker/runc path, or Apple container runtime.
+
+Handoff:
+
+- Current status: OCI-derived environment work now has a build-installed Linux selftest for UTS and PID namespace substrate, alongside existing mount/network namespace and cgroup probes.
+- Continue by running the kselftest initramfs in the app/simulator harness when CoreSimulator is responsive and recording the `namespace_probe` TAP result before claiming namespace runtime proof.
