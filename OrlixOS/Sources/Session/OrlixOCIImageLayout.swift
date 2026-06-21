@@ -1342,6 +1342,8 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		let config = try JSONDecoder().decode(OCIRuntimeConfig.self, from: data)
 		try Self.validateOCIVersion(config.ociVersion)
 		try Self.rejectUnsupportedHostname(config.hostname)
+		try Self.rejectUnsupportedDomainname(config.domainname)
+		try Self.rejectUnsupportedNonLinuxPlatformConfig(config)
 
 		guard let process = config.process else {
 			throw OrlixOCIRuntimeConfigError.missingProcess
@@ -1438,6 +1440,28 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hostname")
 	}
 
+	private static func rejectUnsupportedDomainname(_ domainname: String?) throws {
+		guard let domainname, !domainname.isEmpty else {
+			return
+		}
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("domainname")
+	}
+
+	private static func rejectUnsupportedNonLinuxPlatformConfig(_ config: OCIRuntimeConfig) throws {
+		if config.solaris != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("solaris")
+		}
+		if config.windows != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("windows")
+		}
+		if config.vm != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("vm")
+		}
+		if config.zOS != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("zOS")
+		}
+	}
+
 	private static func rejectUnsupportedRootReadonly(_ root: OCIRuntimeRoot?) throws {
 		if root?.readonly == true {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("root.readonly")
@@ -1493,6 +1517,13 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.type.\(mount.type)")
 			}
 
+			if let uidMappings = mount.uidMappings, !uidMappings.isEmpty {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.uidMappings")
+			}
+			if let gidMappings = mount.gidMappings, !gidMappings.isEmpty {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.gidMappings")
+			}
+
 			return OrlixOCIRuntimeMount(
 				destination: mount.destination,
 				type: mount.type,
@@ -1520,6 +1551,24 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.noNewPrivileges != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.noNewPrivileges")
+		}
+		if process.oomScoreAdj != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.oomScoreAdj")
+		}
+		if process.scheduler != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler")
+		}
+		if process.ioPriority != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.ioPriority")
+		}
+		if process.user?.umask != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.umask")
+		}
+		if process.execCPUAffinity != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
+		}
+		if process.closeAdditionalFds != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.closeAdditionalFds")
 		}
 	}
 
@@ -1569,6 +1618,27 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		if linux.mountLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
 		}
+		if linux.rootfsPropagation != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.rootfsPropagation")
+		}
+		if linux.personality != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.personality")
+		}
+		if let timeOffsets = linux.timeOffsets, !timeOffsets.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.timeOffsets")
+		}
+		if let unified = linux.unified, !unified.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.unified")
+		}
+		if linux.intelRdt != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.intelRdt")
+		}
+		if let hugepageLimits = linux.hugepageLimits, !hugepageLimits.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.hugepageLimits")
+		}
+		if let rdma = linux.rdma, !rdma.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.rdma")
+		}
 		if linux.cgroupsPath != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.cgroupsPath")
 		}
@@ -1582,12 +1652,19 @@ private struct OCIRuntimeConfig: Decodable {
 	let ociVersion: String
 	let annotations: [String: String]?
 	let hostname: String?
+	let domainname: String?
 	let hooks: OCIRuntimeHooks?
 	let process: OCIRuntimeProcess?
 	let root: OCIRuntimeRoot?
 	let mounts: [OCIRuntimeMount]?
 	let linux: OCIRuntimeLinux?
+	let solaris: OCIRuntimeUnsupportedPlatform?
+	let windows: OCIRuntimeUnsupportedPlatform?
+	let vm: OCIRuntimeUnsupportedPlatform?
+	let zOS: OCIRuntimeUnsupportedPlatform?
 }
+
+private struct OCIRuntimeUnsupportedPlatform: Decodable {}
 
 private struct OCIRuntimeHooks: Decodable {
 	let prestart: [OCIRuntimeHook]?
@@ -1617,12 +1694,35 @@ private struct OCIRuntimeProcess: Decodable {
 	let apparmorProfile: String?
 	let selinuxLabel: String?
 	let noNewPrivileges: Bool?
+	let oomScoreAdj: Int?
+	let scheduler: OCIRuntimeScheduler?
+	let ioPriority: OCIRuntimeIOPriority?
+	let execCPUAffinity: OCIRuntimeCPUAffinity?
+	let closeAdditionalFds: Bool?
 }
 
 private struct OCIRuntimeUser: Decodable {
 	let uid: UInt32
 	let gid: UInt32
 	let additionalGids: [UInt32]?
+	let umask: UInt32?
+}
+
+private struct OCIRuntimeScheduler: Decodable {
+	let policy: String?
+	let nice: Int?
+	let priority: Int?
+	let flags: [String]?
+}
+
+private struct OCIRuntimeIOPriority: Decodable {
+	let `class`: String?
+	let priority: Int?
+}
+
+private struct OCIRuntimeCPUAffinity: Decodable {
+	let initial: String?
+	let final: String?
 }
 
 private struct OCIRuntimeRoot: Decodable {
@@ -1635,6 +1735,8 @@ private struct OCIRuntimeMount: Decodable {
 	let type: String
 	let source: String?
 	let options: [String]?
+	let uidMappings: [OCIRuntimeIDMapping]?
+	let gidMappings: [OCIRuntimeIDMapping]?
 }
 
 private struct OCIRuntimeLinux: Decodable {
@@ -1648,8 +1750,34 @@ private struct OCIRuntimeLinux: Decodable {
 	let readonlyPaths: [String]?
 	let sysctl: [String: String]?
 	let mountLabel: String?
+	let rootfsPropagation: String?
+	let personality: OCIRuntimePersonality?
+	let timeOffsets: [String: String]?
+	let unified: [String: String]?
+	let intelRdt: OCIRuntimeIntelRdt?
+	let hugepageLimits: [OCIRuntimeHugepageLimit]?
+	let rdma: [String: OCIRuntimeRdmaLimit]?
 	let cgroupsPath: String?
 	let netDevices: [OCIRuntimeNetDevice]?
+}
+
+private struct OCIRuntimePersonality: Decodable {
+	let domain: String?
+}
+
+private struct OCIRuntimeIntelRdt: Decodable {
+	let l3CacheSchema: String?
+	let memBwSchema: String?
+}
+
+private struct OCIRuntimeHugepageLimit: Decodable {
+	let pageSize: String?
+	let limit: UInt64?
+}
+
+private struct OCIRuntimeRdmaLimit: Decodable {
+	let hcaHandles: UInt32?
+	let hcaObjects: UInt32?
 }
 
 private struct OCIRuntimeNamespace: Decodable {

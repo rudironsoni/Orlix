@@ -5996,6 +5996,114 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeConfigParserRejectsUnsupportedDomainname() throws {
+		let config = Data("""
+		{
+		  "ociVersion": "1.1.0",
+		  "domainname": "example.test",
+		  "process": {
+		    "args": ["/bin/sh"],
+		    "cwd": "/",
+		    "env": ["PATH=/usr/bin"]
+		  },
+		  "root": { "path": "rootfs" }
+		}
+		""".utf8)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeConfigError,
+				.unsupportedLinuxFeature("domainname")
+			)
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedNonLinuxPlatformConfig() throws {
+		let fragments: [(feature: String, json: String)] = [
+			("solaris", #""solaris": {}"#),
+			("windows", #""windows": {}"#),
+			("vm", #""vm": {}"#),
+			("zOS", #""zOS": {}"#)
+		]
+
+		for (feature, configFragment) in fragments {
+			let config = Data("""
+			{
+			  "ociVersion": "1.1.0",
+			  \(configFragment),
+			  "process": {
+			    "args": ["/bin/sh"],
+			    "cwd": "/"
+			  },
+			  "root": { "path": "rootfs" }
+			}
+			""".utf8)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeConfigError,
+					.unsupportedLinuxFeature(feature)
+				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedProcessSchedulingFields() throws {
+		let fragments: [(feature: String, json: String)] = [
+			("oomScoreAdj", #""oomScoreAdj": 100"#),
+			("scheduler", #""scheduler": { "policy": "SCHED_FIFO", "priority": 1 }"#),
+			("ioPriority", #""ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 4 }"#),
+			("execCPUAffinity", #""execCPUAffinity": { "initial": "0", "final": "0" }"#),
+			("closeAdditionalFds", #""closeAdditionalFds": true"#)
+		]
+
+		for (feature, processFragment) in fragments {
+			let config = Data("""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": {
+			    "args": ["/bin/sh"],
+			    "cwd": "/",
+			    \(processFragment)
+			  },
+			  "root": { "path": "rootfs" }
+			}
+			""".utf8)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeConfigError,
+					.unsupportedLinuxFeature("process.\(feature)")
+				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedProcessUserUmask() throws {
+		let config = Data("""
+		{
+		  "ociVersion": "1.1.0",
+		  "process": {
+		    "args": ["/bin/sh"],
+		    "cwd": "/",
+		    "user": {
+		      "uid": 0,
+		      "gid": 0,
+		      "umask": 18
+		    }
+		  },
+		  "root": { "path": "rootfs" }
+		}
+		""".utf8)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeConfigError,
+				.unsupportedLinuxFeature("process.user.umask")
+			)
+		}
+	}
+
 	func testOCIRuntimeConfigParserRejectsUnsupportedHooks() throws {
 		let config = Data("""
 		{
@@ -6019,6 +6127,75 @@ extension OrlixTerminalSessionTests {
 				error as? OrlixOCIRuntimeConfigError,
 				.unsupportedLinuxFeature("hooks.prestart")
 			)
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedMountIDMappings() throws {
+		let fragments: [(feature: String, json: String)] = [
+			("uidMappings", #""uidMappings": [{ "containerID": 0, "hostID": 1000, "size": 1 }]"#),
+			("gidMappings", #""gidMappings": [{ "containerID": 0, "hostID": 1000, "size": 1 }]"#)
+		]
+
+		for (feature, mountFragment) in fragments {
+			let config = Data("""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": {
+			    "args": ["/bin/sh"],
+			    "cwd": "/"
+			  },
+			  "root": { "path": "rootfs" },
+			  "mounts": [
+			    {
+			      "destination": "/proc",
+			      "type": "proc",
+			      \(mountFragment)
+			    }
+			  ]
+			}
+			""".utf8)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeConfigError,
+					.unsupportedLinuxFeature("mounts.\(feature)")
+				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxRuntimeFields() throws {
+		let fragments: [(feature: String, json: String)] = [
+			("rootfsPropagation", #""rootfsPropagation": "shared""#),
+			("personality", #""personality": { "domain": "LINUX" }"#),
+			("timeOffsets", #""timeOffsets": { "monotonic": "1 0" }"#),
+			("unified", #""unified": { "memory.max": "1048576" }"#),
+			("intelRdt", #""intelRdt": { "l3CacheSchema": "L3:0=ff" }"#),
+			("hugepageLimits", #""hugepageLimits": [{ "pageSize": "2MB", "limit": 1 }]"#),
+			("rdma", #""rdma": { "mlx5_0": { "hcaHandles": 1, "hcaObjects": 1 } }"#)
+		]
+
+		for (feature, linuxFragment) in fragments {
+			let config = Data("""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": {
+			    "args": ["/bin/sh"],
+			    "cwd": "/"
+			  },
+			  "root": { "path": "rootfs" },
+			  "linux": {
+			    \(linuxFragment)
+			  }
+			}
+			""".utf8)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeConfigError,
+					.unsupportedLinuxFeature("linux.\(feature)")
+				)
+			}
 		}
 	}
 
