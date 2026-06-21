@@ -6130,14 +6130,14 @@ extension OrlixTerminalSessionTests {
 			config: config,
 			id: "oci-session-created",
 			bundlePath: "/bundles/oci-session-created"
-		).apply(.create)
+		).create()
 
-		let session = try controller.sessionDescriptor(rootMount: .defaultOverlay)
+		let session = try controller.sessionDescriptor(rootMount: OrlixEnvironmentRootMount.defaultOverlay)
 
 		XCTAssertEqual(session.id, "oci-session-created")
-		XCTAssertEqual(session.lifecycleState, .created)
+		XCTAssertEqual(session.lifecycleState, OrlixOCIRuntimeLifecycleState.created)
 		XCTAssertEqual(session.environment.id, "oci-session-created")
-		XCTAssertEqual(session.environment.source, .ociLayout)
+		XCTAssertEqual(session.environment.source, OrlixEnvironmentSource.ociLayout)
 		XCTAssertEqual(session.environment.rootImageIdentifier, "rootfs")
 		XCTAssertEqual(session.environment.defaultCommand, ["/usr/bin/env", "sh"])
 		XCTAssertEqual(session.environment.defaultEnvironment["HOME"], "/root")
@@ -6146,8 +6146,55 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.environment.defaultWorkingDirectory, "/work")
 		XCTAssertEqual(session.environment.defaultUserID, 1000)
 		XCTAssertEqual(session.environment.defaultGroupID, 1000)
-		XCTAssertEqual(session.environment.rootMount, .defaultOverlay)
-		XCTAssertEqual(session.environment.mounts, [])
+		XCTAssertEqual(session.environment.rootMount, OrlixEnvironmentRootMount.defaultOverlay)
+		XCTAssertTrue(session.environment.mounts.isEmpty)
+	}
+
+	func testOCIRuntimeSessionDescriptorLaunchesThroughEnvironmentRegistry() throws {
+		let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-session-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		defer { try? FileManager.default.removeItem(at: root) }
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: root.appendingPathComponent("Application Support/Orlix"),
+			cacheRoot: root.appendingPathComponent("Caches/Orlix"),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix")
+		)
+		let config = try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig())
+		let controller = try OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-session-registry",
+			bundlePath: "/bundles/oci-session-registry"
+		).create()
+		let sessionDescriptor = try controller.sessionDescriptor(rootMount: OrlixEnvironmentRootMount.defaultOverlay)
+		let layout = try registry.layout(forEnvironmentID: sessionDescriptor.environment.id)
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+		try FileManager.default.createDirectory(
+			at: layout.rootDirectory,
+			withIntermediateDirectories: true
+		)
+		try encoder
+			.encode(sessionDescriptor.environment)
+			.write(to: try registry.descriptorURL(forEnvironmentID: sessionDescriptor.environment.id))
+		try Data().write(to: layout.baseImageURL)
+		try Data().write(to: layout.stateImageURL)
+
+		let linuxSession = try OrlixLinuxSession(
+			ociRuntimeSession: sessionDescriptor,
+			registry: registry,
+			kernelCommandLine: "console=orlix-test"
+		)
+
+		let materializedRootImage = try XCTUnwrap(linuxSession.materializedRootImageForTesting)
+		XCTAssertEqual(materializedRootImage.environmentID, sessionDescriptor.environment.id)
+		XCTAssertEqual(materializedRootImage.rootImageIdentifier, sessionDescriptor.environment.rootImageIdentifier)
+		XCTAssertEqual(materializedRootImage.baseImageURL, layout.baseImageURL)
+		XCTAssertEqual(materializedRootImage.stateImageURL, layout.stateImageURL)
+		XCTAssertEqual(linuxSession.bootConfig.kernelCommandLine, "console=orlix-test")
 	}
 
 	func testOCIRuntimeLifecycleControllerRejectsUnavailableSessionDescriptors() throws {
@@ -6156,15 +6203,15 @@ extension OrlixTerminalSessionTests {
 			id: "oci-session-configured",
 			bundlePath: "/bundles/oci-session-configured"
 		)
-		XCTAssertThrowsError(try configured.sessionDescriptor(rootMount: .defaultOverlay)) { error in
+		XCTAssertThrowsError(try configured.sessionDescriptor(rootMount: OrlixEnvironmentRootMount.defaultOverlay)) { error in
 			XCTAssertEqual(
 				error as? OrlixOCIRuntimeLifecycleError,
 				.stateUnavailable(.configured)
 			)
 		}
 
-		let deleted = try configured.apply(.delete)
-		XCTAssertThrowsError(try deleted.sessionDescriptor(rootMount: .defaultOverlay)) { error in
+		let deleted = try configured.delete()
+		XCTAssertThrowsError(try deleted.sessionDescriptor(rootMount: OrlixEnvironmentRootMount.defaultOverlay)) { error in
 			XCTAssertEqual(
 				error as? OrlixOCIRuntimeLifecycleError,
 				.stateUnavailable(.deleted)
