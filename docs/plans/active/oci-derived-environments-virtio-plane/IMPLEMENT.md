@@ -10812,3 +10812,36 @@ Current status:
   - Remaining proof gap: no app-hosted runtime execution has been claimed for this checkpoint.
 - Non-claims:
   - No OCI lifecycle, registry pull, networking/cgroup/namespace runtime, app-hosted runtime success, or product runtime readiness claim is made.
+## 2026-06-21 - Linux networking namespace substrate probe
+
+Changed:
+
+- Added `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/network_namespace_probe.c`.
+- Registered `network_namespace_probe` in `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`.
+
+Scope:
+
+- This is a Linux-native kselftest probe for the OCI substrate proof ladder, not an OrlixHostAdapter networking backend.
+- The probe checks that `/proc/net/dev` and `/proc/net/tcp` are readable from Linux userspace.
+- The probe checks that a rtnetlink socket can be opened with `socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE)`.
+- The probe checks that loopback TCP can bind, listen, connect, accept, write, and read through normal Linux socket calls.
+
+Validation:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` completed after correcting the probe to call `orlix_test_exit();` as a void helper.
+- `rtk rg -n "network_namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/network_namespace_probe.c`
+  - `Build/OrlixMLibC/kselftest/release/kselftest-list.txt:13:orlix:network_namespace_probe`
+  - `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:20:file /orlix/network_namespace_probe ... 755 0 0`
+- `rtk rg -n "loopback TCP accepts local connections|rtnetlink sockets open|procfs exposes network" Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/network_namespace_probe.c OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/network_namespace_probe.c` found the expected TAP labels in both durable overlay and generated Linux source.
+- `rtk git diff --check` exited 0.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning: `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+
+Non-claims:
+
+- This is not app-hosted runtime proof.
+- This is not virtio-net packet transport proof.
+- This is not product networking or external egress proof.
+- This is not registry pull proof.
+- This is not OCI lifecycle/runtime readiness.
