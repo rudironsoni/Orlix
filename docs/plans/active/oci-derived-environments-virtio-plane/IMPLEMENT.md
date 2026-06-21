@@ -11500,3 +11500,42 @@ Handoff:
 
 - Current status: OCI-derived environment work now has a build-installed Linux selftest for UTS and PID namespace substrate, alongside existing mount/network namespace and cgroup probes.
 - Continue by running the kselftest initramfs in the app/simulator harness when CoreSimulator is responsive and recording the `namespace_probe` TAP result before claiming namespace runtime proof.
+
+## 2026-06-21 - IPC Namespace Substrate Probe
+
+Status: kernel selftest build/install/package checkpoint accepted; runtime execution still unproven.
+
+Changes:
+
+- Added `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/ipc_namespace_probe.c`.
+- Registered `ipc_namespace_probe` in `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`.
+- The probe uses Linux syscall/API surface only:
+  - `unshare(CLONE_NEWIPC)`.
+  - SysV shared memory via `shmget(2)` and `shmctl(IPC_RMID)`.
+  - SysV message queues via `msgget(2)` and `msgctl(IPC_RMID)`.
+  - `fork(2)` and `waitpid(2)` to compare parent namespace state with child state after `CLONE_NEWIPC`.
+- The probe checks that a SysV IPC key visible in the parent namespace is not visible after the child enters a new IPC namespace, then verifies the child can create the same key privately inside that namespace.
+
+Validation:
+
+- Escalated `rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release` completed; the output included existing Linux build warnings while rebuilding/installing selftests.
+- Escalated `rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed with exit 0 and printed `packaged kselftest initramfs: .../Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `grep -n "ipc_namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt` showed `11:orlix:ipc_namespace_probe`.
+- `grep -n "ipc_namespace_probe" Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` showed `18:file /orlix/ipc_namespace_probe ... 755 0 0`.
+- `test -x Build/OrlixMLibC/kselftest/release/orlix/ipc_namespace_probe` passed and printed `ipc_namespace_probe executable installed`.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the pre-existing warning: `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+
+Non-claims:
+
+- This does not prove `ipc_namespace_probe` passes at runtime in the simulator or on device.
+- This does not prove OCI Runtime lifecycle compliance.
+- This does not prove POSIX mqueue behavior, user namespaces, mount namespaces, network namespaces, cgroups, or full container runtime behavior.
+- This does not add any custom ABI, HostAdapter API, Docker/runc path, or Apple container runtime.
+
+Handoff:
+
+- Current status: OCI-derived environment substrate coverage now includes build-installed Orlix Linux probes for UTS, PID, IPC, mount, network, and cgroup surfaces.
+- Continue by running the kselftest initramfs in the app/simulator harness when CoreSimulator is responsive and recording TAP results for `namespace_probe` and `ipc_namespace_probe` before claiming namespace runtime proof.
