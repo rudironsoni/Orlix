@@ -11938,3 +11938,34 @@ Non-claims:
 Current status:
 
 Latest checkpoint: additional OCI runtime fields that Orlix cannot yet honor through Linux mechanisms now fail closed instead of being silently ignored. Runtime execution of bundled probes, Linux-backed field implementation where needed, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - UTS Namespace Domainname Substrate Probe
+
+Status: kernel selftest substrate coverage extended for Linux UTS namespace domainname behavior.
+
+Changes:
+
+- `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/namespace_probe.c` now verifies `setdomainname(2)`/`getdomainname(2)` after `unshare(CLONE_NEWUTS)`.
+- The namespace probe TAP plan increased from 2 to 3 checks and now reports `UTS namespace supports private domainname` between the existing hostname and PID namespace checks.
+
+Rationale:
+
+- OCI `domainname` is Linux-visible UTS namespace state. Before OrlixOS can accept or apply OCI `domainname`, the Linux substrate must prove the behavior through Linux mechanisms.
+- This keeps the work in the owning layer: upstream Linux/Orlix port selftests verify kernel namespace behavior; `OrlixOS` continues to reject unsupported OCI `domainname` until the session path applies it through Linux without custom ABI or host leakage.
+
+Validation:
+
+- `rtk err make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed with generated Linux host-tool warnings only.
+- `rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk strings Build/OrlixMLibC/kselftest/release/orlix/namespace_probe | rtk rg "UTS namespace supports private domainname|orlix-domain-probe|setdomainname|getdomainname"` found the new probe label, test domain, and libc calls in the rebuilt selftest binary.
+- `rtk git diff --check` passed.
+
+Non-claims:
+
+- This is source/build/install/package evidence only; it is not runtime TAP proof from simulator/device execution.
+- This does not make OCI `domainname` accepted in `OrlixOS`; parser fail-closed behavior remains correct until session setup applies domainname through Linux mechanisms and is proven.
+- This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, systemd image compatibility, or app-hosted OCI-derived execution proof.
+
+Current status:
+
+Latest checkpoint: the Linux kselftest namespace probe now covers UTS namespace domainname behavior needed for future OCI `domainname` support. Runtime execution of the kselftest bundle, Linux-backed OCI field application, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
