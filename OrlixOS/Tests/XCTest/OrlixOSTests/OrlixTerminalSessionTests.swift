@@ -732,9 +732,9 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertEqual(rootImage.bootConfig.kernelCommandLine, "console=hvc0")
     }
 
-    func testEnvironmentRootImageDefaultsToOverlayRootCommandLine() throws {
-        let root = temporaryRegistryRoot()
-        let descriptor = OrlixEnvironmentDescriptor(
+	func testEnvironmentRootImageDefaultsToOverlayRootCommandLine() throws {
+		let root = temporaryRegistryRoot()
+		let descriptor = OrlixEnvironmentDescriptor(
             id: "alpine-overlay-default",
             source: .rootfsTar,
             platform: "linux/arm64",
@@ -788,12 +788,53 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(
             try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
                 .contains("orlix.exec=/bin/sh")
-        )
-    }
+		)
+	}
 
-    func testEnvironmentRootImageBindsDefaultCommandExecutableToInit() throws {
-        let root = temporaryRegistryRoot()
-        let descriptor = OrlixEnvironmentDescriptor(
+	func testEnvironmentRootImageMaterializesUTSNameCommandLine() throws {
+		let root = temporaryRegistryRoot()
+		let descriptor = OrlixEnvironmentDescriptor(
+			id: "alpine-uts-names",
+			source: .ociLayout,
+			platform: "linux/arm64",
+			rootImageIdentifier: "orlix.env.alpine-uts-names",
+			defaultCommand: ["/bin/sh"],
+			defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+			defaultWorkingDirectory: "/",
+			defaultUserID: 0,
+			defaultGroupID: 0,
+			hostname: "container-host",
+			domainname: "example.test"
+		)
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: descriptor.id,
+			linuxStateRoot: root.appendingPathComponent(
+				"Application Support/Orlix",
+				isDirectory: true
+			),
+			cacheRoot: root.appendingPathComponent("Caches/Orlix", isDirectory: true),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+		)
+		try FileManager.default.createDirectory(
+			at: layout.rootDirectory,
+			withIntermediateDirectories: true
+		)
+		try Data("base".utf8).write(to: layout.baseImageURL)
+		try Data("state".utf8).write(to: layout.stateImageURL)
+
+		let rootImage = try OrlixEnvironmentRootImage.materialized(
+			descriptor: descriptor,
+			layout: layout
+		)
+		let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
+
+		XCTAssertTrue(commandLine.contains("orlix.hostname=container-host"))
+		XCTAssertTrue(commandLine.contains("orlix.domainname=example.test"))
+	}
+
+	func testEnvironmentRootImageBindsDefaultCommandExecutableToInit() throws {
+		let root = temporaryRegistryRoot()
+		let descriptor = OrlixEnvironmentDescriptor(
             id: "busybox-command",
             source: .rootfsTar,
             platform: "linux/arm64",
@@ -5974,32 +6015,11 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
-	func testOCIRuntimeConfigParserRejectsUnsupportedHostname() throws {
+	func testOCIRuntimeConfigParserAcceptsHostnameAndDomainname() throws {
 		let config = Data("""
 		{
 		  "ociVersion": "1.1.0",
 		  "hostname": "container-host",
-		  "process": {
-		    "args": ["/bin/sh"],
-		    "cwd": "/",
-		    "env": ["PATH=/usr/bin"]
-		  },
-		  "root": { "path": "rootfs" }
-		}
-		""".utf8)
-
-		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
-			XCTAssertEqual(
-				error as? OrlixOCIRuntimeConfigError,
-				.unsupportedLinuxFeature("hostname")
-			)
-		}
-	}
-
-	func testOCIRuntimeConfigParserRejectsUnsupportedDomainname() throws {
-		let config = Data("""
-		{
-		  "ociVersion": "1.1.0",
 		  "domainname": "example.test",
 		  "process": {
 		    "args": ["/bin/sh"],
@@ -6010,12 +6030,9 @@ extension OrlixTerminalSessionTests {
 		}
 		""".utf8)
 
-		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
-			XCTAssertEqual(
-				error as? OrlixOCIRuntimeConfigError,
-				.unsupportedLinuxFeature("domainname")
-			)
-		}
+		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+		XCTAssertEqual(descriptor.hostname, "container-host")
+		XCTAssertEqual(descriptor.domainname, "example.test")
 	}
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedNonLinuxPlatformConfig() throws {

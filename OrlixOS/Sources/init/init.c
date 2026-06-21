@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sched.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -423,10 +424,14 @@ struct orlix_command_config {
 	char argv_storage[ORLIX_INIT_MAX_ARGS][ORLIX_INIT_VALUE_SIZE];
 	char env_storage[ORLIX_INIT_MAX_ENV][ORLIX_INIT_VALUE_SIZE];
 	char cwd[ORLIX_INIT_VALUE_SIZE];
+	char hostname[ORLIX_INIT_VALUE_SIZE];
+	char domainname[ORLIX_INIT_VALUE_SIZE];
 	char *argv[ORLIX_INIT_MAX_ARGS + 2];
 	char *envp[ORLIX_INIT_MAX_ENV + 1];
 	int argc;
 	int envc;
+	int has_hostname;
+	int has_domainname;
 	unsigned long uid;
 	unsigned long gid;
 };
@@ -515,8 +520,18 @@ static void selected_command_config(struct orlix_command_config *config)
 
 	(void)read_cmdline_unsigned("orlix.uid=", &config->uid);
 	(void)read_cmdline_unsigned("orlix.gid=", &config->gid);
+	if (read_cmdline_decoded("orlix.hostname=", config->hostname,
+				 sizeof(config->hostname)) == 0 &&
+	    config->hostname[0] != '\0')
+		config->has_hostname = 1;
+	if (read_cmdline_decoded("orlix.domainname=", config->domainname,
+				 sizeof(config->domainname)) == 0 &&
+	    config->domainname[0] != '\0')
+		config->has_domainname = 1;
 
 	config->cwd[sizeof(config->cwd) - 1] = '\0';
+	config->hostname[sizeof(config->hostname) - 1] = '\0';
+	config->domainname[sizeof(config->domainname) - 1] = '\0';
 }
 
 static int copy_available(int input_fd, int output_fd)
@@ -689,6 +704,23 @@ static void exec_configured_command(struct orlix_command_config *config)
 	}
 }
 
+static void apply_uts_config(const struct orlix_command_config *config)
+{
+	if (!config->has_hostname && !config->has_domainname)
+		return;
+
+	if (unshare(CLONE_NEWUTS) != 0) {
+		write_literal(STDERR_FILENO, "orlix-init: unshare UTS failed\n");
+		return;
+	}
+	if (config->has_hostname &&
+	    sethostname(config->hostname, strlen(config->hostname)) != 0)
+		write_literal(STDERR_FILENO, "orlix-init: sethostname failed\n");
+	if (config->has_domainname &&
+	    setdomainname(config->domainname, strlen(config->domainname)) != 0)
+		write_literal(STDERR_FILENO, "orlix-init: setdomainname failed\n");
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -714,6 +746,7 @@ static pid_t start_command_on_pty(int master, int slave)
 		_exit(127);
 	}
 	selected_command_config(config);
+	apply_uts_config(config);
 	if (chdir(config->cwd) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)

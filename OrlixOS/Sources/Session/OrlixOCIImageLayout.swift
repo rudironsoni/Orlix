@@ -1283,12 +1283,16 @@ public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
 	case invalidAnnotationEntry(String)
 	case invalidWorkingDirectory(String)
 	case invalidConsoleSize
+	case invalidHostname(String)
+	case invalidDomainname(String)
 	case unsupportedLinuxFeature(String)
 }
 
 public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let ociVersion: String
 	public let annotations: [String: String]
+	public let hostname: String?
+	public let domainname: String?
 	public let rootPath: String?
 	public let rootReadonly: Bool
 	public let mounts: [OrlixOCIRuntimeMount]
@@ -1317,6 +1321,8 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultWorkingDirectory: defaultWorkingDirectory,
 			defaultUserID: defaultUserID,
 			defaultGroupID: defaultGroupID,
+			hostname: hostname,
+			domainname: domainname,
 			rootMount: rootMount,
 			mounts: mounts
 		)
@@ -1341,8 +1347,10 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	public func parse(_ data: Data) throws -> OrlixOCIRuntimeConfigDescriptor {
 		let config = try JSONDecoder().decode(OCIRuntimeConfig.self, from: data)
 		try Self.validateOCIVersion(config.ociVersion)
-		try Self.rejectUnsupportedHostname(config.hostname)
-		try Self.rejectUnsupportedDomainname(config.domainname)
+		let hostname = try Self.validatedUTSName(config.hostname,
+							 feature: "hostname")
+		let domainname = try Self.validatedUTSName(config.domainname,
+							   feature: "domainname")
 		try Self.rejectUnsupportedNonLinuxPlatformConfig(config)
 
 		guard let process = config.process else {
@@ -1377,6 +1385,8 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		return OrlixOCIRuntimeConfigDescriptor(
 			ociVersion: config.ociVersion,
 			annotations: try Self.validatedAnnotations(config.annotations ?? [:]),
+			hostname: hostname,
+			domainname: domainname,
 			rootPath: config.root?.path,
 			rootReadonly: config.root?.readonly ?? false,
 			mounts: mounts,
@@ -1433,18 +1443,25 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		return annotations
 	}
 
-	private static func rejectUnsupportedHostname(_ hostname: String?) throws {
-		guard let hostname, !hostname.isEmpty else {
-			return
+	private static func validatedUTSName(_ value: String?,
+					     feature: String) throws -> String?
+	{
+		guard let value, !value.isEmpty else {
+			return nil
 		}
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hostname")
-	}
-
-	private static func rejectUnsupportedDomainname(_ domainname: String?) throws {
-		guard let domainname, !domainname.isEmpty else {
-			return
+		guard !value.contains("\u{0}") else {
+			if feature == "hostname" {
+				throw OrlixOCIRuntimeConfigError.invalidHostname(value)
+			}
+			throw OrlixOCIRuntimeConfigError.invalidDomainname(value)
 		}
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("domainname")
+		guard value.utf8.count <= 64 else {
+			if feature == "hostname" {
+				throw OrlixOCIRuntimeConfigError.invalidHostname(value)
+			}
+			throw OrlixOCIRuntimeConfigError.invalidDomainname(value)
+		}
+		return value
 	}
 
 	private static func rejectUnsupportedNonLinuxPlatformConfig(_ config: OCIRuntimeConfig) throws {

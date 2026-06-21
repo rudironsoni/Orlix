@@ -21,6 +21,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultWorkingDirectory: String
     public let defaultUserID: UInt32
     public let defaultGroupID: UInt32
+    public let hostname: String?
+    public let domainname: String?
     public let rootMount: OrlixEnvironmentRootMount
     public let mounts: [OrlixEnvironmentMount]
 
@@ -42,6 +44,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             defaultWorkingDirectory: "/",
             defaultUserID: 0,
             defaultGroupID: 0,
+            hostname: nil,
+            domainname: nil,
             rootMount: .defaultOverlay,
             mounts: []
         )
@@ -57,6 +61,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultWorkingDirectory: String,
         defaultUserID: UInt32,
         defaultGroupID: UInt32,
+        hostname: String? = nil,
+        domainname: String? = nil,
         rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
         mounts: [OrlixEnvironmentMount] = []
     ) {
@@ -69,6 +75,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.defaultUserID = defaultUserID
         self.defaultGroupID = defaultGroupID
+        self.hostname = hostname
+        self.domainname = domainname
         self.rootMount = rootMount
         self.mounts = mounts
     }
@@ -83,6 +91,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultWorkingDirectory
         case defaultUserID
         case defaultGroupID
+        case hostname
+        case domainname
         case rootMount
         case mounts
     }
@@ -447,6 +457,8 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultWorkingDirectoryCommandLineKey = "orlix.cwd"
     public static let defaultUserIDCommandLineKey = "orlix.uid"
     public static let defaultGroupIDCommandLineKey = "orlix.gid"
+    public static let hostnameCommandLineKey = "orlix.hostname"
+    public static let domainnameCommandLineKey = "orlix.domainname"
 
     public let environmentID: String
     public let rootImageIdentifier: String
@@ -643,6 +655,12 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         )
         tokens.append("\(defaultUserIDCommandLineKey)=\(descriptor.defaultUserID)")
         tokens.append("\(defaultGroupIDCommandLineKey)=\(descriptor.defaultGroupID)")
+        if let hostname = descriptor.hostname, !hostname.isEmpty {
+            tokens.append("\(hostnameCommandLineKey)=\(percentEncoded(hostname))")
+        }
+        if let domainname = descriptor.domainname, !domainname.isEmpty {
+            tokens.append("\(domainnameCommandLineKey)=\(percentEncoded(domainname))")
+        }
         return tokens
     }
 

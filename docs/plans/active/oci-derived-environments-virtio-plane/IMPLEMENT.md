@@ -12001,3 +12001,43 @@ Non-claims:
 Current status:
 
 Latest checkpoint: the Linux kselftest namespace probe now covers both private UTS hostname/domainname set/get behavior and parent namespace isolation. Runtime execution of the kselftest bundle, Linux-backed OCI field application, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - OCI Hostname/Domainname Linux Init Application
+
+Status: OCI runtime `hostname` and `domainname` are now carried through OrlixOS session metadata and applied by Linux init through Linux UTS mechanisms.
+
+Changes:
+
+- `OrlixOCIRuntimeConfigParser` now accepts valid non-empty OCI `hostname` and `domainname` fields instead of rejecting them as unsupported.
+- `OrlixOCIRuntimeConfigDescriptor` and `OrlixEnvironmentDescriptor` carry optional `hostname` and `domainname` values.
+- `OrlixEnvironmentRootImage` materializes optional `orlix.hostname=` and `orlix.domainname=` boot command-line tokens using the existing percent-encoded OrlixOS session metadata path.
+- `OrlixOS/Sources/init/init.c` reads those tokens, calls `unshare(CLONE_NEWUTS)` when either value is configured, then applies them with `sethostname(2)` and `setdomainname(2)` before starting the configured Linux process.
+- XCTest coverage now verifies parser acceptance and command-line materialization for UTS names.
+
+Rationale:
+
+- This advances from parser fail-closed behavior to Linux-backed implementation after the kernel selftest substrate established UTS hostname/domainname set/get and parent namespace isolation.
+- The Linux-visible behavior is implemented in Linux userspace init through Linux syscalls. No HostAdapter policy, Darwin-visible Linux facade, custom ABI, Docker daemon, `runc`, Apple Containerization, or Virtualization.framework dependency was introduced.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed with escalation for Swift compiler cache writes.
+- `rtk err xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` completed without compiler errors in the failure-filtered output.
+- `rtk err make -f OrlixOS/Makefile rootfs PROFILE=release` exited 0.
+- `rtk strings Build/OrlixOS/packages/release/sbin/init | rtk rg "orlix.hostname=|orlix.domainname=|unshare UTS failed|sethostname failed|setdomainname failed"` found the new init command-line keys and UTS failure paths in the rebuilt init binary.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is source/build/package evidence for OCI UTS name application; it is not app-hosted OCI-derived session runtime proof.
+- This does not claim OCI Runtime lifecycle compliance, registry pull support, external networking, systemd image compatibility, arbitrary imported binary compatibility, or full container runtime readiness.
+- This does not implement unsupported OCI scheduling, cgroup, mount-idmap, seccomp, hook, root-readonly, or non-Linux platform fields; their fail-closed behavior remains correct until each is implemented through Linux mechanisms and proven.
+
+Current status:
+
+Latest checkpoint: OCI `hostname` and `domainname` now flow from runtime config through OrlixOS metadata into Linux init, which applies them inside a private UTS namespace with Linux syscalls. App-hosted OCI-derived execution proof, broader OCI lifecycle behavior, and remaining Linux-backed field implementations remain pending before any OCI runtime readiness claim.
