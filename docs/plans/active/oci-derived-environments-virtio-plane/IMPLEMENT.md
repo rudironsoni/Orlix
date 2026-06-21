@@ -10792,3 +10792,23 @@ Current status:
   - Remaining proof gap: this is still not app-hosted runtime execution of the nested probe, and the nested probe remains opportunistic when the mounted host fixture has no nested child entry.
 - Non-claims:
   - No OCI lifecycle, registry pull, networking/cgroup/namespace runtime, app-hosted runtime success, or product runtime readiness claim is made.
+## 2026-06-21 - Virtio-fs path-node forget checkpoint
+
+- Continued the Linux/virtio substrate path in `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`; no custom Linux ABI, no host leakage into Linux userspace, and no product/runtime facade work.
+- Added dynamic path-node lifetime handling:
+  - path nodes now track counted lookup references separately from plain `READDIR` dirent inode ids;
+  - `FUSE_LOOKUP` and `FUSE_READDIRPLUS` create counted lookup references;
+  - plain `FUSE_READDIR` can still return stable path-node inode ids without creating lookup refs;
+  - zero-ref path-node slots are reusable so broad directory enumeration does not permanently consume the fixed path-node table;
+  - no-reply `FUSE_FORGET` and `FUSE_BATCH_FORGET` now decrement/release counted path-node refs before completing the used-ring descriptor with no response.
+- Verification:
+  - Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release` exited 0.
+  - `rtk git diff --check` exited 0.
+  - `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, all OK.
+  - `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, all OK.
+  - `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning for older entries in this long implementation log.
+- Current status:
+  - Path-node virtio-fs traversal now covers lookup/stat/open/opendir/read/readlink/readdir/readdirplus/access and dynamic lookup lifetime release.
+  - Remaining proof gap: no app-hosted runtime execution has been claimed for this checkpoint.
+- Non-claims:
+  - No OCI lifecycle, registry pull, networking/cgroup/namespace runtime, app-hosted runtime success, or product runtime readiness claim is made.
