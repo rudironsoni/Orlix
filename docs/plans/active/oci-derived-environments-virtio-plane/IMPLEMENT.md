@@ -11579,3 +11579,35 @@ Handoff:
 
 - Current status: the build-installed IPC namespace probe now covers SysV shared memory, SysV message queues, and POSIX message queue namespace isolation.
 - Continue by running the kselftest initramfs in the app/simulator harness when CoreSimulator is responsive and recording TAP results for `ipc_namespace_probe` before claiming runtime IPC namespace proof.
+## 2026-06-21 - User Namespace Substrate Probe
+
+Status: build/install/package proof added for the OCI-relevant Linux user namespace surface.
+
+Changes:
+
+- Added `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/user_namespace_probe.c`.
+- Registered `user_namespace_probe` in `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`.
+
+Linux surface covered:
+
+- `unshare(CLONE_NEWUSER)` changes the Linux-visible `/proc/self/ns/user` namespace inode.
+- `/proc/self/uid_map` and `/proc/self/gid_map` are present and readable from inside a new user namespace.
+- `/proc/self/setgroups` is present from inside a new user namespace.
+
+Validation:
+
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk err make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed after fixing the probe `main` exit helper call; output retained existing generated-kernel warnings.
+- `rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk grep -n "user_namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt` found `orlix:user_namespace_probe`.
+- `rtk grep -n "user_namespace_probe" Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` found the `/orlix/user_namespace_probe` entry.
+- `rtk test test -x Build/OrlixMLibC/kselftest/release/orlix/user_namespace_probe` passed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is source/build/install/package evidence only; it is not a runtime-passed kselftest result.
+- This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
+- No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
