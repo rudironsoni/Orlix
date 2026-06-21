@@ -188,6 +188,22 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         kernelCommandLineSuffix: "orlix.kselftest=virtio_blk_environment_probe"
     )
 
+    static let kernelRlimit = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=rlimit_probe"
+    )
+
+    static let kernelUmask = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=umask_probe"
+    )
+
     static let kernelEnvironmentStateWriteback = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

@@ -101,6 +101,492 @@ For upstream conformance work, upstream sources and tests are authoritative. Fix
 11. Keep `IMPLEMENT.md` current after each coherent checkpoint.
 12. Commit and push after a coherent verified checkpoint when implementation work is complete.
 
+## Xcode / Simulator / External SSD Environment Rules
+
+This machine has a deliberately externalized Xcode/CoreSimulator storage setup.
+Treat it as part of the environment contract. Do not bypass it, do not
+"simplify" it, and do not hardcode `/Volumes/1TB` in project scripts.
+
+### Core Principle
+
+Xcode, `xcodebuild`, `xcrun`, `simctl`, DerivedData, SwiftPM package caches,
+CoreSimulator devices, and CoreSimulator caches are configured to use the
+external SSD transparently.
+
+Agents should use the normal Apple paths and commands. The relocation is handled
+by wrapper scripts and mounted APFS sparsebundles.
+
+The intended behavior is:
+
+- Agents do not need to know where the external SSD is mounted.
+- Agents do not pass custom DerivedData paths unless explicitly required by the
+  user.
+- Agents do not create project-specific workarounds for the external SSD.
+- Agents do not edit source code to compensate for simulator/storage issues.
+- Agents diagnose environment problems as environment problems.
+
+### Required PATH
+
+Before running Xcode, `xcrun`, `simctl`, or build/test commands, use this PATH:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+```
+
+This ensures the wrappers are used:
+
+```text
+~/.local/bin/xcrun
+~/.local/bin/simctl
+~/.local/bin/xcodebuild
+```
+
+Do not call these directly unless debugging wrapper behavior:
+
+```text
+/usr/bin/xcrun
+/usr/bin/xcodebuild
+/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild
+```
+
+Direct Apple binaries bypass some of the fail-closed validation.
+
+### Do Not Hardcode External SSD Paths
+
+Do not hardcode:
+
+```text
+/Volumes/1TB
+/Volumes/1TB/Xcode
+/Volumes/1TB/Xcode/DerivedData
+/Volumes/1TB/Xcode/CoreSimulator
+```
+
+The correct abstraction is:
+
+```text
+external-ssd-root
+```
+
+If an external path is truly needed for diagnostics, resolve it dynamically:
+
+```sh
+ROOT="$(external-ssd-root)"
+echo "$ROOT/Xcode"
+```
+
+But normal project commands should not need this.
+
+### Xcode Build/Test Commands
+
+Use plain `xcodebuild` through the PATH wrapper.
+
+Good:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+xcodebuild \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  test
+```
+
+Avoid adding:
+
+```text
+-derivedDataPath ...
+-clonedSourcePackagesDirPath ...
+SYMROOT=...
+OBJROOT=...
+CLANG_MODULE_CACHE_PATH=...
+SWIFT_MODULE_CACHE_PATH=...
+```
+
+The wrapper enforces those to external SSD-backed locations.
+
+If you pass your own `-derivedDataPath`, the wrapper may remove or override it.
+That is expected.
+
+### Preferred Simulator Destination
+
+The currently known-good simulator is:
+
+```text
+iPhone 17
+UDID: E65F0D05-980C-4368-8CDC-2D2BF3E05757
+Runtime: iOS 26.5
+```
+
+Prefer this destination for Xcode tests unless the task explicitly requires a
+fresh simulator:
+
+```text
+-destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757'
+```
+
+This simulator is booted and has already completed the expensive first-boot data
+migration.
+
+Do not prefer name-based destinations if a UDID is known. Name-based
+destinations can become ambiguous after agents create additional simulators.
+
+Prefer:
+
+```text
+-destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757'
+```
+
+Over:
+
+```text
+-destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'
+```
+
+### Creating New Simulators
+
+If a fresh simulator is required, create it through wrapped `xcrun` or `simctl`:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+UDID="$(xcrun simctl create "AgentTest-$(date +%H%M%S)" "iPhone 17" "com.apple.CoreSimulator.SimRuntime.iOS-26-5")"
+echo "$UDID"
+```
+
+New simulator directories should appear under the normal Apple path:
+
+```text
+~/Library/Developer/CoreSimulator/Devices/<UDID>
+```
+
+That path is externally backed by the mounted sparsebundle. Do not move it
+manually.
+
+After creating a simulator, verify storage backing:
+
+```sh
+mount | grep "$HOME/Library/Developer/CoreSimulator/Devices"
+```
+
+Expected shape:
+
+```text
+/dev/disk... on /Users/rudironsoni/Library/Developer/CoreSimulator/Devices (apfs, ...)
+```
+
+Do not assume first boot will be quick. On iOS 26.5, first boot can take around
+10 minutes because Apple data migration runs inside the simulator.
+
+Use a generous timeout and inspect state instead of killing it early.
+
+Example:
+
+```sh
+xcrun simctl boot "$UDID"
+xcrun simctl bootstatus "$UDID" -b
+```
+
+Important: `simctl bootstatus` may return success even when the printed terminal
+state indicates a migration failure. Read the output. Look for terminal success,
+not just exit code.
+
+Successful terminal boot looks like:
+
+```text
+Device already booted, nothing to do.
+```
+
+or CoreSimulator log state:
+
+```text
+status = Finished
+DataMigrationPhaseDescription = kDMMigrationPhaseDescriptionDidFinishWithSuccess
+```
+
+Bad terminal state includes:
+
+```text
+Data Migration Failed
+DataMigrationPhaseDescription = kDMMigrationPhaseDescriptionDidFinishWithFailure
+```
+
+If a newly-created simulator fails migration, delete that simulator and use the
+known-good booted simulator instead unless the user specifically wants to debug
+simulator creation.
+
+Cleanup:
+
+```sh
+xcrun simctl shutdown "$UDID" 2>/dev/null || true
+xcrun simctl delete "$UDID"
+```
+
+### CoreSimulator Storage Contract
+
+The simulator device store must remain:
+
+```text
+~/Library/Developer/CoreSimulator/Devices
+```
+
+It is backed by:
+
+```text
+/Volumes/1TB/Xcode/CoreSimulator/DeviceSet.sparsebundle
+```
+
+The CoreSimulator cache store must remain:
+
+```text
+/Library/Developer/CoreSimulator/Caches
+```
+
+It is backed by:
+
+```text
+/Volumes/1TB/Xcode/CoreSimulator/Caches.sparsebundle
+```
+
+Do not replace these with symlinks.
+
+Do not move device directories manually.
+
+Do not mount a raw APFS volume over
+`~/Library/Developer/CoreSimulator/Devices`. That approach was tested and
+rejected because CoreSimulatorService hit permission/state errors.
+
+The certified backend is the sparsebundle mounted at the normal Apple path.
+
+### Health Check
+
+Before diagnosing Xcode or simulator failures, run:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+xcode-storage-doctor
+```
+
+Expected outside restrictive sandboxes:
+
+```text
+OK xcode external storage doctor passed
+```
+
+If this fails, treat it as an environment issue first. Do not change project
+source code until the environment is healthy.
+
+Useful checks:
+
+```sh
+external-ssd-root
+
+mount | grep "$HOME/Library/Developer/CoreSimulator/Devices"
+mount | grep '/Library/Developer/CoreSimulator/Caches'
+
+xcrun simctl list runtimes available
+xcrun simctl list devices available
+xcodebuild -version
+xcodebuild -project OrlixSystem.xcodeproj -list
+```
+
+### Sandbox Caveat
+
+Some coding-agent sandboxes block Apple CoreSimulator XPC and DiskManagement
+access. In that case, `simctl` can fail with errors that look like broken
+CoreSimulator services, for example:
+
+```text
+Code=61
+Code=409
+Code=410
+Cannot talk to simdiskimaged
+simdiskimaged crashed or is not responding
+```
+
+If the agent is running in a restrictive sandbox, do not conclude the machine
+environment is broken until the same command has been tested outside the
+sandbox.
+
+Known sandbox marker:
+
+```sh
+echo "$CODEX_SANDBOX"
+```
+
+If it prints:
+
+```text
+seatbelt
+```
+
+then CoreSimulator commands may need unsandboxed/escalated execution.
+
+For real simulator/Xcode tests, use an unsandboxed command execution path.
+
+### Diagnosing XCTest Failures
+
+Distinguish these cases:
+
+#### Environment / runner attach failure
+
+Symptoms:
+
+```text
+The test runner hung before establishing connection
+Connection to remote process was not established
+launch failed
+SIGTERM(15)
+```
+
+Check environment first:
+
+```sh
+xcode-storage-doctor
+xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b
+xcrun simctl list devices available
+```
+
+Then inspect CoreSimulator logs:
+
+```sh
+tail -300 "$HOME/Library/Logs/CoreSimulator/CoreSimulator.log" | grep -E 'OrlixTestRunner|XCTest|testmanager|launch failed|hung|SIGTERM|Error'
+```
+
+Do not modify project code until runner attachment has been proven healthy.
+
+#### Project/test failure
+
+If logs show:
+
+```text
+Testing started
+Test Suite ...
+Test Case ...
+Executed ...
+```
+
+then XCTest attached successfully. Failures after that are project/test
+behavior, not the external storage migration.
+
+The environment has already proven that hosted XCTest can attach and execute
+against the booted iPhone 17 simulator.
+
+### Result Bundles And Build Products
+
+Build products and test logs should land under external SSD-backed DerivedData:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Build/Products
+/Volumes/1TB/Xcode/DerivedData/Logs/Test
+```
+
+You may reference these paths in diagnostics after resolving through the
+environment, but do not bake them into source code, scripts, or docs as fixed
+assumptions.
+
+To find recent test results:
+
+```sh
+ls -dt "$(external-ssd-root)"/Xcode/DerivedData/Logs/Test/*.xcresult | head
+```
+
+### Do Not Do These
+
+Do not move Xcode.app.
+
+Do not move application binaries to the external SSD.
+
+Do not replace CoreSimulator directories with symlinks.
+
+Do not create project-specific DerivedData directories under the repo.
+
+Do not delete or recreate simulator runtimes casually.
+
+Do not kill a simulator during first-boot data migration unless you are
+intentionally abandoning that simulator and will delete it afterward.
+
+Do not trust `simctl bootstatus` exit code alone. Inspect the terminal state.
+
+Do not use `/usr/bin/xcrun` or `/usr/bin/xcodebuild` in normal work.
+
+Do not hardcode `/Volumes/1TB`.
+
+Do not "fix" XCTest runner issues by changing Linux, OCI, kernel, or app code
+until the hosted XCTest attachment path is independently verified.
+
+### Known-Good Baseline Commands
+
+Use these when starting a task that depends on Xcode or Simulator:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+xcode-storage-doctor
+
+xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b
+
+xcodebuild \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixTestRunnerTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixTestRunnerTests \
+  test
+```
+
+If that smoke test reaches `Testing started` and test suites execute, the
+hosted XCTest attach path is healthy.
+
+If a later, more specific test fails after test execution begins, treat it as a
+test/project/runtime behavior issue, not as an external SSD storage issue.
+
 ## XcodeBuildMCP
 
 If using XcodeBuildMCP, use the installed XcodeBuildMCP skill before calling XcodeBuildMCP tools.
+
+
+<!-- headroom:rtk-instructions -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
+
+When running shell commands, **always prefix with `rtk`**. This reduces context
+usage by 60-90% with zero behavior change. If rtk has no filter for a command,
+it passes through unchanged — so it is always safe to use.
+
+## Key Commands
+```bash
+# Git (59-80% savings)
+rtk git status          rtk git diff            rtk git log
+
+# Files & Search (60-75% savings)
+rtk ls <path>           rtk read <file>         rtk grep <pattern>
+rtk find <pattern>      rtk diff <file>
+
+# Test (90-99% savings) — shows failures only
+rtk pytest tests/       rtk cargo test          rtk test <cmd>
+
+# Build & Lint (80-90% savings) — shows errors only
+rtk tsc                 rtk lint                rtk cargo build
+rtk prettier --check    rtk mypy                rtk ruff check
+
+# Analysis (70-90% savings)
+rtk err <cmd>           rtk log <file>          rtk json <file>
+rtk summary <cmd>       rtk deps                rtk env
+
+# GitHub (26-87% savings)
+rtk gh pr view <n>      rtk gh run list         rtk gh issue list
+
+# Infrastructure (85% savings)
+rtk docker ps           rtk kubectl get         rtk docker logs <c>
+
+# Package managers (70-90% savings)
+rtk pip list            rtk pnpm install        rtk npm run <script>
+```
+
+## Rules
+- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
+- For debugging, use raw command without rtk prefix
+- `rtk proxy <cmd>` runs command without filtering but tracks usage
+<!-- /headroom:rtk-instructions -->
