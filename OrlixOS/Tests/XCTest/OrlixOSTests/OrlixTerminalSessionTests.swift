@@ -5953,6 +5953,28 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeConfigParserRejectsUnsupportedHostname() throws {
+		let config = Data("""
+		{
+		  "ociVersion": "1.1.0",
+		  "hostname": "container-host",
+		  "process": {
+		    "args": ["/bin/sh"],
+		    "cwd": "/",
+		    "env": ["PATH=/usr/bin"]
+		  },
+		  "root": { "path": "rootfs" }
+		}
+		""".utf8)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeConfigError,
+				.unsupportedLinuxFeature("hostname")
+			)
+		}
+	}
+
 	func testOCIRuntimeConfigParserRejectsUnsupportedHooks() throws {
 		let config = Data("""
 		{
