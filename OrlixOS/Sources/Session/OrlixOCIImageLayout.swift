@@ -1341,6 +1341,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	public func parse(_ data: Data) throws -> OrlixOCIRuntimeConfigDescriptor {
 		let config = try JSONDecoder().decode(OCIRuntimeConfig.self, from: data)
 		try Self.validateOCIVersion(config.ociVersion)
+		try Self.rejectUnsupportedHostname(config.hostname)
 
 		guard let process = config.process else {
 			throw OrlixOCIRuntimeConfigError.missingProcess
@@ -1427,6 +1428,13 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 
 		return annotations
+	}
+
+	private static func rejectUnsupportedHostname(_ hostname: String?) throws {
+		guard let hostname, !hostname.isEmpty else {
+			return
+		}
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hostname")
 	}
 
 	private static func rejectUnsupportedHooks(_ hooks: OCIRuntimeHooks?) throws {
@@ -1566,6 +1574,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 private struct OCIRuntimeConfig: Decodable {
 	let ociVersion: String
 	let annotations: [String: String]?
+	let hostname: String?
 	let hooks: OCIRuntimeHooks?
 	let process: OCIRuntimeProcess?
 	let root: OCIRuntimeRoot?
