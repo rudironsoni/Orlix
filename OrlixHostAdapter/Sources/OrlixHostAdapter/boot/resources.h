@@ -94,6 +94,16 @@ __attribute__((visibility("hidden"))) int orlix_host_directory_read_child_entry(
     unsigned int parent_entry_index,
     unsigned int entry_index,
     struct OrlixHostDirectoryEntry *entry);
+__attribute__((visibility("hidden"))) int orlix_host_directory_read_entry_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    struct OrlixHostDirectoryEntry *entry);
+__attribute__((visibility("hidden"))) int
+orlix_host_directory_read_directory_entry_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    unsigned int entry_index,
+    struct OrlixHostDirectoryEntry *entry);
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_file(
     unsigned int directory,
     unsigned int entry_index,
@@ -107,9 +117,20 @@ __attribute__((visibility("hidden"))) long orlix_host_directory_read_child_file(
     uint64_t offset,
     void *buffer,
     uint32_t length);
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_file_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    uint64_t offset,
+    void *buffer,
+    uint32_t length);
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_link(
     unsigned int directory,
     unsigned int entry_index,
+    void *buffer,
+    uint32_t length);
+__attribute__((visibility("hidden"))) long orlix_host_directory_read_link_at_path(
+    unsigned int directory,
+    const char *relative_path,
     void *buffer,
     uint32_t length);
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_child_link(

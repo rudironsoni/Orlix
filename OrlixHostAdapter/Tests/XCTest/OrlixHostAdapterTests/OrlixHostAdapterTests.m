@@ -2,6 +2,7 @@
 #import <XCTest/XCTest.h>
 
 #include <string.h>
+#include <unistd.h>
 #include "OrlixHostAdapter/boot/resources.h"
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
 
@@ -513,6 +514,80 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
                                                     path,
                                                     sizeof(path),
                                                     NULL),
+                      0);
+
+    [fileManager removeItemAtURL:root error:nil];
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+}
+
+- (void)testHostDirectorySupportsNestedRelativePathReads
+{
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    NSURL *root = [fileManager.temporaryDirectory
+        URLByAppendingPathComponent:[NSUUID UUID].UUIDString
+                        isDirectory:YES];
+    NSURL *single = [root URLByAppendingPathComponent:@"single"
+                                          isDirectory:YES];
+    NSURL *nested = [root URLByAppendingPathComponent:@"nested/deeper"
+                                           isDirectory:YES];
+    NSURL *fileURL = [nested URLByAppendingPathComponent:@"file.txt"
+                                             isDirectory:NO];
+    NSURL *singleFileURL = [single URLByAppendingPathComponent:@"only.txt"
+                                                   isDirectory:NO];
+    NSURL *linkURL = [nested URLByAppendingPathComponent:@"file-link"
+                                             isDirectory:NO];
+    NSData *payload = [@"nested-data" dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *singlePayload = [@"only" dataUsingEncoding:NSUTF8StringEncoding];
+    struct OrlixHostDirectoryEntry entry;
+    uint8_t buffer[32] = {0};
+    char linkBuffer[32] = {0};
+
+    XCTAssertTrue([fileManager createDirectoryAtURL:single
+                        withIntermediateDirectories:YES
+                                         attributes:nil
+                                              error:nil]);
+    XCTAssertTrue([fileManager createDirectoryAtURL:nested
+                        withIntermediateDirectories:YES
+                                         attributes:nil
+                                              error:nil]);
+    XCTAssertTrue([payload writeToURL:fileURL atomically:YES]);
+    XCTAssertTrue([singlePayload writeToURL:singleFileURL atomically:YES]);
+    XCTAssertEqual(symlink("file.txt", linkURL.path.UTF8String), 0);
+    XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+    XCTAssertEqual(orlix_host_resources_register_host_directory(
+                       "orlix-host0", root.path.UTF8String, 1),
+                   0);
+
+    XCTAssertEqual(orlix_host_directory_read_entry_at_path(
+                       0, "nested/deeper/file.txt", &entry),
+                   0);
+    XCTAssertEqual(entry.type, OrlixHostDirectoryEntryRegular);
+    XCTAssertEqual(strcmp(entry.name, "file.txt"), 0);
+    XCTAssertEqual(entry.size, payload.length);
+
+    XCTAssertEqual(orlix_host_directory_read_directory_entry_at_path(
+                       0, "single", 0, &entry),
+                   0);
+    XCTAssertEqual(entry.type, OrlixHostDirectoryEntryRegular);
+    XCTAssertEqual(strcmp(entry.name, "only.txt"), 0);
+
+    XCTAssertEqual(orlix_host_directory_read_file_at_path(
+                       0, "nested/deeper/file.txt", 0, buffer,
+                       (uint32_t)sizeof(buffer)),
+                   (long)payload.length);
+    XCTAssertEqual(memcmp(buffer, payload.bytes, payload.length), 0);
+
+    XCTAssertEqual(orlix_host_directory_read_link_at_path(
+                       0, "nested/deeper/file-link", linkBuffer,
+                       (uint32_t)sizeof(linkBuffer)),
+                   (long)strlen("file.txt"));
+    XCTAssertEqual(strncmp(linkBuffer, "file.txt", strlen("file.txt")), 0);
+
+    XCTAssertNotEqual(orlix_host_directory_read_entry_at_path(
+                          0, "/absolute", &entry),
+                      0);
+    XCTAssertNotEqual(orlix_host_directory_read_file_at_path(
+                          0, "../escape", 0, buffer, (uint32_t)sizeof(buffer)),
                       0);
 
     [fileManager removeItemAtURL:root error:nil];
