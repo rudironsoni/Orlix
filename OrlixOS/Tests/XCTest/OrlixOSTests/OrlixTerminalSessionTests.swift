@@ -941,7 +941,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultEnvironment: ["PATH": "/usr/bin:/bin"],
             defaultWorkingDirectory: "/work/../project",
             defaultUserID: 0,
-            defaultGroupID: 0
+            defaultGroupID: 0,
+            defaultUmask: 18
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -970,6 +971,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.argv1="))
         XCTAssertTrue(commandLine.contains("orlix.argv2=arg%20with%20space"))
         XCTAssertTrue(commandLine.contains("orlix.cwd=/work/../project"))
+        XCTAssertTrue(commandLine.contains("orlix.umask=18"))
     }
 
     func testEnvironmentRootImageEncodesPathLookupCommandName() throws {
@@ -5872,7 +5874,7 @@ extension OrlixTerminalSessionTests {
 			    "args": ["/bin/sh", "-lc", "echo ok"],
 			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
 			    "cwd": "/work",
-			    "user": { "uid": 1000, "gid": 1000 }
+			    "user": { "uid": 1000, "gid": 1000, "umask": 18 }
 			  },
 			  "linux": {
 			    "namespaces": [
@@ -5909,6 +5911,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.defaultWorkingDirectory, "/work")
 		XCTAssertEqual(descriptor.defaultUserID, 1000)
 		XCTAssertEqual(descriptor.defaultGroupID, 1000)
+		XCTAssertEqual(descriptor.defaultUmask, 18)
 		XCTAssertTrue(descriptor.terminal)
 		XCTAssertEqual(descriptor.consoleSize, OrlixOCIRuntimeConsoleSize(height: 24, width: 80))
 		XCTAssertEqual(descriptor.namespaces, ["mount", "pid", "uts", "ipc", "network"])
@@ -5924,6 +5927,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultWorkingDirectory, descriptor.defaultWorkingDirectory)
 		XCTAssertEqual(environment.defaultUserID, descriptor.defaultUserID)
 		XCTAssertEqual(environment.defaultGroupID, descriptor.defaultGroupID)
+		XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
 	}
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxFeatures() throws {
@@ -6096,7 +6100,7 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
-	func testOCIRuntimeConfigParserRejectsUnsupportedProcessUserUmask() throws {
+	func testOCIRuntimeConfigParserRejectsOutOfRangeProcessUserUmask() throws {
 		let config = Data("""
 		{
 		  "ociVersion": "1.1.0",
@@ -6106,7 +6110,7 @@ extension OrlixTerminalSessionTests {
 		    "user": {
 		      "uid": 0,
 		      "gid": 0,
-		      "umask": 18
+		      "umask": 512
 		    }
 		  },
 		  "root": { "path": "rootfs" }

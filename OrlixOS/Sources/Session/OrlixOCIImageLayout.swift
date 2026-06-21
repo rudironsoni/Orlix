@@ -1301,6 +1301,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultWorkingDirectory: String
 	public let defaultUserID: UInt32
 	public let defaultGroupID: UInt32
+	public let defaultUmask: UInt32?
 	public let terminal: Bool
 	public let consoleSize: OrlixOCIRuntimeConsoleSize?
 	public let namespaces: [String]
@@ -1321,6 +1322,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultWorkingDirectory: defaultWorkingDirectory,
 			defaultUserID: defaultUserID,
 			defaultGroupID: defaultGroupID,
+			defaultUmask: defaultUmask,
 			hostname: hostname,
 			domainname: domainname,
 			rootMount: rootMount,
@@ -1395,6 +1397,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultWorkingDirectory: cwd,
 			defaultUserID: process.user?.uid ?? 0,
 			defaultGroupID: process.user?.gid ?? 0,
+			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			terminal: terminal,
 			consoleSize: consoleSize,
 			namespaces: namespaces
@@ -1460,6 +1463,16 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 				throw OrlixOCIRuntimeConfigError.invalidHostname(value)
 			}
 			throw OrlixOCIRuntimeConfigError.invalidDomainname(value)
+		}
+		return value
+	}
+
+	private static func validatedUmask(_ value: UInt32?) throws -> UInt32? {
+		guard let value else {
+			return nil
+		}
+		guard value <= 0o777 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.umask")
 		}
 		return value
 	}
@@ -1577,9 +1590,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.ioPriority != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.ioPriority")
-		}
-		if process.user?.umask != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.umask")
 		}
 		if process.execCPUAffinity != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
