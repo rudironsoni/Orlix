@@ -11969,3 +11969,35 @@ Non-claims:
 Current status:
 
 Latest checkpoint: the Linux kselftest namespace probe now covers UTS namespace domainname behavior needed for future OCI `domainname` support. Runtime execution of the kselftest bundle, Linux-backed OCI field application, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - UTS Namespace Parent Isolation Probe
+
+Status: kernel selftest substrate coverage now verifies that private UTS hostname/domainname changes do not leak back to the parent namespace.
+
+Changes:
+
+- Refactored `namespace_probe.c` so hostname and domainname UTS checks run in forked children instead of mutating the main selftest process namespace.
+- Added `UTS namespace child names do not leak to parent`, which records the parent hostname/domainname, forks a child that unshares `CLONE_NEWUTS`, sets both names, verifies them inside the child, and then verifies the parent names are unchanged after child exit.
+- Reused the same wait/exit helper for UTS child probes and the existing PID namespace child-init probe.
+
+Rationale:
+
+- OCI-derived environments must run alongside the default Orlix Linux environment without leaking Linux-visible namespace state. Hostname/domainname application is only acceptable once Linux UTS namespace isolation is proven through Linux mechanisms.
+- This remains OrlixKernel/Linux selftest work. It does not add a HostAdapter ABI, host-visible policy, Swift-side Linux facade, Docker, `runc`, Apple Containerization, or Virtualization.framework dependency.
+
+Validation:
+
+- `rtk err make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed with generated Linux host-tool warnings only.
+- `rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk strings Build/OrlixMLibC/kselftest/release/orlix/namespace_probe | rtk rg "UTS namespace child names do not leak to parent|orlix-uts-isolated|orlix-domain-isolated"` found the new isolation probe label and test values in the rebuilt selftest binary.
+- `rtk git diff --check` passed.
+
+Non-claims:
+
+- This is source/build/install/package evidence only; it is not runtime TAP proof from simulator/device execution.
+- This does not make OCI `hostname` or `domainname` accepted in `OrlixOS`; parser fail-closed behavior remains correct until session setup applies them through Linux mechanisms and is proven.
+- This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, systemd image compatibility, or app-hosted OCI-derived execution proof.
+
+Current status:
+
+Latest checkpoint: the Linux kselftest namespace probe now covers both private UTS hostname/domainname set/get behavior and parent namespace isolation. Runtime execution of the kselftest bundle, Linux-backed OCI field application, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
