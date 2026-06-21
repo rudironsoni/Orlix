@@ -8,6 +8,7 @@ config ORLIX
 	select OF
 	select OF_IRQ
 	select HAS_IOMEM
+	select GENERIC_VDSO_TIME_NS
 	select HAS_DMA
 	select ARCH_WANT_FRAME_POINTERS
 	select GENERIC_CPU_DEVICES

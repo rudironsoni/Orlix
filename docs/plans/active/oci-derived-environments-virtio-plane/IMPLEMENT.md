@@ -13019,3 +13019,102 @@ Result:
 testOverlayFSProbeCompletesThroughOrlixOSTerminalSession: Passed
 xcodebuild exit status: 0
 ```
+## 2026-06-22 - App-hosted time namespace proof through OrlixOS
+
+Ownership decision:
+
+Keep this checkpoint in OrlixKernel arch/Kbuild support, upstream Linux time namespace objects, and OrlixTestRunner app-hosted proof wiring. Time namespaces are a Linux namespace surface used by container runtimes; they must not become HostAdapter policy, a Darwin translation path, or a custom Orlix ABI.
+
+Changes:
+
+- Added `arch/orlix` selection of `GENERIC_VDSO_TIME_NS` so `CONFIG_TIME_NS=y` resolves from `release_defconfig`.
+- Added `kernel/time/namespace.c` to the Orlix kernel archive source list, matching upstream Linux `kernel/time/Makefile` for `CONFIG_TIME_NS`.
+- Added minimal Orlix arch VDSO support required by upstream time namespaces:
+  - `arch/orlix/include/asm/vdso/processor.h`
+  - `arch/orlix/include/asm/vdso/gettimeofday.h`
+  - `arch/orlix/kernel/vdso.c`
+- Reworked `time_namespace_probe` to prove the Linux contract explicitly:
+  - `/proc/self/ns/time` is readable.
+  - `/proc/self/ns/time_for_children` is readable.
+  - `unshare(CLONE_NEWTIME)` succeeds.
+  - the parent remains in its current time namespace while `time_for_children` changes.
+  - a forked child enters the unshared time namespace.
+  - `/proc/self/timens_offsets` is readable.
+- Added `OrlixUpstreamTestRunSpec.kernelTimeNamespace`.
+- Added `OrlixKernelUpstreamTests/testTimeNamespaceProbeCompletesThroughOrlixOSTerminalSession`.
+
+Failure sequence that drove the fix:
+
+The first app-hosted XCTest attached successfully, then failed in Linux:
+
+```text
+upstream failure marker found: not ok 1 - forked child enters unshared time namespace
+```
+
+After splitting the probe, the first failing condition was:
+
+```text
+upstream failure marker found: not ok 1 - time namespace proc entries are readable
+```
+
+The generated release kernel config did not contain `CONFIG_TIME_NS=y` even though `release_defconfig` requested it. Upstream Linux requires `GENERIC_VDSO_TIME_NS` for `TIME_NS`, so `arch/orlix` now selects it. That exposed the normal upstream dependencies on `kernel/time/namespace.c` and arch VDSO hooks; those are now provided in the Orlix arch layer.
+
+Verification:
+
+```sh
+grep -n '^CONFIG_TIME_NS\|^CONFIG_GENERIC_VDSO_TIME_NS' Build/OrlixKernel/build/release/.config
+```
+
+Result:
+
+```text
+120:CONFIG_TIME_NS=y
+1707:CONFIG_GENERIC_VDSO_TIME_NS=y
+```
+
+```sh
+nm -g Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a | grep -E 'timens_operations|vdso_join_timens|arch_get_vdso_data'
+```
+
+Result:
+
+```text
+0000000000002320 T _arch_get_vdso_data
+0000000000587e00 S _timens_operations
+0000000000002330 T _vdso_join_timens
+```
+
+Build/proof commands:
+
+```sh
+rtk make -f OrlixKernel/Makefile __ios-simulator-xcframework PROFILE=release
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testTimeNamespaceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_00-26-48-+0200.xcresult
+testTimeNamespaceProbeCompletesThroughOrlixOSTerminalSession: Passed
+xcodebuild exit status: 0
+```
+
+Non-claims:
+
+This proves the Linux time namespace substrate through OrlixOS app-hosted execution. It does not claim full OCI runtime compliance, registry pull support, time offset write policy, full VDSO userspace acceleration, seccomp/hooks, or product runtime readiness.
+
+Current status:
+
+- Latest pushed checkpoint before this work: `3b229e3a Prove overlayfs through OrlixOS`.
+- Current unpushed checkpoint proves the Linux time namespace substrate through OrlixOS app-hosted execution.
+- Next OCI-relevant candidates remain broader cgroup controller/resource enforcement, OCI readonly/masked path behavior, virtio-net/shared outbound networking, and OrlixOS OCI lifecycle policy gaps.

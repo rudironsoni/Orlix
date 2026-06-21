@@ -120,6 +120,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/kernel/signal.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/syscall.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/time.c \
+	arch/$(ORLIX_PORT_ARCH)/kernel/vdso.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/traps.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/delay.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/fault.c \
@@ -392,6 +393,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/time/itimer.c \
 	kernel/time/jiffies.c \
 	kernel/time/ntp.c \
+	kernel/time/namespace.c \
 	kernel/time/posix-clock.c \
 	kernel/time/posix-cpu-timers.c \
 	kernel/time/posix-timers.c \

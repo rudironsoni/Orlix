@@ -16,99 +16,102 @@ static bool same_inode(const struct stat *left, const struct stat *right)
 	return left->st_dev == right->st_dev && left->st_ino == right->st_ino;
 }
 
-static bool proc_file_has_content(const char *path)
+static bool path_is_readable(const char *path)
 {
-	char byte;
-	int fd;
-	ssize_t nread;
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
 
-	fd = open(path, O_RDONLY);
 	if (fd < 0)
 		return false;
 
-	nread = read(fd, &byte, 1);
 	close(fd);
-
-	return nread == 1;
+	return true;
 }
 
-static bool child_exits_successfully(bool (*probe)(void))
+static bool child_exited_successfully(pid_t child)
 {
-	pid_t child;
 	int status;
-
-	child = fork();
-	if (child < 0)
-		return false;
-
-	if (child == 0)
-		_exit(probe() ? 0 : 1);
 
 	if (waitpid(child, &status, 0) != child)
 		return false;
 
 	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-
-static bool child_time_namespace_differs_from(const struct stat *before)
-{
-	struct stat child_time;
-
-	if (stat("/proc/self/ns/time", &child_time) != 0)
-		return false;
-
-	return !same_inode(before, &child_time);
-}
-
-static bool forked_child_enters_new_time_namespace(void)
-{
-	struct stat before;
-	struct stat after_for_children;
-	pid_t child;
-	int status;
-
-	if (stat("/proc/self/ns/time", &before) != 0)
-		return false;
-
-	if (unshare(CLONE_NEWTIME) != 0)
-		return false;
-
-	if (stat("/proc/self/ns/time_for_children", &after_for_children) != 0)
-		return false;
-
-	if (same_inode(&before, &after_for_children))
-		return false;
-
-	child = fork();
-	if (child < 0)
-		return false;
-
-	if (child == 0)
-		_exit(child_time_namespace_differs_from(&before) ? 0 : 1);
-
-	if (waitpid(child, &status, 0) != child)
-		return false;
-
-	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-
-static bool time_namespace_exposes_offsets_file(void)
-{
-	if (unshare(CLONE_NEWTIME) != 0)
-		return false;
-
-	return proc_file_has_content("/proc/self/timens_offsets");
 }
 
 int main(void)
 {
-	orlix_test_plan(2);
+	struct stat parent_time;
+	struct stat parent_time_after_unshare;
+	struct stat children_time_before_unshare;
+	struct stat children_time_after_unshare;
+	bool unshare_prepares_child_namespace = false;
+	bool forked_child_enters_child_namespace = false;
+	bool time_namespace_is_readable = false;
+	bool time_for_children_is_readable = false;
+	bool proc_entries_are_readable;
+	bool unshare_succeeds = false;
+	pid_t child;
 
-	orlix_test_result(child_exits_successfully(
-				  forked_child_enters_new_time_namespace),
+	orlix_test_plan(6);
+
+	time_namespace_is_readable =
+		stat("/proc/self/ns/time", &parent_time) == 0;
+	time_for_children_is_readable =
+		stat("/proc/self/ns/time_for_children",
+		     &children_time_before_unshare) == 0;
+	proc_entries_are_readable =
+		time_namespace_is_readable && time_for_children_is_readable;
+
+	orlix_test_result(time_namespace_is_readable,
+			  "time namespace proc entry is readable");
+	orlix_test_result(time_for_children_is_readable,
+			  "time_for_children proc entry is readable");
+
+	if (proc_entries_are_readable) {
+		unshare_succeeds = unshare(CLONE_NEWTIME) == 0;
+		orlix_test_result(unshare_succeeds,
+				  "unshare CLONE_NEWTIME succeeds");
+
+		if (unshare_succeeds &&
+		    stat("/proc/self/ns/time", &parent_time_after_unshare) ==
+			    0 &&
+		    stat("/proc/self/ns/time_for_children",
+			 &children_time_after_unshare) == 0) {
+			unshare_prepares_child_namespace =
+				same_inode(&parent_time,
+					   &parent_time_after_unshare) &&
+				!same_inode(&children_time_before_unshare,
+					    &children_time_after_unshare);
+		}
+	} else {
+		orlix_test_result(false, "unshare CLONE_NEWTIME succeeds");
+	}
+
+	orlix_test_result(unshare_prepares_child_namespace,
+			  "unshare prepares time namespace for children");
+
+	if (unshare_prepares_child_namespace) {
+		child = fork();
+		if (child == 0) {
+			struct stat child_time;
+			bool entered_child_namespace;
+
+			entered_child_namespace =
+				stat("/proc/self/ns/time", &child_time) == 0 &&
+				!same_inode(&parent_time, &child_time) &&
+				same_inode(&children_time_after_unshare,
+					   &child_time);
+
+			_exit(entered_child_namespace ? 0 : 1);
+		}
+
+		if (child > 0)
+			forked_child_enters_child_namespace =
+				child_exited_successfully(child);
+	}
+
+	orlix_test_result(forked_child_enters_child_namespace,
 			  "forked child enters unshared time namespace");
-	orlix_test_result(
-		child_exits_successfully(time_namespace_exposes_offsets_file),
+	orlix_test_result(path_is_readable("/proc/self/timens_offsets"),
 			  "time namespace exposes timens_offsets");
 
 	orlix_test_exit();
