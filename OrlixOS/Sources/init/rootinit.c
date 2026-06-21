@@ -2,7 +2,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -44,6 +46,41 @@ static int mount_if_needed(const char *source, const char *target,
 	return -1;
 }
 
+static bool cmdline_has_token(const char *token)
+{
+	char buffer[1024];
+	size_t token_len;
+	ssize_t nread;
+	char *cursor;
+	int fd;
+
+	fd = open("/proc/cmdline", O_RDONLY);
+	if (fd < 0)
+		return false;
+
+	nread = read(fd, buffer, sizeof(buffer) - 1);
+	close(fd);
+	if (nread <= 0)
+		return false;
+
+	buffer[nread] = '\0';
+	token_len = strlen(token);
+	cursor = buffer;
+	while (*cursor != '\0') {
+		while (*cursor == ' ' || *cursor == '\n' || *cursor == '\t')
+			cursor++;
+		if (memcmp(cursor, token, token_len) == 0 &&
+		    (cursor[token_len] == '\0' || cursor[token_len] == ' ' ||
+		     cursor[token_len] == '\n' || cursor[token_len] == '\t'))
+			return true;
+		while (*cursor != '\0' && *cursor != ' ' && *cursor != '\n' &&
+		       *cursor != '\t')
+			cursor++;
+	}
+
+	return false;
+}
+
 static int wait_for_path(const char *path)
 {
 	for (int attempt = 0; attempt < 250; attempt++) {
@@ -66,6 +103,8 @@ static int wait_for_path(const char *path)
 
 static int mount_overlay_root(void)
 {
+	bool readonly_root;
+
 	if (ensure_dir("/dev", 0755) != 0 ||
 	    ensure_dir("/proc", 0755) != 0 ||
 	    ensure_dir("/sys", 0755) != 0 ||
@@ -79,8 +118,16 @@ static int mount_overlay_root(void)
 	    mount_if_needed("sysfs", "/sys", "sysfs", 0, NULL) != 0)
 		return -1;
 
+	if (mount_if_needed("proc", "/proc", "proc", 0, NULL) != 0)
+		return -1;
+	readonly_root = cmdline_has_token("orlix.root.readonly=1");
+
 	if (wait_for_path("/dev/vda") != 0 || wait_for_path("/dev/vdb") != 0)
 		return -1;
+
+	if (readonly_root)
+		return mount_if_needed("/dev/vda", "/newroot", "ext4",
+				       MS_RDONLY, NULL);
 
 	if (mount_if_needed("/dev/vda", "/lower", "ext4", MS_RDONLY, NULL) != 0 ||
 	    mount_if_needed("/dev/vdb", "/state", "ext4", 0, NULL) != 0)

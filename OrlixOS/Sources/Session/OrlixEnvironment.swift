@@ -26,6 +26,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let hostname: String?
     public let domainname: String?
     public let rootMount: OrlixEnvironmentRootMount
+    public let rootReadonly: Bool
     public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
@@ -70,6 +71,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         hostname: String? = nil,
         domainname: String? = nil,
         rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+        rootReadonly: Bool = false,
         mounts: [OrlixEnvironmentMount] = []
     ) {
         self.id = id
@@ -86,6 +88,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.hostname = hostname
         self.domainname = domainname
         self.rootMount = rootMount
+        self.rootReadonly = rootReadonly
         self.mounts = mounts
     }
 
@@ -104,6 +107,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case hostname
         case domainname
         case rootMount
+        case rootReadonly
         case mounts
     }
 
@@ -159,6 +163,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             OrlixEnvironmentRootMount.self,
             forKey: .rootMount
         ) ?? .defaultOverlay
+        self.rootReadonly = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .rootReadonly
+        ) ?? false
         self.mounts = try container.decodeIfPresent(
             [OrlixEnvironmentMount].self,
             forKey: .mounts
@@ -183,6 +191,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         try container.encodeIfPresent(hostname, forKey: .hostname)
         try container.encodeIfPresent(domainname, forKey: .domainname)
         try container.encode(rootMount, forKey: .rootMount)
+        try container.encode(rootReadonly, forKey: .rootReadonly)
         try container.encode(mounts, forKey: .mounts)
     }
 }
@@ -505,6 +514,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
     public static let hostnameCommandLineKey = "orlix.hostname"
     public static let domainnameCommandLineKey = "orlix.domainname"
+    public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
 
     public let environmentID: String
     public let rootImageIdentifier: String
@@ -725,6 +735,9 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         }
         if let domainname = descriptor.domainname, !domainname.isEmpty {
             tokens.append("\(domainnameCommandLineKey)=\(percentEncoded(domainname))")
+        }
+        if descriptor.rootReadonly {
+            tokens.append("\(rootReadonlyCommandLineKey)=1")
         }
         return tokens
     }
@@ -985,6 +998,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultUserID: parent.defaultUserID,
                 defaultGroupID: parent.defaultGroupID,
                 rootMount: parent.rootMount,
+                rootReadonly: parent.rootReadonly,
                 mounts: parent.mounts
             )
             try save(descriptor, fileManager: fileManager)
