@@ -10767,3 +10767,28 @@ Current status:
   - This is still not an app-hosted runtime proof.
   - The nested probe is opportunistic when the mounted host fixture contains a directory; a deterministic nested runtime fixture remains stronger evidence.
   - No OCI lifecycle, registry pull, networking/cgroup/namespace runtime, or product runtime readiness claim is made.
+## 2026-06-21 - Virtio-fs path-node access checkpoint
+
+- Continued the Linux/virtio substrate path in `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`; no custom Linux ABI, no host leakage into Linux userspace, and no iOS/product runtime facade work.
+- Fixed `FUSE_ACCESS` for nested path-node descendants:
+  - existing read-only write access behavior still returns `-EACCES` for `W_OK`;
+  - root and first-layer host nodes still use existing paths;
+  - child nodes and path nodes now share normal metadata lookup through the existing private HostAdapter-backed node metadata helper;
+  - unknown node ids now return `-ENOENT` instead of falling through without an explicit error.
+- Strengthened `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`:
+  - the nested probe now descends to an actual nested child path discovered through `readdir(3)`;
+  - it checks Linux `access(2)` and `statx(2)` on that nested path when present.
+- Verification:
+  - Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release` exited 0.
+  - Escalated `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` completed without reported failure.
+  - `rtk rg -n "virtio_fs_mount_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` found the probe in both generated lists.
+  - `rtk rg -n "build_descendant_path|access\\(nested_path|readdir, access, and statx" Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/virtio_fs_mount_probe.c OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c` found the updated probe in both durable overlay and generated Linux copy.
+  - `rtk git diff --check` exited 0.
+  - `rtk python3 -m unittest discover .codex/hooks/tests` ran 32 tests, all OK.
+  - `rtk python3 -m unittest discover .codex/rules/tests` ran 5 tests, all OK.
+  - `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warnings: stale older pending/blocked statuses in this long implementation log and missing recent current-status/handoff marker before this entry.
+- Current status:
+  - Latest coherent checkpoint is path-node virtio-fs lookup/stat/open/read/readlink/readdir/readdirplus/access coverage with release build and kselftest packaging proof.
+  - Remaining proof gap: this is still not app-hosted runtime execution of the nested probe, and the nested probe remains opportunistic when the mounted host fixture has no nested child entry.
+- Non-claims:
+  - No OCI lifecycle, registry pull, networking/cgroup/namespace runtime, app-hosted runtime success, or product runtime readiness claim is made.
