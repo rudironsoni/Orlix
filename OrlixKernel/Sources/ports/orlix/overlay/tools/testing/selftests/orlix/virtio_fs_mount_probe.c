@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <dirent.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -34,6 +35,59 @@ static bool read_file_equals(const char *path, const char *expected)
 
 	return (size_t)size == expected_len &&
 	       orlix_memcmp(buffer, expected, expected_len) == 0;
+}
+
+static bool build_virtiofs_tag_path(char *path, size_t path_size,
+				    const char *device_name)
+{
+	const char prefix[] = "/sys/fs/virtiofs/";
+	const char suffix[] = "/tag";
+	size_t offset = 0;
+
+	for (size_t i = 0; prefix[i] != '\0'; ++i) {
+		if (offset + 1 >= path_size)
+			return false;
+		path[offset++] = prefix[i];
+	}
+
+	for (size_t i = 0; device_name[i] != '\0'; ++i) {
+		if (offset + 1 >= path_size)
+			return false;
+		path[offset++] = device_name[i];
+	}
+
+	for (size_t i = 0; suffix[i] != '\0'; ++i) {
+		if (offset + 1 >= path_size)
+			return false;
+		path[offset++] = suffix[i];
+	}
+
+	path[offset] = '\0';
+	return true;
+}
+
+static bool virtiofs_tag_is_registered(void)
+{
+	DIR *devices = opendir("/sys/fs/virtiofs");
+	struct dirent *entry;
+	char path[128];
+
+	if (!devices)
+		return false;
+
+	while ((entry = readdir(devices)) != NULL) {
+		if (entry->d_name[0] == '.')
+			continue;
+		if (!build_virtiofs_tag_path(path, sizeof(path), entry->d_name))
+			continue;
+		if (read_file_equals(path, ORLIX_VIRTIOFS_TAG)) {
+			closedir(devices);
+			return true;
+		}
+	}
+
+	closedir(devices);
+	return false;
 }
 
 static bool ensure_mountpoint(void)
@@ -288,7 +342,7 @@ int main(void)
 	orlix_test_plan(12);
 
 	orlix_test_result(
-		read_file_equals("/sys/fs/virtiofs/virtio0/tag", ORLIX_VIRTIOFS_TAG),
+		virtiofs_tag_is_registered(),
 		"virtio-fs device exposes the standard Orlix host-folder tag");
 	orlix_test_result(ensure_mountpoint(),
 			  "virtio-fs mountpoint is available");

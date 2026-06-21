@@ -345,7 +345,7 @@ enum OrlixUpstreamTestRunError: Error, Equatable, CustomStringConvertible {
     case crashReport(String)
     case kernelPanic(String)
     case oom(String)
-    case upstreamFailure(String)
+    case upstreamFailure(String, outputTail: String)
     case missingCompletionMarker(String)
     case malformedUpstreamOutput(String)
     case malformedCoreutilsCompletion(String)
@@ -371,8 +371,8 @@ enum OrlixUpstreamTestRunError: Error, Equatable, CustomStringConvertible {
             return "kernel panic marker found: \(marker)"
         case let .oom(marker):
             return "out-of-memory marker found: \(marker)"
-        case let .upstreamFailure(line):
-            return "upstream failure marker found: \(line)"
+        case let .upstreamFailure(line, outputTail):
+            return "upstream failure marker found: \(line)\nrecent upstream output:\n\(outputTail)"
         case let .missingCompletionMarker(marker):
             return "missing upstream completion marker: \(marker)"
         case let .malformedUpstreamOutput(reason):
@@ -413,7 +413,10 @@ final class OrlixUpstreamTestOutputParser {
             throw OrlixUpstreamTestRunError.oom(marker)
         }
         if let failure = Self.firstUpstreamFailureLine(in: output) {
-            throw OrlixUpstreamTestRunError.upstreamFailure(failure)
+            throw OrlixUpstreamTestRunError.upstreamFailure(
+                failure,
+                outputTail: Self.outputTail(output)
+            )
         }
         guard output.contains(spec.completionMarker) else {
             throw OrlixUpstreamTestRunError.missingCompletionMarker(
@@ -513,6 +516,11 @@ final class OrlixUpstreamTestOutputParser {
         markers: [String]
     ) -> String? {
         markers.first { output.contains($0) }
+    }
+
+    private static func outputTail(_ output: String, maxLines: Int = 200) -> String {
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+        return lines.suffix(maxLines).joined(separator: "\n")
     }
 
     private static func firstFatalMarker(in output: String) -> String? {

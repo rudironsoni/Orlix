@@ -13316,3 +13316,66 @@ Next status: the broader OCI-derived environment and virtio plane plan remains
 active. Do not claim full OCI runtime compliance, full cgroup resource support,
 seccomp, hooks, readonly or masked paths, sysctl application, registry pull, or
 external/shared networking from this checkpoint.
+
+## 2026-06-22 - Virtio-fs mount probe sysfs discovery and failure context
+
+Checkpoint: advanced the app-hosted `virtio_fs_mount_probe` path far enough to
+remove a stale selftest assumption, but did not claim full app-hosted virtio-fs
+mount success.
+
+Changes:
+
+- Updated the durable Orlix selftest
+  `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+  to discover `/sys/fs/virtiofs/<device>/tag` dynamically instead of assuming
+  `/sys/fs/virtiofs/virtio0/tag`.
+- Kept the check Linux-shaped: it still reads the upstream virtiofs sysfs tag
+  and expects `orlix-host0`; no custom ABI or HostAdapter-visible shortcut was
+  added.
+- Updated `OrlixUpstreamTestOutputParser` to include a bounded recent upstream
+  output tail when it reports an upstream `not ok` marker, so future app-hosted
+  probe failures preserve more evidence in XCTest result bundles.
+
+Evidence:
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:
+28:orlix:virtio_fs_mount_probe
+
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:
+35:file /orlix/virtio_fs_mount_probe ... 755 0 0
+```
+
+Focused app-hosted run after the sysfs discovery fix:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_01-24-04-+0200.xcresult
+testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession: failed
+upstream failure marker found: not ok 11 - virtio_fs_mount_probe
+```
+
+Existing app-hosted virtio MMIO contract gate after the runner diagnostic
+change:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_01-26-26-+0200.xcresult
+testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession: passed
+xcodebuild exit status: 0
+```
+
+Non-claims:
+
+- This does not prove app-hosted `virtio_fs_mount_probe` success.
+- This does not prove mounted virtio-fs file-operation coverage in app-hosted
+  OrlixOS execution.
+- This does not claim OCI host-folder mount readiness.
+- The next virtio-fs checkpoint must isolate and fix the remaining
+  `virtio_fs_mount_probe` failure through Linux/FUSE behavior rather than
+  weakening the probe or introducing host leakage.
+
+Current status:
+
+The brittle hardcoded virtiofs sysfs device name is fixed in the durable
+selftest, and failing app-hosted upstream probes now retain more runner context.
+Full app-hosted virtio-fs mount proof remains pending. The broader OCI-derived
+environment and virtio plane plan remains active.
