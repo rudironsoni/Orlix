@@ -254,6 +254,18 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertFalse(output.contains("/orlix/mount_namespace_probe"))
     }
 
+    func testTimeNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelTimeNamespace)
+        XCTAssertTrue(output.contains("time_namespace_probe"))
+        XCTAssertTrue(output.contains("time namespace proc entry is readable"))
+        XCTAssertTrue(output.contains("time_for_children proc entry is readable"))
+        XCTAssertTrue(output.contains("unshare CLONE_NEWTIME succeeds"))
+        XCTAssertTrue(output.contains("unshare prepares time namespace for children"))
+        XCTAssertTrue(output.contains("forked child enters unshared time namespace"))
+        XCTAssertTrue(output.contains("time namespace exposes timens_offsets"))
+        XCTAssertFalse(output.contains("/orlix/mount_namespace_probe"))
+    }
+
     func testPathErrnoProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelPathErrno)
 
