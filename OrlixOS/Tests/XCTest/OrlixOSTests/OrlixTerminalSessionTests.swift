@@ -5811,7 +5811,7 @@ extension OrlixTerminalSessionTests {
 			  "annotations": {
 			    "org.opencontainers.image.ref.name": "orlix-demo"
 			  },
-			  "root": { "path": "rootfs", "readonly": true },
+			  "root": { "path": "rootfs", "readonly": false },
 			  "mounts": [
 			    {
 			      "destination": "/proc",
@@ -5854,7 +5854,7 @@ extension OrlixTerminalSessionTests {
 			"orlix-demo"
 		)
 		XCTAssertEqual(descriptor.rootPath, "rootfs")
-		XCTAssertTrue(descriptor.rootReadonly)
+		XCTAssertFalse(descriptor.rootReadonly)
 		XCTAssertEqual(descriptor.mounts.count, 2)
 		XCTAssertEqual(descriptor.mounts[0].destination, "/proc")
 		XCTAssertEqual(descriptor.mounts[0].type, "proc")
@@ -5950,6 +5950,27 @@ extension OrlixTerminalSessionTests {
 					.unsupportedLinuxFeature("process.\(feature)")
 				)
 			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedRootReadonly() throws {
+		let config = Data("""
+		{
+		  "ociVersion": "1.1.0",
+		  "process": {
+		    "args": ["/bin/sh"],
+		    "cwd": "/",
+		    "env": ["PATH=/usr/bin"]
+		  },
+		  "root": { "path": "rootfs", "readonly": true }
+		}
+		""".utf8)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeConfigError,
+				.unsupportedLinuxFeature("root.readonly")
+			)
 		}
 	}
 
