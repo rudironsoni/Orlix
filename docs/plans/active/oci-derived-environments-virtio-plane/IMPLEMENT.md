@@ -12600,3 +12600,70 @@ Current status / handoff:
 
 - `hostname` and `domainname` now have a focused Linux-visible proof through normal libc/Linux UTS APIs in the app-hosted kselftest path.
 - Continue from the remaining OCI Linux fields and virtio/network substrate items; do not treat this as broader OCI runtime readiness.
+
+## 2026-06-21 - Focused Linux namespace proof through OrlixOS XCTest
+
+Scope completed:
+- Added a focused app-hosted run spec for the existing Linux-owned
+  `namespace_probe` kselftest:
+  `OrlixUpstreamTestRunSpec.kernelNamespace`.
+- Added
+  `OrlixKernelUpstreamTests/testNamespaceProbeCompletesThroughOrlixOSTerminalSession`
+  to run only `orlix.kselftest=namespace_probe` through the OrlixOS terminal
+  session path.
+- The assertion checks the Linux-visible UTS namespace proof lines emitted by
+  the probe:
+  - `UTS namespace supports private hostname`
+  - `UTS namespace supports private domainname`
+  - `UTS namespace child names do not leak to parent`
+
+Ownership:
+- No HostAdapter ABI or host-visible policy was added.
+- No custom Linux ABI was added.
+- The proof remains in the Linux-owned kselftest overlay under
+  `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix`.
+- OrlixTestRunner only selects the existing Linux proof through the app-hosted
+  OrlixOS session path.
+
+Xcode / Simulator environment gate:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+xcode-storage-doctor
+```
+
+Result:
+
+```text
+OK xcode external storage doctor passed
+STATUS:0
+```
+
+Focused app-hosted proof:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+xcodebuild \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testNamespaceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result bundle:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.21_20-23-37-+0200.xcresult
+result=Passed totalTestCount=1 passedTests=1 failedTests=0
+```
+
+Not claimed:
+- This does not make `linux.maskedPaths` or `linux.readonlyPaths` supported.
+  Those remain fail-closed until real mount namespace enforcement exists.
+- This does not claim full OCI namespace lifecycle support, seccomp, hooks,
+  cgroup resource accounting, virtio-net, registry pull, or full OCI Runtime
+  Spec compliance.
+- This does not claim product runtime readiness or the third-party package
+  ladder.

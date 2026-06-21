@@ -412,6 +412,15 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("orlix.domainname=oci.example"))
     }
 
+    func testNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelNamespace)
+
+        XCTAssertTrue(output.contains("namespace_probe"))
+        XCTAssertTrue(output.contains("UTS namespace supports private hostname"))
+        XCTAssertTrue(output.contains("UTS namespace supports private domainname"))
+        XCTAssertTrue(output.contains("UTS namespace child names do not leak to parent"))
+    }
+
     func testEnvironmentStateWritebackProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {
