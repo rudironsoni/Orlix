@@ -10956,3 +10956,35 @@ Non-claims:
 
 - The overall OCI-derived environments goal is not complete.
 - The recent probes do not prove app-hosted product runtime readiness, OCI Runtime lifecycle compliance, registry pull, external networking, systemd image compatibility, or arbitrary imported binary compatibility.
+
+## 2026-06-21 - Linux pseudo-fs substrate probe expansion
+
+Changed:
+
+- Reworked `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/pseudo_fs_probe.c` into a 20-test Linux pseudo-fs and device-node probe.
+
+Scope:
+
+- The probe still uses only standard Linux userspace operations.
+- It verifies `/proc`, `/sys`, `/dev`, `/dev/pts`, and `/tmp` are visible directories.
+- It verifies `/proc/self/mountinfo` reports `proc` at `/proc`, `sysfs` at `/sys`, `devtmpfs` at `/dev`, `devpts` at `/dev/pts`, and `tmpfs` at `/tmp`.
+- It verifies `/proc/self/status` exposes `Pid:` and `Uid:`, and `/proc/self/mounts` exposes the proc mount.
+- It verifies `/dev/null`, `/dev/zero`, `/dev/random`, and `/dev/urandom` are Linux character devices.
+- It verifies `/dev/null` accepts writes, `/dev/zero` returns zero bytes, `/dev/urandom` returns bytes, and devpts exposes a usable ptmx device.
+
+Validation:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` completed and regenerated kselftest artifacts.
+- `rtk rg -n "mountinfo reports devpts at /dev/pts|mountinfo reports tmpfs at /tmp|random pseudo devices are readable|devpts exposes a usable ptmx device|orlix_test_plan\\(20\\)" OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/pseudo_fs_probe.c Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/pseudo_fs_probe.c`
+  - Found the 20-test plan and new pseudo-fs TAP labels in both durable overlay and generated Linux source.
+- `rtk rg -n "pseudo_fs_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  - `Build/OrlixMLibC/kselftest/release/kselftest-list.txt:18:orlix:pseudo_fs_probe`
+  - `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:25:file /orlix/pseudo_fs_probe ... 755 0 0`
+- `rtk git diff --check` exited 0.
+
+Non-claims:
+
+- This is not app-hosted product runtime proof.
+- This is not OCI Runtime lifecycle readiness.
+- This is not arbitrary device, PTY, or namespace coverage.
+- This is not a custom Orlix pseudo-fs API.
