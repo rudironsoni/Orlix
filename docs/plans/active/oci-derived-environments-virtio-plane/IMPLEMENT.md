@@ -11263,3 +11263,57 @@ Non-claims:
 
 - The overall OCI-derived environments goal remains incomplete.
 - There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.
+
+## 2026-06-21 - OCI Runtime state report baseline
+
+Changed:
+
+- Added `OrlixOCIRuntimeStateStatus` and `OrlixOCIRuntimeStateReport` to `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Extended `OrlixOCIRuntimeLifecycleController` with `stateReport()`.
+- Added lifecycle state-report tests to `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Scope:
+
+- The state report is deterministic OrlixOS data output for lifecycle records in `created`, `running`, and `stopped` states.
+- The report includes OCI version, id, status, pid, bundle path, annotations, and optional exit status.
+- `configured` and `deleted` states reject state reporting deterministically with `stateUnavailable`.
+- Parsed `annotations` now flow through `OrlixOCIRuntimeConfigDescriptor` into the state report after validation for empty/NUL keys or NUL values.
+- `jsonData()` emits stable sorted JSON for the report.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift /private/tmp/OrlixOCIRuntimeConfigParserCheck.swift` passed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed 5 tests.
+
+Blocked validation:
+
+- Targeted `xcodebuild` for the state-report tests still failed before XCTest execution because CoreSimulator returned service errors including `CoreSimulator.SimError` and Code 409.
+
+Non-claims:
+
+- This is not Linux process execution or a full OCI Runtime `state` command implementation.
+- This is not app-hosted product runtime proof.
+- This does not prove Linux `execve`, wait/reap, signal delivery, or actual exit-status runtime behavior.
+
+## 2026-06-21 - Current status after state report baseline
+
+Current status:
+
+- OrlixOS now has deterministic OCI Runtime feature reporting, expanded minimal Linux OCI Runtime `config.json` parsing, lifecycle state ordering, and OCI-shaped state report data for created/running/stopped records.
+- Lifecycle work remains data/state semantics only; actual Linux execution and app-hosted runtime proof remain unproven.
+- OrlixKernel substrate proof has recent coverage for virtio-fs path nodes, cgroup v2 child lifecycle, `/proc/net`/rtnetlink/loopback TCP/UDP, fd aliases, and pseudo-fs/device nodes.
+- Targeted simulator XCTest execution remains blocked by CoreSimulator service errors, so state-report tests are not claimed green through XCTest execution.
+
+Next aligned work:
+
+- Bind accepted lifecycle/config descriptors into real OrlixOS session execution and prove argv/env/cwd/user/stdio/lifecycle/exit status through Linux exec.
+- Continue Linux-owned namespace, mount, signal, fd, pseudo-fs, and virtio proof only where a concrete gap blocks OCI-derived environment execution.
+
+Non-claims:
+
+- The overall OCI-derived environments goal remains incomplete.
+- There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.
