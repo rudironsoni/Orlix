@@ -11721,3 +11721,38 @@ Non-claims:
 Current status:
 
 Latest checkpoint: OverlayFS copy-up/unlink substrate proof is built, installed, and packaged into the Orlix kselftest initramfs. Runtime execution of the bundled namespace and OverlayFS probes remains pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - POSIX mqueue Close Surface
+
+Status: build/install/package proof added for the OrlixMLibC POSIX message queue close surface used by the IPC namespace substrate probe.
+
+Changes:
+
+- Added `OrlixMLibC/Sources/patches/0002-posix-implement-mq-close.patch`.
+- The patch adds `mq_close(mqd_t)` to upstream mlibc's POSIX mqueue header and implements it by delegating to the existing Linux `Close` sysdep, matching OrlixMLibC's Linux `mqd_t` descriptor representation.
+- Updated `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/ipc_namespace_probe.c` so the POSIX mqueue namespace check uses `mq_close(3)` instead of direct `close(2)`.
+
+Validation:
+
+- Early patch-context attempts failed cleanly during `__apply-mlibc-patches`; the durable patch was corrected and generated OrlixMLibC outputs were cleaned with `rtk make -f OrlixMLibC/Makefile clean PROFILE=release`.
+- `rtk make -f OrlixMLibC/Makefile headers_install PROFILE=release` passed after the clean regenerated the sysroot.
+- `rtk err make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed.
+- `rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk grep -n "mq_close" Build/OrlixMLibC/sysroot/release/usr/include/mqueue.h Build/OrlixMLibC/src/mlibc-43ab07732cdf/options/posix/include/mqueue.h OrlixMLibC/Sources/patches/0002-posix-implement-mq-close.patch` found the generated and durable declarations.
+- `xcrun llvm-nm Build/OrlixMLibC/build/release/libc.a.p/options_posix_generic_mqueue.cpp.o | grep ' T mq_close'` found an unmangled exported C symbol.
+- `rtk grep -n "ipc_namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` found the installed and bundled IPC namespace probe.
+- `rtk test test -x Build/OrlixMLibC/kselftest/release/orlix/ipc_namespace_probe` passed.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is source/build/install/package evidence only; it is not a runtime-passed IPC namespace or POSIX mqueue test result.
+- This does not claim full POSIX mqueue conformance, OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
+- No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+
+Current status:
+
+Latest checkpoint: OrlixMLibC now exposes `mq_close(3)` and the IPC namespace probe builds against that POSIX surface. Runtime execution of the bundled probes remains pending before any OCI runtime readiness claim.
