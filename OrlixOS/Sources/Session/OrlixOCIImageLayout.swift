@@ -1280,6 +1280,7 @@ public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
 	case emptyProcessArgs
 	case invalidProcessArg(String)
 	case invalidEnvironmentEntry(String)
+	case invalidAnnotationEntry(String)
 	case invalidWorkingDirectory(String)
 	case invalidConsoleSize
 	case unsupportedLinuxFeature(String)
@@ -1287,6 +1288,7 @@ public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
 
 public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let ociVersion: String
+	public let annotations: [String: String]
 	public let rootPath: String?
 	public let rootReadonly: Bool
 	public let mounts: [OrlixOCIRuntimeMount]
@@ -1369,6 +1371,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 
 		return OrlixOCIRuntimeConfigDescriptor(
 			ociVersion: config.ociVersion,
+			annotations: try Self.validatedAnnotations(config.annotations ?? [:]),
 			rootPath: config.root?.path,
 			rootReadonly: config.root?.readonly ?? false,
 			mounts: mounts,
@@ -1409,6 +1412,20 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 
 		return environment
+	}
+
+	private static func validatedAnnotations(_ annotations: [String: String]) throws
+		-> [String: String]
+	{
+		for (key, value) in annotations {
+			guard !key.isEmpty,
+			      !key.contains("\u{0}"),
+			      !value.contains("\u{0}") else {
+				throw OrlixOCIRuntimeConfigError.invalidAnnotationEntry(key)
+			}
+		}
+
+		return annotations
 	}
 
 	private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
@@ -1520,6 +1537,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 
 private struct OCIRuntimeConfig: Decodable {
 	let ociVersion: String
+	let annotations: [String: String]?
 	let process: OCIRuntimeProcess?
 	let root: OCIRuntimeRoot?
 	let mounts: [OCIRuntimeMount]?
@@ -1612,6 +1630,29 @@ public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
 	case invalidTransition(from: OrlixOCIRuntimeLifecycleState,
 			       action: OrlixOCIRuntimeLifecycleAction)
 	case invalidSignal(Int32)
+	case stateUnavailable(OrlixOCIRuntimeLifecycleState)
+}
+
+public enum OrlixOCIRuntimeStateStatus: String, Codable, Equatable, Sendable {
+	case created
+	case running
+	case stopped
+}
+
+public struct OrlixOCIRuntimeStateReport: Codable, Equatable, Sendable {
+	public let ociVersion: String
+	public let id: String
+	public let status: OrlixOCIRuntimeStateStatus
+	public let pid: Int32?
+	public let bundle: String
+	public let annotations: [String: String]
+	public let exitStatus: Int32?
+
+	public func jsonData() throws -> Data {
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+		return try encoder.encode(self)
+	}
 }
 
 public struct OrlixOCIRuntimeLifecycleRecord: Codable, Equatable, Sendable {
@@ -1717,6 +1758,31 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 				action: .delete
 			)
 		}
+	}
+
+	public func stateReport() throws -> OrlixOCIRuntimeStateReport {
+		let status: OrlixOCIRuntimeStateStatus
+
+		switch record.state {
+		case .created:
+			status = .created
+		case .running:
+			status = .running
+		case .stopped:
+			status = .stopped
+		case .configured, .deleted:
+			throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
+		}
+
+		return OrlixOCIRuntimeStateReport(
+			ociVersion: config.ociVersion,
+			id: record.id,
+			status: status,
+			pid: record.pid,
+			bundle: record.bundlePath,
+			annotations: config.annotations,
+			exitStatus: record.exitStatus
+		)
 	}
 
 	private func withState(_ state: OrlixOCIRuntimeLifecycleState)

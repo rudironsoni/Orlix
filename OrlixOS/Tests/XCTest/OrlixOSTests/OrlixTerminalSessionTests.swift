@@ -5770,6 +5770,9 @@ extension OrlixTerminalSessionTests {
 			"""
 			{
 			  "ociVersion": "1.1.0",
+			  "annotations": {
+			    "org.opencontainers.image.ref.name": "orlix-demo"
+			  },
 			  "root": { "path": "rootfs", "readonly": true },
 			  "mounts": [
 			    {
@@ -5808,6 +5811,10 @@ extension OrlixTerminalSessionTests {
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
 
 		XCTAssertEqual(descriptor.ociVersion, "1.1.0")
+		XCTAssertEqual(
+			descriptor.annotations["org.opencontainers.image.ref.name"],
+			"orlix-demo"
+		)
 		XCTAssertEqual(descriptor.rootPath, "rootfs")
 		XCTAssertTrue(descriptor.rootReadonly)
 		XCTAssertEqual(descriptor.mounts.count, 2)
@@ -5997,6 +6004,72 @@ extension OrlixTerminalSessionTests {
 			XCTAssertEqual(
 				error as? OrlixOCIRuntimeLifecycleError,
 				.invalidTransition(from: .deleted, action: .create)
+			)
+		}
+	}
+
+	func testOCIRuntimeLifecycleControllerProducesStateReportJSON() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(
+			Data(
+				"""
+				{
+				  "ociVersion": "1.1.0",
+				  "annotations": { "org.opencontainers.image.ref.name": "orlix-demo" },
+				  "process": { "args": ["/bin/sh"], "cwd": "/" }
+				}
+				""".utf8
+			)
+		)
+		let stopped = try OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		.create()
+		.start(pid: 42)
+		.kill(signal: 15)
+
+		let report = try stopped.stateReport()
+		XCTAssertEqual(report.ociVersion, "1.1.0")
+		XCTAssertEqual(report.id, "oci-demo")
+		XCTAssertEqual(report.status, .stopped)
+		XCTAssertEqual(report.pid, 42)
+		XCTAssertEqual(report.bundle, "/bundles/oci-demo")
+		XCTAssertEqual(report.annotations["org.opencontainers.image.ref.name"], "orlix-demo")
+		XCTAssertEqual(report.exitStatus, 143)
+
+		let json = String(decoding: try report.jsonData(), as: UTF8.self)
+		XCTAssertTrue(json.contains(#""bundle" : "/bundles/oci-demo""#))
+		XCTAssertTrue(json.contains(#""id" : "oci-demo""#))
+		XCTAssertTrue(json.contains(#""status" : "stopped""#))
+		XCTAssertTrue(json.contains(#""pid" : 42"#))
+
+		let decoded = try JSONDecoder().decode(
+			OrlixOCIRuntimeStateReport.self,
+			from: try report.jsonData()
+		)
+		XCTAssertEqual(decoded, report)
+	}
+
+	func testOCIRuntimeLifecycleControllerRejectsUnavailableStateReports() throws {
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig()),
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+
+		XCTAssertThrowsError(try configured.stateReport()) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.stateUnavailable(.configured)
+			)
+		}
+
+		let deleted = try configured.delete()
+		XCTAssertThrowsError(try deleted.stateReport()) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.stateUnavailable(.deleted)
 			)
 		}
 	}
