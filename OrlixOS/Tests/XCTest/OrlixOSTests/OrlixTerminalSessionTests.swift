@@ -5771,6 +5771,19 @@ extension OrlixTerminalSessionTests {
 			{
 			  "ociVersion": "1.1.0",
 			  "root": { "path": "rootfs", "readonly": true },
+			  "mounts": [
+			    {
+			      "destination": "/proc",
+			      "type": "proc",
+			      "source": "proc",
+			      "options": ["nosuid", "noexec", "nodev"]
+			    },
+			    {
+			      "destination": "/tmp",
+			      "type": "tmpfs",
+			      "source": "tmpfs"
+			    }
+			  ],
 			  "process": {
 			    "terminal": false,
 			    "args": ["/bin/sh", "-lc", "echo ok"],
@@ -5796,6 +5809,13 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.ociVersion, "1.1.0")
 		XCTAssertEqual(descriptor.rootPath, "rootfs")
 		XCTAssertTrue(descriptor.rootReadonly)
+		XCTAssertEqual(descriptor.mounts.count, 2)
+		XCTAssertEqual(descriptor.mounts[0].destination, "/proc")
+		XCTAssertEqual(descriptor.mounts[0].type, "proc")
+		XCTAssertEqual(descriptor.mounts[0].source, "proc")
+		XCTAssertEqual(descriptor.mounts[0].options, ["nosuid", "noexec", "nodev"])
+		XCTAssertEqual(descriptor.mounts[1].destination, "/tmp")
+		XCTAssertEqual(descriptor.mounts[1].type, "tmpfs")
 		XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo ok"])
 		XCTAssertEqual(descriptor.defaultEnvironment["PATH"], "/usr/bin:/bin")
 		XCTAssertEqual(descriptor.defaultEnvironment["TERM"], "xterm-256color")
@@ -5827,7 +5847,9 @@ extension OrlixTerminalSessionTests {
 			("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
 			("maskedPaths", #""maskedPaths": ["/proc/kcore"]"#),
 			("readonlyPaths", #""readonlyPaths": ["/proc/sys"]"#),
-			("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#)
+			("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
+			("cgroupsPath", #""cgroupsPath": "/orlix/demo""#),
+			("netDevices", #""netDevices": [{ "name": "eth0" }]"#)
 		]
 
 		for (feature, linuxFragment) in unsupportedFeatureConfigs {
@@ -5846,6 +5868,67 @@ extension OrlixTerminalSessionTests {
 					error as? OrlixOCIRuntimeConfigError,
 					.unsupportedLinuxFeature("linux.\(feature)")
 				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedProcessFeatures() throws {
+		let unsupportedProcessConfigs: [(String, String)] = [
+			("rlimits", #""rlimits": [{ "type": "RLIMIT_NOFILE", "hard": 1024, "soft": 1024 }]"#),
+			("capabilities", #""capabilities": { "bounding": ["CAP_NET_ADMIN"] }"#),
+			("apparmorProfile", #""apparmorProfile": "container-default""#),
+			("selinuxLabel", #""selinuxLabel": "system_u:system_r:container_t:s0""#),
+			("noNewPrivileges", #""noNewPrivileges": true"#)
+		]
+
+		for (feature, processFragment) in unsupportedProcessConfigs {
+			let config = Data(
+				"""
+				{
+				  "ociVersion": "1.1.0",
+				  "process": {
+				    "args": ["/bin/sh"],
+				    "cwd": "/",
+				    \(processFragment)
+				  }
+				}
+				""".utf8
+			)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeConfigError,
+					.unsupportedLinuxFeature("process.\(feature)")
+				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
+		let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [
+			(
+				#"{ "destination": "/sys/fs/cgroup", "type": "cgroup2", "source": "cgroup2" }"#,
+				.unsupportedLinuxFeature("mounts.type.cgroup2")
+			),
+			(
+				#"{ "destination": "relative", "type": "tmpfs", "source": "tmpfs" }"#,
+				.unsupportedLinuxFeature("mounts.destination")
+			)
+		]
+
+		for (mountFragment, expectedError) in unsupportedMountConfigs {
+			let config = Data(
+				"""
+				{
+				  "ociVersion": "1.1.0",
+				  "process": { "args": ["/bin/sh"], "cwd": "/" },
+				  "mounts": [\(mountFragment)]
+				}
+				""".utf8
+			)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+				XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
 			}
 		}
 	}

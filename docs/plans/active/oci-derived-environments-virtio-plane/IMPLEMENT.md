@@ -11096,3 +11096,64 @@ Non-claims:
 
 - The overall OCI-derived environments goal remains incomplete.
 - There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.
+
+## 2026-06-21 - OCI Runtime config parser schema-field expansion
+
+Changed:
+
+- Extended `OrlixOCIRuntimeConfigParser` in `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Added `OrlixOCIRuntimeMount` as the accepted in-memory shape for supported OCI mount declarations.
+- Extended `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` parser coverage.
+
+Scope:
+
+- The parser now accepts supported OCI `mounts[]` entries for `proc`, `sysfs`, `devtmpfs`, `devpts`, and `tmpfs` when destinations are absolute Linux paths.
+- The parser now rejects unsupported mount types and relative mount destinations deterministically.
+- The parser now rejects known unsupported process fields deterministically:
+  - `process.rlimits`
+  - `process.capabilities`
+  - `process.apparmorProfile`
+  - `process.selinuxLabel`
+  - `process.noNewPrivileges`
+- The parser now rejects additional unsupported Linux fields deterministically:
+  - `linux.cgroupsPath`
+  - `linux.netDevices`
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift /private/tmp/OrlixOCIRuntimeConfigParserCheck.swift` passed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed 5 tests.
+
+Blocked validation:
+
+- Targeted `xcodebuild` for the config parser tests again failed before XCTest execution because CoreSimulator returned service errors including `CoreSimulator.SimError` and Code 410.
+
+Non-claims:
+
+- This is not pinned upstream OCI Runtime JSON schema validation.
+- This is not OCI Runtime lifecycle compliance.
+- Accepted mount declarations are parsed and validated as OrlixOS config data; this does not yet perform OCI lifecycle mount setup.
+- This does not add support for process rlimits, capabilities, AppArmor, SELinux, no-new-privileges, cgroupsPath, netDevices, or custom Orlix ABI.
+
+## 2026-06-21 - Current status after config parser field expansion
+
+Current status:
+
+- OrlixOS now has deterministic OCI Runtime feature reporting and an expanded minimal Linux OCI Runtime `config.json` parser/converter baseline.
+- The parser accepts process defaults, root info, recognized namespaces, and supported pseudo-filesystem mount declarations while rejecting unsupported Linux/process fields deterministically.
+- OrlixKernel substrate proof has recent coverage for virtio-fs path nodes, cgroup v2 child lifecycle, `/proc/net`/rtnetlink/loopback TCP/UDP, fd aliases, and pseudo-fs/device nodes.
+- Targeted simulator XCTest execution remains blocked by CoreSimulator service errors, so parser tests are not claimed green through XCTest execution.
+
+Next aligned work:
+
+- Add pinned upstream OCI Runtime schema validation or begin deterministic OrlixOS lifecycle command/state semantics around accepted descriptors.
+- Continue Linux-owned namespace, mount, signal, fd, pseudo-fs, and virtio proof only where a concrete requirement gap blocks OCI-derived environment execution.
+
+Non-claims:
+
+- The overall OCI-derived environments goal remains incomplete.
+- There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.
