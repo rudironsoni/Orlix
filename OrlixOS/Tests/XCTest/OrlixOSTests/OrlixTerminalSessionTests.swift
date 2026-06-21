@@ -5953,6 +5953,32 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeConfigParserRejectsUnsupportedHooks() throws {
+		let config = Data("""
+		{
+		  "ociVersion": "1.1.0",
+		  "process": {
+		    "args": ["/bin/sh"],
+		    "cwd": "/",
+		    "env": ["PATH=/usr/bin"]
+		  },
+		  "root": { "path": "rootfs" },
+		  "hooks": {
+		    "prestart": [
+		      { "path": "/usr/bin/prepare-container", "args": ["prepare-container"] }
+		    ]
+		  }
+		}
+		""".utf8)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeConfigError,
+				.unsupportedLinuxFeature("hooks.prestart")
+			)
+		}
+	}
+
 	func testOCIRuntimeConfigParserRejectsUnsupportedVersionAndConsoleSize() throws {
 		let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
 			(

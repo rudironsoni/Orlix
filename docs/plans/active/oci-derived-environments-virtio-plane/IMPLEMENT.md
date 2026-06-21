@@ -11792,3 +11792,40 @@ Non-claims:
 Current status:
 
 Latest checkpoint: OCI runtime configs with non-empty `linux.sysctl` now fail closed instead of being silently ignored. Runtime execution of the bundled probes and app-hosted OCI-derived sessions remains pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - OCI Runtime Hooks Rejection
+
+Status: parser guard added for OCI runtime `hooks`.
+
+Changes:
+
+- Added `hooks` decoding to `OCIRuntimeConfig` in `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Added `OCIRuntimeHooks` and `OCIRuntimeHook` decode models so hook sections are not silently ignored by Swift `Decodable`.
+- `OrlixOCIRuntimeConfigParser` now rejects non-empty `prestart`, `createRuntime`, `createContainer`, `startContainer`, `poststart`, and `poststop` hook arrays with deterministic `unsupportedLinuxFeature("hooks.<name>")` errors.
+- Added `testOCIRuntimeConfigParserRejectsUnsupportedHooks` in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Rationale:
+
+- OCI runtime hooks are lifecycle actions. Orlix cannot accept them until hook execution is implemented through the correct OrlixOS/Linux session lifecycle without host leakage or a custom ABI.
+- Decoding and rejecting non-empty hook sections keeps imported runtime configs fail-closed instead of silently dropping lifecycle behavior.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` completed with warnings/build metadata only in the visible output.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is parser/source/build evidence only; it is not OCI hook execution support.
+- This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
+- No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+
+Current status:
+
+Latest checkpoint: OCI runtime configs with non-empty hook arrays now fail closed instead of being silently ignored. Runtime execution of bundled probes, hook execution, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
