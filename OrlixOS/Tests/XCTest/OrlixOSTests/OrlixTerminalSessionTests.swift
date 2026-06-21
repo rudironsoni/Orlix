@@ -973,6 +973,44 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.env0=PATH=/usr/bin:/bin"))
     }
 
+    func testEnvironmentRootImageCommandLineKeysMatchInitParserContract() throws {
+        let initSource = try String(
+            contentsOf: try repositoryRoot()
+                .appendingPathComponent("OrlixOS/Sources/init/init.c")
+        )
+
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_decoded(\"\\(OrlixEnvironmentRootImage.defaultExecCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(
+            initSource.contains(
+                "snprintf(key, sizeof(key), \"\\(OrlixEnvironmentRootImage.defaultArgumentCommandLineKeyPrefix)%d=\","
+            )
+        )
+        XCTAssertTrue(
+            initSource.contains(
+                "snprintf(key, sizeof(key), \"\\(OrlixEnvironmentRootImage.defaultEnvironmentCommandLineKeyPrefix)%d=\","
+            )
+        )
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_decoded(\"\\(OrlixEnvironmentRootImage.defaultWorkingDirectoryCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_unsigned(\"\\(OrlixEnvironmentRootImage.defaultUserIDCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_unsigned(\"\\(OrlixEnvironmentRootImage.defaultGroupIDCommandLineKey)=\","
+            )
+        )
+    }
+
     func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
         let root = temporaryRegistryRoot()
         let layout = try OrlixEnvironmentStorageLayout.layout(
