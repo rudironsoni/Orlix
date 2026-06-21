@@ -11865,3 +11865,39 @@ Non-claims:
 Current status:
 
 Latest checkpoint: OCI runtime configs with a non-empty hostname now fail closed instead of being silently ignored. Runtime execution of bundled probes, hostname application, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.
+
+## 2026-06-21 - OCI Runtime Root Readonly Rejection
+
+Status: parser guard added for OCI runtime `root.readonly`.
+
+Changes:
+
+- `OrlixOCIRuntimeConfigParser` now rejects `root.readonly: true` with `unsupportedLinuxFeature("root.readonly")`.
+- Updated the supported minimal runtime config parser test to use `root.readonly: false`.
+- Added `testOCIRuntimeConfigParserRejectsUnsupportedRootReadonly` in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Rationale:
+
+- OCI `root.readonly` is Linux-visible root mount policy. The parser previously carried `rootReadonly` as metadata, but the OCI-derived session/root mount path does not yet prove read-only root enforcement through Linux mechanisms.
+- Rejecting `root.readonly: true` avoids pretending imported OCI configs can enforce a read-only root before that behavior is implemented and proven.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` completed with warnings/build metadata only in the visible output.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is parser/source/build evidence only; it is not read-only root enforcement.
+- This does not claim OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, or app-hosted execution proof.
+- No custom ABI, Darwin host leakage, Docker daemon, `runc`, Apple Containerization, Virtualization.framework, or host-side Linux facade was introduced.
+
+Current status:
+
+Latest checkpoint: OCI runtime configs requesting `root.readonly: true` now fail closed instead of being accepted as unenforced metadata. Runtime execution of bundled probes, read-only root enforcement, and app-hosted OCI-derived sessions remain pending before any OCI runtime readiness claim.

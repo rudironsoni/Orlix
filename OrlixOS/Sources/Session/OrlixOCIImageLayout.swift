@@ -1371,6 +1371,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		let consoleSize = try Self.validatedConsoleSize(process.consoleSize,
 							       terminal: terminal)
 
+		try Self.rejectUnsupportedRootReadonly(config.root)
 		return OrlixOCIRuntimeConfigDescriptor(
 			ociVersion: config.ociVersion,
 			annotations: try Self.validatedAnnotations(config.annotations ?? [:]),
@@ -1435,6 +1436,12 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			return
 		}
 		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("hostname")
+	}
+
+	private static func rejectUnsupportedRootReadonly(_ root: OCIRuntimeRoot?) throws {
+		if root?.readonly == true {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("root.readonly")
+		}
 	}
 
 	private static func rejectUnsupportedHooks(_ hooks: OCIRuntimeHooks?) throws {
