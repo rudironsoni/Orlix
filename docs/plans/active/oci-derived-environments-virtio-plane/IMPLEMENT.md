@@ -11317,3 +11317,37 @@ Non-claims:
 
 - The overall OCI-derived environments goal remains incomplete.
 - There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.
+
+## 2026-06-21 - OCI Runtime Session Descriptor Projection
+
+Status: source-level checkpoint accepted; app-hosted XCTest execution not proven.
+
+Changes:
+
+- Added `OrlixOCIRuntimeSessionDescriptor` in `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` as an SPI-only OrlixOS projection from OCI runtime lifecycle state into the existing `OrlixEnvironmentDescriptor` session-selection surface.
+- Added `OrlixOCIRuntimeLifecycleController.sessionDescriptor(rootMount:)`, which returns a descriptor only for `.created`, `.running`, and `.stopped` lifecycle records and rejects `.configured`/`.deleted` with existing `OrlixOCIRuntimeLifecycleError.stateUnavailable`.
+- Added XCTest coverage in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` proving parsed OCI `process.args`, `process.env`, `process.cwd`, `process.user.uid/gid`, root path, root mount, and lifecycle state flow into the existing OrlixOS environment descriptor without adding a HostAdapter API or Linux-visible ABI.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift /private/tmp/OrlixOCIRuntimeConfigParserCheck.swift` passed.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the pre-existing warning: `IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status`.
+- Targeted `rtk xcodebuild ... -scheme OrlixOSTests ... -only-testing:...testOCIRuntimeLifecycleControllerProducesSessionDescriptor ... -only-testing:...testOCIRuntimeLifecycleControllerRejectsUnavailableSessionDescriptors test` did not complete; the first run used an unavailable `iPhone 16` destination, and the retry on available `iPhone 17, OS=26.5` stayed silent for several minutes and was interrupted with exit 130. XCTest execution is therefore not claimed.
+
+Non-claims:
+
+- This does not prove OCI Runtime lifecycle compliance.
+- This does not prove app-hosted execution of imported OCI rootfs payloads.
+- This does not add or require any custom Linux ABI, HostAdapter API, Apple container runtime, VM lifecycle, Docker/runc daemon, or Darwin-visible Linux policy.
+- This does not prove product runtime readiness or the ADR 0017 proof ladder.
+
+Handoff:
+
+- Current status: OCI runtime config can now project a lifecycle-created/running/stopped record into the existing OrlixOS environment descriptor/session-selection data surface; this is source-level policy plumbing only.
+- Continue by wiring that descriptor into the existing OrlixOS session launch path only where it preserves Linux-owned process semantics and does not add HostAdapter or Linux-visible ABI.
+- Re-run targeted `OrlixOSTests` once CoreSimulator is responsive; the most recent available-simulator attempt was interrupted after several silent minutes and is not a pass.
