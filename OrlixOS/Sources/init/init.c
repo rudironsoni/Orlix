@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -17,6 +18,13 @@
 #include <unistd.h>
 
 #define ORLIX_INIT_CMDLINE_SIZE 16384
+#define ORLIX_INIT_MAX_RLIMITS 16
+
+struct orlix_rlimit_config {
+	int resource;
+	rlim_t soft;
+	rlim_t hard;
+};
 
 static int write_all(int fd, const void *bytes, size_t length)
 {
@@ -369,6 +377,145 @@ static int read_cmdline_decoded(const char *key, char *value,
 	return percent_decode(value);
 }
 
+static int parse_rlimit_number(const char *value, rlim_t *out)
+{
+	char *end = NULL;
+	unsigned long long parsed;
+
+	errno = 0;
+	parsed = strtoull(value, &end, 10);
+	if (errno != 0 || end == value || *end != '\0')
+		return -1;
+	*out = (rlim_t)parsed;
+	return 0;
+}
+
+static int rlimit_resource_from_name(const char *name, int *resource)
+{
+#ifdef RLIMIT_AS
+	if (strcmp(name, "RLIMIT_AS") == 0) {
+		*resource = RLIMIT_AS;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_CORE
+	if (strcmp(name, "RLIMIT_CORE") == 0) {
+		*resource = RLIMIT_CORE;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_CPU
+	if (strcmp(name, "RLIMIT_CPU") == 0) {
+		*resource = RLIMIT_CPU;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_DATA
+	if (strcmp(name, "RLIMIT_DATA") == 0) {
+		*resource = RLIMIT_DATA;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_FSIZE
+	if (strcmp(name, "RLIMIT_FSIZE") == 0) {
+		*resource = RLIMIT_FSIZE;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_LOCKS
+	if (strcmp(name, "RLIMIT_LOCKS") == 0) {
+		*resource = RLIMIT_LOCKS;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_MEMLOCK
+	if (strcmp(name, "RLIMIT_MEMLOCK") == 0) {
+		*resource = RLIMIT_MEMLOCK;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_MSGQUEUE
+	if (strcmp(name, "RLIMIT_MSGQUEUE") == 0) {
+		*resource = RLIMIT_MSGQUEUE;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_NICE
+	if (strcmp(name, "RLIMIT_NICE") == 0) {
+		*resource = RLIMIT_NICE;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_NOFILE
+	if (strcmp(name, "RLIMIT_NOFILE") == 0) {
+		*resource = RLIMIT_NOFILE;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_NPROC
+	if (strcmp(name, "RLIMIT_NPROC") == 0) {
+		*resource = RLIMIT_NPROC;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_RSS
+	if (strcmp(name, "RLIMIT_RSS") == 0) {
+		*resource = RLIMIT_RSS;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_RTPRIO
+	if (strcmp(name, "RLIMIT_RTPRIO") == 0) {
+		*resource = RLIMIT_RTPRIO;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_RTTIME
+	if (strcmp(name, "RLIMIT_RTTIME") == 0) {
+		*resource = RLIMIT_RTTIME;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_SIGPENDING
+	if (strcmp(name, "RLIMIT_SIGPENDING") == 0) {
+		*resource = RLIMIT_SIGPENDING;
+		return 0;
+	}
+#endif
+#ifdef RLIMIT_STACK
+	if (strcmp(name, "RLIMIT_STACK") == 0) {
+		*resource = RLIMIT_STACK;
+		return 0;
+	}
+#endif
+	return -1;
+}
+
+static int parse_rlimit_value(char *value, struct orlix_rlimit_config *limit)
+{
+	char *soft_text;
+	char *hard_text;
+
+	soft_text = strchr(value, ':');
+	if (soft_text == NULL)
+		return -1;
+	*soft_text++ = '\0';
+	hard_text = strchr(soft_text, ':');
+	if (hard_text == NULL)
+		return -1;
+	*hard_text++ = '\0';
+	if (strchr(hard_text, ':') != NULL)
+		return -1;
+	if (rlimit_resource_from_name(value, &limit->resource) != 0)
+		return -1;
+	if (parse_rlimit_number(soft_text, &limit->soft) != 0 ||
+	    parse_rlimit_number(hard_text, &limit->hard) != 0)
+		return -1;
+	if (limit->soft > limit->hard)
+		return -1;
+	return 0;
+}
+
 static int read_cmdline_unsigned(const char *key, unsigned long *value)
 {
 	char buffer[32];
@@ -426,12 +573,14 @@ struct orlix_command_config {
 	char cwd[ORLIX_INIT_VALUE_SIZE];
 	char hostname[ORLIX_INIT_VALUE_SIZE];
 	char domainname[ORLIX_INIT_VALUE_SIZE];
+	struct orlix_rlimit_config rlimits[ORLIX_INIT_MAX_RLIMITS];
 	char *argv[ORLIX_INIT_MAX_ARGS + 2];
 	char *envp[ORLIX_INIT_MAX_ENV + 1];
 	int argc;
 	int envc;
 	int has_hostname;
 	int has_domainname;
+	int rlimitc;
 	unsigned long uid;
 	unsigned long gid;
 	unsigned long umask_value;
@@ -524,6 +673,20 @@ static void selected_command_config(struct orlix_command_config *config)
 	(void)read_cmdline_unsigned("orlix.gid=", &config->gid);
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
+	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
+		char key[32];
+		char value[ORLIX_INIT_VALUE_SIZE];
+
+		snprintf(key, sizeof(key), "orlix.rlimit%d=", i);
+		if (read_cmdline_value(key, value, sizeof(value)) != 0)
+			continue;
+		if (parse_rlimit_value(value, &config->rlimits[config->rlimitc]) != 0) {
+			write_literal(STDERR_FILENO,
+				      "orlix-init: invalid rlimit config\n");
+			_exit(127);
+		}
+		config->rlimitc++;
+	}
 	if (read_cmdline_decoded("orlix.hostname=", config->hostname,
 				 sizeof(config->hostname)) == 0 &&
 	    config->hostname[0] != '\0')
@@ -725,6 +888,21 @@ static void apply_uts_config(const struct orlix_command_config *config)
 		write_literal(STDERR_FILENO, "orlix-init: setdomainname failed\n");
 }
 
+static void apply_rlimits(const struct orlix_command_config *config)
+{
+	for (int i = 0; i < config->rlimitc; i++) {
+		struct rlimit limit;
+
+		limit.rlim_cur = config->rlimits[i].soft;
+		limit.rlim_max = config->rlimits[i].hard;
+		if (setrlimit(config->rlimits[i].resource, &limit) != 0) {
+			write_literal(STDERR_FILENO,
+				      "orlix-init: setrlimit failed\n");
+			_exit(127);
+		}
+	}
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -755,6 +933,7 @@ static pid_t start_command_on_pty(int master, int slave)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
 	if (config->has_umask)
 		(void)umask((mode_t)config->umask_value);
+	apply_rlimits(config);
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: setgid failed\n");
 	if (config->uid != 0 && setuid((uid_t)config->uid) != 0)

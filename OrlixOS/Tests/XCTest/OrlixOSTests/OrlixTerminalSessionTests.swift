@@ -942,7 +942,10 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultWorkingDirectory: "/work/../project",
             defaultUserID: 0,
             defaultGroupID: 0,
-            defaultUmask: 18
+            defaultUmask: 18,
+            defaultRlimits: [
+                OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 64)
+            ]
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -972,6 +975,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.argv2=arg%20with%20space"))
         XCTAssertTrue(commandLine.contains("orlix.cwd=/work/../project"))
         XCTAssertTrue(commandLine.contains("orlix.umask=18"))
+        XCTAssertTrue(commandLine.contains("orlix.rlimit0=RLIMIT_NOFILE:64:64"))
     }
 
     func testEnvironmentRootImageEncodesPathLookupCommandName() throws {
@@ -5874,7 +5878,10 @@ extension OrlixTerminalSessionTests {
 			    "args": ["/bin/sh", "-lc", "echo ok"],
 			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
 			    "cwd": "/work",
-			    "user": { "uid": 1000, "gid": 1000, "umask": 18 }
+			    "user": { "uid": 1000, "gid": 1000, "umask": 18 },
+			    "rlimits": [
+			      { "type": "RLIMIT_NOFILE", "soft": 64, "hard": 64 }
+			    ]
 			  },
 			  "linux": {
 			    "namespaces": [
@@ -5912,6 +5919,9 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.defaultUserID, 1000)
 		XCTAssertEqual(descriptor.defaultGroupID, 1000)
 		XCTAssertEqual(descriptor.defaultUmask, 18)
+		XCTAssertEqual(descriptor.defaultRlimits, [
+			OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 64)
+		])
 		XCTAssertTrue(descriptor.terminal)
 		XCTAssertEqual(descriptor.consoleSize, OrlixOCIRuntimeConsoleSize(height: 24, width: 80))
 		XCTAssertEqual(descriptor.namespaces, ["mount", "pid", "uts", "ipc", "network"])
@@ -5928,6 +5938,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultUserID, descriptor.defaultUserID)
 		XCTAssertEqual(environment.defaultGroupID, descriptor.defaultGroupID)
 		XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
+		XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
 	}
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxFeatures() throws {
@@ -5968,7 +5979,6 @@ extension OrlixTerminalSessionTests {
 	func testOCIRuntimeConfigParserRejectsUnsupportedProcessFeatures() throws {
 		let unsupportedProcessConfigs: [(String, String)] = [
 			("user.additionalGids", #""user": { "uid": 0, "gid": 0, "additionalGids": [1] }"#),
-			("rlimits", #""rlimits": [{ "type": "RLIMIT_NOFILE", "hard": 1024, "soft": 1024 }]"#),
 			("capabilities", #""capabilities": { "bounding": ["CAP_NET_ADMIN"] }"#),
 			("apparmorProfile", #""apparmorProfile": "container-default""#),
 			("selinuxLabel", #""selinuxLabel": "system_u:system_r:container_t:s0""#),
@@ -6064,6 +6074,35 @@ extension OrlixTerminalSessionTests {
 				XCTAssertEqual(
 					error as? OrlixOCIRuntimeConfigError,
 					.unsupportedLinuxFeature(feature)
+				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedProcessRlimits() throws {
+		let fields: [(String, String)] = [
+			("unknown", #""rlimits": [{ "type": "RLIMIT_UNKNOWN", "hard": 64, "soft": 64 }]"#),
+			("reversed", #""rlimits": [{ "type": "RLIMIT_NOFILE", "hard": 32, "soft": 64 }]"#),
+			("duplicate", #""rlimits": [{ "type": "RLIMIT_NOFILE", "hard": 64, "soft": 64 }, { "type": "RLIMIT_NOFILE", "hard": 64, "soft": 64 }]"#)
+		]
+
+		for (feature, field) in fields {
+			let config = Data("""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": {
+			    "args": ["/bin/sh"],
+			    "cwd": "/",
+			    \(field)
+			  },
+			  "root": { "path": "rootfs" }
+			}
+			""".utf8)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeConfigError,
+					.unsupportedLinuxFeature("process.rlimits")
 				)
 			}
 		}

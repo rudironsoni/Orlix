@@ -1302,6 +1302,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultUserID: UInt32
 	public let defaultGroupID: UInt32
 	public let defaultUmask: UInt32?
+	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
 	public let consoleSize: OrlixOCIRuntimeConsoleSize?
 	public let namespaces: [String]
@@ -1323,6 +1324,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultUserID: defaultUserID,
 			defaultGroupID: defaultGroupID,
 			defaultUmask: defaultUmask,
+			defaultRlimits: defaultRlimits,
 			hostname: hostname,
 			domainname: domainname,
 			rootMount: rootMount,
@@ -1398,6 +1400,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultUserID: process.user?.uid ?? 0,
 			defaultGroupID: process.user?.gid ?? 0,
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
+			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
 			consoleSize: consoleSize,
 			namespaces: namespaces
@@ -1476,6 +1479,47 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		return value
 	}
+
+	private static func validatedRlimits(_ values: [OCIRuntimeRlimit]?) throws -> [OrlixEnvironmentRlimit] {
+		guard let values else {
+			return []
+		}
+		var seen = Set<String>()
+		var rlimits: [OrlixEnvironmentRlimit] = []
+		for value in values {
+			guard supportedRlimitTypes.contains(value.type),
+			      value.soft <= value.hard,
+			      seen.insert(value.type).inserted
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.rlimits")
+			}
+			rlimits.append(OrlixEnvironmentRlimit(
+				type: value.type,
+				soft: value.soft,
+				hard: value.hard
+			))
+		}
+		return rlimits
+	}
+
+	private static let supportedRlimitTypes: Set<String> = [
+		"RLIMIT_AS",
+		"RLIMIT_CORE",
+		"RLIMIT_CPU",
+		"RLIMIT_DATA",
+		"RLIMIT_FSIZE",
+		"RLIMIT_LOCKS",
+		"RLIMIT_MEMLOCK",
+		"RLIMIT_MSGQUEUE",
+		"RLIMIT_NICE",
+		"RLIMIT_NOFILE",
+		"RLIMIT_NPROC",
+		"RLIMIT_RSS",
+		"RLIMIT_RTPRIO",
+		"RLIMIT_RTTIME",
+		"RLIMIT_SIGPENDING",
+		"RLIMIT_STACK"
+	]
 
 	private static func rejectUnsupportedNonLinuxPlatformConfig(_ config: OCIRuntimeConfig) throws {
 		if config.solaris != nil {
@@ -1566,9 +1610,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	private static func rejectUnsupportedProcessFeatures(_ process: OCIRuntimeProcess) throws {
 		if let additionalGids = process.user?.additionalGids, !additionalGids.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.additionalGids")
-		}
-		if let rlimits = process.rlimits, !rlimits.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.rlimits")
 		}
 		if process.capabilities != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.capabilities")
@@ -1824,7 +1865,11 @@ private struct OCIProcessConsoleSize: Decodable {
 	let height: UInt32
 	let width: UInt32
 }
-private struct OCIRuntimeRlimit: Decodable {}
+private struct OCIRuntimeRlimit: Decodable {
+	let type: String
+	let hard: UInt64
+	let soft: UInt64
+}
 private struct OCIRuntimeCapabilities: Decodable {}
 private struct OCIRuntimeNetDevice: Decodable {}
 

@@ -22,6 +22,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultUserID: UInt32
     public let defaultGroupID: UInt32
     public let defaultUmask: UInt32?
+    public let defaultRlimits: [OrlixEnvironmentRlimit]
     public let hostname: String?
     public let domainname: String?
     public let rootMount: OrlixEnvironmentRootMount
@@ -46,6 +47,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             defaultUserID: 0,
             defaultGroupID: 0,
             defaultUmask: nil,
+            defaultRlimits: [],
             hostname: nil,
             domainname: nil,
             rootMount: .defaultOverlay,
@@ -64,6 +66,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultUserID: UInt32,
         defaultGroupID: UInt32,
         defaultUmask: UInt32? = nil,
+        defaultRlimits: [OrlixEnvironmentRlimit] = [],
         hostname: String? = nil,
         domainname: String? = nil,
         rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
@@ -79,6 +82,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultUserID = defaultUserID
         self.defaultGroupID = defaultGroupID
         self.defaultUmask = defaultUmask
+        self.defaultRlimits = defaultRlimits
         self.hostname = hostname
         self.domainname = domainname
         self.rootMount = rootMount
@@ -96,6 +100,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultUserID
         case defaultGroupID
         case defaultUmask
+        case defaultRlimits
         case hostname
         case domainname
         case rootMount
@@ -138,6 +143,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             UInt32.self,
             forKey: .defaultUmask
         )
+        self.defaultRlimits = try container.decodeIfPresent(
+            [OrlixEnvironmentRlimit].self,
+            forKey: .defaultRlimits
+        ) ?? []
         self.hostname = try container.decodeIfPresent(
             String.self,
             forKey: .hostname
@@ -167,8 +176,26 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         try container.encode(defaultWorkingDirectory, forKey: .defaultWorkingDirectory)
         try container.encode(defaultUserID, forKey: .defaultUserID)
         try container.encode(defaultGroupID, forKey: .defaultGroupID)
+        try container.encodeIfPresent(defaultUmask, forKey: .defaultUmask)
+        if !defaultRlimits.isEmpty {
+            try container.encode(defaultRlimits, forKey: .defaultRlimits)
+        }
+        try container.encodeIfPresent(hostname, forKey: .hostname)
+        try container.encodeIfPresent(domainname, forKey: .domainname)
         try container.encode(rootMount, forKey: .rootMount)
         try container.encode(mounts, forKey: .mounts)
+    }
+}
+
+public struct OrlixEnvironmentRlimit: Codable, Equatable, Sendable {
+    public let type: String
+    public let soft: UInt64
+    public let hard: UInt64
+
+    public init(type: String, soft: UInt64, hard: UInt64) {
+        self.type = type
+        self.soft = soft
+        self.hard = hard
     }
 }
 
@@ -475,6 +502,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultUserIDCommandLineKey = "orlix.uid"
     public static let defaultGroupIDCommandLineKey = "orlix.gid"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
+    public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
     public static let hostnameCommandLineKey = "orlix.hostname"
     public static let domainnameCommandLineKey = "orlix.domainname"
 
@@ -635,6 +663,16 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         }
     }
 
+    private static func validateRlimit(_ rlimit: OrlixEnvironmentRlimit) throws {
+        guard !rlimit.type.isEmpty,
+              !rlimit.type.contains(":"),
+              !rlimit.type.contains("\u{0}"),
+              rlimit.soft <= rlimit.hard
+        else {
+            throw OrlixEnvironmentRootImageError.invalidDefaultRlimit(rlimit.type)
+        }
+    }
+
     private static func validateSupportedMounts(
         _ mounts: [OrlixEnvironmentMount]
     ) throws {
@@ -675,6 +713,12 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         tokens.append("\(defaultGroupIDCommandLineKey)=\(descriptor.defaultGroupID)")
         if let defaultUmask = descriptor.defaultUmask {
             tokens.append("\(defaultUmaskCommandLineKey)=\(defaultUmask)")
+        }
+        for (index, rlimit) in descriptor.defaultRlimits.enumerated() {
+            try validateRlimit(rlimit)
+            tokens.append(
+                "\(defaultRlimitCommandLineKeyPrefix)\(index)=\(rlimit.type):\(rlimit.soft):\(rlimit.hard)"
+            )
         }
         if let hostname = descriptor.hostname, !hostname.isEmpty {
             tokens.append("\(hostnameCommandLineKey)=\(percentEncoded(hostname))")
@@ -732,6 +776,7 @@ public enum OrlixEnvironmentRootImageError:
     case invalidDefaultArgument(String)
     case invalidDefaultEnvironment(String)
     case invalidDefaultWorkingDirectory(String)
+    case invalidDefaultRlimit(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
 
