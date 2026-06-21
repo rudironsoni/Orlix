@@ -12725,3 +12725,91 @@ Notes:
   external networking, virtio-net readiness, seccomp/hooks/cgroup resource
   support, `linux.readonlyPaths`, `linux.maskedPaths`, the third-party package
   ladder, or full product runtime readiness.
+
+## 2026-06-21 - App-hosted Linux network namespace substrate proof
+
+Checkpoint:
+
+- Promoted the existing Linux-owned `network_namespace_probe` kselftest to an
+  app-hosted OrlixOS proof through
+  `OrlixUpstreamTestRunSpec.kernelNetworkNamespace`.
+- Added
+  `OrlixKernelUpstreamTests/testNetworkNamespaceProbeCompletesThroughOrlixOSTerminalSession`
+  to launch only `orlix.kselftest=network_namespace_probe` through the
+  wrapper-managed iPhone 17 simulator path.
+- Kept the proof in the Linux surface:
+  - `/proc/net/dev`, `/proc/net/tcp`, and `/proc/net/udp` are readable.
+  - A normal rtnetlink socket opens in the current network namespace.
+  - The probe configures Linux loopback with `SIOCSIFADDR`,
+    `SIOCSIFNETMASK`, `SIOCGIFFLAGS`, and `SIOCSIFFLAGS` before transport
+    checks.
+  - Loopback TCP accepts a local connection.
+  - Loopback UDP exchanges a local datagram.
+
+Important failure and fix:
+
+- The first app-hosted run reached XCTest and failed inside Linux with:
+  `upstream failure marker found: not ok 3 - loopback TCP accepts local
+  connections`.
+- Diagnostic shaping of the existing probe showed the TCP path failed at
+  `bind`, meaning Linux networking was present but loopback had not been
+  assigned `127.0.0.1` in this minimal kselftest userspace.
+- Fixed by configuring loopback inside the Linux kselftest using normal Linux
+  networking ioctls. No HostAdapter ABI, custom syscall, Darwin socket
+  translation, or host network policy was added.
+
+Commands:
+
+```sh
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcode-storage-doctor
+
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testNetworkNamespaceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Test-OrlixKernelUpstreamTests-2026.06.21_22-41-02-+0200.xcresult
+xcodebuild exit status: 0
+Testing started completed.
+```
+
+Harness checks:
+
+```sh
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+```text
+git diff --check: STATUS 0
+.codex/hooks/tests: Ran 32 tests, OK
+.codex/rules/tests: Ran 5 tests, OK
+compact_plan_check.py: STATUS 0 with known stale-status warning
+```
+
+Current status:
+
+- Linux-visible `/proc/net`, rtnetlink, loopback address configuration, local
+  TCP, and local UDP now have focused app-hosted kselftest evidence through the
+  OrlixOS terminal-session path.
+- This is still a local loopback/network-namespace substrate proof only. It
+  does not claim virtio-net readiness, external/shared outbound networking,
+  per-environment network isolation, OCI Runtime Spec lifecycle compliance,
+  registry pull support, cgroup resource behavior, seccomp/hooks support,
+  `linux.readonlyPaths`, `linux.maskedPaths`, third-party package ladder
+  readiness, or full product runtime readiness.

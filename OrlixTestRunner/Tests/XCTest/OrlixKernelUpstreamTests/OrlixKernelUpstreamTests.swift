@@ -433,6 +433,19 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("UTS namespace child names do not leak to parent"))
     }
 
+    func testNetworkNamespaceProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelNetworkNamespace)
+
+        XCTAssertTrue(output.contains("network_namespace_probe"))
+        XCTAssertTrue(output.contains("procfs exposes network state"))
+        XCTAssertTrue(output.contains("rtnetlink sockets open in the current network namespace"))
+        XCTAssertTrue(output.contains("loopback interface accepts Linux address configuration"))
+        XCTAssertTrue(output.contains("loopback TCP accepts local connections"))
+        XCTAssertTrue(output.contains("loopback UDP exchanges local datagrams"))
+    }
+
     func testEnvironmentStateWritebackProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {
