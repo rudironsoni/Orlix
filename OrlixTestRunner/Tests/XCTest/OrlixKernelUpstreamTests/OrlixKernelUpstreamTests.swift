@@ -367,6 +367,32 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertFalse(output.contains("# exec /orlix/clone_thread_probe"))
     }
 
+    func testRlimitProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelRlimit)
+
+        XCTAssertTrue(output.contains("rlimit_probe"))
+        XCTAssertTrue(output.contains("ok - setrlimit/getrlimit RLIMIT_NOFILE"))
+        XCTAssertTrue(output.contains("ok - RLIMIT_NOFILE enforces EMFILE"))
+        XCTAssertTrue(output.contains("ok - exec child inherited RLIMIT_NOFILE"))
+        XCTAssertTrue(output.contains("ok - RLIMIT_NOFILE survives exec"))
+    }
+
+    func testUmaskProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelUmask)
+
+        XCTAssertTrue(output.contains("umask_probe"))
+        XCTAssertTrue(
+            output.contains("ok - umask masks file and directory creation modes")
+        )
+        XCTAssertTrue(output.contains("ok - exec child inherited umask"))
+        XCTAssertTrue(output.contains("ok - umask survives exec"))
+        XCTAssertTrue(output.contains("ok - child umask changes stay process-local"))
+    }
+
     func testEnvironmentStateWritebackProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {

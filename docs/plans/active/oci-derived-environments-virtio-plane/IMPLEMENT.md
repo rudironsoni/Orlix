@@ -12181,3 +12181,174 @@ Current status:
   through Linux mount semantics, readonly/masked paths through Linux mounts,
   cgroup resource enforcement, virtio-net Linux-visible netdev/socket proof,
   and full OCI lifecycle proof remain pending.
+
+### 2026-06-21 - App-hosted process-default kselftest harness checkpoint
+
+Added focused app-hosted XCTest selectors for the existing Linux kselftests that
+back OCI process defaults already plumbed through OrlixOS metadata and Linux
+init:
+
+- `OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift`
+  - `kernelRlimit` selects `orlix.kselftest=rlimit_probe`.
+  - `kernelUmask` selects `orlix.kselftest=umask_probe`.
+- `OrlixTestRunner/Tests/XCTest/OrlixKernelUpstreamTests/OrlixKernelUpstreamTests.swift`
+  - `testRlimitProbeCompletesThroughOrlixOSTerminalSession()` asserts Linux TAP
+    markers for `setrlimit(2)`/`getrlimit(2)`, `RLIMIT_NOFILE` `EMFILE`
+    enforcement, and exec inheritance.
+  - `testUmaskProbeCompletesThroughOrlixOSTerminalSession()` asserts Linux TAP
+    markers for file/directory mode masking, exec inheritance, exec survival,
+    and process-local child changes.
+
+Validation:
+
+- `rtk git diff --check`
+  - Passed.
+- `rtk xcrun swiftc -parse OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift OrlixTestRunner/Tests/XCTest/OrlixKernelUpstreamTests/OrlixKernelUpstreamTests.swift OrlixTestRunner/Tests/XCTest/Support/OrlixUpstreamXCTest.swift`
+  - Initial sandboxed run failed with `error: permissionDenied`.
+  - Escalated rerun passed.
+- `rtk timeout 900 xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath .deriveddata/OrlixSystem-sim -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testRlimitProbeCompletesThroughOrlixOSTerminalSession -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testUmaskProbeCompletesThroughOrlixOSTerminalSession test`
+  - Timed out during build setup with `STATUS:124` and `** BUILD INTERRUPTED **`.
+  - Captured output contained only the existing OrlixKernel alignment warning
+    and script-phase notes for embedding `OrlixOS` and upstream test rootfs
+    bundles.
+  - No `OrlixKernelUpstreamTests` or `OrlixTestRunner` crash reports were found
+    under `~/Library/Logs/DiagnosticReports`.
+- Confirmed simulator availability with
+  `rtk xcrun simctl list devices available | rtk rg "iPhone 17|iOS 26.5|-- iOS"`;
+  `iPhone 17` on iOS 26.5 existed and was booted.
+- Retried the same focused XCTest command with `rtk timeout 1200`.
+  - Reached `Testing started`.
+  - Failed with `STATUS:65`.
+  - `xcodebuild` reported `OrlixTestRunner ... encountered an error (The test
+    runner hung before establishing connection.)`.
+  - Diagnostic collection also timed out waiting for the invoked simulator
+    process.
+  - Rechecked `~/Library/Logs/DiagnosticReports`; no matching
+    `OrlixKernelUpstreamTests` or `OrlixTestRunner` crash reports were present.
+- Follow-up runner diagnostics:
+  - `build-for-testing` for `OrlixKernelUpstreamTests` returned `STATUS:0`, but
+    Xcode wrote products under `/Volumes/1TB/Xcode/DerivedData/Build/Products`
+    rather than the requested relative `.deriveddata/OrlixSystem-sim` path.
+  - The generated app bundle contains `OrlixTestRunner.app`, the
+    `OrlixKernelUpstreamTests.xctest` plug-in, `OrlixKernel.framework`,
+    `OrlixOS.framework`, and `Frameworks/libXCTestBundleInject.dylib`.
+  - The generated `OrlixKernelUpstreamTests_iphonesimulator26.5-arm64.xctestrun`
+    contains `TestHostPath = __TESTROOT__/Debug-iphonesimulator/OrlixTestRunner.app`
+    and `TestBundlePath = __TESTHOST__/PlugIns/OrlixKernelUpstreamTests.xctest`.
+  - `xcrun simctl install booted .../OrlixTestRunner.app` returned `STATUS:0`.
+  - `xcrun simctl launch --terminate-running-process booted org.orlix.OrlixTestRunner`
+    returned `STATUS:0`, proving the host app can install and launch outside
+    XCTest injection.
+  - `xcodebuild test-without-building -xctestrun ... -destination "platform=iOS Simulator,name=iPhone 17,OS=26.5"`
+    against a simple `OrlixTestRunnerTests` parser test timed out with
+    `STATUS:124` and repeated `IDERunDestination: Supported platforms for the
+    buildables in the current scheme is empty`.
+  - The same `test-without-building` path for
+    `OrlixKernelUpstreamTests/testRlimitProbeCompletesThroughOrlixOSTerminalSession`
+    failed with `STATUS:70` when using destination `id=...` or
+    `platform=iOS Simulator,id=...`.
+  - Re-running the project/scheme path with `platform=iOS Simulator,id=...`
+    also failed with `STATUS:70`.
+  - Simulator logs around the name-based project/scheme launch showed
+    `OrlixTestRunner` running in the foreground for several minutes, then
+    SpringBoard reported `Connection to remote process was not established`,
+    flagged the launch as failed, and terminated the process with `SIGTERM(15)`.
+    No dyld crash or app crash report was produced.
+
+Status: harness is ready to promote `rlimit_probe` and `umask_probe` to
+app-hosted runtime evidence, but app-hosted runtime proof is not yet green. Do
+not claim OCI process-default runtime completion from this checkpoint alone.
+
+Current status:
+
+- Focus remains OCI-derived Linux environments with Linux-compatible behavior,
+  zero custom ABI, and no HostAdapter-visible Linux policy.
+- Current patch adds app-hosted XCTest selectors/assertions for existing Linux
+  kselftests `rlimit_probe` and `umask_probe`; it does not change
+  OrlixHostAdapter, OCI parser support, or Linux UAPI.
+- The earlier app-hosted failure was an environment/invocation problem:
+  commands bypassed the wrapper PATH, used stale/name-based simulator selection,
+  and attempted both Orlix boots in one XCTest process.
+- App-hosted runtime proof for the two existing Linux kselftests is now green
+  when run according to `AGENTS.md`: wrapper PATH, known-good simulator UDID,
+  no custom DerivedData path, and one Orlix boot per XCTest invocation.
+- Next action: keep expanding OCI-derived Linux behavior only through Linux
+  mechanisms with matching Linux-side proof. Do not reinterpret this rlimit/umask
+  proof as full OCI runtime/lifecycle/networking readiness.
+
+### 2026-06-21 - Wrapper-based app-hosted process-default proof
+
+Re-ran the process-default proof using the newly documented Xcode/Simulator
+environment contract:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+```
+
+Environment health:
+
+- `xcode-storage-doctor`
+  - Exited `0` through the wrapper PATH.
+- `xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b`
+  - `Monitoring boot status for iPhone 17 (E65F0D05-980C-4368-8CDC-2D2BF3E05757).`
+  - `Device already booted, nothing to do.`
+- `xcrun simctl list devices available | grep E65F0D05`
+  - `iPhone 17 (E65F0D05-980C-4368-8CDC-2D2BF3E05757) (Booted)`
+- `xcodebuild -version`
+  - `Xcode 26.5`
+  - `Build version 17F42`
+
+Hosted XCTest attach baseline:
+
+- `xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination "platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757" -only-testing:OrlixTestRunnerTests test`
+  - Wrapper expanded the build/cache roots to external SSD-backed locations.
+  - `Testing started completed.`
+  - `STATUS:0`
+
+Combined focused invocation:
+
+- `xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination "platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757" -only-testing:.../testRlimitProbeCompletesThroughOrlixOSTerminalSession -only-testing:.../testUmaskProbeCompletesThroughOrlixOSTerminalSession test`
+  - Reached hosted XCTest execution.
+  - `testRlimitProbeCompletesThroughOrlixOSTerminalSession` ran first.
+  - `testUmaskProbeCompletesThroughOrlixOSTerminalSession` failed with
+    `Orlix boot already started in this process; run upstream runtime suites in process-isolated invocations.`
+  - This is a test invocation constraint, not a Linux `umask(2)` failure.
+
+Process-isolated app-hosted `rlimit_probe` proof:
+
+- `xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination "platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757" -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testRlimitProbeCompletesThroughOrlixOSTerminalSession test`
+  - Kernel command line included `orlix.kselftest=rlimit_probe`.
+  - Linux stdout included `# exec /orlix/rlimit_probe`.
+  - XCTest executed `1 test, with 0 failures`.
+  - `STATUS:0`
+  - Result bundle:
+    `$(external-ssd-root)/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.21_18-33-22-+0200.xcresult`
+
+Process-isolated app-hosted `umask_probe` proof:
+
+- `xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination "platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757" -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testUmaskProbeCompletesThroughOrlixOSTerminalSession test`
+  - Kernel command line included `orlix.kselftest=umask_probe`.
+  - Linux stdout included `# exec /orlix/umask_probe`.
+  - XCTest executed `1 test, with 0 failures`.
+  - `STATUS:0`
+  - Result bundle:
+    `$(external-ssd-root)/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.21_18-34-38-+0200.xcresult`
+
+Status: `process.rlimits` and `process.user.umask` now have app-hosted Linux
+kselftest runtime evidence through the iOS-hosted Orlix path. This proves only
+those Linux-backed process defaults. It does not prove full OCI Runtime
+lifecycle compliance, registry/image pull support, networking, cgroup resource
+enforcement, `root.readonly`, `readonlyPaths`, `maskedPaths`, or third-party
+package ladder readiness.
+
+Current status:
+
+- `process.rlimits` and `process.user.umask` are app-hosted runtime-proved via
+  process-isolated OrlixKernelUpstreamTests on the wrapper-managed iPhone 17
+  simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- The wrapper-managed Xcode/Simulator environment is healthy enough for hosted
+  XCTest attachment: `OrlixTestRunnerTests` smoke passed with `STATUS:0`.
+- Continue the OCI-derived environment plan with the next Linux-owned substrate
+  slice; do not broaden this proof to OCI lifecycle, networking, cgroup
+  resources, read-only roots, masked paths, registry pull, or third-party
+  package readiness.
