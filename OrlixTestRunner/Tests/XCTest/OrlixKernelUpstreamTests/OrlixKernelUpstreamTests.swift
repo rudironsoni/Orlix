@@ -312,6 +312,18 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertFalse(output.contains("# exec /orlix/clone_thread_probe"))
     }
 
+    func testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelVirtioMMIOContract)
+
+        XCTAssertTrue(output.contains("virtio_mmio_probe_contract"))
+        XCTAssertTrue(
+            output.contains("upstream virtio-fs device registers the Orlix host-folder tag")
+        )
+        XCTAssertTrue(output.contains("orlix-host0"))
+    }
+
     func testRandomDeviceProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelRandomDevice)
 

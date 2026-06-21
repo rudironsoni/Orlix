@@ -12667,3 +12667,61 @@ Not claimed:
   Spec compliance.
 - This does not claim product runtime readiness or the third-party package
   ladder.
+## 2026-06-21 - App-Hosted Virtio-MMIO / Virtio-FS Contract Proof
+
+Checkpoint:
+
+- Added focused OrlixOS app-hosted kselftest coverage for
+  `virtio_mmio_probe_contract` through
+  `OrlixUpstreamTestRunSpec.kernelVirtioMMIOContract`.
+- Kept the proof on Linux-owned surfaces:
+  - Device-tree virtio-mmio nodes under `/proc/device-tree`.
+  - Generic upstream virtio bus device IDs under
+    `/sys/bus/virtio/devices/<virtioN>/device`.
+  - Upstream virtio-fs tag registration under
+    `/sys/fs/virtiofs/<tag>/tag`.
+- Corrected the earlier tag probe direction. Generic virtio device sysfs does
+  not expose a `tag` attribute; upstream `fs/fuse/virtio_fs.c` publishes the
+  virtio-fs tag through the `virtiofs` kset under `/sys/fs/virtiofs`.
+- Rebuilt the simulator kernel artifact after observing that the existing
+  `OrlixKernel.framework` did not contain `orlix-host0`. The rebuilt
+  `Build/OrlixKernel/xcframework/OrlixKernel.xcframework` binary contains the
+  `orlix-host0` tag and exposes the `VIRTIO_ID_FS` slot to Linux.
+
+Commands:
+
+```sh
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+/opt/homebrew/bin/rtk make -f OrlixKernel/Makefile __ios-simulator-xcframework PROFILE=release
+
+/opt/homebrew/bin/rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Test-OrlixKernelUpstreamTests-2026.06.21_21-26-47-+0200.xcresult
+testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession: Passed
+```
+
+Notes:
+
+- `xcode-storage-doctor` passed outside the restrictive sandbox. Inside the
+  sandbox, `simctl` access failed as expected under the documented
+  CoreSimulator/XPC caveat.
+- The proof establishes Linux-visible virtio-mmio, `VIRTIO_ID_FS`, and
+  upstream virtio-fs tag registration for `orlix-host0` through the app-hosted
+  OrlixOS terminal-session path.
+- This does not claim full OCI Runtime Spec compliance, registry pull support,
+  external networking, virtio-net readiness, seccomp/hooks/cgroup resource
+  support, `linux.readonlyPaths`, `linux.maskedPaths`, the third-party package
+  ladder, or full product runtime readiness.
