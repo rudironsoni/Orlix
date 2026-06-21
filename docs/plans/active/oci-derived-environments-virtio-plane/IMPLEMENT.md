@@ -13177,3 +13177,89 @@ Current status:
 - Latest pushed checkpoint before this work: `6e0c6724 Prove Linux time namespace through OrlixOS`.
 - Current unpushed checkpoint proves Linux IPC namespace isolation through OrlixOS app-hosted execution.
 - Active OCI-derived environment work remains open. This does not claim full OCI runtime compliance, registry pull support, cgroup controller/resource enforcement, seccomp/hooks, shared outbound networking, or product runtime readiness.
+## 2026-06-22 - App-hosted pids cgroup controller proof through OrlixOS
+
+Proved the Linux cgroup v2 pids controller substrate through the OrlixOS
+app-hosted terminal-session path. This is an OCI-relevant resource-controller
+checkpoint, not a full OCI `linux.resources` implementation claim.
+
+Ownership:
+
+- `OrlixKernel` owns the Linux cgroup controller substrate and visible cgroup
+  semantics.
+- `OrlixOS` may later map OCI resource policy onto the Linux cgroup surface.
+- `OrlixHostAdapter` must not own cgroup semantics or expose a host-specific
+  resource ABI to Linux userspace.
+
+Changes:
+
+- Enabled `CONFIG_CGROUP_PIDS=y` in the development and release Orlix kernel
+  defconfigs.
+- Added upstream `kernel/cgroup/pids.c` to the Orlix kernel archive source
+  list.
+- Added `orlix:cgroup_pids_probe` to the Orlix kselftest payload.
+- Added `OrlixUpstreamTestRunSpec.kernelCgroupPids` with
+  `orlix.kselftest=cgroup_pids_probe`.
+- Added
+  `testCgroupPidsProbeCompletesThroughOrlixOSTerminalSession()` to prove the
+  controller through the OrlixOS-hosted XCTest path.
+
+Evidence:
+
+```text
+Build/OrlixKernel/build/release/.config:
+107:CONFIG_CGROUPS=y
+112:CONFIG_CGROUP_PIDS=y
+```
+
+```text
+Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a:
+0000000000628ea8 D _pids_cgrp_subsys
+0000000000625d00 D _pids_cgrp_subsys_enabled_key
+0000000000625d04 D _pids_cgrp_subsys_on_dfl_key
+```
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:
+31:orlix:cgroup_pids_probe
+
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:
+38:file /orlix/cgroup_pids_probe ... 755 0 0
+```
+
+Focused app-hosted proof:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testCgroupPidsProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+xcodebuild exit status: 0
+Testing started completed.
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_00-49-01-+0200.xcresult
+testCgroupPidsProbeCompletesThroughOrlixOSTerminalSession(): Passed
+device: iPhone 17, UDID E65F0D05-980C-4368-8CDC-2D2BF3E05757, iOS 26.5
+```
+
+Non-claims:
+
+- This does not prove full cgroup resource enforcement.
+- This does not prove full OCI `linux.resources` support.
+- This does not prove full OCI runtime compliance.
+- This does not prove seccomp, hooks, readonly paths, masked paths, sysctl, or
+  external networking support.
+
+Current status: pids cgroup controller substrate is enabled in the Orlix Linux
+kernel build and proven through OrlixOS app-hosted execution. The broader
+OCI-derived environment and virtio plane plan remains active.

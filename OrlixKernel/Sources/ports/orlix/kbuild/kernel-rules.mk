@@ -201,6 +201,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	kernel/cgroup/cgroup-v1.c \
 	kernel/cgroup/freezer.c \
 	kernel/cgroup/namespace.c \
+	kernel/cgroup/pids.c \
 	kernel/cgroup/rstat.c \
 	kernel/dma/direct.c \
 	kernel/dma/coherent.c \
