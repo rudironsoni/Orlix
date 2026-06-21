@@ -236,6 +236,17 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("cgroup namespace keeps /proc/self/cgroup readable"))
     }
 
+    func testCgroupPidsProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelCgroupPids)
+        XCTAssertTrue(output.contains("cgroup_pids_probe"))
+        XCTAssertTrue(output.contains("cgroup v2 exposes pids controller"))
+        XCTAssertTrue(output.contains("cgroup v2 enables pids controller for children"))
+        XCTAssertTrue(output.contains("child cgroup exposes pids controller files"))
+        XCTAssertTrue(output.contains("pids controller accepts max limit"))
+        XCTAssertTrue(output.contains("pids cgroup accepts current task"))
+        XCTAssertFalse(output.contains("/orlix/mount_namespace_probe"))
+    }
+
     func testUserNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelUserNamespace)
 
