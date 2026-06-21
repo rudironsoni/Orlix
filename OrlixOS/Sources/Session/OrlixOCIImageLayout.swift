@@ -1144,3 +1144,132 @@ private enum OrlixSHA256 {
         (value >> bits) | (value << (32 - bits))
     }
 }
+
+public enum OrlixOCIRuntimeFeatureStatus: String, Codable, Equatable, Sendable {
+	case implemented
+	case recognized
+	case deterministicallyRejected
+}
+
+public struct OrlixOCIRuntimeFeature: Codable, Equatable, Sendable {
+	public let name: String
+	public let status: OrlixOCIRuntimeFeatureStatus
+	public let proof: String?
+	public let reason: String
+
+	public init(name: String,
+		    status: OrlixOCIRuntimeFeatureStatus,
+		    proof: String? = nil,
+		    reason: String)
+	{
+		self.name = name
+		self.status = status
+		self.proof = proof
+		self.reason = reason
+	}
+}
+
+public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
+	public let schemaVersion: UInt
+	public let platform: String
+	public let features: [OrlixOCIRuntimeFeature]
+
+	public init(schemaVersion: UInt = 1,
+		    platform: String = "linux/arm64",
+		    features: [OrlixOCIRuntimeFeature])
+	{
+		self.schemaVersion = schemaVersion
+		self.platform = platform
+		self.features = features.sorted { $0.name < $1.name }
+	}
+
+	public static let current = OrlixOCIRuntimeFeatureReport(features: [
+		OrlixOCIRuntimeFeature(
+			name: "apparmor",
+			status: .deterministicallyRejected,
+			reason: "No AppArmor policy loading or enforcement proof exists for Orlix OCI-derived environments."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "cgroupV2BasicLifecycle",
+			status: .implemented,
+			proof: "orlix:cgroup_v2_probe",
+			reason: "Basic cgroup v2 mount, task move, child creation, and child removal are covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "cgroups",
+			status: .recognized,
+			reason: "Broad OCI cgroup resource policy is recognized but not claimed beyond the basic cgroup v2 lifecycle proof."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "devtmpfs",
+			status: .implemented,
+			proof: "orlix:pseudo_fs_probe",
+			reason: "Linux /dev devtmpfs visibility and core character devices are covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "fdAliases",
+			status: .implemented,
+			proof: "orlix:fd_alias_probe",
+			reason: "Linux /dev/fd, /dev/stdin, /dev/stdout, and /dev/stderr alias behavior is covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "idmappedMounts",
+			status: .deterministicallyRejected,
+			reason: "No idmapped mount proof exists for Orlix OCI-derived environments."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "loopbackNetworking",
+			status: .implemented,
+			proof: "orlix:network_namespace_probe",
+			reason: "Loopback TCP and UDP behavior is covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "netDevices",
+			status: .deterministicallyRejected,
+			reason: "No OCI netDevices policy or virtio-net packet transport proof exists yet."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "procfs",
+			status: .implemented,
+			proof: "orlix:pseudo_fs_probe",
+			reason: "Linux /proc mount and /proc/self files are covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "rtnetlink",
+			status: .implemented,
+			proof: "orlix:network_namespace_probe",
+			reason: "Opening rtnetlink sockets is covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "seccomp",
+			status: .deterministicallyRejected,
+			reason: "No seccomp filter loading or enforcement proof exists for Orlix OCI-derived environments."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "selinux",
+			status: .deterministicallyRejected,
+			reason: "No SELinux policy loading or enforcement proof exists for Orlix OCI-derived environments."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "tmpfs",
+			status: .implemented,
+			proof: "orlix:pseudo_fs_probe",
+			reason: "Linux /tmp tmpfs visibility is covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "userNamespaceMappings",
+			status: .deterministicallyRejected,
+			reason: "No OCI uidMappings/gidMappings namespace proof exists for Orlix OCI-derived environments."
+		),
+	])
+
+	public func feature(named name: String) -> OrlixOCIRuntimeFeature? {
+		features.first { $0.name == name }
+	}
+
+	public func jsonData() throws -> Data {
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+		return try encoder.encode(self)
+	}
+}

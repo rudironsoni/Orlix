@@ -10988,3 +10988,56 @@ Non-claims:
 - This is not OCI Runtime lifecycle readiness.
 - This is not arbitrary device, PTY, or namespace coverage.
 - This is not a custom Orlix pseudo-fs API.
+
+## 2026-06-21 - OCI Runtime feature report baseline
+
+Changed:
+
+- Added `OrlixOCIRuntimeFeatureStatus`, `OrlixOCIRuntimeFeature`, and `OrlixOCIRuntimeFeatureReport` to `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Added focused `OrlixOSTests` coverage in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Scope:
+
+- This is OrlixOS-owned deterministic feature reporting for OCI-derived environments.
+- The report is stable JSON with `schemaVersion`, `platform`, and sorted feature entries.
+- Narrow substrate features backed by current proof are reported as `implemented`, including fd aliases, procfs/devtmpfs/tmpfs, loopback networking, rtnetlink, and basic cgroup v2 lifecycle.
+- Broad or unsupported OCI Linux features are not overclaimed:
+  - `cgroups` is only `recognized`.
+  - `seccomp`, `apparmor`, `selinux`, `netDevices`, `idmappedMounts`, and `userNamespaceMappings` are `deterministicallyRejected`.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed after moving the new tests into an `extension OrlixTerminalSessionTests`.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known older stale pending/blocked warning.
+
+Blocked validation:
+
+- Targeted `xcodebuild` execution for the two new `OrlixOSTests` methods did not reach a clean XCTest result because CoreSimulator failed before test execution with `CoreSimulator.SimError` and Code 61/410 service errors.
+
+Non-claims:
+
+- This is not OCI Runtime config parsing or lifecycle compliance.
+- This is not app-hosted product runtime proof.
+- This is not proof that broad cgroups, seccomp, AppArmor, SELinux, net devices, idmapped mounts, or user namespace mappings are supported.
+
+## 2026-06-21 - Current status after feature report baseline
+
+Current status:
+
+- OrlixOS now has a deterministic OCI Runtime feature report baseline that does not overclaim broad Linux features.
+- OrlixKernel substrate proof has recently advanced across virtio-fs path nodes, cgroup v2 child lifecycle, `/proc/net`/rtnetlink/loopback TCP/UDP, fd aliases, and pseudo-fs/device nodes.
+- Targeted OrlixOSTests execution for the new feature report tests is still blocked by CoreSimulator service errors, but the changed Session Swift sources typecheck and the XCTest file parses.
+
+Next aligned work:
+
+- Add deterministic OCI Runtime `config.json` parsing/schema validation and conversion to OrlixOS descriptors, rejecting unsupported Linux features without custom ABI.
+- Continue deepening Linux-owned namespace, mount, signal, fd, pseudo-fs, and virtio device proof only where a concrete requirement gap is visible.
+
+Non-claims:
+
+- The overall OCI-derived environments goal remains incomplete.
+- There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.

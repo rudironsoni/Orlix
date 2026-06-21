@@ -5720,6 +5720,52 @@ final class OrlixTerminalSessionTests: XCTestCase {
     }
 }
 
+extension OrlixTerminalSessionTests {
+	func testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures() throws {
+		let report = OrlixOCIRuntimeFeatureReport.current
+
+		XCTAssertEqual(report.schemaVersion, 1)
+		XCTAssertEqual(report.platform, "linux/arm64")
+		XCTAssertEqual(report.feature(named: "cgroups")?.status, .recognized)
+		XCTAssertEqual(
+			report.feature(named: "cgroupV2BasicLifecycle")?.status,
+			.implemented
+		)
+		XCTAssertEqual(report.feature(named: "seccomp")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "apparmor")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "selinux")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "netDevices")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
+		XCTAssertEqual(
+			report.feature(named: "userNamespaceMappings")?.status,
+			.deterministicallyRejected
+		)
+	}
+
+	func testOCIRuntimeFeatureReportEncodesStableJSON() throws {
+		let data = try OrlixOCIRuntimeFeatureReport.current.jsonData()
+		let json = String(decoding: data, as: UTF8.self)
+
+		XCTAssertTrue(json.contains(#""platform" : "linux/arm64""#))
+		XCTAssertTrue(json.contains(#""name" : "fdAliases""#))
+		XCTAssertTrue(json.contains(#""proof" : "orlix:fd_alias_probe""#))
+		XCTAssertTrue(json.contains(#""name" : "procfs""#))
+		XCTAssertTrue(json.contains(#""proof" : "orlix:pseudo_fs_probe""#))
+		XCTAssertTrue(json.contains(#""name" : "netDevices""#))
+		XCTAssertTrue(json.contains(#""status" : "deterministicallyRejected""#))
+
+		let decoded = try JSONDecoder().decode(
+			OrlixOCIRuntimeFeatureReport.self,
+			from: data
+		)
+		XCTAssertEqual(decoded, OrlixOCIRuntimeFeatureReport.current)
+		XCTAssertEqual(
+			decoded.features.map(\.name),
+			decoded.features.map(\.name).sorted()
+		)
+	}
+}
+
 private final class DataRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [Data] = []
