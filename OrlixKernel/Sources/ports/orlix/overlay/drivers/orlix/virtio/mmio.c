@@ -1975,12 +1975,11 @@ static void orlix_virtio_mmio_process_fs_queue(
 						out->error = -ENOENT;
 				} else {
 					unsigned int parent_entry_index;
+					struct orlix_host_directory_entry host_entry;
 
 					if (orlix_virtio_mmio_fs_child_index(
 						    in->nodeid, &parent_entry_index,
 						    &entry_index)) {
-						struct orlix_host_directory_entry host_entry;
-
 						if (orlix_host_directory_read_child_entry(
 							    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
 							    parent_entry_index, entry_index,
@@ -1988,6 +1987,12 @@ static void orlix_virtio_mmio_process_fs_queue(
 							out->error = 0;
 						else
 							out->error = -ENOENT;
+					} else if (orlix_virtio_mmio_fs_read_node_entry(
+							   in->nodeid,
+							   &host_entry)) {
+						out->error = 0;
+					} else {
+						out->error = -ENOENT;
 					}
 				}
 			} else if (in->opcode == FUSE_READ) {

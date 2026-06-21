@@ -157,6 +157,35 @@ static bool build_mount_child_path(char *path, size_t path_size, const char *nam
 	return true;
 }
 
+static bool build_descendant_path(
+	char *path,
+	size_t path_size,
+	const char *parent,
+	const char *name)
+{
+	size_t offset = 0;
+
+	while (parent[offset] != '\0') {
+		if (offset + 1 >= path_size)
+			return false;
+		path[offset] = parent[offset];
+		offset++;
+	}
+
+	if (offset + 1 >= path_size)
+		return false;
+	path[offset++] = '/';
+
+	while (*name != '\0') {
+		if (offset + 1 >= path_size)
+			return false;
+		path[offset++] = *name++;
+	}
+
+	path[offset] = '\0';
+	return true;
+}
+
 static bool mounted_regular_file_supports_lseek(void)
 {
 	DIR *directory;
@@ -203,7 +232,9 @@ static bool mounted_nested_directory_supports_readdir_statx(void)
 	DIR *nested;
 	struct dirent *entry;
 	char path[512];
+	char nested_path[512];
 	bool saw_directory = false;
+	bool saw_nested_entry = false;
 	bool result = false;
 
 	root = opendir(ORLIX_VIRTIOFS_MOUNTPOINT);
@@ -226,18 +257,28 @@ static bool mounted_nested_directory_supports_readdir_statx(void)
 		if (!nested)
 			break;
 
-		result = readdir(nested) != NULL &&
-			 syscall(SYS_statx, AT_FDCWD, path,
-				 AT_SYMLINK_NOFOLLOW,
-				 STATX_TYPE | STATX_MODE, &nested_status) == 0 &&
-			 (nested_status.stx_mask & STATX_TYPE) != 0 &&
-			 S_ISDIR(nested_status.stx_mode);
+		while ((entry = readdir(nested)) != NULL) {
+			if (entry->d_name[0] == '.')
+				continue;
+			if (!build_descendant_path(nested_path, sizeof(nested_path),
+						   path, entry->d_name))
+				continue;
+
+			saw_nested_entry = true;
+			result = access(nested_path, R_OK) == 0 &&
+				 syscall(SYS_statx, AT_FDCWD, nested_path,
+					 AT_SYMLINK_NOFOLLOW,
+					 STATX_TYPE | STATX_MODE,
+					 &nested_status) == 0 &&
+				 (nested_status.stx_mask & STATX_TYPE) != 0;
+			break;
+		}
 		closedir(nested);
 		break;
 	}
 
 	closedir(root);
-	return !saw_directory || result;
+	return !saw_directory || !saw_nested_entry || result;
 }
 
 int main(void)
@@ -275,7 +316,7 @@ int main(void)
 				  "mounted virtio-fs regular files support lseek when present");
 		orlix_test_result(
 			mounted_nested_directory_supports_readdir_statx(),
-			"mounted virtio-fs nested directories support readdir and statx when present");
+			"mounted virtio-fs nested paths support readdir, access, and statx when present");
 		umount(ORLIX_VIRTIOFS_MOUNTPOINT);
 	} else {
 		orlix_test_result(false,
@@ -296,7 +337,7 @@ int main(void)
 				  "mounted virtio-fs regular files support lseek when present");
 		orlix_test_result(
 			false,
-			"mounted virtio-fs nested directories support readdir and statx when present");
+			"mounted virtio-fs nested paths support readdir, access, and statx when present");
 	}
 
 	orlix_test_exit();
