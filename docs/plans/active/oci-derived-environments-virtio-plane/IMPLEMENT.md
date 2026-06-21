@@ -11041,3 +11041,58 @@ Non-claims:
 
 - The overall OCI-derived environments goal remains incomplete.
 - There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.
+
+## 2026-06-21 - OCI Runtime config parser baseline
+
+Changed:
+
+- Added `OrlixOCIRuntimeConfigError`, `OrlixOCIRuntimeConfigDescriptor`, and `OrlixOCIRuntimeConfigParser` to `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Added focused parser tests to `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Scope:
+
+- This is OrlixOS-owned deterministic parsing for a minimal Linux OCI Runtime `config.json`.
+- The parser accepts Linux process args, env, cwd, user uid/gid, root path/readonly, terminal flag, and recognized namespace types.
+- The parser lowers accepted process defaults into `OrlixOCIRuntimeConfigDescriptor`.
+- The descriptor can produce an SPI `OrlixEnvironmentDescriptor` when the caller supplies an Orlix root mount, preserving OrlixOS ownership of storage/session binding.
+- Unsupported Linux features fail deterministically with `unsupportedLinuxFeature`, including uid/gid mappings, devices, resources, seccomp, masked paths, readonly paths, and mount labels.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift /private/tmp/OrlixOCIRuntimeConfigParserCheck.swift` passed, verifying parser use and descriptor conversion against the Session sources.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `rtk git diff --check` exited 0.
+
+Blocked validation:
+
+- Targeted `xcodebuild` execution for the new OrlixOSTests methods again failed before XCTest execution because CoreSimulator returned service/disk-image errors including `CoreSimulator.SimError` and Code 409/410/61.
+
+Non-claims:
+
+- This is not full OCI Runtime schema validation against the upstream JSON schema.
+- This is not OCI Runtime lifecycle compliance.
+- This does not add support for broad cgroups, seccomp, AppArmor, SELinux, net devices, idmapped mounts, user namespace mappings, or custom Orlix ABI.
+- This is not app-hosted product runtime proof.
+
+## 2026-06-21 - Current status after config parser baseline
+
+Current status:
+
+- OrlixOS now has deterministic OCI Runtime feature reporting and a minimal Linux OCI Runtime `config.json` parser/converter baseline.
+- OrlixKernel substrate proof has recent coverage for virtio-fs path nodes, cgroup v2 child lifecycle, `/proc/net`/rtnetlink/loopback TCP/UDP, fd aliases, and pseudo-fs/device nodes.
+- Targeted simulator XCTest execution remains blocked by CoreSimulator service errors, so parser tests are not claimed green through XCTest execution.
+
+Next aligned work:
+
+- Extend config parsing toward pinned upstream OCI Runtime schema validation and lifecycle command semantics while preserving deterministic rejection of unsupported Linux features.
+- Continue Linux-owned namespace, mount, signal, fd, pseudo-fs, and virtio proof only where a concrete gap blocks OCI-derived environment execution.
+
+Non-claims:
+
+- The overall OCI-derived environments goal remains incomplete.
+- There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.

@@ -1273,3 +1273,204 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		return try encoder.encode(self)
 	}
 }
+
+public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
+	case missingProcess
+	case emptyProcessArgs
+	case invalidProcessArg(String)
+	case invalidEnvironmentEntry(String)
+	case invalidWorkingDirectory(String)
+	case unsupportedLinuxFeature(String)
+}
+
+public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
+	public let ociVersion: String
+	public let rootPath: String?
+	public let rootReadonly: Bool
+	public let defaultCommand: [String]
+	public let defaultEnvironment: [String: String]
+	public let defaultWorkingDirectory: String
+	public let defaultUserID: UInt32
+	public let defaultGroupID: UInt32
+	public let terminal: Bool
+	public let namespaces: [String]
+
+	@_spi(OrlixPrivateTesting)
+	public func environmentDescriptor(id: String,
+					  rootMount: OrlixEnvironmentRootMount,
+					  mounts: [OrlixEnvironmentMount] = [])
+		-> OrlixEnvironmentDescriptor
+	{
+		OrlixEnvironmentDescriptor(
+			id: id,
+			source: .ociLayout,
+			platform: "linux/arm64",
+			rootImageIdentifier: id,
+			defaultCommand: defaultCommand,
+			defaultEnvironment: defaultEnvironment,
+			defaultWorkingDirectory: defaultWorkingDirectory,
+			defaultUserID: defaultUserID,
+			defaultGroupID: defaultGroupID,
+			rootMount: rootMount,
+			mounts: mounts
+		)
+	}
+}
+
+public struct OrlixOCIRuntimeConfigParser: Sendable {
+	public init() {}
+
+	public func parse(_ data: Data) throws -> OrlixOCIRuntimeConfigDescriptor {
+		let config = try JSONDecoder().decode(OCIRuntimeConfig.self, from: data)
+
+		guard let process = config.process else {
+			throw OrlixOCIRuntimeConfigError.missingProcess
+		}
+		guard !process.args.isEmpty else {
+			throw OrlixOCIRuntimeConfigError.emptyProcessArgs
+		}
+
+		let args = try process.args.map { arg in
+			if arg.contains("\u{0}") {
+				throw OrlixOCIRuntimeConfigError.invalidProcessArg(arg)
+			}
+			return arg
+		}
+		let environment = try Self.environmentDictionary(from: process.env ?? [])
+		let cwd = process.cwd ?? "/"
+		guard cwd.hasPrefix("/"), !cwd.contains("\u{0}") else {
+			throw OrlixOCIRuntimeConfigError.invalidWorkingDirectory(cwd)
+		}
+
+		let namespaces = try Self.validatedNamespaces(config.linux?.namespaces ?? [])
+		try Self.rejectUnsupportedLinuxFeatures(config.linux)
+
+		return OrlixOCIRuntimeConfigDescriptor(
+			ociVersion: config.ociVersion,
+			rootPath: config.root?.path,
+			rootReadonly: config.root?.readonly ?? false,
+			defaultCommand: args,
+			defaultEnvironment: environment,
+			defaultWorkingDirectory: cwd,
+			defaultUserID: process.user?.uid ?? 0,
+			defaultGroupID: process.user?.gid ?? 0,
+			terminal: process.terminal ?? false,
+			namespaces: namespaces
+		)
+	}
+
+	private static func environmentDictionary(from values: [String]) throws -> [String: String] {
+		var environment: [String: String] = [:]
+
+		for value in values {
+			guard let separator = value.firstIndex(of: "=") else {
+				throw OrlixOCIRuntimeConfigError.invalidEnvironmentEntry(value)
+			}
+			let key = String(value[..<separator])
+			let variableValue = String(value[value.index(after: separator)...])
+			guard !key.isEmpty,
+			      !key.contains("\u{0}"),
+			      !variableValue.contains("\u{0}") else {
+				throw OrlixOCIRuntimeConfigError.invalidEnvironmentEntry(value)
+			}
+			environment[key] = variableValue
+		}
+
+		return environment
+	}
+
+	private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
+		let supportedTypes = Set(["mount", "pid", "uts", "ipc", "network"])
+
+		return try namespaces.map { namespace in
+			guard supportedTypes.contains(namespace.type) else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"linux.namespaces.\(namespace.type)"
+				)
+			}
+			return namespace.type
+		}
+	}
+
+	private static func rejectUnsupportedLinuxFeatures(_ linux: OCIRuntimeLinux?) throws {
+		guard let linux else {
+			return
+		}
+
+		if let uidMappings = linux.uidMappings, !uidMappings.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.uidMappings")
+		}
+		if let gidMappings = linux.gidMappings, !gidMappings.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.gidMappings")
+		}
+		if let devices = linux.devices, !devices.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices")
+		}
+		if linux.resources != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources")
+		}
+		if linux.seccomp != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
+		}
+		if let maskedPaths = linux.maskedPaths, !maskedPaths.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.maskedPaths")
+		}
+		if let readonlyPaths = linux.readonlyPaths, !readonlyPaths.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.readonlyPaths")
+		}
+		if linux.mountLabel != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
+		}
+	}
+}
+
+private struct OCIRuntimeConfig: Decodable {
+	let ociVersion: String
+	let process: OCIRuntimeProcess?
+	let root: OCIRuntimeRoot?
+	let linux: OCIRuntimeLinux?
+}
+
+private struct OCIRuntimeProcess: Decodable {
+	let terminal: Bool?
+	let args: [String]
+	let env: [String]?
+	let cwd: String?
+	let user: OCIRuntimeUser?
+}
+
+private struct OCIRuntimeUser: Decodable {
+	let uid: UInt32
+	let gid: UInt32
+}
+
+private struct OCIRuntimeRoot: Decodable {
+	let path: String
+	let readonly: Bool?
+}
+
+private struct OCIRuntimeLinux: Decodable {
+	let namespaces: [OCIRuntimeNamespace]?
+	let uidMappings: [OCIRuntimeIDMapping]?
+	let gidMappings: [OCIRuntimeIDMapping]?
+	let devices: [OCIRuntimeDevice]?
+	let resources: OCIRuntimeResources?
+	let seccomp: OCIRuntimeSeccomp?
+	let maskedPaths: [String]?
+	let readonlyPaths: [String]?
+	let mountLabel: String?
+}
+
+private struct OCIRuntimeNamespace: Decodable {
+	let type: String
+}
+
+private struct OCIRuntimeIDMapping: Decodable {
+	let containerID: UInt32?
+	let hostID: UInt32?
+	let size: UInt32?
+}
+
+private struct OCIRuntimeDevice: Decodable {}
+private struct OCIRuntimeResources: Decodable {}
+private struct OCIRuntimeSeccomp: Decodable {}
