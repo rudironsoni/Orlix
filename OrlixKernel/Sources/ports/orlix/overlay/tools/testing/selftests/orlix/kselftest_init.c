@@ -200,8 +200,13 @@ static int run_test(const char *name, size_t name_len)
 		return -1;
 	if (waitpid(child, &status, 0) != child)
 		return -1;
-	if (!WIFEXITED(status))
+	if (!WIFEXITED(status)) {
+		if (WIFSIGNALED(status))
+			orlix_test_comment_uint("child signal ", WTERMSIG(status));
 		return -1;
+	}
+	if (WEXITSTATUS(status) != 0)
+		orlix_test_comment_uint("child exit status ", WEXITSTATUS(status));
 	return WEXITSTATUS(status);
 }
 

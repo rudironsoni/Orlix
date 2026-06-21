@@ -341,33 +341,62 @@ int main(void)
 
 	orlix_test_plan(12);
 
+	orlix_test_comment("probe step ", "virtiofs_tag_is_registered",
+			   sizeof("virtiofs_tag_is_registered") - 1);
 	orlix_test_result(
 		virtiofs_tag_is_registered(),
 		"virtio-fs device exposes the standard Orlix host-folder tag");
+	orlix_test_comment("probe step ", "ensure_mountpoint",
+			   sizeof("ensure_mountpoint") - 1);
 	orlix_test_result(ensure_mountpoint(),
 			  "virtio-fs mountpoint is available");
 
+	orlix_test_comment("probe step ", "mount_host_virtiofs",
+			   sizeof("mount_host_virtiofs") - 1);
 	mounted = mount_host_virtiofs();
 	orlix_test_result(mounted,
 			  "Linux mounts the Orlix host folder through virtio-fs");
 
 	if (mounted) {
+		orlix_test_comment("probe step ", "mounted_root_is_directory",
+				   sizeof("mounted_root_is_directory") - 1);
 		orlix_test_result(mounted_root_is_directory(),
 				  "mounted virtio-fs root is a directory");
+		orlix_test_comment("probe step ", "mountinfo_reports_virtiofs",
+				   sizeof("mountinfo_reports_virtiofs") - 1);
 		orlix_test_result(mountinfo_reports_virtiofs(),
 				  "mountinfo reports the mounted virtio-fs root");
+		orlix_test_comment("probe step ", "mounted_root_can_readdir",
+				   sizeof("mounted_root_can_readdir") - 1);
 		orlix_test_result(mounted_root_can_readdir(),
 				  "mounted virtio-fs root supports readdir");
+		orlix_test_comment("probe step ",
+				   "mounted_root_rejects_create_with_erofs",
+				   sizeof("mounted_root_rejects_create_with_erofs") - 1);
 		orlix_test_result(mounted_root_rejects_create_with_erofs(),
 				  "mounted virtio-fs root rejects create with EROFS");
+		orlix_test_comment("probe step ", "mounted_root_supports_statx",
+				   sizeof("mounted_root_supports_statx") - 1);
 		orlix_test_result(mounted_root_supports_statx(),
 				  "mounted virtio-fs root supports statx");
+		orlix_test_comment("probe step ",
+				   "mounted_root_has_empty_xattr_list",
+				   sizeof("mounted_root_has_empty_xattr_list") - 1);
 		orlix_test_result(mounted_root_has_empty_xattr_list(),
 				  "mounted virtio-fs root reports an empty xattr list");
+		orlix_test_comment("probe step ",
+				   "mounted_root_reports_missing_xattr",
+				   sizeof("mounted_root_reports_missing_xattr") - 1);
 		orlix_test_result(mounted_root_reports_missing_xattr(),
 				  "mounted virtio-fs root reports missing xattrs");
+		orlix_test_comment("probe step ",
+				   "mounted_regular_file_supports_lseek",
+				   sizeof("mounted_regular_file_supports_lseek") - 1);
 		orlix_test_result(mounted_regular_file_supports_lseek(),
 				  "mounted virtio-fs regular files support lseek when present");
+		orlix_test_comment("probe step ",
+				   "mounted_nested_directory_supports_readdir_statx",
+				   sizeof("mounted_nested_directory_supports_readdir_statx") - 1);
 		orlix_test_result(
 			mounted_nested_directory_supports_readdir_statx(),
 			"mounted virtio-fs nested paths support readdir, access, and statx when present");
