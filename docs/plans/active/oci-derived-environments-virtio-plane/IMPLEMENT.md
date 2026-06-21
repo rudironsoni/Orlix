@@ -10934,3 +10934,25 @@ Non-claims:
 - This is not OCI Runtime lifecycle readiness.
 - This is not proof of arbitrary fd inheritance policy for every OCI config shape.
 - This is not a custom Orlix fd API.
+
+## 2026-06-21 - Current status before next continuation
+
+Current status:
+
+- Durable Linux substrate proof has advanced across virtio-fs path nodes, cgroup v2 child lifecycle, `/proc/net`/rtnetlink/loopback TCP/UDP, and fd alias surfaces.
+- Recent local commits:
+  - `c1276e27 Add Orlix networking namespace probe`
+  - `4def0cb9 Extend Orlix cgroup v2 substrate probe`
+  - `e2a09378 Add Orlix loopback UDP substrate probe`
+  - `e2ab0ba Expand Orlix fd alias substrate probe`
+- The only known unrelated dirty worktree items after those commits are `AGENTS.md` and `.serena/`; do not stage or revert them unless explicitly instructed.
+
+Next aligned work:
+
+- Continue toward OCI-derived environment runtime readiness by adding OrlixOS-owned deterministic OCI Runtime config/feature handling, or by deepening Linux-owned namespace, mount, signal, fd, pseudo-fs, and virtio device proof where a concrete gap is visible.
+- Keep HostAdapter private and transparent; do not add Linux-visible host APIs or custom ABI.
+
+Non-claims:
+
+- The overall OCI-derived environments goal is not complete.
+- The recent probes do not prove app-hosted product runtime readiness, OCI Runtime lifecycle compliance, registry pull, external networking, systemd image compatibility, or arbitrary imported binary compatibility.
