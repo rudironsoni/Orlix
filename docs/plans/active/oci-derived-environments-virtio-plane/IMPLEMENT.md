@@ -12071,3 +12071,69 @@ Non-claims:
 - This is source/build/package evidence only; it is not app-hosted OCI-derived runtime proof.
 - This does not claim full OCI Runtime lifecycle compliance, container runtime readiness, registry pull support, external networking, systemd image compatibility, or third-party package ladder readiness.
 - Unsupported OCI fields still fail closed unless and until implemented through Linux mechanisms and proven in the ADR 0017 order.
+### Checkpoint: OCI `process.rlimits` applied by Linux init with Linux-side proof
+
+Status: source/build/package checkpoint complete for the OCI `process.rlimits`
+slice.
+
+Implementation:
+
+- `OrlixOS` now carries OCI `process.rlimits` as `defaultRlimits` on
+  `OrlixOCIRuntimeConfigDescriptor` and `OrlixEnvironmentDescriptor`.
+- OCI runtime config parsing accepts a bounded Linux `RLIMIT_*` subset and
+  rejects unsupported, duplicate, or `soft > hard` entries fail-closed as
+  `process.rlimits`.
+- Materialized root images emit indexed `orlix.rlimit<N>=TYPE:SOFT:HARD`
+  tokens only for accepted rlimit entries.
+- `/sbin/init` parses bounded `orlix.rlimit<N>=...` entries, maps names to
+  compile-time Linux `RLIMIT_*` constants, and applies them with `setrlimit(2)`
+  before gid/uid changes and before exec. Invalid or unapplied limits abort the
+  child before exec instead of silently ignoring requested OCI policy.
+- Added `orlix/rlimit_probe` under the durable Orlix Linux selftest overlay to
+  prove Linux `setrlimit(2)`/`getrlimit(2)`, exec inheritance, and
+  `RLIMIT_NOFILE` enforcement through `EMFILE`.
+- No `OrlixHostAdapter` change, Darwin-visible Linux facade, custom ABI,
+  Docker daemon, `runc`, Apple Containerization, or Virtualization.framework
+  dependency was introduced.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed with escalation for Swift compiler cache writes.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift` passed with escalation for Swift compiler cache writes.
+- `cc -Wall -Wextra -Werror -o /tmp/orlix-rlimit-probe OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/rlimit_probe.c` passed with escalation for compiler temporary files.
+- `/tmp/orlix-rlimit-probe` passed on the host as a probe logic sanity check: set/get, exec inheritance, and `EMFILE` enforcement all reported `ok`.
+- `make -f OrlixKernel/Makefile kselftest-install PROFILE=release` passed with explicit wrapper status `0` after escalation for configured external cache/temp writes.
+- `make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release` passed with explicit wrapper status `0`.
+- `file Build/OrlixMLibC/kselftest/release/orlix/rlimit_probe` reports a statically linked aarch64 ELF.
+- `grep -n 'rlimit_probe' Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list` found `orlix:rlimit_probe` and the packaged `/orlix/rlimit_probe` entry.
+- `xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixOSTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build-for-testing` passed with explicit wrapper status `0`.
+- `make -f OrlixOS/Makefile rootfs PROFILE=release` passed with explicit status-file value `0` after escalation for configured external cache/temp writes.
+- `strings Build/OrlixOS/packages/release/sbin/init | grep -E 'orlix\\.rlimit|setrlimit failed|invalid rlimit'` found the rlimit token and fail-closed init paths in the rebuilt packaged init binary.
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed: 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed: 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale pending/blocked warning in this long `IMPLEMENT.md`.
+
+Non-claims:
+
+- This is source/build/package and Linux-side probe build evidence; it is not
+  app-hosted OCI-derived runtime execution proof for `process.rlimits`.
+- This does not claim full OCI Runtime lifecycle compliance, OCI resource/cgroup
+  support, container runtime readiness, registry pull support, external
+  networking, systemd image compatibility, or third-party package ladder
+  readiness.
+- Unsupported OCI fields still fail closed unless and until implemented through
+  Linux mechanisms and proven in the ADR 0017 order.
+
+Current status:
+
+- Latest checkpoint: OCI `process.rlimits` is accepted for a bounded Linux
+  `RLIMIT_*` subset, materialized into `orlix.rlimit<N>=TYPE:SOFT:HARD`, and
+  applied by `/sbin/init` through `setrlimit(2)` before exec. A Linux-side
+  `orlix/rlimit_probe` now builds into the kselftest package and proves
+  set/get, exec inheritance, and `RLIMIT_NOFILE` `EMFILE` enforcement.
+- Remaining work: app-hosted OCI-derived runtime execution proof, root readonly
+  through Linux mount semantics, readonly/masked paths through Linux mounts,
+  cgroup resource enforcement, virtio-net Linux-visible netdev/socket proof,
+  and full OCI lifecycle proof remain pending.
