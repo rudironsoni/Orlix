@@ -10875,3 +10875,32 @@ Non-claims:
 - This is not systemd image compatibility.
 - This is not proof of controller delegation, resource accounting, pressure metrics, or container policy.
 - This is not a custom Orlix cgroup API.
+
+## 2026-06-21 - Loopback UDP networking substrate probe
+
+Changed:
+
+- Extended `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/network_namespace_probe.c` to include UDP alongside the existing procfs, rtnetlink, and loopback TCP checks.
+
+Scope:
+
+- The probe now requires `/proc/net/udp` in addition to `/proc/net/dev` and `/proc/net/tcp`.
+- The probe now opens loopback UDP sockets, binds a server socket to `INADDR_LOOPBACK`, sends one local datagram with `sendto(2)`, and receives it with `recvfrom(2)`.
+- This remains a Linux-native socket/procfs proof and does not add HostAdapter networking API.
+
+Validation:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` completed and regenerated kselftest artifacts.
+- `rtk rg -n "loopback UDP exchanges local datagrams|/proc/net/udp|orlix_test_plan\\(4\\)" OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/network_namespace_probe.c Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/network_namespace_probe.c`
+  - Found `/proc/net/udp`, the 4-test plan, and the UDP TAP label in both durable overlay and generated Linux source.
+- `rtk rg -n "network_namespace_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  - `Build/OrlixMLibC/kselftest/release/kselftest-list.txt:13:orlix:network_namespace_probe`
+  - `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:20:file /orlix/network_namespace_probe ... 755 0 0`
+- `rtk git diff --check` exited 0.
+
+Non-claims:
+
+- This is not virtio-net packet transport proof.
+- This is not external network egress proof.
+- This is not DNS, registry pull, or OCI runtime lifecycle proof.
+- This is not a custom Orlix network API.
