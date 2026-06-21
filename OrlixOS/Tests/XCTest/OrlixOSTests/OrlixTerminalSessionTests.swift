@@ -5764,6 +5764,118 @@ extension OrlixTerminalSessionTests {
 			decoded.features.map(\.name).sorted()
 		)
 	}
+
+	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
+		let config = Data(
+			"""
+			{
+			  "ociVersion": "1.1.0",
+			  "root": { "path": "rootfs", "readonly": true },
+			  "process": {
+			    "terminal": false,
+			    "args": ["/bin/sh", "-lc", "echo ok"],
+			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
+			    "cwd": "/work",
+			    "user": { "uid": 1000, "gid": 1000 }
+			  },
+			  "linux": {
+			    "namespaces": [
+			      { "type": "mount" },
+			      { "type": "pid" },
+			      { "type": "uts" },
+			      { "type": "ipc" },
+			      { "type": "network" }
+			    ]
+			  }
+			}
+			""".utf8
+		)
+
+		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+
+		XCTAssertEqual(descriptor.ociVersion, "1.1.0")
+		XCTAssertEqual(descriptor.rootPath, "rootfs")
+		XCTAssertTrue(descriptor.rootReadonly)
+		XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo ok"])
+		XCTAssertEqual(descriptor.defaultEnvironment["PATH"], "/usr/bin:/bin")
+		XCTAssertEqual(descriptor.defaultEnvironment["TERM"], "xterm-256color")
+		XCTAssertEqual(descriptor.defaultWorkingDirectory, "/work")
+		XCTAssertEqual(descriptor.defaultUserID, 1000)
+		XCTAssertEqual(descriptor.defaultGroupID, 1000)
+		XCTAssertFalse(descriptor.terminal)
+		XCTAssertEqual(descriptor.namespaces, ["mount", "pid", "uts", "ipc", "network"])
+
+		let environment = descriptor.environmentDescriptor(
+			id: "oci-runtime-config",
+			rootMount: .defaultOverlay
+		)
+		XCTAssertEqual(environment.id, "oci-runtime-config")
+		XCTAssertEqual(environment.source, .ociLayout)
+		XCTAssertEqual(environment.platform, "linux/arm64")
+		XCTAssertEqual(environment.defaultCommand, descriptor.defaultCommand)
+		XCTAssertEqual(environment.defaultWorkingDirectory, descriptor.defaultWorkingDirectory)
+		XCTAssertEqual(environment.defaultUserID, descriptor.defaultUserID)
+		XCTAssertEqual(environment.defaultGroupID, descriptor.defaultGroupID)
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxFeatures() throws {
+		let unsupportedFeatureConfigs: [(String, String)] = [
+			("uidMappings", #""uidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
+			("gidMappings", #""gidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
+			("devices", #""devices": [{ "path": "/dev/net/tun", "type": "c" }]"#),
+			("resources", #""resources": { "memory": { "limit": 268435456 } }"#),
+			("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
+			("maskedPaths", #""maskedPaths": ["/proc/kcore"]"#),
+			("readonlyPaths", #""readonlyPaths": ["/proc/sys"]"#),
+			("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#)
+		]
+
+		for (feature, linuxFragment) in unsupportedFeatureConfigs {
+			let config = Data(
+				"""
+				{
+				  "ociVersion": "1.1.0",
+				  "process": { "args": ["/bin/sh"], "cwd": "/" },
+				  "linux": { \(linuxFragment) }
+				}
+				""".utf8
+			)
+
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeConfigError,
+					.unsupportedLinuxFeature("linux.\(feature)")
+				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsInvalidProcessSurface() throws {
+		let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
+			(
+				Data(#"{ "ociVersion": "1.1.0" }"#.utf8),
+				.missingProcess
+			),
+			(
+				Data(#"{ "ociVersion": "1.1.0", "process": { "args": [], "cwd": "/" } }"#.utf8),
+				.emptyProcessArgs
+			),
+			(
+				Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "env": ["BAD"], "cwd": "/" } }"#.utf8),
+				.invalidEnvironmentEntry("BAD")
+			),
+			(
+				Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "cwd": "relative" } }"#.utf8),
+				.invalidWorkingDirectory("relative")
+			)
+		]
+
+		for (config, expectedError) in invalidConfigs {
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+				XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
+			}
+		}
+	}
 }
 
 private final class DataRecorder: @unchecked Sendable {
