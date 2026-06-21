@@ -12813,3 +12813,70 @@ Current status:
   registry pull support, cgroup resource behavior, seccomp/hooks support,
   `linux.readonlyPaths`, `linux.maskedPaths`, third-party package ladder
   readiness, or full product runtime readiness.
+
+## 2026-06-21 - App-hosted Linux cgroup namespace proof
+
+Checkpoint:
+
+- Promoted the existing Linux-owned `cgroup_namespace_probe` kselftest to an
+  app-hosted OrlixOS proof through
+  `OrlixUpstreamTestRunSpec.kernelCgroupNamespace`.
+- Added
+  `OrlixKernelUpstreamTests/testCgroupNamespaceProbeCompletesThroughOrlixOSTerminalSession`
+  to launch only `orlix.kselftest=cgroup_namespace_probe` through the
+  wrapper-managed iPhone 17 simulator path.
+- Kept the proof on Linux-visible surfaces:
+  - `unshare(CLONE_NEWCGROUP)` changes `/proc/self/ns/cgroup`.
+  - `/proc/self/cgroup` remains readable and reports the expected root
+    cgroup view.
+
+Commands:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcode-storage-doctor
+
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testCgroupNamespaceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Test-OrlixKernelUpstreamTests-2026.06.21_22-50-58-+0200.xcresult
+xcodebuild exit status: 0
+Testing started completed.
+```
+
+Harness checks:
+
+```sh
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+```text
+git diff --check: STATUS 0
+.codex/hooks/tests: Ran 32 tests, OK
+.codex/rules/tests: Ran 5 tests, OK
+compact_plan_check.py: STATUS 0 with known stale-status warning
+```
+
+Current status:
+
+- Linux-visible cgroup namespace unshare and `/proc/self/cgroup` readability
+  now have focused app-hosted kselftest evidence through the OrlixOS
+  terminal-session path.
+- This does not claim cgroup controller accounting, cgroup resource
+  enforcement, cgroup delegation policy, OCI Runtime Spec completion, seccomp
+  or hooks support, external networking, virtio-net readiness, third-party
+  package ladder readiness, or full product runtime readiness.

@@ -228,6 +228,14 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
     }
 
+    func testCgroupNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelCgroupNamespace)
+
+        XCTAssertTrue(output.contains("cgroup_namespace_probe"))
+        XCTAssertTrue(output.contains("cgroup namespace unshare changes /proc/self/ns/cgroup"))
+        XCTAssertTrue(output.contains("cgroup namespace keeps /proc/self/cgroup readable"))
+    }
+
     func testPathErrnoProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelPathErrno)
 
