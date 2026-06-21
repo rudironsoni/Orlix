@@ -1275,11 +1275,13 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 }
 
 public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
+	case unsupportedOCIVersion(String)
 	case missingProcess
 	case emptyProcessArgs
 	case invalidProcessArg(String)
 	case invalidEnvironmentEntry(String)
 	case invalidWorkingDirectory(String)
+	case invalidConsoleSize
 	case unsupportedLinuxFeature(String)
 }
 
@@ -1294,6 +1296,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultUserID: UInt32
 	public let defaultGroupID: UInt32
 	public let terminal: Bool
+	public let consoleSize: OrlixOCIRuntimeConsoleSize?
 	public let namespaces: [String]
 
 	@_spi(OrlixPrivateTesting)
@@ -1325,11 +1328,17 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 	public let options: [String]
 }
 
+public struct OrlixOCIRuntimeConsoleSize: Equatable, Sendable {
+	public let height: UInt32
+	public let width: UInt32
+}
+
 public struct OrlixOCIRuntimeConfigParser: Sendable {
 	public init() {}
 
 	public func parse(_ data: Data) throws -> OrlixOCIRuntimeConfigDescriptor {
 		let config = try JSONDecoder().decode(OCIRuntimeConfig.self, from: data)
+		try Self.validateOCIVersion(config.ociVersion)
 
 		guard let process = config.process else {
 			throw OrlixOCIRuntimeConfigError.missingProcess
@@ -1354,6 +1363,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		let mounts = try Self.validatedMounts(config.mounts ?? [])
 		try Self.rejectUnsupportedProcessFeatures(process)
 		try Self.rejectUnsupportedLinuxFeatures(config.linux)
+		let terminal = process.terminal ?? false
+		let consoleSize = try Self.validatedConsoleSize(process.consoleSize,
+							       terminal: terminal)
 
 		return OrlixOCIRuntimeConfigDescriptor(
 			ociVersion: config.ociVersion,
@@ -1365,9 +1377,18 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultWorkingDirectory: cwd,
 			defaultUserID: process.user?.uid ?? 0,
 			defaultGroupID: process.user?.gid ?? 0,
-			terminal: process.terminal ?? false,
+			terminal: terminal,
+			consoleSize: consoleSize,
 			namespaces: namespaces
 		)
+	}
+
+	private static func validateOCIVersion(_ version: String) throws {
+		let supportedVersions = Set(["1.0.0", "1.0.1", "1.1.0"])
+
+		if !supportedVersions.contains(version) {
+			throw OrlixOCIRuntimeConfigError.unsupportedOCIVersion(version)
+		}
 	}
 
 	private static func environmentDictionary(from values: [String]) throws -> [String: String] {
@@ -1425,6 +1446,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	}
 
 	private static func rejectUnsupportedProcessFeatures(_ process: OCIRuntimeProcess) throws {
+		if let additionalGids = process.user?.additionalGids, !additionalGids.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.additionalGids")
+		}
 		if let rlimits = process.rlimits, !rlimits.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.rlimits")
 		}
@@ -1440,6 +1464,20 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		if process.noNewPrivileges != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.noNewPrivileges")
 		}
+	}
+
+	private static func validatedConsoleSize(_ size: OCIProcessConsoleSize?,
+						 terminal: Bool) throws
+		-> OrlixOCIRuntimeConsoleSize?
+	{
+		guard let size else {
+			return nil
+		}
+		guard terminal, size.height > 0, size.width > 0 else {
+			throw OrlixOCIRuntimeConfigError.invalidConsoleSize
+		}
+
+		return OrlixOCIRuntimeConsoleSize(height: size.height, width: size.width)
 	}
 
 	private static func rejectUnsupportedLinuxFeatures(_ linux: OCIRuntimeLinux?) throws {
@@ -1490,7 +1528,7 @@ private struct OCIRuntimeConfig: Decodable {
 
 private struct OCIRuntimeProcess: Decodable {
 	let terminal: Bool?
-	let consoleSize: OCIRuntimeConsoleSize?
+	let consoleSize: OCIProcessConsoleSize?
 	let args: [String]
 	let env: [String]?
 	let cwd: String?
@@ -1505,6 +1543,7 @@ private struct OCIRuntimeProcess: Decodable {
 private struct OCIRuntimeUser: Decodable {
 	let uid: UInt32
 	let gid: UInt32
+	let additionalGids: [UInt32]?
 }
 
 private struct OCIRuntimeRoot: Decodable {
@@ -1546,7 +1585,10 @@ private struct OCIRuntimeIDMapping: Decodable {
 private struct OCIRuntimeDevice: Decodable {}
 private struct OCIRuntimeResources: Decodable {}
 private struct OCIRuntimeSeccomp: Decodable {}
-private struct OCIRuntimeConsoleSize: Decodable {}
+private struct OCIProcessConsoleSize: Decodable {
+	let height: UInt32
+	let width: UInt32
+}
 private struct OCIRuntimeRlimit: Decodable {}
 private struct OCIRuntimeCapabilities: Decodable {}
 private struct OCIRuntimeNetDevice: Decodable {}
