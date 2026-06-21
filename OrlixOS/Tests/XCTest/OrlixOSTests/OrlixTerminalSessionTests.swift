@@ -5930,6 +5930,77 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeLifecycleControllerFollowsCreateStartKillDeleteOrder() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+
+		XCTAssertEqual(configured.record.state, .configured)
+		XCTAssertNil(configured.record.pid)
+
+		let created = try configured.create()
+		XCTAssertEqual(created.record.state, .created)
+		XCTAssertNil(created.record.pid)
+
+		let running = try created.start(pid: 42)
+		XCTAssertEqual(running.record.state, .running)
+		XCTAssertEqual(running.record.pid, 42)
+
+		let stopped = try running.kill(signal: 15)
+		XCTAssertEqual(stopped.record.state, .stopped)
+		XCTAssertEqual(stopped.record.pid, 42)
+		XCTAssertEqual(stopped.record.exitStatus, 143)
+
+		let deleted = try stopped.delete()
+		XCTAssertEqual(deleted.record.state, .deleted)
+		XCTAssertEqual(deleted.record.exitStatus, 143)
+	}
+
+	func testOCIRuntimeLifecycleControllerRejectsInvalidTransitions() throws {
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig()),
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+
+		XCTAssertThrowsError(try configured.start(pid: 42)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .configured, action: .start)
+			)
+		}
+
+		let created = try configured.create()
+		XCTAssertThrowsError(try created.kill(signal: 15)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .created, action: .kill)
+			)
+		}
+
+		let running = try created.start(pid: 42)
+		XCTAssertThrowsError(try running.delete()) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .running, action: .delete)
+			)
+		}
+		XCTAssertThrowsError(try running.kill(signal: 0)) { error in
+			XCTAssertEqual(error as? OrlixOCIRuntimeLifecycleError, .invalidSignal(0))
+		}
+
+		let deleted = try configured.delete()
+		XCTAssertThrowsError(try deleted.create()) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .deleted, action: .create)
+			)
+		}
+	}
+
 	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 		let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [
 			(
@@ -5957,6 +6028,20 @@ extension OrlixTerminalSessionTests {
 				XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
 			}
 		}
+	}
+
+	private func minimalOCIRuntimeConfig() -> Data {
+		Data(
+			"""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": {
+			    "args": ["/bin/sh"],
+			    "cwd": "/"
+			  }
+			}
+			""".utf8
+		)
 	}
 
 	func testOCIRuntimeConfigParserRejectsInvalidProcessSurface() throws {

@@ -1592,3 +1592,145 @@ private struct OCIProcessConsoleSize: Decodable {
 private struct OCIRuntimeRlimit: Decodable {}
 private struct OCIRuntimeCapabilities: Decodable {}
 private struct OCIRuntimeNetDevice: Decodable {}
+
+public enum OrlixOCIRuntimeLifecycleState: String, Codable, Equatable, Sendable {
+	case configured
+	case created
+	case running
+	case stopped
+	case deleted
+}
+
+public enum OrlixOCIRuntimeLifecycleAction: String, Codable, Equatable, Sendable {
+	case create
+	case start
+	case kill
+	case delete
+}
+
+public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
+	case invalidTransition(from: OrlixOCIRuntimeLifecycleState,
+			       action: OrlixOCIRuntimeLifecycleAction)
+	case invalidSignal(Int32)
+}
+
+public struct OrlixOCIRuntimeLifecycleRecord: Codable, Equatable, Sendable {
+	public let id: String
+	public let bundlePath: String
+	public let pid: Int32?
+	public let exitStatus: Int32?
+	public let state: OrlixOCIRuntimeLifecycleState
+
+	public init(id: String,
+		    bundlePath: String,
+		    pid: Int32? = nil,
+		    exitStatus: Int32? = nil,
+		    state: OrlixOCIRuntimeLifecycleState = .configured)
+	{
+		self.id = id
+		self.bundlePath = bundlePath
+		self.pid = pid
+		self.exitStatus = exitStatus
+		self.state = state
+	}
+}
+
+public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
+	public let config: OrlixOCIRuntimeConfigDescriptor
+	public let record: OrlixOCIRuntimeLifecycleRecord
+
+	public init(config: OrlixOCIRuntimeConfigDescriptor,
+		    id: String,
+		    bundlePath: String)
+	{
+		self.config = config
+		self.record = OrlixOCIRuntimeLifecycleRecord(
+			id: id,
+			bundlePath: bundlePath
+		)
+	}
+
+	private init(config: OrlixOCIRuntimeConfigDescriptor,
+		     record: OrlixOCIRuntimeLifecycleRecord)
+	{
+		self.config = config
+		self.record = record
+	}
+
+	public func create() throws -> OrlixOCIRuntimeLifecycleController {
+		guard record.state == .configured else {
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: record.state,
+				action: .create
+			)
+		}
+		return withState(.created)
+	}
+
+	public func start(pid: Int32) throws -> OrlixOCIRuntimeLifecycleController {
+		guard record.state == .created else {
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: record.state,
+				action: .start
+			)
+		}
+		return OrlixOCIRuntimeLifecycleController(
+			config: config,
+			record: OrlixOCIRuntimeLifecycleRecord(
+				id: record.id,
+				bundlePath: record.bundlePath,
+				pid: pid,
+				state: .running
+			)
+		)
+	}
+
+	public func kill(signal: Int32) throws -> OrlixOCIRuntimeLifecycleController {
+		guard signal > 0 else {
+			throw OrlixOCIRuntimeLifecycleError.invalidSignal(signal)
+		}
+		guard record.state == .running else {
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: record.state,
+				action: .kill
+			)
+		}
+		return OrlixOCIRuntimeLifecycleController(
+			config: config,
+			record: OrlixOCIRuntimeLifecycleRecord(
+				id: record.id,
+				bundlePath: record.bundlePath,
+				pid: record.pid,
+				exitStatus: 128 + signal,
+				state: .stopped
+			)
+		)
+	}
+
+	public func delete() throws -> OrlixOCIRuntimeLifecycleController {
+		switch record.state {
+		case .configured, .created, .stopped:
+			return withState(.deleted)
+		case .running, .deleted:
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: record.state,
+				action: .delete
+			)
+		}
+	}
+
+	private func withState(_ state: OrlixOCIRuntimeLifecycleState)
+		-> OrlixOCIRuntimeLifecycleController
+	{
+		OrlixOCIRuntimeLifecycleController(
+			config: config,
+			record: OrlixOCIRuntimeLifecycleRecord(
+				id: record.id,
+				bundlePath: record.bundlePath,
+				pid: record.pid,
+				exitStatus: record.exitStatus,
+				state: state
+			)
+		)
+	}
+}
