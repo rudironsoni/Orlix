@@ -1196,6 +1196,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Basic cgroup v2 mount, task move, child creation, and child removal are covered by Orlix kselftest."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "cgroupV2PidsController",
+			status: .implemented,
+			proof: "orlix:cgroup_pids_probe",
+			reason: "The cgroup v2 pids controller is exposed, enabled for child cgroups, accepts max limits, and accepts task migration in Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "cgroups",
 			status: .recognized,
 			reason: "Broad OCI cgroup resource policy is recognized but not claimed beyond the basic cgroup v2 lifecycle proof."
