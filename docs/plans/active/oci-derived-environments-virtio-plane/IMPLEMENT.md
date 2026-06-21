@@ -11157,3 +11157,55 @@ Non-claims:
 
 - The overall OCI-derived environments goal remains incomplete.
 - There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.
+
+## 2026-06-21 - OCI Runtime config parser version and terminal fields
+
+Changed:
+
+- Extended `OrlixOCIRuntimeConfigParser` in `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Added `OrlixOCIRuntimeConsoleSize` and new deterministic parser errors for unsupported OCI versions and invalid console size.
+- Extended parser tests in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Scope:
+
+- The parser now accepts only pinned OCI Runtime spec versions `1.0.0`, `1.0.1`, and `1.1.0`.
+- The parser now preserves `process.consoleSize` only when `process.terminal` is true and height/width are nonzero.
+- The parser now rejects `process.user.additionalGids` deterministically until supplementary group handling has Linux proof.
+
+Validation:
+
+- `rtk xcrun swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` passed.
+- `rtk xcrun swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` passed.
+- `rtk xcrun swiftc -typecheck OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift /private/tmp/OrlixOCIRuntimeConfigParserCheck.swift` passed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed 5 tests.
+
+Blocked validation:
+
+- Targeted `xcodebuild` for the parser tests still failed before XCTest execution because CoreSimulator returned service errors including `CoreSimulator.SimError`, Code 410, and Code 61.
+
+Non-claims:
+
+- This is not full OCI Runtime schema validation against an upstream schema file.
+- This is not OCI Runtime lifecycle compliance.
+- This does not implement PTY allocation, console resizing, supplementary group application, or app-hosted product runtime proof.
+
+## 2026-06-21 - Current status after config parser terminal/version handling
+
+Current status:
+
+- OrlixOS now has deterministic OCI Runtime feature reporting and an expanded minimal Linux OCI Runtime `config.json` parser/converter baseline.
+- The parser accepts process defaults, root info, recognized namespaces, supported pseudo-filesystem mount declarations, pinned OCI versions, and terminal console size metadata under explicit constraints.
+- The parser rejects unsupported Linux/process fields deterministically, including supplementary groups, process rlimits/capabilities/labels/no-new-privileges, unsupported mounts, cgroupsPath, and netDevices.
+- Targeted simulator XCTest execution remains blocked by CoreSimulator service errors, so parser tests are not claimed green through XCTest execution.
+
+Next aligned work:
+
+- Add pinned upstream OCI Runtime schema validation or begin deterministic OrlixOS lifecycle command/state semantics around accepted descriptors.
+- Continue Linux-owned namespace, mount, signal, fd, pseudo-fs, and virtio proof only where a concrete requirement gap blocks OCI-derived environment execution.
+
+Non-claims:
+
+- The overall OCI-derived environments goal remains incomplete.
+- There is still no OCI Runtime lifecycle compliance, app-hosted product runtime proof, registry pull proof, external networking proof, systemd image compatibility proof, or arbitrary imported binary compatibility proof.

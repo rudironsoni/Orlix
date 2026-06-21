@@ -5785,7 +5785,8 @@ extension OrlixTerminalSessionTests {
 			    }
 			  ],
 			  "process": {
-			    "terminal": false,
+			    "terminal": true,
+			    "consoleSize": { "height": 24, "width": 80 },
 			    "args": ["/bin/sh", "-lc", "echo ok"],
 			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
 			    "cwd": "/work",
@@ -5822,7 +5823,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.defaultWorkingDirectory, "/work")
 		XCTAssertEqual(descriptor.defaultUserID, 1000)
 		XCTAssertEqual(descriptor.defaultGroupID, 1000)
-		XCTAssertFalse(descriptor.terminal)
+		XCTAssertTrue(descriptor.terminal)
+		XCTAssertEqual(descriptor.consoleSize, OrlixOCIRuntimeConsoleSize(height: 24, width: 80))
 		XCTAssertEqual(descriptor.namespaces, ["mount", "pid", "uts", "ipc", "network"])
 
 		let environment = descriptor.environmentDescriptor(
@@ -5874,6 +5876,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedProcessFeatures() throws {
 		let unsupportedProcessConfigs: [(String, String)] = [
+			("user.additionalGids", #""user": { "uid": 0, "gid": 0, "additionalGids": [1] }"#),
 			("rlimits", #""rlimits": [{ "type": "RLIMIT_NOFILE", "hard": 1024, "soft": 1024 }]"#),
 			("capabilities", #""capabilities": { "bounding": ["CAP_NET_ADMIN"] }"#),
 			("apparmorProfile", #""apparmorProfile": "container-default""#),
@@ -5900,6 +5903,29 @@ extension OrlixTerminalSessionTests {
 					error as? OrlixOCIRuntimeConfigError,
 					.unsupportedLinuxFeature("process.\(feature)")
 				)
+			}
+		}
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedVersionAndConsoleSize() throws {
+		let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
+			(
+				Data(#"{ "ociVersion": "0.2.0", "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
+				.unsupportedOCIVersion("0.2.0")
+			),
+			(
+				Data(#"{ "ociVersion": "1.1.0", "process": { "terminal": false, "consoleSize": { "height": 24, "width": 80 }, "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
+				.invalidConsoleSize
+			),
+			(
+				Data(#"{ "ociVersion": "1.1.0", "process": { "terminal": true, "consoleSize": { "height": 0, "width": 80 }, "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
+				.invalidConsoleSize
+			)
+		]
+
+		for (config, expectedError) in invalidConfigs {
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+				XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
 			}
 		}
 	}
