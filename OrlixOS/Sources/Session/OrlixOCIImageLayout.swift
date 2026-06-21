@@ -1287,6 +1287,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let ociVersion: String
 	public let rootPath: String?
 	public let rootReadonly: Bool
+	public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
 	public let defaultWorkingDirectory: String
@@ -1317,6 +1318,13 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	}
 }
 
+public struct OrlixOCIRuntimeMount: Equatable, Sendable {
+	public let destination: String
+	public let type: String
+	public let source: String?
+	public let options: [String]
+}
+
 public struct OrlixOCIRuntimeConfigParser: Sendable {
 	public init() {}
 
@@ -1343,12 +1351,15 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 
 		let namespaces = try Self.validatedNamespaces(config.linux?.namespaces ?? [])
+		let mounts = try Self.validatedMounts(config.mounts ?? [])
+		try Self.rejectUnsupportedProcessFeatures(process)
 		try Self.rejectUnsupportedLinuxFeatures(config.linux)
 
 		return OrlixOCIRuntimeConfigDescriptor(
 			ociVersion: config.ociVersion,
 			rootPath: config.root?.path,
 			rootReadonly: config.root?.readonly ?? false,
+			mounts: mounts,
 			defaultCommand: args,
 			defaultEnvironment: environment,
 			defaultWorkingDirectory: cwd,
@@ -1392,6 +1403,45 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 	}
 
+	private static func validatedMounts(_ mounts: [OCIRuntimeMount]) throws -> [OrlixOCIRuntimeMount] {
+		try mounts.map { mount in
+			guard mount.destination.hasPrefix("/"),
+			      !mount.destination.contains("\u{0}") else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.destination")
+			}
+
+			let supportedMountTypes = Set(["proc", "sysfs", "devtmpfs", "devpts", "tmpfs"])
+			guard supportedMountTypes.contains(mount.type) else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.type.\(mount.type)")
+			}
+
+			return OrlixOCIRuntimeMount(
+				destination: mount.destination,
+				type: mount.type,
+				source: mount.source,
+				options: mount.options ?? []
+			)
+		}
+	}
+
+	private static func rejectUnsupportedProcessFeatures(_ process: OCIRuntimeProcess) throws {
+		if let rlimits = process.rlimits, !rlimits.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.rlimits")
+		}
+		if process.capabilities != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.capabilities")
+		}
+		if process.apparmorProfile != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.apparmorProfile")
+		}
+		if process.selinuxLabel != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.selinuxLabel")
+		}
+		if process.noNewPrivileges != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.noNewPrivileges")
+		}
+	}
+
 	private static func rejectUnsupportedLinuxFeatures(_ linux: OCIRuntimeLinux?) throws {
 		guard let linux else {
 			return
@@ -1421,6 +1471,12 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		if linux.mountLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
 		}
+		if linux.cgroupsPath != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.cgroupsPath")
+		}
+		if let netDevices = linux.netDevices, !netDevices.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.netDevices")
+		}
 	}
 }
 
@@ -1428,15 +1484,22 @@ private struct OCIRuntimeConfig: Decodable {
 	let ociVersion: String
 	let process: OCIRuntimeProcess?
 	let root: OCIRuntimeRoot?
+	let mounts: [OCIRuntimeMount]?
 	let linux: OCIRuntimeLinux?
 }
 
 private struct OCIRuntimeProcess: Decodable {
 	let terminal: Bool?
+	let consoleSize: OCIRuntimeConsoleSize?
 	let args: [String]
 	let env: [String]?
 	let cwd: String?
 	let user: OCIRuntimeUser?
+	let rlimits: [OCIRuntimeRlimit]?
+	let capabilities: OCIRuntimeCapabilities?
+	let apparmorProfile: String?
+	let selinuxLabel: String?
+	let noNewPrivileges: Bool?
 }
 
 private struct OCIRuntimeUser: Decodable {
@@ -1449,6 +1512,13 @@ private struct OCIRuntimeRoot: Decodable {
 	let readonly: Bool?
 }
 
+private struct OCIRuntimeMount: Decodable {
+	let destination: String
+	let type: String
+	let source: String?
+	let options: [String]?
+}
+
 private struct OCIRuntimeLinux: Decodable {
 	let namespaces: [OCIRuntimeNamespace]?
 	let uidMappings: [OCIRuntimeIDMapping]?
@@ -1459,6 +1529,8 @@ private struct OCIRuntimeLinux: Decodable {
 	let maskedPaths: [String]?
 	let readonlyPaths: [String]?
 	let mountLabel: String?
+	let cgroupsPath: String?
+	let netDevices: [OCIRuntimeNetDevice]?
 }
 
 private struct OCIRuntimeNamespace: Decodable {
@@ -1474,3 +1546,7 @@ private struct OCIRuntimeIDMapping: Decodable {
 private struct OCIRuntimeDevice: Decodable {}
 private struct OCIRuntimeResources: Decodable {}
 private struct OCIRuntimeSeccomp: Decodable {}
+private struct OCIRuntimeConsoleSize: Decodable {}
+private struct OCIRuntimeRlimit: Decodable {}
+private struct OCIRuntimeCapabilities: Decodable {}
+private struct OCIRuntimeNetDevice: Decodable {}
