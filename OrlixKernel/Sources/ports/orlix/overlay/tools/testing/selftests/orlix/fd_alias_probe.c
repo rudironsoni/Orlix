@@ -1,11 +1,44 @@
 // SPDX-License-Identifier: GPL-2.0
-
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "orlix_kselftest_user.h"
+
+#define FD_ALIAS_PROBE_FILE "/tmp/orlix-fd-alias-probe.txt"
+#define FD_ALIAS_PROBE_PAYLOAD "orlix-fd-alias\n"
+
+static bool append_uint(char *buffer, size_t buffer_size, size_t *pos,
+			unsigned int value)
+{
+	char digits[16];
+	size_t count = 0;
+
+	do {
+		digits[count++] = (char)('0' + (value % 10));
+		value /= 10;
+	} while (value != 0 && count < sizeof(digits));
+
+	while (count > 0) {
+		if (*pos + 1 >= buffer_size)
+			return false;
+		buffer[(*pos)++] = digits[--count];
+	}
+
+	buffer[*pos] = '\0';
+	return true;
+}
+
+static bool make_fd_path(char *buffer, size_t buffer_size, const char *prefix,
+			 int fd)
+{
+	size_t pos = 0;
+
+	pos = orlix_append_cstr(buffer, pos, buffer_size, prefix);
+	return append_uint(buffer, buffer_size, &pos, (unsigned int)fd);
+}
 
 static bool path_is_directory(const char *path)
 {
@@ -14,86 +47,124 @@ static bool path_is_directory(const char *path)
 	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-static bool fd_alias_opens_referenced_file(int fd, const char *alias_path)
+static bool symlink_target_equals(const char *path, const char *expected)
 {
-	static const char payload[] = "orlix-fd-alias\n";
-	char buffer[sizeof(payload)];
+	char buffer[128];
+	ssize_t size;
+
+	size = readlink(path, buffer, sizeof(buffer) - 1);
+	if (size < 0)
+		return false;
+	buffer[size] = '\0';
+
+	return orlix_memcmp(buffer, expected, orlix_strlen(expected)) == 0 &&
+	       buffer[orlix_strlen(expected)] == '\0';
+}
+
+static bool stat_paths_match(const char *first, const char *second)
+{
+	struct stat first_st;
+	struct stat second_st;
+
+	return stat(first, &first_st) == 0 && stat(second, &second_st) == 0 &&
+	       first_st.st_dev == second_st.st_dev &&
+	       first_st.st_ino == second_st.st_ino;
+}
+
+static bool fd_alias_opens_referenced_file(int fd, const char *prefix)
+{
+	char path[64];
+	char buffer[sizeof(FD_ALIAS_PROBE_PAYLOAD)] = { 0 };
 	struct stat expected;
 	struct stat actual;
 	int alias_fd;
-	ssize_t nread;
+	ssize_t size;
 
-	if (write(fd, payload, sizeof(payload) - 1) !=
-	    (ssize_t)(sizeof(payload) - 1))
+	if (!make_fd_path(path, sizeof(path), prefix, fd))
+		return false;
+	if (fstat(fd, &expected) != 0)
 		return false;
 
-	if (lseek(fd, 0, SEEK_SET) != 0)
-		return false;
-
-	alias_fd = open(alias_path, O_RDONLY);
+	alias_fd = open(path, O_RDONLY | O_CLOEXEC);
 	if (alias_fd < 0)
 		return false;
 
-	if (fstat(fd, &expected) != 0 || fstat(alias_fd, &actual) != 0) {
+	size = read(alias_fd, buffer, sizeof(FD_ALIAS_PROBE_PAYLOAD) - 1);
+	if (fstat(alias_fd, &actual) != 0) {
 		close(alias_fd);
 		return false;
 	}
+	close(alias_fd);
 
-	nread = read(alias_fd, buffer, sizeof(payload) - 1);
-	if (close(alias_fd) != 0)
-		return false;
-
-	return expected.st_dev == actual.st_dev &&
-	       expected.st_ino == actual.st_ino &&
-	       expected.st_mode == actual.st_mode &&
-	       nread == (ssize_t)(sizeof(payload) - 1) &&
-	       orlix_memcmp(buffer, payload, sizeof(payload) - 1) == 0;
+	return size == (ssize_t)(sizeof(FD_ALIAS_PROBE_PAYLOAD) - 1) &&
+	       orlix_memcmp(buffer, FD_ALIAS_PROBE_PAYLOAD,
+			    sizeof(FD_ALIAS_PROBE_PAYLOAD) - 1) == 0 &&
+	       expected.st_dev == actual.st_dev && expected.st_ino == actual.st_ino;
 }
 
-static bool stdio_alias_matches(const char *path, int fd)
+static bool fd_path_exists_for_stdio(int fd, const char *prefix)
 {
-	struct stat expected;
-	struct stat actual;
+	char path[64];
+	struct stat st;
 
-	return fstat(fd, &expected) == 0 &&
-	       stat(path, &actual) == 0 &&
-	       expected.st_dev == actual.st_dev &&
-	       expected.st_ino == actual.st_ino &&
-	       expected.st_mode == actual.st_mode;
+	return make_fd_path(path, sizeof(path), prefix, fd) && stat(path, &st) == 0;
+}
+
+static int create_probe_file(void)
+{
+	int fd;
+
+	fd = open(FD_ALIAS_PROBE_FILE, O_CREAT | O_TRUNC | O_RDWR | O_CLOEXEC,
+		  0600);
+	if (fd < 0)
+		return -1;
+	if (write(fd, FD_ALIAS_PROBE_PAYLOAD,
+		  sizeof(FD_ALIAS_PROBE_PAYLOAD) - 1) !=
+	    (ssize_t)(sizeof(FD_ALIAS_PROBE_PAYLOAD) - 1)) {
+		close(fd);
+		return -1;
+	}
+	if (lseek(fd, 0, SEEK_SET) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	return fd;
 }
 
 int main(void)
 {
-	char fd_path[32] = "/dev/fd/";
-	size_t pos;
-	int tmp_fd;
+	int fd;
 
-	orlix_write_all("ORLIX-FD-ALIAS-PROBE\n");
-	orlix_test_plan(5);
+	orlix_test_plan(11);
 
-	tmp_fd = open("/tmp/orlix-fd-alias-probe",
-		      O_CREAT | O_TRUNC | O_RDWR, 0600);
-	if (tmp_fd >= 0) {
-		pos = orlix_strlen(fd_path);
-		pos = orlix_append_uint(fd_path, pos, sizeof(fd_path),
-					(unsigned int)tmp_fd);
-		fd_path[pos] = '\0';
-	}
-
-	orlix_test_result(path_is_directory("/dev/fd"),
-			  "/dev/fd is a directory");
-	orlix_test_result(tmp_fd >= 0 &&
-			  fd_alias_opens_referenced_file(tmp_fd, fd_path),
-			  "/dev/fd opens the referenced descriptor path");
-	orlix_test_result(stdio_alias_matches("/dev/stdin", STDIN_FILENO),
+	fd = create_probe_file();
+	orlix_test_result(fd >= 0, "fd alias probe file opens");
+	orlix_test_result(path_is_directory("/dev/fd"), "/dev/fd is a directory");
+	orlix_test_result(path_is_directory("/proc/self/fd"),
+			  "/proc/self/fd is a directory");
+	orlix_test_result(symlink_target_equals("/dev/fd", "/proc/self/fd"),
+			  "/dev/fd aliases /proc/self/fd");
+	orlix_test_result(symlink_target_equals("/dev/stdin", "/proc/self/fd/0"),
 			  "/dev/stdin aliases fd 0");
-	orlix_test_result(stdio_alias_matches("/dev/stdout", STDOUT_FILENO),
+	orlix_test_result(symlink_target_equals("/dev/stdout", "/proc/self/fd/1"),
 			  "/dev/stdout aliases fd 1");
-	orlix_test_result(stdio_alias_matches("/dev/stderr", STDERR_FILENO),
+	orlix_test_result(symlink_target_equals("/dev/stderr", "/proc/self/fd/2"),
 			  "/dev/stderr aliases fd 2");
+	orlix_test_result(fd >= 0 && fd_alias_opens_referenced_file(fd, "/dev/fd/"),
+			  "/dev/fd/N opens referenced file");
+	orlix_test_result(fd >= 0 &&
+				  fd_alias_opens_referenced_file(fd,
+								 "/proc/self/fd/"),
+			  "/proc/self/fd/N opens referenced file");
+	orlix_test_result(stat_paths_match("/dev/stdout", "/proc/self/fd/1"),
+			  "/dev/stdout resolves to proc fd 1");
+	orlix_test_result(fd_path_exists_for_stdio(2, "/dev/fd/") &&
+				  fd_path_exists_for_stdio(2, "/proc/self/fd/"),
+			  "fd directories expose stderr");
 
-	if (tmp_fd >= 0)
-		close(tmp_fd);
-	unlink("/tmp/orlix-fd-alias-probe");
+	if (fd >= 0)
+		close(fd);
+	unlink(FD_ALIAS_PROBE_FILE);
 	orlix_test_exit();
 }

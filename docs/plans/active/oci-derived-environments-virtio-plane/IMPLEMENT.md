@@ -10904,3 +10904,33 @@ Non-claims:
 - This is not external network egress proof.
 - This is not DNS, registry pull, or OCI runtime lifecycle proof.
 - This is not a custom Orlix network API.
+
+## 2026-06-21 - Linux fd alias substrate probe expansion
+
+Changed:
+
+- Reworked `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/fd_alias_probe.c` into an 11-test Linux fd-surface probe.
+
+Scope:
+
+- The probe still uses only standard Linux userspace filesystem and fd operations.
+- It verifies `/dev/fd` and `/proc/self/fd` are directories from userspace.
+- It verifies `/dev/fd` aliases `/proc/self/fd`.
+- It verifies `/dev/stdin`, `/dev/stdout`, and `/dev/stderr` alias `/proc/self/fd/0`, `/proc/self/fd/1`, and `/proc/self/fd/2`.
+- It verifies both `/dev/fd/N` and `/proc/self/fd/N` can open a referenced regular file with matching inode identity and content.
+- It verifies stdout resolves to proc fd 1 and fd directories expose stderr.
+
+Validation:
+
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` completed and regenerated kselftest artifacts.
+- `rtk rg -n "/proc/self/fd/N opens referenced file|/dev/fd aliases /proc/self/fd|fd directories expose stderr|orlix_test_plan\\(11\\)" OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/fd_alias_probe.c Build/OrlixKernel/src/linux-6.12-port/tools/testing/selftests/orlix/fd_alias_probe.c`
+  - Found the 11-test plan and fd alias TAP labels in both durable overlay and generated Linux source.
+- `rtk rg -n "fd_alias_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+  - `Build/OrlixMLibC/kselftest/release/kselftest-list.txt:8:orlix:fd_alias_probe`
+  - `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:15:file /orlix/fd_alias_probe ... 755 0 0`
+
+Non-claims:
+
+- This is not OCI Runtime lifecycle readiness.
+- This is not proof of arbitrary fd inheritance policy for every OCI config shape.
+- This is not a custom Orlix fd API.
