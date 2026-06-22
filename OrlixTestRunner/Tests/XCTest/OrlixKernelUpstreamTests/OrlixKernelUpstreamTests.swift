@@ -418,6 +418,7 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("AF_PACKET socket binds to the virtio-net link"))
         XCTAssertTrue(output.contains("virtio-net reports carrier after Linux interface up"))
         XCTAssertTrue(output.contains("AF_PACKET send advances virtio-net tx_packets"))
+        XCTAssertTrue(output.contains("virtio-net RX queue advances rx_packets"))
         XCTAssertTrue(output.contains("virtio-net link is distinct from loopback"))
         XCTAssertTrue(output.contains("procfs reports the virtio-net interface"))
     }
