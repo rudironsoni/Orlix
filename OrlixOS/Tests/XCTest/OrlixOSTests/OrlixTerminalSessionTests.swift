@@ -895,7 +895,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultWorkingDirectory: "/work/project",
             defaultUserID: 1000,
             defaultGroupID: 100,
-            defaultSupplementaryGroups: [44, 45]
+            defaultSupplementaryGroups: [44, 45],
+            defaultNoNewPrivileges: true
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -931,6 +932,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.gid=100"))
         XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
         XCTAssertTrue(commandLine.contains("orlix.suppgid1=45"))
+        XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
     }
 
     func testEnvironmentRootImageEncodesLinuxPathDefaultsWithoutHostPathPolicy() throws {
@@ -1066,6 +1068,12 @@ final class OrlixTerminalSessionTests: XCTestCase {
             )
         )
         XCTAssertTrue(initSource.contains("setgroups("))
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultNoNewPrivilegesCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(initSource.contains("PR_SET_NO_NEW_PRIVS"))
     }
 
     func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
@@ -5897,6 +5905,7 @@ extension OrlixTerminalSessionTests {
 			  ],
 			  "process": {
 			    "terminal": true,
+			    "noNewPrivileges": true,
 			    "consoleSize": { "height": 24, "width": 80 },
 			    "args": ["/bin/sh", "-lc", "echo ok"],
 			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
@@ -5941,6 +5950,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.defaultWorkingDirectory, "/work")
 		XCTAssertEqual(descriptor.defaultUserID, 1000)
 		XCTAssertEqual(descriptor.defaultGroupID, 1000)
+		XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 		XCTAssertEqual(descriptor.defaultUmask, 18)
 		XCTAssertEqual(descriptor.defaultRlimits, [
 			OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 64)
@@ -5960,6 +5970,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultWorkingDirectory, descriptor.defaultWorkingDirectory)
 		XCTAssertEqual(environment.defaultUserID, descriptor.defaultUserID)
 		XCTAssertEqual(environment.defaultGroupID, descriptor.defaultGroupID)
+		XCTAssertEqual(environment.defaultNoNewPrivileges, descriptor.defaultNoNewPrivileges)
 		XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
 		XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
 	}
@@ -6003,8 +6014,7 @@ extension OrlixTerminalSessionTests {
 		let unsupportedProcessConfigs: [(String, String)] = [
 			("capabilities", #""capabilities": { "bounding": ["CAP_NET_ADMIN"] }"#),
 			("apparmorProfile", #""apparmorProfile": "container-default""#),
-			("selinuxLabel", #""selinuxLabel": "system_u:system_r:container_t:s0""#),
-			("noNewPrivileges", #""noNewPrivileges": true"#)
+			("selinuxLabel", #""selinuxLabel": "system_u:system_r:container_t:s0""#)
 		]
 
 		for (feature, processFragment) in unsupportedProcessConfigs {
@@ -6442,6 +6452,7 @@ extension OrlixTerminalSessionTests {
 		  "process": {
 		    "args": ["/usr/bin/env", "sh", "-lc", "id"],
 		    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color", "ORLIX_MODE=oci"],
+		    "noNewPrivileges": true,
 		    "cwd": "/work",
 		    "user": { "uid": 1000, "gid": 1001, "additionalGids": [44, 45], "umask": 18 }
 		  }
@@ -6468,6 +6479,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.environment.defaultUserID, 1000)
 		XCTAssertEqual(session.environment.defaultGroupID, 1001)
 		XCTAssertEqual(session.environment.defaultSupplementaryGroups, [44, 45])
+		XCTAssertTrue(session.environment.defaultNoNewPrivileges)
 		XCTAssertEqual(session.environment.defaultUmask, 18)
 
 		XCTAssertEqual(importPlan.environment.defaultCommand, session.environment.defaultCommand)
@@ -6478,6 +6490,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(
 			importPlan.environment.defaultSupplementaryGroups,
 			session.environment.defaultSupplementaryGroups
+		)
+		XCTAssertEqual(
+			importPlan.environment.defaultNoNewPrivileges,
+			session.environment.defaultNoNewPrivileges
 		)
 		XCTAssertEqual(importPlan.environment.defaultUmask, session.environment.defaultUmask)
 	}

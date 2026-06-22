@@ -1327,6 +1327,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultUserID: UInt32
 	public let defaultGroupID: UInt32
 	public let defaultSupplementaryGroups: [UInt32]
+	public let defaultNoNewPrivileges: Bool
 	public let defaultUmask: UInt32?
 	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
@@ -1350,6 +1351,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultUserID: defaultUserID,
 			defaultGroupID: defaultGroupID,
 			defaultSupplementaryGroups: defaultSupplementaryGroups,
+			defaultNoNewPrivileges: defaultNoNewPrivileges,
 			defaultUmask: defaultUmask,
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
@@ -1427,6 +1429,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultUserID: process.user?.uid ?? 0,
 			defaultGroupID: process.user?.gid ?? 0,
 			defaultSupplementaryGroups: process.user?.additionalGids ?? [],
+			defaultNoNewPrivileges: process.noNewPrivileges ?? false,
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
@@ -1638,9 +1641,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.selinuxLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.selinuxLabel")
-		}
-		if process.noNewPrivileges != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.noNewPrivileges")
 		}
 		if process.oomScoreAdj != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.oomScoreAdj")
