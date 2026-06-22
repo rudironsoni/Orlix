@@ -391,6 +391,14 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertFalse(output.contains("# exec /orlix/clone_thread_probe"))
     }
 
+    func testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelVirtioFSMount)
+
+        XCTAssertTrue(output.contains("virtio_fs_mount_probe"))
+    }
+
     func testVirtioBlockEnvironmentProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {

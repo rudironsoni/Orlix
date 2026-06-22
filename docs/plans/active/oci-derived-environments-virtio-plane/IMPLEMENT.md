@@ -13494,3 +13494,77 @@ Current status:
 - The crash has been narrowed to real mounted virtio-fs/FUSE operation behavior: `stat()` and `opendir()` on the mounted root return `ECONNREFUSED`.
 - Do not claim virtio-fs host-folder readiness, OCI host-folder readiness, or product runtime readiness from this checkpoint.
 - Next owning layer is `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`, specifically the virtio-fs/FUSE connection and request handling after successful mount negotiation.
+## 2026-06-22 virtio-fs mount probe reaches green through Linux FUSE
+
+Status: focused checkpoint green; broader OCI-derived environment goal remains
+open.
+
+Changed durable OrlixKernel virtio-fs transport in
+`OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`:
+
+- Preserved the Linux-facing surface as standard virtio-fs/FUSE; no custom ABI
+  and no HostAdapter-visible Linux policy was added.
+- Added split readable/writable descriptor handling for immediate FUSE request
+  and response payloads.
+- Returned a valid split `FUSE_INIT` response, clearing the previous upstream
+  FUSE connection poison that surfaced as `ECONNREFUSED`.
+- Added Linux-shaped `GETATTR`, root `OPENDIR`, root `READDIR`, split root
+  `LOOKUP`, and root xattr handling needed by the mounted host-folder probe.
+- Kept readonly host-folder mutation behavior Linux-shaped: missing lookup
+  returns `ENOENT`, create then reaches `FUSE_CREATE` and returns `EROFS`.
+
+Added a durable focused XCTest gate:
+
+- `OrlixUpstreamTestRunSpec.kernelVirtioFSMount`
+- `testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession`
+
+Evidence progression:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_03-29-14-+0200.xcresult
+FUSE_INIT: error=0 written=80
+Next blocker: FUSE_GETATTR returned ENOSYS; stat failed with errno 38.
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_03-51-55-+0200.xcresult
+FUSE_GETATTR: error=0 written=120
+Next blocker: FUSE_OPENDIR/FUSE_READDIR returned ENOSYS; mlibc readdir trapped.
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_04-42-41-+0200.xcresult
+FUSE_READDIR: error=0 written=80
+Checks green through readdir, lseek-if-present, and nested readdir/statx.
+Next blocker: root create and xattr checks.
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_05-03-47-+0200.xcresult
+FUSE_LOOKUP missing child: ENOENT
+FUSE_CREATE: EROFS
+Next blocker: root xattr list/missing-xattr checks.
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_05-22-49-+0200.xcresult
+testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession: passed
+result=Passed
+passedTests=1
+failedTests=0
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_05-38-13-+0200.xcresult
+trace-free final focused run after removing temporary pr_info diagnostics
+result=Passed
+passedTests=1
+failedTests=0
+testFailures=0
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_05-42-30-+0200.xcresult
+testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession: passed
+result=Passed
+passedTests=1
+failedTests=0
+testFailures=0
+```
+
+Non-claims:
+
+- This is not full virtio-fs feature completion.
+- This is not OCI import/runtime completion.
+- This does not claim registry pull, cgroup resource enforcement, external
+  networking, full package ladder, or product runtime readiness.
+- Remaining transport work should generalize scatter-gather input/output
+  handling beyond the immediate FUSE operations proven here.
