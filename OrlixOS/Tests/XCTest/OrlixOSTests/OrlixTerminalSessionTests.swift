@@ -6334,6 +6334,43 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.environment.defaultCommand, ["/bin/sh"])
 	}
 
+	func testOrlixOSBuildsSessionFromOCIRuntimeBundle() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+		try fileManager.createDirectory(
+			at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+			withIntermediateDirectories: true
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let registry = try OrlixEnvironmentRegistry()
+		let linuxSession = try OrlixLinuxSession(
+			ociRuntimeBundle: try OrlixOCIRuntimeBundle.load(from: bundleURL),
+			id: "bundle-session",
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay,
+			registry: registry,
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
+		)
+
+		let savedEnvironment = try registry.load(environmentID: "bundle-session")
+		XCTAssertEqual(savedEnvironment.id, "bundle-session")
+
+		XCTAssertNil(linuxSession.materializedRootImageForTesting)
+		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+		XCTAssertTrue(commandLine.contains("orlix.exec=/usr/bin/env"), commandLine)
+		XCTAssertTrue(commandLine.contains("orlix.argv0=/usr/bin/env"), commandLine)
+		XCTAssertTrue(commandLine.contains("orlix.argv1=sh"), commandLine)
+		XCTAssertTrue(commandLine.contains("orlix.argv2=-lc"), commandLine)
+		XCTAssertTrue(commandLine.contains("orlix.uid=1000"), commandLine)
+		XCTAssertTrue(commandLine.contains("orlix.gid=1000"), commandLine)
+	}
+
 	func testOCIRuntimeBundleRejectsMissingConfig() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory

@@ -770,6 +770,34 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         )
     }
 
+    convenience init(
+        ociRuntimeBundle: OrlixOCIRuntimeBundle,
+        id: String,
+        rootMount: OrlixEnvironmentRootMount,
+        registry: OrlixEnvironmentRegistry,
+        kernelCommandLine: String = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+        terminal: OrlixTerminalSession
+    ) throws {
+        let ociRuntimeSession = try ociRuntimeBundle.sessionDescriptor(
+            id: id,
+            rootMount: rootMount
+        )
+        try registry.save(ociRuntimeSession.environment)
+
+        let resolvedCommandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+            descriptor: ociRuntimeSession.environment,
+            kernelCommandLine: kernelCommandLine
+        )
+        self.init(
+            bootConfig: OrlixBootConfig(
+                profile: .development,
+                kernelCommandLine: resolvedCommandLine,
+                rootImageIdentifier: ociRuntimeSession.environment.rootImageIdentifier
+            ),
+            terminal: terminal
+        )
+    }
+
     public func boot() -> OrlixBootStatus {
         guard registerRootImagesForBoot() else {
             return .invalidConfig
