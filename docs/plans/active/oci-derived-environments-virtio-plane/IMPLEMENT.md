@@ -14689,3 +14689,45 @@ Non-claims:
 - No runtime proof yet shows scheduler policy observed inside a booted Linux
   process; this checkpoint proves descriptor import, init command-line contract,
   and init-side `sched_setscheduler(2)` setup only.
+
+## 2026-06-22 Current Status - OCI I/O priority
+
+Current status:
+
+- Promoted the supported subset of OCI Runtime `process.ioPriority` from broad
+  rejected metadata into an OrlixOS-owned Linux process execution default.
+- Added `OrlixEnvironmentIOPriority` and
+  `OrlixEnvironmentDescriptor.defaultIOPriority` with backward-compatible decode
+  defaulting to `nil`.
+- Added root-image init command-line keys `orlix.ioprio.class` and
+  `orlix.ioprio.priority`, emitted when an I/O priority default is present.
+- Updated OCI config import so I/O priority `class` plus `priority` carries into
+  the session/import environment descriptor for standard Linux classes
+  `IOPRIO_CLASS_RT`, `IOPRIO_CLASS_BE`, and `IOPRIO_CLASS_IDLE`.
+- Unknown I/O priority classes and priorities outside `0...7` remain rejected
+  instead of being silently ignored.
+- Updated `OrlixOS/Sources/init/init.c` to parse I/O priority class/priority and
+  call Linux `ioprio_set(2)` through `SYS_ioprio_set` before credential drop and
+  exec.
+
+Evidence:
+
+- Focused command-line/parser/OCI process-default tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_11-27-12-+0200.xcresult`
+  with `result=Passed`, `passedTests=6`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=6`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_11-31-50-+0200.xcresult`
+  with `result=Passed`, `passedTests=8`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=8`, `expectedFailures=0`.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- No runtime proof yet shows I/O priority observed inside a booted Linux process;
+  this checkpoint proves descriptor import, init command-line contract, and
+  init-side `ioprio_set(2)` setup only.
