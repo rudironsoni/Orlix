@@ -2,6 +2,21 @@ import XCTest
 @testable import OrlixTestRunner
 
 final class OrlixKernelUpstreamTests: XCTestCase {
+    func testProcessLifecycleProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelProcessLifecycle)
+
+        XCTAssertTrue(output.contains("process_lifecycle_probe"))
+        XCTAssertTrue(output.contains("ORLIX-PROCESS-LIFECYCLE-PROBE"))
+        XCTAssertTrue(output.contains("forked child exit status is reported by waitpid"))
+        XCTAssertTrue(output.contains("waited child is reaped with ECHILD on second wait"))
+        XCTAssertTrue(output.contains("child reads Linux procfs status before exit"))
+        XCTAssertTrue(output.contains("signal-terminated child reports Linux wait status"))
+        XCTAssertTrue(output.contains("process has Linux PID allocated by the kernel"))
+        XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
+    }
+
     func testMountNamespaceProbeVerifiesMountinfoThroughOrlixOSTerminalSession()
         throws
     {

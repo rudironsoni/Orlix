@@ -14956,3 +14956,51 @@ and app-hosted Linux capability substrate proof. The active goal remains open
 because runtime-observed imported-OCI process defaults, real OCI lifecycle,
 namespaces, cgroups, registry pull, product `orlix run`, virtio-fs host-folder
 behavior, and full OCI Runtime compliance are not complete.
+### 2026-06-22 - Linux process lifecycle substrate proof
+
+Checkpoint:
+
+- Added `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/process_lifecycle_probe.c`.
+- Registered `process_lifecycle_probe` in `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile`.
+- Added `OrlixUpstreamTestRunSpec.kernelProcessLifecycle`.
+- Added selected app-hosted XCTest `testProcessLifecycleProbeCompletesThroughOrlixOSTerminalSession`.
+
+Linux-owned behavior covered by the probe:
+
+- `fork(2)` creates a child with a Linux PID.
+- `waitpid(2)` reports normal child exit status.
+- A waited child is reaped and a second wait returns `ECHILD`.
+- A child can read Linux procfs process status through `/proc/self/status`.
+- `kill(2)` plus `waitpid(2)` reports signal termination status.
+
+Evidence:
+
+```text
+rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+result: passed
+```
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:21:orlix:process_lifecycle_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:28:file /orlix/process_lifecycle_probe ...
+```
+
+Selected app-hosted runtime proof:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_14-11-24-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Non-claims:
+
+- This proves Linux process lifecycle substrate needed by OCI runtime process execution.
+- This does not claim full OCI Runtime lifecycle compliance.
+- This does not yet prove imported OCI `create/start/delete` state transitions.
+- This does not yet prove runtime-observed imported OCI process defaults inside an OCI-created process.
+- Product `orlix run`, registry pull, virtio-fs host-folder mounts, and full namespace/cgroup OCI integration remain open.
