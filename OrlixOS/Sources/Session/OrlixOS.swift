@@ -848,8 +848,14 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
     }
 
     public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessSession {
+        try start(
+            observedProcess: OrlixOCIRuntimeProcessStartObservation(pid: pid)
+        )
+    }
+
+    public func start(observedProcess observation: OrlixOCIRuntimeProcessStartObservation) throws -> OrlixOCIRuntimeProcessSession {
         try OrlixOCIRuntimeProcessSession(
-            processHandle: processHandle.start(observedPID: pid),
+            processHandle: processHandle.start(observedProcess: observation),
             linuxSession: linuxSession
         )
     }

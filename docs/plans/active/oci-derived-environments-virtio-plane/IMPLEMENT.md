@@ -15506,3 +15506,52 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI process start uses observed Linux PID value
+
+Checkpoint:
+
+- Added `OrlixOCIRuntimeProcessStartObservation`.
+- The start observation validates that a Linux-observed process PID is positive
+  before it can start an OCI process handle/session.
+- Added `start(observedProcess:)` to `OrlixOCIRuntimeProcessHandle`.
+- Added `start(observedProcess:)` to SPI `OrlixOCIRuntimeProcessSession`.
+- Kept `start(observedPID:)` as a compatibility convenience that constructs the
+  typed observation before mutating lifecycle state.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- Start, exit, and signal lifecycle mutations now all have typed Linux-observed
+  process metadata values at the process handle/session boundary.
+- Invalid observed start PIDs fail before lifecycle/session state is advanced.
+- The change remains above the Linux surface. It adds no syscall, ioctl,
+  pseudo-file, HostAdapter API, host path, Darwin behavior, or custom Linux ABI.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_16-19-22-+0200.xcresult
+result=Passed
+passedTests=3
+failedTests=0
+skippedTests=0
+totalTestCount=3
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history/current-status warnings.
+
+Non-claims:
+
+- This validates and routes observed Linux start metadata only.
+- It does not yet launch, signal, monitor, wait for, or reap a real
+  OCI-created Linux process.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.
