@@ -15056,3 +15056,54 @@ Non-claims:
   tracking.
 - Full product `orlix run`, registry pull, virtio-fs host-folder mounts, and
   full namespace/cgroup OCI integration remain open.
+
+### 2026-06-22 - Linux fork/exec/wait lifecycle proof
+
+Checkpoint:
+
+- Extended `process_lifecycle_probe` so a forked child `exec`s
+  `/orlix/process_lifecycle_probe` with an `exec-child` argument and exits with
+  a sentinel status from the exec image.
+- The parent process waits on the execed child and verifies the Linux wait
+  status.
+- Updated the selected app-hosted lifecycle XCTest to require the new
+  fork/exec/wait marker.
+
+Linux-owned behavior covered by this checkpoint:
+
+- Forked child process can replace its image through Linux exec.
+- The execed image observes `/proc/self/status`.
+- Parent `waitpid(2)` receives the execed process exit status.
+
+Evidence:
+
+```text
+rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+result: passed
+```
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:21:orlix:process_lifecycle_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:28:file /orlix/process_lifecycle_probe ...
+```
+
+Selected app-hosted runtime proof:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_15-00-36-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Non-claims:
+
+- This proves Linux fork/exec/wait substrate needed by OCI process lifecycle
+  execution.
+- This still does not claim OCI Runtime `create/start/state/kill/delete`
+  compliance or a product `orlix run` command.
+- Registry pull, virtio-fs host-folder mounts, and full namespace/cgroup OCI
+  integration remain open.
