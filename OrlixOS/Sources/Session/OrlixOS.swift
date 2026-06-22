@@ -834,6 +834,42 @@ public final class OrlixLinuxSession: @unchecked Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeProcessSession: Sendable {
+    public let processHandle: OrlixOCIRuntimeProcessHandle
+    public let linuxSession: OrlixLinuxSession
+
+    public init(
+        processHandle: OrlixOCIRuntimeProcessHandle,
+        linuxSession: OrlixLinuxSession
+    ) {
+        self.processHandle = processHandle
+        self.linuxSession = linuxSession
+    }
+
+    public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessSession {
+        try OrlixOCIRuntimeProcessSession(
+            processHandle: processHandle.start(observedPID: pid),
+            linuxSession: linuxSession
+        )
+    }
+
+    public func kill(signal: Int32) throws -> OrlixOCIRuntimeProcessSession {
+        try OrlixOCIRuntimeProcessSession(
+            processHandle: processHandle.kill(signal: signal),
+            linuxSession: linuxSession
+        )
+    }
+
+    public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+        try processHandle.exit(observedProcess: observation)
+    }
+
+    public func exit(observedSignal observation: OrlixOCIRuntimeProcessSignalObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+        try processHandle.exit(observedSignal: observation)
+    }
+}
+
 private final class HostConsoleTerminalTransport:
     OrlixTerminalTransport,
     @unchecked Sendable
