@@ -1330,6 +1330,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultNoNewPrivileges: Bool
 	public let defaultCloseAdditionalFds: Bool
 	public let defaultOOMScoreAdjustment: Int32?
+	public let defaultScheduler: OrlixEnvironmentScheduler?
 	public let defaultUmask: UInt32?
 	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
@@ -1356,6 +1357,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultNoNewPrivileges: defaultNoNewPrivileges,
 			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
 			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
+			defaultScheduler: defaultScheduler,
 			defaultUmask: defaultUmask,
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
@@ -1436,6 +1438,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultNoNewPrivileges: process.noNewPrivileges ?? false,
 			defaultCloseAdditionalFds: process.closeAdditionalFds ?? false,
 			defaultOOMScoreAdjustment: try Self.validatedOOMScoreAdjustment(process.oomScoreAdj),
+			defaultScheduler: try Self.validatedScheduler(process.scheduler),
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
@@ -1525,6 +1528,38 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.oomScoreAdj")
 		}
 		return Int32(value)
+	}
+
+	private static func validatedScheduler(
+		_ scheduler: OCIRuntimeScheduler?
+	) throws -> OrlixEnvironmentScheduler? {
+		guard let scheduler else {
+			return nil
+		}
+		if scheduler.nice != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler.nice")
+		}
+		if let flags = scheduler.flags, !flags.isEmpty {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler.flags")
+		}
+		guard let policy = scheduler.policy else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler.policy")
+		}
+		let supportedPolicies: Set<String> = [
+			"SCHED_OTHER",
+			"SCHED_BATCH",
+			"SCHED_IDLE",
+			"SCHED_FIFO",
+			"SCHED_RR"
+		]
+		guard supportedPolicies.contains(policy) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler.policy")
+		}
+		let priority = scheduler.priority ?? 0
+		guard priority >= 0 && priority <= Int(Int32.max) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler.priority")
+		}
+		return OrlixEnvironmentScheduler(policy: policy, priority: Int32(priority))
 	}
 
 	private static func validatedRlimits(_ values: [OCIRuntimeRlimit]?) throws -> [OrlixEnvironmentRlimit] {
@@ -1657,9 +1692,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.selinuxLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.selinuxLabel")
-		}
-		if process.scheduler != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler")
 		}
 		if process.ioPriority != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.ioPriority")

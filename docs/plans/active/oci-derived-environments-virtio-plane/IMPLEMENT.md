@@ -14648,3 +14648,44 @@ Non-claims:
 - No runtime proof yet shows `/proc/self/oom_score_adj` observed inside a booted
   Linux process; this checkpoint proves descriptor import, init command-line
   contract, and init-side procfs write setup only.
+
+## 2026-06-22 Current Status - OCI scheduler policy
+
+Current status:
+
+- Promoted the supported subset of OCI Runtime `process.scheduler` from broad
+  rejected metadata into an OrlixOS-owned Linux process execution default.
+- Added `OrlixEnvironmentScheduler` and
+  `OrlixEnvironmentDescriptor.defaultScheduler` with backward-compatible decode
+  defaulting to `nil`.
+- Added root-image init command-line keys `orlix.scheduler.policy` and
+  `orlix.scheduler.priority`, emitted when a scheduler default is present.
+- Updated OCI config import so scheduler `policy` plus `priority` carries into
+  the session/import environment descriptor for standard Linux policies
+  `SCHED_OTHER`, `SCHED_BATCH`, `SCHED_IDLE`, `SCHED_FIFO`, and `SCHED_RR`.
+- Scheduler `nice`, `flags`, unknown policies, and invalid priorities remain
+  rejected instead of being silently ignored.
+- Updated `OrlixOS/Sources/init/init.c` to parse scheduler policy/priority and
+  call `sched_setscheduler(2)` before credential drop and exec.
+
+Evidence:
+
+- Focused command-line/parser/OCI process-default tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_11-08-49-+0200.xcresult`
+  with `result=Passed`, `passedTests=6`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=6`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_11-13-07-+0200.xcresult`
+  with `result=Passed`, `passedTests=8`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=8`, `expectedFailures=0`.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- No runtime proof yet shows scheduler policy observed inside a booted Linux
+  process; this checkpoint proves descriptor import, init command-line contract,
+  and init-side `sched_setscheduler(2)` setup only.
