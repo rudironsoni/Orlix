@@ -5828,6 +5828,8 @@ extension OrlixTerminalSessionTests {
 			"orlix:cgroup_pids_probe"
 		)
 		XCTAssertEqual(report.feature(named: "netDevices")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.status, .implemented)
+		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.proof, "orlix:virtio_mmio_probe_contract")
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(
 			report.feature(named: "userNamespaceMappings")?.status,
@@ -5845,6 +5847,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(json.contains(#""name" : "procfs""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:pseudo_fs_probe""#))
 		XCTAssertTrue(json.contains(#""name" : "netDevices""#))
+		XCTAssertTrue(json.contains(#""name" : "virtioNetDevicePlane""#))
 		XCTAssertTrue(json.contains(#""status" : "deterministicallyRejected""#))
 
 		let decoded = try JSONDecoder().decode(

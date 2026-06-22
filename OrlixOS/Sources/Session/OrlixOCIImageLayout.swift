@@ -1241,6 +1241,13 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Linux /proc mount and /proc/self files are covered by Orlix kselftest."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "virtioNetDevicePlane",
+			status: .implemented,
+			proof: "orlix:virtio_mmio_probe_contract",
+			reason:
+				"Linux sees a standard virtio-net MMIO device id; link-up and packet transport are not claimed."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "rtnetlink",
 			status: .implemented,
 			proof: "orlix:network_namespace_probe",

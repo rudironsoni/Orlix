@@ -13695,3 +13695,32 @@ failedTests=0
 skippedTests=0
 totalTestCount=1
 ```
+
+## 2026-06-22 06:38 +0200 - Truthful OCI Feature Report For Virtio-Net Device Plane
+
+Status: completed narrow OCI feature-report update for the Linux-visible
+virtio-net device-plane proof.
+
+Changes:
+
+- Added `virtioNetDevicePlane` to `OrlixOCIRuntimeFeatureReport.current` with
+  status `implemented` and proof `orlix:virtio_mmio_probe_contract`.
+- Kept `netDevices` as `deterministicallyRejected`; this checkpoint does not
+  claim OCI network device policy, link-up behavior, packet I/O, or external
+  networking.
+- Extended the OrlixOS feature-report XCTest to verify the new feature status,
+  proof string, and JSON visibility while preserving the broad-feature
+  non-overclaim checks.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_06-38-01-+0200.xcresult
+testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
