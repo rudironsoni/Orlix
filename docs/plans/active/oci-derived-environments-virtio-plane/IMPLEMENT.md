@@ -13822,3 +13822,53 @@ Current status after this checkpoint:
 - Next aligned work should use this configured controller to drive the existing
   OrlixOS session descriptor path or continue proving root binding with Linux
   mount behavior.
+
+## 2026-06-22 07:06 +0200 - OCI Bundle To Session Descriptor Checkpoint
+
+Status: completed narrow OrlixOS bridge from loaded OCI Runtime bundle to the
+existing OCI runtime session descriptor path.
+
+Changes:
+
+- Added SPI `OrlixOCIRuntimeBundle.sessionDescriptor(id:rootMount:)`.
+- The bridge composes the existing lifecycle model rather than bypassing it:
+  loaded bundle -> configured lifecycle controller -> `create()` -> session
+  descriptor.
+- The valid bundle XCTest now proves a loaded bundle can project to an Orlix
+  environment descriptor and to a created OCI runtime session descriptor with
+  the expected id, lifecycle state, and default command.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_07-06-18-+0200.xcresult
+testOCIRuntimeBundleLoadsConfigAndRootfs
+testOCIRuntimeBundleRejectsMissingConfig
+testOCIRuntimeBundleRejectsMissingRootfs
+testOCIRuntimeBundleRejectsFileRootfs
+result=Passed
+passedTests=4
+failedTests=0
+skippedTests=0
+totalTestCount=4
+expectedFailures=0
+```
+
+Non-claims:
+
+- This reaches created session descriptor state only.
+- It does not start a process, attach a PID, mount the bundle rootfs as active
+  Linux root, implement product `orlix run`, pull from a registry, or claim full
+  OCI runtime compliance.
+- OCI session/lifecycle policy remains in OrlixOS; no Linux ABI or HostAdapter
+  policy surface was added.
+
+Current status after this checkpoint:
+
+- OrlixOS can now load an OCI Runtime bundle, validate `config.json` and
+  `rootfs/`, parse the config, create a configured lifecycle controller, and
+  derive a created OCI runtime session descriptor through existing lifecycle
+  rules.
+- Next aligned work should connect the created session descriptor to an actual
+  OrlixOS session construction path or continue proving bundle root binding via
+  Linux-owned mount behavior.

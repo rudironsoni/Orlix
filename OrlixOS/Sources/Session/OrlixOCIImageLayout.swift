@@ -1928,6 +1928,16 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 			bundlePath: bundleURL.path
 		)
 	}
+
+	@_spi(OrlixPrivateTesting)
+	public func sessionDescriptor(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount
+	) throws -> OrlixOCIRuntimeSessionDescriptor {
+		try lifecycleController(id: id)
+			.create()
+			.sessionDescriptor(rootMount: rootMount)
+	}
 }
 
 public enum OrlixOCIRuntimeLifecycleState: String, Codable, Equatable, Sendable {
