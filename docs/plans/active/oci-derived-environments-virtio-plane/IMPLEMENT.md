@@ -16295,6 +16295,82 @@ visibility plus Ethernet-shaped Linux netdev properties. Next work should move
 to truthful link/carrier or packet-path behavior through standard Linux
 networking surfaces only.
 
+### 2026-06-22 - Virtio-net ioctl link-flag consistency proof
+
+Follow-up extended the Linux-owned `virtio_net_device_probe` across another
+standard Linux network surface. The probe now captures the virtio-net
+interface flags reported by `RTM_GETLINK`, then verifies that legacy
+`SIOCGIFFLAGS` reports matching core link flags for the same interface.
+
+New proof:
+
+- `RTM_GETLINK` still reports the virtio-net interface with Ethernet identity,
+  matching MTU, and standard `IFLA_OPERSTATE`.
+- `SIOCGIFFLAGS` on the same interface reports matching `IFF_UP`,
+  `IFF_RUNNING`, and `IFF_LOOPBACK` bits.
+
+New TAP marker:
+
+```text
+ioctl reports matching virtio-net link flags
+```
+
+Validation:
+
+```sh
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+```
+
+Packaging evidence:
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:32:orlix:virtio_net_device_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:39:file /orlix/virtio_net_device_probe ...
+```
+
+Focused hosted XCTest:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Testing started
+xcodebuild exit=0
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_19-08-26-+0200.xcresult
+```
+
+Harness checks:
+
+```text
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests  # 32 OK
+rtk python3 -m unittest discover .codex/rules/tests  # 5 OK
+rtk python3 .codex/hooks/compact_plan_check.py       # exit 0; stale-history warning only
+```
+
+Scope note: this proves consistency between rtnetlink and legacy ioctl link
+flag reporting for the virtio-net interface. It still does not claim
+carrier/link-up behavior, packet I/O, DNS, NAT, registry pull, OCI
+`netDevices`, or full OCI networking support.
+
+Current status:
+
+The active virtio-net proof is green through hosted XCTest for device
+visibility, Ethernet-shaped netdev properties, MTU consistency, standard
+rtnetlink operstate, and ioctl/rtnetlink link-flag consistency. Next work
+should move to truthful carrier/link-up or packet-path behavior through
+standard Linux networking surfaces only.
+
 ### 2026-06-22 - Virtio-net MTU consistency proof
 
 Follow-up extended the Linux-owned `virtio_net_device_probe` from
