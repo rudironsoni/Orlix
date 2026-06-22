@@ -2449,6 +2449,11 @@ public struct OrlixOCIRuntimeProcessSignalObservation: Equatable, Sendable {
 	}
 }
 
+public enum OrlixOCIRuntimeProcessCompletionObservation: Equatable, Sendable {
+	case exited(OrlixOCIRuntimeProcessExitObservation)
+	case signaled(OrlixOCIRuntimeProcessSignalObservation)
+}
+
 public enum OrlixOCIRuntimeStateStatus: String, Codable, Equatable, Sendable {
 	case created
 	case running
@@ -2730,6 +2735,15 @@ public struct OrlixOCIRuntimeProcessHandle: Sendable {
 		OrlixOCIRuntimeCompletedProcess(
 			lifecycle: try lifecycle.exit(observedSignal: observation)
 		)
+	}
+
+	public func exit(observedCompletion observation: OrlixOCIRuntimeProcessCompletionObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+		switch observation {
+		case .exited(let processExit):
+			return try exit(observedProcess: processExit)
+		case .signaled(let processSignal):
+			return try exit(observedSignal: processSignal)
+		}
 	}
 }
 

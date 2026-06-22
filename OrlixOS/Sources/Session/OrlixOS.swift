@@ -835,6 +835,13 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public protocol OrlixOCIRuntimeProcessObservationDriver: Sendable {
+    func start(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessStartObservation
+    func signal(processSession: OrlixOCIRuntimeProcessSession, signal: Int32) throws
+    func wait(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessCompletionObservation
+}
+
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessSession: Sendable {
     public let processHandle: OrlixOCIRuntimeProcessHandle
     public let linuxSession: OrlixLinuxSession
@@ -860,11 +867,20 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
         )
     }
 
+    public func start(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessSession {
+        try start(observedProcess: driver.start(processSession: self))
+    }
+
     public func kill(signal: Int32) throws -> OrlixOCIRuntimeProcessSession {
         try OrlixOCIRuntimeProcessSession(
             processHandle: processHandle.kill(signal: signal),
             linuxSession: linuxSession
         )
+    }
+
+    public func kill(signal: Int32, using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessSession {
+        try driver.signal(processSession: self, signal: signal)
+        return try kill(signal: signal)
     }
 
     public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeCompletedProcess {
@@ -873,6 +889,14 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 
     public func exit(observedSignal observation: OrlixOCIRuntimeProcessSignalObservation) throws -> OrlixOCIRuntimeCompletedProcess {
         try processHandle.exit(observedSignal: observation)
+    }
+
+    public func exit(observedCompletion observation: OrlixOCIRuntimeProcessCompletionObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+        try processHandle.exit(observedCompletion: observation)
+    }
+
+    public func wait(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeCompletedProcess {
+        try exit(observedCompletion: driver.wait(processSession: self))
     }
 }
 
