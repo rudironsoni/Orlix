@@ -811,6 +811,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	net/netlink/af_netlink.c \
 	net/netlink/genetlink.c \
 	net/netlink/policy.c \
+	net/packet/af_packet.c \
 	net/ethernet/eth.c \
 	net/sched/sch_generic.c \
 	net/sched/sch_mq.c \

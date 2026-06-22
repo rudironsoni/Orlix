@@ -2,7 +2,10 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
 #include <linux/if.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <stdbool.h>
@@ -223,7 +226,8 @@ static bool is_standard_operstate(unsigned char operstate)
 
 static bool rtnetlink_reports_link(const char *expected_ifname,
 				   unsigned long expected_mtu,
-				   unsigned int *observed_flags)
+				   unsigned int *observed_flags,
+				   int *observed_ifindex)
 {
 	struct {
 		struct nlmsghdr header;
@@ -334,10 +338,33 @@ static bool rtnetlink_reports_link(const char *expected_ifname,
 			if (name_matches && has_ethernet_address && mtu_matches &&
 			    has_standard_operstate) {
 				*observed_flags = interface->ifi_flags;
+				*observed_ifindex = interface->ifi_index;
 				saw_link = true;
 			}
 		}
 	}
+}
+
+static bool packet_socket_binds_to_link(int ifindex)
+{
+	struct sockaddr_ll address = {
+		.sll_family = AF_PACKET,
+		.sll_protocol = htons(ETH_P_ALL),
+		.sll_ifindex = ifindex,
+	};
+	int fd;
+	bool bound;
+
+	if (ifindex <= 0)
+		return false;
+
+	fd = socket(AF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_ALL));
+	if (fd < 0)
+		return false;
+
+	bound = bind(fd, (struct sockaddr *)&address, sizeof(address)) == 0;
+	close(fd);
+	return bound;
 }
 
 static bool ioctl_reports_matching_flags(const char *ifname,
@@ -385,12 +412,13 @@ int main(void)
 	char ifname[IFNAMSIZ] = { 0 };
 	unsigned long mtu = 0;
 	unsigned int rtnetlink_flags = 0;
+	int ifindex = 0;
 	bool device_present;
 	bool owns_netdev = false;
 	bool has_mtu = false;
 	bool rtnetlink_ok = false;
 
-	orlix_test_plan(10);
+	orlix_test_plan(11);
 
 	device_present = find_virtio_net_device(device_name, sizeof(device_name));
 	orlix_test_result(device_present,
@@ -412,12 +440,15 @@ int main(void)
 	orlix_test_result(has_mtu,
 			  "virtio-net netdev reports a positive MTU through sysfs");
 	rtnetlink_ok = has_mtu &&
-		       rtnetlink_reports_link(ifname, mtu, &rtnetlink_flags);
+		       rtnetlink_reports_link(ifname, mtu, &rtnetlink_flags,
+					      &ifindex);
 	orlix_test_result(rtnetlink_ok,
 			  "rtnetlink enumerates the virtio-net Ethernet link with matching MTU and standard operstate");
 	orlix_test_result(rtnetlink_ok &&
 			  ioctl_reports_matching_flags(ifname, rtnetlink_flags),
 			  "ioctl reports matching virtio-net link flags");
+	orlix_test_result(rtnetlink_ok && packet_socket_binds_to_link(ifindex),
+			  "AF_PACKET socket binds to the virtio-net link");
 	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
 			  "virtio-net link is distinct from loopback");
 	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),

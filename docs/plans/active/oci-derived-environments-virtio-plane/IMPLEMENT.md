@@ -16526,3 +16526,108 @@ visibility, Ethernet-shaped netdev properties, MTU consistency across sysfs and
 rtnetlink, and standard rtnetlink operstate presence. Next work should move to
 truthful carrier/link-up or packet-path behavior through standard Linux
 networking surfaces only.
+
+### 2026-06-22 - Virtio-net AF_PACKET bind proof
+
+Follow-up advanced the Linux-owned virtio-net packet-path substrate without
+adding a HostAdapter networking shortcut or custom userspace ABI.
+
+Changes:
+
+- Enabled upstream Linux `CONFIG_PACKET=y` in the release and development
+  profile defconfigs.
+- Added upstream `net/packet/af_packet.c` to the curated OrlixKernel upstream
+  source list so `CONFIG_PACKET` is backed by the standard Linux packet socket
+  implementation.
+- Extended `virtio_net_device_probe` to capture the discovered virtio-net
+  interface index from `RTM_GETLINK`, open an `AF_PACKET`/`SOCK_DGRAM` socket,
+  and bind it to that Linux interface through `struct sockaddr_ll`.
+- Extended the hosted XCTest marker list for
+  `testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession` to require:
+
+```text
+AF_PACKET socket binds to the virtio-net link
+```
+
+Course correction:
+
+- The first implementation only enabled `CONFIG_PACKET` and added the probe
+  assertion. Hosted XCTest failed with:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_19-54-11-+0200.xcresult
+result=Failed
+upstream failure marker found: not ok 9 - AF_PACKET socket binds to the virtio-net link
+```
+
+- Adding `net/packet/af_packet.c` to the OrlixKernel source list was required;
+  the fix stayed in the upstream Linux networking layer instead of weakening
+  the test or moving behavior into `OrlixHostAdapter`.
+
+Validation:
+
+```sh
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release
+```
+
+Packaging/source evidence:
+
+```text
+OrlixKernel/Sources/ports/orlix/configs/development_defconfig:47:CONFIG_PACKET=y
+OrlixKernel/Sources/ports/orlix/configs/release_defconfig:47:CONFIG_PACKET=y
+OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk:814:	net/packet/af_packet.c \
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:32:orlix:virtio_net_device_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:39:file /orlix/virtio_net_device_probe ...
+```
+
+Focused hosted XCTest:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Testing started
+xcodebuild exit=0
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_20-43-23-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Harness checks:
+
+```text
+rtk git diff --check                                      # exit 0
+rtk python3 -m unittest discover .codex/hooks/tests      # 32 OK
+rtk python3 -m unittest discover .codex/rules/tests      # 5 OK
+rtk python3 .codex/hooks/compact_plan_check.py           # exit 0; stale-history warning only
+```
+
+Scope note: this proves the standard Linux `AF_PACKET` socket family can bind
+to the discovered virtio-net interface in the app-hosted Orlix path. It still
+does not claim carrier/link-up behavior, packet transmit/receive, DNS, NAT,
+registry pull, OCI `netDevices`, external networking, or full OCI networking
+support.
+
+Current status:
+
+The active virtio-net proof is green through hosted XCTest for device
+visibility, Ethernet-shaped netdev properties, MTU consistency across sysfs and
+rtnetlink, standard rtnetlink operstate presence, ioctl/rtnetlink link-flag
+consistency, and Linux `AF_PACKET` bindability on the virtio-net link. Next
+work should move to truthful carrier/link-up or packet transmit/receive
+behavior through standard Linux networking surfaces only.
