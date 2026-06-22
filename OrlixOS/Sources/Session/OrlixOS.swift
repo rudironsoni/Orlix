@@ -842,6 +842,14 @@ public protocol OrlixOCIRuntimeProcessObservationDriver: Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeProcessRunResult: Sendable {
+    public let startObservation: OrlixOCIRuntimeProcessStartObservation
+    public let runningSession: OrlixOCIRuntimeProcessSession
+    public let completionObservation: OrlixOCIRuntimeProcessCompletionObservation
+    public let completedProcess: OrlixOCIRuntimeCompletedProcess
+}
+
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessSession: Sendable {
     public let processHandle: OrlixOCIRuntimeProcessHandle
     public let linuxSession: OrlixLinuxSession
@@ -900,7 +908,21 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
     }
 
     public func run(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeCompletedProcess {
-        try start(using: driver).wait(using: driver)
+        try runObserved(using: driver).completedProcess
+    }
+
+    public func runObserved(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessRunResult {
+        let startObservation = try driver.start(processSession: self)
+        let runningSession = try start(observedProcess: startObservation)
+        let completionObservation = try driver.wait(processSession: runningSession)
+        let completedProcess = try runningSession.exit(observedCompletion: completionObservation)
+
+        return OrlixOCIRuntimeProcessRunResult(
+            startObservation: startObservation,
+            runningSession: runningSession,
+            completionObservation: completionObservation,
+            completedProcess: completedProcess
+        )
     }
 }
 

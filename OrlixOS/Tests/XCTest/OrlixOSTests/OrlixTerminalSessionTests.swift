@@ -7666,6 +7666,101 @@ extension OrlixTerminalSessionTests {
 		)
 	}
 
+	func testOCIRuntimeProcessSessionRunObservedPreservesStartAndCompletionEvidence() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-process-run-observed-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+		let stateRoot = scratch.appendingPathComponent("state", isDirectory: true)
+		let cacheRoot = scratch.appendingPathComponent("cache", isDirectory: true)
+		let scratchRoot = scratch.appendingPathComponent("scratch", isDirectory: true)
+		try fileManager.createDirectory(
+			at: stateRoot.appendingPathComponent("environments/oci-demo", isDirectory: true),
+			withIntermediateDirectories: true
+		)
+		try fileManager.createDirectory(
+			at: cacheRoot,
+			withIntermediateDirectories: true
+		)
+		try fileManager.createDirectory(
+			at: scratchRoot,
+			withIntermediateDirectories: true
+		)
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: stateRoot,
+			cacheRoot: cacheRoot,
+			scratchRoot: scratchRoot
+		)
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let processHandle = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: try configured.create(),
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+		try registry.save(processHandle.sessionDescriptor.environment)
+		try Data("base".utf8).write(
+			to: stateRoot.appendingPathComponent("environments/oci-demo/base.ext4")
+		)
+		try Data("state".utf8).write(
+			to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
+		)
+		let linuxSession = try OrlixLinuxSession(
+			ociRuntimeSession: processHandle.sessionDescriptor,
+			registry: registry,
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
+		)
+		let processSession = OrlixOCIRuntimeProcessSession(
+			processHandle: processHandle,
+			linuxSession: linuxSession
+		)
+		let driver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 42,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(
+					pid: 42,
+					exitStatus: 0
+				)
+			)
+		)
+
+		let result = try processSession.runObserved(using: driver)
+		let report = try result.completedProcess.stateReport()
+
+		XCTAssertEqual(result.startObservation.pid, 42)
+		XCTAssertEqual(result.runningSession.processHandle.lifecycle.record.state, .running)
+		XCTAssertEqual(result.runningSession.processHandle.lifecycle.record.pid, 42)
+		XCTAssertEqual(
+			result.completionObservation,
+			.exited(
+				try OrlixOCIRuntimeProcessExitObservation(
+					pid: 42,
+					exitStatus: 0
+				)
+			)
+		)
+		XCTAssertEqual(report.status, OrlixOCIRuntimeStateStatus.stopped)
+		XCTAssertEqual(report.pid, 42)
+		XCTAssertEqual(report.exitStatus, 0)
+		XCTAssertEqual(
+			driver.events,
+			[
+				"start:created:nil",
+				"wait:running:42"
+			]
+		)
+	}
+
 	func testOCIRuntimeLifecycleControllerRejectsInvalidObservedLinuxExitStatus() throws {
 		XCTAssertThrowsError(try OrlixOCIRuntimeProcessExitObservation(pid: 42, exitStatus: 256)) { error in
 			XCTAssertEqual(
