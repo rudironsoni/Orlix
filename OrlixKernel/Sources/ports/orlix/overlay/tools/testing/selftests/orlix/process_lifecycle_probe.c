@@ -7,6 +7,14 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+static bool is_exec_child_argument(const char *argument)
+{
+	static const char expected[] = "exec-child";
+
+	return orlix_strlen(argument) == sizeof(expected) - 1 &&
+	       orlix_memcmp(argument, expected, sizeof(expected) - 1) == 0;
+}
+
 static bool read_proc_self_status(void)
 {
 	char buffer[1024];
@@ -34,6 +42,26 @@ static bool child_exit_status_is_reported(void)
 		return false;
 
 	return WIFEXITED(status) && WEXITSTATUS(status) == 42;
+}
+
+static bool fork_exec_status_is_reported(void)
+{
+	pid_t child = fork();
+	int status;
+
+	if (child < 0)
+		return false;
+
+	if (child == 0) {
+		execl("/orlix/process_lifecycle_probe",
+		      "process_lifecycle_probe", "exec-child", NULL);
+		_exit(127);
+	}
+
+	if (waitpid(child, &status, 0) != child)
+		return false;
+
+	return WIFEXITED(status) && WEXITSTATUS(status) == 77;
 }
 
 static bool waited_child_is_reaped(void)
@@ -115,13 +143,18 @@ static bool signal_termination_status_is_reported(void)
 	return WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-	orlix_test_plan(5);
+	if (argc == 2 && is_exec_child_argument(argv[1]))
+		_exit(read_proc_self_status() ? 77 : 76);
+
+	orlix_test_plan(6);
 	orlix_write_all("ORLIX-PROCESS-LIFECYCLE-PROBE\n");
 
 	orlix_test_result(child_exit_status_is_reported(),
 			  "forked child exit status is reported by waitpid");
+	orlix_test_result(fork_exec_status_is_reported(),
+			  "forked child exec status is reported by waitpid");
 	orlix_test_result(waited_child_is_reaped(),
 			  "waited child is reaped with ECHILD on second wait");
 	orlix_test_result(live_child_has_proc_status(),

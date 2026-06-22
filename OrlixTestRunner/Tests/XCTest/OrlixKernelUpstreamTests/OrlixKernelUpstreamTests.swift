@@ -10,6 +10,7 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("process_lifecycle_probe"))
         XCTAssertTrue(output.contains("ORLIX-PROCESS-LIFECYCLE-PROBE"))
         XCTAssertTrue(output.contains("forked child exit status is reported by waitpid"))
+        XCTAssertTrue(output.contains("forked child exec status is reported by waitpid"))
         XCTAssertTrue(output.contains("waited child is reaped with ECHILD on second wait"))
         XCTAssertTrue(output.contains("child reads Linux procfs status before exit"))
         XCTAssertTrue(output.contains("signal-terminated child reports Linux wait status"))
