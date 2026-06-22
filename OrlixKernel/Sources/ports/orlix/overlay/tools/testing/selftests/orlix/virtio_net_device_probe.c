@@ -1,0 +1,282 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include <dirent.h>
+#include <fcntl.h>
+#include <linux/if.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include "orlix_kselftest_user.h"
+
+static bool read_text_file(const char *path, char *buffer, size_t size)
+{
+	int fd;
+	ssize_t received;
+
+	if (size == 0)
+		return false;
+
+	fd = open(path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+
+	received = read(fd, buffer, size - 1);
+	close(fd);
+
+	if (received < 0)
+		return false;
+
+	buffer[received] = '\0';
+	return true;
+}
+
+static void trim_trailing_newline(char *text)
+{
+	size_t len = strlen(text);
+
+	while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r'))
+		text[--len] = '\0';
+}
+
+static bool append_path(char *buffer, size_t size, const char *prefix,
+			const char *name, const char *suffix)
+{
+	size_t prefix_len = strlen(prefix);
+	size_t name_len = strlen(name);
+	size_t suffix_len = strlen(suffix);
+
+	if (prefix_len + name_len + suffix_len + 1 > size)
+		return false;
+
+	memcpy(buffer, prefix, prefix_len);
+	memcpy(buffer + prefix_len, name, name_len);
+	memcpy(buffer + prefix_len + name_len, suffix, suffix_len);
+	buffer[prefix_len + name_len + suffix_len] = '\0';
+	return true;
+}
+
+static bool find_virtio_net_device(char *device_name, size_t device_name_size)
+{
+	DIR *devices;
+	struct dirent *entry;
+
+	devices = opendir("/sys/bus/virtio/devices");
+	if (!devices)
+		return false;
+
+	while ((entry = readdir(devices)) != NULL) {
+		char path[160];
+		char device_id[64];
+
+		if (entry->d_name[0] == '.')
+			continue;
+
+		if (!append_path(path, sizeof(path),
+				 "/sys/bus/virtio/devices/", entry->d_name,
+				 "/device"))
+			continue;
+
+		if (!read_text_file(path, device_id, sizeof(device_id)))
+			continue;
+
+		trim_trailing_newline(device_id);
+		if (strcmp(device_id, "0x0001") != 0 &&
+		    strcmp(device_id, "0001") != 0 &&
+		    strcmp(device_id, "1") != 0)
+			continue;
+
+		if (strlen(entry->d_name) + 1 > device_name_size)
+			continue;
+
+		strcpy(device_name, entry->d_name);
+		closedir(devices);
+		return true;
+	}
+
+	closedir(devices);
+	return false;
+}
+
+static bool find_netdev_for_virtio_device(const char *device_name,
+					  char *ifname, size_t ifname_size)
+{
+	char net_path[160];
+	DIR *netdevs;
+	struct dirent *entry;
+
+	if (!append_path(net_path, sizeof(net_path),
+			 "/sys/bus/virtio/devices/", device_name, "/net"))
+		return false;
+
+	netdevs = opendir(net_path);
+	if (!netdevs)
+		return false;
+
+	while ((entry = readdir(netdevs)) != NULL) {
+		if (entry->d_name[0] == '.')
+			continue;
+
+		if (strcmp(entry->d_name, "lo") == 0)
+			continue;
+
+		if (strlen(entry->d_name) + 1 > ifname_size)
+			continue;
+
+		strcpy(ifname, entry->d_name);
+		closedir(netdevs);
+		return true;
+	}
+
+	closedir(netdevs);
+	return false;
+}
+
+static bool sysfs_netdev_exists(const char *ifname)
+{
+	char path[128];
+	DIR *netdev;
+
+	if (!append_path(path, sizeof(path), "/sys/class/net/", ifname, ""))
+		return false;
+
+	netdev = opendir(path);
+	if (!netdev)
+		return false;
+
+	closedir(netdev);
+	return true;
+}
+
+static bool rtnetlink_reports_link(const char *expected_ifname)
+{
+	struct {
+		struct nlmsghdr header;
+		struct ifinfomsg interface;
+	} request = {
+		.header = {
+			.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
+			.nlmsg_type = RTM_GETLINK,
+			.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
+			.nlmsg_seq = 1,
+		},
+		.interface = {
+			.ifi_family = AF_UNSPEC,
+		},
+	};
+	char buffer[8192];
+	bool saw_link = false;
+	int fd;
+
+	fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+	if (fd < 0)
+		return false;
+
+	if (send(fd, &request, request.header.nlmsg_len, 0) < 0) {
+		close(fd);
+		return false;
+	}
+
+	for (;;) {
+		ssize_t received;
+		struct nlmsghdr *message;
+
+		received = recv(fd, buffer, sizeof(buffer), 0);
+		if (received < 0) {
+			close(fd);
+			return false;
+		}
+
+		for (message = (struct nlmsghdr *)buffer;
+		     NLMSG_OK(message, received);
+		     message = NLMSG_NEXT(message, received)) {
+			struct ifinfomsg *interface;
+			struct rtattr *attribute;
+			int attributes_len;
+			bool name_matches = false;
+			bool has_hardware_address = false;
+
+			if (message->nlmsg_type == NLMSG_DONE) {
+				close(fd);
+				return saw_link;
+			}
+
+			if (message->nlmsg_type == NLMSG_ERROR) {
+				close(fd);
+				return false;
+			}
+
+			if (message->nlmsg_type != RTM_NEWLINK)
+				continue;
+
+			interface = NLMSG_DATA(message);
+			if (interface->ifi_index <= 0 ||
+			    (interface->ifi_flags & IFF_LOOPBACK))
+				continue;
+
+			attributes_len = IFLA_PAYLOAD(message);
+			for (attribute = IFLA_RTA(interface);
+			     RTA_OK(attribute, attributes_len);
+			     attribute = RTA_NEXT(attribute, attributes_len)) {
+				if (attribute->rta_type == IFLA_IFNAME) {
+					const char *ifname = RTA_DATA(attribute);
+
+					if (strcmp(ifname, expected_ifname) == 0)
+						name_matches = true;
+				}
+
+				if (attribute->rta_type == IFLA_ADDRESS &&
+				    RTA_PAYLOAD(attribute) > 0)
+					has_hardware_address = true;
+			}
+
+			if (name_matches && has_hardware_address)
+				saw_link = true;
+		}
+	}
+}
+
+static bool proc_net_dev_reports_interface(const char *ifname)
+{
+	char buffer[4096];
+
+	if (!read_text_file("/proc/net/dev", buffer, sizeof(buffer)))
+		return false;
+
+	return orlix_contains(buffer, strlen(buffer), ifname);
+}
+
+int main(void)
+{
+	char device_name[64] = { 0 };
+	char ifname[IFNAMSIZ] = { 0 };
+	bool device_present;
+	bool owns_netdev = false;
+
+	orlix_test_plan(6);
+
+	device_present = find_virtio_net_device(device_name, sizeof(device_name));
+	orlix_test_result(device_present,
+			  "virtio-net device is present on the upstream virtio bus");
+
+	if (device_present)
+		owns_netdev = find_netdev_for_virtio_device(device_name, ifname,
+							    sizeof(ifname));
+	orlix_test_result(owns_netdev,
+			  "virtio-net device owns a Linux netdev");
+
+	orlix_test_result(owns_netdev && sysfs_netdev_exists(ifname),
+			  "virtio-net netdev is exposed through sysfs");
+	orlix_test_result(owns_netdev && rtnetlink_reports_link(ifname),
+			  "rtnetlink enumerates the virtio-net link");
+	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
+			  "virtio-net link is distinct from loopback");
+	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),
+			  "procfs reports the virtio-net interface");
+
+	orlix_test_exit();
+}
