@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <poll.h>
 #include <sched.h>
 #include <stddef.h>
@@ -19,6 +20,7 @@
 
 #define ORLIX_INIT_CMDLINE_SIZE 16384
 #define ORLIX_INIT_MAX_RLIMITS 16
+#define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
 
 struct orlix_rlimit_config {
 	int resource;
@@ -583,6 +585,8 @@ struct orlix_command_config {
 	int rlimitc;
 	unsigned long uid;
 	unsigned long gid;
+	unsigned long supplementary_groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
+	size_t supplementary_group_count;
 	unsigned long umask_value;
 	int has_umask;
 };
@@ -671,6 +675,14 @@ static void selected_command_config(struct orlix_command_config *config)
 
 	(void)read_cmdline_unsigned("orlix.uid=", &config->uid);
 	(void)read_cmdline_unsigned("orlix.gid=", &config->gid);
+	for (int index = 0; index < ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS; ++index) {
+		char key[32];
+		unsigned long group_id = 0;
+		snprintf(key, sizeof(key), "orlix.suppgid%d=", index);
+		if (read_cmdline_unsigned(key, &group_id) != 0)
+			break;
+		config->supplementary_groups[config->supplementary_group_count++] = group_id;
+	}
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
@@ -934,6 +946,13 @@ static pid_t start_command_on_pty(int master, int slave)
 	if (config->has_umask)
 		(void)umask((mode_t)config->umask_value);
 	apply_rlimits(config);
+	if (config->supplementary_group_count > 0) {
+		gid_t groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
+		for (size_t index = 0; index < config->supplementary_group_count; ++index)
+			groups[index] = (gid_t)config->supplementary_groups[index];
+		if (setgroups(config->supplementary_group_count, groups) != 0)
+			write_literal(STDERR_FILENO, "orlix-init: setgroups failed\n");
+	}
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: setgid failed\n");
 	if (config->uid != 0 && setuid((uid_t)config->uid) != 0)
