@@ -7041,7 +7041,17 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(running.record.state, .running)
 		XCTAssertEqual(running.record.pid, 42)
 
-		let stopped = try running.kill(signal: 15)
+		let signaled = try running.kill(signal: 15)
+		XCTAssertEqual(signaled.record.state, .running)
+		XCTAssertEqual(signaled.record.pid, 42)
+		XCTAssertNil(signaled.record.exitStatus)
+
+		let stopped = try signaled.exit(
+			observedSignal: OrlixOCIRuntimeProcessSignalObservation(
+				pid: 42,
+				signal: 15
+			)
+		)
 		XCTAssertEqual(stopped.record.state, .stopped)
 		XCTAssertEqual(stopped.record.pid, 42)
 		XCTAssertEqual(stopped.record.exitStatus, 143)
@@ -7082,6 +7092,9 @@ extension OrlixTerminalSessionTests {
 		}
 		XCTAssertThrowsError(try running.kill(signal: 0)) { error in
 			XCTAssertEqual(error as? OrlixOCIRuntimeLifecycleError, .invalidSignal(0))
+		}
+		XCTAssertThrowsError(try running.kill(signal: 128)) { error in
+			XCTAssertEqual(error as? OrlixOCIRuntimeLifecycleError, .invalidSignal(128))
 		}
 
 		let deleted = try configured.delete()
@@ -7159,6 +7172,64 @@ extension OrlixTerminalSessionTests {
 			XCTAssertEqual(
 				error as? OrlixOCIRuntimeLifecycleError,
 				.processPIDMismatch(expected: 42, observed: 43)
+			)
+		}
+	}
+
+	func testOCIRuntimeLifecycleControllerRecordsObservedLinuxSignalTermination() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let running = try configured.create().start(pid: 42)
+		let stopped = try running.exit(
+			observedSignal: OrlixOCIRuntimeProcessSignalObservation(
+				pid: 42,
+				signal: 15
+			)
+		)
+		let report = try stopped.stateReport()
+
+		XCTAssertEqual(report.status, OrlixOCIRuntimeStateStatus.stopped)
+		XCTAssertEqual(report.pid, 42)
+		XCTAssertEqual(report.exitStatus, 143)
+	}
+
+	func testOCIRuntimeLifecycleControllerRejectsMismatchedObservedLinuxSignalPID() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let running = try configured.create().start(pid: 42)
+		let observedSignal = try OrlixOCIRuntimeProcessSignalObservation(
+			pid: 43,
+			signal: 15
+		)
+
+		XCTAssertThrowsError(try running.exit(observedSignal: observedSignal)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.processPIDMismatch(expected: 42, observed: 43)
+			)
+		}
+	}
+
+	func testOCIRuntimeLifecycleControllerRejectsInvalidObservedLinuxSignal() throws {
+		XCTAssertThrowsError(try OrlixOCIRuntimeProcessSignalObservation(pid: 42, signal: 0)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidSignal(0)
+			)
+		}
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeProcessSignalObservation(pid: 42, signal: 128)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidSignal(128)
 			)
 		}
 	}
