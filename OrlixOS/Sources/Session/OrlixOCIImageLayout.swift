@@ -1226,6 +1226,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "process.capabilities",
 			status: .implemented,
+			proof: "orlix:process_capability_probe",
 			reason: "OCI process capability sets carry into OrlixOS descriptors and init applies Linux capability UAPI through capset and prctl."
 		),
 		OrlixOCIRuntimeFeature(

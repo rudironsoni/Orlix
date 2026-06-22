@@ -457,6 +457,22 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("ok - RLIMIT_NOFILE survives exec"))
     }
 
+    func testProcessCapabilityProbeCompletesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let output = try OrlixUpstreamXCTest.run(.kernelProcessCapability)
+
+        XCTAssertTrue(output.contains("process_capability_probe"))
+        XCTAssertTrue(output.contains("ORLIX-PROCESS-CAPABILITY-PROBE"))
+        XCTAssertTrue(output.contains("capget reads current Linux capability sets"))
+        XCTAssertTrue(output.contains("proc self status exposes Linux capability fields"))
+        XCTAssertTrue(output.contains("capset accepts current Linux capability sets"))
+        XCTAssertTrue(output.contains("capset effective changes are visible in proc status"))
+        XCTAssertTrue(output.contains("prctl reads Linux capability bounding set"))
+        XCTAssertTrue(output.contains("prctl ambient clear is visible in proc status"))
+        XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
+    }
+
     func testUmaskProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {
