@@ -2419,6 +2419,24 @@ public struct OrlixOCIRuntimeProcessExitObservation: Equatable, Sendable {
 	}
 }
 
+public struct OrlixOCIRuntimeProcessSignalObservation: Equatable, Sendable {
+	public let pid: Int32
+	public let signal: Int32
+
+	public init(pid: Int32, signal: Int32) throws {
+		guard pid > 0 else {
+			throw OrlixOCIRuntimeLifecycleError.invalidPID(pid)
+		}
+
+		guard (1...127).contains(signal) else {
+			throw OrlixOCIRuntimeLifecycleError.invalidSignal(signal)
+		}
+
+		self.pid = pid
+		self.signal = signal
+	}
+}
+
 public enum OrlixOCIRuntimeStateStatus: String, Codable, Equatable, Sendable {
 	case created
 	case running
@@ -2516,7 +2534,7 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 	}
 
 	public func kill(signal: Int32) throws -> OrlixOCIRuntimeLifecycleController {
-		guard signal > 0 else {
+		guard (1...127).contains(signal) else {
 			throw OrlixOCIRuntimeLifecycleError.invalidSignal(signal)
 		}
 		guard record.state == .running else {
@@ -2525,16 +2543,7 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 				action: .kill
 			)
 		}
-		return OrlixOCIRuntimeLifecycleController(
-			config: config,
-			record: OrlixOCIRuntimeLifecycleRecord(
-				id: record.id,
-				bundlePath: record.bundlePath,
-				pid: record.pid,
-				exitStatus: 128 + signal,
-				state: .stopped
-			)
-		)
+		return self
 	}
 
 	public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeLifecycleController {
@@ -2553,6 +2562,24 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 		}
 
 		return try exit(exitStatus: observation.exitStatus)
+	}
+
+	public func exit(observedSignal observation: OrlixOCIRuntimeProcessSignalObservation) throws -> OrlixOCIRuntimeLifecycleController {
+		guard record.state == .running else {
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: record.state,
+				action: .exit
+			)
+		}
+
+		guard record.pid == observation.pid else {
+			throw OrlixOCIRuntimeLifecycleError.processPIDMismatch(
+				expected: record.pid ?? 0,
+				observed: observation.pid
+			)
+		}
+
+		return try exit(exitStatus: 128 + observation.signal)
 	}
 
 	public func exit(exitStatus: Int32) throws -> OrlixOCIRuntimeLifecycleController {

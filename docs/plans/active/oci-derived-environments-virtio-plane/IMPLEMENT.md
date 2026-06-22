@@ -15323,3 +15323,66 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI kill no longer fabricates process exit
+
+Checkpoint:
+
+- Corrected `OrlixOCIRuntimeLifecycleController.kill(signal:)` so signal
+  delivery validation no longer moves a running OCI lifecycle record directly to
+  `stopped`.
+- Added `OrlixOCIRuntimeProcessSignalObservation` as the OrlixOS-owned value
+  for Linux-observed signal termination.
+- Added `exit(observedSignal:)`, which stops a running lifecycle record only
+  when the observed Linux PID matches the running record PID.
+- Bounded lifecycle signal values to `1...127` so signal-derived exit statuses
+  stay within the Linux process exit-status range.
+- Updated lifecycle tests so `kill(signal:)` leaves the record running, and
+  stopped state comes from an observed signal termination.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- OCI `kill` is now modeled as signal delivery, not as proof that Linux has
+  already terminated and reaped the process.
+- Signal termination follows the same observed-process pattern as normal exit:
+  the future Linux wait/reap path supplies the process result, and PID mismatch
+  fails closed.
+- The change remains above the Linux surface. It adds no syscall, ioctl,
+  pseudo-file, HostAdapter API, host path, Darwin behavior, or custom Linux ABI.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_15-47-37-+0200.xcresult
+result=Passed
+passedTests=4
+failedTests=0
+skippedTests=0
+totalTestCount=4
+expectedFailures=0
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_15-48-20-+0200.xcresult
+result=Passed
+passedTests=3
+failedTests=0
+skippedTests=0
+totalTestCount=3
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history warning.
+
+Non-claims:
+
+- This corrects OCI lifecycle signal semantics in OrlixOS only.
+- It does not yet launch, signal, monitor, wait for, or reap a real
+  OCI-created Linux process.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.
