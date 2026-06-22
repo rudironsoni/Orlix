@@ -1896,6 +1896,27 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 	public var environment: OrlixEnvironmentDescriptor {
 		ociRuntimeSession.environment
 	}
+
+	@discardableResult
+	public func saveEnvironment(
+		to registry: OrlixEnvironmentRegistry,
+		fileManager: FileManager = .default
+	) throws -> OrlixEnvironmentDescriptor {
+		try registry.save(environment, fileManager: fileManager)
+		return environment
+	}
+
+	public func materializationCommands(
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs"
+	) throws -> [OrlixEnvironmentImageMaterializationCommand] {
+		try materializationPlan.commands(
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable
+		)
+	}
 }
 
 public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
