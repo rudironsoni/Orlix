@@ -15446,3 +15446,63 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI process session binds handle to Linux session
+
+Checkpoint:
+
+- Added SPI `OrlixOCIRuntimeProcessSession` in `OrlixOS`.
+- The process session binds an `OrlixOCIRuntimeProcessHandle` to an existing
+  `OrlixLinuxSession`.
+- The binding is explicit: it does not silently materialize a missing root image
+  from lifecycle state.
+- The process session preserves the same `OrlixLinuxSession` across
+  `start(observedPID:)` and `kill(signal:)` lifecycle updates.
+- Observed normal/signal completion still returns
+  `OrlixOCIRuntimeCompletedProcess`, not a materializable session descriptor.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- OCI lifecycle/session state now has an OrlixOS-owned object that pairs it with
+  the actual app-facing Linux session object.
+- The object remains SPI because it carries SPI lifecycle/session descriptor
+  types and is not a product ABI.
+- The change remains above the Linux surface. It adds no syscall, ioctl,
+  pseudo-file, HostAdapter API, host path, Darwin behavior, or custom Linux ABI.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_16-13-01-+0200.xcresult
+result=Passed
+passedTests=2
+failedTests=0
+skippedTests=0
+totalTestCount=2
+expectedFailures=0
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_16-13-40-+0200.xcresult
+result=Passed
+passedTests=3
+failedTests=0
+skippedTests=0
+totalTestCount=3
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history/current-status warnings.
+
+Non-claims:
+
+- This binds an existing OrlixOS Linux session to the OCI process handle.
+- It does not yet launch, signal, monitor, wait for, or reap a real
+  OCI-created Linux process.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.
