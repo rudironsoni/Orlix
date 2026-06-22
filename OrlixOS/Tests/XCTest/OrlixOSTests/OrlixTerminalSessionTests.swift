@@ -897,7 +897,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultGroupID: 100,
             defaultSupplementaryGroups: [44, 45],
             defaultNoNewPrivileges: true,
-            defaultCloseAdditionalFds: true
+            defaultCloseAdditionalFds: true,
+            defaultOOMScoreAdjustment: -500
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -935,6 +936,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.suppgid1=45"))
         XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
         XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
+        XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=-500"))
     }
 
     func testEnvironmentRootImageEncodesLinuxPathDefaultsWithoutHostPathPolicy() throws {
@@ -1083,6 +1085,12 @@ final class OrlixTerminalSessionTests: XCTestCase {
         )
         XCTAssertTrue(initSource.contains("close_additional_fds();"))
         XCTAssertTrue(initSource.contains("for (int fd = 3;"))
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_signed(\"\(OrlixEnvironmentRootImage.defaultOOMScoreAdjustmentCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(initSource.contains("\"/proc/self/oom_score_adj\""))
     }
 
     func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
@@ -5916,6 +5924,7 @@ extension OrlixTerminalSessionTests {
 			    "terminal": true,
 			    "noNewPrivileges": true,
 			    "closeAdditionalFds": true,
+			    "oomScoreAdj": -500,
 			    "consoleSize": { "height": 24, "width": 80 },
 			    "args": ["/bin/sh", "-lc", "echo ok"],
 			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
@@ -5962,6 +5971,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.defaultGroupID, 1000)
 		XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 		XCTAssertTrue(descriptor.defaultCloseAdditionalFds)
+		XCTAssertEqual(descriptor.defaultOOMScoreAdjustment, -500)
 		XCTAssertEqual(descriptor.defaultUmask, 18)
 		XCTAssertEqual(descriptor.defaultRlimits, [
 			OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 64)
@@ -5983,6 +5993,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultGroupID, descriptor.defaultGroupID)
 		XCTAssertEqual(environment.defaultNoNewPrivileges, descriptor.defaultNoNewPrivileges)
 		XCTAssertEqual(environment.defaultCloseAdditionalFds, descriptor.defaultCloseAdditionalFds)
+		XCTAssertEqual(environment.defaultOOMScoreAdjustment, descriptor.defaultOOMScoreAdjustment)
 		XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
 		XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
 	}
@@ -6151,7 +6162,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedProcessSchedulingFields() throws {
 		let fragments: [(feature: String, json: String)] = [
-			("oomScoreAdj", #""oomScoreAdj": 100"#),
+			("oomScoreAdj", #""oomScoreAdj": 1001"#),
 			("scheduler", #""scheduler": { "policy": "SCHED_FIFO", "priority": 1 }"#),
 			("ioPriority", #""ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 4 }"#),
 			("execCPUAffinity", #""execCPUAffinity": { "initial": "0", "final": "0" }"#)
@@ -6465,6 +6476,7 @@ extension OrlixTerminalSessionTests {
 		    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color", "ORLIX_MODE=oci"],
 		    "noNewPrivileges": true,
 		    "closeAdditionalFds": true,
+		    "oomScoreAdj": -500,
 		    "cwd": "/work",
 		    "user": { "uid": 1000, "gid": 1001, "additionalGids": [44, 45], "umask": 18 }
 		  }
@@ -6493,6 +6505,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.environment.defaultSupplementaryGroups, [44, 45])
 		XCTAssertTrue(session.environment.defaultNoNewPrivileges)
 		XCTAssertTrue(session.environment.defaultCloseAdditionalFds)
+		XCTAssertEqual(session.environment.defaultOOMScoreAdjustment, -500)
 		XCTAssertEqual(session.environment.defaultUmask, 18)
 
 		XCTAssertEqual(importPlan.environment.defaultCommand, session.environment.defaultCommand)
@@ -6511,6 +6524,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(
 			importPlan.environment.defaultCloseAdditionalFds,
 			session.environment.defaultCloseAdditionalFds
+		)
+		XCTAssertEqual(
+			importPlan.environment.defaultOOMScoreAdjustment,
+			session.environment.defaultOOMScoreAdjustment
 		)
 		XCTAssertEqual(importPlan.environment.defaultUmask, session.environment.defaultUmask)
 	}

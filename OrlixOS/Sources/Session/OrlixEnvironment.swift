@@ -24,6 +24,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultSupplementaryGroups: [UInt32]
     public let defaultNoNewPrivileges: Bool
     public let defaultCloseAdditionalFds: Bool
+    public let defaultOOMScoreAdjustment: Int32?
     public let defaultUmask: UInt32?
     public let defaultRlimits: [OrlixEnvironmentRlimit]
     public let hostname: String?
@@ -72,6 +73,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultSupplementaryGroups: [UInt32] = [],
         defaultNoNewPrivileges: Bool = false,
         defaultCloseAdditionalFds: Bool = false,
+        defaultOOMScoreAdjustment: Int32? = nil,
         defaultUmask: UInt32? = nil,
         defaultRlimits: [OrlixEnvironmentRlimit] = [],
         hostname: String? = nil,
@@ -92,6 +94,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultSupplementaryGroups = defaultSupplementaryGroups
         self.defaultNoNewPrivileges = defaultNoNewPrivileges
         self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
+        self.defaultOOMScoreAdjustment = defaultOOMScoreAdjustment
         self.defaultUmask = defaultUmask
         self.defaultRlimits = defaultRlimits
         self.hostname = hostname
@@ -114,6 +117,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultSupplementaryGroups
         case defaultNoNewPrivileges
         case defaultCloseAdditionalFds
+        case defaultOOMScoreAdjustment
         case defaultUmask
         case defaultRlimits
         case hostname
@@ -167,6 +171,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             Bool.self,
             forKey: .defaultCloseAdditionalFds
         ) ?? false
+        self.defaultOOMScoreAdjustment = try container.decodeIfPresent(
+            Int32.self,
+            forKey: .defaultOOMScoreAdjustment
+        )
         self.defaultUmask = try container.decodeIfPresent(
             UInt32.self,
             forKey: .defaultUmask
@@ -218,6 +226,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         if defaultCloseAdditionalFds {
             try container.encode(defaultCloseAdditionalFds, forKey: .defaultCloseAdditionalFds)
         }
+        try container.encodeIfPresent(
+            defaultOOMScoreAdjustment,
+            forKey: .defaultOOMScoreAdjustment
+        )
         try container.encodeIfPresent(defaultUmask, forKey: .defaultUmask)
         if !defaultRlimits.isEmpty {
             try container.encode(defaultRlimits, forKey: .defaultRlimits)
@@ -547,6 +559,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultSupplementaryGroupCommandLineKeyPrefix = "orlix.suppgid"
     public static let defaultNoNewPrivilegesCommandLineKey = "orlix.nonewprivs"
     public static let defaultCloseAdditionalFdsCommandLineKey = "orlix.closefds"
+    public static let defaultOOMScoreAdjustmentCommandLineKey = "orlix.oomscoreadj"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
     public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
     public static let hostnameCommandLineKey = "orlix.hostname"
@@ -766,6 +779,9 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         }
         if descriptor.defaultCloseAdditionalFds {
             tokens.append("\(defaultCloseAdditionalFdsCommandLineKey)=1")
+        }
+        if let defaultOOMScoreAdjustment = descriptor.defaultOOMScoreAdjustment {
+            tokens.append("\(defaultOOMScoreAdjustmentCommandLineKey)=\(defaultOOMScoreAdjustment)")
         }
         if let defaultUmask = descriptor.defaultUmask {
             tokens.append("\(defaultUmaskCommandLineKey)=\(defaultUmask)")
@@ -1046,6 +1062,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultSupplementaryGroups: parent.defaultSupplementaryGroups,
                 defaultNoNewPrivileges: parent.defaultNoNewPrivileges,
                 defaultCloseAdditionalFds: parent.defaultCloseAdditionalFds,
+                defaultOOMScoreAdjustment: parent.defaultOOMScoreAdjustment,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
                 mounts: parent.mounts

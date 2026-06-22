@@ -22,6 +22,8 @@
 #define ORLIX_INIT_CMDLINE_SIZE 16384
 #define ORLIX_INIT_MAX_RLIMITS 16
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
+#define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
+#define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
 
 struct orlix_rlimit_config {
 	int resource;
@@ -537,6 +539,38 @@ static int read_cmdline_unsigned(const char *key, unsigned long *value)
 	return 0;
 }
 
+static int read_cmdline_signed(const char *key, long *value)
+{
+	int fd = open("/proc/cmdline", O_RDONLY);
+	if (fd < 0)
+		return -1;
+	char buffer[4096];
+	ssize_t nread = read(fd, buffer, sizeof(buffer) - 1);
+	close(fd);
+	if (nread <= 0)
+		return -1;
+	buffer[nread] = '\0';
+
+	size_t key_length = strlen(key);
+	char *cursor = buffer;
+	while (*cursor != '\0') {
+		while (*cursor == ' ')
+			cursor++;
+		if (strncmp(cursor, key, key_length) == 0) {
+			char *end = NULL;
+			errno = 0;
+			long parsed = strtol(cursor + key_length, &end, 10);
+			if (errno != 0 || end == cursor + key_length)
+				return -1;
+			*value = parsed;
+			return 0;
+		}
+		while (*cursor != '\0' && *cursor != ' ')
+			cursor++;
+	}
+	return -1;
+}
+
 static int valid_exec_path(const char *path)
 {
 	if (path[0] == '\0')
@@ -590,6 +624,8 @@ struct orlix_command_config {
 	size_t supplementary_group_count;
 	int no_new_privileges;
 	int close_additional_fds;
+	int has_oom_score_adjustment;
+	long oom_score_adjustment;
 	unsigned long umask_value;
 	int has_umask;
 };
@@ -692,6 +728,13 @@ static void selected_command_config(struct orlix_command_config *config)
 	unsigned long close_additional_fds = 0;
 	if (read_cmdline_unsigned("orlix.closefds=", &close_additional_fds) == 0 && close_additional_fds != 0)
 		config->close_additional_fds = 1;
+	long oom_score_adjustment = 0;
+	if (read_cmdline_signed("orlix.oomscoreadj=", &oom_score_adjustment) == 0 &&
+	    oom_score_adjustment >= ORLIX_INIT_OOM_SCORE_ADJ_MIN &&
+	    oom_score_adjustment <= ORLIX_INIT_OOM_SCORE_ADJ_MAX) {
+		config->oom_score_adjustment = oom_score_adjustment;
+		config->has_oom_score_adjustment = 1;
+	}
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
@@ -936,6 +979,22 @@ static void close_additional_fds(void)
 		close(fd);
 }
 
+static void apply_oom_score_adjustment(long value)
+{
+	char buffer[32];
+	int length = snprintf(buffer, sizeof(buffer), "%ld\n", value);
+	if (length <= 0 || (size_t)length >= sizeof(buffer))
+		return;
+	int fd = open("/proc/self/oom_score_adj", O_WRONLY);
+	if (fd < 0) {
+		write_literal(STDERR_FILENO, "orlix-init: open oom_score_adj failed\n");
+		return;
+	}
+	if (write(fd, buffer, (size_t)length) != length)
+		write_literal(STDERR_FILENO, "orlix-init: write oom_score_adj failed\n");
+	close(fd);
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -978,6 +1037,8 @@ static pid_t start_command_on_pty(int master, int slave)
 		if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0)
 			write_literal(STDERR_FILENO, "orlix-init: prctl(PR_SET_NO_NEW_PRIVS) failed\n");
 	}
+	if (config->has_oom_score_adjustment)
+		apply_oom_score_adjustment(config->oom_score_adjustment);
 	if (config->close_additional_fds)
 		close_additional_fds();
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
