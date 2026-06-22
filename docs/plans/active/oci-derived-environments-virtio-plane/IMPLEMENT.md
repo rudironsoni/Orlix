@@ -14414,3 +14414,82 @@ Non-claims:
 - This does not prove process start, PID allocation, lifecycle execution,
   registry pull, `orlix run`, or full OCI Runtime compliance.
 - This does not add HostAdapter policy, host path leakage, or a custom Linux ABI.
+## 2026-06-22 09:27 +0200 - Command-line parser contract restored
+
+Status: green checkpoint for the OrlixOS execution-token contract used by
+OCI-derived session descriptors.
+
+Fixed `testEnvironmentRootImageCommandLineKeysMatchInitParserContract` so it
+interpolates the Swift command-line key constants when checking
+`OrlixOS/Sources/init/init.c`. The test was searching for literal escaped
+interpolation text instead of the actual parser keys, so it failed even though
+the init parser still consumed:
+
+- `orlix.exec=`
+- `orlix.argv%d=`
+- `orlix.env%d=`
+- `orlix.cwd=`
+- `orlix.uid=`
+- `orlix.gid=`
+
+This strengthens the OCI process-default work because the same execution-token
+surface carries OCI Runtime `process.args`, `process.env`, `process.cwd`, and
+process user defaults into the Linux init path without adding HostAdapter policy
+or a custom ABI.
+
+Evidence, command-line/materialized-root contract subset:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_09-26-35-+0200.xcresult
+result=Passed
+passedTests=5
+failedTests=0
+skippedTests=0
+totalTestCount=5
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testEnvironmentRootImageCommandLineKeysMatchInitParserContract \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testLinuxSessionCanBindMaterializedEnvironmentRootImage \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testMaterializedEnvironmentRootImageRegistersWithHostAdapter \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testMaterializedRootRegistrationDoesNotRegisterAllBundledRootsFirst \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist \
+  test
+```
+
+Evidence, OCI descriptor/reporting regression group:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_09-27-15-+0200.xcresult
+result=Passed
+passedTests=8
+failedTests=0
+skippedTests=0
+totalTestCount=8
+expectedFailures=0
+```
+
+Hygiene:
+
+```text
+rtk git diff --check: passed
+rtk python3 -m unittest discover .codex/hooks/tests: passed, 32 tests
+rtk python3 -m unittest discover .codex/rules/tests: passed, 5 tests
+rtk python3 .codex/hooks/compact_plan_check.py: warning-only existing stale status/current-status markers
+```
+
+Non-claims:
+
+- This does not add new Linux command-line keys.
+- This does not implement OCI process start, PID allocation, namespaces,
+  cgroups, registry pull, `orlix run`, or full OCI Runtime compliance.
+- This does not add HostAdapter policy, host path leakage, or a custom Linux ABI.

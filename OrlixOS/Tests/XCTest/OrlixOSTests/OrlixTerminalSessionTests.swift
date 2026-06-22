@@ -1028,32 +1028,32 @@ final class OrlixTerminalSessionTests: XCTestCase {
 
         XCTAssertTrue(
             initSource.contains(
-                "read_cmdline_decoded(\"\\(OrlixEnvironmentRootImage.defaultExecCommandLineKey)=\","
+                "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultExecCommandLineKey)=\","
             )
         )
         XCTAssertTrue(
             initSource.contains(
-                "snprintf(key, sizeof(key), \"\\(OrlixEnvironmentRootImage.defaultArgumentCommandLineKeyPrefix)%d=\","
+                "snprintf(key, sizeof(key), \"\(OrlixEnvironmentRootImage.defaultArgumentCommandLineKeyPrefix)%d=\","
             )
         )
         XCTAssertTrue(
             initSource.contains(
-                "snprintf(key, sizeof(key), \"\\(OrlixEnvironmentRootImage.defaultEnvironmentCommandLineKeyPrefix)%d=\","
+                "snprintf(key, sizeof(key), \"\(OrlixEnvironmentRootImage.defaultEnvironmentCommandLineKeyPrefix)%d=\","
             )
         )
         XCTAssertTrue(
             initSource.contains(
-                "read_cmdline_decoded(\"\\(OrlixEnvironmentRootImage.defaultWorkingDirectoryCommandLineKey)=\","
+                "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultWorkingDirectoryCommandLineKey)=\","
             )
         )
         XCTAssertTrue(
             initSource.contains(
-                "read_cmdline_unsigned(\"\\(OrlixEnvironmentRootImage.defaultUserIDCommandLineKey)=\","
+                "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultUserIDCommandLineKey)=\","
             )
         )
         XCTAssertTrue(
             initSource.contains(
-                "read_cmdline_unsigned(\"\\(OrlixEnvironmentRootImage.defaultGroupIDCommandLineKey)=\","
+                "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultGroupIDCommandLineKey)=\","
             )
         )
     }
