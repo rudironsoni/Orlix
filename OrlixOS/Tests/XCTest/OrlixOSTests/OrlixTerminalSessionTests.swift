@@ -5911,6 +5911,26 @@ extension OrlixTerminalSessionTests {
 		)
 	}
 
+	func testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults() throws {
+		let report = OrlixOCIRuntimeFeatureReport.current
+		let features = Dictionary(uniqueKeysWithValues: report.features.map { ($0.name, $0) })
+
+		for name in [
+			"process.user",
+			"process.noNewPrivileges",
+			"process.closeAdditionalFds",
+			"process.oomScoreAdj",
+			"process.scheduler",
+			"process.ioPriority",
+			"process.execCPUAffinity"
+		] {
+			XCTAssertEqual(features[name]?.status, .implemented, name)
+			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
+		}
+		XCTAssertEqual(features["seccomp"]?.status, .deterministicallyRejected)
+		XCTAssertEqual(features["selinux"]?.status, .deterministicallyRejected)
+	}
+
 	func testOCIRuntimeFeatureReportEncodesStableJSON() throws {
 		let data = try OrlixOCIRuntimeFeatureReport.current.jsonData()
 		let json = String(decoding: data, as: UTF8.self)
