@@ -13981,3 +13981,54 @@ Non-claims:
 - No bundle rootfs was registered with HostAdapter, mounted as the active Linux root, or booted.
 - No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
 - This is a materialization planning bridge only. Full import-to-enter still needs execution of the materialization plan, root image registration, and Linux substrate proof.
+### 2026-06-22 08:02 +0200 - OCI bundle rootfs materialization command bridge
+
+Status: green targeted checkpoint.
+
+Implemented:
+
+- Extended SPI `OrlixOCIRuntimeBundleImportPlan` with:
+  - `saveEnvironment(to:fileManager:)`
+  - `materializationCommands(mke2fsExecutable:truncateExecutable:debugfsExecutable:)`
+- The bridge persists the derived `OrlixEnvironmentDescriptor` through the normal `OrlixEnvironmentRegistry` path.
+- The bridge emits the existing Orlix environment image materialization command stream for the bundle `rootfs/` staging directory, standard target `base.ext4`, and standard target `state.ext4`.
+- Added `testOCIRuntimeBundleImportPlanSavesDescriptorAndEmitsMaterializationCommands` to prove descriptor persistence and command emission from the OCI bundle import plan.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_08-02-42-+0200.xcresult
+result=Passed
+passedTests=7
+failedTests=0
+skippedTests=0
+totalTestCount=7
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOrlixOSBuildsSessionFromOCIRuntimeBundle \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanUsesBundleRootfsForMaterialization \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanSavesDescriptorAndEmitsMaterializationCommands \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingConfig \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsFileRootfs \
+  test
+```
+
+Non-claims:
+
+- No materialization commands were executed by this checkpoint.
+- No `base.ext4` or `state.ext4` image was generated.
+- No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
+- No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
+- The next required step remains executing or otherwise proving the materialization command stream and binding the resulting root image through the normal OrlixLinuxSession materialized-root path.

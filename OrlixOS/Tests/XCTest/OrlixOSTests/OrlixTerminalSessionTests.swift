@@ -6406,6 +6406,49 @@ extension OrlixTerminalSessionTests {
 		))
 	}
 
+	func testOCIRuntimeBundleImportPlanSavesDescriptorAndEmitsMaterializationCommands() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("bin-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let registry = try OrlixEnvironmentRegistry()
+		let importPlan = try OrlixOCIRuntimeBundle
+			.load(from: bundleURL)
+			.importPlan(
+				id: "bundle-materialize",
+				rootMount: OrlixEnvironmentRootMount.defaultOverlay
+			)
+
+		try importPlan.saveEnvironment(to: registry)
+		let savedEnvironment = try registry.load(environmentID: "bundle-materialize")
+		XCTAssertEqual(savedEnvironment, importPlan.environment)
+
+		let commands = try importPlan.materializationCommands(
+			mke2fsExecutable: "orlix-mke2fs",
+			truncateExecutable: "orlix-truncate",
+			debugfsExecutable: "orlix-debugfs"
+		)
+		let expectedCommands = try importPlan.materializationPlan.commands(
+			mke2fsExecutable: "orlix-mke2fs",
+			truncateExecutable: "orlix-truncate",
+			debugfsExecutable: "orlix-debugfs"
+		)
+		XCTAssertEqual(commands, expectedCommands)
+		XCTAssertFalse(commands.isEmpty)
+	}
+
 	func testOCIRuntimeBundleRejectsMissingConfig() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
