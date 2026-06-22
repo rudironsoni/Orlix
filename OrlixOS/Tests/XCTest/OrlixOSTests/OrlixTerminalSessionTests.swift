@@ -7340,6 +7340,25 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(commandLine.contains("orlix.gid=1000"))
 	}
 
+	func testOCIRuntimeLifecycleControllerRejectsStoppedSessionDescriptor() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let stopped = try OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		.create()
+		.start(pid: 42)
+		.exit(exitStatus: 0)
+
+		XCTAssertThrowsError(try stopped.sessionDescriptor(rootMount: OrlixEnvironmentRootMount.defaultOverlay)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.stateUnavailable(.stopped)
+			)
+		}
+	}
+
 	func testOCIRuntimeLifecycleControllerRejectsUnavailableSessionDescriptors() throws {
 		let configured = OrlixOCIRuntimeLifecycleController(
 			config: try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig()),
