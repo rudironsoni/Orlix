@@ -14609,3 +14609,42 @@ Non-claims:
 - No runtime proof yet shows inherited descriptors closed inside a booted Linux
   process; this checkpoint proves descriptor import, init command-line contract,
   and init-side close loop setup only.
+
+## 2026-06-22 Current Status - OCI oom score adjustment
+
+Current status:
+
+- Promoted OCI Runtime `process.oomScoreAdj` from rejected metadata into an
+  OrlixOS-owned Linux process execution default.
+- Added `OrlixEnvironmentDescriptor.defaultOOMScoreAdjustment` with
+  backward-compatible decode defaulting to `nil`.
+- Added the root-image init command-line key `orlix.oomscoreadj` and emission of
+  signed values such as `orlix.oomscoreadj=-500`.
+- Updated `OrlixOS/Sources/init/init.c` to parse signed command-line values,
+  range-check the Linux `oom_score_adj` interval `-1000..1000`, and write the
+  value to `/proc/self/oom_score_adj` before credential drop and exec.
+- Updated OCI config import so valid `process.oomScoreAdj` carries into the
+  session/import environment descriptor instead of being listed as unsupported.
+  Out-of-range values remain rejected.
+
+Evidence:
+
+- Focused command-line/parser/OCI process-default tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-54-25-+0200.xcresult`
+  with `result=Passed`, `passedTests=6`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=6`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-58-46-+0200.xcresult`
+  with `result=Passed`, `passedTests=8`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=8`, `expectedFailures=0`.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- No runtime proof yet shows `/proc/self/oom_score_adj` observed inside a booted
+  Linux process; this checkpoint proves descriptor import, init command-line
+  contract, and init-side procfs write setup only.

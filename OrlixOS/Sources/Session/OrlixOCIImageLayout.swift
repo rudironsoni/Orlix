@@ -1329,6 +1329,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultSupplementaryGroups: [UInt32]
 	public let defaultNoNewPrivileges: Bool
 	public let defaultCloseAdditionalFds: Bool
+	public let defaultOOMScoreAdjustment: Int32?
 	public let defaultUmask: UInt32?
 	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
@@ -1354,6 +1355,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultSupplementaryGroups: defaultSupplementaryGroups,
 			defaultNoNewPrivileges: defaultNoNewPrivileges,
 			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
+			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
 			defaultUmask: defaultUmask,
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
@@ -1433,6 +1435,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultSupplementaryGroups: process.user?.additionalGids ?? [],
 			defaultNoNewPrivileges: process.noNewPrivileges ?? false,
 			defaultCloseAdditionalFds: process.closeAdditionalFds ?? false,
+			defaultOOMScoreAdjustment: try Self.validatedOOMScoreAdjustment(process.oomScoreAdj),
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
@@ -1512,6 +1515,16 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.umask")
 		}
 		return value
+	}
+
+	private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? {
+		guard let value else {
+			return nil
+		}
+		guard value >= -1000 && value <= 1000 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.oomScoreAdj")
+		}
+		return Int32(value)
 	}
 
 	private static func validatedRlimits(_ values: [OCIRuntimeRlimit]?) throws -> [OrlixEnvironmentRlimit] {
@@ -1644,9 +1657,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.selinuxLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.selinuxLabel")
-		}
-		if process.oomScoreAdj != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.oomScoreAdj")
 		}
 		if process.scheduler != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler")
