@@ -6449,6 +6449,49 @@ extension OrlixTerminalSessionTests {
 		XCTAssertFalse(commands.isEmpty)
 	}
 
+	func testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("root-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let registry = try OrlixEnvironmentRegistry()
+		let importPlan = try OrlixOCIRuntimeBundle
+			.load(from: bundleURL)
+			.importPlan(
+				id: "bundle-bound-root",
+				rootMount: OrlixEnvironmentRootMount.defaultOverlay
+			)
+		try fileManager.createDirectory(
+			at: importPlan.storageLayout.rootDirectory,
+			withIntermediateDirectories: true
+		)
+		try Data("base".utf8).write(to: importPlan.storageLayout.baseImageURL)
+		try Data("state".utf8).write(to: importPlan.storageLayout.stateImageURL)
+
+		let linuxSession = try importPlan.linuxSession(
+			registry: registry,
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
+		)
+		let materializedRoot = try XCTUnwrap(linuxSession.materializedRootImageForTesting)
+		XCTAssertEqual(materializedRoot.environmentID, "bundle-bound-root")
+		XCTAssertEqual(materializedRoot.baseImageURL, importPlan.storageLayout.baseImageURL)
+		XCTAssertEqual(materializedRoot.stateImageURL, importPlan.storageLayout.stateImageURL)
+		XCTAssertEqual(materializedRoot.bootConfig.rootImageIdentifier, importPlan.environment.rootImageIdentifier)
+		XCTAssertTrue(try registry.load(environmentID: "bundle-bound-root") == importPlan.environment)
+	}
+
 	func testOCIRuntimeBundleRejectsMissingConfig() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory

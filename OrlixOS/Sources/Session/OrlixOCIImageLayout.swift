@@ -1917,6 +1917,35 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 			debugfsExecutable: debugfsExecutable
 		)
 	}
+
+	public func materializedRootImage(
+		registry: OrlixEnvironmentRegistry,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		fileManager: FileManager = .default
+	) throws -> OrlixEnvironmentRootImage {
+		try saveEnvironment(to: registry, fileManager: fileManager)
+		return try registry.materializedRootImage(
+			forEnvironmentID: environment.id,
+			kernelCommandLine: kernelCommandLine,
+			fileManager: fileManager
+		)
+	}
+
+	public func linuxSession(
+		registry: OrlixEnvironmentRegistry,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default
+	) throws -> OrlixLinuxSession {
+		try OrlixLinuxSession(
+			materializedRootImage: materializedRootImage(
+				registry: registry,
+				kernelCommandLine: kernelCommandLine,
+				fileManager: fileManager
+			),
+			terminal: terminal
+		)
+	}
 }
 
 public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
