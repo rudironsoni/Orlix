@@ -544,6 +544,9 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("loopback interface accepts Linux address configuration"))
         XCTAssertTrue(output.contains("RTM_GETADDR reports loopback IPv4 address"))
         XCTAssertTrue(output.contains("RTM_GETROUTE reports loopback IPv4 route"))
+        XCTAssertTrue(output.contains("network namespace child enters isolated net namespace"))
+        XCTAssertTrue(output.contains("new network namespace keeps procfs network state readable"))
+        XCTAssertTrue(output.contains("new network namespace keeps rtnetlink socket local"))
         XCTAssertTrue(output.contains("loopback TCP accepts local connections"))
         XCTAssertTrue(output.contains("loopback UDP exchanges local datagrams"))
     }

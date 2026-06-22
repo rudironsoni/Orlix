@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <arpa/inet.h>
+#include <linux/sched.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
@@ -8,6 +9,9 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "orlix_kselftest_user.h"
@@ -36,6 +40,87 @@ static bool rtnetlink_socket_opens(void)
 
 	close(fd);
 	return true;
+}
+
+struct newnet_child_result {
+	char inode_changed;
+	char proc_net_readable;
+	char rtnetlink_socket_local;
+};
+
+static bool stat_inode_changed(const struct stat *before,
+			       const struct stat *after)
+{
+	return before->st_dev != after->st_dev || before->st_ino != after->st_ino;
+}
+
+static struct newnet_child_result check_new_network_namespace_child(void)
+{
+	struct newnet_child_result result = { 0 };
+	struct stat before;
+	struct stat after;
+
+	if (stat("/proc/self/ns/net", &before) != 0)
+		return result;
+
+	if (syscall(SYS_unshare, CLONE_NEWNET) != 0)
+		return result;
+
+	if (stat("/proc/self/ns/net", &after) == 0 &&
+	    stat_inode_changed(&before, &after))
+		result.inode_changed = 1;
+
+	if (file_is_readable("/proc/net/dev") &&
+	    file_is_readable("/proc/net/tcp") &&
+	    file_is_readable("/proc/net/udp"))
+		result.proc_net_readable = 1;
+
+	if (rtnetlink_socket_opens())
+		result.rtnetlink_socket_local = 1;
+
+	return result;
+}
+
+static struct newnet_child_result fork_and_check_new_network_namespace(void)
+{
+	struct newnet_child_result result = { 0 };
+	int pipefd[2];
+	pid_t child;
+	int status;
+
+	if (pipe(pipefd) != 0)
+		return result;
+
+	child = fork();
+	if (child < 0) {
+		close(pipefd[0]);
+		close(pipefd[1]);
+		return result;
+	}
+
+	if (child == 0) {
+		struct newnet_child_result child_result;
+
+		close(pipefd[0]);
+		child_result = check_new_network_namespace_child();
+		(void)write(pipefd[1], &child_result, sizeof(child_result));
+		close(pipefd[1]);
+		_exit(child_result.inode_changed &&
+		      child_result.proc_net_readable &&
+		      child_result.rtnetlink_socket_local ? 0 : 1);
+	}
+
+	close(pipefd[1]);
+	(void)read(pipefd[0], &result, sizeof(result));
+	close(pipefd[0]);
+
+	if (waitpid(child, &status, 0) != child)
+		return (struct newnet_child_result){ 0 };
+
+	if (!WIFEXITED(status))
+		return (struct newnet_child_result){ 0 };
+
+	return result;
 }
 
 static bool rtnetlink_reports_loopback_link(void)
@@ -468,7 +553,7 @@ out:
 
 int main(void)
 {
-	orlix_test_plan(8);
+	orlix_test_plan(11);
 
 	orlix_test_result(proc_net_files_are_readable(),
 			  "procfs exposes network state");
@@ -482,6 +567,17 @@ int main(void)
 			  "RTM_GETADDR reports loopback IPv4 address");
 	orlix_test_result(rtnetlink_reports_loopback_ipv4_route(),
 			  "RTM_GETROUTE reports loopback IPv4 route");
+	{
+		struct newnet_child_result newnet =
+			fork_and_check_new_network_namespace();
+
+		orlix_test_result(newnet.inode_changed,
+				  "network namespace child enters isolated net namespace");
+		orlix_test_result(newnet.proc_net_readable,
+				  "new network namespace keeps procfs network state readable");
+		orlix_test_result(newnet.rtnetlink_socket_local,
+				  "new network namespace keeps rtnetlink socket local");
+	}
 	{
 		bool tcp_ok = loopback_tcp_accepts_connection();
 

@@ -15892,3 +15892,72 @@ Current status / handoff:
 - Continue with Linux-owned networking expansion such as namespace isolation,
   route mutation/error semantics, or virtio-net device/packet proof. Do not
   route these semantics through `OrlixHostAdapter`.
+
+### 2026-06-22 - Linux network namespace proof covers CLONE_NEWNET isolation
+
+Checkpoint summary:
+
+- Extended `network_namespace_probe` with a forked child proof for
+  `SYS_unshare(CLONE_NEWNET)`.
+- The child compares `/proc/self/ns/net` before and after unshare, then reports
+  three Linux-owned facts back to the parent: the namespace inode changed,
+  `/proc/net` state remains readable, and a local `NETLINK_ROUTE` rtnetlink
+  socket still opens inside the new network namespace.
+- The parent stays in its original namespace, so the existing loopback
+  `RTM_GETLINK`, `RTM_GETADDR`, `RTM_GETROUTE`, TCP, and UDP checks continue to
+  prove the configured parent namespace.
+- Updated the app-hosted `OrlixKernelUpstreamTests` assertion so the focused
+  OrlixOS terminal-session proof must include:
+  `network namespace child enters isolated net namespace`,
+  `new network namespace keeps procfs network state readable`, and
+  `new network namespace keeps rtnetlink socket local`.
+
+Ownership / boundary notes:
+
+- This remains a standard Linux namespace/syscall/procfs/rtnetlink contract. It
+  does not introduce an Orlix-specific ABI, Swift runtime facade, or host-visible
+  compatibility shortcut.
+- `OrlixHostAdapter` remains outside the Linux surface; the test observes only
+  Linux namespace inode state, `/proc/net`, and `NETLINK_ROUTE` sockets.
+- This is progress on OCI/container namespace prerequisites. It does not claim
+  full OCI networking, virtio-net packet I/O, external registry pull, product
+  `orlix run`, complete cgroup integration, or full OCI Runtime compliance.
+
+Validation:
+
+```text
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+result=passed
+
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:15:orlix:network_namespace_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:22:file /orlix/network_namespace_probe ...
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcode-storage-doctor
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testNetworkNamespaceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_17-21-32-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Current status / handoff:
+
+- `network_namespace_probe` now proves procfs network state, rtnetlink socket
+  creation, `RTM_GETLINK` loopback link enumeration, Linux address
+  configuration, `RTM_GETADDR` loopback IPv4 address enumeration,
+  `RTM_GETROUTE` loopback IPv4 route enumeration, child `CLONE_NEWNET`
+  isolation, and loopback TCP/UDP.
+- Continue with Linux-owned networking expansion such as namespace-local route
+  mutation/error semantics or virtio-net device/packet proof. Do not route these
+  semantics through `OrlixHostAdapter`.
