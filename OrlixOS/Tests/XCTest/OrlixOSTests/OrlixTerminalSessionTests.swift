@@ -6371,6 +6371,51 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeBundleCarriesReadonlyRootIntoEnvironmentDescriptors() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try """
+		{
+		  "ociVersion": "1.1.0",
+		  "root": { "path": "rootfs", "readonly": true },
+		  "process": {
+		    "args": ["/usr/bin/env", "sh", "-lc"],
+		    "env": ["PATH=/usr/bin:/bin"],
+		    "cwd": "/work",
+		    "user": { "uid": 1000, "gid": 1000 }
+		  },
+		  "linux": {
+		    "namespaces": [
+		      { "type": "pid" },
+		      { "type": "mount" }
+		    ]
+		  }
+		}
+		""".data(using: .utf8)!.write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let bundle = try OrlixOCIRuntimeBundle.load(from: bundleURL)
+		let session = try bundle.sessionDescriptor(
+			id: "readonly-root",
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+		let importPlan = try bundle.importPlan(
+			id: "readonly-root",
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+
+		XCTAssertTrue(bundle.config.rootReadonly)
+		XCTAssertTrue(session.environment.rootReadonly)
+		XCTAssertTrue(importPlan.environment.rootReadonly)
+		XCTAssertEqual(importPlan.environment.rootMount, OrlixEnvironmentRootMount.defaultOverlay)
+	}
+
 	func testOrlixOSBuildsSessionFromOCIRuntimeBundle() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
