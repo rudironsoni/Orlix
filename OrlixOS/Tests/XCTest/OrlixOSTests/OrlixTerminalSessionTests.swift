@@ -6334,6 +6334,43 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.environment.defaultCommand, ["/bin/sh"])
 	}
 
+	func testOCIRuntimeBundleResolvesConfiguredRelativeRootPath() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let configuredRootfsURL = bundleURL.appendingPathComponent("roots/alpine", isDirectory: true)
+		try fileManager.createDirectory(at: configuredRootfsURL, withIntermediateDirectories: true)
+		try nonRootOCIRuntimeConfig(rootPath: "roots/alpine").write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let bundle = try OrlixOCIRuntimeBundle.load(from: bundleURL)
+
+		XCTAssertEqual(bundle.rootfsURL, configuredRootfsURL)
+		XCTAssertEqual(bundle.config.rootPath, "roots/alpine")
+	}
+
+	func testOCIRuntimeBundleRejectsRootPathEscapingBundle() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+		try nonRootOCIRuntimeConfig(rootPath: "../escaped-root").write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeBundle.load(from: bundleURL)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeBundleError,
+				.rootfsEscapesBundle("../escaped-root")
+			)
+		}
+	}
+
 	func testOrlixOSBuildsSessionFromOCIRuntimeBundle() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
@@ -6982,13 +7019,13 @@ extension OrlixTerminalSessionTests {
 		)
 	}
 
-	private func nonRootOCIRuntimeConfig() -> Data {
+	private func nonRootOCIRuntimeConfig(rootPath: String = "rootfs") -> Data {
 		Data(
 			"""
 			{
 			  "ociVersion": "1.1.0",
 			  "root": {
-			    "path": "rootfs"
+			    "path": "\(rootPath)"
 			  },
 			  "process": {
 			    "terminal": true,
