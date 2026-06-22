@@ -13436,3 +13436,61 @@ Current status:
 The remaining virtio-fs mount blocker is now known to be child SIGSEGV in the
 app-hosted `virtio_fs_mount_probe` path. The broader OCI-derived environment
 and virtio plane plan remains active.
+2026-06-22 update - virtio-fs mount probe no longer dies in selftest helper
+
+Changed durable selftest source only:
+
+- `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_fs_mount_probe.c`
+
+Fixes:
+
+- Updated `read_file_equals()` to use the current `orlix_read_file(path, buffer, capacity, &size)` contract instead of passing `false` as the size out pointer.
+- Updated `mountinfo_reports_virtiofs()` to use a real `size_t size` out parameter and explicit zero-length handling.
+- Added narrow TAP comments for mounted-root `stat(2)` and `opendir(3)` failures so the remaining Linux/FUSE behavior is visible without changing pass/fail semantics.
+
+Focused app-hosted evidence after rebuilding kselftest payload:
+
+```text
+rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_02-39-35-+0200.xcresult
+testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession: failed
+xcodebuild exit status: 65
+```
+
+Existing virtio MMIO regression guard remained green after the selftest helper fix:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_02-43-17-+0200.xcresult
+testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession: passed
+xcodebuild exit status: 0
+```
+
+The failure is no longer the earlier `child signal 11` at the tag-read/mountinfo selftest helper path. The focused TAP stream now reaches the mounted-operation phase:
+
+```text
+ok 1 - virtio-fs device exposes the standard Orlix host-folder tag
+ok 2 - virtio-fs mountpoint is available
+ok 3 - Linux mounts the Orlix host folder through virtio-fs
+# stat errno 111
+not ok 4 - mounted virtio-fs root is a directory
+ok 5 - mountinfo reports the mounted virtio-fs root
+# opendir errno 111
+not ok 6 - mounted virtio-fs root supports readdir
+not ok 7 - mounted virtio-fs root rejects create with EROFS
+not ok 8 - mounted virtio-fs root supports statx
+not ok 9 - mounted virtio-fs root reports an empty xattr list
+not ok 10 - mounted virtio-fs root reports missing xattrs
+not ok 11 - mounted virtio-fs regular files support lseek when present
+not ok 12 - mounted virtio-fs nested paths support readdir, access, and statx when present
+# child exit status 4
+not ok 11 - virtio_fs_mount_probe
+```
+
+Current status:
+
+- `virtio_fs_mount_probe` remains red app-hosted.
+- The crash has been narrowed to real mounted virtio-fs/FUSE operation behavior: `stat()` and `opendir()` on the mounted root return `ECONNREFUSED`.
+- Do not claim virtio-fs host-folder readiness, OCI host-folder readiness, or product runtime readiness from this checkpoint.
+- Next owning layer is `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`, specifically the virtio-fs/FUSE connection and request handling after successful mount negotiation.

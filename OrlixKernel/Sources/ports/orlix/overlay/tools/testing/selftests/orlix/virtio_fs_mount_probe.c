@@ -19,11 +19,10 @@
 static bool read_file_equals(const char *path, const char *expected)
 {
 	char buffer[64];
-	ssize_t size;
+	size_t size;
 	size_t expected_len;
 
-	size = orlix_read_file(path, buffer, sizeof(buffer) - 1, false);
-	if (size < 0)
+	if (orlix_read_file(path, buffer, sizeof(buffer) - 1, &size) != 0)
 		return false;
 
 	buffer[size] = '\0';
@@ -108,9 +107,13 @@ static bool mounted_root_is_directory(void)
 {
 	struct stat status;
 
-	if (stat(ORLIX_VIRTIOFS_MOUNTPOINT, &status) != 0)
+	errno = 0;
+	if (stat(ORLIX_VIRTIOFS_MOUNTPOINT, &status) != 0) {
+		orlix_test_comment_uint("stat errno ", (unsigned int)errno);
 		return false;
+	}
 
+	orlix_test_comment_uint("stat mode ", (unsigned int)status.st_mode);
 	return S_ISDIR(status.st_mode);
 }
 
@@ -121,8 +124,10 @@ static bool mounted_root_can_readdir(void)
 	bool saw_dot = false;
 
 	directory = opendir(ORLIX_VIRTIOFS_MOUNTPOINT);
-	if (!directory)
+	if (!directory) {
+		orlix_test_comment_uint("opendir errno ", (unsigned int)errno);
 		return false;
+	}
 
 	while ((entry = readdir(directory)) != NULL) {
 		if (entry->d_name[0] == '.' && entry->d_name[1] == '\0') {
@@ -138,11 +143,12 @@ static bool mounted_root_can_readdir(void)
 static bool mountinfo_reports_virtiofs(void)
 {
 	char buffer[4096];
-	ssize_t size;
+	size_t size;
 
-	size = orlix_read_file("/proc/self/mountinfo", buffer,
-			       sizeof(buffer), false);
-	if (size <= 0)
+	if (orlix_read_file("/proc/self/mountinfo", buffer, sizeof(buffer),
+			    &size) != 0)
+		return false;
+	if (size == 0)
 		return false;
 
 	return orlix_contains(buffer, (size_t)size, ORLIX_VIRTIOFS_MOUNTPOINT) &&
