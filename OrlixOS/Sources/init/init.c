@@ -589,6 +589,7 @@ struct orlix_command_config {
 	unsigned long supplementary_groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
 	size_t supplementary_group_count;
 	int no_new_privileges;
+	int close_additional_fds;
 	unsigned long umask_value;
 	int has_umask;
 };
@@ -688,6 +689,9 @@ static void selected_command_config(struct orlix_command_config *config)
 	unsigned long no_new_privileges = 0;
 	if (read_cmdline_unsigned("orlix.nonewprivs=", &no_new_privileges) == 0 && no_new_privileges != 0)
 		config->no_new_privileges = 1;
+	unsigned long close_additional_fds = 0;
+	if (read_cmdline_unsigned("orlix.closefds=", &close_additional_fds) == 0 && close_additional_fds != 0)
+		config->close_additional_fds = 1;
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
@@ -920,6 +924,18 @@ static void apply_rlimits(const struct orlix_command_config *config)
 	}
 }
 
+static void close_additional_fds(void)
+{
+	struct rlimit limit;
+	rlim_t max_fd = 1024;
+	if (getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_cur != RLIM_INFINITY)
+		max_fd = limit.rlim_cur;
+	if (max_fd > 1048576)
+		max_fd = 1048576;
+	for (int fd = 3; (rlim_t)fd < max_fd; ++fd)
+		close(fd);
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -962,6 +978,8 @@ static pid_t start_command_on_pty(int master, int slave)
 		if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0)
 			write_literal(STDERR_FILENO, "orlix-init: prctl(PR_SET_NO_NEW_PRIVS) failed\n");
 	}
+	if (config->close_additional_fds)
+		close_additional_fds();
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: setgid failed\n");
 	if (config->uid != 0 && setuid((uid_t)config->uid) != 0)

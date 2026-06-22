@@ -1328,6 +1328,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultGroupID: UInt32
 	public let defaultSupplementaryGroups: [UInt32]
 	public let defaultNoNewPrivileges: Bool
+	public let defaultCloseAdditionalFds: Bool
 	public let defaultUmask: UInt32?
 	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
@@ -1352,6 +1353,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultGroupID: defaultGroupID,
 			defaultSupplementaryGroups: defaultSupplementaryGroups,
 			defaultNoNewPrivileges: defaultNoNewPrivileges,
+			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
 			defaultUmask: defaultUmask,
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
@@ -1430,6 +1432,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultGroupID: process.user?.gid ?? 0,
 			defaultSupplementaryGroups: process.user?.additionalGids ?? [],
 			defaultNoNewPrivileges: process.noNewPrivileges ?? false,
+			defaultCloseAdditionalFds: process.closeAdditionalFds ?? false,
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
@@ -1653,9 +1656,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.execCPUAffinity != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
-		}
-		if process.closeAdditionalFds != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.closeAdditionalFds")
 		}
 	}
 
