@@ -14258,3 +14258,64 @@ Non-claims:
 - No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
 - No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
 - Absolute host paths are rejected unless they remain inside the bundle directory; this is OrlixOS import policy only, not Linux-visible ABI.
+## 2026-06-22 08:44 +0200 - OCI readonly root descriptor preservation
+
+Status: green checkpoint for descriptor preservation only.
+
+Added XCTest proof that OCI Runtime `config.json` `root.readonly: true` is
+preserved through the OrlixOS-owned bundle descriptor surfaces:
+
+- `OrlixOCIRuntimeBundle.config.rootReadonly`
+- `OrlixOCIRuntimeBundle.sessionDescriptor(...).environment.rootReadonly`
+- `OrlixOCIRuntimeBundle.importPlan(...).environment.rootReadonly`
+
+The test also verifies the import plan keeps the requested
+`OrlixEnvironmentRootMount.defaultOverlay` binding while carrying the readonly
+root flag.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_08-44-32-+0200.xcresult
+result=Passed
+passedTests=13
+failedTests=0
+skippedTests=0
+totalTestCount=13
+expectedFailures=0
+```
+
+Focused test first run:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleCarriesReadonlyRootIntoEnvironmentDescriptors \
+  test
+```
+
+OCI bundle group run included the new readonly-root test plus the existing 12
+OCI Runtime bundle/import-plan tests.
+
+Hygiene:
+
+```text
+rtk git diff --check: passed
+rtk python3 -m unittest discover .codex/hooks/tests: passed, 32 tests
+rtk python3 -m unittest discover .codex/rules/tests: passed, 5 tests
+rtk python3 .codex/hooks/compact_plan_check.py: warning-only existing stale status/current-status markers
+```
+
+Non-claims:
+
+- This does not prove readonly mount enforcement inside Linux.
+- This does not prove ext4 image generation from the OCI rootfs.
+- This does not prove boot, enter, process start, PID allocation, or lifecycle execution.
+- This does not add HostAdapter policy or host leakage to the Linux surface.
+- This does not add a custom Linux ABI.
+- This does not prove networking, namespaces, cgroups, registry pull, `orlix run`,
+  or full OCI Runtime compliance.
