@@ -5917,6 +5917,10 @@ extension OrlixTerminalSessionTests {
 			report.feature(named: "cgroupV2PidsController")?.proof,
 			"orlix:cgroup_pids_probe"
 		)
+		XCTAssertEqual(
+			report.feature(named: "process.capabilities")?.proof,
+			"orlix:process_capability_probe"
+		)
 		XCTAssertEqual(report.feature(named: "netDevices")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.status, .implemented)
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.proof, "orlix:virtio_mmio_probe_contract")

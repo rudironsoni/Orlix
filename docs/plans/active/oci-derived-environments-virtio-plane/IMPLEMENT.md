@@ -14881,3 +14881,78 @@ descriptor/init contract level. The active goal remains open because runtime
 process lifecycle proof, runtime-observed capability proof, namespaces, cgroups
 v2, registry pull, product `orlix run`, virtio-fs host-folder behavior, and
 full OCI Runtime compliance are not complete.
+
+## 2026-06-22 - Runtime Linux capability substrate proof
+
+Added an app-hosted Orlix kselftest probe for Linux process capability
+substrate behavior. This moves the OCI `process.capabilities` support beyond
+descriptor/init command-line proof by verifying that a booted Orlix Linux
+process can observe and manipulate Linux capability state through Linux APIs.
+
+Implemented:
+
+- Added `process_capability_probe` under the durable Orlix kselftest overlay.
+- The probe verifies:
+  - `capget(2)` reads current Linux capability sets.
+  - `/proc/self/status` exposes `CapInh`, `CapPrm`, `CapEff`, `CapBnd`, and
+    `CapAmb`.
+  - `capset(2)` accepts current Linux capability sets.
+  - clearing effective capabilities through `capset(2)` is reflected in
+    `/proc/self/status`.
+  - `prctl(PR_CAPBSET_READ, ...)` reads a standard Linux capability from the
+    bounding set.
+  - `prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, ...)` is reflected in
+    `/proc/self/status`.
+- Registered the probe in the Orlix kselftest Makefile.
+- Added a selected app-hosted XCTest entry:
+  `testProcessCapabilityProbeCompletesThroughOrlixOSTerminalSession`.
+- Updated `process.capabilities` in `OrlixOCIRuntimeFeatureReport.current` to
+  cite `orlix:process_capability_probe`.
+
+Evidence:
+
+- Kselftest packaging:
+  - `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  - `Build/OrlixMLibC/kselftest/release/kselftest-list.txt` contains
+    `orlix:process_capability_probe`.
+  - `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list`
+    contains `/orlix/process_capability_probe`.
+- App-hosted runtime proof:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_13-25-04-+0200.xcresult`
+  - `result=Passed`
+  - `passedTests=1`
+  - `failedTests=0`
+  - `skippedTests=0`
+  - `totalTestCount=1`
+  - `expectedFailures=0`
+- Feature-report proof:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_13-30-22-+0200.xcresult`
+  - `result=Passed`
+  - `passedTests=2`
+  - `failedTests=0`
+  - `skippedTests=0`
+  - `totalTestCount=2`
+  - `expectedFailures=0`
+- Harness:
+  - `rtk git diff --check`
+  - `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+  - `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+  - `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+    stale-history warning about older pending/blocked text.
+
+Non-claims:
+
+- This proves Linux capability substrate behavior in a booted Orlix Linux
+  process. It is not a full runtime-observed proof of OCI process defaults
+  applied from an imported OCI `config.json`.
+- Real OCI process lifecycle execution, PID allocation/reaping, namespace
+  setup, cgroup v2 resource behavior, registry pull, product `orlix run`,
+  virtio-fs host-folder mounts, and full OCI Runtime compliance remain open.
+
+Current status:
+
+The OCI `process.capabilities` path now has descriptor/init contract coverage
+and app-hosted Linux capability substrate proof. The active goal remains open
+because runtime-observed imported-OCI process defaults, real OCI lifecycle,
+namespaces, cgroups, registry pull, product `orlix run`, virtio-fs host-folder
+behavior, and full OCI Runtime compliance are not complete.
