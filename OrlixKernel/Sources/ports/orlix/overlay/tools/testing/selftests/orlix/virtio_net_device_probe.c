@@ -13,6 +13,9 @@
 
 #include "orlix_kselftest_user.h"
 
+#define ORLIX_ARPHRD_ETHER 1
+#define ORLIX_ETH_ALEN 6
+
 static bool read_text_file(const char *path, char *buffer, size_t size)
 {
 	int fd;
@@ -152,6 +155,50 @@ static bool sysfs_netdev_exists(const char *ifname)
 	return true;
 }
 
+static bool read_sysfs_ulong(const char *path, unsigned long *value)
+{
+	char buffer[64];
+	size_t index = 0;
+	unsigned long parsed = 0;
+
+	if (!read_text_file(path, buffer, sizeof(buffer)))
+		return false;
+
+	if (buffer[0] < '0' || buffer[0] > '9')
+		return false;
+
+	while (buffer[index] >= '0' && buffer[index] <= '9') {
+		parsed = parsed * 10 + (unsigned long)(buffer[index] - '0');
+		++index;
+	}
+
+	*value = parsed;
+	return true;
+}
+
+static bool sysfs_netdev_reports_ethernet_type(const char *ifname)
+{
+	char path[128];
+	unsigned long type = 0;
+
+	if (!append_path(path, sizeof(path), "/sys/class/net/", ifname, "/type"))
+		return false;
+
+	return read_sysfs_ulong(path, &type) && type == ORLIX_ARPHRD_ETHER;
+}
+
+static bool sysfs_netdev_reports_ethernet_addr_len(const char *ifname)
+{
+	char path[128];
+	unsigned long addr_len = 0;
+
+	if (!append_path(path, sizeof(path), "/sys/class/net/", ifname,
+			 "/addr_len"))
+		return false;
+
+	return read_sysfs_ulong(path, &addr_len) && addr_len == ORLIX_ETH_ALEN;
+}
+
 static bool rtnetlink_reports_link(const char *expected_ifname)
 {
 	struct {
@@ -198,7 +245,7 @@ static bool rtnetlink_reports_link(const char *expected_ifname)
 			struct rtattr *attribute;
 			int attributes_len;
 			bool name_matches = false;
-			bool has_hardware_address = false;
+			bool has_ethernet_address = false;
 
 			if (message->nlmsg_type == NLMSG_DONE) {
 				close(fd);
@@ -230,11 +277,19 @@ static bool rtnetlink_reports_link(const char *expected_ifname)
 				}
 
 				if (attribute->rta_type == IFLA_ADDRESS &&
-				    RTA_PAYLOAD(attribute) > 0)
-					has_hardware_address = true;
+				    RTA_PAYLOAD(attribute) == ORLIX_ETH_ALEN) {
+					const unsigned char *mac = RTA_DATA(attribute);
+					size_t mac_index;
+					bool has_nonzero_octet = false;
+
+					for (mac_index = 0; mac_index < ORLIX_ETH_ALEN; ++mac_index)
+						has_nonzero_octet |= mac[mac_index] != 0;
+
+					has_ethernet_address = has_nonzero_octet;
+				}
 			}
 
-			if (name_matches && has_hardware_address)
+			if (name_matches && has_ethernet_address)
 				saw_link = true;
 		}
 	}
@@ -257,7 +312,7 @@ int main(void)
 	bool device_present;
 	bool owns_netdev = false;
 
-	orlix_test_plan(6);
+	orlix_test_plan(8);
 
 	device_present = find_virtio_net_device(device_name, sizeof(device_name));
 	orlix_test_result(device_present,
@@ -271,8 +326,12 @@ int main(void)
 
 	orlix_test_result(owns_netdev && sysfs_netdev_exists(ifname),
 			  "virtio-net netdev is exposed through sysfs");
+	orlix_test_result(owns_netdev && sysfs_netdev_reports_ethernet_type(ifname),
+			  "virtio-net netdev reports Ethernet hardware type");
+	orlix_test_result(owns_netdev && sysfs_netdev_reports_ethernet_addr_len(ifname),
+			  "virtio-net netdev reports Ethernet address length");
 	orlix_test_result(owns_netdev && rtnetlink_reports_link(ifname),
-			  "rtnetlink enumerates the virtio-net link");
+			  "rtnetlink enumerates the virtio-net Ethernet link");
 	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
 			  "virtio-net link is distinct from loopback");
 	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),

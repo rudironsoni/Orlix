@@ -408,7 +408,9 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("virtio-net device is present on the upstream virtio bus"))
         XCTAssertTrue(output.contains("virtio-net device owns a Linux netdev"))
         XCTAssertTrue(output.contains("virtio-net netdev is exposed through sysfs"))
-        XCTAssertTrue(output.contains("rtnetlink enumerates the virtio-net link"))
+        XCTAssertTrue(output.contains("virtio-net netdev reports Ethernet hardware type"))
+        XCTAssertTrue(output.contains("virtio-net netdev reports Ethernet address length"))
+        XCTAssertTrue(output.contains("rtnetlink enumerates the virtio-net Ethernet link"))
         XCTAssertTrue(output.contains("virtio-net link is distinct from loopback"))
         XCTAssertTrue(output.contains("procfs reports the virtio-net interface"))
     }
