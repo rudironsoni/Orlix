@@ -16877,3 +16877,49 @@ reporting after Linux brings the interface up, Linux-visible TX completion for
 an `AF_PACKET` send, and Linux-visible RX queue accounting. Next work should
 move to userspace receive proof, loopback reflection, or a deliberately scoped
 host-mediated packet path through standard Linux networking surfaces.
+
+### 2026-06-22 - Build-manifest audit substrate for Linux, mlibc, and Coreutils
+
+Added the first safe checkpoint for reducing repeated Linux, OrlixMLibC, and
+Coreutils build cost without weakening proof requirements. This checkpoint does
+not skip build stages yet. It adds deterministic input manifests and owner
+Makefile audit/write surfaces so later reuse can be gated on exact input
+equivalence.
+
+Changes:
+
+- Added `tools/orlix-build-manifest`, a deterministic manifest helper with
+  `audit` and `write` subcommands.
+- Covered three components: `linux`, `mlibc`, and `coreutils`.
+- Added root `make cache-audit` and `make cache-manifest-write` entrypoints
+  with optional `COMPONENT=linux|mlibc|coreutils`.
+- Added owner-level cache entrypoints in `OrlixKernel`, `OrlixMLibC`, and
+  `OrlixOS` Makefiles.
+- Added unit tests for stable manifests, input-change invalidation, successful
+  write-then-audit, and fail-closed corrupt-manifest handling.
+
+Validation:
+
+```sh
+rtk python3 -m unittest discover tools/tests
+rtk python3 tools/orlix-build-manifest write --profile release
+rtk python3 tools/orlix-build-manifest audit --profile release
+rtk make cache-audit PROFILE=release COMPONENT=linux
+rtk make -f OrlixMLibC/Makefile cache-audit PROFILE=release
+rtk make -f OrlixOS/Makefile cache-audit PROFILE=release
+```
+
+Result:
+
+```text
+tools/tests: 4 tests passed
+manifest write: exited 0
+manifest audit: exited 0 after generated manifests were written
+owner cache-audit targets: exited 0 after generated manifests were written
+```
+
+Scope note: this is build-prep evidence only. It does not claim faster Linux,
+mlibc, or Coreutils builds yet, and it does not change the runtime proof ladder.
+The next implementation step is to wire specific build stages to consult these
+manifests and reuse outputs only on exact matches, while preserving full proof
+gates for completion claims.
