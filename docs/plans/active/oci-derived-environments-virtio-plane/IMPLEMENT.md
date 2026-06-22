@@ -14534,3 +14534,40 @@ Non-claims:
 - No runtime proof yet shows supplementary groups applied inside a booted Linux
   process; this checkpoint proves descriptor import, init command-line contract,
   and init-side credential setup only.
+
+## 2026-06-22 Current Status - OCI no-new-privileges
+
+Current status:
+
+- Promoted OCI Runtime `process.noNewPrivileges` from rejected metadata into an
+  OrlixOS-owned Linux process execution default.
+- Added `OrlixEnvironmentDescriptor.defaultNoNewPrivileges` with
+  backward-compatible decode defaulting to `false`.
+- Added the root-image init command-line key `orlix.nonewprivs` and emission of
+  `orlix.nonewprivs=1` when the descriptor default is enabled.
+- Updated `OrlixOS/Sources/init/init.c` to parse the key and call
+  `prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)` before credential drop and exec.
+- Updated OCI config import so `process.noNewPrivileges` carries into the
+  session/import environment descriptor instead of being listed as unsupported.
+
+Evidence:
+
+- Focused command-line/parser/OCI process-default tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-25-41-+0200.xcresult`
+  with `result=Passed`, `passedTests=5`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=5`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-30-36-+0200.xcresult`
+  with `result=Passed`, `passedTests=8`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=8`, `expectedFailures=0`.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- No runtime proof yet shows `no_new_privs` observed inside a booted Linux
+  process; this checkpoint proves descriptor import, init command-line contract,
+  and init-side `prctl(PR_SET_NO_NEW_PRIVS)` setup only.

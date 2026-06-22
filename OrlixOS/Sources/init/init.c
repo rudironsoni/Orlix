@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
+#include <sys/prctl.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -587,6 +588,7 @@ struct orlix_command_config {
 	unsigned long gid;
 	unsigned long supplementary_groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
 	size_t supplementary_group_count;
+	int no_new_privileges;
 	unsigned long umask_value;
 	int has_umask;
 };
@@ -683,6 +685,9 @@ static void selected_command_config(struct orlix_command_config *config)
 			break;
 		config->supplementary_groups[config->supplementary_group_count++] = group_id;
 	}
+	unsigned long no_new_privileges = 0;
+	if (read_cmdline_unsigned("orlix.nonewprivs=", &no_new_privileges) == 0 && no_new_privileges != 0)
+		config->no_new_privileges = 1;
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
@@ -952,6 +957,10 @@ static pid_t start_command_on_pty(int master, int slave)
 			groups[index] = (gid_t)config->supplementary_groups[index];
 		if (setgroups(config->supplementary_group_count, groups) != 0)
 			write_literal(STDERR_FILENO, "orlix-init: setgroups failed\n");
+	}
+	if (config->no_new_privileges) {
+		if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0)
+			write_literal(STDERR_FILENO, "orlix-init: prctl(PR_SET_NO_NEW_PRIVS) failed\n");
 	}
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: setgid failed\n");
