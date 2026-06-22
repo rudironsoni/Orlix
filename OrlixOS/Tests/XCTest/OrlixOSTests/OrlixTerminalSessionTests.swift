@@ -894,7 +894,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             ],
             defaultWorkingDirectory: "/work/project",
             defaultUserID: 1000,
-            defaultGroupID: 100
+            defaultGroupID: 100,
+            defaultSupplementaryGroups: [44, 45]
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -928,6 +929,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.cwd=/work/project"))
         XCTAssertTrue(commandLine.contains("orlix.uid=1000"))
         XCTAssertTrue(commandLine.contains("orlix.gid=100"))
+        XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
+        XCTAssertTrue(commandLine.contains("orlix.suppgid1=45"))
     }
 
     func testEnvironmentRootImageEncodesLinuxPathDefaultsWithoutHostPathPolicy() throws {
@@ -942,6 +945,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultWorkingDirectory: "/work/../project",
             defaultUserID: 0,
             defaultGroupID: 0,
+            defaultSupplementaryGroups: [44, 45],
             defaultUmask: 18,
             defaultRlimits: [
                 OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 64)
@@ -1056,6 +1060,12 @@ final class OrlixTerminalSessionTests: XCTestCase {
                 "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultGroupIDCommandLineKey)=\","
             )
         )
+        XCTAssertTrue(
+            initSource.contains(
+                "snprintf(key, sizeof(key), \"\(OrlixEnvironmentRootImage.defaultSupplementaryGroupCommandLineKeyPrefix)%d=\","
+            )
+        )
+        XCTAssertTrue(initSource.contains("setgroups("))
     }
 
     func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
@@ -5991,7 +6001,6 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedProcessFeatures() throws {
 		let unsupportedProcessConfigs: [(String, String)] = [
-			("user.additionalGids", #""user": { "uid": 0, "gid": 0, "additionalGids": [1] }"#),
 			("capabilities", #""capabilities": { "bounding": ["CAP_NET_ADMIN"] }"#),
 			("apparmorProfile", #""apparmorProfile": "container-default""#),
 			("selinuxLabel", #""selinuxLabel": "system_u:system_r:container_t:s0""#),
@@ -6434,7 +6443,7 @@ extension OrlixTerminalSessionTests {
 		    "args": ["/usr/bin/env", "sh", "-lc", "id"],
 		    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color", "ORLIX_MODE=oci"],
 		    "cwd": "/work",
-		    "user": { "uid": 1000, "gid": 1001, "umask": 18 }
+		    "user": { "uid": 1000, "gid": 1001, "additionalGids": [44, 45], "umask": 18 }
 		  }
 		}
 		""".data(using: .utf8)!.write(
@@ -6458,6 +6467,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.environment.defaultWorkingDirectory, "/work")
 		XCTAssertEqual(session.environment.defaultUserID, 1000)
 		XCTAssertEqual(session.environment.defaultGroupID, 1001)
+		XCTAssertEqual(session.environment.defaultSupplementaryGroups, [44, 45])
 		XCTAssertEqual(session.environment.defaultUmask, 18)
 
 		XCTAssertEqual(importPlan.environment.defaultCommand, session.environment.defaultCommand)
@@ -6465,6 +6475,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(importPlan.environment.defaultWorkingDirectory, session.environment.defaultWorkingDirectory)
 		XCTAssertEqual(importPlan.environment.defaultUserID, session.environment.defaultUserID)
 		XCTAssertEqual(importPlan.environment.defaultGroupID, session.environment.defaultGroupID)
+		XCTAssertEqual(
+			importPlan.environment.defaultSupplementaryGroups,
+			session.environment.defaultSupplementaryGroups
+		)
 		XCTAssertEqual(importPlan.environment.defaultUmask, session.environment.defaultUmask)
 	}
 

@@ -1326,6 +1326,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultWorkingDirectory: String
 	public let defaultUserID: UInt32
 	public let defaultGroupID: UInt32
+	public let defaultSupplementaryGroups: [UInt32]
 	public let defaultUmask: UInt32?
 	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
@@ -1348,6 +1349,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultWorkingDirectory: defaultWorkingDirectory,
 			defaultUserID: defaultUserID,
 			defaultGroupID: defaultGroupID,
+			defaultSupplementaryGroups: defaultSupplementaryGroups,
 			defaultUmask: defaultUmask,
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
@@ -1424,6 +1426,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultWorkingDirectory: cwd,
 			defaultUserID: process.user?.uid ?? 0,
 			defaultGroupID: process.user?.gid ?? 0,
+			defaultSupplementaryGroups: process.user?.additionalGids ?? [],
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
@@ -1627,9 +1630,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	}
 
 	private static func rejectUnsupportedProcessFeatures(_ process: OCIRuntimeProcess) throws {
-		if let additionalGids = process.user?.additionalGids, !additionalGids.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.additionalGids")
-		}
 		if process.capabilities != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.capabilities")
 		}

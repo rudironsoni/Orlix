@@ -12669,7 +12669,7 @@ Not claimed:
   ladder.
 ## 2026-06-21 - App-Hosted Virtio-MMIO / Virtio-FS Contract Proof
 
-Checkpoint:
+Current status:
 
 - Added focused OrlixOS app-hosted kselftest coverage for
   `virtio_mmio_probe_contract` through
@@ -14493,3 +14493,44 @@ Non-claims:
 - This does not implement OCI process start, PID allocation, namespaces,
   cgroups, registry pull, `orlix run`, or full OCI Runtime compliance.
 - This does not add HostAdapter policy, host path leakage, or a custom Linux ABI.
+## 2026-06-22 Current Status - OCI supplementary groups
+
+Current status:
+
+- Promoted OCI Runtime `process.user.additionalGids` from rejected metadata into
+  an OrlixOS-owned Linux process credential default.
+- Added `OrlixEnvironmentDescriptor.defaultSupplementaryGroups` with
+  backward-compatible decode defaulting to `[]`.
+- Added the root-image init command-line prefix `orlix.suppgid` and emission of
+  indexed `orlix.suppgidN=<gid>` tokens.
+- Updated `OrlixOS/Sources/init/init.c` to parse up to 32 supplementary groups
+  and call `setgroups(2)` before `setgid(2)` and `setuid(2)`.
+- Updated OCI config import so `process.user.additionalGids` carries into the
+  session/import environment descriptor instead of being listed as unsupported.
+
+Evidence:
+
+- Focused command-line/parser/OCI process-default tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-06-10-+0200.xcresult`
+  with `result=Passed`, `passedTests=4`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=4`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-07-03-+0200.xcresult`
+  with `result=Passed`, `passedTests=8`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=8`, `expectedFailures=0`.
+- Hygiene passed: `rtk git diff --check`,
+  `rtk python3 -m unittest discover .codex/hooks/tests` with 32 tests, and
+  `rtk python3 -m unittest discover .codex/rules/tests` with 5 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the existing
+  stale pending/blocked warning before this current-status marker was appended.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- No runtime proof yet shows supplementary groups applied inside a booted Linux
+  process; this checkpoint proves descriptor import, init command-line contract,
+  and init-side credential setup only.

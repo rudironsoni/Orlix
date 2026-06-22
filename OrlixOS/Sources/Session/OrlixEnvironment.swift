@@ -21,6 +21,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultWorkingDirectory: String
     public let defaultUserID: UInt32
     public let defaultGroupID: UInt32
+    public let defaultSupplementaryGroups: [UInt32]
     public let defaultUmask: UInt32?
     public let defaultRlimits: [OrlixEnvironmentRlimit]
     public let hostname: String?
@@ -66,6 +67,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultWorkingDirectory: String,
         defaultUserID: UInt32,
         defaultGroupID: UInt32,
+        defaultSupplementaryGroups: [UInt32] = [],
         defaultUmask: UInt32? = nil,
         defaultRlimits: [OrlixEnvironmentRlimit] = [],
         hostname: String? = nil,
@@ -83,6 +85,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.defaultUserID = defaultUserID
         self.defaultGroupID = defaultGroupID
+        self.defaultSupplementaryGroups = defaultSupplementaryGroups
         self.defaultUmask = defaultUmask
         self.defaultRlimits = defaultRlimits
         self.hostname = hostname
@@ -102,6 +105,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultWorkingDirectory
         case defaultUserID
         case defaultGroupID
+        case defaultSupplementaryGroups
         case defaultUmask
         case defaultRlimits
         case hostname
@@ -143,6 +147,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             UInt32.self,
             forKey: .defaultGroupID
         )
+        self.defaultSupplementaryGroups = try container.decodeIfPresent(
+            [UInt32].self,
+            forKey: .defaultSupplementaryGroups
+        ) ?? []
         self.defaultUmask = try container.decodeIfPresent(
             UInt32.self,
             forKey: .defaultUmask
@@ -184,6 +192,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         try container.encode(defaultWorkingDirectory, forKey: .defaultWorkingDirectory)
         try container.encode(defaultUserID, forKey: .defaultUserID)
         try container.encode(defaultGroupID, forKey: .defaultGroupID)
+        try container.encode(
+            defaultSupplementaryGroups,
+            forKey: .defaultSupplementaryGroups
+        )
         try container.encodeIfPresent(defaultUmask, forKey: .defaultUmask)
         if !defaultRlimits.isEmpty {
             try container.encode(defaultRlimits, forKey: .defaultRlimits)
@@ -510,6 +522,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultWorkingDirectoryCommandLineKey = "orlix.cwd"
     public static let defaultUserIDCommandLineKey = "orlix.uid"
     public static let defaultGroupIDCommandLineKey = "orlix.gid"
+    public static let defaultSupplementaryGroupCommandLineKeyPrefix = "orlix.suppgid"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
     public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
     public static let hostnameCommandLineKey = "orlix.hostname"
@@ -721,6 +734,9 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         )
         tokens.append("\(defaultUserIDCommandLineKey)=\(descriptor.defaultUserID)")
         tokens.append("\(defaultGroupIDCommandLineKey)=\(descriptor.defaultGroupID)")
+        for (index, groupID) in descriptor.defaultSupplementaryGroups.enumerated() {
+            tokens.append("\(defaultSupplementaryGroupCommandLineKeyPrefix)\(index)=\(groupID)")
+        }
         if let defaultUmask = descriptor.defaultUmask {
             tokens.append("\(defaultUmaskCommandLineKey)=\(defaultUmask)")
         }
@@ -997,6 +1013,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultWorkingDirectory: parent.defaultWorkingDirectory,
                 defaultUserID: parent.defaultUserID,
                 defaultGroupID: parent.defaultGroupID,
+                defaultSupplementaryGroups: parent.defaultSupplementaryGroups,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
                 mounts: parent.mounts
