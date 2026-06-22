@@ -14773,3 +14773,47 @@ Non-claims:
 - No runtime proof yet shows CPU affinity observed inside a booted Linux process;
   this checkpoint proves descriptor import, init command-line contract, and
   init-side `sched_setaffinity(2)` setup only.
+
+## 2026-06-22 Current Status - OCI process feature reporting
+
+Current status:
+
+- Updated `OrlixOCIRuntimeFeatureReport.current` so implemented OCI process
+  defaults are explicitly reported instead of being absent from the stable
+  feature report.
+- Added implemented report entries for:
+  - `process.user`
+  - `process.noNewPrivileges`
+  - `process.closeAdditionalFds`
+  - `process.oomScoreAdj`
+  - `process.scheduler`
+  - `process.ioPriority`
+  - `process.execCPUAffinity`
+- Kept broad security/substrate claims rejected or absent rather than
+  overclaiming capabilities, seccomp, AppArmor, SELinux, namespaces, cgroups, or
+  OCI lifecycle execution.
+
+Evidence:
+
+- Focused feature-report tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_12-00-21-+0200.xcresult`
+  with `result=Passed`, `passedTests=3`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=3`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_12-01-21-+0200.xcresult`
+  with `result=Passed`, `passedTests=9`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=9`, `expectedFailures=0`.
+- An earlier focused run failed because the new test asserted a non-existent
+  top-level `capabilities` feature-report entry. The test was corrected to keep
+  capabilities covered by parser fail-closed behavior rather than inventing a
+  report surface the product has not declared.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- This checkpoint updates truthful reporting only; it does not add new runtime
+  proof beyond the descriptor/init process-default proofs recorded above.

@@ -1219,6 +1219,41 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Linux /dev/fd, /dev/stdin, /dev/stdout, and /dev/stderr alias behavior is covered by Orlix kselftest."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "process.user",
+			status: .implemented,
+			reason: "OCI process uid, gid, supplementary groups, umask, and supported rlimits carry into OrlixOS descriptors and init command-line defaults."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "process.noNewPrivileges",
+			status: .implemented,
+			reason: "OCI process noNewPrivileges carries into OrlixOS descriptors and init applies PR_SET_NO_NEW_PRIVS."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "process.closeAdditionalFds",
+			status: .implemented,
+			reason: "OCI process closeAdditionalFds carries into OrlixOS descriptors and init closes inherited descriptors above stderr."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "process.oomScoreAdj",
+			status: .implemented,
+			reason: "OCI process oomScoreAdj values in Linux's -1000...1000 range carry into OrlixOS descriptors and init writes /proc/self/oom_score_adj."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "process.scheduler",
+			status: .implemented,
+			reason: "OCI process scheduler policy plus priority carries into OrlixOS descriptors for supported Linux SCHED_* policies and init calls sched_setscheduler."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "process.ioPriority",
+			status: .implemented,
+			reason: "OCI process ioPriority class plus priority carries into OrlixOS descriptors for supported Linux IOPRIO classes and init calls ioprio_set."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "process.execCPUAffinity",
+			status: .implemented,
+			reason: "OCI process execCPUAffinity CPU lists carry into OrlixOS descriptors and init calls sched_setaffinity."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "idmappedMounts",
 			status: .deterministicallyRejected,
 			reason: "No idmapped mount proof exists for Orlix OCI-derived environments."
