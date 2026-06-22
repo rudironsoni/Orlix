@@ -17010,3 +17010,42 @@ before expensive stage work, but it intentionally does not skip Linux, mlibc, or
 Coreutils stages yet. Do not claim faster builds from this checkpoint. The next
 step is to wire owner recipes to call `tools/orlix-cache-ready` before selected
 stage work and to write fresh manifests after successful stage completion.
+
+## 2026-06-23 - Cache Guard Command Mode
+
+Status: safe substrate checkpoint; broad root `make build` skipping was tested
+and not retained.
+
+Changes:
+
+- Extended `tools/orlix-cache-ready` with command mode:
+  - when exact-input readiness succeeds, the command is skipped and the tool
+    exits `0`;
+  - when readiness fails, the command is executed as the fallback path.
+- Added tests proving both command-mode branches.
+
+Rejected attempt:
+
+- Tried a root `make build` wrapper that skipped the full build fan-out when
+  Linux, mlibc, and Coreutils sentinels were ready.
+- The first validation correctly failed closed because the Makefile/tool changes
+  made existing manifests stale, which triggered the original build path.
+- The subsequent OrlixOS/rootfs rebuild did not leave the expected rootfs/kernel
+  sentinels, so the broad root-build wrapper was reverted rather than committed.
+
+Validation:
+
+```bash
+rtk python3 -m unittest discover tools/tests
+rtk git diff --check
+```
+
+Result:
+
+- `tools/tests`: 9 tests, OK.
+- `git diff --check`: OK.
+
+Scope note: command mode is the reusable mechanism for owner recipes, but this
+checkpoint still does not claim Linux, mlibc, or Coreutils stage skipping. The
+next safe implementation step remains owner-stage wiring with stable per-stage
+sentinels and fresh-manifest writes after successful fallback execution.
