@@ -15386,3 +15386,63 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI process handle binds lifecycle to session descriptor
+
+Checkpoint:
+
+- Added SPI `OrlixOCIRuntimeProcessHandle`.
+- The handle binds an OCI lifecycle controller to the
+  `OrlixOCIRuntimeSessionDescriptor` that can materialize a created/running
+  Linux session.
+- The handle supports:
+  - `start(observedPID:)` for transitioning a created process handle to a
+    running process handle after the Linux PID is known.
+  - `kill(signal:)` for validated signal delivery while preserving the running
+    session descriptor.
+  - `exit(observedProcess:)` and `exit(observedSignal:)` for converting an
+    observed Linux process result into `OrlixOCIRuntimeCompletedProcess`.
+- Added SPI `OrlixOCIRuntimeCompletedProcess`.
+- Completed processes expose state reporting but do not carry a materializable
+  session descriptor, preserving the stopped-session boundary.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- OCI lifecycle state is now tied to the same session descriptor path used to
+  create an OCI-derived Linux session, instead of being only standalone state
+  metadata.
+- Created/running records can carry a process handle; configured/stopped states
+  cannot.
+- Signal delivery stays associated with the still-running session until Linux
+  observed completion is supplied.
+- The change remains above the Linux surface. It adds no syscall, ioctl,
+  pseudo-file, HostAdapter API, host path, Darwin behavior, or custom Linux ABI.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_15-54-56-+0200.xcresult
+result=Passed
+passedTests=3
+failedTests=0
+skippedTests=0
+totalTestCount=3
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history warning.
+
+Non-claims:
+
+- This introduces the OrlixOS runtime process handle boundary only.
+- It does not yet launch, signal, monitor, wait for, or reap a real
+  OCI-created Linux process.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.

@@ -7234,6 +7234,92 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeProcessHandleBindsCreatedAndRunningSessionDescriptors() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let created = try configured.create()
+		let createdProcess = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: created,
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+
+		XCTAssertEqual(createdProcess.lifecycle.record.state, .created)
+		XCTAssertEqual(createdProcess.sessionDescriptor.lifecycleState, .created)
+
+		let runningProcess = try createdProcess.start(observedPID: 42)
+		XCTAssertEqual(runningProcess.lifecycle.record.state, .running)
+		XCTAssertEqual(runningProcess.lifecycle.record.pid, 42)
+		XCTAssertEqual(runningProcess.sessionDescriptor.lifecycleState, .running)
+		XCTAssertEqual(runningProcess.sessionDescriptor.id, "oci-demo")
+	}
+
+	func testOCIRuntimeProcessHandleKeepsSessionRunningUntilObservedCompletion() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let createdProcess = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: try configured.create(),
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+		let runningProcess = try createdProcess.start(observedPID: 42)
+		let signaledProcess = try runningProcess.kill(signal: 15)
+
+		XCTAssertEqual(signaledProcess.lifecycle.record.state, .running)
+		XCTAssertEqual(signaledProcess.sessionDescriptor.lifecycleState, .running)
+		XCTAssertNil(signaledProcess.lifecycle.record.exitStatus)
+
+		let completedProcess = try signaledProcess.exit(
+			observedSignal: OrlixOCIRuntimeProcessSignalObservation(
+				pid: 42,
+				signal: 15
+			)
+		)
+		let report = try completedProcess.stateReport()
+
+		XCTAssertEqual(report.status, OrlixOCIRuntimeStateStatus.stopped)
+		XCTAssertEqual(report.pid, 42)
+		XCTAssertEqual(report.exitStatus, 143)
+		XCTAssertThrowsError(
+			try OrlixOCIRuntimeProcessHandle(
+				lifecycle: completedProcess.lifecycle,
+				rootMount: OrlixEnvironmentRootMount.defaultOverlay
+			)
+		) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.stateUnavailable(.stopped)
+			)
+		}
+	}
+
+	func testOCIRuntimeProcessHandleRejectsUnmaterializableLifecycleStates() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+
+		XCTAssertThrowsError(
+			try OrlixOCIRuntimeProcessHandle(
+				lifecycle: configured,
+				rootMount: OrlixEnvironmentRootMount.defaultOverlay
+			)
+		) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.stateUnavailable(.configured)
+			)
+		}
+	}
+
 	func testOCIRuntimeLifecycleControllerRejectsInvalidObservedLinuxExitStatus() throws {
 		XCTAssertThrowsError(try OrlixOCIRuntimeProcessExitObservation(pid: 42, exitStatus: 256)) { error in
 			XCTAssertEqual(
