@@ -262,7 +262,7 @@ MLIBC_COMPILER_RT_BUILTINS := \
 	trunctfsf2.c \
 	trunctfxf2.c
 
-.PHONY: all help build headers_install test kselftest cache-audit cache-manifest-write clean mrproper __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
+.PHONY: all help build headers_install test kselftest cache-audit cache-ready cache-manifest-write clean mrproper __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
 
 define orlix_mlibc_with_profile_lock
 	@set -euo pipefail; \
@@ -531,6 +531,9 @@ __test-initramfs: __test-build __prepare-test-locale-data
 
 cache-audit:
 	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component mlibc
+
+cache-ready:
+	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component mlibc

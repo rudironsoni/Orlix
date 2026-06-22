@@ -33,7 +33,7 @@ ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP := $(ORLIXOS_BUILD_ROOT)/environment-run
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 
-.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-proof-fixtures test coreutils-test cache-audit cache-manifest-write clean mrproper __coreutils-source FORCE
+.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-proof-fixtures test coreutils-test cache-audit cache-ready cache-manifest-write clean mrproper __coreutils-source FORCE
 
 all: rootfs
 
@@ -255,6 +255,9 @@ $(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP): $(ORLIXOS_ROOTFS_PROOF) $(ORLIXOS_IN
 
 cache-audit:
 	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component coreutils
+
+cache-ready:
+	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component coreutils

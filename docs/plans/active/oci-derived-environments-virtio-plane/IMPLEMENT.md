@@ -16960,3 +16960,53 @@ Additional evidence gathered but not retained as implementation:
 - Do not claim AF_PACKET receive of virtio-net RX frames, loopback reflection, DNS,
   NAT, OCI `netDevices`, external networking, or full OCI networking support from
   the current checkpoint.
+
+## 2026-06-23 - Build Cache Readiness Gate
+
+Status: safe substrate checkpoint; build recipes still do not skip stages yet.
+
+Changes:
+
+- Added `tools/orlix-cache-ready`, a fail-closed readiness guard for exact-input
+  reuse.
+- The guard requires stage manifests for the selected component and reruns the
+  existing manifest audit before reporting readiness.
+- Exposed `cache-ready` through:
+  - root `Makefile` with optional `COMPONENT=linux|mlibc|coreutils`
+  - `OrlixKernel/Makefile` through `kernel-rules.mk`
+  - `OrlixMLibC/Makefile`
+  - `OrlixOS/Makefile`
+- Added unit coverage in `tools/tests/test_orlix_cache_ready.py` for ready,
+  missing-manifest, and stale-audit cases.
+
+Validation:
+
+```bash
+rtk python3 -m unittest discover tools/tests
+rtk make cache-ready PROFILE=release COMPONENT=linux
+rtk make cache-ready PROFILE=release COMPONENT=mlibc
+rtk make cache-ready PROFILE=release COMPONENT=coreutils
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk make cache-ready PROFILE=release
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+- `tools/tests`: 7 tests, OK.
+- root and owner `cache-ready` targets returned success for Linux, mlibc, and
+  Coreutils with current `release` manifests.
+- `.codex/hooks/tests`: 32 tests, OK.
+- `.codex/rules/tests`: 5 tests, OK.
+- `compact_plan_check.py`: known stale-status warning remains.
+
+Scope note: this checkpoint creates the reusable gate that build recipes can use
+before expensive stage work, but it intentionally does not skip Linux, mlibc, or
+Coreutils stages yet. Do not claim faster builds from this checkpoint. The next
+step is to wire owner recipes to call `tools/orlix-cache-ready` before selected
+stage work and to write fresh manifests after successful stage completion.

@@ -1251,6 +1251,10 @@ run: __ios-simulator-framework xcodeproj
 cache-audit:
 	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component linux
 
+.PHONY: cache-ready
+cache-ready:
+	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component linux
+
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component linux
 
