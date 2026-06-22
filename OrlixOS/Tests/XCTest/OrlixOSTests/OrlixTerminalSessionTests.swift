@@ -6371,6 +6371,41 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(commandLine.contains("orlix.gid=1000"), commandLine)
 	}
 
+	func testOCIRuntimeBundleImportPlanUsesBundleRootfsForMaterialization() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try "hello from bundle rootfs\n".write(
+			to: rootfsURL.appendingPathComponent("etc-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let bundle = try OrlixOCIRuntimeBundle.load(from: bundleURL)
+		let importPlan = try bundle.importPlan(
+			id: "bundle-import",
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+
+		XCTAssertEqual(importPlan.bundle, bundle)
+		XCTAssertEqual(importPlan.environment.id, "bundle-import")
+		XCTAssertEqual(importPlan.storageLayout.environmentID, "bundle-import")
+		XCTAssertEqual(importPlan.materializationPlan.stagingRootDirectory, rootfsURL)
+		XCTAssertEqual(importPlan.materializationPlan.baseImageURL, importPlan.storageLayout.baseImageURL)
+		XCTAssertEqual(importPlan.materializationPlan.stateImageURL, importPlan.storageLayout.stateImageURL)
+		XCTAssertTrue(importPlan.materializationPlan.baseTreeDirectory.path.hasPrefix(
+			importPlan.storageLayout.importScratchDirectory.path
+		))
+	}
+
 	func testOCIRuntimeBundleRejectsMissingConfig() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
