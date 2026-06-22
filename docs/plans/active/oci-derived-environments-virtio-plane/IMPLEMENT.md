@@ -15716,3 +15716,57 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - Linux network namespace proof covers RTM_GETLINK loopback
+
+Checkpoint:
+
+- Extended the Linux-owned `network_namespace_probe` kselftest.
+- The probe now sends an `RTM_GETLINK` dump request over `NETLINK_ROUTE`.
+- The probe parses `RTM_NEWLINK` messages and requires the loopback interface
+  to appear with a positive Linux interface index and `IFLA_IFNAME == "lo"`.
+- Updated the app-hosted `OrlixKernelUpstreamTests` assertion so the simulator
+  proof must include the new `RTM_GETLINK reports loopback interface` marker.
+
+Linux-owned behavior covered by this checkpoint:
+
+- OCI/networking substrate now proves rtnetlink link enumeration, not only that
+  a rtnetlink socket can be opened.
+- This is upstream Linux API behavior through `NETLINK_ROUTE`, `RTM_GETLINK`,
+  `RTM_NEWLINK`, and `IFLA_IFNAME`.
+- The change adds no HostAdapter API, host path, Darwin behavior, pseudo-file,
+  ioctl, or custom Linux ABI.
+
+Evidence:
+
+```text
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+result: passed
+
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:15:orlix:network_namespace_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:22:file /orlix/network_namespace_probe ...
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_16-50-31-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history/current-status warnings.
+
+Non-claims:
+
+- This proves rtnetlink loopback enumeration in the existing network namespace
+  probe.
+- It does not claim full OCI networking, virtio-net packet I/O, registry pull,
+  product `orlix run`, complete namespace/cgroup integration, or full OCI
+  Runtime compliance.
