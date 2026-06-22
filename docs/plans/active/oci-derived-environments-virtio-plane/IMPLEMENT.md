@@ -15107,3 +15107,54 @@ Non-claims:
   compliance or a product `orlix run` command.
 - Registry pull, virtio-fs host-folder mounts, and full namespace/cgroup OCI
   integration remain open.
+
+### 2026-06-22 - Linux exec argv/env/cwd lifecycle proof
+
+Checkpoint:
+
+- Extended `process_lifecycle_probe` with a second exec-child path that verifies
+  Linux exec observes caller-supplied argv, environment, and working directory.
+- The parent forks, the child changes cwd to `/tmp`, execs
+  `/orlix/process_lifecycle_probe`, passes a sentinel argv vector and environment,
+  and waits for the exec image's sentinel exit status.
+- Updated the selected app-hosted lifecycle XCTest to require the
+  `forked exec observes Linux argv env and cwd` marker.
+
+Linux-owned behavior covered by this checkpoint:
+
+- `execve`-style argv delivery reaches the new image.
+- `execve`-style environment delivery reaches the new image.
+- The process working directory survives across exec.
+- Parent `waitpid(2)` receives the execed process exit status.
+
+Evidence:
+
+```text
+rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+result: passed
+```
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:21:orlix:process_lifecycle_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:28:file /orlix/process_lifecycle_probe ...
+```
+
+Selected app-hosted runtime proof:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_15-08-46-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Non-claims:
+
+- This proves Linux exec argv/env/cwd substrate needed by OCI `process.args`,
+  `process.env`, and `process.cwd`.
+- This still does not claim OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.

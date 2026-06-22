@@ -4,15 +4,41 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-static bool is_exec_child_argument(const char *argument)
+static bool string_equals(const char *actual, const char *expected)
 {
-	static const char expected[] = "exec-child";
+	if (!actual || !expected)
+		return false;
 
-	return orlix_strlen(argument) == sizeof(expected) - 1 &&
-	       orlix_memcmp(argument, expected, sizeof(expected) - 1) == 0;
+	return orlix_strlen(actual) == orlix_strlen(expected) &&
+	       orlix_memcmp(actual, expected, orlix_strlen(expected)) == 0;
+}
+
+static bool exec_defaults_child_observes_linux_state(int argc, char **argv)
+{
+	char cwd[128];
+	const char *value;
+
+	if (argc != 3)
+		return false;
+
+	if (!string_equals(argv[0], "exec-defaults-argv0"))
+		return false;
+
+	if (!string_equals(argv[2], "argument-one"))
+		return false;
+
+	value = getenv("ORLIX_EXEC_ENV");
+	if (!string_equals(value, "oci-defaults"))
+		return false;
+
+	if (!getcwd(cwd, sizeof(cwd)))
+		return false;
+
+	return string_equals(cwd, "/tmp");
 }
 
 static bool read_proc_self_status(void)
@@ -62,6 +88,34 @@ static bool fork_exec_status_is_reported(void)
 		return false;
 
 	return WIFEXITED(status) && WEXITSTATUS(status) == 77;
+}
+
+static bool fork_exec_carries_argv_env_and_cwd(void)
+{
+	char *const envp[] = {
+		"ORLIX_EXEC_ENV=oci-defaults",
+		"PATH=/bin:/usr/bin:/sbin:/usr/sbin",
+		NULL
+	};
+	pid_t child = fork();
+	int status;
+
+	if (child < 0)
+		return false;
+
+	if (child == 0) {
+		if (chdir("/tmp") != 0)
+			_exit(126);
+		execle("/orlix/process_lifecycle_probe",
+		       "exec-defaults-argv0", "exec-defaults-child",
+		       "argument-one", NULL, envp);
+		_exit(127);
+	}
+
+	if (waitpid(child, &status, 0) != child)
+		return false;
+
+	return WIFEXITED(status) && WEXITSTATUS(status) == 78;
 }
 
 static bool waited_child_is_reaped(void)
@@ -145,16 +199,21 @@ static bool signal_termination_status_is_reported(void)
 
 int main(int argc, char **argv)
 {
-	if (argc == 2 && is_exec_child_argument(argv[1]))
+	if (argc == 2 && string_equals(argv[1], "exec-child"))
 		_exit(read_proc_self_status() ? 77 : 76);
 
-	orlix_test_plan(6);
+	if (argc >= 2 && string_equals(argv[1], "exec-defaults-child"))
+		_exit(exec_defaults_child_observes_linux_state(argc, argv) ? 78 : 75);
+
+	orlix_test_plan(7);
 	orlix_write_all("ORLIX-PROCESS-LIFECYCLE-PROBE\n");
 
 	orlix_test_result(child_exit_status_is_reported(),
 			  "forked child exit status is reported by waitpid");
 	orlix_test_result(fork_exec_status_is_reported(),
 			  "forked child exec status is reported by waitpid");
+	orlix_test_result(fork_exec_carries_argv_env_and_cwd(),
+			  "forked exec observes Linux argv env and cwd");
 	orlix_test_result(waited_child_is_reaped(),
 			  "waited child is reaped with ECHILD on second wait");
 	orlix_test_result(live_child_has_proc_status(),
