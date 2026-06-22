@@ -15269,3 +15269,57 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI lifecycle accepts observed Linux process exit
+
+Checkpoint:
+
+- Added `OrlixOCIRuntimeProcessExitObservation` as an OrlixOS-owned value for
+  Linux-observed OCI process completion.
+- The observation validates Linux-shaped process metadata before lifecycle state
+  can use it:
+  - PID must be positive.
+  - Normal exit status must be in the Linux process exit range `0...255`.
+- Added `OrlixOCIRuntimeLifecycleController.exit(observedProcess:)`.
+- A running lifecycle record now rejects observed completion for a different
+  PID with `.processPIDMismatch(expected:observed:)`.
+- `exit(exitStatus:)` now also rejects invalid normal exit statuses before
+  producing a stopped lifecycle record.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- Lifecycle stop metadata is no longer just an unbounded integer. It has a
+  typed path for process-observer results that can be connected to the future
+  real OCI execution/reaping path.
+- PID mismatch fails closed so a lifecycle record for one Linux process cannot
+  be stopped by a completion result from another Linux process.
+- The change remains above the Linux surface. It adds no syscall, ioctl,
+  pseudo-file, HostAdapter API, host path, Darwin behavior, or custom Linux ABI.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_15-41-08-+0200.xcresult
+result=Passed
+passedTests=3
+failedTests=0
+skippedTests=0
+totalTestCount=3
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history warning and a pre-handoff current-status warning.
+
+Non-claims:
+
+- This is still OrlixOS lifecycle binding and validation.
+- It does not yet launch, monitor, or reap a real OCI-created process object.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.

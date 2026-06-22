@@ -7122,6 +7122,71 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeLifecycleControllerRecordsObservedLinuxProcessExit() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let running = try configured.create().start(pid: 42)
+		let observedExit = try OrlixOCIRuntimeProcessExitObservation(
+			pid: 42,
+			exitStatus: 7
+		)
+		let stopped = try running.exit(observedProcess: observedExit)
+		let report = try stopped.stateReport()
+
+		XCTAssertEqual(report.status, OrlixOCIRuntimeStateStatus.stopped)
+		XCTAssertEqual(report.pid, 42)
+		XCTAssertEqual(report.exitStatus, 7)
+	}
+
+	func testOCIRuntimeLifecycleControllerRejectsMismatchedObservedLinuxProcessExitPID() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let running = try configured.create().start(pid: 42)
+		let observedExit = try OrlixOCIRuntimeProcessExitObservation(
+			pid: 43,
+			exitStatus: 0
+		)
+
+		XCTAssertThrowsError(try running.exit(observedProcess: observedExit)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.processPIDMismatch(expected: 42, observed: 43)
+			)
+		}
+	}
+
+	func testOCIRuntimeLifecycleControllerRejectsInvalidObservedLinuxExitStatus() throws {
+		XCTAssertThrowsError(try OrlixOCIRuntimeProcessExitObservation(pid: 42, exitStatus: 256)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidExitStatus(256)
+			)
+		}
+
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let running = try configured.create().start(pid: 42)
+
+		XCTAssertThrowsError(try running.exit(exitStatus: -1)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidExitStatus(-1)
+			)
+		}
+	}
+
 	func testOCIRuntimeLifecycleControllerRejectsInvalidStartPID() throws {
 		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
 		let created = try OrlixOCIRuntimeLifecycleController(

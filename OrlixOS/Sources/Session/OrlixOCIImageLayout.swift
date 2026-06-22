@@ -2395,8 +2395,28 @@ public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
 	case invalidTransition(from: OrlixOCIRuntimeLifecycleState,
 			       action: OrlixOCIRuntimeLifecycleAction)
 	case invalidPID(Int32)
+	case invalidExitStatus(Int32)
 	case invalidSignal(Int32)
+	case processPIDMismatch(expected: Int32, observed: Int32)
 	case stateUnavailable(OrlixOCIRuntimeLifecycleState)
+}
+
+public struct OrlixOCIRuntimeProcessExitObservation: Equatable, Sendable {
+	public let pid: Int32
+	public let exitStatus: Int32
+
+	public init(pid: Int32, exitStatus: Int32) throws {
+		guard pid > 0 else {
+			throw OrlixOCIRuntimeLifecycleError.invalidPID(pid)
+		}
+
+		guard (0...255).contains(exitStatus) else {
+			throw OrlixOCIRuntimeLifecycleError.invalidExitStatus(exitStatus)
+		}
+
+		self.pid = pid
+		self.exitStatus = exitStatus
+	}
 }
 
 public enum OrlixOCIRuntimeStateStatus: String, Codable, Equatable, Sendable {
@@ -2517,7 +2537,29 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 		)
 	}
 
+	public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeLifecycleController {
+		guard record.state == .running else {
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: record.state,
+				action: .exit
+			)
+		}
+
+		guard record.pid == observation.pid else {
+			throw OrlixOCIRuntimeLifecycleError.processPIDMismatch(
+				expected: record.pid ?? 0,
+				observed: observation.pid
+			)
+		}
+
+		return try exit(exitStatus: observation.exitStatus)
+	}
+
 	public func exit(exitStatus: Int32) throws -> OrlixOCIRuntimeLifecycleController {
+		guard (0...255).contains(exitStatus) else {
+			throw OrlixOCIRuntimeLifecycleError.invalidExitStatus(exitStatus)
+		}
+
 		guard record.state == .running else {
 			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
 				from: record.state,
