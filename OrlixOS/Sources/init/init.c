@@ -17,6 +17,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <linux/capability.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -664,6 +665,191 @@ enum {
 	ORLIX_INIT_VALUE_SIZE = 2048,
 };
 
+#define ORLIX_CAPABILITY_WORDS _LINUX_CAPABILITY_U32S_3
+#define ORLIX_CAPABILITY_BUFFER_SIZE 512
+
+static void die(const char *message)
+{
+	static const char prefix[] = "orlix-init: ";
+	static const char suffix[] = "\n";
+
+	(void)write(STDERR_FILENO, prefix, sizeof(prefix) - 1);
+	(void)write(STDERR_FILENO, message, strlen(message));
+	(void)write(STDERR_FILENO, suffix, sizeof(suffix) - 1);
+	_exit(127);
+}
+
+struct orlix_capability_set {
+	int present;
+	__u32 words[ORLIX_CAPABILITY_WORDS];
+};
+
+struct orlix_capability_sets {
+	struct orlix_capability_set bounding;
+	struct orlix_capability_set permitted;
+	struct orlix_capability_set inheritable;
+	struct orlix_capability_set effective;
+	struct orlix_capability_set ambient;
+};
+
+static int capability_index_for_name(const char *name)
+{
+	static const char *const capability_names[] = {
+		"CAP_CHOWN",
+		"CAP_DAC_OVERRIDE",
+		"CAP_DAC_READ_SEARCH",
+		"CAP_FOWNER",
+		"CAP_FSETID",
+		"CAP_KILL",
+		"CAP_SETGID",
+		"CAP_SETUID",
+		"CAP_SETPCAP",
+		"CAP_LINUX_IMMUTABLE",
+		"CAP_NET_BIND_SERVICE",
+		"CAP_NET_BROADCAST",
+		"CAP_NET_ADMIN",
+		"CAP_NET_RAW",
+		"CAP_IPC_LOCK",
+		"CAP_IPC_OWNER",
+		"CAP_SYS_MODULE",
+		"CAP_SYS_RAWIO",
+		"CAP_SYS_CHROOT",
+		"CAP_SYS_PTRACE",
+		"CAP_SYS_PACCT",
+		"CAP_SYS_ADMIN",
+		"CAP_SYS_BOOT",
+		"CAP_SYS_NICE",
+		"CAP_SYS_RESOURCE",
+		"CAP_SYS_TIME",
+		"CAP_SYS_TTY_CONFIG",
+		"CAP_MKNOD",
+		"CAP_LEASE",
+		"CAP_AUDIT_WRITE",
+		"CAP_AUDIT_CONTROL",
+		"CAP_SETFCAP",
+		"CAP_MAC_OVERRIDE",
+		"CAP_MAC_ADMIN",
+		"CAP_SYSLOG",
+		"CAP_WAKE_ALARM",
+		"CAP_BLOCK_SUSPEND",
+		"CAP_AUDIT_READ",
+		"CAP_PERFMON",
+		"CAP_BPF",
+		"CAP_CHECKPOINT_RESTORE",
+	};
+
+	for (size_t index = 0; index < sizeof(capability_names) / sizeof(capability_names[0]); index++) {
+		if (strcmp(name, capability_names[index]) == 0)
+			return (int)index;
+	}
+	return -1;
+}
+
+static int parse_capability_list(const char *value, struct orlix_capability_set *set)
+{
+	char buffer[ORLIX_CAPABILITY_BUFFER_SIZE];
+	size_t length = strnlen(value, sizeof(buffer));
+
+	if (length >= sizeof(buffer))
+		return 0;
+
+	memset(set->words, 0, sizeof(set->words));
+	set->present = 1;
+	memcpy(buffer, value, length + 1);
+
+	char *cursor = buffer;
+	while (cursor != NULL) {
+		char *next = strchr(cursor, ',');
+		if (next != NULL)
+			*next++ = '\0';
+
+		if (*cursor == '\0') {
+			cursor = next;
+			continue;
+		}
+
+		int capability = capability_index_for_name(cursor);
+		if (capability < 0 || capability > CAP_LAST_CAP)
+			return 0;
+
+		size_t word = (size_t)capability / 32;
+		if (word >= ORLIX_CAPABILITY_WORDS)
+			return 0;
+		set->words[word] |= CAP_TO_MASK(capability);
+		cursor = next;
+	}
+
+	return 1;
+}
+
+static int capability_set_contains(const struct orlix_capability_set *set, int capability)
+{
+	size_t word = (size_t)capability / 32;
+	if (word >= ORLIX_CAPABILITY_WORDS)
+		return 0;
+	return (set->words[word] & CAP_TO_MASK(capability)) != 0;
+}
+
+static int final_capability_set_present(const struct orlix_capability_sets *sets)
+{
+	return sets->permitted.present ||
+	       sets->inheritable.present ||
+	       sets->effective.present ||
+	       sets->ambient.present;
+}
+
+static void apply_capability_bounding_set(const struct orlix_capability_sets *sets)
+{
+	if (!sets->bounding.present)
+		return;
+
+	for (int capability = 0; capability <= CAP_LAST_CAP; capability++) {
+		if (!capability_set_contains(&sets->bounding, capability) &&
+		    prctl(PR_CAPBSET_DROP, capability, 0, 0, 0) != 0)
+			die("prctl(PR_CAPBSET_DROP)");
+	}
+}
+
+static void apply_final_capability_sets(const struct orlix_capability_sets *sets)
+{
+	if (!final_capability_set_present(sets))
+		return;
+
+	if (sets->permitted.present || sets->inheritable.present || sets->effective.present) {
+		struct __user_cap_header_struct header = {
+			.version = _LINUX_CAPABILITY_VERSION_3,
+			.pid = 0,
+		};
+		struct __user_cap_data_struct data[ORLIX_CAPABILITY_WORDS];
+
+		memset(data, 0, sizeof(data));
+		if (syscall(SYS_capget, &header, data) != 0)
+			die("capget");
+
+		for (size_t index = 0; index < ORLIX_CAPABILITY_WORDS; index++) {
+			if (sets->permitted.present)
+				data[index].permitted = sets->permitted.words[index];
+			if (sets->inheritable.present)
+				data[index].inheritable = sets->inheritable.words[index];
+			if (sets->effective.present)
+				data[index].effective = sets->effective.words[index];
+		}
+
+		if (syscall(SYS_capset, &header, data) != 0)
+			die("capset");
+	}
+
+	if (sets->ambient.present) {
+		if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0) != 0)
+			die("prctl(PR_CAP_AMBIENT_CLEAR_ALL)");
+		for (int capability = 0; capability <= CAP_LAST_CAP; capability++) {
+			if (capability_set_contains(&sets->ambient, capability) &&
+			    prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, capability, 0, 0) != 0)
+				die("prctl(PR_CAP_AMBIENT_RAISE)");
+		}
+	}
+}
+
 struct orlix_command_config {
 	char argv_storage[ORLIX_INIT_MAX_ARGS][ORLIX_INIT_VALUE_SIZE];
 	char env_storage[ORLIX_INIT_MAX_ENV][ORLIX_INIT_VALUE_SIZE];
@@ -682,6 +868,7 @@ struct orlix_command_config {
 	unsigned long gid;
 	unsigned long supplementary_groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
 	size_t supplementary_group_count;
+	struct orlix_capability_sets capabilities;
 	int no_new_privileges;
 	int close_additional_fds;
 	int has_oom_score_adjustment;
@@ -791,6 +978,23 @@ static void selected_command_config(struct orlix_command_config *config)
 		config->supplementary_groups[config->supplementary_group_count++] = group_id;
 	}
 	unsigned long no_new_privileges = 0;
+	char capability_value[ORLIX_CAPABILITY_BUFFER_SIZE];
+	if (read_cmdline_decoded("orlix.cap.bounding=", capability_value, sizeof(capability_value)) == 0 &&
+	    !parse_capability_list(capability_value, &config->capabilities.bounding))
+		die("invalid orlix.cap.bounding");
+	if (read_cmdline_decoded("orlix.cap.permitted=", capability_value, sizeof(capability_value)) == 0 &&
+	    !parse_capability_list(capability_value, &config->capabilities.permitted))
+		die("invalid orlix.cap.permitted");
+	if (read_cmdline_decoded("orlix.cap.inheritable=", capability_value, sizeof(capability_value)) == 0 &&
+	    !parse_capability_list(capability_value, &config->capabilities.inheritable))
+		die("invalid orlix.cap.inheritable");
+	if (read_cmdline_decoded("orlix.cap.effective=", capability_value, sizeof(capability_value)) == 0 &&
+	    !parse_capability_list(capability_value, &config->capabilities.effective))
+		die("invalid orlix.cap.effective");
+	if (read_cmdline_decoded("orlix.cap.ambient=", capability_value, sizeof(capability_value)) == 0 &&
+	    !parse_capability_list(capability_value, &config->capabilities.ambient))
+		die("invalid orlix.cap.ambient");
+
 	if (read_cmdline_unsigned("orlix.nonewprivs=", &no_new_privileges) == 0 && no_new_privileges != 0)
 		config->no_new_privileges = 1;
 	unsigned long close_additional_fds = 0;
@@ -1142,16 +1346,17 @@ static pid_t start_command_on_pty(int master, int slave)
 	if (config->has_umask)
 		(void)umask((mode_t)config->umask_value);
 	apply_rlimits(config);
+	apply_capability_bounding_set(&config->capabilities);
+	if (final_capability_set_present(&config->capabilities) &&
+	    prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0) != 0)
+		die("prctl(PR_SET_KEEPCAPS)");
+
 	if (config->supplementary_group_count > 0) {
 		gid_t groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
 		for (size_t index = 0; index < config->supplementary_group_count; ++index)
 			groups[index] = (gid_t)config->supplementary_groups[index];
 		if (setgroups(config->supplementary_group_count, groups) != 0)
 			write_literal(STDERR_FILENO, "orlix-init: setgroups failed\n");
-	}
-	if (config->no_new_privileges) {
-		if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0)
-			write_literal(STDERR_FILENO, "orlix-init: prctl(PR_SET_NO_NEW_PRIVS) failed\n");
 	}
 	if (config->has_oom_score_adjustment)
 		apply_oom_score_adjustment(config->oom_score_adjustment);
@@ -1168,6 +1373,14 @@ static pid_t start_command_on_pty(int master, int slave)
 	if (config->uid != 0 && setuid((uid_t)config->uid) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: setuid failed\n");
 
+	apply_final_capability_sets(&config->capabilities);
+	if (final_capability_set_present(&config->capabilities) &&
+	    prctl(PR_SET_KEEPCAPS, 0, 0, 0, 0) != 0)
+		die("prctl(PR_SET_KEEPCAPS)");
+	if (config->no_new_privileges) {
+		if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0)
+			write_literal(STDERR_FILENO, "orlix-init: prctl(PR_SET_NO_NEW_PRIVS) failed\n");
+	}
 	exec_configured_command(config);
 	write_literal(STDERR_FILENO, "orlix-init: exec command failed\n");
 	_exit(127);

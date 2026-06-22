@@ -1224,6 +1224,11 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "OCI process uid, gid, supplementary groups, umask, and supported rlimits carry into OrlixOS descriptors and init command-line defaults."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "process.capabilities",
+			status: .implemented,
+			reason: "OCI process capability sets carry into OrlixOS descriptors and init applies Linux capability UAPI through capset and prctl."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "process.noNewPrivileges",
 			status: .implemented,
 			reason: "OCI process noNewPrivileges carries into OrlixOS descriptors and init applies PR_SET_NO_NEW_PRIVS."
@@ -1362,6 +1367,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultUserID: UInt32
 	public let defaultGroupID: UInt32
 	public let defaultSupplementaryGroups: [UInt32]
+	public let defaultCapabilities: OrlixEnvironmentCapabilities?
 	public let defaultNoNewPrivileges: Bool
 	public let defaultCloseAdditionalFds: Bool
 	public let defaultOOMScoreAdjustment: Int32?
@@ -1391,6 +1397,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultUserID: defaultUserID,
 			defaultGroupID: defaultGroupID,
 			defaultSupplementaryGroups: defaultSupplementaryGroups,
+			defaultCapabilities: defaultCapabilities,
 			defaultNoNewPrivileges: defaultNoNewPrivileges,
 			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
 			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
@@ -1474,6 +1481,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultUserID: process.user?.uid ?? 0,
 			defaultGroupID: process.user?.gid ?? 0,
 			defaultSupplementaryGroups: process.user?.additionalGids ?? [],
+			defaultCapabilities: try Self.validatedCapabilities(process.capabilities),
 			defaultNoNewPrivileges: process.noNewPrivileges ?? false,
 			defaultCloseAdditionalFds: process.closeAdditionalFds ?? false,
 			defaultOOMScoreAdjustment: try Self.validatedOOMScoreAdjustment(process.oomScoreAdj),
@@ -1570,6 +1578,85 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		return Int32(value)
 	}
+
+	private static func validatedCapabilities(
+		_ capabilities: OCIRuntimeCapabilities?
+	) throws -> OrlixEnvironmentCapabilities? {
+		guard let capabilities else {
+			return nil
+		}
+		return OrlixEnvironmentCapabilities(
+			bounding: try validatedCapabilitySet(capabilities.bounding, field: "bounding"),
+			permitted: try validatedCapabilitySet(capabilities.permitted, field: "permitted"),
+			inheritable: try validatedCapabilitySet(capabilities.inheritable, field: "inheritable"),
+			effective: try validatedCapabilitySet(capabilities.effective, field: "effective"),
+			ambient: try validatedCapabilitySet(capabilities.ambient, field: "ambient")
+		)
+	}
+
+	private static func validatedCapabilitySet(
+		_ names: [String]?,
+		field: String
+	) throws -> [String] {
+		guard let names else {
+			return []
+		}
+		var seen = Set<String>()
+		var result: [String] = []
+		for name in names {
+			guard supportedLinuxCapabilityNames.contains(name) else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.capabilities.\(field)")
+			}
+			if seen.insert(name).inserted {
+				result.append(name)
+			}
+		}
+		return result
+	}
+
+	private static let supportedLinuxCapabilityNames: Set<String> = [
+		"CAP_CHOWN",
+		"CAP_DAC_OVERRIDE",
+		"CAP_DAC_READ_SEARCH",
+		"CAP_FOWNER",
+		"CAP_FSETID",
+		"CAP_KILL",
+		"CAP_SETGID",
+		"CAP_SETUID",
+		"CAP_SETPCAP",
+		"CAP_LINUX_IMMUTABLE",
+		"CAP_NET_BIND_SERVICE",
+		"CAP_NET_BROADCAST",
+		"CAP_NET_ADMIN",
+		"CAP_NET_RAW",
+		"CAP_IPC_LOCK",
+		"CAP_IPC_OWNER",
+		"CAP_SYS_MODULE",
+		"CAP_SYS_RAWIO",
+		"CAP_SYS_CHROOT",
+		"CAP_SYS_PTRACE",
+		"CAP_SYS_PACCT",
+		"CAP_SYS_ADMIN",
+		"CAP_SYS_BOOT",
+		"CAP_SYS_NICE",
+		"CAP_SYS_RESOURCE",
+		"CAP_SYS_TIME",
+		"CAP_SYS_TTY_CONFIG",
+		"CAP_MKNOD",
+		"CAP_LEASE",
+		"CAP_AUDIT_WRITE",
+		"CAP_AUDIT_CONTROL",
+		"CAP_SETFCAP",
+		"CAP_MAC_OVERRIDE",
+		"CAP_MAC_ADMIN",
+		"CAP_SYSLOG",
+		"CAP_WAKE_ALARM",
+		"CAP_BLOCK_SUSPEND",
+		"CAP_AUDIT_READ",
+		"CAP_PERFMON",
+		"CAP_BPF",
+		"CAP_CHECKPOINT_RESTORE",
+	]
 
 	private static func validatedScheduler(
 		_ scheduler: OCIRuntimeScheduler?
@@ -1779,9 +1866,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	}
 
 	private static func rejectUnsupportedProcessFeatures(_ process: OCIRuntimeProcess) throws {
-		if process.capabilities != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.capabilities")
-		}
 		if process.apparmorProfile != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.apparmorProfile")
 		}
@@ -2020,7 +2104,13 @@ private struct OCIRuntimeRlimit: Decodable {
 	let hard: UInt64
 	let soft: UInt64
 }
-private struct OCIRuntimeCapabilities: Decodable {}
+private struct OCIRuntimeCapabilities: Decodable {
+	let bounding: [String]?
+	let permitted: [String]?
+	let inheritable: [String]?
+	let effective: [String]?
+	let ambient: [String]?
+}
 private struct OCIRuntimeNetDevice: Decodable {}
 
 public enum OrlixOCIRuntimeBundleError: Error, Equatable, Sendable {

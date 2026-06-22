@@ -14817,3 +14817,67 @@ Non-claims:
 - No HostAdapter policy, host leakage, or custom Linux ABI was added.
 - This checkpoint updates truthful reporting only; it does not add new runtime
   proof beyond the descriptor/init process-default proofs recorded above.
+## 2026-06-22 - OCI process capabilities carried through Linux UAPI
+
+Implemented a bounded OCI `process.capabilities` checkpoint without adding a
+custom Linux ABI or HostAdapter-owned Linux policy.
+
+- Added `OrlixEnvironmentCapabilities` to `OrlixOS` environment descriptors.
+- `OrlixOCIRuntimeConfigParser` now accepts canonical Linux `CAP_*` names for
+  OCI `bounding`, `permitted`, `inheritable`, `effective`, and `ambient` sets.
+- Invalid capability names fail closed with field-specific
+  `unsupportedLinuxFeature("process.capabilities.<set>")` errors.
+- `OrlixEnvironmentRootImage` encodes the sets as init command-line defaults:
+  `orlix.cap.bounding`, `orlix.cap.permitted`, `orlix.cap.inheritable`,
+  `orlix.cap.effective`, and `orlix.cap.ambient`.
+- `OrlixOS/Sources/init/init.c` applies those sets through Linux capability
+  mechanisms:
+  - bounding set reduction with `prctl(PR_CAPBSET_DROP, ...)`
+  - permitted/effective/inheritable sets with `capget(2)`/`capset(2)`
+  - ambient capabilities with `prctl(PR_CAP_AMBIENT, ...)`
+  - `PR_SET_KEEPCAPS` around UID/GID changes where final capability sets are
+    requested
+- Updated `OrlixOCIRuntimeFeatureReport.current` to report only this bounded
+  `process.capabilities` support. This does not claim seccomp, LSM labels,
+  namespaces, cgroups, OCI lifecycle execution, registry pull, product
+  `orlix run`, or full OCI Runtime compliance.
+
+Evidence:
+
+- Focused OCI capabilities/defaults group:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_13-02-23-+0200.xcresult`
+  - `result=Passed`
+  - `passedTests=6`
+  - `failedTests=0`
+  - `skippedTests=0`
+  - `totalTestCount=6`
+  - `expectedFailures=0`
+- Broader OCI descriptor/reporting regression group:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_13-03-50-+0200.xcresult`
+  - `result=Passed`
+  - `passedTests=9`
+  - `failedTests=0`
+  - `skippedTests=0`
+  - `totalTestCount=9`
+  - `expectedFailures=0`
+- Harness:
+  - `rtk git diff --check`
+  - `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+  - `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+  - `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+    stale-history warning about older `IMPLEMENT.md` pending/blocked text.
+
+Remaining:
+
+- Runtime-observed capability proof inside a booted Linux process.
+- Real OCI process lifecycle execution and PID/reaping proof.
+- Namespace, cgroup v2, registry pull, product `orlix run`, virtio-fs
+  host-folder mount behavior, and full OCI Runtime compliance remain open.
+
+Current status:
+
+The OCI process capabilities checkpoint is implemented and verified at the
+descriptor/init contract level. The active goal remains open because runtime
+process lifecycle proof, runtime-observed capability proof, namespaces, cgroups
+v2, registry pull, product `orlix run`, virtio-fs host-folder behavior, and
+full OCI Runtime compliance are not complete.
