@@ -7250,11 +7250,40 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(createdProcess.lifecycle.record.state, .created)
 		XCTAssertEqual(createdProcess.sessionDescriptor.lifecycleState, .created)
 
-		let runningProcess = try createdProcess.start(observedPID: 42)
+		let runningProcess = try createdProcess.start(
+			observedProcess: OrlixOCIRuntimeProcessStartObservation(pid: 42)
+		)
 		XCTAssertEqual(runningProcess.lifecycle.record.state, .running)
 		XCTAssertEqual(runningProcess.lifecycle.record.pid, 42)
 		XCTAssertEqual(runningProcess.sessionDescriptor.lifecycleState, .running)
 		XCTAssertEqual(runningProcess.sessionDescriptor.id, "oci-demo")
+	}
+
+	func testOCIRuntimeProcessHandleRejectsInvalidObservedLinuxStartPID() throws {
+		XCTAssertThrowsError(try OrlixOCIRuntimeProcessStartObservation(pid: 0)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidPID(0)
+			)
+		}
+
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let createdProcess = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: try configured.create(),
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+
+		XCTAssertThrowsError(try createdProcess.start(observedPID: -1)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidPID(-1)
+			)
+		}
 	}
 
 	func testOCIRuntimeProcessHandleKeepsSessionRunningUntilObservedCompletion() throws {
@@ -7442,7 +7471,9 @@ extension OrlixTerminalSessionTests {
 			processHandle: processHandle,
 			linuxSession: linuxSession
 		)
-		let runningSession = try processSession.start(observedPID: 42)
+		let runningSession = try processSession.start(
+			observedProcess: OrlixOCIRuntimeProcessStartObservation(pid: 42)
+		)
 		let signaledSession = try runningSession.kill(signal: 15)
 
 		XCTAssertTrue(runningSession.linuxSession === processSession.linuxSession)

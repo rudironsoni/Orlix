@@ -2401,6 +2401,18 @@ public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
 	case stateUnavailable(OrlixOCIRuntimeLifecycleState)
 }
 
+public struct OrlixOCIRuntimeProcessStartObservation: Equatable, Sendable {
+	public let pid: Int32
+
+	public init(pid: Int32) throws {
+		guard pid > 0 else {
+			throw OrlixOCIRuntimeLifecycleError.invalidPID(pid)
+		}
+
+		self.pid = pid
+	}
+}
+
 public struct OrlixOCIRuntimeProcessExitObservation: Equatable, Sendable {
 	public let pid: Int32
 	public let exitStatus: Int32
@@ -2689,8 +2701,14 @@ public struct OrlixOCIRuntimeProcessHandle: Sendable {
 	}
 
 	public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessHandle {
+		try start(
+			observedProcess: OrlixOCIRuntimeProcessStartObservation(pid: pid)
+		)
+	}
+
+	public func start(observedProcess observation: OrlixOCIRuntimeProcessStartObservation) throws -> OrlixOCIRuntimeProcessHandle {
 		try OrlixOCIRuntimeProcessHandle(
-			lifecycle: lifecycle.start(pid: pid),
+			lifecycle: lifecycle.start(pid: observation.pid),
 			rootMount: rootMount
 		)
 	}
