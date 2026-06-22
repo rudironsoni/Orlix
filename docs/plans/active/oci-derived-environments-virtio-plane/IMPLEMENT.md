@@ -14571,3 +14571,41 @@ Non-claims:
 - No runtime proof yet shows `no_new_privs` observed inside a booted Linux
   process; this checkpoint proves descriptor import, init command-line contract,
   and init-side `prctl(PR_SET_NO_NEW_PRIVS)` setup only.
+
+## 2026-06-22 Current Status - OCI close additional fds
+
+Current status:
+
+- Promoted OCI Runtime `process.closeAdditionalFds` from rejected metadata into
+  an OrlixOS-owned Linux process execution default.
+- Added `OrlixEnvironmentDescriptor.defaultCloseAdditionalFds` with
+  backward-compatible decode defaulting to `false`.
+- Added the root-image init command-line key `orlix.closefds` and emission of
+  `orlix.closefds=1` when the descriptor default is enabled.
+- Updated `OrlixOS/Sources/init/init.c` to parse the key and close file
+  descriptors `>= 3` using an `RLIMIT_NOFILE`-bounded loop before credential
+  drop and exec.
+- Updated OCI config import so `process.closeAdditionalFds` carries into the
+  session/import environment descriptor instead of being listed as unsupported.
+
+Evidence:
+
+- Focused command-line/parser/OCI process-default tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-39-53-+0200.xcresult`
+  with `result=Passed`, `passedTests=5`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=5`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_10-45-15-+0200.xcresult`
+  with `result=Passed`, `passedTests=8`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=8`, `expectedFailures=0`.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- No runtime proof yet shows inherited descriptors closed inside a booted Linux
+  process; this checkpoint proves descriptor import, init command-line contract,
+  and init-side close loop setup only.

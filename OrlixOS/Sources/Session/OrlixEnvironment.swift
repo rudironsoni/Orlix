@@ -23,6 +23,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultGroupID: UInt32
     public let defaultSupplementaryGroups: [UInt32]
     public let defaultNoNewPrivileges: Bool
+    public let defaultCloseAdditionalFds: Bool
     public let defaultUmask: UInt32?
     public let defaultRlimits: [OrlixEnvironmentRlimit]
     public let hostname: String?
@@ -70,6 +71,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultGroupID: UInt32,
         defaultSupplementaryGroups: [UInt32] = [],
         defaultNoNewPrivileges: Bool = false,
+        defaultCloseAdditionalFds: Bool = false,
         defaultUmask: UInt32? = nil,
         defaultRlimits: [OrlixEnvironmentRlimit] = [],
         hostname: String? = nil,
@@ -89,6 +91,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultGroupID = defaultGroupID
         self.defaultSupplementaryGroups = defaultSupplementaryGroups
         self.defaultNoNewPrivileges = defaultNoNewPrivileges
+        self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
         self.defaultUmask = defaultUmask
         self.defaultRlimits = defaultRlimits
         self.hostname = hostname
@@ -110,6 +113,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultGroupID
         case defaultSupplementaryGroups
         case defaultNoNewPrivileges
+        case defaultCloseAdditionalFds
         case defaultUmask
         case defaultRlimits
         case hostname
@@ -159,6 +163,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             Bool.self,
             forKey: .defaultNoNewPrivileges
         ) ?? false
+        self.defaultCloseAdditionalFds = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .defaultCloseAdditionalFds
+        ) ?? false
         self.defaultUmask = try container.decodeIfPresent(
             UInt32.self,
             forKey: .defaultUmask
@@ -206,6 +214,9 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         )
         if defaultNoNewPrivileges {
             try container.encode(defaultNoNewPrivileges, forKey: .defaultNoNewPrivileges)
+        }
+        if defaultCloseAdditionalFds {
+            try container.encode(defaultCloseAdditionalFds, forKey: .defaultCloseAdditionalFds)
         }
         try container.encodeIfPresent(defaultUmask, forKey: .defaultUmask)
         if !defaultRlimits.isEmpty {
@@ -535,6 +546,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultGroupIDCommandLineKey = "orlix.gid"
     public static let defaultSupplementaryGroupCommandLineKeyPrefix = "orlix.suppgid"
     public static let defaultNoNewPrivilegesCommandLineKey = "orlix.nonewprivs"
+    public static let defaultCloseAdditionalFdsCommandLineKey = "orlix.closefds"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
     public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
     public static let hostnameCommandLineKey = "orlix.hostname"
@@ -751,6 +763,9 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         }
         if descriptor.defaultNoNewPrivileges {
             tokens.append("\(defaultNoNewPrivilegesCommandLineKey)=1")
+        }
+        if descriptor.defaultCloseAdditionalFds {
+            tokens.append("\(defaultCloseAdditionalFdsCommandLineKey)=1")
         }
         if let defaultUmask = descriptor.defaultUmask {
             tokens.append("\(defaultUmaskCommandLineKey)=\(defaultUmask)")
@@ -1030,6 +1045,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultGroupID: parent.defaultGroupID,
                 defaultSupplementaryGroups: parent.defaultSupplementaryGroups,
                 defaultNoNewPrivileges: parent.defaultNoNewPrivileges,
+                defaultCloseAdditionalFds: parent.defaultCloseAdditionalFds,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
                 mounts: parent.mounts
