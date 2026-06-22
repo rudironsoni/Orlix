@@ -13,7 +13,7 @@ DEFAULT_MANIFEST_ROOT = Path("Build/orlix-build-manifests")
 DEFAULT_STAGES = {
     "linux": ("source-prep", "headers-install"),
     "mlibc": ("source-prep", "compiler-rt"),
-    "coreutils": ("source-prep",),
+    "coreutils": ("source-prep", "configure-build", "install-rootfs"),
 }
 
 

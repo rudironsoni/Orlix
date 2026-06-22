@@ -1121,7 +1121,20 @@ help:
 
 setup-env: __bootstrap-linux-upstream xcodeproj
 
-build: clean __ios-simulator-xcframework
+.PHONY: __build-cache-gated
+build: __build-cache-gated
+
+__build-cache-gated:
+	@if python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component linux \
+		--stage source-prep \
+		--stage headers-install \
+		--stage kernel-archive \
+		--requires "$(ORLIX_KERNEL_XCFRAMEWORK)/Info.plist" \
+		--requires "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)/OrlixKernel" >/dev/null; then \
+		printf '%s\n' "skip: OrlixKernel build $(PROFILE) cache ready"; \
+	else \
+		$(MAKE) -f OrlixKernel/Makefile clean __ios-simulator-xcframework PROFILE="$(PROFILE)"; \
+	fi
 
 prepare scripts dtbs: __prepare-kbuild
 

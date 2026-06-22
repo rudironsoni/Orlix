@@ -32,6 +32,8 @@ class CacheReadyTests(unittest.TestCase):
     def test_ready_requires_manifest_output_and_clean_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.write_manifest(tmp, "release", "coreutils", "source-prep")
+            self.write_manifest(tmp, "release", "coreutils", "configure-build")
+            self.write_manifest(tmp, "release", "coreutils", "install-rootfs")
             output = Path(tmp) / "rootfs" / "bin" / "ls"
             output.parent.mkdir(parents=True)
             output.write_text("ls\n")
@@ -82,6 +84,8 @@ class CacheReadyTests(unittest.TestCase):
     def test_stale_audit_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.write_manifest(tmp, "release", "coreutils", "source-prep")
+            self.write_manifest(tmp, "release", "coreutils", "configure-build")
+            self.write_manifest(tmp, "release", "coreutils", "install-rootfs")
             output = Path(tmp) / "rootfs" / "bin" / "ls"
             output.parent.mkdir(parents=True)
             output.write_text("ls\n")
@@ -109,6 +113,8 @@ class CacheReadyTests(unittest.TestCase):
     def test_ready_command_mode_skips_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.write_manifest(tmp, "release", "coreutils", "source-prep")
+            self.write_manifest(tmp, "release", "coreutils", "configure-build")
+            self.write_manifest(tmp, "release", "coreutils", "install-rootfs")
             marker = Path(tmp) / "marker"
 
             with mock.patch.object(self.module, "audit_component", return_value=[]):
