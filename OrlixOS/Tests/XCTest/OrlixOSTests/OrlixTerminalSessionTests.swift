@@ -6324,6 +6324,14 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(controller.record.id, "bundle-test")
 		XCTAssertEqual(controller.record.bundlePath, bundleURL.path)
 		XCTAssertEqual(controller.record.state, .configured)
+
+		let session = try bundle.sessionDescriptor(
+			id: "bundle-test",
+			rootMount: .defaultOverlay
+		)
+		XCTAssertEqual(session.id, "bundle-test")
+		XCTAssertEqual(session.lifecycleState, .created)
+		XCTAssertEqual(session.environment.defaultCommand, ["/bin/sh"])
 	}
 
 	func testOCIRuntimeBundleRejectsMissingConfig() throws {
