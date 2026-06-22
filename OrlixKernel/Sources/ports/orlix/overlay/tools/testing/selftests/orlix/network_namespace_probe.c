@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <arpa/inet.h>
 #include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <net/if.h>
 #include <stdbool.h>
@@ -35,6 +36,85 @@ static bool rtnetlink_socket_opens(void)
 
 	close(fd);
 	return true;
+}
+
+static bool rtnetlink_reports_loopback_link(void)
+{
+	struct {
+		struct nlmsghdr header;
+		struct ifinfomsg interface;
+	} request = {
+		.header = {
+			.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
+			.nlmsg_type = RTM_GETLINK,
+			.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
+			.nlmsg_seq = 1,
+		},
+		.interface = {
+			.ifi_family = AF_UNSPEC,
+		},
+	};
+	char buffer[8192];
+	bool saw_loopback = false;
+	int fd;
+
+	fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+	if (fd < 0)
+		return false;
+
+	if (send(fd, &request, request.header.nlmsg_len, 0) < 0) {
+		close(fd);
+		return false;
+	}
+
+	for (;;) {
+		ssize_t received;
+		struct nlmsghdr *message;
+
+		received = recv(fd, buffer, sizeof(buffer), 0);
+		if (received < 0) {
+			close(fd);
+			return false;
+		}
+
+		for (message = (struct nlmsghdr *)buffer;
+		     NLMSG_OK(message, received);
+		     message = NLMSG_NEXT(message, received)) {
+			struct ifinfomsg *interface;
+			struct rtattr *attribute;
+			int attributes_len;
+
+			if (message->nlmsg_type == NLMSG_DONE) {
+				close(fd);
+				return saw_loopback;
+			}
+
+			if (message->nlmsg_type == NLMSG_ERROR) {
+				close(fd);
+				return false;
+			}
+
+			if (message->nlmsg_type != RTM_NEWLINK)
+				continue;
+
+			interface = NLMSG_DATA(message);
+			attributes_len = IFLA_PAYLOAD(message);
+
+			for (attribute = IFLA_RTA(interface);
+			     RTA_OK(attribute, attributes_len);
+			     attribute = RTA_NEXT(attribute, attributes_len)) {
+				const char *name;
+
+				if (attribute->rta_type != IFLA_IFNAME)
+					continue;
+
+				name = RTA_DATA(attribute);
+				if (interface->ifi_index > 0 &&
+				    strcmp(name, "lo") == 0)
+					saw_loopback = true;
+			}
+		}
+	}
 }
 
 static bool configure_loopback_interface(void)
@@ -201,12 +281,14 @@ out:
 
 int main(void)
 {
-	orlix_test_plan(5);
+	orlix_test_plan(6);
 
 	orlix_test_result(proc_net_files_are_readable(),
 			  "procfs exposes network state");
 	orlix_test_result(rtnetlink_socket_opens(),
 			  "rtnetlink sockets open in the current network namespace");
+	orlix_test_result(rtnetlink_reports_loopback_link(),
+			  "RTM_GETLINK reports loopback interface");
 	orlix_test_result(configure_loopback_interface(),
 			  "loopback interface accepts Linux address configuration");
 	{
