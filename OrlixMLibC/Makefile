@@ -303,7 +303,8 @@ __build-cache-gated:
 		--requires "$(MLIBC_TARGET_ARCH_DEFS)" >/dev/null; then \
 		printf '%s\n' "skip: OrlixMLibC build $(PROFILE) cache ready"; \
 	else \
-		$(MAKE) -f OrlixMLibC/Makefile __build PROFILE="$(PROFILE)"; \
+		$(MAKE) -f OrlixMLibC/Makefile __build PROFILE="$(PROFILE)" && \
+		$(MAKE) -f OrlixMLibC/Makefile cache-manifest-write PROFILE="$(PROFILE)"; \
 	fi
 
 __build: __write-cross-file
