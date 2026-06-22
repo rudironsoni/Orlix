@@ -1884,6 +1884,7 @@ public enum OrlixOCIRuntimeBundleError: Error, Equatable, Sendable {
 	case missingConfig(String)
 	case missingRootfs(String)
 	case rootfsIsNotDirectory(String)
+	case rootfsEscapesBundle(String)
 }
 
 @_spi(OrlixPrivateTesting)
@@ -2039,12 +2040,18 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 		parser: OrlixOCIRuntimeConfigParser = OrlixOCIRuntimeConfigParser()
 	) throws -> OrlixOCIRuntimeBundle {
 		let configURL = bundleURL.appendingPathComponent("config.json")
-		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
 
 		guard fileManager.fileExists(atPath: configURL.path) else {
 			throw OrlixOCIRuntimeBundleError.missingConfig(configURL.path)
 		}
 
+		let configData = try Data(contentsOf: configURL)
+		let config = try parser.parse(configData)
+		let rootfsURL = try resolveRootfsURL(
+			for: config,
+			bundleURL: bundleURL,
+			fileManager: fileManager
+		)
 		var isDirectory: ObjCBool = false
 		guard fileManager.fileExists(atPath: rootfsURL.path, isDirectory: &isDirectory) else {
 			throw OrlixOCIRuntimeBundleError.missingRootfs(rootfsURL.path)
@@ -2053,13 +2060,34 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 			throw OrlixOCIRuntimeBundleError.rootfsIsNotDirectory(rootfsURL.path)
 		}
 
-		let configData = try Data(contentsOf: configURL)
 		return OrlixOCIRuntimeBundle(
 			bundleURL: bundleURL,
 			configURL: configURL,
 			rootfsURL: rootfsURL,
-			config: try parser.parse(configData)
+			config: config
 		)
+	}
+
+	private static func resolveRootfsURL(
+		for config: OrlixOCIRuntimeConfigDescriptor,
+		bundleURL: URL,
+		fileManager: FileManager
+	) throws -> URL {
+		let rootPath = config.rootPath ?? "rootfs"
+		let candidateURL: URL
+		if rootPath.hasPrefix("/") {
+			candidateURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+		} else {
+			candidateURL = bundleURL.appendingPathComponent(rootPath, isDirectory: true)
+		}
+
+		let bundlePath = bundleURL.standardizedFileURL.path
+		let candidatePath = candidateURL.standardizedFileURL.path
+		guard candidatePath == bundlePath || candidatePath.hasPrefix(bundlePath + "/") else {
+			throw OrlixOCIRuntimeBundleError.rootfsEscapesBundle(rootPath)
+		}
+
+		return candidateURL
 	}
 
 	public func lifecycleController(id: String) -> OrlixOCIRuntimeLifecycleController {

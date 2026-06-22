@@ -14202,3 +14202,59 @@ Non-claims:
 - No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
 - This proves rootfs input preparation only; metadata-fidelity completeness for OCI/tar semantics still depends on the existing tar/materializer coverage and further bundle-rootfs metadata work.
 - No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, or cgroup completeness is claimed.
+### 2026-06-22 08:34 +0200 - OCI runtime bundle root.path confinement
+
+Status: green targeted checkpoint.
+
+Implemented:
+
+- Extended `OrlixOCIRuntimeBundle.load(from:)` so local OCI Runtime bundle rootfs resolution honors `config.json` `root.path`.
+- Relative `root.path` values resolve under the bundle directory instead of assuming only `bundle/rootfs`.
+- Resolved rootfs paths are confined to the bundle directory and fail closed with `OrlixOCIRuntimeBundleError.rootfsEscapesBundle`.
+- The loader still validates that the resolved rootfs exists and is a directory before returning a bundle.
+- Added focused tests:
+  - `testOCIRuntimeBundleResolvesConfiguredRelativeRootPath`
+  - `testOCIRuntimeBundleRejectsRootPathEscapingBundle`
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_08-34-02-+0200.xcresult
+result=Passed
+passedTests=12
+failedTests=0
+skippedTests=0
+totalTestCount=12
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleResolvesConfiguredRelativeRootPath \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsRootPathEscapingBundle \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOrlixOSBuildsSessionFromOCIRuntimeBundle \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanUsesBundleRootfsForMaterialization \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanSavesDescriptorAndEmitsMaterializationCommands \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanPreparesRootfsMaterializationInputs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanReportsMaterializationToolchainReadiness \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingConfig \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsFileRootfs \
+  test
+```
+
+Non-claims:
+
+- No ext4 image generation was executed by this checkpoint.
+- No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
+- No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
+- Absolute host paths are rejected unless they remain inside the bundle directory; this is OrlixOS import policy only, not Linux-visible ABI.
