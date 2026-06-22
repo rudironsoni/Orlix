@@ -14032,3 +14032,55 @@ Non-claims:
 - No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
 - No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
 - The next required step remains executing or otherwise proving the materialization command stream and binding the resulting root image through the normal OrlixLinuxSession materialized-root path.
+### 2026-06-22 08:09 +0200 - OCI bundle import plan to materialized-root session bridge
+
+Status: green targeted checkpoint.
+
+Implemented:
+
+- Extended SPI `OrlixOCIRuntimeBundleImportPlan` with:
+  - `materializedRootImage(registry:kernelCommandLine:fileManager:)`
+  - `linuxSession(registry:kernelCommandLine:terminal:fileManager:)`
+- The bridge saves the derived environment descriptor through `OrlixEnvironmentRegistry`, then uses the existing registry `materializedRootImage(forEnvironmentID:kernelCommandLine:fileManager:)` validation path.
+- The resulting session uses the existing `OrlixLinuxSession(materializedRootImage:terminal:)` path, so root image binding remains the same OrlixOS session mechanism used by named materialized environments.
+- Added `testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist` to prove a loaded OCI runtime bundle import plan can bind a validated materialized root image and produce an `OrlixLinuxSession` with a non-nil `materializedRootImageForTesting`.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_08-09-12-+0200.xcresult
+result=Passed
+passedTests=8
+failedTests=0
+skippedTests=0
+totalTestCount=8
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOrlixOSBuildsSessionFromOCIRuntimeBundle \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanUsesBundleRootfsForMaterialization \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanSavesDescriptorAndEmitsMaterializationCommands \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingConfig \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsFileRootfs \
+  test
+```
+
+Non-claims:
+
+- The test uses placeholder `base.ext4`/`state.ext4` files to prove the existing validation and session-binding path is reached; it does not prove real ext4 image generation or Linux root contents.
+- No materialization commands were executed by this checkpoint.
+- No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
+- No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
+- The remaining rootfs gap is executing/proving the materialization command stream against real bundle rootfs contents and then booting/entering through Linux-owned root behavior.
