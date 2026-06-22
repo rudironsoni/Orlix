@@ -6290,6 +6290,97 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeBundleLoadsConfigAndRootfs() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+		try fileManager.createDirectory(
+			at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+			withIntermediateDirectories: true
+		)
+		try minimalOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let bundle = try OrlixOCIRuntimeBundle.load(from: bundleURL)
+
+		XCTAssertEqual(bundle.bundleURL, bundleURL)
+		XCTAssertEqual(bundle.configURL.lastPathComponent, "config.json")
+		XCTAssertEqual(bundle.rootfsURL.lastPathComponent, "rootfs")
+		XCTAssertEqual(bundle.config.ociVersion, "1.1.0")
+		XCTAssertEqual(
+			bundle.config.environmentDescriptor(
+				id: "bundle-test",
+				rootMount: .defaultOverlay,
+				mounts: []
+			).defaultCommand,
+			["/bin/sh"]
+		)
+	}
+
+	func testOCIRuntimeBundleRejectsMissingConfig() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		try fileManager.createDirectory(
+			at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+			withIntermediateDirectories: true
+		)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeBundle.load(from: bundleURL)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeBundleError,
+				.missingConfig(bundleURL.appendingPathComponent("config.json").path)
+			)
+		}
+	}
+
+	func testOCIRuntimeBundleRejectsMissingRootfs() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+		try minimalOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeBundle.load(from: bundleURL)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeBundleError,
+				.missingRootfs(bundleURL.appendingPathComponent("rootfs", isDirectory: true).path)
+			)
+		}
+	}
+
+	func testOCIRuntimeBundleRejectsFileRootfs() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+		try minimalOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+		try Data("not a directory".utf8).write(
+			to: bundleURL.appendingPathComponent("rootfs")
+		)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeBundle.load(from: bundleURL)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeBundleError,
+				.rootfsIsNotDirectory(bundleURL.appendingPathComponent("rootfs").path)
+			)
+		}
+	}
+
 	func testOCIRuntimeLifecycleControllerFollowsCreateStartKillDeleteOrder() throws {
 		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
 		let configured = OrlixOCIRuntimeLifecycleController(
