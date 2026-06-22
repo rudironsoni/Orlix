@@ -1880,6 +1880,48 @@ private struct OCIRuntimeRlimit: Decodable {
 private struct OCIRuntimeCapabilities: Decodable {}
 private struct OCIRuntimeNetDevice: Decodable {}
 
+public enum OrlixOCIRuntimeBundleError: Error, Equatable, Sendable {
+	case missingConfig(String)
+	case missingRootfs(String)
+	case rootfsIsNotDirectory(String)
+}
+
+public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
+	public let bundleURL: URL
+	public let configURL: URL
+	public let rootfsURL: URL
+	public let config: OrlixOCIRuntimeConfigDescriptor
+
+	public static func load(
+		from bundleURL: URL,
+		fileManager: FileManager = .default,
+		parser: OrlixOCIRuntimeConfigParser = OrlixOCIRuntimeConfigParser()
+	) throws -> OrlixOCIRuntimeBundle {
+		let configURL = bundleURL.appendingPathComponent("config.json")
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+
+		guard fileManager.fileExists(atPath: configURL.path) else {
+			throw OrlixOCIRuntimeBundleError.missingConfig(configURL.path)
+		}
+
+		var isDirectory: ObjCBool = false
+		guard fileManager.fileExists(atPath: rootfsURL.path, isDirectory: &isDirectory) else {
+			throw OrlixOCIRuntimeBundleError.missingRootfs(rootfsURL.path)
+		}
+		guard isDirectory.boolValue else {
+			throw OrlixOCIRuntimeBundleError.rootfsIsNotDirectory(rootfsURL.path)
+		}
+
+		let configData = try Data(contentsOf: configURL)
+		return OrlixOCIRuntimeBundle(
+			bundleURL: bundleURL,
+			configURL: configURL,
+			rootfsURL: rootfsURL,
+			config: try parser.parse(configData)
+		)
+	}
+}
+
 public enum OrlixOCIRuntimeLifecycleState: String, Codable, Equatable, Sendable {
 	case configured
 	case created

@@ -13724,3 +13724,54 @@ skippedTests=0
 totalTestCount=1
 expectedFailures=0
 ```
+
+## 2026-06-22 06:50 +0200 - OCI Runtime Bundle Loader Checkpoint
+
+Status: completed narrow OrlixOS runtime-bundle loading step for OCI Runtime
+config/schema/lifecycle work.
+
+Changes:
+
+- Added `OrlixOCIRuntimeBundle.load(from:)` in OrlixOS session code.
+- The loader requires a standard OCI runtime bundle shape: `config.json` plus a
+  `rootfs/` directory.
+- The loader parses `config.json` through the existing `OrlixOCIRuntimeConfigParser`
+  and returns the parsed config with resolved bundle/config/rootfs URLs.
+- Added deterministic errors for missing `config.json`, missing `rootfs`, and a
+  non-directory `rootfs` path.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_06-50-34-+0200.xcresult
+testOCIRuntimeBundleLoadsConfigAndRootfs
+testOCIRuntimeBundleRejectsMissingConfig
+testOCIRuntimeBundleRejectsMissingRootfs
+testOCIRuntimeBundleRejectsFileRootfs
+result=Passed
+passedTests=4
+failedTests=0
+skippedTests=0
+totalTestCount=4
+expectedFailures=0
+```
+
+Non-claims:
+
+- This is bundle loading and config validation only.
+- It does not execute a container process, mount the bundle rootfs as the active
+  Linux root, implement `orlix run`, pull from a registry, or claim OCI runtime
+  lifecycle compliance.
+- It keeps OCI policy in OrlixOS and does not add a custom Linux ABI or move
+  Linux behavior into HostAdapter.
+
+Current status after this checkpoint:
+
+- OrlixOS can load a local OCI Runtime bundle directory with `config.json` and
+  `rootfs/`, parse the config through the existing OCI runtime parser, and
+  deterministically reject malformed bundle shape.
+- This is a prerequisite for product `orlix run` style work, but no product run
+  command or process execution claim is made yet.
+- Next aligned work should connect this loaded bundle descriptor to the existing
+  lifecycle/session path or continue proving rootfs binding through Linux-owned
+  mount behavior.
