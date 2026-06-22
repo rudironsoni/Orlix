@@ -46,12 +46,77 @@ struct newnet_child_result {
 	char inode_changed;
 	char proc_net_readable;
 	char rtnetlink_socket_local;
+	char route_mutation_error_linux_shaped;
 };
 
 static bool stat_inode_changed(const struct stat *before,
 			       const struct stat *after)
 {
 	return before->st_dev != after->st_dev || before->st_ino != after->st_ino;
+}
+
+static bool rtnetlink_rejects_incomplete_route_request(void)
+{
+	struct {
+		struct nlmsghdr header;
+		struct rtmsg route;
+	} request = {
+		.header = {
+			.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg)),
+			.nlmsg_type = RTM_NEWROUTE,
+			.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK |
+				       NLM_F_CREATE | NLM_F_EXCL,
+			.nlmsg_seq = 4,
+		},
+		.route = {
+			.rtm_family = AF_INET,
+			.rtm_dst_len = 32,
+			.rtm_table = RT_TABLE_MAIN,
+			.rtm_protocol = RTPROT_STATIC,
+			.rtm_scope = RT_SCOPE_UNIVERSE,
+			.rtm_type = RTN_UNICAST,
+		},
+	};
+	char buffer[8192];
+	int fd;
+
+	fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+	if (fd < 0)
+		return false;
+
+	if (send(fd, &request, request.header.nlmsg_len, 0) < 0) {
+		close(fd);
+		return false;
+	}
+
+	for (;;) {
+		ssize_t received;
+		struct nlmsghdr *message;
+
+		received = recv(fd, buffer, sizeof(buffer), 0);
+		if (received < 0) {
+			close(fd);
+			return false;
+		}
+
+		for (message = (struct nlmsghdr *)buffer;
+		     NLMSG_OK(message, received);
+		     message = NLMSG_NEXT(message, received)) {
+			struct nlmsgerr *error;
+
+			if (message->nlmsg_type == NLMSG_DONE) {
+				close(fd);
+				return false;
+			}
+
+			if (message->nlmsg_type != NLMSG_ERROR)
+				continue;
+
+			error = NLMSG_DATA(message);
+			close(fd);
+			return error->error < 0;
+		}
+	}
 }
 
 static struct newnet_child_result check_new_network_namespace_child(void)
@@ -77,6 +142,9 @@ static struct newnet_child_result check_new_network_namespace_child(void)
 
 	if (rtnetlink_socket_opens())
 		result.rtnetlink_socket_local = 1;
+
+	if (rtnetlink_rejects_incomplete_route_request())
+		result.route_mutation_error_linux_shaped = 1;
 
 	return result;
 }
@@ -107,7 +175,8 @@ static struct newnet_child_result fork_and_check_new_network_namespace(void)
 		close(pipefd[1]);
 		_exit(child_result.inode_changed &&
 		      child_result.proc_net_readable &&
-		      child_result.rtnetlink_socket_local ? 0 : 1);
+		      child_result.rtnetlink_socket_local &&
+		      child_result.route_mutation_error_linux_shaped ? 0 : 1);
 	}
 
 	close(pipefd[1]);
@@ -553,7 +622,7 @@ out:
 
 int main(void)
 {
-	orlix_test_plan(11);
+	orlix_test_plan(12);
 
 	orlix_test_result(proc_net_files_are_readable(),
 			  "procfs exposes network state");
@@ -577,6 +646,8 @@ int main(void)
 				  "new network namespace keeps procfs network state readable");
 		orlix_test_result(newnet.rtnetlink_socket_local,
 				  "new network namespace keeps rtnetlink socket local");
+		orlix_test_result(newnet.route_mutation_error_linux_shaped,
+				  "new network namespace rejects incomplete route with Linux error");
 	}
 	{
 		bool tcp_ok = loopback_tcp_accepts_connection();
