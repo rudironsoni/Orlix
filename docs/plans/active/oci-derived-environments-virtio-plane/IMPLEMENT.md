@@ -17147,3 +17147,41 @@ rtk python3 tools/orlix-cache-ready --profile release --component coreutils --re
 - Coreutils cache probes currently fail closed because this checkout lacks required Coreutils manifests and/or installed package sentinels.
 - No broad root `build` skip was reintroduced.
 - No generated Linux, mlibc, OrlixOS, or Coreutils source/build trees were edited.
+
+## 2026-06-23 - Post-fallback manifest refresh
+
+### Status
+
+- Extended the cache-gated fallback paths so a successful expensive rebuild refreshes manifests automatically:
+  - `OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk`
+    - Linux fallback now runs the existing `clean __ios-simulator-xcframework` path and then `cache-manifest-write`.
+  - `OrlixMLibC/Makefile`
+    - mlibc fallback now runs the existing `__build` path and then `cache-manifest-write`.
+  - `OrlixOS/Makefile`
+    - Coreutils fallback now runs the existing `$(ORLIXOS_COREUTILS_PROOF)` path and then `cache-manifest-write`.
+- The manifest refresh is chained after the successful fallback build. A failed fallback build does not write fresh manifests.
+- The manifest refresh is intentionally fail-loud. If a build succeeds but the cache manifest cannot be written, the target fails instead of leaving an ambiguous cache state.
+
+### Validation
+
+```bash
+rtk make -f OrlixMLibC/Makefile build PROFILE=release
+rtk make -f OrlixMLibC/Makefile build PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk python3 -m unittest discover tools/tests
+rtk git diff --check
+rtk python3 -m py_compile tools/orlix-cache-ready tools/orlix-build-manifest tools/tests/test_orlix_cache_ready.py
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+```
+
+- First mlibc build after the Makefile change ran the real fallback build because the existing manifest was stale.
+- The fallback completed successfully and wrote fresh manifests.
+- Second mlibc build skipped with `skip: OrlixMLibC build release cache ready`.
+- `OrlixMLibC cache-ready`: `ready: mlibc release (source-prep, compiler-rt)`.
+- `tools/tests`: 9 tests pass.
+- `git diff --check`: pass.
+- Python compile check: pass.
+- `.codex/hooks/tests`: 32 tests pass.
+- `.codex/rules/tests`: 5 tests pass.
+- Linux and Coreutils fallback refreshes are wired but were not forced through full rebuilds in this checkpoint.

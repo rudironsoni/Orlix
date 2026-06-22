@@ -1133,7 +1133,8 @@ __build-cache-gated:
 		--requires "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)/OrlixKernel" >/dev/null; then \
 		printf '%s\n' "skip: OrlixKernel build $(PROFILE) cache ready"; \
 	else \
-		$(MAKE) -f OrlixKernel/Makefile clean __ios-simulator-xcframework PROFILE="$(PROFILE)"; \
+		$(MAKE) -f OrlixKernel/Makefile clean __ios-simulator-xcframework PROFILE="$(PROFILE)" && \
+		$(MAKE) -f OrlixKernel/Makefile cache-manifest-write PROFILE="$(PROFILE)"; \
 	fi
 
 prepare scripts dtbs: __prepare-kbuild

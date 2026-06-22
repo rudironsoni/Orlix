@@ -56,7 +56,8 @@ __coreutils-cache-gated:
 		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat" >/dev/null; then \
 		printf '%s\n' "skip: OrlixOS Coreutils $(PROFILE) cache ready"; \
 	else \
-		$(MAKE) -f OrlixOS/Makefile "$(ORLIXOS_COREUTILS_PROOF)" PROFILE="$(PROFILE)"; \
+		$(MAKE) -f OrlixOS/Makefile "$(ORLIXOS_COREUTILS_PROOF)" PROFILE="$(PROFILE)" && \
+		$(MAKE) -f OrlixOS/Makefile cache-manifest-write PROFILE="$(PROFILE)"; \
 	fi
 
 rootfs: $(ORLIXOS_ROOTFS_PROOF)
