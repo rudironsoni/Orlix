@@ -6449,6 +6449,58 @@ extension OrlixTerminalSessionTests {
 		XCTAssertFalse(commands.isEmpty)
 	}
 
+	func testOCIRuntimeBundleImportPlanPreparesRootfsMaterializationInputs() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		let binURL = rootfsURL.appendingPathComponent("bin", isDirectory: true)
+		try fileManager.createDirectory(at: binURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("root-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try fileManager.createSymbolicLink(
+			at: binURL.appendingPathComponent("sh"),
+			withDestinationURL: URL(fileURLWithPath: "/usr/bin/env")
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let importPlan = try OrlixOCIRuntimeBundle
+			.load(from: bundleURL)
+			.importPlan(
+				id: "bundle-prepared-root",
+				rootMount: OrlixEnvironmentRootMount.defaultOverlay
+			)
+
+		try importPlan.prepareMaterializationInputs()
+
+		let preparedMarker = importPlan.materializationPlan.baseTreeDirectory
+			.appendingPathComponent("root-marker")
+		let preparedShell = importPlan.materializationPlan.baseTreeDirectory
+			.appendingPathComponent("bin/sh")
+		let upperDirectory = importPlan.materializationPlan.stateTreeDirectory
+			.appendingPathComponent("upper", isDirectory: true)
+		let workDirectory = importPlan.materializationPlan.stateTreeDirectory
+			.appendingPathComponent("work", isDirectory: true)
+
+		XCTAssertEqual(
+			try String(contentsOf: preparedMarker, encoding: .utf8),
+			"bundle-root\n"
+		)
+		XCTAssertEqual(
+			try fileManager.destinationOfSymbolicLink(atPath: preparedShell.path),
+			"/usr/bin/env"
+		)
+		XCTAssertTrue(fileManager.fileExists(atPath: upperDirectory.path))
+		XCTAssertTrue(fileManager.fileExists(atPath: workDirectory.path))
+	}
+
 	func testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
