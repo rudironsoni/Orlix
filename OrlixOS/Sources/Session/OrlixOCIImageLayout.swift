@@ -2611,7 +2611,7 @@ public extension OrlixOCIRuntimeLifecycleController {
 		throws -> OrlixOCIRuntimeSessionDescriptor
 	{
 		switch record.state {
-		case .created, .running, .stopped:
+		case .created, .running:
 			return OrlixOCIRuntimeSessionDescriptor(
 				id: record.id,
 				lifecycleState: record.state,
@@ -2620,7 +2620,7 @@ public extension OrlixOCIRuntimeLifecycleController {
 					rootMount: rootMount
 				)
 			)
-		case .configured, .deleted:
+		case .configured, .stopped, .deleted:
 			throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
 		}
 	}

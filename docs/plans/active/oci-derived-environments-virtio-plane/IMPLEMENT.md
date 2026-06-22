@@ -15234,3 +15234,38 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI stopped records cannot materialize sessions
+
+Checkpoint:
+
+- Tightened `OrlixOCIRuntimeLifecycleController.sessionDescriptor(rootMount:)`
+  so stopped OCI lifecycle records reject with `.stateUnavailable(.stopped)`.
+- Added `testOCIRuntimeLifecycleControllerRejectsStoppedSessionDescriptor`.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- Completed OCI process records can no longer be converted back into bootable
+  `OrlixOCIRuntimeSessionDescriptor` values.
+- Session materialization remains available only for created/running lifecycle
+  states; configured, stopped, and deleted records fail closed.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_15-26-44-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Non-claims:
+
+- This guards lifecycle/session boundaries only.
+- It does not yet launch, monitor, or reap a real OCI-created process object.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.
