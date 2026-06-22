@@ -14084,3 +14084,66 @@ Non-claims:
 - No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
 - No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
 - The remaining rootfs gap is executing/proving the materialization command stream against real bundle rootfs contents and then booting/entering through Linux-owned root behavior.
+### 2026-06-22 08:15 +0200 - OCI bundle materialization toolchain preflight
+
+Status: green targeted checkpoint.
+
+Implemented:
+
+- Added SPI `OrlixOCIRuntimeBundleMaterializationToolchainCheck`.
+- Added `OrlixOCIRuntimeBundleImportPlan.materializationToolchainCheck(mke2fsExecutable:truncateExecutable:debugfsExecutable:searchPath:fileManager:)`.
+- The preflight:
+  - validates that the existing materialization command stream can be generated for the OCI bundle import plan;
+  - records the required `mke2fs`, `truncate`, and `debugfs` executable names;
+  - resolves those executable names against a deterministic search path;
+  - reports missing executables fail-closed before any materialization execution is attempted.
+- Added `testOCIRuntimeBundleImportPlanReportsMaterializationToolchainReadiness` to prove both ready and missing toolchain states without depending on the host machine PATH.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_08-15-02-+0200.xcresult
+result=Passed
+passedTests=9
+failedTests=0
+skippedTests=0
+totalTestCount=9
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOrlixOSBuildsSessionFromOCIRuntimeBundle \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanUsesBundleRootfsForMaterialization \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanSavesDescriptorAndEmitsMaterializationCommands \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanReportsMaterializationToolchainReadiness \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingConfig \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsFileRootfs \
+  test
+```
+
+Observed host-tool state:
+
+```text
+command -v mke2fs -> missing
+command -v debugfs -> missing
+command -v truncate -> /usr/bin/truncate
+```
+
+Non-claims:
+
+- No materialization commands were executed by this checkpoint.
+- No `base.ext4` or `state.ext4` image was generated.
+- No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
+- No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
+- This checkpoint only makes the next materialization execution step fail-closed when required filesystem tools are unavailable.
