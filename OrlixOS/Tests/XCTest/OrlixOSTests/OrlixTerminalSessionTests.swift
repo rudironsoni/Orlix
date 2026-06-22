@@ -6319,6 +6319,11 @@ extension OrlixTerminalSessionTests {
 			).defaultCommand,
 			["/bin/sh"]
 		)
+
+		let controller = bundle.lifecycleController(id: "bundle-test")
+		XCTAssertEqual(controller.record.id, "bundle-test")
+		XCTAssertEqual(controller.record.bundlePath, bundleURL.path)
+		XCTAssertEqual(controller.record.state, .configured)
 	}
 
 	func testOCIRuntimeBundleRejectsMissingConfig() throws {

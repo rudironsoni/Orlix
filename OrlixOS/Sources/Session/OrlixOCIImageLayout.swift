@@ -1920,6 +1920,14 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 			config: try parser.parse(configData)
 		)
 	}
+
+	public func lifecycleController(id: String) -> OrlixOCIRuntimeLifecycleController {
+		OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: id,
+			bundlePath: bundleURL.path
+		)
+	}
 }
 
 public enum OrlixOCIRuntimeLifecycleState: String, Codable, Equatable, Sendable {

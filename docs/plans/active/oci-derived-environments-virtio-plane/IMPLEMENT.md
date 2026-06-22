@@ -13775,3 +13775,50 @@ Current status after this checkpoint:
 - Next aligned work should connect this loaded bundle descriptor to the existing
   lifecycle/session path or continue proving rootfs binding through Linux-owned
   mount behavior.
+
+## 2026-06-22 06:57 +0200 - OCI Bundle To Lifecycle Bridge Checkpoint
+
+Status: completed narrow OrlixOS bridge from a loaded OCI Runtime bundle to the
+existing OCI lifecycle controller.
+
+Changes:
+
+- Added `OrlixOCIRuntimeBundle.lifecycleController(id:)`.
+- The bridge creates a configured `OrlixOCIRuntimeLifecycleController` from the
+  bundle's parsed runtime config and uses the bundle directory path as the OCI
+  lifecycle record `bundlePath`.
+- Extended the valid bundle XCTest to verify the loaded bundle projects to an
+  Orlix environment descriptor and to a configured lifecycle record with the
+  expected id and bundle path.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_06-56-46-+0200.xcresult
+testOCIRuntimeBundleLoadsConfigAndRootfs
+testOCIRuntimeBundleRejectsMissingConfig
+testOCIRuntimeBundleRejectsMissingRootfs
+testOCIRuntimeBundleRejectsFileRootfs
+result=Passed
+passedTests=4
+failedTests=0
+skippedTests=0
+totalTestCount=4
+expectedFailures=0
+```
+
+Non-claims:
+
+- This bridges bundle metadata/config into lifecycle state only.
+- It does not start execution, mount bundle `rootfs` as Linux root, implement
+  product `orlix run`, pull registries, or claim full OCI runtime compliance.
+- OCI lifecycle/session policy remains in OrlixOS; no Linux ABI or HostAdapter
+  policy surface was added.
+
+Current status after this checkpoint:
+
+- OrlixOS can load an OCI Runtime bundle, parse `config.json`, validate `rootfs/`,
+  and construct a configured OCI lifecycle controller from that bundle.
+- Next aligned work should use this configured controller to drive the existing
+  OrlixOS session descriptor path or continue proving root binding with Linux
+  mount behavior.
