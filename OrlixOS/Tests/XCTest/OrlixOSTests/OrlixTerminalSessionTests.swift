@@ -898,7 +898,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultSupplementaryGroups: [44, 45],
             defaultNoNewPrivileges: true,
             defaultCloseAdditionalFds: true,
-            defaultOOMScoreAdjustment: -500
+            defaultOOMScoreAdjustment: -500,
+            defaultScheduler: OrlixEnvironmentScheduler(policy: "SCHED_FIFO", priority: 1)
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -937,6 +938,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
         XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
         XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=-500"))
+        XCTAssertTrue(commandLine.contains("orlix.scheduler.policy=SCHED_FIFO"))
+        XCTAssertTrue(commandLine.contains("orlix.scheduler.priority=1"))
     }
 
     func testEnvironmentRootImageEncodesLinuxPathDefaultsWithoutHostPathPolicy() throws {
@@ -1091,6 +1094,17 @@ final class OrlixTerminalSessionTests: XCTestCase {
             )
         )
         XCTAssertTrue(initSource.contains("\"/proc/self/oom_score_adj\""))
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultSchedulerPolicyCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultSchedulerPriorityCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(initSource.contains("sched_setscheduler("))
     }
 
     func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
@@ -5925,6 +5939,7 @@ extension OrlixTerminalSessionTests {
 			    "noNewPrivileges": true,
 			    "closeAdditionalFds": true,
 			    "oomScoreAdj": -500,
+			    "scheduler": { "policy": "SCHED_FIFO", "priority": 1 },
 			    "consoleSize": { "height": 24, "width": 80 },
 			    "args": ["/bin/sh", "-lc", "echo ok"],
 			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
@@ -5972,6 +5987,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 		XCTAssertTrue(descriptor.defaultCloseAdditionalFds)
 		XCTAssertEqual(descriptor.defaultOOMScoreAdjustment, -500)
+		XCTAssertEqual(
+			descriptor.defaultScheduler,
+			OrlixEnvironmentScheduler(policy: "SCHED_FIFO", priority: 1)
+		)
 		XCTAssertEqual(descriptor.defaultUmask, 18)
 		XCTAssertEqual(descriptor.defaultRlimits, [
 			OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 64)
@@ -5994,6 +6013,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultNoNewPrivileges, descriptor.defaultNoNewPrivileges)
 		XCTAssertEqual(environment.defaultCloseAdditionalFds, descriptor.defaultCloseAdditionalFds)
 		XCTAssertEqual(environment.defaultOOMScoreAdjustment, descriptor.defaultOOMScoreAdjustment)
+		XCTAssertEqual(environment.defaultScheduler, descriptor.defaultScheduler)
 		XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
 		XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
 	}
@@ -6163,7 +6183,8 @@ extension OrlixTerminalSessionTests {
 	func testOCIRuntimeConfigParserRejectsUnsupportedProcessSchedulingFields() throws {
 		let fragments: [(feature: String, json: String)] = [
 			("oomScoreAdj", #""oomScoreAdj": 1001"#),
-			("scheduler", #""scheduler": { "policy": "SCHED_FIFO", "priority": 1 }"#),
+			("scheduler.nice", #""scheduler": { "policy": "SCHED_OTHER", "nice": 4 }"#),
+			("scheduler.flags", #""scheduler": { "policy": "SCHED_OTHER", "flags": ["RESET_ON_FORK"] }"#),
 			("ioPriority", #""ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 4 }"#),
 			("execCPUAffinity", #""execCPUAffinity": { "initial": "0", "final": "0" }"#)
 		]
@@ -6477,6 +6498,7 @@ extension OrlixTerminalSessionTests {
 		    "noNewPrivileges": true,
 		    "closeAdditionalFds": true,
 		    "oomScoreAdj": -500,
+		    "scheduler": { "policy": "SCHED_FIFO", "priority": 1 },
 		    "cwd": "/work",
 		    "user": { "uid": 1000, "gid": 1001, "additionalGids": [44, 45], "umask": 18 }
 		  }
@@ -6506,6 +6528,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(session.environment.defaultNoNewPrivileges)
 		XCTAssertTrue(session.environment.defaultCloseAdditionalFds)
 		XCTAssertEqual(session.environment.defaultOOMScoreAdjustment, -500)
+		XCTAssertEqual(
+			session.environment.defaultScheduler,
+			OrlixEnvironmentScheduler(policy: "SCHED_FIFO", priority: 1)
+		)
 		XCTAssertEqual(session.environment.defaultUmask, 18)
 
 		XCTAssertEqual(importPlan.environment.defaultCommand, session.environment.defaultCommand)
@@ -6528,6 +6554,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(
 			importPlan.environment.defaultOOMScoreAdjustment,
 			session.environment.defaultOOMScoreAdjustment
+		)
+		XCTAssertEqual(
+			importPlan.environment.defaultScheduler,
+			session.environment.defaultScheduler
 		)
 		XCTAssertEqual(importPlan.environment.defaultUmask, session.environment.defaultUmask)
 	}

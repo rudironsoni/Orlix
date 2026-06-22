@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <limits.h>
 #include <poll.h>
 #include <sched.h>
 #include <stddef.h>
@@ -571,6 +572,21 @@ static int read_cmdline_signed(const char *key, long *value)
 	return -1;
 }
 
+static int scheduler_policy_from_name(const char *policy)
+{
+	if (strcmp(policy, "SCHED_OTHER") == 0)
+		return SCHED_OTHER;
+	if (strcmp(policy, "SCHED_BATCH") == 0)
+		return SCHED_BATCH;
+	if (strcmp(policy, "SCHED_IDLE") == 0)
+		return SCHED_IDLE;
+	if (strcmp(policy, "SCHED_FIFO") == 0)
+		return SCHED_FIFO;
+	if (strcmp(policy, "SCHED_RR") == 0)
+		return SCHED_RR;
+	return -1;
+}
+
 static int valid_exec_path(const char *path)
 {
 	if (path[0] == '\0')
@@ -626,6 +642,9 @@ struct orlix_command_config {
 	int close_additional_fds;
 	int has_oom_score_adjustment;
 	long oom_score_adjustment;
+	int has_scheduler;
+	int scheduler_policy;
+	int scheduler_priority;
 	unsigned long umask_value;
 	int has_umask;
 };
@@ -734,6 +753,17 @@ static void selected_command_config(struct orlix_command_config *config)
 	    oom_score_adjustment <= ORLIX_INIT_OOM_SCORE_ADJ_MAX) {
 		config->oom_score_adjustment = oom_score_adjustment;
 		config->has_oom_score_adjustment = 1;
+	}
+	char scheduler_policy[32];
+	unsigned long scheduler_priority = 0;
+	if (read_cmdline_decoded("orlix.scheduler.policy=", scheduler_policy, sizeof(scheduler_policy)) == 0 &&
+	    read_cmdline_unsigned("orlix.scheduler.priority=", &scheduler_priority) == 0) {
+		int policy = scheduler_policy_from_name(scheduler_policy);
+		if (policy >= 0 && scheduler_priority <= INT_MAX) {
+			config->scheduler_policy = policy;
+			config->scheduler_priority = (int)scheduler_priority;
+			config->has_scheduler = 1;
+		}
 	}
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
@@ -995,6 +1025,15 @@ static void apply_oom_score_adjustment(long value)
 	close(fd);
 }
 
+static void apply_scheduler(int policy, int priority)
+{
+	struct sched_param param;
+	memset(&param, 0, sizeof(param));
+	param.sched_priority = priority;
+	if (sched_setscheduler(0, policy, &param) != 0)
+		write_literal(STDERR_FILENO, "orlix-init: sched_setscheduler failed\n");
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -1039,6 +1078,8 @@ static pid_t start_command_on_pty(int master, int slave)
 	}
 	if (config->has_oom_score_adjustment)
 		apply_oom_score_adjustment(config->oom_score_adjustment);
+	if (config->has_scheduler)
+		apply_scheduler(config->scheduler_policy, config->scheduler_priority);
 	if (config->close_additional_fds)
 		close_additional_fds();
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
