@@ -209,6 +209,17 @@ static bool sysfs_netdev_reports_mtu(const char *ifname, unsigned long *mtu)
 	return read_sysfs_ulong(path, mtu) && *mtu > 0;
 }
 
+static bool is_standard_operstate(unsigned char operstate)
+{
+	return operstate == IF_OPER_UNKNOWN ||
+	       operstate == IF_OPER_NOTPRESENT ||
+	       operstate == IF_OPER_DOWN ||
+	       operstate == IF_OPER_LOWERLAYERDOWN ||
+	       operstate == IF_OPER_TESTING ||
+	       operstate == IF_OPER_DORMANT ||
+	       operstate == IF_OPER_UP;
+}
+
 static bool rtnetlink_reports_link(const char *expected_ifname,
 				   unsigned long expected_mtu)
 {
@@ -258,6 +269,7 @@ static bool rtnetlink_reports_link(const char *expected_ifname,
 			bool name_matches = false;
 			bool has_ethernet_address = false;
 			bool mtu_matches = false;
+			bool has_standard_operstate = false;
 
 			if (message->nlmsg_type == NLMSG_DONE) {
 				close(fd);
@@ -306,9 +318,19 @@ static bool rtnetlink_reports_link(const char *expected_ifname,
 					memcpy(&mtu, RTA_DATA(attribute), sizeof(mtu));
 					mtu_matches = mtu == expected_mtu;
 				}
+				if (attribute->rta_type == IFLA_OPERSTATE &&
+				    RTA_PAYLOAD(attribute) == sizeof(unsigned char)) {
+					unsigned char operstate = 0;
+
+					memcpy(&operstate, RTA_DATA(attribute),
+					       sizeof(operstate));
+					has_standard_operstate =
+						is_standard_operstate(operstate);
+				}
 			}
 
-			if (name_matches && has_ethernet_address && mtu_matches)
+			if (name_matches && has_ethernet_address && mtu_matches &&
+			    has_standard_operstate)
 				saw_link = true;
 		}
 	}
@@ -355,7 +377,7 @@ int main(void)
 	orlix_test_result(has_mtu,
 			  "virtio-net netdev reports a positive MTU through sysfs");
 	orlix_test_result(has_mtu && rtnetlink_reports_link(ifname, mtu),
-			  "rtnetlink enumerates the virtio-net Ethernet link with matching MTU");
+			  "rtnetlink enumerates the virtio-net Ethernet link with matching MTU and standard operstate");
 	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
 			  "virtio-net link is distinct from loopback");
 	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),

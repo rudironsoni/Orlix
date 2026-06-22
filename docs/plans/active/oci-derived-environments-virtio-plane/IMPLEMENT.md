@@ -16368,3 +16368,85 @@ The active virtio-net proof is green through hosted XCTest for device
 visibility, Ethernet-shaped netdev properties, and MTU consistency across
 sysfs and rtnetlink. Next work should move to truthful link/carrier or
 packet-path behavior through standard Linux networking surfaces only.
+
+### 2026-06-22 - Virtio-net rtnetlink operstate proof
+
+Follow-up extended the Linux-owned `virtio_net_device_probe` from MTU
+consistency to a standard rtnetlink operstate proof. The first attempted
+assertion required `/sys/class/net/<ifname>/operstate`; hosted XCTest proved
+that sysfs operstate is not currently exposed on this surface:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_18-54-26-+0200.xcresult
+upstream failure marker found: not ok 7 - virtio-net netdev reports a standard operstate through sysfs
+```
+
+The checkpoint was corrected to avoid overclaiming sysfs operstate. The green
+probe now requires:
+
+- `RTM_GETLINK` reports the virtio-net interface.
+- `IFLA_MTU` matches `/sys/class/net/<ifname>/mtu`.
+- `IFLA_OPERSTATE` is present and is one of the standard Linux `IF_OPER_*`
+  values.
+
+Updated TAP marker:
+
+```text
+rtnetlink enumerates the virtio-net Ethernet link with matching MTU and standard operstate
+```
+
+Validation:
+
+```sh
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+```
+
+Packaging evidence:
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:32:orlix:virtio_net_device_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:39:file /orlix/virtio_net_device_probe ...
+```
+
+Focused hosted XCTest:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Testing started
+xcodebuild exit=0
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_18-59-02-+0200.xcresult
+```
+
+Harness checks:
+
+```text
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests  # 32 OK
+rtk python3 -m unittest discover .codex/rules/tests  # 5 OK
+rtk python3 .codex/hooks/compact_plan_check.py       # exit 0; stale-history warning only
+```
+
+Scope note: this proves standard rtnetlink operstate presence for the
+virtio-net link. It does not claim sysfs operstate exposure, carrier/link-up,
+packet I/O, DNS, NAT, registry pull, OCI `netDevices`, or full OCI networking
+support.
+
+Current status:
+
+The active virtio-net proof is green through hosted XCTest for device
+visibility, Ethernet-shaped netdev properties, MTU consistency across sysfs and
+rtnetlink, and standard rtnetlink operstate presence. Next work should move to
+truthful carrier/link-up or packet-path behavior through standard Linux
+networking surfaces only.
