@@ -1270,6 +1270,18 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Linux /tmp tmpfs visibility is covered by Orlix kselftest."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "ociBindMounts",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_spec_mount_validation",
+			reason: "OCI bind mounts are rejected until host-folder mounts are exposed through Linux mount behavior and virtio-fs without host path leakage."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociCgroupMounts",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_spec_mount_validation",
+			reason: "OCI cgroup mounts are rejected until Orlix reports a Linux-owned cgroup2 hierarchy for OCI-derived environments."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "userNamespaceMappings",
 			status: .deterministicallyRejected,
 			reason: "No OCI uidMappings/gidMappings namespace proof exists for Orlix OCI-derived environments."
