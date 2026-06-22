@@ -7122,6 +7122,25 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeLifecycleControllerRejectsInvalidStartPID() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let created = try OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		.create()
+
+		for invalidPID in [Int32(0), Int32(-1)] {
+			XCTAssertThrowsError(try created.start(pid: invalidPID)) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIRuntimeLifecycleError,
+					.invalidPID(invalidPID)
+				)
+			}
+		}
+	}
+
 	func testOCIRuntimeLifecycleControllerProducesStateReportJSON() throws {
 		let config = try OrlixOCIRuntimeConfigParser().parse(
 			Data(
