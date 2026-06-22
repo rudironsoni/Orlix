@@ -51,10 +51,13 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try parser.validate(output, for: .kernel)) { error in
-            XCTAssertEqual(
-                error as? OrlixUpstreamTestRunError,
-                .upstreamFailure("not ok 1 waitpid returns the forked child")
-            )
+            guard case let .upstreamFailure(line, outputTail) = error as? OrlixUpstreamTestRunError else {
+                XCTFail("expected upstream failure, got \(error)")
+                return
+            }
+
+            XCTAssertEqual(line, "not ok 1 waitpid returns the forked child")
+            XCTAssertTrue(outputTail.contains("not ok 1 waitpid returns the forked child"))
         }
     }
 

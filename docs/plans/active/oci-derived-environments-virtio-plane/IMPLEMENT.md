@@ -16923,3 +16923,40 @@ mlibc, or Coreutils builds yet, and it does not change the runtime proof ladder.
 The next implementation step is to wire specific build stages to consult these
 manifests and reuse outputs only on exact matches, while preserving full proof
 gates for completion claims.
+
+## 2026-06-23 - Parser Assertion Maintenance And AF_PACKET Receive Boundary
+
+Status: partial checkpoint; no new virtio-net receive proof committed.
+
+Changes retained:
+
+- Updated `OrlixUpstreamTestOutputParserTests.testRejectsFailingTapLine` for the current
+  `OrlixUpstreamTestRunError.upstreamFailure(_:outputTail:)` associated-value shape.
+- The assertion now checks the failure marker line and verifies the captured output tail
+  still contains the failing TAP line.
+
+Validation:
+
+```bash
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixTestRunnerTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixTestRunnerTests \
+  test
+```
+
+Result: `Testing started`; `xcodebuild` exit `0` on 2026-06-23.
+
+Additional evidence gathered but not retained as implementation:
+
+- Attempted to add an AF_PACKET userspace receive marker for virtio-net.
+- Hosted XCTest consistently failed on that new marker:
+  `not ok 10 - AF_PACKET socket receives ...`.
+- Existing reliable virtio-net proof boundary remains discovery, AF_PACKET bind,
+  carrier reporting, TX accounting, and RX queue accounting.
+- Do not claim AF_PACKET receive of virtio-net RX frames, loopback reflection, DNS,
+  NAT, OCI `netDevices`, external networking, or full OCI networking support from
+  the current checkpoint.
