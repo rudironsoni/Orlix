@@ -896,6 +896,13 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultUserID: 1000,
             defaultGroupID: 100,
             defaultSupplementaryGroups: [44, 45],
+            defaultCapabilities: OrlixEnvironmentCapabilities(
+                bounding: ["CAP_CHOWN", "CAP_SETUID"],
+                permitted: ["CAP_CHOWN"],
+                inheritable: ["CAP_SETUID"],
+                effective: ["CAP_CHOWN"],
+                ambient: ["CAP_SETUID"]
+            ),
             defaultNoNewPrivileges: true,
             defaultCloseAdditionalFds: true,
             defaultOOMScoreAdjustment: -500,
@@ -937,6 +944,11 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.gid=100"))
         XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
         XCTAssertTrue(commandLine.contains("orlix.suppgid1=45"))
+        XCTAssertTrue(commandLine.contains("orlix.cap.bounding=CAP_CHOWN,CAP_SETUID"))
+        XCTAssertTrue(commandLine.contains("orlix.cap.permitted=CAP_CHOWN"))
+        XCTAssertTrue(commandLine.contains("orlix.cap.inheritable=CAP_SETUID"))
+        XCTAssertTrue(commandLine.contains("orlix.cap.effective=CAP_CHOWN"))
+        XCTAssertTrue(commandLine.contains("orlix.cap.ambient=CAP_SETUID"))
         XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
         XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
         XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=-500"))
@@ -1127,6 +1139,10 @@ final class OrlixTerminalSessionTests: XCTestCase {
             )
         )
         XCTAssertTrue(initSource.contains("sched_setaffinity("))
+        XCTAssertTrue(initSource.contains("SYS_capset"))
+        XCTAssertTrue(initSource.contains("SYS_capget"))
+        XCTAssertTrue(initSource.contains("PR_CAPBSET_DROP"))
+        XCTAssertTrue(initSource.contains("PR_CAP_AMBIENT"))
         XCTAssertTrue(initSource.contains("CPU_SET("))
     }
 
@@ -5917,6 +5933,7 @@ extension OrlixTerminalSessionTests {
 
 		for name in [
 			"process.user",
+			"process.capabilities",
 			"process.noNewPrivileges",
 			"process.closeAdditionalFds",
 			"process.oomScoreAdj",
@@ -6110,7 +6127,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedProcessFeatures() throws {
 		let unsupportedProcessConfigs: [(String, String)] = [
-			("capabilities", #""capabilities": { "bounding": ["CAP_NET_ADMIN"] }"#),
+			("capabilities", #""capabilities": { "bounding": ["CAP_ORLIX_ONLY"] }"#),
 			("apparmorProfile", #""apparmorProfile": "container-default""#),
 			("selinuxLabel", #""selinuxLabel": "system_u:system_r:container_t:s0""#)
 		]
@@ -6129,10 +6146,13 @@ extension OrlixTerminalSessionTests {
 				""".utf8
 			)
 
+			let expectedFeature = feature == "capabilities"
+				? "process.capabilities.bounding"
+				: "process.\(feature)"
 			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
 				XCTAssertEqual(
 					error as? OrlixOCIRuntimeConfigError,
-					.unsupportedLinuxFeature("process.\(feature)")
+					.unsupportedLinuxFeature(expectedFeature)
 				)
 			}
 		}
@@ -6557,6 +6577,13 @@ extension OrlixTerminalSessionTests {
 		    "scheduler": { "policy": "SCHED_FIFO", "priority": 1 },
 		    "ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 4 },
 		    "execCPUAffinity": { "initial": "0", "final": "0-1" },
+		    "capabilities": {
+		      "bounding": ["CAP_CHOWN", "CAP_SETUID"],
+		      "permitted": ["CAP_CHOWN"],
+		      "inheritable": ["CAP_SETUID"],
+		      "effective": ["CAP_CHOWN"],
+		      "ambient": ["CAP_SETUID"]
+		    },
 		    "cwd": "/work",
 		    "user": { "uid": 1000, "gid": 1001, "additionalGids": [44, 45], "umask": 18 }
 		  }
@@ -6583,6 +6610,16 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.environment.defaultUserID, 1000)
 		XCTAssertEqual(session.environment.defaultGroupID, 1001)
 		XCTAssertEqual(session.environment.defaultSupplementaryGroups, [44, 45])
+		XCTAssertEqual(
+			session.environment.defaultCapabilities,
+			OrlixEnvironmentCapabilities(
+				bounding: ["CAP_CHOWN", "CAP_SETUID"],
+				permitted: ["CAP_CHOWN"],
+				inheritable: ["CAP_SETUID"],
+				effective: ["CAP_CHOWN"],
+				ambient: ["CAP_SETUID"]
+			)
+		)
 		XCTAssertTrue(session.environment.defaultNoNewPrivileges)
 		XCTAssertTrue(session.environment.defaultCloseAdditionalFds)
 		XCTAssertEqual(session.environment.defaultOOMScoreAdjustment, -500)
@@ -6608,6 +6645,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(
 			importPlan.environment.defaultSupplementaryGroups,
 			session.environment.defaultSupplementaryGroups
+		)
+		XCTAssertEqual(
+			importPlan.environment.defaultCapabilities,
+			session.environment.defaultCapabilities
 		)
 		XCTAssertEqual(
 			importPlan.environment.defaultNoNewPrivileges,

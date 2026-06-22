@@ -22,6 +22,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultUserID: UInt32
     public let defaultGroupID: UInt32
     public let defaultSupplementaryGroups: [UInt32]
+    public let defaultCapabilities: OrlixEnvironmentCapabilities?
     public let defaultNoNewPrivileges: Bool
     public let defaultCloseAdditionalFds: Bool
     public let defaultOOMScoreAdjustment: Int32?
@@ -74,6 +75,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultUserID: UInt32,
         defaultGroupID: UInt32,
         defaultSupplementaryGroups: [UInt32] = [],
+        defaultCapabilities: OrlixEnvironmentCapabilities? = nil,
         defaultNoNewPrivileges: Bool = false,
         defaultCloseAdditionalFds: Bool = false,
         defaultOOMScoreAdjustment: Int32? = nil,
@@ -98,6 +100,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultUserID = defaultUserID
         self.defaultGroupID = defaultGroupID
         self.defaultSupplementaryGroups = defaultSupplementaryGroups
+        self.defaultCapabilities = defaultCapabilities
         self.defaultNoNewPrivileges = defaultNoNewPrivileges
         self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
         self.defaultOOMScoreAdjustment = defaultOOMScoreAdjustment
@@ -124,6 +127,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultUserID
         case defaultGroupID
         case defaultSupplementaryGroups
+        case defaultCapabilities
         case defaultNoNewPrivileges
         case defaultCloseAdditionalFds
         case defaultOOMScoreAdjustment
@@ -175,6 +179,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             [UInt32].self,
             forKey: .defaultSupplementaryGroups
         ) ?? []
+        self.defaultCapabilities = try container.decodeIfPresent(
+            OrlixEnvironmentCapabilities.self,
+            forKey: .defaultCapabilities
+        )
         self.defaultNoNewPrivileges = try container.decodeIfPresent(
             Bool.self,
             forKey: .defaultNoNewPrivileges
@@ -278,6 +286,28 @@ public struct OrlixEnvironmentRlimit: Codable, Equatable, Sendable {
         self.type = type
         self.soft = soft
         self.hard = hard
+    }
+}
+
+public struct OrlixEnvironmentCapabilities: Codable, Equatable, Sendable {
+    public let bounding: [String]
+    public let permitted: [String]
+    public let inheritable: [String]
+    public let effective: [String]
+    public let ambient: [String]
+
+    public init(
+        bounding: [String] = [],
+        permitted: [String] = [],
+        inheritable: [String] = [],
+        effective: [String] = [],
+        ambient: [String] = []
+    ) {
+        self.bounding = bounding
+        self.permitted = permitted
+        self.inheritable = inheritable
+        self.effective = effective
+        self.ambient = ambient
     }
 }
 
@@ -612,6 +642,11 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultUserIDCommandLineKey = "orlix.uid"
     public static let defaultGroupIDCommandLineKey = "orlix.gid"
     public static let defaultSupplementaryGroupCommandLineKeyPrefix = "orlix.suppgid"
+    public static let defaultCapabilitiesBoundingCommandLineKey = "orlix.cap.bounding"
+    public static let defaultCapabilitiesPermittedCommandLineKey = "orlix.cap.permitted"
+    public static let defaultCapabilitiesInheritableCommandLineKey = "orlix.cap.inheritable"
+    public static let defaultCapabilitiesEffectiveCommandLineKey = "orlix.cap.effective"
+    public static let defaultCapabilitiesAmbientCommandLineKey = "orlix.cap.ambient"
     public static let defaultNoNewPrivilegesCommandLineKey = "orlix.nonewprivs"
     public static let defaultCloseAdditionalFdsCommandLineKey = "orlix.closefds"
     public static let defaultOOMScoreAdjustmentCommandLineKey = "orlix.oomscoreadj"
@@ -833,6 +868,13 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         tokens.append("\(defaultGroupIDCommandLineKey)=\(descriptor.defaultGroupID)")
         for (index, groupID) in descriptor.defaultSupplementaryGroups.enumerated() {
             tokens.append("\(defaultSupplementaryGroupCommandLineKeyPrefix)\(index)=\(groupID)")
+        }
+        if let capabilities = descriptor.defaultCapabilities {
+            tokens.append("\(defaultCapabilitiesBoundingCommandLineKey)=\(capabilities.bounding.joined(separator: ","))")
+            tokens.append("\(defaultCapabilitiesPermittedCommandLineKey)=\(capabilities.permitted.joined(separator: ","))")
+            tokens.append("\(defaultCapabilitiesInheritableCommandLineKey)=\(capabilities.inheritable.joined(separator: ","))")
+            tokens.append("\(defaultCapabilitiesEffectiveCommandLineKey)=\(capabilities.effective.joined(separator: ","))")
+            tokens.append("\(defaultCapabilitiesAmbientCommandLineKey)=\(capabilities.ambient.joined(separator: ","))")
         }
         if descriptor.defaultNoNewPrivileges {
             tokens.append("\(defaultNoNewPrivilegesCommandLineKey)=1")
@@ -1131,6 +1173,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultUserID: parent.defaultUserID,
                 defaultGroupID: parent.defaultGroupID,
                 defaultSupplementaryGroups: parent.defaultSupplementaryGroups,
+                defaultCapabilities: parent.defaultCapabilities,
                 defaultNoNewPrivileges: parent.defaultNoNewPrivileges,
                 defaultCloseAdditionalFds: parent.defaultCloseAdditionalFds,
                 defaultOOMScoreAdjustment: parent.defaultOOMScoreAdjustment,
