@@ -16087,3 +16087,71 @@ Current status / handoff:
 - Continue by adding a dedicated virtio-net interface/packet proof only when it
   can stay Linux-owned and avoid exposing Darwin or simulator networking details
   to the Linux surface.
+
+### 2026-06-22 - Add dedicated virtio-net Linux visibility probe
+
+Checkpoint summary:
+
+- Added `virtio_net_device_probe` as an Orlix Linux kselftest overlay program.
+- The probe is visibility-only and uses standard Linux surfaces:
+  `/sys/bus/virtio/devices`, `/sys/class/net`, `RTM_GETLINK` over
+  `NETLINK_ROUTE`, and `/proc/net/dev`.
+- The probe dynamically discovers the virtio-net device ID (`0x0001`, `0001`,
+  or `1`), discovers the owned Linux netdev without assuming `eth0`, rejects
+  loopback, and requires sysfs, rtnetlink, and procfs to agree on the interface.
+- Added the probe to the Orlix selftest `TEST_GEN_PROGS` list so it builds and
+  packages into the kselftest initramfs.
+
+Ownership / boundary notes:
+
+- This is a Linux-owned visibility probe only. It does not add a custom ABI,
+  HostAdapter networking callback, Swift net-device facade, Darwin socket path,
+  or app-facing route/device API.
+- The probe deliberately avoids carrier state, DNS, NAT, registry pull, packet
+  transmission, OCI `netDevices`, or container networking claims.
+- If runtime execution later shows the interface is absent, the owning area is
+  the Linux virtio-net/MMIO plane under `OrlixKernel`, not OrlixOS policy or
+  HostAdapter leakage.
+
+Validation:
+
+```text
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+result=passed
+
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:32:orlix:virtio_net_device_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:39:file /orlix/virtio_net_device_probe ...
+```
+
+Runtime proof attempt:
+
+```text
+Focused hosted XCTest wiring was attempted for:
+OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession
+
+Latest attempted result:
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_18-00-02-+0200.xcresult
+result=Failed
+passedTests=0
+failedTests=1
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+The failed hosted attempt replayed the older `virtio_mmio_probe_contract`
+output (`1..11`) instead of the new `virtio_net_device_probe` (`1..6`) output.
+The unproven runner/XCTest wiring was removed from this checkpoint. Keep the
+runtime proof pending until the upstream-test runner can execute this new
+kselftest in a fresh command-specific session, or another existing hosted path
+can prove the new markers directly.
+
+Current status / handoff:
+
+- Kernel-side source, build, and initramfs packaging for
+  `virtio_net_device_probe` are present and verified.
+- App-hosted runtime execution of the new probe is not yet proven.
+- Continue by fixing/using a hosted runner path that executes
+  `orlix.kselftest=virtio_net_device_probe` without reusing previous `.kernel`
+  terminal output, then decide from the real probe output whether the next fix
+  belongs in test runner isolation or the Orlix virtio-net/MMIO backend.
