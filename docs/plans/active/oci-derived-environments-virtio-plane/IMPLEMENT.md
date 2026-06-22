@@ -16709,3 +16709,88 @@ rtnetlink, standard rtnetlink operstate presence, ioctl/rtnetlink link-flag
 consistency, Linux `AF_PACKET` bindability on the virtio-net link, and carrier
 reporting after Linux brings the interface up. Next work should move to packet
 transmit/receive behavior through standard Linux networking surfaces only.
+
+### 2026-06-22 - Virtio-net TX completion proof
+
+Follow-up advanced the packet path by making the Orlix virtio MMIO backend
+complete upstream virtio-net transmit queue descriptors. This is still a
+Linux-owned virtio/netdev proof; it does not add HostAdapter network policy,
+host packet forwarding, DNS, NAT, or OCI networking configuration.
+
+Changes:
+
+- Added a `VIRTIO_ID_NET` queue path in
+  `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`.
+- For virtio-net queue 1, the backend validates transmit descriptor chains as
+  guest-readable descriptors, publishes used-ring completion with length `0`,
+  and raises the normal virtio interrupt through `orlix_virtio_mmio_push_used`.
+- Extended `virtio_net_device_probe` to send a minimum Ethernet frame through a
+  Linux `AF_PACKET`/`SOCK_DGRAM` socket and require
+  `/sys/class/net/<ifname>/statistics/tx_packets` to advance.
+- Avoided `snprintf` in the kselftest probe because it pulls in mlibc
+  long-double formatting helpers that are not available in the static
+  kselftest link.
+- Extended the hosted XCTest marker list for
+  `testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession` to require:
+
+```text
+AF_PACKET send advances virtio-net tx_packets
+```
+
+Validation:
+
+```sh
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release
+```
+
+Focused hosted XCTest:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Testing started
+xcodebuild exit=0
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_21-47-22-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Packaging/source evidence:
+
+```text
+OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c:3030:		orlix_virtio_mmio_process_net_tx_queue(slot, queue_index);
+OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_net_device_probe.c:561:			  "AF_PACKET send advances virtio-net tx_packets");
+OrlixTestRunner/Tests/XCTest/OrlixKernelUpstreamTests/OrlixKernelUpstreamTests.swift:420:        XCTAssertTrue(output.contains("AF_PACKET send advances virtio-net tx_packets"))
+```
+
+Scope note: this proves that Linux can transmit an Ethernet frame into the
+virtio-net TX queue and observe TX completion through standard Linux
+`tx_packets` accounting. It does not prove RX delivery, loopback reflection,
+DNS, NAT, registry pulls, OCI `netDevices`, external networking, or full OCI
+networking support.
+
+Current status:
+
+The active virtio-net proof is green through hosted XCTest for device
+visibility, Ethernet-shaped netdev properties, MTU consistency across sysfs and
+rtnetlink, standard rtnetlink operstate presence, ioctl/rtnetlink link-flag
+consistency, Linux `AF_PACKET` bindability on the virtio-net link, carrier
+reporting after Linux brings the interface up, and Linux-visible TX completion
+for an `AF_PACKET` send. Next work should move to RX delivery or a deliberately
+scoped host-mediated packet path through standard Linux networking surfaces.
