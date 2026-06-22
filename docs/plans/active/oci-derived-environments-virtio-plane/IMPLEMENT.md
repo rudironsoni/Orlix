@@ -14319,3 +14319,98 @@ Non-claims:
 - This does not add a custom Linux ABI.
 - This does not prove networking, namespaces, cgroups, registry pull, `orlix run`,
   or full OCI Runtime compliance.
+## 2026-06-22 09:19 +0200 - OCI process defaults and mount feature reporting
+
+Status: green checkpoint for OrlixOS descriptor/reporting surfaces only.
+
+Added OrlixOS feature-report entries for OCI-specific mount behavior that the
+current Runtime Spec validator already rejects:
+
+- `ociBindMounts`: deterministically rejected until host-folder mounts are
+  exposed through Linux mount behavior and virtio-fs without host path leakage.
+- `ociCgroupMounts`: deterministically rejected until Orlix reports a
+  Linux-owned cgroup2 hierarchy for OCI-derived environments.
+
+This keeps the product report truthful: generic `/tmp` tmpfs visibility remains
+reported separately through the existing `tmpfs` feature, but OCI bind and
+cgroup mount requests are not overclaimed as supported.
+
+Added descriptor proof that OCI Runtime `process` defaults from `config.json`
+are preserved through OrlixOS-owned session/import descriptors:
+
+- `process.args` -> `OrlixEnvironmentDescriptor.defaultCommand`
+- `process.env` -> `OrlixEnvironmentDescriptor.defaultEnvironment`
+- `process.cwd` -> `OrlixEnvironmentDescriptor.defaultWorkingDirectory`
+- `process.user.uid/gid/umask` -> descriptor uid/gid/umask defaults
+
+Also corrected existing OCI descriptor tests so `rootImageIdentifier` is the
+Orlix environment/root-image identity, not the bundle-relative `root.path`, and
+so the launch-through-registry proof uses the default kernel command-line path
+where Orlix execution tokens are projected.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_09-18-50-+0200.xcresult
+result=Passed
+passedTests=8
+failedTests=0
+skippedTests=0
+totalTestCount=8
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserConvertsMinimalLinuxConfig \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleCarriesReadonlyRootIntoEnvironmentDescriptors \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleCarriesProcessDefaultsIntoSessionDescriptor \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLifecycleControllerProducesSessionDescriptor \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeSessionDescriptorLaunchesThroughEnvironmentRegistry \
+  test
+```
+
+Hygiene:
+
+```text
+rtk git diff --check: passed
+rtk python3 -m unittest discover .codex/hooks/tests: passed, 32 tests
+rtk python3 -m unittest discover .codex/rules/tests: passed, 5 tests
+rtk python3 .codex/hooks/compact_plan_check.py: warning-only existing stale status/current-status markers
+```
+
+Observed additional check:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_09-17-14-+0200.xcresult
+result=Failed
+passedTests=4
+failedTests=1
+skippedTests=0
+totalTestCount=5
+expectedFailures=0
+```
+
+The remaining failure in that broader command-line/materialized-root subset was
+`testEnvironmentRootImageCommandLineKeysMatchInitParserContract`, whose
+assertions compare key names against `Sources/init/init.c`. It is not used as
+green evidence for this checkpoint.
+
+Non-claims:
+
+- This does not implement OCI bind mounts, cgroup mounts, namespace execution,
+  or Linux cgroup hierarchy mounting.
+- This does not prove host-folder mounts through virtio-fs.
+- This does not prove process start, PID allocation, lifecycle execution,
+  registry pull, `orlix run`, or full OCI Runtime compliance.
+- This does not add HostAdapter policy, host path leakage, or a custom Linux ABI.

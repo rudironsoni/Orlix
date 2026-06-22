@@ -5819,6 +5819,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(report.feature(named: "seccomp")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "apparmor")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "selinux")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "ociBindMounts")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "ociCgroupMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(
 			report.feature(named: "cgroupV2PidsController")?.status,
 			.implemented
@@ -6416,6 +6418,56 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(importPlan.environment.rootMount, OrlixEnvironmentRootMount.defaultOverlay)
 	}
 
+	func testOCIRuntimeBundleCarriesProcessDefaultsIntoSessionDescriptor() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try """
+		{
+		  "ociVersion": "1.1.0",
+		  "root": { "path": "rootfs" },
+		  "process": {
+		    "args": ["/usr/bin/env", "sh", "-lc", "id"],
+		    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color", "ORLIX_MODE=oci"],
+		    "cwd": "/work",
+		    "user": { "uid": 1000, "gid": 1001, "umask": 18 }
+		  }
+		}
+		""".data(using: .utf8)!.write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let bundle = try OrlixOCIRuntimeBundle.load(from: bundleURL)
+		let session = try bundle.sessionDescriptor(
+			id: "process-defaults",
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+		let importPlan = try bundle.importPlan(
+			id: "process-defaults",
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+
+		XCTAssertEqual(session.environment.defaultCommand, ["/usr/bin/env", "sh", "-lc", "id"])
+		XCTAssertEqual(session.environment.defaultEnvironment["PATH"], "/usr/bin:/bin")
+		XCTAssertEqual(session.environment.defaultEnvironment["TERM"], "xterm-256color")
+		XCTAssertEqual(session.environment.defaultEnvironment["ORLIX_MODE"], "oci")
+		XCTAssertEqual(session.environment.defaultWorkingDirectory, "/work")
+		XCTAssertEqual(session.environment.defaultUserID, 1000)
+		XCTAssertEqual(session.environment.defaultGroupID, 1001)
+		XCTAssertEqual(session.environment.defaultUmask, 18)
+
+		XCTAssertEqual(importPlan.environment.defaultCommand, session.environment.defaultCommand)
+		XCTAssertEqual(importPlan.environment.defaultEnvironment, session.environment.defaultEnvironment)
+		XCTAssertEqual(importPlan.environment.defaultWorkingDirectory, session.environment.defaultWorkingDirectory)
+		XCTAssertEqual(importPlan.environment.defaultUserID, session.environment.defaultUserID)
+		XCTAssertEqual(importPlan.environment.defaultGroupID, session.environment.defaultGroupID)
+		XCTAssertEqual(importPlan.environment.defaultUmask, session.environment.defaultUmask)
+	}
+
 	func testOrlixOSBuildsSessionFromOCIRuntimeBundle() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
@@ -6958,7 +7010,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.lifecycleState, OrlixOCIRuntimeLifecycleState.created)
 		XCTAssertEqual(session.environment.id, "oci-session-created")
 		XCTAssertEqual(session.environment.source, OrlixEnvironmentSource.ociLayout)
-		XCTAssertEqual(session.environment.rootImageIdentifier, "rootfs")
+		XCTAssertEqual(session.environment.rootImageIdentifier, "oci-session-created")
 		XCTAssertEqual(session.environment.defaultCommand, ["/usr/bin/env", "sh"])
 		XCTAssertEqual(session.environment.defaultEnvironment["HOME"], "/root")
 		XCTAssertEqual(session.environment.defaultEnvironment["PATH"], "/usr/bin:/bin")
@@ -7005,8 +7057,7 @@ extension OrlixTerminalSessionTests {
 
 		let linuxSession = try OrlixLinuxSession(
 			ociRuntimeSession: sessionDescriptor,
-			registry: registry,
-			kernelCommandLine: "console=orlix-test"
+			registry: registry
 		)
 
 		let materializedRootImage = try XCTUnwrap(linuxSession.materializedRootImageForTesting)
@@ -7015,7 +7066,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(materializedRootImage.baseImageURL, layout.baseImageURL)
 		XCTAssertEqual(materializedRootImage.stateImageURL, layout.stateImageURL)
 		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
-		XCTAssertTrue(commandLine.contains("console=orlix-test"))
+		XCTAssertTrue(commandLine.contains("console=hvc0"))
 		XCTAssertTrue(commandLine.contains("orlix.exec=/usr/bin/env"))
 		XCTAssertTrue(commandLine.contains("orlix.argv0=/usr/bin/env"))
 		XCTAssertTrue(commandLine.contains("orlix.argv1=sh"))
