@@ -268,7 +268,10 @@ cache-audit:
 	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component coreutils
 
 cache-ready:
-	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils
+	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils \
+		--requires "$(ORLIXOS_COREUTILS_PROOF)" \
+		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls" \
+		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat"
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component coreutils

@@ -49,11 +49,16 @@ cache-audit:
 
 cache-ready:
 	@if [ -n "$(COMPONENT)" ]; then \
-		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component "$(COMPONENT)"; \
+		case "$(COMPONENT)" in \
+			linux) $(MAKE) -f OrlixKernel/Makefile cache-ready PROFILE="$(PROFILE)" ;; \
+			mlibc) $(MAKE) -f OrlixMLibC/Makefile cache-ready PROFILE="$(PROFILE)" ;; \
+			coreutils) $(MAKE) -f OrlixOS/Makefile cache-ready PROFILE="$(PROFILE)" ;; \
+			*) printf 'unknown cache component: %s\n' "$(COMPONENT)" >&2; exit 2 ;; \
+		esac; \
 	else \
-		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component linux; \
-		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc; \
-		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils; \
+		$(MAKE) -f OrlixKernel/Makefile cache-ready PROFILE="$(PROFILE)" && \
+		$(MAKE) -f OrlixMLibC/Makefile cache-ready PROFILE="$(PROFILE)" && \
+		$(MAKE) -f OrlixOS/Makefile cache-ready PROFILE="$(PROFILE)"; \
 	fi
 
 cache-manifest-write:

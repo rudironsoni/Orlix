@@ -1267,7 +1267,9 @@ cache-audit:
 
 .PHONY: cache-ready
 cache-ready:
-	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component linux
+	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component linux \
+		--requires "$(ORLIX_KERNEL_XCFRAMEWORK)/Info.plist" \
+		--requires "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)/OrlixKernel"
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component linux

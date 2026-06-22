@@ -542,7 +542,8 @@ cache-audit:
 	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component mlibc
 
 cache-ready:
-	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc
+	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc \
+		--requires "$(MLIBC_TARGET_ARCH_DEFS)"
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component mlibc
