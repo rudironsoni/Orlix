@@ -4,6 +4,57 @@ import Foundation
 import XCTest
 
 final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
+    func testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession()
+        throws
+    {
+        let descriptor = try Self.makeOCIRuntimeProcessDefaultsDescriptor()
+        XCTAssertEqual(
+            descriptor.defaultCommand,
+            ["/bin/sh"]
+        )
+        XCTAssertEqual(descriptor.defaultEnvironment["ORLIX_DESCRIPTOR_MESSAGE"], "descriptor value without path")
+        XCTAssertEqual(descriptor.defaultWorkingDirectory, "/tmp")
+        XCTAssertEqual(descriptor.defaultUserID, 1000)
+        XCTAssertEqual(descriptor.defaultGroupID, 100)
+
+        let runner = OrlixEnvironmentRootRuntimeProofRunner(
+            fixture: .ociDerived,
+            proof: .descriptorExecution
+        )
+        let output = try runner.run()
+
+        XCTAssertTrue(output.contains("ORLIX_ENV_EXEC_BEGIN"))
+    }
+
+    private static func makeOCIRuntimeProcessDefaultsDescriptor()
+        throws -> OrlixEnvironmentDescriptor
+    {
+        let config = Data(
+            #"""
+            {
+              "ociVersion": "1.1.0",
+              "process": {
+                "terminal": true,
+                "args": ["/bin/sh"],
+                "env": [
+                  "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                  "TERM=xterm-256color",
+                  "ORLIX_DESCRIPTOR_MESSAGE=descriptor value without path"
+                ],
+                "cwd": "/tmp",
+                "user": { "uid": 1000, "gid": 100 }
+              },
+              "root": { "path": "rootfs" }
+            }
+            """#.utf8
+        )
+        let parsed = try OrlixOCIRuntimeConfigParser().parse(config)
+        return parsed.environmentDescriptor(
+            id: "orlix.oci-runtime-defaults",
+            rootMount: .defaultOverlay
+        )
+    }
+
     func testTarDerivedMaterializedRootBootsAndExposesOSRelease() throws {
         let runner = OrlixEnvironmentRootRuntimeProofRunner(
             fixture: .tarDerived

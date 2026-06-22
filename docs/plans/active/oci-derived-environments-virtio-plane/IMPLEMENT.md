@@ -15004,3 +15004,55 @@ Non-claims:
 - This does not yet prove imported OCI `create/start/delete` state transitions.
 - This does not yet prove runtime-observed imported OCI process defaults inside an OCI-created process.
 - Product `orlix run`, registry pull, virtio-fs host-folder mounts, and full namespace/cgroup OCI integration remain open.
+
+### 2026-06-22 - OCI runtime config defaults reach app-hosted OCI-derived entry proof
+
+Checkpoint:
+
+- Added `testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession`
+  to `OrlixEnvironmentRootRuntimeTests`.
+- The test parses an OCI Runtime `config.json` with process defaults through
+  `OrlixOCIRuntimeConfigParser`.
+- It verifies the parsed OCI config produces the expected Orlix environment
+  descriptor defaults:
+  - `process.args` -> `defaultCommand`
+  - `process.env` -> `defaultEnvironment`
+  - `process.cwd` -> `defaultWorkingDirectory`
+  - `process.user.uid` / `process.user.gid` -> descriptor UID/GID defaults
+- It then boots the OCI-derived materialized-root fixture through the existing
+  app-hosted `OrlixEnvironmentRootRuntimeProofRunner` descriptor-execution path.
+
+Evidence:
+
+```text
+rtk timeout 180 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixPTYRuntimeTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  build
+result: passed
+```
+
+Selected app-hosted runtime proof:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.22_14-53-08-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Non-claims:
+
+- This is stronger than descriptor-only OCI default parsing because it pairs the
+  parsed OCI defaults with app-hosted OCI-derived environment entry.
+- This still does not claim OCI Runtime `create/start/state/kill/delete`
+  compliance.
+- This still does not prove an OCI-created process object with PID/state
+  tracking.
+- Full product `orlix run`, registry pull, virtio-fs host-folder mounts, and
+  full namespace/cgroup OCI integration remain open.
