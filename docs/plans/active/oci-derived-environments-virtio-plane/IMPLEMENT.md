@@ -14147,3 +14147,58 @@ Non-claims:
 - No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
 - No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, cgroup, or metadata-fidelity completeness is claimed.
 - This checkpoint only makes the next materialization execution step fail-closed when required filesystem tools are unavailable.
+### 2026-06-22 08:21 +0200 - OCI bundle rootfs materialization input preparation
+
+Status: green targeted checkpoint.
+
+Implemented:
+
+- Added SPI `OrlixOCIRuntimeBundleImportPlan.prepareMaterializationInputs(fileManager:)`.
+- The bridge calls the existing `OrlixEnvironmentImageMaterializationPlan.prepareInputTrees(fileManager:)` path for OCI bundle rootfs imports.
+- This prepares the bundle `rootfs/` directory into the materialization base tree and prepares the overlay state tree directories through the existing OrlixOS-owned image materialization model.
+- Added `testOCIRuntimeBundleImportPlanPreparesRootfsMaterializationInputs` to prove:
+  - a file from the local OCI runtime bundle `rootfs/` is copied into the base tree;
+  - a rootfs symlink is preserved in the base tree;
+  - the state `upper/` and `work/` directories are created for the writable overlay state image.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_08-21-19-+0200.xcresult
+result=Passed
+passedTests=10
+failedTests=0
+skippedTests=0
+totalTestCount=10
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOrlixOSBuildsSessionFromOCIRuntimeBundle \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanUsesBundleRootfsForMaterialization \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanSavesDescriptorAndEmitsMaterializationCommands \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanPreparesRootfsMaterializationInputs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleImportPlanReportsMaterializationToolchainReadiness \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingConfig \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsFileRootfs \
+  test
+```
+
+Non-claims:
+
+- No ext4 image generation was executed by this checkpoint.
+- No `base.ext4` or `state.ext4` file was generated.
+- No bundle rootfs was registered with HostAdapter, mounted as active Linux root, or booted.
+- This proves rootfs input preparation only; metadata-fidelity completeness for OCI/tar semantics still depends on the existing tar/materializer coverage and further bundle-rootfs metadata work.
+- No process start, PID allocation, OCI Runtime lifecycle execution, `orlix run`, registry pull, full OCI Runtime compliance, networking, namespace, or cgroup completeness is claimed.

@@ -1918,6 +1918,12 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 		)
 	}
 
+	public func prepareMaterializationInputs(
+		fileManager: FileManager = .default
+	) throws {
+		try materializationPlan.prepareInputTrees(fileManager: fileManager)
+	}
+
 	public func materializationToolchainCheck(
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
