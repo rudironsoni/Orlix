@@ -13568,3 +13568,73 @@ Non-claims:
   networking, full package ladder, or product runtime readiness.
 - Remaining transport work should generalize scatter-gather input/output
   handling beyond the immediate FUSE operations proven here.
+
+## 2026-06-22 post-virtio-fs substrate proof refresh
+
+Status: evidence-only checkpoint; no source behavior changed in this slice.
+
+After the virtio-fs transport changes landed, re-ran the already-existing
+app-hosted substrate probes that the OCI-derived environment plan depends on
+before any OCI runtime, `orlix run`, external networking, or cgroup resource
+claims.
+
+Focused app-hosted proof:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_05-47-38-+0200.xcresult
+testNetworkNamespaceProbeCompletesThroughOrlixOSTerminalSession
+result=Passed
+passedTests=1
+failedTests=0
+testFailures=0
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_05-48-41-+0200.xcresult
+testCgroupNamespaceProbeCompletesThroughOrlixOSTerminalSession
+result=Passed
+passedTests=1
+failedTests=0
+testFailures=0
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_05-49-41-+0200.xcresult
+testCgroupPidsProbeCompletesThroughOrlixOSTerminalSession
+result=Passed
+passedTests=1
+failedTests=0
+testFailures=0
+```
+
+Current feature-report inspection:
+
+```text
+cgroupV2BasicLifecycle|implemented|orlix:cgroup_v2_probe
+cgroupV2PidsController|implemented|orlix:cgroup_pids_probe
+cgroups|recognized|
+loopbackNetworking|implemented|orlix:network_namespace_probe
+netDevices|deterministicallyRejected|
+rtnetlink|implemented|orlix:network_namespace_probe
+userNamespaceMappings|deterministicallyRejected|
+```
+
+Non-claims:
+
+- Green network namespace proof covers loopback/proc/rtnetlink substrate, not
+  external/shared networking and not virtio-net data-plane readiness.
+- Green cgroup namespace and pids probes do not claim full cgroup v2 resource
+  controller enforcement.
+- `netDevices` remains deterministically rejected until a real virtio-net
+  device-plane proof exists.
+- This checkpoint does not advance OCI lifecycle, registry pull, Docker daemon,
+  runc, VM runtime, Apple container/containerization, or product runtime
+  readiness.
+
+Current status / handoff:
+
+- Latest pushed implementation commit before this evidence checkpoint:
+  `8500657d Complete virtiofs mount probe transport`.
+- Current evidence checkpoint verifies existing app-hosted networking/cgroup
+  substrate probes after that virtio-fs change.
+- Worktree at this checkpoint should only contain this `IMPLEMENT.md` update
+  plus untracked local Serena metadata.
+- Next aligned implementation target: real virtio-net device-plane proof. Do
+  not claim external/shared networking, OCI `netDevices`, OCI lifecycle, or
+  `orlix run` until that Linux-owned substrate is implemented and verified.
