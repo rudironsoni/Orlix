@@ -15610,3 +15610,54 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI process session has driver-backed run composition
+
+Checkpoint:
+
+- Added SPI `OrlixOCIRuntimeProcessSession.run(using:)`.
+- The run helper composes `start(using:)` followed by `wait(using:)` through the
+  same observation driver.
+- Added a focused recording-driver test proving the composed run path observes:
+  - start from a created lifecycle record,
+  - wait from the running lifecycle record with the observed Linux PID,
+  - stopped completion from the returned Linux-observed completion metadata.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- OrlixOS now has a single process-session entry point for the common
+  start-and-wait lifecycle path.
+- Lifecycle advancement still depends only on driver-returned observed process
+  metadata.
+- The change remains above the Linux surface and below product claims. It adds
+  no syscall, ioctl, pseudo-file, HostAdapter API, host path, Darwin behavior,
+  or custom Linux ABI.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_16-29-51-+0200.xcresult
+result=Passed
+passedTests=2
+failedTests=0
+skippedTests=0
+totalTestCount=2
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history/current-status warnings.
+
+Non-claims:
+
+- This composes the OrlixOS observation-driver run path only.
+- It does not yet launch, signal, monitor, wait for, or reap a real
+  OCI-created Linux process.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.
