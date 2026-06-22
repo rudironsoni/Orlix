@@ -32,11 +32,15 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
             commandLine = rootImage.kernelCommandLine
         }
 
+        let terminalIdentifierSuffix = String((kernelCommandLineSuffix ?? "default").map {
+            $0.isLetter || $0.isNumber ? $0 : "."
+        })
+
         return OrlixBootConfig(
             profile: profile,
             kernelCommandLine: commandLine,
             rootImageIdentifier: rootImage.identifier,
-            terminalIdentifier: "orlix.test.\(suite.rawValue).terminal"
+            terminalIdentifier: "orlix.test.\(suite.rawValue).\(terminalIdentifierSuffix).terminal"
         )
     }
 
@@ -250,6 +254,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=virtio_mmio_probe_contract"
+    )
+
+    static let kernelVirtioNetDevice = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=virtio_net_device_probe"
     )
 
     static let kernelVirtioFSMount = OrlixUpstreamTestRunSpec(
