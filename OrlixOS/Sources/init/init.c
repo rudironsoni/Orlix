@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <grp.h>
 #include <limits.h>
+#include <linux/ioprio.h>
 #include <poll.h>
 #include <sched.h>
 #include <stddef.h>
@@ -15,6 +16,7 @@
 #include <sys/prctl.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -587,6 +589,17 @@ static int scheduler_policy_from_name(const char *policy)
 	return -1;
 }
 
+static int io_priority_class_from_name(const char *priority_class)
+{
+	if (strcmp(priority_class, "IOPRIO_CLASS_RT") == 0)
+		return IOPRIO_CLASS_RT;
+	if (strcmp(priority_class, "IOPRIO_CLASS_BE") == 0)
+		return IOPRIO_CLASS_BE;
+	if (strcmp(priority_class, "IOPRIO_CLASS_IDLE") == 0)
+		return IOPRIO_CLASS_IDLE;
+	return -1;
+}
+
 static int valid_exec_path(const char *path)
 {
 	if (path[0] == '\0')
@@ -645,6 +658,9 @@ struct orlix_command_config {
 	int has_scheduler;
 	int scheduler_policy;
 	int scheduler_priority;
+	int has_io_priority;
+	int io_priority_class;
+	int io_priority_priority;
 	unsigned long umask_value;
 	int has_umask;
 };
@@ -763,6 +779,17 @@ static void selected_command_config(struct orlix_command_config *config)
 			config->scheduler_policy = policy;
 			config->scheduler_priority = (int)scheduler_priority;
 			config->has_scheduler = 1;
+		}
+	}
+	char io_priority_class[32];
+	unsigned long io_priority_priority = 0;
+	if (read_cmdline_decoded("orlix.ioprio.class=", io_priority_class, sizeof(io_priority_class)) == 0 &&
+	    read_cmdline_unsigned("orlix.ioprio.priority=", &io_priority_priority) == 0) {
+		int priority_class = io_priority_class_from_name(io_priority_class);
+		if (priority_class >= 0 && io_priority_priority <= 7) {
+			config->io_priority_class = priority_class;
+			config->io_priority_priority = (int)io_priority_priority;
+			config->has_io_priority = 1;
 		}
 	}
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
@@ -1034,6 +1061,13 @@ static void apply_scheduler(int policy, int priority)
 		write_literal(STDERR_FILENO, "orlix-init: sched_setscheduler failed\n");
 }
 
+static void apply_io_priority(int priority_class, int priority)
+{
+	int value = IOPRIO_PRIO_VALUE(priority_class, priority);
+	if (syscall(SYS_ioprio_set, IOPRIO_WHO_PROCESS, 0, value) != 0)
+		write_literal(STDERR_FILENO, "orlix-init: ioprio_set failed\n");
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -1080,6 +1114,8 @@ static pid_t start_command_on_pty(int master, int slave)
 		apply_oom_score_adjustment(config->oom_score_adjustment);
 	if (config->has_scheduler)
 		apply_scheduler(config->scheduler_policy, config->scheduler_priority);
+	if (config->has_io_priority)
+		apply_io_priority(config->io_priority_class, config->io_priority_priority);
 	if (config->close_additional_fds)
 		close_additional_fds();
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)

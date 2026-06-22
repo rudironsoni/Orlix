@@ -1331,6 +1331,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultCloseAdditionalFds: Bool
 	public let defaultOOMScoreAdjustment: Int32?
 	public let defaultScheduler: OrlixEnvironmentScheduler?
+	public let defaultIOPriority: OrlixEnvironmentIOPriority?
 	public let defaultUmask: UInt32?
 	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
@@ -1358,6 +1359,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
 			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
 			defaultScheduler: defaultScheduler,
+			defaultIOPriority: defaultIOPriority,
 			defaultUmask: defaultUmask,
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
@@ -1439,6 +1441,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultCloseAdditionalFds: process.closeAdditionalFds ?? false,
 			defaultOOMScoreAdjustment: try Self.validatedOOMScoreAdjustment(process.oomScoreAdj),
 			defaultScheduler: try Self.validatedScheduler(process.scheduler),
+			defaultIOPriority: try Self.validatedIOPriority(process.ioPriority),
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
@@ -1560,6 +1563,30 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.scheduler.priority")
 		}
 		return OrlixEnvironmentScheduler(policy: policy, priority: Int32(priority))
+	}
+
+	private static func validatedIOPriority(
+		_ ioPriority: OCIRuntimeIOPriority?
+	) throws -> OrlixEnvironmentIOPriority? {
+		guard let ioPriority else {
+			return nil
+		}
+		guard let priorityClass = ioPriority.class else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.ioPriority.class")
+		}
+		let supportedClasses: Set<String> = [
+			"IOPRIO_CLASS_RT",
+			"IOPRIO_CLASS_BE",
+			"IOPRIO_CLASS_IDLE"
+		]
+		guard supportedClasses.contains(priorityClass) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.ioPriority.class")
+		}
+		let priority = ioPriority.priority ?? 0
+		guard priority >= 0 && priority <= 7 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.ioPriority.priority")
+		}
+		return OrlixEnvironmentIOPriority(class: priorityClass, priority: Int32(priority))
 	}
 
 	private static func validatedRlimits(_ values: [OCIRuntimeRlimit]?) throws -> [OrlixEnvironmentRlimit] {
@@ -1692,9 +1719,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.selinuxLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.selinuxLabel")
-		}
-		if process.ioPriority != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.ioPriority")
 		}
 		if process.execCPUAffinity != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")

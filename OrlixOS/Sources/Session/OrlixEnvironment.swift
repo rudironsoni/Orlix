@@ -26,6 +26,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultCloseAdditionalFds: Bool
     public let defaultOOMScoreAdjustment: Int32?
     public let defaultScheduler: OrlixEnvironmentScheduler?
+    public let defaultIOPriority: OrlixEnvironmentIOPriority?
     public let defaultUmask: UInt32?
     public let defaultRlimits: [OrlixEnvironmentRlimit]
     public let hostname: String?
@@ -76,6 +77,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultCloseAdditionalFds: Bool = false,
         defaultOOMScoreAdjustment: Int32? = nil,
         defaultScheduler: OrlixEnvironmentScheduler? = nil,
+        defaultIOPriority: OrlixEnvironmentIOPriority? = nil,
         defaultUmask: UInt32? = nil,
         defaultRlimits: [OrlixEnvironmentRlimit] = [],
         hostname: String? = nil,
@@ -98,6 +100,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
         self.defaultOOMScoreAdjustment = defaultOOMScoreAdjustment
         self.defaultScheduler = defaultScheduler
+        self.defaultIOPriority = defaultIOPriority
         self.defaultUmask = defaultUmask
         self.defaultRlimits = defaultRlimits
         self.hostname = hostname
@@ -122,6 +125,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultCloseAdditionalFds
         case defaultOOMScoreAdjustment
         case defaultScheduler
+        case defaultIOPriority
         case defaultUmask
         case defaultRlimits
         case hostname
@@ -183,6 +187,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             OrlixEnvironmentScheduler.self,
             forKey: .defaultScheduler
         )
+        self.defaultIOPriority = try container.decodeIfPresent(
+            OrlixEnvironmentIOPriority.self,
+            forKey: .defaultIOPriority
+        )
         self.defaultUmask = try container.decodeIfPresent(
             UInt32.self,
             forKey: .defaultUmask
@@ -239,6 +247,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             forKey: .defaultOOMScoreAdjustment
         )
         try container.encodeIfPresent(defaultScheduler, forKey: .defaultScheduler)
+        try container.encodeIfPresent(defaultIOPriority, forKey: .defaultIOPriority)
         try container.encodeIfPresent(defaultUmask, forKey: .defaultUmask)
         if !defaultRlimits.isEmpty {
             try container.encode(defaultRlimits, forKey: .defaultRlimits)
@@ -269,6 +278,16 @@ public struct OrlixEnvironmentScheduler: Codable, Equatable, Sendable {
 
     public init(policy: String, priority: Int32) {
         self.policy = policy
+        self.priority = priority
+    }
+}
+
+public struct OrlixEnvironmentIOPriority: Codable, Equatable, Sendable {
+    public let `class`: String
+    public let priority: Int32
+
+    public init(class: String, priority: Int32) {
+        self.class = `class`
         self.priority = priority
     }
 }
@@ -581,6 +600,8 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultOOMScoreAdjustmentCommandLineKey = "orlix.oomscoreadj"
     public static let defaultSchedulerPolicyCommandLineKey = "orlix.scheduler.policy"
     public static let defaultSchedulerPriorityCommandLineKey = "orlix.scheduler.priority"
+    public static let defaultIOPriorityClassCommandLineKey = "orlix.ioprio.class"
+    public static let defaultIOPriorityPriorityCommandLineKey = "orlix.ioprio.priority"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
     public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
     public static let hostnameCommandLineKey = "orlix.hostname"
@@ -807,6 +828,10 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         if let defaultScheduler = descriptor.defaultScheduler {
             tokens.append("\(defaultSchedulerPolicyCommandLineKey)=\(defaultScheduler.policy)")
             tokens.append("\(defaultSchedulerPriorityCommandLineKey)=\(defaultScheduler.priority)")
+        }
+        if let defaultIOPriority = descriptor.defaultIOPriority {
+            tokens.append("\(defaultIOPriorityClassCommandLineKey)=\(defaultIOPriority.class)")
+            tokens.append("\(defaultIOPriorityPriorityCommandLineKey)=\(defaultIOPriority.priority)")
         }
         if let defaultUmask = descriptor.defaultUmask {
             tokens.append("\(defaultUmaskCommandLineKey)=\(defaultUmask)")
@@ -1089,6 +1114,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultCloseAdditionalFds: parent.defaultCloseAdditionalFds,
                 defaultOOMScoreAdjustment: parent.defaultOOMScoreAdjustment,
                 defaultScheduler: parent.defaultScheduler,
+                defaultIOPriority: parent.defaultIOPriority,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
                 mounts: parent.mounts
