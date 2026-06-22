@@ -106,6 +106,56 @@ class CacheReadyTests(unittest.TestCase):
 
             self.assertEqual(result, 1)
 
+    def test_ready_command_mode_skips_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_manifest(tmp, "release", "coreutils", "source-prep")
+            marker = Path(tmp) / "marker"
+
+            with mock.patch.object(self.module, "audit_component", return_value=[]):
+                result = self.module.main(
+                    [
+                        "--repo-root",
+                        tmp,
+                        "--manifest-root",
+                        "manifests",
+                        "--profile",
+                        "release",
+                        "--component",
+                        "coreutils",
+                        "--",
+                        sys.executable,
+                        "-c",
+                        f"from pathlib import Path; Path({str(marker)!r}).write_text('ran')",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            self.assertFalse(marker.exists())
+
+    def test_not_ready_command_mode_runs_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / "marker"
+
+            result = self.module.main(
+                [
+                    "--repo-root",
+                    tmp,
+                    "--manifest-root",
+                    "manifests",
+                    "--profile",
+                    "release",
+                    "--component",
+                    "coreutils",
+                    "--",
+                    sys.executable,
+                    "-c",
+                    f"from pathlib import Path; Path({str(marker)!r}).write_text('ran')",
+                ]
+            )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(marker.read_text(), "ran")
+
 
 if __name__ == "__main__":
     unittest.main()

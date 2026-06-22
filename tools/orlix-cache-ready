@@ -34,6 +34,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--manifest-root", default=str(DEFAULT_MANIFEST_ROOT))
     parser.add_argument("--repo-root", default=".")
+    parser.add_argument(
+        "command",
+        nargs=argparse.REMAINDER,
+        help=(
+            "Optional command to run when cache is not ready. Prefix the command "
+            "with --, for example: orlix-cache-ready ... -- make target"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -105,14 +113,26 @@ def readiness_errors(args: argparse.Namespace) -> list[str]:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    command = args.command
+    if command and command[0] == "--":
+        command = command[1:]
+
     errors = readiness_errors(args)
+    if errors and command:
+        for error in errors:
+            print(f"not ready: {error}", file=sys.stderr)
+        return subprocess.call(command, cwd=Path(args.repo_root).resolve())
+
     if errors:
         for error in errors:
             print(f"not ready: {error}", file=sys.stderr)
         return 1
 
     stages = ", ".join(args.stage or DEFAULT_STAGES[args.component])
-    print(f"ready: {args.component} {args.profile} ({stages})")
+    if command:
+        print(f"skip: {args.component} {args.profile} cache ready ({stages})")
+    else:
+        print(f"ready: {args.component} {args.profile} ({stages})")
     return 0
 
 
