@@ -900,7 +900,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             defaultCloseAdditionalFds: true,
             defaultOOMScoreAdjustment: -500,
             defaultScheduler: OrlixEnvironmentScheduler(policy: "SCHED_FIFO", priority: 1),
-            defaultIOPriority: OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 4)
+            defaultIOPriority: OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 4),
+            defaultCPUAffinity: OrlixEnvironmentCPUAffinity(mask: "0-1")
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -943,6 +944,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.scheduler.priority=1"))
         XCTAssertTrue(commandLine.contains("orlix.ioprio.class=IOPRIO_CLASS_BE"))
         XCTAssertTrue(commandLine.contains("orlix.ioprio.priority=4"))
+        XCTAssertTrue(commandLine.contains("orlix.cpuaffinity=0-1"))
     }
 
     func testEnvironmentRootImageEncodesLinuxPathDefaultsWithoutHostPathPolicy() throws {
@@ -1119,6 +1121,13 @@ final class OrlixTerminalSessionTests: XCTestCase {
             )
         )
         XCTAssertTrue(initSource.contains("SYS_ioprio_set"))
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultCPUAffinityCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(initSource.contains("sched_setaffinity("))
+        XCTAssertTrue(initSource.contains("CPU_SET("))
     }
 
     func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
@@ -5955,6 +5964,7 @@ extension OrlixTerminalSessionTests {
 			    "oomScoreAdj": -500,
 			    "scheduler": { "policy": "SCHED_FIFO", "priority": 1 },
 			    "ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 4 },
+			    "execCPUAffinity": { "initial": "0", "final": "0-1" },
 			    "consoleSize": { "height": 24, "width": 80 },
 			    "args": ["/bin/sh", "-lc", "echo ok"],
 			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
@@ -6010,6 +6020,10 @@ extension OrlixTerminalSessionTests {
 			descriptor.defaultIOPriority,
 			OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 4)
 		)
+		XCTAssertEqual(
+			descriptor.defaultCPUAffinity,
+			OrlixEnvironmentCPUAffinity(mask: "0-1")
+		)
 		XCTAssertEqual(descriptor.defaultUmask, 18)
 		XCTAssertEqual(descriptor.defaultRlimits, [
 			OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 64)
@@ -6034,6 +6048,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultOOMScoreAdjustment, descriptor.defaultOOMScoreAdjustment)
 		XCTAssertEqual(environment.defaultScheduler, descriptor.defaultScheduler)
 		XCTAssertEqual(environment.defaultIOPriority, descriptor.defaultIOPriority)
+		XCTAssertEqual(environment.defaultCPUAffinity, descriptor.defaultCPUAffinity)
 		XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
 		XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
 	}
@@ -6207,7 +6222,7 @@ extension OrlixTerminalSessionTests {
 			("scheduler.flags", #""scheduler": { "policy": "SCHED_OTHER", "flags": ["RESET_ON_FORK"] }"#),
 			("ioPriority.class", #""ioPriority": { "class": "IOPRIO_CLASS_NONE", "priority": 4 }"#),
 			("ioPriority.priority", #""ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 8 }"#),
-			("execCPUAffinity", #""execCPUAffinity": { "initial": "0", "final": "0" }"#)
+			("execCPUAffinity", #""execCPUAffinity": { "initial": "0", "final": "1-0" }"#)
 		]
 
 		for (feature, processFragment) in fragments {
@@ -6521,6 +6536,7 @@ extension OrlixTerminalSessionTests {
 		    "oomScoreAdj": -500,
 		    "scheduler": { "policy": "SCHED_FIFO", "priority": 1 },
 		    "ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 4 },
+		    "execCPUAffinity": { "initial": "0", "final": "0-1" },
 		    "cwd": "/work",
 		    "user": { "uid": 1000, "gid": 1001, "additionalGids": [44, 45], "umask": 18 }
 		  }
@@ -6558,6 +6574,10 @@ extension OrlixTerminalSessionTests {
 			session.environment.defaultIOPriority,
 			OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 4)
 		)
+		XCTAssertEqual(
+			session.environment.defaultCPUAffinity,
+			OrlixEnvironmentCPUAffinity(mask: "0-1")
+		)
 		XCTAssertEqual(session.environment.defaultUmask, 18)
 
 		XCTAssertEqual(importPlan.environment.defaultCommand, session.environment.defaultCommand)
@@ -6588,6 +6608,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(
 			importPlan.environment.defaultIOPriority,
 			session.environment.defaultIOPriority
+		)
+		XCTAssertEqual(
+			importPlan.environment.defaultCPUAffinity,
+			session.environment.defaultCPUAffinity
 		)
 		XCTAssertEqual(importPlan.environment.defaultUmask, session.environment.defaultUmask)
 	}

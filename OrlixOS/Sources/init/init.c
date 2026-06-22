@@ -600,6 +600,37 @@ static int io_priority_class_from_name(const char *priority_class)
 	return -1;
 }
 
+static int parse_cpu_affinity(const char *value, cpu_set_t *set)
+{
+	CPU_ZERO(set);
+	const char *cursor = value;
+	while (*cursor != '\0') {
+		errno = 0;
+		char *end = NULL;
+		unsigned long start = strtoul(cursor, &end, 10);
+		if (errno != 0 || end == cursor || start >= CPU_SETSIZE)
+			return -1;
+		unsigned long last = start;
+		if (*end == '-') {
+			cursor = end + 1;
+			errno = 0;
+			last = strtoul(cursor, &end, 10);
+			if (errno != 0 || end == cursor || last < start || last >= CPU_SETSIZE)
+				return -1;
+		}
+		for (unsigned long cpu = start; cpu <= last; ++cpu)
+			CPU_SET((int)cpu, set);
+		if (*end == '\0')
+			return 0;
+		if (*end != ',')
+			return -1;
+		cursor = end + 1;
+		if (*cursor == '\0')
+			return -1;
+	}
+	return -1;
+}
+
 static int valid_exec_path(const char *path)
 {
 	if (path[0] == '\0')
@@ -661,6 +692,8 @@ struct orlix_command_config {
 	int has_io_priority;
 	int io_priority_class;
 	int io_priority_priority;
+	int has_cpu_affinity;
+	cpu_set_t cpu_affinity;
 	unsigned long umask_value;
 	int has_umask;
 };
@@ -792,6 +825,10 @@ static void selected_command_config(struct orlix_command_config *config)
 			config->has_io_priority = 1;
 		}
 	}
+	char cpu_affinity[128];
+	if (read_cmdline_decoded("orlix.cpuaffinity=", cpu_affinity, sizeof(cpu_affinity)) == 0 &&
+	    parse_cpu_affinity(cpu_affinity, &config->cpu_affinity) == 0)
+		config->has_cpu_affinity = 1;
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
@@ -1068,6 +1105,12 @@ static void apply_io_priority(int priority_class, int priority)
 		write_literal(STDERR_FILENO, "orlix-init: ioprio_set failed\n");
 }
 
+static void apply_cpu_affinity(const cpu_set_t *set)
+{
+	if (sched_setaffinity(0, sizeof(*set), set) != 0)
+		write_literal(STDERR_FILENO, "orlix-init: sched_setaffinity failed\n");
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -1116,6 +1159,8 @@ static pid_t start_command_on_pty(int master, int slave)
 		apply_scheduler(config->scheduler_policy, config->scheduler_priority);
 	if (config->has_io_priority)
 		apply_io_priority(config->io_priority_class, config->io_priority_priority);
+	if (config->has_cpu_affinity)
+		apply_cpu_affinity(&config->cpu_affinity);
 	if (config->close_additional_fds)
 		close_additional_fds();
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)
