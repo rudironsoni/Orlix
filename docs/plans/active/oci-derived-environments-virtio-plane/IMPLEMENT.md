@@ -17240,3 +17240,44 @@ Current status:
   - No generated Linux, mlibc, OrlixOS, or Coreutils source/build trees should be edited to make proofs pass.
 - Next useful proof direction:
   - Exercise Linux and Coreutils fallback-to-manifest-refresh paths when an expensive rebuild is acceptable, then confirm second-run skips with `cache-ready` plus concrete sentinels.
+
+## 2026-06-23 - Owner cache-ready targets match skip gates
+
+Current status:
+
+- Tightened public cache readiness entry points so "ready" means the matching build/package gate would actually skip.
+- Root `Makefile cache-ready` no longer calls `tools/orlix-cache-ready` directly for each component.
+  - `COMPONENT=linux` delegates to `OrlixKernel/Makefile cache-ready`.
+  - `COMPONENT=mlibc` delegates to `OrlixMLibC/Makefile cache-ready`.
+  - `COMPONENT=coreutils` delegates to `OrlixOS/Makefile cache-ready`.
+  - No-component `cache-ready` runs the three owner readiness targets in order.
+  - Unknown component names fail with an explicit error.
+- Owner readiness sentinels now match skip gates:
+  - Linux `cache-ready` requires the Linux manifests plus `$(ORLIX_KERNEL_XCFRAMEWORK)/Info.plist` and `$(ORLIX_IOS_SIMULATOR_FRAMEWORK)/OrlixKernel`.
+  - OrlixMLibC `cache-ready` requires the mlibc manifests plus `$(MLIBC_TARGET_ARCH_DEFS)`.
+  - Coreutils `cache-ready` requires the Coreutils manifests plus `$(ORLIXOS_COREUTILS_PROOF)`, `$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls`, and `$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat`.
+
+Validation:
+
+```bash
+rtk make -n cache-ready COMPONENT=mlibc PROFILE=release
+rtk make cache-ready COMPONENT=mlibc PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make cache-ready COMPONENT=linux PROFILE=release
+rtk make cache-ready COMPONENT=coreutils PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk python3 -m unittest discover tools/tests
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+- mlibc root and owner readiness pass against the refreshed mlibc cache.
+- Linux root readiness fails closed through the owner target because Linux manifests and XCFramework sentinels are missing in this checkout.
+- Coreutils root and owner readiness fail closed because Coreutils proof/install sentinels are missing in this checkout.
+- `tools/tests`: 10 tests pass.
+- `git diff --check`: pass.
+- `.codex/hooks/tests`: 32 tests pass.
+- `.codex/rules/tests`: 5 tests pass.
+- `compact_plan_check.py`: pass.
