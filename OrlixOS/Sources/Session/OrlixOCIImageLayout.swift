@@ -2675,6 +2675,60 @@ public struct OrlixOCIRuntimeSessionDescriptor: Equatable, Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeProcessHandle: Sendable {
+	public let lifecycle: OrlixOCIRuntimeLifecycleController
+	public let rootMount: OrlixEnvironmentRootMount
+	public let sessionDescriptor: OrlixOCIRuntimeSessionDescriptor
+
+	public init(lifecycle: OrlixOCIRuntimeLifecycleController,
+		    rootMount: OrlixEnvironmentRootMount) throws
+	{
+		self.lifecycle = lifecycle
+		self.rootMount = rootMount
+		self.sessionDescriptor = try lifecycle.sessionDescriptor(rootMount: rootMount)
+	}
+
+	public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessHandle {
+		try OrlixOCIRuntimeProcessHandle(
+			lifecycle: lifecycle.start(pid: pid),
+			rootMount: rootMount
+		)
+	}
+
+	public func kill(signal: Int32) throws -> OrlixOCIRuntimeProcessHandle {
+		try OrlixOCIRuntimeProcessHandle(
+			lifecycle: lifecycle.kill(signal: signal),
+			rootMount: rootMount
+		)
+	}
+
+	public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+		OrlixOCIRuntimeCompletedProcess(
+			lifecycle: try lifecycle.exit(observedProcess: observation)
+		)
+	}
+
+	public func exit(observedSignal observation: OrlixOCIRuntimeProcessSignalObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+		OrlixOCIRuntimeCompletedProcess(
+			lifecycle: try lifecycle.exit(observedSignal: observation)
+		)
+	}
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeCompletedProcess: Sendable {
+	public let lifecycle: OrlixOCIRuntimeLifecycleController
+
+	public init(lifecycle: OrlixOCIRuntimeLifecycleController) {
+		self.lifecycle = lifecycle
+	}
+
+	public func stateReport() throws -> OrlixOCIRuntimeStateReport {
+		try lifecycle.stateReport()
+	}
+}
+
+@_spi(OrlixPrivateTesting)
 public extension OrlixOCIRuntimeLifecycleController {
 	func sessionDescriptor(rootMount: OrlixEnvironmentRootMount)
 		throws -> OrlixOCIRuntimeSessionDescriptor
