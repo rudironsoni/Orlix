@@ -199,7 +199,18 @@ static bool sysfs_netdev_reports_ethernet_addr_len(const char *ifname)
 	return read_sysfs_ulong(path, &addr_len) && addr_len == ORLIX_ETH_ALEN;
 }
 
-static bool rtnetlink_reports_link(const char *expected_ifname)
+static bool sysfs_netdev_reports_mtu(const char *ifname, unsigned long *mtu)
+{
+	char path[128];
+
+	if (!append_path(path, sizeof(path), "/sys/class/net/", ifname, "/mtu"))
+		return false;
+
+	return read_sysfs_ulong(path, mtu) && *mtu > 0;
+}
+
+static bool rtnetlink_reports_link(const char *expected_ifname,
+				   unsigned long expected_mtu)
 {
 	struct {
 		struct nlmsghdr header;
@@ -246,6 +257,7 @@ static bool rtnetlink_reports_link(const char *expected_ifname)
 			int attributes_len;
 			bool name_matches = false;
 			bool has_ethernet_address = false;
+			bool mtu_matches = false;
 
 			if (message->nlmsg_type == NLMSG_DONE) {
 				close(fd);
@@ -287,9 +299,16 @@ static bool rtnetlink_reports_link(const char *expected_ifname)
 
 					has_ethernet_address = has_nonzero_octet;
 				}
+				if (attribute->rta_type == IFLA_MTU &&
+				    RTA_PAYLOAD(attribute) == sizeof(unsigned int)) {
+					unsigned int mtu = 0;
+
+					memcpy(&mtu, RTA_DATA(attribute), sizeof(mtu));
+					mtu_matches = mtu == expected_mtu;
+				}
 			}
 
-			if (name_matches && has_ethernet_address)
+			if (name_matches && has_ethernet_address && mtu_matches)
 				saw_link = true;
 		}
 	}
@@ -309,10 +328,12 @@ int main(void)
 {
 	char device_name[64] = { 0 };
 	char ifname[IFNAMSIZ] = { 0 };
+	unsigned long mtu = 0;
 	bool device_present;
 	bool owns_netdev = false;
+	bool has_mtu = false;
 
-	orlix_test_plan(8);
+	orlix_test_plan(9);
 
 	device_present = find_virtio_net_device(device_name, sizeof(device_name));
 	orlix_test_result(device_present,
@@ -330,8 +351,11 @@ int main(void)
 			  "virtio-net netdev reports Ethernet hardware type");
 	orlix_test_result(owns_netdev && sysfs_netdev_reports_ethernet_addr_len(ifname),
 			  "virtio-net netdev reports Ethernet address length");
-	orlix_test_result(owns_netdev && rtnetlink_reports_link(ifname),
-			  "rtnetlink enumerates the virtio-net Ethernet link");
+	has_mtu = owns_netdev && sysfs_netdev_reports_mtu(ifname, &mtu);
+	orlix_test_result(has_mtu,
+			  "virtio-net netdev reports a positive MTU through sysfs");
+	orlix_test_result(has_mtu && rtnetlink_reports_link(ifname, mtu),
+			  "rtnetlink enumerates the virtio-net Ethernet link with matching MTU");
 	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
 			  "virtio-net link is distinct from loopback");
 	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),
