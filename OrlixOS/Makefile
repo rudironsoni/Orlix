@@ -33,7 +33,7 @@ ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP := $(ORLIXOS_BUILD_ROOT)/environment-run
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 
-.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-proof-fixtures test coreutils-test cache-audit cache-ready cache-manifest-write clean mrproper __coreutils-source FORCE
+.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-proof-fixtures test coreutils-test cache-audit cache-ready cache-manifest-write clean mrproper __coreutils-cache-gated __coreutils-source FORCE
 
 all: rootfs
 
@@ -47,7 +47,17 @@ help:
 	@printf '%s\n' '  test     run OrlixOS package tests in the app-hosted Orlix path'
 	@printf '%s\n' '  clean    remove generated OrlixOS outputs'
 
-build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_PROOF) $(ORLIXOS_FINDUTILS_PROOF) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_INIT_BINARY)
+build: $(ORLIXOS_BASH_BINARY) __coreutils-cache-gated $(ORLIXOS_FINDUTILS_PROOF) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_INIT_BINARY)
+
+__coreutils-cache-gated:
+	@if python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils \
+		--requires "$(ORLIXOS_COREUTILS_PROOF)" \
+		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls" \
+		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat" >/dev/null; then \
+		printf '%s\n' "skip: OrlixOS Coreutils $(PROFILE) cache ready"; \
+	else \
+		$(MAKE) -f OrlixOS/Makefile "$(ORLIXOS_COREUTILS_PROOF)" PROFILE="$(PROFILE)"; \
+	fi
 
 rootfs: $(ORLIXOS_ROOTFS_PROOF)
 

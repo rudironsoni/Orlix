@@ -17093,3 +17093,57 @@ Scope note: this is a real time/resource-saving skip for the OrlixMLibC owner
 `build` target only when exact-input manifests and the generated target-header
 sentinel match. It does not skip Linux or Coreutils yet, and it does not weaken
 test/proof targets.
+## 2026-06-23 - Linux/Coreutils owner build cache gates
+
+### Status
+
+- Added the Linux owner build gate in `OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk`.
+  - `build` now routes through `__build-cache-gated` before the previous `clean __ios-simulator-xcframework` path.
+  - The skip requires `tools/orlix-cache-ready --component linux` to pass for `source-prep`, `headers-install`, and `kernel-archive`.
+  - The skip also requires concrete XCFramework sentinels:
+    - `$(ORLIX_KERNEL_XCFRAMEWORK)/Info.plist`
+    - `$(ORLIX_IOS_SIMULATOR_FRAMEWORK)/OrlixKernel`
+  - Missing or stale cache state falls back to the existing clean XCFramework build path.
+- Added the Coreutils owner build gate in `OrlixOS/Makefile`.
+  - `build` now depends on `__coreutils-cache-gated` instead of directly depending on `$(ORLIXOS_COREUTILS_PROOF)`.
+  - The skip requires `tools/orlix-cache-ready --component coreutils` to pass and therefore audits Coreutils `source-prep`, `configure-build`, and `install-rootfs` manifests.
+  - The skip also requires concrete package sentinels:
+    - `$(ORLIXOS_COREUTILS_PROOF)`
+    - `$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls`
+    - `$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat`
+  - Missing or stale cache state falls back to the existing `$(ORLIXOS_COREUTILS_PROOF)` package build.
+- Kept the earlier OrlixMLibC gate intact.
+  - `OrlixMLibC/Makefile build` continues to route through `__build-cache-gated`.
+  - The skip requires the mlibc manifest audit plus the `$(MLIBC_TARGET_ARCH_DEFS)` sentinel.
+
+### Validation
+
+```bash
+rtk python3 -m unittest discover tools/tests
+rtk git diff --check
+rtk python3 -m py_compile tools/orlix-cache-ready tools/orlix-build-manifest tools/tests/test_orlix_cache_ready.py
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+- `tools/tests`: 9 tests pass.
+- `git diff --check`: pass.
+- Python compile check: pass.
+- `.codex/hooks/tests`: 32 tests pass.
+- `.codex/rules/tests`: 5 tests pass.
+- `compact_plan_check.py`: exits 0 with the known stale-status warning for this active plan.
+
+Live cache probes:
+
+```bash
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk python3 tools/orlix-cache-ready --profile release --component linux --stage source-prep --stage headers-install --stage kernel-archive --requires Build/OrlixKernel/xcframework/OrlixKernel.xcframework/Info.plist --requires Build/OrlixKernel/build/ios-simulator/Build/Products/Debug-iphonesimulator/OrlixKernel.framework/OrlixKernel
+rtk python3 tools/orlix-cache-ready --profile release --component coreutils --requires Build/OrlixOS/install/release/usr/bin/ls --requires Build/OrlixOS/install/release/usr/bin/cat
+```
+
+- Linux cache probes currently fail closed because this checkout lacks the required Linux manifests and XCFramework sentinels.
+- Coreutils cache probes currently fail closed because this checkout lacks required Coreutils manifests and/or installed package sentinels.
+- No broad root `build` skip was reintroduced.
+- No generated Linux, mlibc, OrlixOS, or Coreutils source/build trees were edited.
