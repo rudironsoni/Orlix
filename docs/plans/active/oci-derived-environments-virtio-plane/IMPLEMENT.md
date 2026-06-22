@@ -17049,3 +17049,47 @@ Scope note: command mode is the reusable mechanism for owner recipes, but this
 checkpoint still does not claim Linux, mlibc, or Coreutils stage skipping. The
 next safe implementation step remains owner-stage wiring with stable per-stage
 sentinels and fresh-manifest writes after successful fallback execution.
+
+## 2026-06-23 - OrlixMLibC Build Cache Skip
+
+Status: first verified owner build skip; Linux and Coreutils are not skipped yet.
+
+Changes:
+
+- `OrlixMLibC/Makefile` now runs the public `build` target through a cache-gated
+  internal target while preserving the existing profile lock.
+- The gate uses `tools/orlix-cache-ready --component mlibc` plus the generated
+  target-headers sentinel `$(MLIBC_TARGET_ARCH_DEFS)`.
+- If the manifest audit or sentinel check fails, the target falls back to the
+  existing `__build` recipe.
+
+Validation:
+
+```bash
+rtk make -f OrlixMLibC/Makefile build PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-manifest-write PROFILE=release
+rtk make -f OrlixMLibC/Makefile build PROFILE=release
+rtk python3 -m unittest discover tools/tests
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+- First `build` after the Makefile change failed closed and executed the real
+  fallback build because existing manifests were stale.
+- After `cache-manifest-write`, the second `build` exited `0` with:
+  `skip: OrlixMLibC build release cache ready`.
+- `tools/tests`: 9 tests, OK.
+- `OrlixMLibC cache-ready`: `ready: mlibc release (source-prep, compiler-rt)`.
+- `.codex/hooks/tests`: 32 tests, OK.
+- `.codex/rules/tests`: 5 tests, OK.
+- `compact_plan_check.py`: known stale-status and handoff warnings remain.
+
+Scope note: this is a real time/resource-saving skip for the OrlixMLibC owner
+`build` target only when exact-input manifests and the generated target-header
+sentinel match. It does not skip Linux or Coreutils yet, and it does not weaken
+test/proof targets.

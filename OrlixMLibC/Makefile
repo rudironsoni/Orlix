@@ -262,7 +262,7 @@ MLIBC_COMPILER_RT_BUILTINS := \
 	trunctfsf2.c \
 	trunctfxf2.c
 
-.PHONY: all help build headers_install test kselftest cache-audit cache-ready cache-manifest-write clean mrproper __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
+.PHONY: all help build headers_install test kselftest cache-audit cache-ready cache-manifest-write clean mrproper __build-cache-gated __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
 
 define orlix_mlibc_with_profile_lock
 	@set -euo pipefail; \
@@ -296,7 +296,15 @@ help:
 	@printf '%s\n' '  clean             remove generated OrlixMLibC outputs'
 
 build:
-	$(call orlix_mlibc_with_profile_lock,__build)
+	$(call orlix_mlibc_with_profile_lock,__build-cache-gated)
+
+__build-cache-gated:
+	@if python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc \
+		--requires "$(MLIBC_TARGET_ARCH_DEFS)" >/dev/null; then \
+		printf '%s\n' "skip: OrlixMLibC build $(PROFILE) cache ready"; \
+	else \
+		$(MAKE) -f OrlixMLibC/Makefile __build PROFILE="$(PROFILE)"; \
+	fi
 
 __build: __write-cross-file
 	@set -euo pipefail; \
