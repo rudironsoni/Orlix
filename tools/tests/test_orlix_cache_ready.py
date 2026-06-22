@@ -56,6 +56,45 @@ class CacheReadyTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
 
+    def test_linux_default_requires_kernel_archive_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_root = Path(tmp) / "manifests"
+            linux_manifests = manifest_root / "release" / "linux"
+            linux_manifests.mkdir(parents=True)
+            for stage in ("source-prep", "headers-install"):
+                (linux_manifests / f"{stage}.json").write_text("{}\n")
+
+            with mock.patch.object(self.module, "audit_component", return_value=[]) as audit:
+                result = self.module.main(
+                    [
+                        "--manifest-root",
+                        str(manifest_root),
+                        "--profile",
+                        "release",
+                        "--component",
+                        "linux",
+                    ]
+                )
+
+            self.assertEqual(result, 1)
+            audit.assert_not_called()
+
+            (linux_manifests / "kernel-archive.json").write_text("{}\n")
+
+            with mock.patch.object(self.module, "audit_component", return_value=[]):
+                result = self.module.main(
+                    [
+                        "--manifest-root",
+                        str(manifest_root),
+                        "--profile",
+                        "release",
+                        "--component",
+                        "linux",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+
     def test_missing_manifest_fails_before_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "rootfs" / "bin" / "ls"

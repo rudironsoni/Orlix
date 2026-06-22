@@ -17185,3 +17185,35 @@ rtk python3 -m unittest discover .codex/rules/tests
 - `.codex/hooks/tests`: 32 tests pass.
 - `.codex/rules/tests`: 5 tests pass.
 - Linux and Coreutils fallback refreshes are wired but were not forced through full rebuilds in this checkpoint.
+
+## 2026-06-23 - Linux cache-ready default matches build skip
+
+### Status
+
+- Tightened the generic Linux readiness contract in `tools/orlix-cache-ready`.
+  - Linux defaults now require `source-prep`, `headers-install`, and `kernel-archive`.
+  - This matches the Linux owner `build` skip gate in `OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk`.
+  - `make cache-ready COMPONENT=linux` can no longer report readiness from only source-prep plus installed headers when the Linux build archive stage is missing.
+- Added a regression test in `tools/tests/test_orlix_cache_ready.py`.
+  - The test proves default Linux readiness fails before `kernel-archive.json` exists.
+  - The same test proves readiness passes after all three default Linux manifests exist and audit is clean.
+
+### Validation
+
+```bash
+rtk python3 -m unittest discover tools/tests
+rtk python3 -m py_compile tools/orlix-cache-ready tools/orlix-build-manifest tools/tests/test_orlix_cache_ready.py
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 tools/orlix-cache-ready --profile release --component linux
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+- `tools/tests`: 10 tests pass.
+- Python compile check: pass.
+- `git diff --check`: pass.
+- `.codex/hooks/tests`: 32 tests pass.
+- `.codex/rules/tests`: 5 tests pass.
+- Live Linux readiness probe currently fails closed because this checkout lacks required Linux manifests, including `kernel-archive`.
+- `compact_plan_check.py`: exits 0 with the known stale-status/current-status warnings for this active plan.
