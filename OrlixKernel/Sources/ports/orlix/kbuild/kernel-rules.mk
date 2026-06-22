@@ -1104,7 +1104,7 @@ endif
 
 include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run cache-audit cache-manifest-write __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1247,6 +1247,12 @@ run: __ios-simulator-framework xcodeproj
 		sleep "$(ORLIX_KERNEL_RUN_TIMEOUT_SECONDS)"; \
 	fi; \
 	validate_runtime_log
+
+cache-audit:
+	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component linux
+
+cache-manifest-write:
+	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component linux
 
 clean:
 	@set -euo pipefail; \
