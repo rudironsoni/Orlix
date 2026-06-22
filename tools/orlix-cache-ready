@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Fail-closed cache readiness guard for Orlix build stages."""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+
+DEFAULT_MANIFEST_ROOT = Path("Build/orlix-build-manifests")
+DEFAULT_STAGES = {
+    "linux": ("source-prep", "headers-install"),
+    "mlibc": ("source-prep", "compiler-rt"),
+    "coreutils": ("source-prep",),
+}
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", default="release")
+    parser.add_argument("--component", choices=sorted(DEFAULT_STAGES), required=True)
+    parser.add_argument(
+        "--stage",
+        action="append",
+        help="Stage manifest that must exist. Defaults to all known component stages.",
+    )
+    parser.add_argument(
+        "--requires",
+        action="append",
+        default=[],
+        help="Output path that must already exist before reuse is allowed.",
+    )
+    parser.add_argument("--manifest-root", default=str(DEFAULT_MANIFEST_ROOT))
+    parser.add_argument("--repo-root", default=".")
+    return parser.parse_args(argv)
+
+
+def manifest_path(repo_root: Path, manifest_root: Path, profile: str, component: str, stage: str) -> Path:
+    root = manifest_root if manifest_root.is_absolute() else repo_root / manifest_root
+    return root / profile / component / f"{stage}.json"
+
+
+def require_existing(path: Path, label: str) -> list[str]:
+    if path.exists():
+        return []
+    return [f"missing {label}: {path}"]
+
+
+def audit_component(repo_root: Path, profile: str, component: str, manifest_root: Path) -> list[str]:
+    command = [
+        sys.executable,
+        "tools/orlix-build-manifest",
+        "audit",
+        "--profile",
+        profile,
+        "--component",
+        component,
+        "--manifest-root",
+        str(manifest_root),
+    ]
+    result = subprocess.run(
+        command,
+        cwd=repo_root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    if result.returncode == 0:
+        return []
+
+    output = result.stdout.strip()
+    if output:
+        return [f"manifest audit failed for {component}: {output}"]
+    return [f"manifest audit failed for {component} with exit {result.returncode}"]
+
+
+def readiness_errors(args: argparse.Namespace) -> list[str]:
+    repo_root = Path(args.repo_root).resolve()
+    manifest_root = Path(args.manifest_root)
+    stages = tuple(args.stage or DEFAULT_STAGES[args.component])
+
+    errors: list[str] = []
+    for stage in stages:
+        errors.extend(
+            require_existing(
+                manifest_path(repo_root, manifest_root, args.profile, args.component, stage),
+                f"{args.component}/{stage} manifest",
+            )
+        )
+
+    for required in args.requires:
+        required_path = Path(required)
+        if not required_path.is_absolute():
+            required_path = repo_root / required_path
+        errors.extend(require_existing(required_path, "cache output"))
+
+    if not errors:
+        errors.extend(audit_component(repo_root, args.profile, args.component, manifest_root))
+
+    return errors
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    errors = readiness_errors(args)
+    if errors:
+        for error in errors:
+            print(f"not ready: {error}", file=sys.stderr)
+        return 1
+
+    stages = ", ".join(args.stage or DEFAULT_STAGES[args.component])
+    print(f"ready: {args.component} {args.profile} ({stages})")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

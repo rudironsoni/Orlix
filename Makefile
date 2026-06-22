@@ -10,7 +10,7 @@ PROFILE ?= release
 ORLIXOS_BASE_ROOT_TREE := $(CURDIR)/Build/OrlixOS/rootfs/$(PROFILE)/base-tree
 ORLIX_BUILD_MANIFEST := python3 tools/orlix-build-manifest
 
-.PHONY: all help setup-env build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run cache-audit cache-manifest-write clean mrproper
+.PHONY: all help setup-env build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run cache-audit cache-ready cache-manifest-write clean mrproper
 
 all: build
 
@@ -46,6 +46,15 @@ run:
 
 cache-audit:
 	@$(ORLIX_BUILD_MANIFEST) audit --profile "$(PROFILE)" $(if $(COMPONENT),--component "$(COMPONENT)")
+
+cache-ready:
+	@if [ -n "$(COMPONENT)" ]; then \
+		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component "$(COMPONENT)"; \
+	else \
+		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component linux; \
+		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc; \
+		python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils; \
+	fi
 
 cache-manifest-write:
 	@$(ORLIX_BUILD_MANIFEST) write --profile "$(PROFILE)" $(if $(COMPONENT),--component "$(COMPONENT)")
