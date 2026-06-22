@@ -246,6 +246,107 @@ static bool rtnetlink_reports_loopback_ipv4_address(void)
 	}
 }
 
+static bool rtnetlink_reports_loopback_ipv4_route(void)
+{
+	struct {
+		struct nlmsghdr header;
+		struct rtmsg route;
+	} request = {
+		.header = {
+			.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg)),
+			.nlmsg_type = RTM_GETROUTE,
+			.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
+			.nlmsg_seq = 3,
+		},
+		.route = {
+			.rtm_family = AF_INET,
+		},
+	};
+	char buffer[8192];
+	bool saw_loopback_route = false;
+	int fd;
+
+	fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+	if (fd < 0)
+		return false;
+
+	if (send(fd, &request, request.header.nlmsg_len, 0) < 0) {
+		close(fd);
+		return false;
+	}
+
+	for (;;) {
+		ssize_t received;
+		struct nlmsghdr *message;
+
+		received = recv(fd, buffer, sizeof(buffer), 0);
+		if (received < 0) {
+			close(fd);
+			return false;
+		}
+
+		for (message = (struct nlmsghdr *)buffer;
+		     NLMSG_OK(message, received);
+		     message = NLMSG_NEXT(message, received)) {
+			struct rtmsg *route;
+			struct rtattr *attribute;
+			int attributes_len;
+			bool route_targets_loopback = false;
+			bool route_has_output_interface = false;
+
+			if (message->nlmsg_type == NLMSG_DONE) {
+				close(fd);
+				return saw_loopback_route;
+			}
+
+			if (message->nlmsg_type == NLMSG_ERROR) {
+				close(fd);
+				return false;
+			}
+
+			if (message->nlmsg_type != RTM_NEWROUTE)
+				continue;
+
+			route = NLMSG_DATA(message);
+			if (route->rtm_family != AF_INET)
+				continue;
+
+			attributes_len = RTM_PAYLOAD(message);
+			for (attribute = RTM_RTA(route);
+			     RTA_OK(attribute, attributes_len);
+			     attribute = RTA_NEXT(attribute, attributes_len)) {
+				if (attribute->rta_type == RTA_DST) {
+					struct in_addr *ipv4;
+
+					if (RTA_PAYLOAD(attribute) < sizeof(*ipv4))
+						continue;
+
+					ipv4 = RTA_DATA(attribute);
+					if ((route->rtm_dst_len == 8 &&
+					     ipv4->s_addr == htonl(0x7f000000UL)) ||
+					    (route->rtm_dst_len == 32 &&
+					     ipv4->s_addr == htonl(INADDR_LOOPBACK)))
+						route_targets_loopback = true;
+				}
+
+				if (attribute->rta_type == RTA_OIF) {
+					int *ifindex;
+
+					if (RTA_PAYLOAD(attribute) < sizeof(*ifindex))
+						continue;
+
+					ifindex = RTA_DATA(attribute);
+					if (*ifindex > 0)
+						route_has_output_interface = true;
+				}
+			}
+
+			if (route_targets_loopback && route_has_output_interface)
+				saw_loopback_route = true;
+		}
+	}
+}
+
 static bool loopback_tcp_accepts_connection(void)
 {
 	struct sockaddr_in address;
@@ -367,7 +468,7 @@ out:
 
 int main(void)
 {
-	orlix_test_plan(7);
+	orlix_test_plan(8);
 
 	orlix_test_result(proc_net_files_are_readable(),
 			  "procfs exposes network state");
@@ -379,6 +480,8 @@ int main(void)
 			  "loopback interface accepts Linux address configuration");
 	orlix_test_result(rtnetlink_reports_loopback_ipv4_address(),
 			  "RTM_GETADDR reports loopback IPv4 address");
+	orlix_test_result(rtnetlink_reports_loopback_ipv4_route(),
+			  "RTM_GETROUTE reports loopback IPv4 route");
 	{
 		bool tcp_ok = loopback_tcp_accepts_connection();
 
