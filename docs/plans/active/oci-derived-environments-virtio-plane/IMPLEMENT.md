@@ -17217,3 +17217,26 @@ rtk python3 .codex/hooks/compact_plan_check.py
 - `.codex/rules/tests`: 5 tests pass.
 - Live Linux readiness probe currently fails closed because this checkout lacks required Linux manifests, including `kernel-archive`.
 - `compact_plan_check.py`: exits 0 with the known stale-status/current-status warnings for this active plan.
+
+## 2026-06-23 - Build-cache current-status checkpoint
+
+Current status:
+
+- Active scope remains the OCI-derived environments and virtio-plane plan in `docs/plans/active/oci-derived-environments-virtio-plane`.
+- Recent build-cache work covers all three requested expensive build surfaces:
+  - Linux: owner build gate is wired in `OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk`.
+  - OrlixMLibC: owner build gate is wired in `OrlixMLibC/Makefile`.
+  - Coreutils: owner package gate is wired in `OrlixOS/Makefile`.
+- Cache readiness is fail-closed:
+  - Linux readiness requires `source-prep`, `headers-install`, and `kernel-archive`.
+  - OrlixMLibC readiness requires `source-prep`, `compiler-rt`, and the target arch definitions sentinel.
+  - Coreutils readiness requires `source-prep`, `configure-build`, `install-rootfs`, and concrete installed package sentinels.
+- Post-fallback manifest refresh is wired for Linux, OrlixMLibC, and Coreutils.
+  - Verified live for OrlixMLibC: stale build ran the real fallback, refreshed manifests, and the next build skipped.
+  - Linux and Coreutils fallback refreshes are wired but were not forced through full rebuilds in the latest checkpoint.
+- Current unclaimed boundaries:
+  - No DNS, NAT, external networking, OCI `netDevices`, or full networking support is claimed.
+  - No broad repo-root `build` skip is claimed.
+  - No generated Linux, mlibc, OrlixOS, or Coreutils source/build trees should be edited to make proofs pass.
+- Next useful proof direction:
+  - Exercise Linux and Coreutils fallback-to-manifest-refresh paths when an expensive rebuild is acceptable, then confirm second-run skips with `cache-ready` plus concrete sentinels.
