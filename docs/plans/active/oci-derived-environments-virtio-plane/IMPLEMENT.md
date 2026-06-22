@@ -15158,3 +15158,43 @@ Non-claims:
 - This still does not claim OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI lifecycle normal-exit state transition
+
+Checkpoint:
+
+- Added `exit` to `OrlixOCIRuntimeLifecycleAction`.
+- Added `OrlixOCIRuntimeLifecycleController.exit(exitStatus:)`.
+- A running OCI lifecycle record can now transition to `stopped` with the
+  normal process exit status while retaining the process PID.
+- `stateReport()` exposes the stopped state, PID, and exit status after normal
+  process exit.
+- Added `testOCIRuntimeLifecycleControllerRecordsNormalProcessExit`.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- OCI lifecycle state can distinguish normal process exit from signal kill.
+- Invalid normal-exit transitions fail closed with
+  `.invalidTransition(from: .stopped, action: .exit)`.
+- State reporting has a path for process completion without pretending the only
+  stopped state comes from `kill`.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_15-15-42-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Non-claims:
+
+- This is lifecycle state modeling in `OrlixOS`; it does not yet launch, monitor,
+  or reap a real OCI-created process object.
+- This does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.

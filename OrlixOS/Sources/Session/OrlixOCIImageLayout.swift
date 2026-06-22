@@ -2386,6 +2386,7 @@ public enum OrlixOCIRuntimeLifecycleState: String, Codable, Equatable, Sendable 
 public enum OrlixOCIRuntimeLifecycleAction: String, Codable, Equatable, Sendable {
 	case create
 	case start
+	case exit
 	case kill
 	case delete
 }
@@ -2507,6 +2508,25 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 				bundlePath: record.bundlePath,
 				pid: record.pid,
 				exitStatus: 128 + signal,
+				state: .stopped
+			)
+		)
+	}
+
+	public func exit(exitStatus: Int32) throws -> OrlixOCIRuntimeLifecycleController {
+		guard record.state == .running else {
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: record.state,
+				action: .exit
+			)
+		}
+		return OrlixOCIRuntimeLifecycleController(
+			config: config,
+			record: OrlixOCIRuntimeLifecycleRecord(
+				id: record.id,
+				bundlePath: record.bundlePath,
+				pid: record.pid,
+				exitStatus: exitStatus,
 				state: .stopped
 			)
 		)

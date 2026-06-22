@@ -7093,6 +7093,35 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeLifecycleControllerRecordsNormalProcessExit() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let running = try OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		.create()
+		.start(pid: 42)
+
+		let stopped = try running.exit(exitStatus: 7)
+
+		XCTAssertEqual(stopped.record.state, .stopped)
+		XCTAssertEqual(stopped.record.pid, 42)
+		XCTAssertEqual(stopped.record.exitStatus, 7)
+
+		let report = try stopped.stateReport()
+		XCTAssertEqual(report.status, .stopped)
+		XCTAssertEqual(report.pid, 42)
+		XCTAssertEqual(report.exitStatus, 7)
+
+		XCTAssertThrowsError(try stopped.exit(exitStatus: 0)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .stopped, action: .exit)
+			)
+		}
+	}
+
 	func testOCIRuntimeLifecycleControllerProducesStateReportJSON() throws {
 		let config = try OrlixOCIRuntimeConfigParser().parse(
 			Data(
