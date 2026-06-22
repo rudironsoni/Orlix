@@ -1332,6 +1332,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let defaultOOMScoreAdjustment: Int32?
 	public let defaultScheduler: OrlixEnvironmentScheduler?
 	public let defaultIOPriority: OrlixEnvironmentIOPriority?
+	public let defaultCPUAffinity: OrlixEnvironmentCPUAffinity?
 	public let defaultUmask: UInt32?
 	public let defaultRlimits: [OrlixEnvironmentRlimit]
 	public let terminal: Bool
@@ -1360,6 +1361,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
 			defaultScheduler: defaultScheduler,
 			defaultIOPriority: defaultIOPriority,
+			defaultCPUAffinity: defaultCPUAffinity,
 			defaultUmask: defaultUmask,
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
@@ -1442,6 +1444,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			defaultOOMScoreAdjustment: try Self.validatedOOMScoreAdjustment(process.oomScoreAdj),
 			defaultScheduler: try Self.validatedScheduler(process.scheduler),
 			defaultIOPriority: try Self.validatedIOPriority(process.ioPriority),
+			defaultCPUAffinity: try Self.validatedCPUAffinity(process.execCPUAffinity),
 			defaultUmask: try Self.validatedUmask(process.user?.umask),
 			defaultRlimits: try Self.validatedRlimits(process.rlimits),
 			terminal: terminal,
@@ -1589,6 +1592,36 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		return OrlixEnvironmentIOPriority(class: priorityClass, priority: Int32(priority))
 	}
 
+	private static func validatedCPUAffinity(
+		_ affinity: OCIRuntimeCPUAffinity?
+	) throws -> OrlixEnvironmentCPUAffinity? {
+		guard let affinity else {
+			return nil
+		}
+		guard let mask = affinity.final ?? affinity.initial, !mask.isEmpty else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
+		}
+		let parts = mask.split(separator: ",", omittingEmptySubsequences: false)
+		guard !parts.isEmpty else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
+		}
+		for part in parts {
+			let range = part.split(separator: "-", omittingEmptySubsequences: false)
+			guard range.count == 1 || range.count == 2 else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
+			}
+			guard let start = Int(range[0]), start >= 0 else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
+			}
+			if range.count == 2 {
+				guard let end = Int(range[1]), end >= start else {
+					throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
+				}
+			}
+		}
+		return OrlixEnvironmentCPUAffinity(mask: mask)
+	}
+
 	private static func validatedRlimits(_ values: [OCIRuntimeRlimit]?) throws -> [OrlixEnvironmentRlimit] {
 		guard let values else {
 			return []
@@ -1719,9 +1752,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if process.selinuxLabel != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.selinuxLabel")
-		}
-		if process.execCPUAffinity != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.execCPUAffinity")
 		}
 	}
 

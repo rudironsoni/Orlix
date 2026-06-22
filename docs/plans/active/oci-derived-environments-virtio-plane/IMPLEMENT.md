@@ -14731,3 +14731,45 @@ Non-claims:
 - No runtime proof yet shows I/O priority observed inside a booted Linux process;
   this checkpoint proves descriptor import, init command-line contract, and
   init-side `ioprio_set(2)` setup only.
+
+## 2026-06-22 Current Status - OCI CPU affinity
+
+Current status:
+
+- Promoted supported OCI Runtime `process.execCPUAffinity` masks from broad
+  rejected metadata into an OrlixOS-owned Linux process execution default.
+- Added `OrlixEnvironmentCPUAffinity` and
+  `OrlixEnvironmentDescriptor.defaultCPUAffinity` with backward-compatible decode
+  defaulting to `nil`.
+- Added the root-image init command-line key `orlix.cpuaffinity`, emitted when a
+  CPU affinity default is present.
+- Updated OCI config import so `process.execCPUAffinity.final` carries into the
+  session/import environment descriptor, falling back to `initial` when `final`
+  is absent.
+- Malformed CPU lists and reversed ranges remain rejected instead of being
+  silently ignored.
+- Updated `OrlixOS/Sources/init/init.c` to parse comma-separated CPU indexes and
+  ranges into `cpu_set_t` and call Linux `sched_setaffinity(2)` before
+  credential drop and exec.
+
+Evidence:
+
+- Focused command-line/parser/OCI process-default tests passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_11-43-19-+0200.xcresult`
+  with `result=Passed`, `passedTests=6`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=6`, `expectedFailures=0`.
+- OCI descriptor/reporting regression group passed:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_11-48-05-+0200.xcresult`
+  with `result=Passed`, `passedTests=8`, `failedTests=0`, `skippedTests=0`,
+  `totalTestCount=8`, `expectedFailures=0`.
+
+Non-claims:
+
+- No real OCI process start, PID allocation, or container lifecycle execution is
+  proven by this checkpoint.
+- No namespace, cgroup, registry pull, product `orlix run`, host-folder mount, or
+  virtio-fs behavior is claimed complete here.
+- No HostAdapter policy, host leakage, or custom Linux ABI was added.
+- No runtime proof yet shows CPU affinity observed inside a booted Linux process;
+  this checkpoint proves descriptor import, init command-line contract, and
+  init-side `sched_setaffinity(2)` setup only.

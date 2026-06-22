@@ -27,6 +27,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultOOMScoreAdjustment: Int32?
     public let defaultScheduler: OrlixEnvironmentScheduler?
     public let defaultIOPriority: OrlixEnvironmentIOPriority?
+    public let defaultCPUAffinity: OrlixEnvironmentCPUAffinity?
     public let defaultUmask: UInt32?
     public let defaultRlimits: [OrlixEnvironmentRlimit]
     public let hostname: String?
@@ -78,6 +79,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         defaultOOMScoreAdjustment: Int32? = nil,
         defaultScheduler: OrlixEnvironmentScheduler? = nil,
         defaultIOPriority: OrlixEnvironmentIOPriority? = nil,
+        defaultCPUAffinity: OrlixEnvironmentCPUAffinity? = nil,
         defaultUmask: UInt32? = nil,
         defaultRlimits: [OrlixEnvironmentRlimit] = [],
         hostname: String? = nil,
@@ -101,6 +103,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.defaultOOMScoreAdjustment = defaultOOMScoreAdjustment
         self.defaultScheduler = defaultScheduler
         self.defaultIOPriority = defaultIOPriority
+        self.defaultCPUAffinity = defaultCPUAffinity
         self.defaultUmask = defaultUmask
         self.defaultRlimits = defaultRlimits
         self.hostname = hostname
@@ -126,6 +129,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case defaultOOMScoreAdjustment
         case defaultScheduler
         case defaultIOPriority
+        case defaultCPUAffinity
         case defaultUmask
         case defaultRlimits
         case hostname
@@ -191,6 +195,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             OrlixEnvironmentIOPriority.self,
             forKey: .defaultIOPriority
         )
+        self.defaultCPUAffinity = try container.decodeIfPresent(
+            OrlixEnvironmentCPUAffinity.self,
+            forKey: .defaultCPUAffinity
+        )
         self.defaultUmask = try container.decodeIfPresent(
             UInt32.self,
             forKey: .defaultUmask
@@ -248,6 +256,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         )
         try container.encodeIfPresent(defaultScheduler, forKey: .defaultScheduler)
         try container.encodeIfPresent(defaultIOPriority, forKey: .defaultIOPriority)
+        try container.encodeIfPresent(defaultCPUAffinity, forKey: .defaultCPUAffinity)
         try container.encodeIfPresent(defaultUmask, forKey: .defaultUmask)
         if !defaultRlimits.isEmpty {
             try container.encode(defaultRlimits, forKey: .defaultRlimits)
@@ -289,6 +298,14 @@ public struct OrlixEnvironmentIOPriority: Codable, Equatable, Sendable {
     public init(class: String, priority: Int32) {
         self.class = `class`
         self.priority = priority
+    }
+}
+
+public struct OrlixEnvironmentCPUAffinity: Codable, Equatable, Sendable {
+    public let mask: String
+
+    public init(mask: String) {
+        self.mask = mask
     }
 }
 
@@ -602,6 +619,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultSchedulerPriorityCommandLineKey = "orlix.scheduler.priority"
     public static let defaultIOPriorityClassCommandLineKey = "orlix.ioprio.class"
     public static let defaultIOPriorityPriorityCommandLineKey = "orlix.ioprio.priority"
+    public static let defaultCPUAffinityCommandLineKey = "orlix.cpuaffinity"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
     public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
     public static let hostnameCommandLineKey = "orlix.hostname"
@@ -832,6 +850,9 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         if let defaultIOPriority = descriptor.defaultIOPriority {
             tokens.append("\(defaultIOPriorityClassCommandLineKey)=\(defaultIOPriority.class)")
             tokens.append("\(defaultIOPriorityPriorityCommandLineKey)=\(defaultIOPriority.priority)")
+        }
+        if let defaultCPUAffinity = descriptor.defaultCPUAffinity {
+            tokens.append("\(defaultCPUAffinityCommandLineKey)=\(defaultCPUAffinity.mask)")
         }
         if let defaultUmask = descriptor.defaultUmask {
             tokens.append("\(defaultUmaskCommandLineKey)=\(defaultUmask)")
@@ -1115,6 +1136,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultOOMScoreAdjustment: parent.defaultOOMScoreAdjustment,
                 defaultScheduler: parent.defaultScheduler,
                 defaultIOPriority: parent.defaultIOPriority,
+                defaultCPUAffinity: parent.defaultCPUAffinity,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
                 mounts: parent.mounts
