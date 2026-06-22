@@ -6492,6 +6492,77 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(try registry.load(environmentID: "bundle-bound-root") == importPlan.environment)
 	}
 
+	func testOCIRuntimeBundleImportPlanReportsMaterializationToolchainReadiness() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let toolsURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-materialization-tools-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: toolsURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try fileManager.createDirectory(at: toolsURL, withIntermediateDirectories: true)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		for executableName in ["orlix-mke2fs", "orlix-truncate", "orlix-debugfs"] {
+			let executableURL = toolsURL.appendingPathComponent(executableName)
+			try "#!/bin/sh\nexit 0\n".write(
+				to: executableURL,
+				atomically: true,
+				encoding: .utf8
+			)
+			try fileManager.setAttributes(
+				[.posixPermissions: NSNumber(value: Int16(0o755))],
+				ofItemAtPath: executableURL.path
+			)
+		}
+
+		let importPlan = try OrlixOCIRuntimeBundle
+			.load(from: bundleURL)
+			.importPlan(
+				id: "bundle-toolchain-ready",
+				rootMount: OrlixEnvironmentRootMount.defaultOverlay
+			)
+
+		let ready = try importPlan.materializationToolchainCheck(
+			mke2fsExecutable: "orlix-mke2fs",
+			truncateExecutable: "orlix-truncate",
+			debugfsExecutable: "orlix-debugfs",
+			searchPath: [toolsURL]
+		)
+		XCTAssertTrue(ready.isReady)
+		XCTAssertEqual(ready.missingExecutables, [])
+		XCTAssertEqual(ready.requiredExecutables, [
+			"orlix-mke2fs",
+			"orlix-truncate",
+			"orlix-debugfs"
+		])
+		XCTAssertEqual(
+			ready.resolvedExecutables["orlix-mke2fs"],
+			toolsURL.appendingPathComponent("orlix-mke2fs")
+		)
+		XCTAssertFalse(ready.commands.isEmpty)
+
+		let missing = try importPlan.materializationToolchainCheck(
+			mke2fsExecutable: "missing-mke2fs",
+			truncateExecutable: "missing-truncate",
+			debugfsExecutable: "missing-debugfs",
+			searchPath: [toolsURL]
+		)
+		XCTAssertFalse(missing.isReady)
+		XCTAssertEqual(missing.missingExecutables, [
+			"missing-mke2fs",
+			"missing-truncate",
+			"missing-debugfs"
+		])
+		XCTAssertFalse(missing.commands.isEmpty)
+	}
+
 	func testOCIRuntimeBundleRejectsMissingConfig() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory

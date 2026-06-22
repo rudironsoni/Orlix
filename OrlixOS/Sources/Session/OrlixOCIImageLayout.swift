@@ -1918,6 +1918,39 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 		)
 	}
 
+	public func materializationToolchainCheck(
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		searchPath: [URL]? = nil,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeBundleMaterializationToolchainCheck {
+		let commands = try materializationCommands(
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable
+		)
+		let requiredExecutables = [
+			mke2fsExecutable,
+			truncateExecutable,
+			debugfsExecutable
+		]
+		let resolvedExecutables = Self.resolveExecutables(
+			requiredExecutables,
+			searchPath: searchPath ?? Self.defaultExecutableSearchPath(),
+			fileManager: fileManager
+		)
+		let missingExecutables = requiredExecutables.filter {
+			resolvedExecutables[$0] == nil
+		}
+		return OrlixOCIRuntimeBundleMaterializationToolchainCheck(
+			commands: commands,
+			requiredExecutables: requiredExecutables,
+			resolvedExecutables: resolvedExecutables,
+			missingExecutables: missingExecutables
+		)
+	}
+
 	public func materializedRootImage(
 		registry: OrlixEnvironmentRegistry,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
@@ -1945,6 +1978,46 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 			),
 			terminal: terminal
 		)
+	}
+
+	private static func defaultExecutableSearchPath() -> [URL] {
+		ProcessInfo.processInfo.environment["PATH", default: ""]
+			.split(separator: ":")
+			.map { URL(fileURLWithPath: String($0), isDirectory: true) }
+	}
+
+	private static func resolveExecutables(
+		_ executableNames: [String],
+		searchPath: [URL],
+		fileManager: FileManager
+	) -> [String: URL] {
+		var resolved: [String: URL] = [:]
+		for executableName in executableNames where resolved[executableName] == nil {
+			for directory in searchPath {
+				let candidate = directory.appendingPathComponent(executableName)
+				guard fileManager.isExecutableFile(atPath: candidate.path) else {
+					continue
+				}
+				resolved[executableName] = candidate
+				break
+			}
+		}
+		return resolved
+	}
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeBundleMaterializationToolchainCheck:
+	Equatable,
+	Sendable
+{
+	public let commands: [OrlixEnvironmentImageMaterializationCommand]
+	public let requiredExecutables: [String]
+	public let resolvedExecutables: [String: URL]
+	public let missingExecutables: [String]
+
+	public var isReady: Bool {
+		missingExecutables.isEmpty
 	}
 }
 
