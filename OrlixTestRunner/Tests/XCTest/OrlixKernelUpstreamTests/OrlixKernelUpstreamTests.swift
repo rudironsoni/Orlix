@@ -415,6 +415,7 @@ final class OrlixKernelUpstreamTests: XCTestCase {
             output.contains("rtnetlink enumerates the virtio-net Ethernet link with matching MTU and standard operstate")
         )
         XCTAssertTrue(output.contains("ioctl reports matching virtio-net link flags"))
+        XCTAssertTrue(output.contains("AF_PACKET socket binds to the virtio-net link"))
         XCTAssertTrue(output.contains("virtio-net link is distinct from loopback"))
         XCTAssertTrue(output.contains("procfs reports the virtio-net interface"))
     }
