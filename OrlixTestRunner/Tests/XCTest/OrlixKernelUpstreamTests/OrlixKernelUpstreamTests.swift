@@ -410,7 +410,8 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("virtio-net netdev is exposed through sysfs"))
         XCTAssertTrue(output.contains("virtio-net netdev reports Ethernet hardware type"))
         XCTAssertTrue(output.contains("virtio-net netdev reports Ethernet address length"))
-        XCTAssertTrue(output.contains("rtnetlink enumerates the virtio-net Ethernet link"))
+        XCTAssertTrue(output.contains("virtio-net netdev reports a positive MTU through sysfs"))
+        XCTAssertTrue(output.contains("rtnetlink enumerates the virtio-net Ethernet link with matching MTU"))
         XCTAssertTrue(output.contains("virtio-net link is distinct from loopback"))
         XCTAssertTrue(output.contains("procfs reports the virtio-net interface"))
     }
