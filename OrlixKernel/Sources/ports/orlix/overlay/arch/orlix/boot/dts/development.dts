@@ -74,4 +74,11 @@
 		orlix,device-role = "host-folder";
 		status = "okay";
 	};
+
+	virtio_net: virtio@10001a00 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0x10001a00 0x0 0x200>;
+		interrupts = <37>;
+		status = "okay";
+	};
 };

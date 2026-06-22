@@ -16,6 +16,7 @@
 #include <uapi/linux/fuse.h>
 #include <uapi/linux/virtio_blk.h>
 #include <uapi/linux/virtio_fs.h>
+#include <uapi/linux/virtio_net.h>
 #include <uapi/linux/virtio_mmio.h>
 #include <uapi/linux/virtio_ring.h>
 #include <asm/page.h>
@@ -55,6 +56,9 @@
 #define ORLIX_VIRTIO_CONSOLE_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
 #define ORLIX_VIRTIO_RNG_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
 #define ORLIX_VIRTIO_FS_BASE_FEATURES (1ULL << VIRTIO_F_VERSION_1)
+#define ORLIX_VIRTIO_NET_BASE_FEATURES \
+	((1ULL << VIRTIO_F_VERSION_1) | (1ULL << VIRTIO_NET_F_MAC) | \
+	 (1ULL << VIRTIO_NET_F_STATUS) | (1ULL << VIRTIO_NET_F_MTU))
 #define ORLIX_VIRTIO_FS_REQUEST_QUEUES 1U
 
 struct orlix_virtio_mmio_queue {
@@ -139,6 +143,12 @@ static struct orlix_virtio_mmio_slot orlix_virtio_mmio_slots[] = {
 		.device_id = VIRTIO_ID_FS,
 		.device_identifier = "orlix-host0",
 	},
+	{
+		.base = 0x10001a00UL,
+		.irq = 37,
+		.device_id = VIRTIO_ID_NET,
+		.device_identifier = "orlix-net0",
+	},
 };
 
 static struct orlix_virtio_mmio_slot *
@@ -189,6 +199,7 @@ orlix_virtio_mmio_device_present(const struct orlix_virtio_mmio_slot *slot)
 	case VIRTIO_ID_CONSOLE:
 	case VIRTIO_ID_RNG:
 	case VIRTIO_ID_FS:
+	case VIRTIO_ID_NET:
 		return true;
 	default:
 		return false;
@@ -212,6 +223,8 @@ static u64 orlix_virtio_mmio_device_features(
 		return ORLIX_VIRTIO_RNG_BASE_FEATURES;
 	case VIRTIO_ID_FS:
 		return ORLIX_VIRTIO_FS_BASE_FEATURES;
+	case VIRTIO_ID_NET:
+		return ORLIX_VIRTIO_NET_BASE_FEATURES;
 	default:
 		return 0;
 	}
@@ -243,6 +256,36 @@ static u32 orlix_virtio_mmio_fs_config_read32(
 	       ((u32)bytes[2] << 16) | ((u32)bytes[3] << 24);
 }
 
+static u32 orlix_virtio_mmio_net_config_read32(unsigned long config_offset)
+{
+	struct virtio_net_config config;
+	const u8 *bytes = (const u8 *)&config;
+
+	memset(&config, 0, sizeof(config));
+	config.mac[0] = 0x02;
+	config.mac[1] = 0x6f;
+	config.mac[2] = 0x72;
+	config.mac[3] = 0x6c;
+	config.mac[4] = 0x69;
+	config.mac[5] = 0x78;
+	config.status = cpu_to_virtio16(NULL, 0);
+	config.mtu = cpu_to_virtio16(NULL, 1500);
+
+	if (config_offset >= sizeof(config))
+		return 0;
+
+	return ((u32)bytes[config_offset]) |
+	       ((config_offset + 1 < sizeof(config) ?
+			 (u32)bytes[config_offset + 1] : 0)
+		<< 8) |
+	       ((config_offset + 2 < sizeof(config) ?
+			 (u32)bytes[config_offset + 2] : 0)
+		<< 16) |
+	       ((config_offset + 3 < sizeof(config) ?
+			 (u32)bytes[config_offset + 3] : 0)
+		<< 24);
+}
+
 static u32 orlix_virtio_mmio_config_read32(
 	const struct orlix_virtio_mmio_slot *slot,
 	unsigned long config_offset)
@@ -261,6 +304,8 @@ static u32 orlix_virtio_mmio_config_read32(
 		return 0;
 	case VIRTIO_ID_FS:
 		return orlix_virtio_mmio_fs_config_read32(slot, config_offset);
+	case VIRTIO_ID_NET:
+		return orlix_virtio_mmio_net_config_read32(config_offset);
 	default:
 		return 0;
 	}

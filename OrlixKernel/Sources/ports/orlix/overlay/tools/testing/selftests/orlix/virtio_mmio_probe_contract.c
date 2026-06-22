@@ -244,20 +244,74 @@ static bool virtiofs_tag_is_registered(void)
 	return false;
 }
 
+static bool virtio_bus_has_device_id(const char *hex_id, const char *decimal_id)
+{
+	DIR *devices = opendir("/sys/bus/virtio/devices");
+	struct dirent *entry;
+	bool found = false;
+
+	if (!devices)
+		return false;
+
+	while ((entry = readdir(devices)) != NULL) {
+		const char prefix[] = "/sys/bus/virtio/devices/";
+		const char suffix[] = "/device";
+		char path[128];
+		char buffer[64];
+		size_t size;
+		size_t pos = 0;
+		size_t i;
+		bool overflow = false;
+
+		if (entry->d_name[0] == '.')
+			continue;
+
+		for (i = 0; prefix[i] != '\0' && pos + 1 < sizeof(path); i++)
+			path[pos++] = prefix[i];
+		if (prefix[i] != '\0')
+			overflow = true;
+		for (i = 0; entry->d_name[i] != '\0' && pos + 1 < sizeof(path);
+		     i++)
+			path[pos++] = entry->d_name[i];
+		if (entry->d_name[i] != '\0')
+			overflow = true;
+		for (i = 0; suffix[i] != '\0' && pos + 1 < sizeof(path); i++)
+			path[pos++] = suffix[i];
+		if (suffix[i] != '\0')
+			overflow = true;
+		if (overflow)
+			continue;
+		path[pos] = '\0';
+
+		if (orlix_read_file(path, buffer, sizeof(buffer), &size) == 0 &&
+		    (orlix_contains(buffer, size, hex_id) ||
+		     orlix_contains(buffer, size, decimal_id))) {
+			found = true;
+			break;
+		}
+	}
+
+	closedir(devices);
+	return found;
+}
+
 int main(void)
 {
-	orlix_test_plan(19);
+	orlix_test_plan(23);
 
 	expect_virtio_mmio_node("virtio@10001000", 0x10001000, 32);
 	expect_virtio_mmio_node("virtio@10001200", 0x10001200, 33);
 	expect_virtio_mmio_node("virtio@10001400", 0x10001400, 34);
 	expect_virtio_mmio_node("virtio@10001600", 0x10001600, 35);
 	expect_virtio_mmio_node("virtio@10001800", 0x10001800, 36);
+	expect_virtio_mmio_node("virtio@10001a00", 0x10001a00, 37);
 
 	orlix_test_result(hwrng_device_returns_data(),
 			  "upstream hwrng device returns virtio-backed entropy");
 	orlix_test_result(virtio_bus_has_device(),
 			  "upstream virtio bus exposes devices");
+	orlix_test_result(virtio_bus_has_device_id("0001", "1"),
+			  "upstream virtio bus exposes the virtio-net device");
 	orlix_test_result(virtio_bus_has_fs_device(),
 			  "upstream virtio bus exposes the Orlix virtio-fs device");
 	orlix_test_result(virtiofs_tag_is_registered(),
