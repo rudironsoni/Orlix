@@ -393,6 +393,8 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         let output = try OrlixUpstreamXCTest.run(.kernelVirtioMMIOContract)
 
         XCTAssertTrue(output.contains("virtio_mmio_probe_contract"))
+        XCTAssertTrue(output.contains("upstream virtio bus exposes devices"))
+        XCTAssertTrue(output.contains("upstream virtio bus exposes the virtio-net device"))
         XCTAssertTrue(
             output.contains("upstream virtio-fs device registers the Orlix host-folder tag")
         )

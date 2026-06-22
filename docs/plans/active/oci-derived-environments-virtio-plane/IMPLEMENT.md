@@ -16030,3 +16030,60 @@ Current status / handoff:
   namespace-local route/device mutation if required by OCI networking, or move
   to virtio-net device/packet proof. Do not route these semantics through
   `OrlixHostAdapter`.
+
+### 2026-06-22 - App-hosted virtio MMIO proof requires virtio-net visibility
+
+Checkpoint summary:
+
+- Hardened the existing app-hosted `virtio_mmio_probe_contract` XCTest so it
+  must assert the Linux selftest markers for upstream virtio bus visibility and
+  the virtio-net device.
+- The Linux selftest already emits:
+  `upstream virtio bus exposes devices` and
+  `upstream virtio bus exposes the virtio-net device`; the hosted XCTest now
+  fails if those markers disappear.
+- This does not add a new ABI or HostAdapter route. It makes the existing
+  Linux-owned virtio MMIO contract part of the simulator-hosted proof surface.
+
+Ownership / boundary notes:
+
+- The proof remains under the existing upstream Linux virtio bus and Orlix
+  virtio-mmio device-tree contract.
+- `OrlixHostAdapter` is not exposed to Linux userspace. The test observes only
+  the selftest output from the existing OrlixOS terminal-session path.
+- This is progress toward OCI/container networking prerequisites. It proves
+  hosted visibility of the virtio-net device contract, not packet I/O, DNS,
+  NAT, registry pull, product `orlix run`, or full OCI networking.
+
+Validation:
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:31:orlix:virtio_mmio_probe_contract
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:38:file /orlix/virtio_mmio_probe_contract ...
+
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcode-storage-doctor
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession \
+  test
+
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_17-35-27-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Current status / handoff:
+
+- App-hosted virtio MMIO proof now requires the virtio-net device marker as well
+  as the existing virtio-fs host-folder tag marker.
+- Continue by adding a dedicated virtio-net interface/packet proof only when it
+  can stay Linux-owned and avoid exposing Darwin or simulator networking details
+  to the Linux surface.
