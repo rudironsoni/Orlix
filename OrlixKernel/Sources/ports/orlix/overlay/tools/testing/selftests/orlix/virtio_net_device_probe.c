@@ -396,6 +396,42 @@ static bool ioctl_reports_matching_flags(const char *ifname,
 	       (rtnetlink_flags & compared_flags);
 }
 
+static bool ioctl_link_reports_carrier_after_interface_up(const char *ifname)
+{
+	struct ifreq ifr = { 0 };
+	int fd;
+
+	if (strlen(ifname) >= sizeof(ifr.ifr_name))
+		return false;
+
+	strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name) - 1);
+
+	fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+	if (fd < 0)
+		return false;
+
+	if (ioctl(fd, SIOCGIFFLAGS, &ifr) < 0) {
+		close(fd);
+		return false;
+	}
+
+	ifr.ifr_flags |= IFF_UP;
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
+		close(fd);
+		return false;
+	}
+
+	memset(&ifr, 0, sizeof(ifr));
+	strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name) - 1);
+	if (ioctl(fd, SIOCGIFFLAGS, &ifr) < 0) {
+		close(fd);
+		return false;
+	}
+
+	close(fd);
+	return (ifr.ifr_flags & IFF_RUNNING) != 0;
+}
+
 static bool proc_net_dev_reports_interface(const char *ifname)
 {
 	char buffer[4096];
@@ -418,7 +454,7 @@ int main(void)
 	bool has_mtu = false;
 	bool rtnetlink_ok = false;
 
-	orlix_test_plan(11);
+	orlix_test_plan(12);
 
 	device_present = find_virtio_net_device(device_name, sizeof(device_name));
 	orlix_test_result(device_present,
@@ -449,6 +485,9 @@ int main(void)
 			  "ioctl reports matching virtio-net link flags");
 	orlix_test_result(rtnetlink_ok && packet_socket_binds_to_link(ifindex),
 			  "AF_PACKET socket binds to the virtio-net link");
+	orlix_test_result(owns_netdev &&
+			  ioctl_link_reports_carrier_after_interface_up(ifname),
+			  "virtio-net reports carrier after Linux interface up");
 	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
 			  "virtio-net link is distinct from loopback");
 	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),

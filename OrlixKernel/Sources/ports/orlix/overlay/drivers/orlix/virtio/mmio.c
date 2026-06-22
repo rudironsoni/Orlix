@@ -268,7 +268,7 @@ static u32 orlix_virtio_mmio_net_config_read32(unsigned long config_offset)
 	config.mac[3] = 0x6c;
 	config.mac[4] = 0x69;
 	config.mac[5] = 0x78;
-	config.status = cpu_to_virtio16(NULL, 0);
+	config.status = cpu_to_virtio16(NULL, VIRTIO_NET_S_LINK_UP);
 	config.mtu = cpu_to_virtio16(NULL, 1500);
 
 	if (config_offset >= sizeof(config))

@@ -16631,3 +16631,81 @@ rtnetlink, standard rtnetlink operstate presence, ioctl/rtnetlink link-flag
 consistency, and Linux `AF_PACKET` bindability on the virtio-net link. Next
 work should move to truthful carrier/link-up or packet transmit/receive
 behavior through standard Linux networking surfaces only.
+
+### 2026-06-22 - Virtio-net carrier proof
+
+Follow-up advanced the Linux-owned virtio-net link proof by making the Orlix
+virtio MMIO backend report the standard virtio-net link-up status bit and by
+verifying that Linux exposes carrier through ordinary netdev flags after the
+interface is brought administratively up.
+
+Changes:
+
+- Set the Orlix virtio-net device config `status` field to
+  `VIRTIO_NET_S_LINK_UP` while continuing to advertise
+  `VIRTIO_NET_F_STATUS`.
+- Extended `virtio_net_device_probe` to bring the discovered virtio-net
+  interface up through `SIOCSIFFLAGS` and require `IFF_RUNNING` through
+  `SIOCGIFFLAGS`.
+- Extended the hosted XCTest marker list for
+  `testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession` to require:
+
+```text
+virtio-net reports carrier after Linux interface up
+```
+
+Validation:
+
+```sh
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release
+```
+
+Packaging/source evidence:
+
+```text
+OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c:271:	config.status = cpu_to_virtio16(NULL, VIRTIO_NET_S_LINK_UP);
+OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/virtio_net_device_probe.c:490:			  "virtio-net reports carrier after Linux interface up");
+OrlixTestRunner/Tests/XCTest/OrlixKernelUpstreamTests/OrlixKernelUpstreamTests.swift:419:        XCTAssertTrue(output.contains("virtio-net reports carrier after Linux interface up"))
+```
+
+Focused hosted XCTest:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Testing started
+xcodebuild exit=0
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_21-12-44-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Scope note: this proves virtio-net `VIRTIO_NET_S_LINK_UP` propagates through
+upstream Linux into carrier-visible netdev flags after the interface is brought
+up by Linux. It does not prove packet transmit/receive, DNS, NAT, registry
+pulls, OCI `netDevices`, external networking, or full OCI networking support.
+
+Current status:
+
+The active virtio-net proof is green through hosted XCTest for device
+visibility, Ethernet-shaped netdev properties, MTU consistency across sysfs and
+rtnetlink, standard rtnetlink operstate presence, ioctl/rtnetlink link-flag
+consistency, Linux `AF_PACKET` bindability on the virtio-net link, and carrier
+reporting after Linux brings the interface up. Next work should move to packet
+transmit/receive behavior through standard Linux networking surfaces only.
