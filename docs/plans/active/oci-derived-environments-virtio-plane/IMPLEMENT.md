@@ -16220,3 +16220,77 @@ Scope note: this proves app-hosted execution of the Linux-owned
 virtio-net device visibility probe through OrlixOS terminal-session XCTest.
 It does not claim packet I/O, carrier/link-up, DNS, NAT, registry pull,
 OCI `netDevices`, or full OCI networking support.
+
+### 2026-06-22 - Virtio-net Ethernet-shaped Linux netdev proof
+
+Follow-up extended the Linux-owned `virtio_net_device_probe` beyond device
+visibility. The probe still avoids interface-name assumptions and custom ABI.
+It now proves, through standard Linux surfaces, that the virtio-net device is
+exposed as an Ethernet-shaped Linux netdev:
+
+- `/sys/class/net/<ifname>/type` reports `ARPHRD_ETHER` (`1`).
+- `/sys/class/net/<ifname>/addr_len` reports `6`.
+- `RTM_GETLINK` reports the same interface with a nonzero 6-byte hardware
+  address.
+
+The probe plan is now `1..8`, with new TAP markers:
+
+```text
+virtio-net netdev reports Ethernet hardware type
+virtio-net netdev reports Ethernet address length
+rtnetlink enumerates the virtio-net Ethernet link
+```
+
+Validation:
+
+```sh
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+```
+
+Packaging evidence:
+
+```text
+Build/OrlixMLibC/kselftest/release/kselftest-list.txt:32:orlix:virtio_net_device_probe
+Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list:39:file /orlix/virtio_net_device_probe ...
+```
+
+Focused hosted XCTest:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Testing started
+xcodebuild exit=0
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_18-37-02-+0200.xcresult
+```
+
+Harness checks:
+
+```text
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests  # 32 OK
+rtk python3 -m unittest discover .codex/rules/tests  # 5 OK
+rtk python3 .codex/hooks/compact_plan_check.py       # exit 0; stale-history warning only
+```
+
+Scope note: this proves a standard Linux Ethernet-shaped netdev surface for the
+virtio-net device. It still does not claim link-up/carrier semantics, packet
+I/O, DNS, NAT, registry pull, OCI `netDevices`, or full OCI networking support.
+
+Current status:
+
+The active virtio-net proof is green through hosted XCTest for device
+visibility plus Ethernet-shaped Linux netdev properties. Next work should move
+to truthful link/carrier or packet-path behavior through standard Linux
+networking surfaces only.
