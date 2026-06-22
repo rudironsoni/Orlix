@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include <linux/if.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
@@ -367,6 +368,73 @@ static bool packet_socket_binds_to_link(int ifindex)
 	return bound;
 }
 
+static bool read_netdev_stat(const char *ifname, const char *stat_name,
+			     unsigned long *value)
+{
+	static const char prefix[] = "/sys/class/net/";
+	static const char middle[] = "/statistics/";
+	char path[128];
+	size_t prefix_len = sizeof(prefix) - 1;
+	size_t ifname_len = strlen(ifname);
+	size_t middle_len = sizeof(middle) - 1;
+	size_t stat_len = strlen(stat_name);
+	size_t total_len = prefix_len + ifname_len + middle_len + stat_len;
+
+	if (total_len >= sizeof(path))
+		return false;
+
+	memcpy(path, prefix, prefix_len);
+	memcpy(path + prefix_len, ifname, ifname_len);
+	memcpy(path + prefix_len + ifname_len, middle, middle_len);
+	memcpy(path + prefix_len + ifname_len + middle_len, stat_name, stat_len);
+	path[total_len] = '\0';
+
+	return read_sysfs_ulong(path, value);
+}
+
+static bool packet_socket_send_advances_tx_packets(const char *ifname,
+						   int ifindex)
+{
+	static const unsigned char frame[ETH_HLEN + 46] = {
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0x02, 0x6f, 0x72, 0x6c, 0x69, 0x78,
+		0x88, 0xb5,
+	};
+	struct sockaddr_ll address = {
+		.sll_family = AF_PACKET,
+		.sll_protocol = htons(ETH_P_ALL),
+		.sll_ifindex = ifindex,
+		.sll_halen = ETH_ALEN,
+		.sll_addr = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff },
+	};
+	unsigned long before;
+	unsigned long after;
+	int fd;
+	ssize_t sent;
+
+	if (ifindex <= 0)
+		return false;
+
+	if (!read_netdev_stat(ifname, "tx_packets", &before))
+		return false;
+
+	fd = socket(AF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_ALL));
+	if (fd < 0)
+		return false;
+
+	sent = sendto(fd, frame, sizeof(frame), 0,
+		      (struct sockaddr *)&address, sizeof(address));
+	close(fd);
+
+	if (sent != (ssize_t)sizeof(frame))
+		return false;
+
+	if (!read_netdev_stat(ifname, "tx_packets", &after))
+		return false;
+
+	return after > before;
+}
+
 static bool ioctl_reports_matching_flags(const char *ifname,
 					 unsigned int rtnetlink_flags)
 {
@@ -454,7 +522,7 @@ int main(void)
 	bool has_mtu = false;
 	bool rtnetlink_ok = false;
 
-	orlix_test_plan(12);
+	orlix_test_plan(13);
 
 	device_present = find_virtio_net_device(device_name, sizeof(device_name));
 	orlix_test_result(device_present,
@@ -488,6 +556,9 @@ int main(void)
 	orlix_test_result(owns_netdev &&
 			  ioctl_link_reports_carrier_after_interface_up(ifname),
 			  "virtio-net reports carrier after Linux interface up");
+	orlix_test_result(owns_netdev && rtnetlink_ok &&
+			  packet_socket_send_advances_tx_packets(ifname, ifindex),
+			  "AF_PACKET send advances virtio-net tx_packets");
 	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
 			  "virtio-net link is distinct from loopback");
 	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),

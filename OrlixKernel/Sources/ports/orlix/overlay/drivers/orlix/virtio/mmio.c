@@ -800,6 +800,79 @@ static void orlix_virtio_mmio_process_rng_queue(
 	}
 }
 
+static bool orlix_virtio_mmio_validate_net_tx_desc(
+	const struct vring_desc *desc,
+	unsigned int head)
+{
+	unsigned int descriptor_index = head;
+	unsigned int guard;
+
+	if (head >= ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+		return false;
+
+	for (guard = 0; guard < ORLIX_VIRTIO_MMIO_QUEUE_SIZE; guard++) {
+		u32 length;
+		u16 flags;
+		u64 address;
+
+		if (descriptor_index >= ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+			return false;
+
+		length = orlix_vring_read32(desc[descriptor_index].len);
+		flags = orlix_vring_read16(desc[descriptor_index].flags);
+		address = orlix_vring_read64(desc[descriptor_index].addr);
+
+		if (flags & VRING_DESC_F_WRITE)
+			return false;
+
+		if (length &&
+		    !orlix_virtio_mmio_guest_ptr(address, length))
+			return false;
+
+		if (!(flags & VRING_DESC_F_NEXT))
+			return true;
+
+		descriptor_index = orlix_vring_read16(
+			desc[descriptor_index].next);
+	}
+
+	return false;
+}
+
+static void orlix_virtio_mmio_process_net_tx_queue(
+	struct orlix_virtio_mmio_slot *slot,
+	u32 queue_index)
+{
+	struct orlix_virtio_mmio_queue *queue;
+	struct vring_desc *desc;
+	struct vring_avail *avail;
+
+	if (queue_index != 1 || queue_index >= ARRAY_SIZE(slot->queues))
+		return;
+
+	queue = &slot->queues[queue_index];
+	if (!queue->ready || !queue->num ||
+	    queue->num > ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+		return;
+
+	desc = orlix_virtio_mmio_guest_ptr(
+		queue->desc, sizeof(struct vring_desc) * queue->num);
+	avail = orlix_virtio_mmio_guest_ptr(queue->avail, sizeof(*avail));
+	if (!desc || !avail)
+		return;
+
+	while (queue->last_avail != orlix_vring_read16(avail->idx)) {
+		unsigned int head =
+			orlix_vring_read16(avail->ring[queue->last_avail % queue->num]);
+
+		if (!orlix_virtio_mmio_validate_net_tx_desc(desc, head))
+			break;
+
+		orlix_virtio_mmio_push_used(slot, queue, head, 0);
+		queue->last_avail++;
+	}
+}
+
 static void orlix_virtio_mmio_fill_fs_root_attr(struct fuse_attr *attr)
 {
 	memset(attr, 0, sizeof(*attr));
@@ -2950,6 +3023,11 @@ static void orlix_virtio_mmio_process_queue(
 
 	if (slot->device_id == VIRTIO_ID_FS) {
 		orlix_virtio_mmio_process_fs_queue(slot, queue_index);
+		return;
+	}
+
+	if (slot->device_id == VIRTIO_ID_NET) {
+		orlix_virtio_mmio_process_net_tx_queue(slot, queue_index);
 		return;
 	}
 
