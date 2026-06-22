@@ -15555,3 +15555,58 @@ Non-claims:
 - It does not claim full OCI Runtime `create/start/state/kill/delete`
   compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
   or full namespace/cgroup OCI integration.
+
+### 2026-06-22 - OCI process session uses observation driver boundary
+
+Checkpoint:
+
+- Added `OrlixOCIRuntimeProcessCompletionObservation`.
+- Added SPI `OrlixOCIRuntimeProcessObservationDriver`.
+- `OrlixOCIRuntimeProcessSession` can now:
+  - start through a driver that returns `OrlixOCIRuntimeProcessStartObservation`,
+  - request signal delivery through the driver before preserving running
+    lifecycle state,
+  - wait through the driver and convert observed completion into
+    `OrlixOCIRuntimeCompletedProcess`.
+- Added focused tests with a recording driver proving OrlixOS passes the
+  process session through start/signal/wait observation points and advances
+  lifecycle state only from the returned Linux-observed metadata.
+
+OrlixOS-owned behavior covered by this checkpoint:
+
+- There is now a narrow OrlixOS-owned boundary where a future Linux execution
+  adapter can report observed start/completion metadata back into the OCI
+  process session.
+- The driver receives the existing `OrlixLinuxSession`-bound process session; it
+  does not create Linux-visible APIs, host paths, syscalls, ioctls, or pseudo
+  files.
+- The change remains above the Linux surface and below product claims.
+
+Evidence:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_16-25-06-+0200.xcresult
+result=Passed
+passedTests=2
+failedTests=0
+skippedTests=0
+totalTestCount=2
+expectedFailures=0
+```
+
+Harness:
+
+- `rtk git diff --check`
+- `rtk python3 -m unittest discover .codex/hooks/tests` (`32` tests)
+- `rtk python3 -m unittest discover .codex/rules/tests` (`5` tests)
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited `0` with the known
+  stale-history/current-status warnings.
+
+Non-claims:
+
+- This introduces the OrlixOS process observation-driver boundary only.
+- It does not yet launch, signal, monitor, wait for, or reap a real
+  OCI-created Linux process.
+- It does not claim full OCI Runtime `create/start/state/kill/delete`
+  compliance, product `orlix run`, registry pull, virtio-fs host-folder mounts,
+  or full namespace/cgroup OCI integration.
