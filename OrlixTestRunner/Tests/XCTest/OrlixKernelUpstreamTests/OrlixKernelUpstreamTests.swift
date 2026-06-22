@@ -401,6 +401,18 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("orlix-host0"))
     }
 
+    func testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelVirtioNetDevice)
+
+        XCTAssertTrue(output.contains("virtio_net_device_probe"))
+        XCTAssertTrue(output.contains("virtio-net device is present on the upstream virtio bus"))
+        XCTAssertTrue(output.contains("virtio-net device owns a Linux netdev"))
+        XCTAssertTrue(output.contains("virtio-net netdev is exposed through sysfs"))
+        XCTAssertTrue(output.contains("rtnetlink enumerates the virtio-net link"))
+        XCTAssertTrue(output.contains("virtio-net link is distinct from loopback"))
+        XCTAssertTrue(output.contains("procfs reports the virtio-net interface"))
+    }
+
     func testRandomDeviceProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelRandomDevice)
 
