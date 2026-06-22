@@ -2394,6 +2394,7 @@ public enum OrlixOCIRuntimeLifecycleAction: String, Codable, Equatable, Sendable
 public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
 	case invalidTransition(from: OrlixOCIRuntimeLifecycleState,
 			       action: OrlixOCIRuntimeLifecycleAction)
+	case invalidPID(Int32)
 	case invalidSignal(Int32)
 	case stateUnavailable(OrlixOCIRuntimeLifecycleState)
 }
@@ -2474,6 +2475,9 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 	}
 
 	public func start(pid: Int32) throws -> OrlixOCIRuntimeLifecycleController {
+		guard pid > 0 else {
+			throw OrlixOCIRuntimeLifecycleError.invalidPID(pid)
+		}
 		guard record.state == .created else {
 			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
 				from: record.state,
