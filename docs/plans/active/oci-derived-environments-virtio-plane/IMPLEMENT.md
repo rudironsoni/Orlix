@@ -13872,3 +13872,56 @@ Current status after this checkpoint:
 - Next aligned work should connect the created session descriptor to an actual
   OrlixOS session construction path or continue proving bundle root binding via
   Linux-owned mount behavior.
+### 2026-06-22 07:39 +0200 - Loaded OCI bundle to OrlixOS session construction bridge
+
+Status: green targeted checkpoint.
+
+Implemented:
+
+- Added an OrlixOS SPI construction path from a loaded local OCI Runtime bundle to `OrlixLinuxSession`.
+- The path composes the already-validated bundle loader and OCI runtime session descriptor bridge:
+  - `OrlixOCIRuntimeBundle.load(from:)`
+  - `OrlixOCIRuntimeBundle.sessionDescriptor(id:rootMount:)`
+  - `OrlixEnvironmentRegistry.save(_:)`
+  - `OrlixLinuxSession(bootConfig:terminal:)`
+- The bridge saves the derived `OrlixEnvironmentDescriptor` in the environment registry and derives the same Linux-shaped exec/argv/env/cwd/uid/gid command-line projection used by materialized Orlix environments.
+- The bridge deliberately does not synthesize, fake, or require `base.ext4`/`state.ext4` images for a local OCI Runtime bundle that has only `config.json` plus `rootfs/`.
+- The new test asserts the saved environment descriptor, Linux-shaped OCI command-line tokens, and `nil` `materializedRootImageForTesting` to keep this checkpoint honest.
+
+Verification:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.22_07-39-45-+0200.xcresult
+result=Passed
+passedTests=5
+failedTests=0
+skippedTests=0
+totalTestCount=5
+expectedFailures=0
+```
+
+Command:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOrlixOSBuildsSessionFromOCIRuntimeBundle \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingConfig \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsMissingRootfs \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsFileRootfs \
+  test
+```
+
+Non-claims:
+
+- No process start, PID allocation, or runtime lifecycle execution is proven.
+- No local OCI `rootfs/` has been mounted as the active Linux root.
+- No `base.ext4`/`state.ext4` OCI rootfs materialization is claimed.
+- No `orlix run`, registry pull, full OCI Runtime compliance, external networking, or namespace/cgroup completeness is claimed.
+- No custom Linux ABI was added.
+- No HostAdapter Linux policy or host leakage was introduced.

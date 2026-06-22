@@ -618,7 +618,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         }
     }
 
-    private static func materializedKernelCommandLine(
+    static func materializedKernelCommandLine(
         descriptor: OrlixEnvironmentDescriptor,
         kernelCommandLine: String?
     ) throws -> String? {
