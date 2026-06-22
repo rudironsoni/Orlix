@@ -13638,3 +13638,60 @@ Current status / handoff:
 - Next aligned implementation target: real virtio-net device-plane proof. Do
   not claim external/shared networking, OCI `netDevices`, OCI lifecycle, or
   `orlix run` until that Linux-owned substrate is implemented and verified.
+
+## 2026-06-22 06:24 +0200 - Virtio-Net MMIO Device-Plane Checkpoint
+
+Status: completed narrow Linux-visible virtio-net device-plane proof.
+
+Changes:
+
+- Added a standard `virtio,mmio` net node at `0x10001a00` / IRQ `37` to both
+  Orlix release and development DTS profiles.
+- Added a matching Orlix virtio MMIO backend slot with upstream
+  `VIRTIO_ID_NET`, virtio-net MAC/status/MTU feature bits, and a minimal
+  link-down virtio-net config surface.
+- Extended `virtio_mmio_probe_contract` from 19 to 23 TAP checks so the
+  upstream Linux-visible contract now requires the net MMIO firmware node and
+  a `/sys/bus/virtio/devices/*/device` id of `1`.
+
+Verification:
+
+```text
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile __kselftest-initramfs PROFILE=release
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release
+```
+
+Focused app-hosted XCTest:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_06-24-01-+0200.xcresult
+testVirtioMMIOContractProbeCompletesThroughOrlixOSTerminalSession
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+```
+
+Non-claims:
+
+- This proves a Linux-visible standard virtio-net MMIO device plane only.
+- The virtio-net config reports link down; this does not prove packet I/O.
+- This does not prove external/shared networking.
+- `netDevices` remains deterministically rejected until the OCI feature report
+  has a stronger Linux networking proof.
+- No OCI runtime lifecycle, registry pull, Docker daemon, runc, VM runtime,
+  Apple container/containerization, or product readiness claim is made here.
+
+Regression check after virtio-net device-plane patch:
+
+```text
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_06-31-43-+0200.xcresult
+testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+```
