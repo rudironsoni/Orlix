@@ -11,7 +11,7 @@ from pathlib import Path
 
 DEFAULT_MANIFEST_ROOT = Path("Build/orlix-build-manifests")
 DEFAULT_STAGES = {
-    "linux": ("source-prep", "headers-install"),
+    "linux": ("source-prep", "headers-install", "kernel-archive"),
     "mlibc": ("source-prep", "compiler-rt"),
     "coreutils": ("source-prep", "configure-build", "install-rootfs"),
 }
