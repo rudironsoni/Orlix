@@ -898,6 +898,10 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
     public func wait(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeCompletedProcess {
         try exit(observedCompletion: driver.wait(processSession: self))
     }
+
+    public func run(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeCompletedProcess {
+        try start(using: driver).wait(using: driver)
+    }
 }
 
 private final class HostConsoleTerminalTransport:
