@@ -435,6 +435,16 @@ static bool packet_socket_send_advances_tx_packets(const char *ifname,
 	return after > before;
 }
 
+static bool virtio_net_rx_queue_advances_rx_packets(const char *ifname)
+{
+	unsigned long packets = 0;
+
+	if (!read_netdev_stat(ifname, "rx_packets", &packets))
+		return false;
+
+	return packets > 0;
+}
+
 static bool ioctl_reports_matching_flags(const char *ifname,
 					 unsigned int rtnetlink_flags)
 {
@@ -522,7 +532,7 @@ int main(void)
 	bool has_mtu = false;
 	bool rtnetlink_ok = false;
 
-	orlix_test_plan(13);
+	orlix_test_plan(14);
 
 	device_present = find_virtio_net_device(device_name, sizeof(device_name));
 	orlix_test_result(device_present,
@@ -559,6 +569,8 @@ int main(void)
 	orlix_test_result(owns_netdev && rtnetlink_ok &&
 			  packet_socket_send_advances_tx_packets(ifname, ifindex),
 			  "AF_PACKET send advances virtio-net tx_packets");
+	orlix_test_result(virtio_net_rx_queue_advances_rx_packets(ifname),
+			  "virtio-net RX queue advances rx_packets");
 	orlix_test_result(owns_netdev && strcmp(ifname, "lo") != 0,
 			  "virtio-net link is distinct from loopback");
 	orlix_test_result(owns_netdev && proc_net_dev_reports_interface(ifname),

@@ -77,7 +77,9 @@ Current proved state:
   Linux carrier reporting after the interface is brought administratively up.
   The Orlix virtio MMIO backend now completes virtio-net TX queue descriptors,
   and hosted proof verifies that an `AF_PACKET` send advances Linux
-  `tx_packets`.
+  `tx_packets`. The backend also injects a deterministic local frame through
+  virtio-net RX queue buffers, and hosted proof verifies Linux-visible
+  `rx_packets` accounting advances.
 - OrlixKernel durable virtio-mmio input now declares a standard upstream virtio-fs host-folder device shape: a `virtio,mmio` device-tree node at `0x10001800`, an internal `VIRTIO_ID_FS` slot, tag `orlix-host0`, one request queue, and a kselftest contract assertion for `/sys/fs/virtiofs/*/tag`. Release build proof exists; app-hosted runtime proof for the tag assertion is still pending.
 - OrlixTestRunner architecture invariants pin the virtio/container-environment substrate config set across both profile defconfigs.
 - OrlixHostAdapter has private opaque host-directory resource registration and lookup plumbing for future virtio-fs backends, with tests for absolute directory validation and path-shaped identifier rejection.
@@ -104,7 +106,8 @@ Current not-proved state:
 - Product `orlix run`.
 - OCI Runtime Spec lifecycle compliance.
 - Truthful OCI feature report.
-- virtio-net RX delivery, DNS, NAT, external networking, and OCI `netDevices`.
+- virtio-net userspace receive proof, loopback reflection, DNS, NAT, external
+  networking, and OCI `netDevices`.
 - Cgroup v2 controller behavior, delegation, resource accounting, and
   enforcement.
 - Native performance benchmark ladder for imported binaries.

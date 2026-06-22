@@ -16794,3 +16794,86 @@ consistency, Linux `AF_PACKET` bindability on the virtio-net link, carrier
 reporting after Linux brings the interface up, and Linux-visible TX completion
 for an `AF_PACKET` send. Next work should move to RX delivery or a deliberately
 scoped host-mediated packet path through standard Linux networking surfaces.
+
+### 2026-06-22 - Virtio-net RX queue accounting proof
+
+Follow-up advanced the virtio-net packet path by making the Orlix virtio MMIO
+backend satisfy upstream Linux receive queue buffers with a deterministic local
+Ethernet frame. This remains a narrow Linux-owned virtio/netdev proof. It does
+not add HostAdapter network policy, host packet forwarding, DNS, NAT, external
+networking, OCI `netDevices`, or userspace socket receive proof.
+
+Changes:
+
+- Added a `VIRTIO_ID_NET` RX queue path in
+  `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`.
+- For virtio-net queue 0, the backend validates Linux-provided writable
+  descriptor chains, writes a zeroed `struct virtio_net_hdr` followed by a
+  deterministic minimum Ethernet frame, publishes used-ring completion with the
+  written byte count, and raises the normal virtio interrupt through
+  `orlix_virtio_mmio_push_used`.
+- Kept queue 1 routed to the existing TX completion path.
+- Extended `virtio_net_device_probe` to require that
+  `/sys/class/net/<ifname>/statistics/rx_packets` is nonzero after Linux brings
+  the interface up.
+- Extended the hosted XCTest marker list for
+  `testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession` to require:
+
+```text
+virtio-net RX queue advances rx_packets
+```
+
+Validation:
+
+```sh
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release
+TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile build PROFILE=release
+```
+
+Build note: the sandboxed release build first failed at the known late
+Xcode/cache filesystem boundary, and the same build then exited 0 through the
+required unsandboxed Xcode storage path.
+
+Focused hosted XCTest:
+
+```sh
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+rtk timeout 300 xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixKernelUpstreamTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession \
+  test
+```
+
+Result:
+
+```text
+Testing started
+xcodebuild exit=0
+/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.22_22-10-44-+0200.xcresult
+result=Passed
+passedTests=1
+failedTests=0
+skippedTests=0
+totalTestCount=1
+expectedFailures=0
+```
+
+Scope note: this proves that Linux-provided virtio-net RX buffers can be
+completed by the Orlix virtio backend and observed through standard Linux
+`rx_packets` accounting. It does not prove packet delivery to a userspace
+socket, loopback reflection, DNS, NAT, registry pulls, OCI `netDevices`,
+external networking, or full OCI networking support.
+
+Current status:
+
+The active virtio-net proof is green through hosted XCTest for device
+visibility, Ethernet-shaped netdev properties, MTU consistency across sysfs and
+rtnetlink, standard rtnetlink operstate presence, ioctl/rtnetlink link-flag
+consistency, Linux `AF_PACKET` bindability on the virtio-net link, carrier
+reporting after Linux brings the interface up, Linux-visible TX completion for
+an `AF_PACKET` send, and Linux-visible RX queue accounting. Next work should
+move to userspace receive proof, loopback reflection, or a deliberately scoped
+host-mediated packet path through standard Linux networking surfaces.

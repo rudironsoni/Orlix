@@ -800,6 +800,113 @@ static void orlix_virtio_mmio_process_rng_queue(
 	}
 }
 
+static const u8 orlix_virtio_mmio_net_rx_frame[] = {
+	0x02, 0x6f, 0x72, 0x6c, 0x69, 0x78,
+	0x02, 0x6f, 0x72, 0x6c, 0x69, 0x79,
+	0x88, 0xb5,
+	0x6f, 0x72, 0x6c, 0x69, 0x78, 0x20, 0x76, 0x69,
+	0x72, 0x74, 0x69, 0x6f, 0x2d, 0x6e, 0x65, 0x74,
+	0x20, 0x72, 0x78, 0x20, 0x70, 0x72, 0x6f, 0x6f,
+	0x66, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static bool orlix_virtio_mmio_write_net_rx_desc(
+	const struct vring_desc *desc,
+	unsigned int head,
+	unsigned int *written)
+{
+	u8 packet[sizeof(struct virtio_net_hdr) +
+		  sizeof(orlix_virtio_mmio_net_rx_frame)];
+	unsigned int descriptor_index = head;
+	unsigned int offset = 0;
+	unsigned int guard;
+
+	if (head >= ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+		return false;
+
+	memset(packet, 0, sizeof(packet));
+	memcpy(packet + sizeof(struct virtio_net_hdr),
+	       orlix_virtio_mmio_net_rx_frame,
+	       sizeof(orlix_virtio_mmio_net_rx_frame));
+
+	for (guard = 0; guard < ORLIX_VIRTIO_MMIO_QUEUE_SIZE; guard++) {
+		u32 length;
+		u16 flags;
+		u64 address;
+		u32 copied;
+		u8 *buffer;
+
+		if (descriptor_index >= ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+			return false;
+
+		length = orlix_vring_read32(desc[descriptor_index].len);
+		flags = orlix_vring_read16(desc[descriptor_index].flags);
+		address = orlix_vring_read64(desc[descriptor_index].addr);
+
+		if (!(flags & VRING_DESC_F_WRITE))
+			return false;
+
+		buffer = orlix_virtio_mmio_guest_ptr(address, length);
+		if (length && !buffer)
+			return false;
+
+		copied = min_t(u32, length, sizeof(packet) - offset);
+		if (copied)
+			memcpy(buffer, packet + offset, copied);
+		offset += copied;
+
+		if (offset == sizeof(packet)) {
+			*written = offset;
+			return true;
+		}
+
+		if (!(flags & VRING_DESC_F_NEXT))
+			return false;
+
+		descriptor_index =
+			orlix_vring_read16(desc[descriptor_index].next);
+	}
+
+	return false;
+}
+
+static void orlix_virtio_mmio_process_net_rx_queue(
+	struct orlix_virtio_mmio_slot *slot,
+	u32 queue_index)
+{
+	struct orlix_virtio_mmio_queue *queue;
+	struct vring_desc *desc;
+	struct vring_avail *avail;
+
+	if (queue_index != 0 || queue_index >= ARRAY_SIZE(slot->queues))
+		return;
+
+	queue = &slot->queues[queue_index];
+	if (!queue->ready || !queue->num ||
+	    queue->num > ORLIX_VIRTIO_MMIO_QUEUE_SIZE)
+		return;
+
+	desc = orlix_virtio_mmio_guest_ptr(
+		queue->desc, sizeof(struct vring_desc) * queue->num);
+	avail = orlix_virtio_mmio_guest_ptr(queue->avail, sizeof(*avail));
+	if (!desc || !avail)
+		return;
+
+	while (queue->last_avail != orlix_vring_read16(avail->idx)) {
+		unsigned int head =
+			orlix_vring_read16(avail->ring[queue->last_avail % queue->num]);
+		unsigned int written = 0;
+
+		if (!orlix_virtio_mmio_write_net_rx_desc(desc, head, &written))
+			break;
+
+		orlix_virtio_mmio_push_used(slot, queue, head, written);
+		queue->last_avail++;
+	}
+}
+
 static bool orlix_virtio_mmio_validate_net_tx_desc(
 	const struct vring_desc *desc,
 	unsigned int head)
@@ -3027,7 +3134,10 @@ static void orlix_virtio_mmio_process_queue(
 	}
 
 	if (slot->device_id == VIRTIO_ID_NET) {
-		orlix_virtio_mmio_process_net_tx_queue(slot, queue_index);
+		if (queue_index == 0)
+			orlix_virtio_mmio_process_net_rx_queue(slot, queue_index);
+		else if (queue_index == 1)
+			orlix_virtio_mmio_process_net_tx_queue(slot, queue_index);
 		return;
 	}
 
