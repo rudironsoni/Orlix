@@ -560,6 +560,50 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
             else:
                 self.module.STAGES["synthetic"] = original_stages
 
+    def test_write_rejects_absolute_output_sentinel(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_root = root / "manifests"
+            output = io.StringIO()
+
+            class Args:
+                pass
+
+            Args.repo_root = root
+            Args.manifest_root = manifest_root
+            Args.profile = "release"
+            Args.component = ["linux"]
+            Args.stage = ["source-prep"]
+            Args.requires = ["/private/tmp/outside.output"]
+
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(Args)
+
+            self.assertEqual(result, 1)
+            self.assertIn("required-output-not-repo-relative: /private/tmp/outside.output", output.getvalue())
+
+    def test_write_rejects_repo_escaping_output_sentinel(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_root = root / "manifests"
+            output = io.StringIO()
+
+            class Args:
+                pass
+
+            Args.repo_root = root
+            Args.manifest_root = manifest_root
+            Args.profile = "release"
+            Args.component = ["coreutils"]
+            Args.stage = ["source-prep"]
+            Args.requires = ["../outside.output"]
+
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(Args)
+
+            self.assertEqual(result, 1)
+            self.assertIn("required-output-outside-repo: ../outside.output", output.getvalue())
+
     def test_write_rejects_directory_output_sentinel(self) -> None:
         original_stages = self.module.STAGES.get("synthetic")
         self.module.STAGES["synthetic"] = (self.module.StageSpec("payload", ("input",)),)
@@ -582,7 +626,7 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
                     result = self.module.write(args)
 
                 self.assertEqual(result, 1)
-                self.assertIn("not-file required-output", output.getvalue())
+                self.assertIn("required-output-not-file", output.getvalue())
                 self.assertEqual(list((root / "manifests").glob("**/*.json")), [])
         finally:
             if original_stages is None:
