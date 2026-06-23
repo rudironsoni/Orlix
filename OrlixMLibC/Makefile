@@ -332,7 +332,7 @@ __build: __write-cross-file
 		printf 'target=%s\n' "aarch64-linux-gnu"; \
 		printf 'page_size=%s\n' "$(ORLIX_OS_LINUX_PAGE_SIZE)"; \
 	} > "$$meson_config_tmp"; \
-	if [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ] && { [ ! -s "$(MLIBC_MESON_CONFIG_STAMP)" ] || ! cmp -s "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; }; then \
+	if [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ] && { [ ! -s "$(MLIBC_BUILD_DIR)/meson-private/coredata.dat" ] || [ ! -s "$(MLIBC_MESON_CONFIG_STAMP)" ] || ! cmp -s "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; }; then \
 		echo "OrlixMLibC Meson compiler configuration changed; wiping Meson build directory"; \
 		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --wipe "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
 			--cross-file "$(MLIBC_CROSS_FILE)" \
@@ -349,7 +349,7 @@ __build: __write-cross-file
 			-Dbsd_option=enabled \
 			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	elif [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ]; then \
-		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --reconfigure "$(MLIBC_BUILD_DIR)" \
+		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --reconfigure "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
 			--prefix /usr \

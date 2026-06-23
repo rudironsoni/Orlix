@@ -18481,3 +18481,58 @@ Makefile proof/test targets passing. This is stronger than the prior build-only
 checkpoint, but it still does not claim full upstream conformance or product
 runtime readiness because the Xcode runtime/upstream schemes currently build
 without executing any XCTest cases.
+
+## 2026-06-23 - Fix mlibc Meson reconfigure path exposed by Xcode upstream tests
+
+Focused Xcode runtime validation for
+`OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testEnvironmentEntryProbeCompletesThroughOrlixOSTerminalSession`
+exposed a real OrlixMLibC build regression before XCTest execution. The Xcode
+build phase refreshed OrlixMLibC and failed in Meson with:
+
+- `ERROR: Neither source directory '.../Build/OrlixMLibC/build/release' nor build directory None contain a build file meson.build.`
+
+Root cause:
+
+- `OrlixMLibC/Makefile` used `meson setup --reconfigure "$(MLIBC_BUILD_DIR)"`
+  for an existing build directory.
+- With the installed Meson version and this build directory state, that form
+  fails; a direct probe showed `meson setup --reconfigure Build/OrlixMLibC/build/release`
+  returned non-zero, while `meson setup --reconfigure Build/OrlixMLibC/build/release
+  Build/OrlixMLibC/src/mlibc-43ab07732cdf` returned 0.
+- The reconfigure guard also trusted `build.ninja` alone. If Meson coredata is
+  missing or incomplete, reconfigure is the wrong path.
+
+Implementation:
+
+- `OrlixMLibC/Makefile` now includes
+  `$(MLIBC_BUILD_DIR)/meson-private/coredata.dat` in the wipe/reconfigure
+  decision.
+- The reconfigure command now passes both `$(MLIBC_BUILD_DIR)` and
+  `$(MLIBC_SRC_DIR)` to `meson setup --reconfigure`.
+
+Validation:
+
+- `make -f OrlixMLibC/Makefile build PROFILE=release` passed after the fix.
+- Artifact checks passed:
+  - `Build/OrlixMLibC/sysroot/release/usr/lib/libc.a`
+  - `Build/OrlixMLibC/compiler-rt/release/liborlix_compiler_rt.a`
+  - `Build/OrlixMLibC/build/release/meson-private/coredata.dat`
+- `rtk git diff --check` passed.
+- No `OrlixMLibC/Makefile` validation processes remained after cleanup.
+
+Remaining validation gap:
+
+- After the mlibc build-phase failure was fixed, the focused
+  `OrlixKernelUpstreamTests` XCTest no longer failed immediately in Meson, but
+  the run did not produce a test summary and was terminated after several
+  minutes. The active runtime log showed the app-hosted launch path failed with
+  `Simulator device failed to launch org.orlix.OrlixTerminal`.
+- This checkpoint therefore proves the mlibc build/reconfigure fix only. It
+  does not claim the Xcode upstream runtime test now executes or passes.
+
+Current status:
+
+The OrlixMLibC Meson reconfigure regression that blocked Xcode upstream-test
+build phases is fixed and build-proven. The next required proof work is the
+OrlixTerminal simulator launch/runtime-test path so the upstream XCTest schemes
+execute real test cases instead of failing or stalling before runtime proof.
