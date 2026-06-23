@@ -418,6 +418,31 @@ class BuildManifestTests(unittest.TestCase):
                 self.assertEqual(result, 1)
                 self.assertIn(f"{component}:source-prep manifest-missing", stdout.getvalue())
 
+    def test_audit_treats_non_object_manifest_json_as_miss(self):
+        for component, manifest_text in (("linux", '"scalar"'), ("mlibc", "[]"), ("coreutils", "null")):
+            with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
+                manifest_root = Path(tmp) / "manifests"
+                manifest_path = manifest_root / "release" / component / "source-prep.json"
+                manifest_path.parent.mkdir(parents=True)
+                manifest_path.write_text(manifest_text + "\n")
+
+                class Args:
+                    pass
+
+                Args.component = [component]
+                Args.manifest_root = manifest_root
+                Args.repo_root = REPO_ROOT
+                Args.profile = "release"
+                Args.stage = ["source-prep"]
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    result = self.module.audit(Args)
+
+                self.assertEqual(result, 1)
+                self.assertIn(f"{component}:source-prep manifest-missing", stdout.getvalue())
+
+
 
 class BuildManifestWriteGraphTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -225,9 +225,12 @@ def manifest_path(repo_root: Path, manifest_root: Path, profile: str, component:
 
 def load_manifest(path: Path) -> dict[str, object] | None:
     try:
-        return json.loads(path.read_text())
+        manifest = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return None
+    if not isinstance(manifest, dict):
+        return None
+    return manifest
 
 
 def atomic_write_text(path: Path, text: str) -> None:
