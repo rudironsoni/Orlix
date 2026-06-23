@@ -278,6 +278,9 @@ cache-ready:
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component coreutils \
-		--stage install-rootfs
+		--stage install-rootfs \
+		--requires "$(ORLIXOS_COREUTILS_PROOF)" \
+		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls" \
+		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat"
 
 include $(PROJECT_DIR)/Sources/make/rules.mk

@@ -1276,7 +1276,9 @@ cache-ready:
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component linux \
-		--stage kernel-archive
+		--stage kernel-archive \
+		--requires "$(ORLIX_KERNEL_XCFRAMEWORK)/Info.plist" \
+		--requires "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)/OrlixKernel"
 
 clean:
 	@set -euo pipefail; \
