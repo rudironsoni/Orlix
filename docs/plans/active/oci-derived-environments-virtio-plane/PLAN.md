@@ -114,27 +114,6 @@ Current not-proved state:
 - Linux substrate coverage sufficient for OCI Runtime lifecycle and feature
   claims.
 
-Package management direction:
-
-- Orlix must not invent or ship a parallel package-management system for
-  OCI-derived environments.
-- OCI image layout and OCI runtime metadata are the battle-tested interchange
-  formats for imported environments. OrlixOS may verify, select, materialize,
-  persist, and enter those environments, but it must not reinterpret image
-  contents as Orlix-native package records.
-- Package operations inside an imported environment belong to the distro or
-  image userspace that provided them: Alpine uses `apk`, Debian/Ubuntu use
-  `apt`, Fedora/RHEL-like roots use `dnf`/`rpm`, Arch-like roots use `pacman`,
-  and minimal/static roots may have no package manager at all.
-- OrlixOS owns environment import, environment registry metadata, root/state
-  image lifecycle, mount policy, session launch, and feature reporting. It does
-  not own dependency solving, package install/remove semantics, package
-  database formats, repository metadata formats, or package upgrade policy for
-  imported OCI-derived roots.
-- Registry pull, when implemented, must produce a verified OCI layout input and
-  then use the same OCI import path as local layouts. It must not introduce an
-  Orlix package index, Orlix package database, or Orlix package resolver.
-
 The stale historical gaps below that say no tar importer, OCI importer,
 whiteout tests, overlay tests, or oracle tooling exists are superseded by this
 reconciliation and by the current `IMPLEMENT.md` evidence.
@@ -1928,11 +1907,6 @@ Plan rules:
 - No raw host path root.
 - No local Linux UAPI clones.
 - No Darwin/libc/MLibC leakage into OrlixKernel.
-- No Orlix package manager, package database, package repository format, or
-  package dependency resolver for OCI-derived environments.
-- No Orlix package abstraction over OCI image contents. Preserve OCI image
-  metadata and let distro-native tools such as `apk`, `apt`, `dnf`/`rpm`, and
-  `pacman` run inside the Linux environment when present.
 - No hidden compatibility aliases for IXLand.
 - No new OrlixKit.
 - No custom Orlix syscall ABI for container execution.
