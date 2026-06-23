@@ -9,6 +9,54 @@
 
 #include "orlix_kselftest_user.h"
 
+static void write_literal(const char *text)
+{
+	size_t len = 0;
+
+	while (text[len])
+		len++;
+	(void)write(STDOUT_FILENO, text, len);
+}
+
+static void write_hex_byte(unsigned char value)
+{
+	static const char digits[] = "0123456789abcdef";
+	char out[2];
+
+	out[0] = digits[value >> 4];
+	out[1] = digits[value & 0xf];
+	(void)write(STDOUT_FILENO, out, sizeof(out));
+}
+
+static void write_unsigned(unsigned long value)
+{
+	char buffer[32];
+	size_t used = 0;
+
+	if (value == 0) {
+		write_literal("0");
+		return;
+	}
+	while (value && used < sizeof(buffer)) {
+		buffer[used++] = (char)('0' + (value % 10));
+		value /= 10;
+	}
+	while (used)
+		(void)write(STDOUT_FILENO, &buffer[--used], 1);
+}
+
+static void report_mismatch(off_t offset, unsigned char mmap_byte,
+			    unsigned char pread_byte)
+{
+	write_literal("# FM BAD O");
+	write_unsigned((unsigned long)offset);
+	write_literal(" M");
+	write_hex_byte(mmap_byte);
+	write_literal(" P");
+	write_hex_byte(pread_byte);
+	write_literal("\n");
+}
+
 static bool check_offset(int fd, const unsigned char *mapped, off_t offset)
 {
 	unsigned char via_pread = 0;
@@ -18,8 +66,10 @@ static bool check_offset(int fd, const unsigned char *mapped, off_t offset)
 	if (nread != 1)
 		return false;
 
-	if (mapped[offset] != via_pread)
+	if (mapped[offset] != via_pread) {
+		report_mismatch(offset, mapped[offset], via_pread);
 		return false;
+	}
 
 	return true;
 }

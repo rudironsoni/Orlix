@@ -19105,3 +19105,60 @@ Interpretation:
   visibility after a file-backed page fault.
 - The next fix still belongs in the Linux-visible hosted mapping/page-fault
   synchronization path, not in OrlixMLibC.
+## 2026-06-24 mmap Fix Attempts And Diagnostic Tightening
+
+Boundary:
+
+- No OrlixMLibC patch was added.
+- `OrlixMLibC/Sources/patches` remains empty.
+- No generated upstream tree was edited.
+
+Attempts tested and reverted:
+
+- A hosted `update_mmu_cache_range()` hook in `arch/orlix/include/asm/pgtable.h`
+  built, but the kselftest initramfs no longer reached
+  `file_mmap_content_probe` before the runtime timeout. The experiment was
+  reverted.
+- Changing the `ORLIX_HOST_USER_FAULT_BUS` branch in
+  `arch/orlix/mm/init.c` from `orlix_sync_current_user_mapping_page()` to
+  `orlix_refresh_current_user_mapping_page()` built and reached the probe, but
+  the regular-file mmap proof still failed:
+
+```text
+not ok 4 - file-backed mmap bytes match pread bytes
+not ok 44 - file_mmap_content_probe
+```
+
+Durable source change kept:
+
+- `file_mmap_content_probe` now reports the first mismatched offset and the
+  byte observed through `mmap()` versus `pread()` using direct `write(2)`
+  helpers:
+
+```text
+# FM BAD O<offset> M<mmap-byte> P<pread-byte>
+```
+
+Build evidence:
+
+```sh
+TMPDIR=/private/tmp rtk err make -f OrlixKernel/Makefile build PROFILE=release
+TMPDIR=/private/tmp rtk err make -f OrlixKernel/Makefile kselftest PROFILE=release
+```
+
+Both commands exited 0 during this checkpoint.
+
+Runtime evidence:
+
+- The focused regular-file mmap proof still fails on the selected single
+  simulator.
+- The packaged kselftest binary contains the new `# FM BAD O` diagnostic
+  string, but the current terminal log fragmentation did not surface a clean
+  grep-able `FM BAD` line in `Build/OrlixKernel/run/release/OrlixTerminal-runtime.log`.
+
+Next implementation target:
+
+- Keep the new diagnostic in place.
+- Continue tracing below the top-level fault branch: the remaining issue is
+  ordinary file-backed page content reaching the HostAdapter source page used
+  by `orlix_host_user_refresh_window()`, not mlibc locale parsing.
