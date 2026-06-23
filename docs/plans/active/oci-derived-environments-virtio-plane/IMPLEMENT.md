@@ -18704,3 +18704,62 @@ Rejected attempt:
 Current best next step:
 
 - Add a focused OrlixMLibC-owned diagnostic test or temporary probe that runs inside the mlibc initramfs and reports `stat()`/`open()`/`mmap()` results for each `/usr/lib/locale/de_DE.utf8/LC_*` category plus `setlocale()` by individual category. That will distinguish a Linux VFS/syscall issue from mlibc parser/category behavior without editing generated upstream tests.
+
+### 2026-06-23: OrlixMLibC locale diagnostic probe added
+
+Status: probe implemented and packaged; guest runtime output still not captured.
+
+Change:
+
+- Added `OrlixMLibC/Tests/locale_probe.c`.
+- Extended `OrlixMLibC/Makefile` so `MLIBC_TEST_CASES='orlix/<name>'` resolves to `OrlixMLibC/Tests/<name>.c`.
+- Existing upstream test case names still resolve to `$(MLIBC_SRC_DIR)/tests/<name>.c`, so the default upstream mlibc test list remains unchanged.
+
+Probe behavior:
+
+- Checks `stat()`, `open()`, `read()`, `mmap()`, and `munmap()` for every `/usr/lib/locale/de_DE.utf8/LC_*` file used by the locale proof, including the special `LC_MESSAGES/SYS_LC_MESSAGES` path.
+- Calls `setlocale()` category-by-category for:
+
+```text
+LC_COLLATE
+LC_CTYPE
+LC_MESSAGES
+LC_MONETARY
+LC_NUMERIC
+LC_TIME
+LC_ALL
+```
+
+- Prints `# locale_probe ...` diagnostics for each filesystem/syscall and locale-selection result.
+- Returns nonzero if any file operation or locale category selection fails.
+
+Build/package evidence:
+
+```sh
+make -f OrlixMLibC/Makefile test PROFILE=release \
+  MLIBC_TEST_CASES='orlix/locale_probe' \
+  MLIBC_TEST_RUN_TIMEOUT_SECONDS=180
+```
+
+- The run reached test build/package before the simulator runtime path stalled.
+- Generated test list:
+
+```text
+orlix/locale_probe:/mlibc-tests/orlix-locale_probe
+```
+
+- Packaged binary:
+
+```text
+Build/OrlixMLibC/tests-install/release/mlibc-tests/orlix-locale_probe:
+ELF 64-bit LSB executable, ARM aarch64, statically linked, stripped
+```
+
+Runtime evidence:
+
+- The focused run was pinned to `iPhone 17 Pro` (`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`).
+- `iPhone 17` (`E65F0D05-980C-4368-8CDC-2D2BF3E05757`) remained shut down.
+- The runtime helper reached launch/log attachment, but `Build/OrlixKernel/run/release/OrlixTerminal-runtime.log` remained empty and no `ORLIX-MLIBC-TEST-INIT` marker was produced.
+- The hung run was stopped and all `OrlixMLibC/Makefile`, `ORLIX_KERNEL_RUN_TIMEOUT_SECONDS`, `simctl launch`, `log stream --style compact`, and `OrlixTerminal` helper processes were cleaned up.
+
+Current status marker: the OrlixMLibC locale probe is available for the next runtime attempt; the proof still needs a clean guest run to determine whether the `LC_COLLATE` blocker is VFS/syscall visibility or mlibc parser/category behavior.
