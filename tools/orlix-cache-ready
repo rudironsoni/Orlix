@@ -56,8 +56,10 @@ def stage_selection_errors(component: str, stages: tuple[str, ...]) -> list[str]
 
 
 def require_existing(path: Path, label: str) -> list[str]:
-    if path.exists():
+    if path.is_file():
         return []
+    if path.exists():
+        return [f"not-file {label}: {path}"]
     return [f"missing {label}: {path}"]
 
 
