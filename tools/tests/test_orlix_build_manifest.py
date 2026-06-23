@@ -560,7 +560,7 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
             else:
                 self.module.STAGES["synthetic"] = original_stages
 
-    def test_write_rejects_absolute_output_sentinel(self) -> None:
+    def test_write_rejects_absolute_output_sentinel_outside_repo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             manifest_root = root / "manifests"
@@ -580,7 +580,31 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
                 result = self.module.write(Args)
 
             self.assertEqual(result, 1)
-            self.assertIn("required-output-not-repo-relative: /private/tmp/outside.output", output.getvalue())
+            self.assertIn("required-output-outside-repo: /private/tmp/outside.output", output.getvalue())
+
+    def test_write_accepts_absolute_output_sentinel_inside_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_root = root / "manifests"
+            output_file = root / "output.file"
+            output_file.write_text("ready\n")
+            output = io.StringIO()
+
+            class Args:
+                pass
+
+            Args.repo_root = root
+            Args.manifest_root = manifest_root
+            Args.profile = "release"
+            Args.component = ["mlibc"]
+            Args.stage = ["source-prep"]
+            Args.requires = [str(output_file)]
+
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(Args)
+
+            self.assertEqual(result, 0)
+            self.assertIn("wrote: mlibc:source-prep", output.getvalue())
 
     def test_write_rejects_repo_escaping_output_sentinel(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
