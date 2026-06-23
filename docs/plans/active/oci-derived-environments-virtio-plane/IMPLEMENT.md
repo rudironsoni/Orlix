@@ -17489,3 +17489,40 @@ Results:
 HANDOFF: cache manifest audit now fails closed on freshness-critical metadata
 while ignoring commit-hash-only drift; current mlibc cache readiness remains
 blocked by a real `OrlixMLibC/Makefile` input digest change.
+
+## 2026-06-23 - Cache manifest tool provenance
+
+Current status: cache manifests now record the `tools/orlix-build-manifest`
+tool digest and audit it as freshness-critical metadata. This preserves the
+resource-saving cache gate for unchanged Linux, mlibc, and Coreutils inputs,
+while failing closed when the cache decision logic itself changes.
+
+Changes:
+
+- Added `MANIFEST_TOOL_PATH` to `tools/orlix-build-manifest`.
+- `stage_manifest` now writes a `tool` entry using the manifest tool file
+  digest.
+- `manifest_miss_reason` compares `tool` before aggregate `input_digest` so
+  diagnostics identify cache-tool provenance drift explicitly.
+- Added tests for direct `tool-changed` detection and audit-command detection
+  when only the manifest tool changes.
+
+Validation:
+
+```bash
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+python3 -m unittest discover -q tools/tests
+make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+```
+
+Results:
+
+- `tools.tests.test_orlix_build_manifest`: 9 tests passed.
+- `tools/tests`: passed (`TOOLS_TEST_RESULT:PASS`).
+- `OrlixMLibC/Makefile cache-ready`: fails closed with
+  `mlibc:source-prep tool-changed`, proving old manifests must be refreshed
+  after manifest-tool logic changes.
+
+HANDOFF: cache manifest tool provenance is implemented and tested; current
+mlibc cache readiness intentionally fails closed until manifests are refreshed
+with the new manifest-tool digest.

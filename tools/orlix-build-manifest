@@ -17,6 +17,7 @@ from typing import Iterable
 
 DEFAULT_COMPONENTS = ("linux", "mlibc", "coreutils")
 FRESHNESS_IGNORED_ENVIRONMENT_KEYS = frozenset(("git_head",))
+MANIFEST_TOOL_PATH = "tools/orlix-build-manifest"
 MANIFEST_VERSION = 1
 
 
@@ -186,6 +187,7 @@ def stage_manifest(repo_root: Path, component: str, stage: StageSpec, profile: s
         "profile": profile,
         "depends_on": list(stage.depends_on),
         "environment": environment_identity(repo_root, profile),
+        "tool": hash_path(repo_root, MANIFEST_TOOL_PATH),
         "inputs": [hash_path(repo_root, path) for path in stage.inputs],
         "optional_inputs": [hash_path(repo_root, path) for path in stage.optional_inputs],
     }
@@ -236,6 +238,7 @@ def manifest_miss_reason(recorded: dict[str, object], current: dict[str, object]
     for key in (
         "manifest_version",
         "depends_on",
+        "tool",
         "input_digest",
         "inputs",
         "optional_inputs",
