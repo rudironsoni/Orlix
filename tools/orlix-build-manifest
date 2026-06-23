@@ -10,6 +10,7 @@ import os
 import platform
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -227,6 +228,29 @@ def load_manifest(path: Path) -> dict[str, object] | None:
         return json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(text)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        temp_path.replace(path)
+    except OSError:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise
 
 
 def required_output_errors(repo_root: Path, required_outputs: tuple[str, ...]) -> list[str]:
@@ -470,9 +494,11 @@ def write(args: argparse.Namespace) -> int:
         for stage in selected_stages_with_dependencies(args, component):
             path = manifest_path(repo_root, manifest_root, args.profile, component, stage.name)
             try:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(json.dumps(stage_manifest(repo_root, component, stage, args.profile),
-                                          indent=2, sort_keys=True) + "\n")
+                atomic_write_text(
+                    path,
+                    json.dumps(stage_manifest(repo_root, component, stage, args.profile),
+                               indent=2, sort_keys=True) + "\n",
+                )
             except OSError as error:
                 print(f"manifest-write-failed {component}:{stage.name} {path}: {error}")
                 return 1
