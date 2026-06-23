@@ -327,6 +327,73 @@ class BuildManifestTests(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertIn("dependency-stale a input-digest-changed", output.getvalue())
 
+    def test_audit_misses_when_transitive_dependency_manifest_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").mkdir()
+            (root / "input" / "input.txt").write_text("alpha\n")
+            (root / "tools").mkdir()
+            (root / self.module.MANIFEST_TOOL_PATH).write_text("tool\n")
+            manifest_root = root / "manifests"
+            stage_a = self.module.StageSpec("a", ("input",))
+            stage_b = self.module.StageSpec("b", ("input",), depends_on=("a",))
+            stage_c = self.module.StageSpec("c", ("input",), depends_on=("b",))
+            self.module.STAGES = {"test": (stage_a, stage_b, stage_c)}
+            for stage in (stage_b, stage_c):
+                path = self.module.manifest_path(root, manifest_root, "release", "test", stage.name)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(self.module.stage_manifest(root, "test", stage, "release"))
+                )
+            args = Namespace(
+                command="audit",
+                repo_root=str(root),
+                manifest_root=str(manifest_root),
+                profile="release",
+                component=("test",),
+                stage=("c",),
+            )
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.audit(args)
+
+            self.assertEqual(result, 1)
+            self.assertIn("dependency-of b dependency-missing a", output.getvalue())
+
+    def test_audit_misses_when_dependency_graph_cycles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").mkdir()
+            (root / "input" / "input.txt").write_text("alpha\n")
+            (root / "tools").mkdir()
+            (root / self.module.MANIFEST_TOOL_PATH).write_text("tool\n")
+            manifest_root = root / "manifests"
+            stage_a = self.module.StageSpec("a", ("input",), depends_on=("b",))
+            stage_b = self.module.StageSpec("b", ("input",), depends_on=("a",))
+            self.module.STAGES = {"test": (stage_a, stage_b)}
+            for stage in (stage_a, stage_b):
+                path = self.module.manifest_path(root, manifest_root, "release", "test", stage.name)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(self.module.stage_manifest(root, "test", stage, "release"))
+                )
+            args = Namespace(
+                command="audit",
+                repo_root=str(root),
+                manifest_root=str(manifest_root),
+                profile="release",
+                component=("test",),
+                stage=("a",),
+            )
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.audit(args)
+
+            self.assertEqual(result, 1)
+            self.assertIn("dependency-cycle a", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -263,20 +263,35 @@ def dependency_miss_reasons(
     stage: StageSpec,
 ) -> list[str]:
     stages = {candidate.name: candidate for candidate in STAGES[component]}
-    misses = []
-    for dependency in stage.depends_on:
-        dependency_stage = stages.get(dependency)
-        if dependency_stage is None:
-            misses.append(f"dependency-unknown {dependency}")
-            continue
-        path = manifest_path(repo_root, manifest_root, profile, component, dependency)
-        recorded = load_manifest(path)
-        if not recorded:
-            misses.append(f"dependency-missing {dependency} {path}")
-            continue
-        current = stage_manifest(repo_root, component, dependency_stage, profile)
-        if reason := manifest_miss_reason(recorded, current):
-            misses.append(f"dependency-stale {dependency} {reason} {path}")
+    misses: list[str] = []
+    visiting: set[str] = set()
+
+    def visit(owner: StageSpec) -> None:
+        if owner.name in visiting:
+            misses.append(f"dependency-cycle {owner.name}")
+            return
+        visiting.add(owner.name)
+        for dependency in owner.depends_on:
+            dependency_stage = stages.get(dependency)
+            if dependency_stage is None:
+                misses.append(f"dependency-unknown {dependency}")
+                continue
+            path = manifest_path(repo_root, manifest_root, profile, component, dependency)
+            recorded = load_manifest(path)
+            if not recorded:
+                misses.append(f"dependency-missing {dependency} {path}")
+                continue
+            current = stage_manifest(repo_root, component, dependency_stage, profile)
+            if reason := manifest_miss_reason(recorded, current):
+                misses.append(f"dependency-stale {dependency} {reason} {path}")
+                continue
+            before = len(misses)
+            visit(dependency_stage)
+            for index in range(before, len(misses)):
+                misses[index] = f"dependency-of {dependency} {misses[index]}"
+        visiting.remove(owner.name)
+
+    visit(stage)
     return misses
 
 
