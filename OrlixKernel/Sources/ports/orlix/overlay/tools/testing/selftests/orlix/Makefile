@@ -4,6 +4,7 @@ TEST_GEN_PROGS := boot_profile_contract cgroup_v2_probe clone_thread_probe envir
 TEST_GEN_PROGS_EXTENDED := kselftest_init
 TEST_GEN_PROGS += cgroup_namespace_probe
 TEST_GEN_PROGS += cgroup_pids_probe
+TEST_GEN_PROGS += file_mmap_content_probe
 TEST_GEN_PROGS += overlayfs_probe
 TEST_GEN_PROGS += hostname_domainname_probe
 TEST_GEN_PROGS += readonly_root_probe
