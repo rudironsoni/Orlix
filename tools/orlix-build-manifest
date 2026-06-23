@@ -268,6 +268,28 @@ def selected_stages(args: argparse.Namespace, component: str) -> tuple[StageSpec
     return tuple(selected_by_name[name] for name in dict.fromkeys(args.stage) if name in selected_by_name)
 
 
+def selected_stages_with_dependencies(args: argparse.Namespace, component: str) -> tuple[StageSpec, ...]:
+    stages = STAGES[component]
+    selected = selected_stages(args, component)
+    if not args.stage:
+        return selected
+
+    stage_by_name = {stage.name: stage for stage in stages}
+    ordered: list[StageSpec] = []
+    visited: set[str] = set()
+
+    def visit(stage: StageSpec) -> None:
+        for dependency_name in stage.depends_on:
+            visit(stage_by_name[dependency_name])
+        if stage.name not in visited:
+            visited.add(stage.name)
+            ordered.append(stage)
+
+    for stage in selected:
+        visit(stage)
+    return tuple(ordered)
+
+
 def selected_stage_diagnostics(args: argparse.Namespace, component: str) -> list[str]:
     if not args.stage:
         return []
@@ -406,7 +428,7 @@ def write(args: argparse.Namespace) -> int:
             for diagnostic in stage_diagnostics:
                 print(diagnostic)
             return 1
-        for stage in selected_stages(args, component):
+        for stage in selected_stages_with_dependencies(args, component):
             path = manifest_path(repo_root, manifest_root, args.profile, component, stage.name)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(stage_manifest(repo_root, component, stage, args.profile),

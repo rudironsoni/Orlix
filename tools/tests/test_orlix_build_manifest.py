@@ -456,6 +456,50 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
 
         self.assertEqual([stage.name for stage in stages], ["source-prep", "headers-install"])
 
+    def test_selected_stage_write_includes_dependency_closure(self) -> None:
+        cases = {
+            "linux": ("kernel-archive", ["source-prep", "headers-install", "kernel-archive"]),
+            "mlibc": ("compiler-rt", ["source-prep", "compiler-rt"]),
+            "coreutils": ("install-rootfs", ["source-prep", "configure-build", "install-rootfs"]),
+        }
+
+        for component, (stage_name, expected) in cases.items():
+            with self.subTest(component=component):
+                args = type("Args", (), {"stage": [stage_name]})()
+                stages = self.module.selected_stages_with_dependencies(args, component)
+
+                self.assertEqual([stage.name for stage in stages], expected)
+
+    def test_write_selected_stage_writes_dependency_closure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative_path in [
+                "OrlixOS/Makefile",
+                "OrlixOS/Sources/distribution/manifest.mk",
+                "OrlixOS/Sources/make/rootfs.mk",
+                "Build/OrlixOS/src/coreutils-9.11/stamp",
+            ]:
+                path = root / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(relative_path)
+            args = Namespace(
+                repo_root=str(root),
+                manifest_root="manifests",
+                profile="release",
+                component=["coreutils"],
+                stage=["install-rootfs"],
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = self.module.write(args)
+
+            self.assertEqual(result, 0)
+            manifest_dir = root / "manifests" / "release" / "coreutils"
+            self.assertEqual(
+                sorted(path.name for path in manifest_dir.glob("*.json")),
+                ["configure-build.json", "install-rootfs.json", "source-prep.json"],
+            )
+
     def test_write_rejects_unknown_selected_stage(self) -> None:
         self.module.STAGES["synthetic"] = (
             self.module.StageSpec("payload", ("input",)),
