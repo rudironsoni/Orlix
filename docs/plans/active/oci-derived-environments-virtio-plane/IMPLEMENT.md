@@ -18416,3 +18416,68 @@ pass verified native incrementality without additional compiler calls. This is
 build reliability evidence only; it does not claim product runtime readiness,
 upstream Linux conformance, libc conformance, Coreutils test suite conformance,
 or OCI runtime proof.
+
+## 2026-06-23 - Expanded validation beyond build artifacts
+
+The previous checkpoint proved full release builds and repeat-build
+incrementality, but that was not enough to support stronger reliability claims.
+This checkpoint extends validation to the owning kernel, mlibc, OrlixOS, and
+Coreutils proof/test targets and records the remaining Xcode runtime-test gap.
+
+Environment checks:
+
+- `xcode-storage-doctor` passed outside the restrictive sandbox.
+- `xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported
+  `Device already booted, nothing to do.`
+
+Owning Makefile validation targets:
+
+- `make -f OrlixKernel/Makefile test PROFILE=release` passed. The retained
+  output included the known Linux/macOS SDK `__alloc_size` macro redefinition
+  warning, but the target exited 0.
+- `make -f OrlixKernel/Makefile kselftest PROFILE=release` passed.
+- `make -f OrlixMLibC/Makefile test PROFILE=release` passed.
+- `make -f OrlixMLibC/Makefile kselftest PROFILE=release` passed through the
+  normal owning Makefile path.
+- `make -f OrlixOS/Makefile rootfs PROFILE=release` passed.
+- `make -f OrlixOS/Makefile kernel-payload PROFILE=release` passed.
+- `make -f OrlixOS/Makefile environment-runtime-proof-fixtures PROFILE=release`
+  passed.
+- `make -f OrlixOS/Makefile coreutils-test PROFILE=release` passed.
+
+Validation caveats found during this pass:
+
+- `rtk test make -f OrlixMLibC/Makefile kselftest PROFILE=release` failed in a
+  nested Meson build path with `Neither source directory ... nor build directory
+  None contain a build file meson.build`, but rerunning the same owning target
+  through normal `rtk make` passed. This is recorded as an `rtk test` wrapper
+  limitation for this nested Make/Meson path, not an OrlixMLibC Makefile
+  failure.
+- Direct `make -f OrlixOS/Makefile environment-root-image PROFILE=release`
+  correctly failed with `ORLIXOS_ENVIRONMENT_STAGING_ROOT is required`; the
+  owning fixture target above supplies the required image inputs and passed.
+- The Xcode schemes `OrlixTestRunnerTests`, `OrlixLinuxProofOutputParserTests`,
+  `OrlixKernelHostProofTests`, `OrlixKernelUpstreamTests`,
+  `OrlixMLibCUpstreamTests`, `OrlixCoreutilsUpstreamTests`, and `OrlixOSTests`
+  all produced `.xcresult` bundles whose `xcresulttool get test-results summary`
+  output reported `totalTestCount: 0`, `passedTests: 0`, `failedTests: 0`, and
+  `skippedTests: 0`. They are therefore not counted as executed runtime or
+  conformance tests in this checkpoint.
+- `python3 -m unittest discover tools/tests` is not a valid command in this
+  checkout because `tools/tests` does not exist. The real Python harness tests
+  under `.codex/hooks/tests` and `.codex/rules/tests` are listed below.
+
+Harness validation:
+
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed, 5 tests.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed, 32 tests.
+
+Current status:
+
+Linux/OrlixKernel, OrlixMLibC/mlibc, OrlixOS rootfs/payload/environment
+fixtures, and OrlixOS Coreutils now have full release builds plus owning
+Makefile proof/test targets passing. This is stronger than the prior build-only
+checkpoint, but it still does not claim full upstream conformance or product
+runtime readiness because the Xcode runtime/upstream schemes currently build
+without executing any XCTest cases.
