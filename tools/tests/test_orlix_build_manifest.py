@@ -738,5 +738,30 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
             self.assertIn("component-unknown typo", output.getvalue())
 
 
+    def test_write_rejects_directory_manifest_path(self):
+        for component in ("linux", "mlibc", "coreutils"):
+            with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
+                manifest_root = Path(tmp) / "manifests"
+                manifest_path = manifest_root / "release" / component / "source-prep.json"
+                manifest_path.mkdir(parents=True)
+
+                class Args:
+                    pass
+
+                Args.component = [component]
+                Args.manifest_root = manifest_root
+                Args.repo_root = REPO_ROOT
+                Args.profile = "release"
+                Args.requires = []
+                Args.stage = ["source-prep"]
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    result = self.module.write(Args)
+
+                self.assertEqual(result, 1)
+                self.assertIn(f"manifest-write-failed {component}:source-prep", stdout.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
