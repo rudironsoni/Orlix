@@ -17382,3 +17382,69 @@ PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" rtk err 
 - `.codex/rules/tests`: 5 tests pass.
 - `compact_plan_check.py`: exits 0 with the known historical stale-status warning.
 - Focused OrlixOS XCTest feature-report run completed without reported errors.
+## 2026-06-23 - OCI Linux-policy feature-report truthfulness
+
+Current status: OrlixOS now reports the remaining parser-rejected OCI Linux
+policy fields as deterministic runtime-config parser rejections with
+`orlix:runtime_config_parser` proof. This extends the existing parser-backed
+truthfulness pattern used for OCI security and namespace policy fields without
+claiming namespace, device, cgroup-controller, resource-management, hugepage, or
+Intel RDT kernel support.
+
+Changes:
+
+- Added stable `intelRdt`, `ociCgroupPath`, `ociHugepageLimits`,
+  `ociLinuxDevices`, `ociLinuxResources`, `ociMaskedPaths`, `ociNamespaces`,
+  `ociReadonlyPaths`, and `ociUnifiedCgroupResources` feature-report entries in
+  `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` with
+  `.deterministicallyRejected` status and parser proof.
+- Extended `OrlixTerminalSessionTests` feature-report assertions so both direct
+  feature lookup and encoded stable JSON preserve those rejections and proof
+  metadata.
+
+Validation:
+
+```bash
+rtk git diff --check
+python3 -m unittest discover -q tools/tests
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+- `rtk git diff --check`: passed.
+- `tools/tests`: passed (`TOOLS_TEST_RESULT:PASS`).
+- `.codex/hooks/tests`: 32 tests passed.
+- `.codex/rules/tests`: 5 tests passed.
+- `compact_plan_check.py`: exited 0 with the pre-existing stale-status warning
+  for historical pending/blocked plan text.
+
+Blocked Xcode proof:
+
+```bash
+xcodebuild -quiet \
+  -project OrlixSystem.xcodeproj \
+  -scheme OrlixOSTests \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults \
+  -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON \
+  test
+```
+
+Result: build failed before XCTest execution because the local checkout is
+missing `Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a`
+(`XCODE_EXIT:65`). This is a missing Linux/kernel build artifact, not evidence
+against the OrlixOS feature-report source change.
+
+Current status: OCI Linux-policy feature-report truthfulness batch is
+implemented in OrlixOS source and tests. Non-Xcode validations pass; focused
+XCTest remains blocked only by the missing local
+`Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a` artifact.
+
+HANDOFF: OCI Linux-policy feature-report truthfulness batch is implemented and
+non-Xcode validations pass; focused OrlixOS XCTest is blocked by the missing
+local `Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a` artifact.

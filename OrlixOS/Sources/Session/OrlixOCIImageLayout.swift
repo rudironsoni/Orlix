@@ -1321,6 +1321,60 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "No seccomp filter loading or enforcement proof exists for Orlix OCI-derived environments."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "intelRdt",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI Intel RDT policy is parsed and rejected because Orlix does not expose Intel RDT controls."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociCgroupPath",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI cgroupsPath is parsed and rejected until Orlix can place processes in OCI-requested cgroups."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociHugepageLimits",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI hugepage limits are parsed and rejected because hugepage resource control is not supported."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociLinuxDevices",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI Linux device declarations are parsed and rejected until device policy has Linux-owned proof."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociLinuxResources",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI Linux resource limits are parsed and rejected until cgroup resource controller wiring exists."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociMaskedPaths",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI masked paths are parsed and rejected until Linux mount masking is wired."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociNamespaces",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI Linux namespaces are parsed and rejected until each namespace type has Linux-owned proof."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociReadonlyPaths",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI readonly paths are parsed and rejected until Linux mount remount policy is wired."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociUnifiedCgroupResources",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI unified cgroup resources are parsed and rejected until cgroup v2 controller writes are supported."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "selinux",
 			status: .deterministicallyRejected,
 			proof: "orlix:runtime_config_parser",
