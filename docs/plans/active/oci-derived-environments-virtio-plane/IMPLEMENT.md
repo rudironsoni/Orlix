@@ -18654,3 +18654,53 @@ Cleanup evidence:
 iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D) (Booted)
 iPhone 17 (E65F0D05-980C-4368-8CDC-2D2BF3E05757) (Shutdown)
 ```
+
+### 2026-06-23: LC_COLLATE identified as the `de_DE.utf8` locale category blocker
+
+Status: diagnosis advanced; no code fix retained.
+
+Additional evidence:
+
+- Temporary `MLIBC_DEBUG_LOCALE=1` was added to `OrlixMLibC/Tests/mlibc_test_init.c`, used for one focused `ansi/sscanf` diagnostic run, and then reverted.
+- The decoded guest stream showed mlibc probing the `de_DE.utf8` candidate list repeatedly before reporting locale load failure.
+- The candidate list was:
+
+```text
+de_DE.utf8
+de_DE
+de.utf8
+de
+```
+
+- The list appeared for the early `LC_ALL` categories before failure. Given mlibc category order, that narrows the first failing named-locale category to `LC_COLLATE`.
+- The generated initramfs contains the required filesystem entries:
+
+```text
+usr
+usr/lib
+usr/lib/locale
+usr/lib/locale/de_DE.utf8
+usr/lib/locale/de_DE.utf8/LC_COLLATE
+```
+
+- The initramfs list contains:
+
+```text
+dir /usr 755 0 0
+dir /usr/lib 755 0 0
+dir /usr/lib/locale 755 0 0
+dir /usr/lib/locale/de_DE.utf8 755 0 0
+file /usr/lib/locale/de_DE.utf8/LC_COLLATE .../Build/OrlixMLibC/locale-data/release/root/usr/lib/locale/de_DE.utf8/LC_COLLATE 644 0 0
+```
+
+- `LC_COLLATE` exists in the staged Debian locale data and starts with the expected category-derived magic for `LC_COLLATE`.
+
+Rejected attempt:
+
+- A temporary OrlixMLibC patch was tried that fell back named `LC_COLLATE` to C collation when mlibc could not load a named collate record.
+- The patch applied through the OrlixMLibC Makefile after correcting its hunk header, but the focused `ansi/sscanf` proof did not reach `ORLIX-MLIBC-TEST-INIT` in two serialized attempts.
+- Because the patch did not produce a clean focused proof, it was deleted and not retained.
+
+Current best next step:
+
+- Add a focused OrlixMLibC-owned diagnostic test or temporary probe that runs inside the mlibc initramfs and reports `stat()`/`open()`/`mmap()` results for each `/usr/lib/locale/de_DE.utf8/LC_*` category plus `setlocale()` by individual category. That will distinguish a Linux VFS/syscall issue from mlibc parser/category behavior without editing generated upstream tests.
