@@ -395,6 +395,30 @@ class BuildManifestTests(unittest.TestCase):
             self.assertIn("dependency-cycle a", output.getvalue())
 
 
+    def test_audit_treats_directory_manifest_as_miss(self):
+        for component in ("linux", "mlibc", "coreutils"):
+            with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
+                manifest_root = Path(tmp) / "manifests"
+                manifest_path = manifest_root / "release" / component / "source-prep.json"
+                manifest_path.mkdir(parents=True)
+
+                class Args:
+                    pass
+
+                Args.component = [component]
+                Args.manifest_root = manifest_root
+                Args.repo_root = REPO_ROOT
+                Args.profile = "release"
+                Args.stage = ["source-prep"]
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    result = self.module.audit(Args)
+
+                self.assertEqual(result, 1)
+                self.assertIn(f"{component}:source-prep manifest-missing", stdout.getvalue())
+
+
 class BuildManifestWriteGraphTests(unittest.TestCase):
     def setUp(self) -> None:
         loader = SourceFileLoader("orlix_build_manifest_write_graph", str(MODULE_PATH))

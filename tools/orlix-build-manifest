@@ -225,7 +225,7 @@ def manifest_path(repo_root: Path, manifest_root: Path, profile: str, component:
 def load_manifest(path: Path) -> dict[str, object] | None:
     try:
         return json.loads(path.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError):
         return None
 
 
