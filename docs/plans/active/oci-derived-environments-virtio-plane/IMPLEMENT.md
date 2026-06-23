@@ -17839,3 +17839,29 @@ rtk python3 .codex/hooks/compact_plan_check.py
 ```
 
 Results: `git diff --check` passed; `tools.tests.test_orlix_build_manifest` ran 24 tests and passed; `tools/tests` discovery passed; Linux cache-ready still fails closed on missing release manifests and `OrlixKernel.xcframework` outputs; mlibc cache-ready still fails closed on selected-stage manifest tool drift for `source-prep` and `compiler-rt`; Coreutils cache-ready still fails closed on missing release manifests and package output sentinels; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
+
+Current status:
+
+Direct Linux, mlibc, and Coreutils Makefile cache audit/write targets now pass explicit selected stages to `tools/orlix-build-manifest`, matching the high-level `cache-ready` gates. This keeps manual `cache-audit` and `cache-manifest-write` usage resource-scoped without weakening reliability: Linux audits `source-prep`, `headers-install`, and `kernel-archive` and selected writes refresh the `kernel-archive` dependency closure; mlibc audits `source-prep` and `compiler-rt` and selected writes refresh the `compiler-rt` dependency closure; Coreutils audits `source-prep`, `configure-build`, and `install-rootfs` and selected writes refresh the `install-rootfs` dependency closure. Full generated build trees were not edited. Validation:
+
+```bash
+rtk make -f OrlixKernel/Makefile -n cache-audit PROFILE=release
+rtk make -f OrlixMLibC/Makefile -n cache-audit PROFILE=release
+rtk make -f OrlixOS/Makefile -n cache-audit PROFILE=release
+rtk make -f OrlixKernel/Makefile -n cache-manifest-write PROFILE=release
+rtk make -f OrlixMLibC/Makefile -n cache-manifest-write PROFILE=release
+rtk make -f OrlixOS/Makefile -n cache-manifest-write PROFILE=release
+rtk make -f OrlixKernel/Makefile cache-audit PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-audit PROFILE=release
+rtk make -f OrlixOS/Makefile cache-audit PROFILE=release
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk git diff --check
+rtk python3 -m unittest discover -q tools/tests
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: dry-run audit/write commands include the intended selected stages and did not write manifests; direct cache audits still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; cache-ready probes still fail closed in the same expected places; `git diff --check` passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.

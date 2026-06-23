@@ -539,14 +539,17 @@ __test-initramfs: __test-build __prepare-test-locale-data
 	echo "packaged OrlixMLibC test initramfs: $$output"
 
 cache-audit:
-	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component mlibc
+	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component mlibc \
+		--stage source-prep \
+		--stage compiler-rt
 
 cache-ready:
 	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc \
 		--requires "$(MLIBC_TARGET_ARCH_DEFS)"
 
 cache-manifest-write:
-	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component mlibc
+	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component mlibc \
+		--stage compiler-rt
 
 clean:
 	$(call orlix_mlibc_with_profile_lock,__clean)
