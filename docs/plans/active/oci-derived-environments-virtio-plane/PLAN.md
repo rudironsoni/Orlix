@@ -1944,53 +1944,60 @@ Plan rules:
 1. Reconcile active plan status.
    - Proof: `PLAN.md`, `IMPLEMENT.md`, and `GOAL.md` no longer send agents to already-proved work.
 
-2. Refresh baseline iOS Simulator proofs.
+2. Correct build-speed/resource-reduction strategy for all required build lanes.
+   - Scope: OrlixKernel/Linux, OrlixMLibC/mlibc, and OrlixOS Coreutils.
+   - Required direction: use proven build-system mechanisms and compiler caches such as Linux Kbuild incrementality, Meson/Ninja incrementality, Autotools/Make incrementality, and optional `ccache`/`sccache` compiler launchers.
+   - Forbidden direction: do not invent an Orlix-specific package manager, package store, or manifest/freshness system for deciding that Linux, mlibc, or Coreutils builds can be skipped.
+   - Reliability rule: caches are accelerators only. A cache miss, absent cache tool, stale build directory, or changed input must fall back to the owning build system. No custom cache metadata may be treated as proof that upstream Linux, mlibc, or Coreutils outputs are correct.
+   - Proof: all three lanes build through their normal owning build systems, optional compiler launchers are disabled cleanly when unavailable, and stale custom Python build-cache entrypoints are absent from the active build path.
+
+3. Refresh baseline iOS Simulator proofs.
    - Proof: focused OrlixOS and OrlixPTYRuntime tests for current materialized tar and OCI roots pass.
 
-3. Prove cross-boot writable state persistence.
+4. Prove cross-boot writable state persistence.
    - Proof: mutate environment state, shut down, restart the same environment, observe mutation persisted while the base image stayed unchanged.
 
-4. Connect rootfs tar import and OCI layout import to named environment entry.
+5. Connect rootfs tar import and OCI layout import to named environment entry.
    - Proof: both import paths create environments that can be entered without test-only wiring.
 
-5. Complete imported-root image fidelity before runtime claims.
+6. Complete imported-root image fidelity before runtime claims.
    - Proof: OCI whiteouts, opaque directories, immutable image root, writable environment state, and OverlayFS copy-up/unlink semantics are covered by app-hosted tests and oracle cases where available.
 
-6. Expand Linux substrate proof for entered environments.
+7. Expand Linux substrate proof for entered environments.
    - Proof: fd inheritance, close-on-exec, `/dev/fd`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, signals, wait/reaping, PTY behavior, `/proc`, `/dev`, `/sys`, tmpfs, and mount namespace behavior have upstream Linux test, kselftest-style Orlix overlay probe, or Linux oracle coverage, with XCTest only launching and inspecting the iOS-hosted Orlix path.
 
-7. Expand the Linux oracle for substrate behavior.
+8. Expand the Linux oracle for substrate behavior.
    - Proof: the same fixtures produce real-Linux and Orlix JSON results, and the comparator catches drift for paths, errno, fd behavior, signals, waits, stat metadata, procfs, and mount observations.
 
-8. Implement host-folder mount backend through Linux-owned mount behavior.
+9. Implement host-folder mount backend through Linux-owned mount behavior.
     - Proof: Documents and security-scoped folders enter only as Linux mounts, not raw host paths.
 
-9. Add virtio-fs for external folders.
+10. Add virtio-fs for external folders.
     - Proof: host-backed folder appears through Linux-owned mount behavior and passes path/stat/open/rename/unlink tests.
 
-10. Expand networking through upstream Linux networking paths.
+11. Expand networking through upstream Linux networking paths.
     - Proof: virtio-net, `/proc/net`, rtnetlink, loopback, and staged network namespace behavior have upstream Linux test, kselftest-style Orlix overlay probe, or Linux oracle coverage.
 
-11. Add cgroup v2 controller and resource accounting behavior.
+12. Add cgroup v2 controller and resource accounting behavior.
     - Proof: cgroup v2 controller files, delegation, accounting, enforcement, and unsupported-operation errno match declared feature support through upstream Linux test, kselftest-style Orlix overlay probe, or Linux oracle coverage.
 
-12. Add native performance benchmark suite for imported binaries.
+13. Add native performance benchmark suite for imported binaries.
     - Proof: ELF launch, syscall round trip, file IO, pipe, PTY, futex, and process lifecycle benchmarks have repeatable iOS Simulator baselines.
 
-13. Add OCI Runtime config parser and schema validation.
+14. Add OCI Runtime config parser and schema validation.
     - Proof: minimal Linux `config.json` validates against pinned schemas and converts to Orlix descriptors while unsupported Linux features are rejected deterministically.
 
-14. Add OCI Runtime lifecycle model.
+15. Add OCI Runtime lifecycle model.
     - Proof: `create` prepares resources without executing, `start` executes through Linux `execve`, `state` reports correct status, `kill` sends Linux signal, and `delete` removes created resources only.
 
-15. Add OCI Linux runtime defaults.
+16. Add OCI Linux runtime defaults.
     - Proof: fd policy and `/dev/fd`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr` match `runtime-linux.md`.
 
-16. Add OCI feature report.
+17. Add OCI feature report.
     - Proof: generated feature JSON validates and reports only recognized, implemented, or deterministically rejected features without overclaiming cgroups, seccomp, AppArmor, SELinux, netDevices, idmapped mounts, or user namespace mappings.
 
-17. Add product `orlix run`.
+18. Add product `orlix run`.
     - Proof: argv/env/cwd/user/stdio/lifecycle/exit status work through Linux exec, not HostAdapter command execution.
 
-18. Add registry pull tooling.
+19. Add registry pull tooling.
     - Proof: registry pull produces the same verified OCI layout input as local layout import, with no OrlixKernel or iOS runtime dependency on Apple container.

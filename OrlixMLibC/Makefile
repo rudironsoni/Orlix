@@ -49,6 +49,7 @@ MLIBC_HOSTED_EXEC_FIXED_REGISTER_FLAGS := -ffixed-x18
 MLIBC_HOSTED_EXEC_CODEGEN_FLAGS := $(MLIBC_HOSTED_EXEC_FIXED_REGISTER_FLAGS)
 MLIBC_HOSTED_EXEC_MESON_C_ARGS := '-ffixed-x18', '-ffunction-sections', '-fdata-sections'
 MLIBC_HOSTED_EXEC_MESON_CPP_ARGS := '-include', '$(MLIBC_TARGET_ARCH_DEFS)', '-ffixed-x18', '-ffunction-sections', '-fdata-sections'
+ORLIX_COMPILER_LAUNCHER ?= $(shell if command -v ccache >/dev/null 2>&1; then command -v ccache; elif command -v sccache >/dev/null 2>&1; then command -v sccache; fi)
 MLIBC_LLVM_PREFIX ?= $(firstword $(wildcard /opt/homebrew/opt/llvm/bin) $(wildcard /usr/local/opt/llvm/bin))
 MLIBC_CC ?= clang
 MLIBC_CXX ?= clang++
@@ -262,7 +263,7 @@ MLIBC_COMPILER_RT_BUILTINS := \
 	trunctfsf2.c \
 	trunctfxf2.c
 
-.PHONY: all help build headers_install test kselftest cache-audit cache-ready cache-manifest-write clean mrproper __build-cache-gated __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
+.PHONY: all help build headers_install test kselftest clean mrproper __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
 
 define orlix_mlibc_with_profile_lock
 	@set -euo pipefail; \
@@ -296,16 +297,7 @@ help:
 	@printf '%s\n' '  clean             remove generated OrlixMLibC outputs'
 
 build:
-	$(call orlix_mlibc_with_profile_lock,__build-cache-gated)
-
-__build-cache-gated:
-	@if python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc \
-		--requires "$(MLIBC_TARGET_ARCH_DEFS)" >/dev/null; then \
-		printf '%s\n' "skip: OrlixMLibC build $(PROFILE) cache ready"; \
-	else \
-		$(MAKE) -f OrlixMLibC/Makefile __build PROFILE="$(PROFILE)" && \
-		$(MAKE) -f OrlixMLibC/Makefile cache-manifest-write PROFILE="$(PROFILE)"; \
-	fi
+	$(call orlix_mlibc_with_profile_lock,__build)
 
 __build: __write-cross-file
 	@set -euo pipefail; \
@@ -322,25 +314,42 @@ __build: __write-cross-file
 		echo "OrlixMLibC target page size $(ORLIX_OS_LINUX_PAGE_SIZE) does not match OrlixKernel CONFIG_PAGE_SHIFT=$$kernel_page_shift ($$kernel_page_size)" >&2; \
 		exit 1; \
 	fi; \
-	rm -rf "$(MLIBC_BUILD_DIR)" "$(MLIBC_SYSROOT)"; \
+	rm -rf "$(MLIBC_SYSROOT)"; \
 	mkdir -p "$(MLIBC_BUILD_DIR)" "$(MLIBC_SYSROOT)"; \
 	mkdir -p "$(dir $(MLIBC_BUILD_KERNEL_HEADERS))"; \
 	cp -R "$(MLIBC_KERNEL_HEADERS)" "$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	[ -d "$(MLIBC_BUILD_KERNEL_HEADERS)" ] || { echo "missing OrlixMLibC build-local Linux UAPI headers: $(MLIBC_BUILD_KERNEL_HEADERS)" >&2; exit 1; }; \
-	env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
-		--cross-file "$(MLIBC_CROSS_FILE)" \
-		--native-file "$(MLIBC_NATIVE_FILE)" \
-		--prefix /usr \
-		-Ddefault_library=static \
-		-Dheaders_only=false \
-		-Dno_headers=false \
-		-Dbuild_tests=false \
-		-Dlibgcc_dependency=false \
-		-Dlinux_option=enabled \
-		-Dposix_option=enabled \
-		-Dglibc_option=enabled \
-		-Dbsd_option=enabled \
-		-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
+	if [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ]; then \
+		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --reconfigure "$(MLIBC_BUILD_DIR)" \
+			--cross-file "$(MLIBC_CROSS_FILE)" \
+			--native-file "$(MLIBC_NATIVE_FILE)" \
+			--prefix /usr \
+			-Ddefault_library=static \
+			-Dheaders_only=false \
+			-Dno_headers=false \
+			-Dbuild_tests=false \
+			-Dlibgcc_dependency=false \
+			-Dlinux_option=enabled \
+			-Dposix_option=enabled \
+			-Dglibc_option=enabled \
+			-Dbsd_option=enabled \
+			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
+	else \
+		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
+			--cross-file "$(MLIBC_CROSS_FILE)" \
+			--native-file "$(MLIBC_NATIVE_FILE)" \
+			--prefix /usr \
+			-Ddefault_library=static \
+			-Dheaders_only=false \
+			-Dno_headers=false \
+			-Dbuild_tests=false \
+			-Dlibgcc_dependency=false \
+			-Dlinux_option=enabled \
+			-Dposix_option=enabled \
+			-Dglibc_option=enabled \
+			-Dbsd_option=enabled \
+			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
+	fi; \
 	"$(MESON)" compile -C "$(MLIBC_BUILD_DIR)"; \
 	DESTDIR="$(MLIBC_SYSROOT)" "$(MESON)" install -C "$(MLIBC_BUILD_DIR)"; \
 	$(MAKE) -f "$(PROJECT_DIR)/Makefile" __build-compiler-rt PROFILE="$(PROFILE)"; \
@@ -538,20 +547,6 @@ __test-initramfs: __test-build __prepare-test-locale-data
 	plutil -lint "$$output/Info.plist" >/dev/null; \
 	echo "packaged OrlixMLibC test initramfs: $$output"
 
-cache-audit:
-	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component mlibc \
-		--stage source-prep \
-		--stage compiler-rt
-
-cache-ready:
-	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component mlibc \
-		--requires "$(MLIBC_TARGET_ARCH_DEFS)"
-
-cache-manifest-write:
-	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component mlibc \
-		--stage compiler-rt \
-		--requires "$(MLIBC_TARGET_ARCH_DEFS)"
-
 clean:
 	$(call orlix_mlibc_with_profile_lock,__clean)
 
@@ -652,6 +647,7 @@ __write-cross-file: __apply-mlibc-patches
 		*) echo "unsupported OrlixOS target Linux page size: $(ORLIX_OS_LINUX_PAGE_SIZE)" >&2; exit 1 ;; \
 	esac; \
 	mkdir -p "$(dir $(MLIBC_CROSS_FILE))"; \
+	if [ -n "$(ORLIX_COMPILER_LAUNCHER)" ]; then command -v "$(ORLIX_COMPILER_LAUNCHER)" >/dev/null 2>&1 || { echo "compiler launcher is not executable: $(ORLIX_COMPILER_LAUNCHER)" >&2; exit 1; }; fi; \
 	mkdir -p "$(dir $(MLIBC_TARGET_ARCH_DEFS))"; \
 	{ \
 		printf '%s\n' '#ifndef MLIBC_ARCH_DEFS_HPP'; \
@@ -669,13 +665,23 @@ __write-cross-file: __apply-mlibc-patches
 	} > "$(MLIBC_TARGET_ARCH_DEFS)"; \
 	{ \
 		printf '%s\n' '[binaries]'; \
-		printf "c = ['%s', '-isysroot', '%s']\n" "$(MLIBC_HOST_CC)" "$(MLIBC_HOST_SDKROOT)"; \
-		printf "cpp = ['%s', '-isysroot', '%s']\n" "$(MLIBC_HOST_CXX)" "$(MLIBC_HOST_SDKROOT)"; \
+		if [ -n "$(ORLIX_COMPILER_LAUNCHER)" ]; then \
+			printf "c = ['%s', '%s', '-isysroot', '%s']\n" "$(ORLIX_COMPILER_LAUNCHER)" "$(MLIBC_HOST_CC)" "$(MLIBC_HOST_SDKROOT)"; \
+			printf "cpp = ['%s', '%s', '-isysroot', '%s']\n" "$(ORLIX_COMPILER_LAUNCHER)" "$(MLIBC_HOST_CXX)" "$(MLIBC_HOST_SDKROOT)"; \
+		else \
+			printf "c = ['%s', '-isysroot', '%s']\n" "$(MLIBC_HOST_CC)" "$(MLIBC_HOST_SDKROOT)"; \
+			printf "cpp = ['%s', '-isysroot', '%s']\n" "$(MLIBC_HOST_CXX)" "$(MLIBC_HOST_SDKROOT)"; \
+		fi; \
 	} > "$(MLIBC_NATIVE_FILE)"; \
 	{ \
 		printf '%s\n' '[binaries]'; \
-		printf "c = ['%s', '--target=aarch64-linux-gnu']\n" "$(MLIBC_CC)"; \
-		printf "cpp = ['%s', '--target=aarch64-linux-gnu']\n" "$(MLIBC_CXX)"; \
+		if [ -n "$(ORLIX_COMPILER_LAUNCHER)" ]; then \
+			printf "c = ['%s', '%s', '--target=aarch64-linux-gnu']\n" "$(ORLIX_COMPILER_LAUNCHER)" "$(MLIBC_CC)"; \
+			printf "cpp = ['%s', '%s', '--target=aarch64-linux-gnu']\n" "$(ORLIX_COMPILER_LAUNCHER)" "$(MLIBC_CXX)"; \
+		else \
+			printf "c = ['%s', '--target=aarch64-linux-gnu']\n" "$(MLIBC_CC)"; \
+			printf "cpp = ['%s', '--target=aarch64-linux-gnu']\n" "$(MLIBC_CXX)"; \
+		fi; \
 		printf "ar = '%s'\n" "$(MLIBC_AR)"; \
 		printf "strip = '%s'\n" "$(MLIBC_STRIP)"; \
 		printf '%s\n' ''; \

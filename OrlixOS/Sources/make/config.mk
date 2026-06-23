@@ -100,6 +100,7 @@ ORLIXOS_HOMEBREW_PREFIX ?= $(shell command -v brew >/dev/null 2>&1 && brew --pre
 ORLIXOS_PACKAGE_BOOTSTRAP_PATH ?= $(if $(ORLIXOS_HOMEBREW_PREFIX),$(ORLIXOS_HOMEBREW_PREFIX)/opt/bison/bin:$(ORLIXOS_HOMEBREW_PREFIX)/opt/coreutils/libexec/gnubin:$(PATH),$(PATH))
 ORLIXOS_COREUTILS_BOOTSTRAP_PATH ?= $(ORLIXOS_PACKAGE_BOOTSTRAP_PATH)
 ORLIXOS_BUILD_CC ?= xcrun --sdk macosx cc -target arm64-apple-macosx
+ORLIX_COMPILER_LAUNCHER ?= $(shell if command -v ccache >/dev/null 2>&1; then command -v ccache; elif command -v sccache >/dev/null 2>&1; then command -v sccache; fi)
 ORLIXOS_PACKAGE_BUILD_DIR := $(ORLIXOS_BUILD_ROOT)/build/$(PROFILE)
 ORLIXOS_PACKAGE_INSTALL_DIR := $(ORLIXOS_BUILD_ROOT)/packages/$(PROFILE)
 ORLIXOS_ROOTFS_DIR := $(ORLIXOS_BUILD_ROOT)/rootfs/$(PROFILE)
@@ -331,6 +332,7 @@ ORLIXOS_MLIBC_PATCHES := $(wildcard $(REPO_ROOT)/OrlixMLibC/Sources/patches/*.pa
 ORLIXOS_HOSTED_USER_BASE_ADDRESS ?= 0x0000600000000000
 
 ORLIXOS_CC ?= clang
+ORLIXOS_CC_COMMAND := $(if $(strip $(ORLIX_COMPILER_LAUNCHER)),$(strip $(ORLIX_COMPILER_LAUNCHER)) $(ORLIXOS_CC),$(ORLIXOS_CC))
 ORLIXOS_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
 ORLIXOS_AR ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-ar,llvm-ar)
 ORLIXOS_LD ?= $(shell if [ -n "$(ORLIXOS_LLVM_BIN)" ] && [ -x "$(ORLIXOS_LLVM_BIN)/ld.lld" ]; then printf '%s\n' "$(ORLIXOS_LLVM_BIN)/ld.lld"; elif command -v ld.lld >/dev/null 2>&1; then command -v ld.lld; else printf '%s\n' ld.lld; fi)
