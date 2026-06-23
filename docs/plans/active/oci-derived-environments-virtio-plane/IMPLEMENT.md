@@ -19162,3 +19162,51 @@ Next implementation target:
 - Continue tracing below the top-level fault branch: the remaining issue is
   ordinary file-backed page content reaching the HostAdapter source page used
   by `orlix_host_user_refresh_window()`, not mlibc locale parsing.
+
+## 2026-06-24 HostAdapter Shadow Copy-Back Attempts
+
+Boundary:
+
+- No mlibc patch was added.
+- No generated upstream tree was edited.
+- The attempts stayed private to HostAdapter and `arch/orlix` hosted memory
+  plumbing; no Linux userspace ABI, syscall, libc behavior, or package/runtime
+  facade was added.
+
+Attempts tested and reverted:
+
+- Added a private HostAdapter helper to copy back a kernel shadow mapping by
+  host-window target before `orlix_host_user_refresh_window()` consumed the
+  source page. This built, but the focused runtime proof failed to reach
+  `file_mmap_content_probe` before timeout.
+- Corrected that idea to use source-page overlap against HostAdapter kernel
+  shadow segments, because file-backed data may be written through a different
+  kernel alias than the later direct-map `__va(PFN_PHYS())` source page. This
+  built and reached the proof, but the probe still failed:
+
+```text
+# FM BAD O...
+not ok 4 - file-backed mmap bytes match pread bytes
+not ok 44 - file_mmap_content_probe
+```
+
+Both experiments were reverted.
+
+Build and runtime evidence:
+
+```sh
+TMPDIR=/private/tmp rtk err make -f OrlixKernel/Makefile build PROFILE=release
+TMPDIR=/private/tmp rtk err make -f OrlixKernel/Makefile kselftest PROFILE=release
+```
+
+Both commands exited 0 for the source-page-overlap attempt. The focused
+single-simulator proof still failed on `iPhone 17 Pro`
+`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`; the plain `iPhone 17`
+`E65F0D05-980C-4368-8CDC-2D2BF3E05757` remained shut down.
+
+Current state:
+
+- Source is back to the pushed diagnostic baseline.
+- The next implementation step should trace where the ordinary file-backed
+  page content is lost before it reaches the host user mapping, rather than
+  repeating HostAdapter copy-back by target/source-page heuristics.
