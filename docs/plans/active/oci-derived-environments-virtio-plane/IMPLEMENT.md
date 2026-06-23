@@ -17347,3 +17347,38 @@ PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" rtk err 
 - `.codex/rules/tests`: 5 tests pass.
 - `compact_plan_check.py`: exits 0 with the known historical stale-status warning.
 - Focused OrlixOS XCTest feature-report run completed without reported errors.
+
+## 2026-06-23 - OCI process feature report carries parser proof
+
+Current status:
+
+- Normalized OCI Runtime feature-report proof metadata for implemented process descriptor features:
+  - `process.user`
+  - `process.noNewPrivileges`
+  - `process.closeAdditionalFds`
+  - `process.oomScoreAdj`
+  - `process.scheduler`
+  - `process.ioPriority`
+  - `process.execCPUAffinity`
+- Each now reports `proof: "orlix:runtime_config_parser"`.
+- The existing `process.capabilities` feature keeps its separate `orlix:process_capability_probe` proof.
+- This is an OrlixOS feature-reporting change only.
+  - It does not add new process semantics.
+  - It does not bypass Linux-owned syscall behavior.
+  - It makes implemented descriptor/config translation claims traceable to the parser and descriptor path.
+
+Validation:
+
+```bash
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" rtk err xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON test
+```
+
+- `git diff --check`: pass.
+- `.codex/hooks/tests`: 32 tests pass.
+- `.codex/rules/tests`: 5 tests pass.
+- `compact_plan_check.py`: exits 0 with the known historical stale-status warning.
+- Focused OrlixOS XCTest feature-report run completed without reported errors.
