@@ -18252,3 +18252,25 @@ This is cache-tooling reliability evidence only. It is not product runtime readi
 Current status:
 
 Linux, mlibc, and Coreutils cache-readiness tooling now rejects external manifest roots as well as external inputs, external symlink targets, and external output sentinels; the broader OCI-derived environments plan remains active.
+
+## 2026-06-23 - Re-anchor OCI work away from custom package management
+
+Corrected the active OCI-derived environments plan to explicitly forbid an Orlix-specific package-management path. The plan now says OCI image layout and OCI runtime metadata are the interchange formats for imported environments, OrlixOS may verify/materialize/persist/enter those environments, and package operations inside an imported root belong to the distro/image userspace (`apk`, `apt`, `dnf`/`rpm`, `pacman`, or no package manager for minimal/static roots).
+
+This course correction keeps OrlixOS in its proper ownership lane: environment import, registry metadata, root/state image lifecycle, mount policy, session launch, and feature reporting. OrlixOS must not own dependency solving, package install/remove semantics, package database formats, repository metadata formats, upgrade policy, an Orlix package index, or an Orlix package abstraction over OCI image contents.
+
+Added `.codex/rules/tests/test_oci_plan_guardrails.py` so the active plan must continue to contain the no-Orlix-package-manager guardrail, distro-native package-manager routing, and registry-pull-as-verified-OCI-layout direction. No runtime source, generated upstream tree, generated package source, or disposable build output was edited.
+
+Validation:
+
+- `python3 -m unittest discover .codex/rules/tests -p test_oci_plan_guardrails.py` - passed, 3 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` - passed, 8 tests.
+- `rtk python3 -m unittest discover .codex/hooks/tests` - passed, 32 tests.
+- `rtk git diff --check` - passed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` - exited 0 with the known historical warning about stale pending/blocked status contradicted by later green status.
+
+This is planning/harness guardrail evidence only. It is not product runtime readiness, OCI lifecycle compliance, package-manager functionality, registry pull support, or upstream conformance proof.
+
+Current status:
+
+The active OCI-derived environments plan now requires battle-tested OCI image layout/runtime metadata for import and distro-native package managers inside imported Linux environments; custom Orlix package management is explicitly out of scope. The broader OCI-derived environments plan remains active.
