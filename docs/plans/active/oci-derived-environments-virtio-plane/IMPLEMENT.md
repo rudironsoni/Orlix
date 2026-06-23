@@ -18969,3 +18969,75 @@ Current status:
 
 - The repository no longer carries OrlixMLibC patch files for this plan.
 - The next locale failure step remains runtime evidence from the current `orlix/locale_probe` initramfs. Any failure from mlibc must be traced into the Linux-visible Orlix surface, not patched in mlibc.
+
+## 2026-06-23 Locale Probe Runtime Evidence: File-Backed mmap Content Bug
+
+Boundary:
+
+- mlibc remains the oracle. No mlibc patch was added.
+- The failing surface is Linux-visible file-backed `mmap(2)` content, not mlibc locale parsing.
+
+Probe update:
+
+- `OrlixMLibC/Tests/locale_probe.c` now emits a compact mismatch line:
+
+```text
+# LP BAD <category> I<index> O<offset> M<mmap-byte> P<pread-byte>
+```
+
+Fresh single-simulator runtime evidence:
+
+```sh
+ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+  make -f OrlixMLibC/Makefile test PROFILE=release \
+  MLIBC_TEST_CASES='orlix/locale_probe' \
+  MLIBC_TEST_RUN_TIMEOUT_SECONDS=240
+```
+
+Simulator state discipline:
+
+- Used only `iPhone 17 Pro` / `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`.
+- The plain `iPhone 17` / `E65F0D05-980C-4368-8CDC-2D2BF3E05757` remained shut down.
+
+Fresh runtime log:
+
+```text
+Build/OrlixKernel/run/release/OrlixTerminal-runtime.log
+Jun 23 22:15:42 2026
+```
+
+Decoded guest evidence:
+
+```text
+ORLIX-MLIBC-TEST-INIT
+1..2
+ok 1 - installed upstream mlibc test list is ready
+# LP BAD LC_MESSAGES I0 O28 M00 P5e
+# locale_probe offset mismatch LC_MESSAGES index=0
+# LP BAD LC_NUMERIC I0 O32 M00 P2c
+# locale_probe offset mismatch LC_NUMERIC index=0
+```
+
+Host-side locale file comparison:
+
+- For `LC_MESSAGES/SYS_LC_MESSAGES`, the byte at offset 28 in the packaged locale file is `0x5e`.
+- For `LC_NUMERIC`, the byte at offset 32 in the packaged locale file is `0x2c`.
+- Runtime `pread64()` returns those correct bytes (`P5e`, `P2c`), while the runtime `mmap()` view reports `0x00` at the same offsets (`M00`).
+
+Interpretation:
+
+- The current blocker is file-backed `MAP_PRIVATE` read-only mmap content visibility in Orlix Linux.
+- This explains the mlibc locale failures: mlibc maps locale category files and parses records from the mapped bytes.
+- The next fix belongs in OrlixKernel's hosted user mapping/fault synchronization path, not in OrlixMLibC.
+
+Rejected experiment:
+
+- A local experiment changed `orlix_sync_current_user_fault_window()` in `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/init.c` to call refresh helpers after host-window sync.
+- It built, but the focused locale probe still showed the same `M00/P5e` and `M00/P2c` mismatches.
+- A follow-up variant that refreshed the live VMA window did not reach the mlibc test init during the runtime run.
+- The experiment was reverted and is not present in the tree.
+
+Next implementation target:
+
+- Add or fix the OrlixKernel Linux selftest coverage for file-backed `mmap()` content.
+- Then fix the actual hosted user mapping path so a file-backed page fault exposes the populated Linux page contents to host-executed user code.
