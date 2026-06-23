@@ -50,6 +50,11 @@ def manifest_path(repo_root: Path, manifest_root: Path, profile: str, component:
     return root / profile / component / f"{stage}.json"
 
 
+def stage_selection_errors(component: str, stages: tuple[str, ...]) -> list[str]:
+    known_stages = set(DEFAULT_STAGES[component])
+    return [f"stage-unknown {component} {stage}" for stage in dict.fromkeys(stages) if stage not in known_stages]
+
+
 def require_existing(path: Path, label: str) -> list[str]:
     if path.exists():
         return []
@@ -89,6 +94,9 @@ def readiness_errors(args: argparse.Namespace) -> list[str]:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
     stages = tuple(args.stage or DEFAULT_STAGES[args.component])
+    stage_errors = stage_selection_errors(args.component, stages)
+    if stage_errors:
+        return stage_errors
 
     errors: list[str] = []
     for stage in stages:
