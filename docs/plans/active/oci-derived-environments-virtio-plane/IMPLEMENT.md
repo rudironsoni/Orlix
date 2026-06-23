@@ -18536,3 +18536,63 @@ The OrlixMLibC Meson reconfigure regression that blocked Xcode upstream-test
 build phases is fixed and build-proven. The next required proof work is the
 OrlixTerminal simulator launch/runtime-test path so the upstream XCTest schemes
 execute real test cases instead of failing or stalling before runtime proof.
+### 2026-06-23: single-simulator runtime proof cleanup checkpoint
+
+Status: harness cleanup fixed and verified; mlibc runtime proof still fails on real upstream test output.
+
+Scope:
+
+- Enforced the resource constraint from the user: only `iPhone 17 Pro` (`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`) was used for the runtime proof work in this checkpoint.
+- Verified `iPhone 17` (`E65F0D05-980C-4368-8CDC-2D2BF3E05757`) remained shut down while `iPhone 17 Pro` remained booted.
+- Kept all proof work serialized; no parallel mlibc/kselftest/Xcode proof runs were started.
+
+Change:
+
+- Updated `OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk` simulator run cleanup so the trap is installed before launching background simulator helpers.
+- Added recursive child-process cleanup for the `simctl spawn ... log stream` and `simctl launch` helper trees.
+- Added cleanup termination of `org.orlix.OrlixTerminal` on the selected simulator when the run recipe exits.
+
+Evidence:
+
+- Before the fix, a failed/interrupted `make -f OrlixMLibC/Makefile test PROFILE=release` run left orphaned `simctl` and `log stream --style compact` processes that had to be stopped manually.
+- Controlled post-fix proof command:
+
+```sh
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
+xcrun simctl terminate 5E2E003E-F434-4B1F-8E5C-BED59BBC177D org.orlix.OrlixTerminal 2>/dev/null || true
+ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+  make -f OrlixMLibC/Makefile test PROFILE=release \
+  MLIBC_TEST_COMPLETION_MARKER='not ok 4' \
+  MLIBC_TEST_RUN_TIMEOUT_SECONDS=120
+```
+
+- Runtime log evidence:
+
+```text
+Build/OrlixKernel/run/release/OrlixTerminal-runtime.log:2:org.orlix.OrlixTerminal: 92088
+Build/OrlixKernel/run/release/OrlixTerminal-runtime.log:546:ORLIX-MLIBC-TEST-INIT
+Build/OrlixKernel/run/release/OrlixTerminal-runtime.log:569:not ok 4 - ansi/sscanf
+```
+
+- Post-run process check found no remaining `OrlixMLibC/Makefile`, `OrlixKernel/Makefile`, `ORLIX_KERNEL_RUN_TIMEOUT_SECONDS`, `simctl launch`, `log stream --style compact`, `OrlixTerminal`, or Orlix make processes.
+- Post-run simulator state remained single-simulator:
+
+```text
+iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D) (Booted)
+iPhone 17 (E65F0D05-980C-4368-8CDC-2D2BF3E05757) (Shutdown)
+```
+
+Validation:
+
+- `git diff --check`: passed.
+- `python3 -m unittest discover .codex/rules/tests`: 5 passed.
+- `python3 -m unittest discover .codex/hooks/tests`: 32 passed.
+- `python3 .codex/hooks/compact_plan_check.py`: exit 0 with known warning:
+
+```text
+ORLIX-HARNESS-WARN: docs/plans/active/oci-derived-environments-virtio-plane/IMPLEMENT.md has stale pending/blocked status that appears contradicted by later green status
+```
+
+Open issue:
+
+- This checkpoint does not prove OrlixMLibC runtime conformance. The single-simulator runtime path now launches and cleans up correctly, but the controlled proof reaches a real mlibc test failure at `ansi/sscanf`. That failure must be triaged at the owning libc/kernel boundary before claiming the mlibc proof green.

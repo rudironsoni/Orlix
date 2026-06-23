@@ -1223,12 +1223,15 @@ run: __ios-simulator-framework xcodeproj
 	os_log="$(ORLIX_IOS_SIMULATOR_RUN_LOG_DIR)/OrlixTerminal-os.log"; \
 	: > "$$runtime_log"; \
 	: > "$$os_log"; \
+	log_pid=""; \
+	launch_pid=""; \
+	cleanup_tree() { pid="$$1"; [ -n "$$pid" ] || return 0; for child in $$(pgrep -P "$$pid" 2>/dev/null || true); do cleanup_tree "$$child"; done; kill "$$pid" >/dev/null 2>&1 || true; }; \
+	cleanup() { cleanup_tree "$$log_pid"; cleanup_tree "$$launch_pid"; xcrun simctl terminate "$$simctl_device" "$(ORLIX_TERMINAL_BUNDLE_ID)" >/dev/null 2>&1 || true; }; \
+	trap cleanup EXIT INT TERM; \
 	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "OrlixTerminal" || subsystem == "org.orlix.OrlixTerminal"' >> "$$runtime_log" 2>&1 & \
 	log_pid="$$!"; \
 	xcrun simctl launch --terminate-running-process --console "$$simctl_device" "$(ORLIX_TERMINAL_BUNDLE_ID)" >> "$$runtime_log" 2>&1 & \
 	launch_pid="$$!"; \
-	cleanup() { kill "$$log_pid" "$$launch_pid" >/dev/null 2>&1 || true; }; \
-	trap cleanup EXIT INT TERM; \
 	app_has_started() { grep -E -q 'OrlixTerminal\[|Starting Orlix bootloader|ORLIX-COREUTILS-TEST-INIT' "$$runtime_log" || kill -0 "$$launch_pid" >/dev/null 2>&1; }; \
 	validate_runtime_log() { \
 		LC_ALL=C tr -d '\r' < "$$runtime_log" | awk 'BEGIN { bad = 0 } /(^|[^[:alnum:]_])not ok[[:space:]]+[0-9]+([[:space:]-]|$$)/ { print "upstream failure marker: " $$0 > "/dev/stderr"; bad = 1 } /Kernel panic|kernel panic|panic:|Oops|BUG:|Out of memory|Killed process|Attempted to kill init/ { print "fatal runtime marker: " $$0 > "/dev/stderr"; bad = 1 } END { exit bad ? 1 : 0 }'; \
