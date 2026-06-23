@@ -145,6 +145,24 @@ class BuildManifestTests(unittest.TestCase):
 
         self.assertIsNone(self.module.manifest_miss_reason(recorded, current))
 
+    def test_manifest_miss_reason_detects_tool_drift(self):
+        current = {
+            "manifest_version": 1,
+            "depends_on": ["source-prep"],
+            "environment": {"python": "3", "git_head": "new"},
+            "tool": {"path": "tools/orlix-build-manifest", "digest": "new"},
+            "inputs": [{"path": "input.txt", "digest": "abc"}],
+            "optional_inputs": [],
+            "input_digest": "abc",
+        }
+        recorded = dict(current)
+        recorded["tool"] = {"path": "tools/orlix-build-manifest", "digest": "old"}
+
+        self.assertEqual(
+            self.module.manifest_miss_reason(recorded, current),
+            "tool-changed",
+        )
+
     def test_audit_misses_when_recorded_environment_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -174,6 +192,36 @@ class BuildManifestTests(unittest.TestCase):
 
             self.assertEqual(result, 1)
             self.assertIn("environment-changed", output.getvalue())
+
+    def test_audit_misses_when_manifest_tool_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").mkdir()
+            (root / "input" / "input.txt").write_text("alpha\n")
+            (root / "tools").mkdir()
+            (root / self.module.MANIFEST_TOOL_PATH).write_text("tool-v1\n")
+            manifest_root = root / "manifests"
+            stage = self.module.StageSpec("sample", ("input",))
+            self.module.STAGES = {"test": (stage,)}
+            args = Namespace(
+                command="write",
+                repo_root=str(root),
+                manifest_root=str(manifest_root),
+                profile="release",
+                component=("test",),
+                stage=("sample",),
+            )
+            self.module.write(args)
+
+            (root / self.module.MANIFEST_TOOL_PATH).write_text("tool-v2\n")
+
+            args.command = "audit"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.audit(args)
+
+            self.assertEqual(result, 1)
+            self.assertIn("tool-changed", output.getvalue())
 
 
 if __name__ == "__main__":
