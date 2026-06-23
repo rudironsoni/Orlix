@@ -114,5 +114,67 @@ class BuildManifestTests(unittest.TestCase):
             self.assertIn("manifest-missing", output.getvalue())
 
 
+    def test_manifest_miss_reason_detects_metadata_drift(self):
+        current = {
+            "manifest_version": 1,
+            "depends_on": ["source-prep"],
+            "environment": {"python": "3"},
+            "inputs": [{"path": "input.txt", "digest": "abc"}],
+            "optional_inputs": [],
+            "input_digest": "abc",
+        }
+        recorded = dict(current)
+        recorded["environment"] = {"python": "2"}
+
+        self.assertEqual(
+            self.module.manifest_miss_reason(recorded, current),
+            "environment-changed",
+        )
+
+    def test_manifest_miss_reason_ignores_git_head_drift(self):
+        current = {
+            "manifest_version": 1,
+            "depends_on": ["source-prep"],
+            "environment": {"python": "3", "git_head": "new"},
+            "inputs": [{"path": "input.txt", "digest": "abc"}],
+            "optional_inputs": [],
+            "input_digest": "abc",
+        }
+        recorded = dict(current)
+        recorded["environment"] = {"python": "3", "git_head": "old"}
+
+        self.assertIsNone(self.module.manifest_miss_reason(recorded, current))
+
+    def test_audit_misses_when_recorded_environment_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").mkdir()
+            (root / "input" / "input.txt").write_text("alpha\n")
+            manifest_root = root / "manifests"
+            stage = self.module.StageSpec("sample", ("input",))
+            self.module.STAGES = {"test": (stage,)}
+            args = Namespace(
+                command="write",
+                repo_root=str(root),
+                manifest_root=str(manifest_root),
+                profile="release",
+                component=("test",),
+                stage=("sample",),
+            )
+            self.module.write(args)
+
+            path = self.module.manifest_path(root, manifest_root, "release", "test", "sample")
+            data = path.read_text()
+            path.write_text(data.replace('"python"', '"stale-python"', 1))
+
+            args.command = "audit"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.audit(args)
+
+            self.assertEqual(result, 1)
+            self.assertIn("environment-changed", output.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
