@@ -63,6 +63,39 @@ class BuildManifestTests(unittest.TestCase):
 
             self.assertNotEqual(first["input_digest"], second["input_digest"])
 
+    def test_stage_manifest_input_digest_ignores_metadata_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").mkdir()
+            (root / "input" / "input.txt").write_text("alpha\n")
+            (root / "tools").mkdir()
+            (root / self.module.MANIFEST_TOOL_PATH).write_text("tool-v1\n")
+            stage = self.module.StageSpec("sample", ("input",))
+
+            self.module.environment_identity = lambda repo_root, profile: {
+                "profile": profile,
+                "platform": "test",
+                "python": "test",
+                "xcode_version": "test",
+                "clang_version": "test",
+                "git_head": "old",
+            }
+            first = self.module.stage_manifest(root, "sample", stage, "release")
+
+            (root / self.module.MANIFEST_TOOL_PATH).write_text("tool-v2\n")
+            self.module.environment_identity = lambda repo_root, profile: {
+                "profile": profile,
+                "platform": "test",
+                "python": "test",
+                "xcode_version": "test",
+                "clang_version": "test",
+                "git_head": "new",
+            }
+            second = self.module.stage_manifest(root, "sample", stage, "release")
+
+            self.assertEqual(first["input_digest"], second["input_digest"])
+            self.assertEqual(self.module.manifest_miss_reason(first, second), "tool-changed")
+
     def test_audit_hits_after_write_and_misses_after_change(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

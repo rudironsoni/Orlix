@@ -17526,3 +17526,48 @@ Results:
 HANDOFF: cache manifest tool provenance is implemented and tested; current
 mlibc cache readiness intentionally fails closed until manifests are refreshed
 with the new manifest-tool digest.
+
+## 2026-06-23 - Separate input digest from cache metadata
+
+Current status: `input_digest` now represents only declared stage inputs and
+optional inputs. Cache-tool provenance, toolchain/profile environment, and other
+manifest metadata remain audited separately. This keeps Linux, mlibc, and
+Coreutils cache decisions reliable without making input digests change for
+metadata-only drift.
+
+Changes:
+
+- Updated `tools/orlix-build-manifest` so `input_digest` hashes only `inputs`
+  and `optional_inputs`.
+- Preserved fail-closed audit behavior for manifest tool changes through the
+  separate `tool` metadata entry.
+- Added a regression test proving `git_head` and manifest-tool drift do not
+  change `input_digest`, while manifest-tool drift still reports
+  `tool-changed`.
+
+Validation:
+
+```bash
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+python3 -m unittest discover -q tools/tests
+make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+make -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk cache-ready PROFILE=release
+make -f OrlixOS/Makefile cache-ready PROFILE=release
+```
+
+Results:
+
+- `tools.tests.test_orlix_build_manifest`: 10 tests passed.
+- `tools/tests`: passed (`TOOLS_TEST_RESULT:PASS`).
+- Behavior probe: manifest-tool changes now produce `TOOL_CHANGED=True`,
+  `INPUT_DIGEST_CHANGED=False`, and `MISS_REASON=tool-changed`.
+- Linux cache readiness still fails closed because this checkout lacks Linux
+  manifests and the `OrlixKernel.xcframework` sentinel.
+- mlibc cache readiness fails closed with `mlibc:source-prep tool-changed`,
+  as expected until manifests are refreshed with the new manifest-tool digest.
+- Coreutils cache readiness fails closed on missing manifests/cache outputs in
+  this checkout.
+
+HANDOFF: cache input digest semantics are now precise; cache metadata drift is
+audited separately. Current Linux, mlibc, and Coreutils readiness remains
+fail-closed until their local manifests/artifacts are refreshed.
