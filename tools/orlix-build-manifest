@@ -264,13 +264,22 @@ def fsync_directory(path: Path) -> None:
 
 def required_output_errors(repo_root: Path, required_outputs: tuple[str, ...]) -> list[str]:
     errors = []
+    repo_root = repo_root.resolve()
     for output in required_outputs:
-        path = Path(output)
-        resolved = path if path.is_absolute() else repo_root / path
-        if not resolved.exists():
-            errors.append(f"missing required-output: {resolved}")
-        elif not resolved.is_file():
-            errors.append(f"not-file required-output: {resolved}")
+        relative_path = Path(output)
+        if relative_path.is_absolute():
+            errors.append(f"required-output-not-repo-relative: {output}")
+            continue
+        path = (repo_root / relative_path).resolve()
+        try:
+            path.relative_to(repo_root)
+        except ValueError:
+            errors.append(f"required-output-outside-repo: {output}")
+            continue
+        if not path.exists():
+            errors.append(f"missing required-output: {path}")
+        elif not path.is_file():
+            errors.append(f"required-output-not-file: {path}")
     return errors
 
 
