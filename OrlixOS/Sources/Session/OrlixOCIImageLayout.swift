@@ -1321,6 +1321,42 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "No seccomp filter loading or enforcement proof exists for Orlix OCI-derived environments."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "hooks.prestart",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI prestart hooks are rejected until Orlix can execute lifecycle hooks through Linux-owned runtime semantics."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "hooks.createRuntime",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI createRuntime hooks are rejected until Orlix can execute lifecycle hooks through Linux-owned runtime semantics."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "hooks.createContainer",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI createContainer hooks are rejected until Orlix can execute lifecycle hooks through Linux-owned runtime semantics."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "hooks.startContainer",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI startContainer hooks are rejected until Orlix can execute lifecycle hooks through Linux-owned runtime semantics."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "hooks.poststart",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI poststart hooks are rejected until Orlix can execute lifecycle hooks through Linux-owned runtime semantics."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "hooks.poststop",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI poststop hooks are rejected until Orlix can execute lifecycle hooks through Linux-owned runtime semantics."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "intelRdt",
 			status: .deterministicallyRejected,
 			proof: "orlix:runtime_config_parser",
