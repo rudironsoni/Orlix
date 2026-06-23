@@ -4,6 +4,8 @@
 #include <sched.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -45,6 +47,22 @@ static bool uts_namespace_allows_private_hostname(void)
 	return child_exited_success(child);
 }
 
+static int read_domainname(char *buffer, size_t size)
+{
+	struct utsname name;
+	size_t length;
+
+	if (uname(&name) != 0)
+		return -1;
+
+	length = strlen(name.domainname);
+	if (length >= size)
+		length = size - 1;
+	memcpy(buffer, name.domainname, length);
+	buffer[length] = '\0';
+	return 0;
+}
+
 static bool private_domainname_visible_in_current_uts(void)
 {
 	const char domainname[] = "orlix-domain-probe";
@@ -54,9 +72,9 @@ static bool private_domainname_visible_in_current_uts(void)
 
 	if (unshare(CLONE_NEWUTS) != 0)
 		return false;
-	if (setdomainname(domainname, sizeof(domainname) - 1) != 0)
+	if (syscall(SYS_setdomainname, domainname, sizeof(domainname) - 1) != 0)
 		return false;
-	if (getdomainname(observed, sizeof(observed)) != 0)
+	if (read_domainname(observed, sizeof(observed)) != 0)
 		return false;
 
 	observed[sizeof(observed) - 1] = '\0';
@@ -81,7 +99,7 @@ static bool read_current_uts_names(char *hostname, size_t hostname_len,
 {
 	if (gethostname(hostname, hostname_len) != 0)
 		return false;
-	if (getdomainname(domainname, domainname_len) != 0)
+	if (read_domainname(domainname, domainname_len) != 0)
 		return false;
 
 	hostname[hostname_len - 1] = '\0';
@@ -101,7 +119,7 @@ static bool child_sets_private_uts_names(void)
 		return false;
 	if (sethostname(hostname, sizeof(hostname) - 1) != 0)
 		return false;
-	if (setdomainname(domainname, sizeof(domainname) - 1) != 0)
+	if (syscall(SYS_setdomainname, domainname, sizeof(domainname) - 1) != 0)
 		return false;
 	if (!read_current_uts_names(observed_hostname, sizeof(observed_hostname),
 				    observed_domainname,

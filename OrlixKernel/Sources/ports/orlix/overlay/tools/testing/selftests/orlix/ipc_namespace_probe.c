@@ -139,7 +139,7 @@ static bool ipc_namespace_isolates_posix_message_queue_name(void)
 
 	child = fork();
 	if (child < 0) {
-		(void)mq_close(parent_queue);
+		(void)close((int)parent_queue);
 		remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
 		return false;
 	}
@@ -156,17 +156,17 @@ static bool ipc_namespace_isolates_posix_message_queue_name(void)
 				      O_CREAT | O_EXCL | O_RDWR, 0600, &attr);
 		if (child_queue == (mqd_t)-1)
 			_exit(3);
-		(void)mq_close(child_queue);
+		(void)close((int)child_queue);
 		remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
 		_exit(0);
 	}
 
 	if (waitpid(child, &status, 0) != child) {
-		(void)mq_close(parent_queue);
+		(void)close((int)parent_queue);
 		remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
 		return false;
 	}
-	(void)mq_close(parent_queue);
+	(void)close((int)parent_queue);
 	remove_posix_message_queue_name(ORLIX_IPC_MQ_NAME);
 	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }

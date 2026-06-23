@@ -137,7 +137,7 @@ static int child_enter_environment(void)
 		return 17;
 	if (chdir(ENTRY_ROOT) != 0)
 		return 18;
-	if (chroot(".") != 0)
+	if (syscall(SYS_chroot, ".") != 0)
 		return 19;
 	if (chdir("/") != 0)
 		return 24;

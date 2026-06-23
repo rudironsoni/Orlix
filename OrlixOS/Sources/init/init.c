@@ -1246,7 +1246,8 @@ static void apply_uts_config(const struct orlix_command_config *config)
 	    sethostname(config->hostname, strlen(config->hostname)) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: sethostname failed\n");
 	if (config->has_domainname &&
-	    setdomainname(config->domainname, strlen(config->domainname)) != 0)
+	    syscall(SYS_setdomainname, config->domainname,
+		    strlen(config->domainname)) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: setdomainname failed\n");
 }
 
