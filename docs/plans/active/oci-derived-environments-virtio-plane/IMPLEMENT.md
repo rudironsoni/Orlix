@@ -19041,3 +19041,67 @@ Next implementation target:
 
 - Add or fix the OrlixKernel Linux selftest coverage for file-backed `mmap()` content.
 - Then fix the actual hosted user mapping path so a file-backed page fault exposes the populated Linux page contents to host-executed user code.
+
+## 2026-06-23 Linux-Surface mmap Regression Probe
+
+Boundary:
+
+- OrlixMLibC remains a conformance oracle for this plan; no mlibc behavioral
+  patch was added.
+- `OrlixMLibC/Sources/patches` remains empty.
+- The attempted fixes in `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/init.c`
+  and `OrlixHostAdapter/Sources/OrlixHostAdapter/memory/kernel_mapping.c` were
+  tested and reverted because they did not fix the mlibc oracle or the stronger
+  Linux-surface probe.
+
+Durable source change kept:
+
+- Added `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/file_mmap_content_probe.c`.
+- Wired `file_mmap_content_probe` into the Orlix kselftest Makefile.
+- The probe maps `/kselftest-list.txt`, a normal regular data file from the
+  kselftest initramfs, and compares bytes observed through `MAP_PRIVATE`
+  read-only `mmap()` against `pread()`.
+
+Build evidence:
+
+```sh
+TMPDIR=/private/tmp rtk err make -f OrlixKernel/Makefile build PROFILE=release
+TMPDIR=/private/tmp rtk err make -f OrlixKernel/Makefile kselftest PROFILE=release
+```
+
+Both commands exited 0 after the probe was added.
+
+Single-simulator runtime discipline:
+
+- Used only `iPhone 17 Pro` (`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`).
+- The plain `iPhone 17` (`E65F0D05-980C-4368-8CDC-2D2BF3E05757`) remained
+  shut down.
+- Stale helper processes from failed runtime attempts were stopped after
+  evidence capture.
+
+Fresh Linux-surface failure evidence:
+
+```text
+ok 1 - can open regular initramfs test data
+ok 2 - regular initramfs data has mmap-sized file contents
+not ok 4 - file-backed mmap bytes match pread bytes
+not ok 44 - file_mmap_content_probe
+```
+
+Focused mlibc oracle evidence still matches the same class of failure:
+
+```text
+ORLIX-MLIBC-TEST-INIT
+# LP BAD LC_MESSAGES I0 O28 M00 P5e
+# LP BAD LC_NUMERIC I0 O32 M00 P2c
+```
+
+Interpretation:
+
+- The earlier `/proc/self/exe`-based probe was too narrow; it could pass while
+  ordinary regular files from the initramfs still mapped as zero through
+  hosted user memory.
+- The current blocker is ordinary Linux regular-file `MAP_PRIVATE` mmap content
+  visibility after a file-backed page fault.
+- The next fix still belongs in the Linux-visible hosted mapping/page-fault
+  synchronization path, not in OrlixMLibC.
