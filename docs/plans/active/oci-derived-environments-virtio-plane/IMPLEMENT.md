@@ -18194,3 +18194,32 @@ Cache readiness probes:
 This is cache-tooling reliability evidence only. It is not product runtime readiness, upstream Linux readiness, libc conformance, Coreutils conformance, or OCI runtime proof.
 
 Current status: Linux, mlibc, and Coreutils cache-readiness tooling now rejects stage inputs outside the repo while preserving existing manifest digest semantics; the broader OCI-derived environments plan remains active.
+
+## 2026-06-23 - Directory symlink inputs fail closed
+
+Extended the shared build-manifest input confinement so Linux, mlibc, and Coreutils stage-input directories cannot silently depend on symlink targets outside the checkout. `iter_files()` now treats symlinked files and symlinked directories as manifest entries instead of following regular-file symlinks or omitting symlink directories. `hash_path()` records accepted symlink entries by link text after confirming the resolved target remains inside the repo; a symlink target outside the repo now fails closed with `input-outside-repo`.
+
+This keeps the cache trust boundary aligned with the earlier top-level input confinement: repo-owned symlinks are allowed as repo entries, but machine-local external symlink targets cannot influence or evade Linux, mlibc, or Coreutils cache manifests. No generated upstream trees or disposable build outputs were edited.
+
+Validation:
+
+- `rtk python3 -m py_compile tools/orlix-build-manifest tools/tests/test_orlix_build_manifest.py` - passed.
+- `rtk python3 -m unittest tools.tests.test_orlix_build_manifest.BuildManifestTests.test_hash_path_accepts_directory_symlink_inside_repo tools.tests.test_orlix_build_manifest.BuildManifestTests.test_hash_path_rejects_directory_symlink_outside_repo tools.tests.test_orlix_build_manifest.BuildManifestTests.test_hash_path_rejects_inputs_outside_repo` - passed, 3 tests.
+- `rtk python3 -m unittest tools.tests.test_orlix_build_manifest tools.tests.test_orlix_cache_ready` - passed; explicit rerun status 0.
+- `rtk python3 -m unittest discover tools/tests` - passed; explicit rerun status 0.
+- `rtk python3 -m unittest discover .codex/hooks/tests` - passed, 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` - passed, 5 tests.
+- `rtk git diff --check` - passed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` - exited 0 with the known historical warning about stale pending/blocked status contradicted by later green status.
+
+Cache readiness probes:
+
+- `make -f OrlixKernel/Makefile cache-ready PROFILE=release` returned status 2, fail-closed against current release Linux manifest/sentinel state.
+- `make -f OrlixMLibC/Makefile cache-ready PROFILE=release` returned status 2, fail-closed with `mlibc:source-prep input-digest-changed` and `mlibc:compiler-rt input-digest-changed`.
+- `make -f OrlixOS/Makefile cache-ready PROFILE=release` returned status 2, fail-closed against current release Coreutils manifest/sentinel state.
+
+This is cache-tooling reliability evidence only. It is not product runtime readiness, upstream Linux readiness, libc conformance, Coreutils conformance, or OCI runtime proof.
+
+Current status:
+
+Linux, mlibc, and Coreutils cache-readiness tooling now rejects external symlink targets inside directory inputs; the broader OCI-derived environments plan remains active.

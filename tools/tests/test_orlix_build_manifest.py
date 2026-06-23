@@ -117,6 +117,34 @@ class BuildManifestTests(unittest.TestCase):
             self.assertTrue(digest["exists"])
             self.assertEqual("file", digest["kind"])
 
+    def test_hash_path_accepts_directory_symlink_inside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            input_dir.mkdir()
+            shared = root / "shared.txt"
+            shared.write_text("alpha\n")
+            link = input_dir / "shared-link"
+            link.symlink_to("../shared.txt")
+
+            digest = self.module.hash_path(root, "input")
+
+            self.assertTrue(digest["exists"])
+            self.assertEqual("directory", digest["kind"])
+            self.assertEqual(1, digest["file_count"])
+
+    def test_hash_path_rejects_directory_symlink_outside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside_tmp:
+            root = Path(tmp)
+            input_dir = root / "input"
+            input_dir.mkdir()
+            outside = Path(outside_tmp) / "outside.txt"
+            outside.write_text("alpha\n")
+            (input_dir / "outside-link").symlink_to(outside)
+
+            with self.assertRaisesRegex(ValueError, "input-outside-repo"):
+                self.module.hash_path(root, "input")
+
 
     def test_audit_hits_after_write_and_misses_after_change(self):
         with tempfile.TemporaryDirectory() as tmp:
