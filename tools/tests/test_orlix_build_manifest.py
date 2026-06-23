@@ -500,6 +500,54 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
                 ["configure-build.json", "install-rootfs.json", "source-prep.json"],
             )
 
+    def test_audit_reuses_computed_dependency_manifests(self) -> None:
+        original_stages = self.module.STAGES.get("synthetic")
+        self.module.STAGES["synthetic"] = (
+            self.module.StageSpec("source", ("input",)),
+            self.module.StageSpec("mid", ("input",), depends_on=("source",)),
+            self.module.StageSpec("leaf", ("input",), depends_on=("mid",)),
+        )
+        original_stage_manifest = self.module.stage_manifest
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "input").write_text("payload")
+                write_args = Namespace(
+                    repo_root=str(root),
+                    manifest_root="manifests",
+                    profile="release",
+                    component=["synthetic"],
+                    stage=None,
+                )
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(self.module.write(write_args), 0)
+
+                calls = []
+
+                def counted_stage_manifest(repo_root, component, stage, profile):
+                    calls.append(stage.name)
+                    return original_stage_manifest(repo_root, component, stage, profile)
+
+                self.module.stage_manifest = counted_stage_manifest
+                audit_args = Namespace(
+                    repo_root=str(root),
+                    manifest_root="manifests",
+                    profile="release",
+                    component=["synthetic"],
+                    stage=["source", "mid", "leaf"],
+                )
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(self.module.audit(audit_args), 0)
+
+                self.assertEqual(calls, ["source", "mid", "leaf"])
+        finally:
+            self.module.stage_manifest = original_stage_manifest
+            if original_stages is None:
+                del self.module.STAGES["synthetic"]
+            else:
+                self.module.STAGES["synthetic"] = original_stages
+
     def test_write_rejects_unknown_selected_stage(self) -> None:
         self.module.STAGES["synthetic"] = (
             self.module.StageSpec("payload", ("input",)),

@@ -17821,3 +17821,21 @@ rtk python3 .codex/hooks/compact_plan_check.py
 ```
 
 Results: `git diff --check` passed; `tools.tests.test_orlix_build_manifest` ran 23 tests and passed; `tools/tests` discovery passed; Linux cache-ready still fails closed on missing release manifests and `OrlixKernel.xcframework` outputs; mlibc cache-ready still fails closed on selected-stage manifest tool drift for `source-prep` and `compiler-rt`; Coreutils cache-ready still fails closed on missing release manifests and package output sentinels; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
+
+Current status:
+
+`tools/orlix-build-manifest audit` now memoizes freshly computed stage manifests within a single component/profile audit. Recursive dependency validation still fails closed on missing or stale prerequisite manifests, but repeated selections no longer re-hash the same Linux, mlibc, or Coreutils stage inputs multiple times while walking dependency chains. This keeps the cache gate reliable and reduces repeated work for multi-stage checks such as Linux `source-prep` / `headers-install` / `kernel-archive`, mlibc `source-prep` / `compiler-rt`, and Coreutils `source-prep` / `configure-build` / `install-rootfs`. No generated Linux, mlibc, Coreutils, or build output trees were edited. Validation:
+
+```bash
+rtk git diff --check
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+rtk python3 -m unittest discover -q tools/tests
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: `git diff --check` passed; `tools.tests.test_orlix_build_manifest` ran 24 tests and passed; `tools/tests` discovery passed; Linux cache-ready still fails closed on missing release manifests and `OrlixKernel.xcframework` outputs; mlibc cache-ready still fails closed on selected-stage manifest tool drift for `source-prep` and `compiler-rt`; Coreutils cache-ready still fails closed on missing release manifests and package output sentinels; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.

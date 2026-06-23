@@ -204,6 +204,18 @@ def stage_manifest(repo_root: Path, component: str, stage: StageSpec, profile: s
     return payload
 
 
+def cached_stage_manifest(
+    repo_root: Path,
+    component: str,
+    stage: StageSpec,
+    profile: str,
+    computed_manifests: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    if stage.name not in computed_manifests:
+        computed_manifests[stage.name] = stage_manifest(repo_root, component, stage, profile)
+    return computed_manifests[stage.name]
+
+
 def manifest_path(repo_root: Path, manifest_root: Path, profile: str, component: str, stage: str) -> Path:
     root = manifest_root if manifest_root.is_absolute() else repo_root / manifest_root
     return root / profile / component / f"{stage}.json"
@@ -334,6 +346,7 @@ def dependency_miss_reasons(
     profile: str,
     component: str,
     stage: StageSpec,
+    computed_manifests: dict[str, dict[str, object]],
 ) -> list[str]:
     stages = {candidate.name: candidate for candidate in STAGES[component]}
     misses: list[str] = []
@@ -354,7 +367,7 @@ def dependency_miss_reasons(
             if not recorded:
                 misses.append(f"dependency-missing {dependency} {path}")
                 continue
-            current = stage_manifest(repo_root, component, dependency_stage, profile)
+            current = cached_stage_manifest(repo_root, component, dependency_stage, profile, computed_manifests)
             if reason := manifest_miss_reason(recorded, current):
                 misses.append(f"dependency-stale {dependency} {reason} {path}")
                 continue
@@ -379,6 +392,7 @@ def audit(args: argparse.Namespace) -> int:
         return 1
     failed = False
     for component in components:
+        computed_manifests: dict[str, dict[str, object]] = {}
         graph_diagnostics = validate_stage_graph(STAGES[component])
         if graph_diagnostics:
             for diagnostic in graph_diagnostics:
@@ -390,7 +404,7 @@ def audit(args: argparse.Namespace) -> int:
                 print(diagnostic)
             return 1
         for stage in selected_stages(args, component):
-            current = stage_manifest(repo_root, component, stage, args.profile)
+            current = cached_stage_manifest(repo_root, component, stage, args.profile, computed_manifests)
             path = manifest_path(repo_root, manifest_root, args.profile, component, stage.name)
             recorded = load_manifest(path)
             if not recorded:
@@ -399,7 +413,14 @@ def audit(args: argparse.Namespace) -> int:
             elif reason := manifest_miss_reason(recorded, current):
                 failed = True
                 print(f"miss: {component}:{stage.name} {reason} {path}")
-            elif dependency_misses := dependency_miss_reasons(repo_root, manifest_root, args.profile, component, stage):
+            elif dependency_misses := dependency_miss_reasons(
+                repo_root,
+                manifest_root,
+                args.profile,
+                component,
+                stage,
+                computed_manifests,
+            ):
                 failed = True
                 for reason in dependency_misses:
                     print(f"miss: {component}:{stage.name} {reason}")
