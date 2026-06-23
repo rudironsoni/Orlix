@@ -12497,7 +12497,7 @@ Status: implemented and focused-proofed for the OCI process identity slice.
 Scope completed:
 
 - Added durable OrlixMLibC patch `0003-linux-implement-domainname-sysdeps.patch`.
-- `getdomainname(3)` and `setdomainname(3)` no longer abort through mlibc's generic POSIX stubs; Linux sysdeps now use `SYS_uname` for `getdomainname` and `SYS_setdomainname` for `setdomainname`.
+- Superseded by the 2026-06-23 zero-patch correction below: OrlixMLibC must not carry domainname sysdep patches for this plan; Orlix-owned probes/init paths use Linux syscalls and `uname(2)` directly where needed.
 - `kselftest_init` now applies `orlix.hostname=` and `orlix.domainname=` private boot tokens before selected Linux kselftests run.
 - Added `hostname_domainname_probe`, which proves the configured values through Linux-visible `gethostname(2)` and `getdomainname(2)` behavior.
 - Added `OrlixKernelUpstreamTests/testHostnameDomainnameProbeCompletesThroughOrlixOSTerminalSession` as the app-hosted proof selector.
@@ -18918,3 +18918,54 @@ Next proof step:
 - It is intentionally test-side only: no mlibc behavioral patch is present.
 - Build/package evidence exists for the focused probe and initramfs; runtime evidence is still incomplete because the direct run did not reach a fresh runtime log before interruption.
 - Next agent action should continue from the direct run staging problem, not from mlibc patching.
+
+## 2026-06-23 OrlixMLibC Zero-Patch Boundary Correction
+
+Boundary correction:
+
+- OrlixMLibC is not the fix surface for this plan. It is an upstream libc/conformance oracle.
+- The Orlix user-visible surface is Linux. If mlibc exposes a missing behavior, the next fix must land in the Linux-visible surface that mlibc consumes, or in Orlix-owned rootfs/environment construction when the evidence points there.
+- `OrlixMLibC/Sources/patches` must remain empty for this plan. Adding a new mlibc behavioral patch is not an acceptable way to make Linux, mlibc, or Coreutils evidence pass.
+
+Source changes in this checkpoint:
+
+- Deleted the previously tracked OrlixMLibC patch inputs:
+  - `OrlixMLibC/Sources/patches/0001-linux-implement-chroot-sysdep.patch`
+  - `OrlixMLibC/Sources/patches/0002-posix-implement-mq-close.patch`
+  - `OrlixMLibC/Sources/patches/0003-linux-implement-domainname-sysdeps.patch`
+- Moved Orlix-owned selftest/init dependencies off those patched libc wrappers:
+  - `environment_entry_probe.c` now uses `syscall(SYS_chroot, ".")`.
+  - `ipc_namespace_probe.c` closes POSIX message queue descriptors through `close((int)mqd_t)`.
+  - `hostname_domainname_probe.c` and `namespace_probe.c` read the domainname through `uname(2)` instead of `getdomainname(3)`.
+  - `namespace_probe.c`, `kselftest_init.c`, and `OrlixOS/Sources/init/init.c` set the domainname through `syscall(SYS_setdomainname, ...)`.
+
+Verification:
+
+```sh
+rtk make -f OrlixMLibC/Makefile clean PROFILE=release
+rtk err make -f OrlixMLibC/Makefile __test-build PROFILE=release MLIBC_TEST_CASES='orlix/locale_probe'
+rtk err make -f OrlixMLibC/Makefile __test-initramfs PROFILE=release MLIBC_TEST_CASES='orlix/locale_probe'
+rtk err make -f OrlixKernel/Makefile kselftest-install PROFILE=release
+rtk err make -f OrlixOS/Makefile kernel-payload PROFILE=release
+rtk git -C Build/OrlixMLibC/src/mlibc-43ab07732cdf diff --stat
+rtk rg --files OrlixMLibC/Sources/patches
+rtk rg -n "Sysdeps<Chroot>|int mq_close|GetDomainname|SetDomainname" Build/OrlixMLibC/src/mlibc-43ab07732cdf/sysdeps/linux Build/OrlixMLibC/src/mlibc-43ab07732cdf/options/posix Build/OrlixMLibC/src/mlibc-43ab07732cdf/options/internal
+rtk git diff --check
+```
+
+Results:
+
+- `OrlixMLibC/Makefile clean` passed and removed generated mlibc outputs before rebuilding.
+- The first sandboxed focused mlibc rebuild failed only because the sandbox could not create a file in the user ccache directory; the same command passed unsandboxed.
+- Focused `orlix/locale_probe` test build passed against a fresh upstream mlibc checkout with no OrlixMLibC patch inputs.
+- Focused `orlix/locale_probe` initramfs packaging passed.
+- `OrlixKernel/Makefile kselftest-install` passed after the Orlix-owned selftest call sites were moved to Linux syscalls/`uname`.
+- `OrlixOS/Makefile kernel-payload` passed after the init domainname call moved to `SYS_setdomainname`.
+- `rtk rg --files OrlixMLibC/Sources/patches` produced no files.
+- `rtk git -C Build/OrlixMLibC/src/mlibc-43ab07732cdf diff --stat` produced no diff, so the generated upstream mlibc checkout is clean.
+- The narrowed Linux/posix/internal mlibc source search for the deleted patch symbols produced no matches.
+
+Current status:
+
+- The repository no longer carries OrlixMLibC patch files for this plan.
+- The next locale failure step remains runtime evidence from the current `orlix/locale_probe` initramfs. Any failure from mlibc must be traced into the Linux-visible Orlix surface, not patched in mlibc.

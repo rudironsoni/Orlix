@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 #include <errno.h>
+#include <sys/syscall.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/mount.h>
@@ -342,7 +343,7 @@ static void apply_boot_identity_tokens(void)
 	if (cmdline_value("orlix.hostname=", value, sizeof(value)))
 		(void)sethostname(value, orlix_strlen(value));
 	if (cmdline_value("orlix.domainname=", value, sizeof(value)))
-		(void)setdomainname(value, orlix_strlen(value));
+		(void)syscall(SYS_setdomainname, value, orlix_strlen(value));
 }
 
 int main(void)
