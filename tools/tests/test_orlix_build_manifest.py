@@ -761,6 +761,34 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
 
                 self.assertEqual(result, 1)
                 self.assertIn(f"manifest-write-failed {component}:source-prep", stdout.getvalue())
+                self.assertEqual([], list(manifest_path.parent.glob(f".{manifest_path.name}.*.tmp")))
+
+    def test_write_replaces_existing_manifest_atomically(self):
+        for component in ("linux", "mlibc", "coreutils"):
+            with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
+                manifest_root = Path(tmp) / "manifests"
+                manifest_path = manifest_root / "release" / component / "source-prep.json"
+                manifest_path.parent.mkdir(parents=True)
+                manifest_path.write_text("old manifest\n")
+
+                class Args:
+                    pass
+
+                Args.component = [component]
+                Args.manifest_root = manifest_root
+                Args.repo_root = REPO_ROOT
+                Args.profile = "release"
+                Args.requires = []
+                Args.stage = ["source-prep"]
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    result = self.module.write(Args)
+
+                self.assertEqual(result, 0)
+                self.assertIn(f"wrote: {component}:source-prep", stdout.getvalue())
+                self.assertEqual("source-prep", json.loads(manifest_path.read_text())["stage"])
+                self.assertEqual([], list(manifest_path.parent.glob(f".{manifest_path.name}.*.tmp")))
 
 
 if __name__ == "__main__":
