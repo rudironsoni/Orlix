@@ -97,6 +97,27 @@ class BuildManifestTests(unittest.TestCase):
             self.assertEqual(first["input_digest"], second["input_digest"])
             self.assertIsNone(self.module.manifest_miss_reason(first, second))
 
+    def test_hash_path_rejects_inputs_outside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(ValueError, "input-outside-repo"):
+                self.module.hash_path(root, "/private/tmp/outside-input")
+            with self.assertRaisesRegex(ValueError, "input-outside-repo"):
+                self.module.hash_path(root, "../outside-input")
+
+    def test_hash_path_accepts_absolute_inputs_inside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_file = root / "input.txt"
+            input_file.write_text("alpha\n")
+
+            digest = self.module.hash_path(root, str(input_file))
+
+            self.assertEqual(str(input_file), digest["path"])
+            self.assertTrue(digest["exists"])
+            self.assertEqual("file", digest["kind"])
+
+
     def test_audit_hits_after_write_and_misses_after_change(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

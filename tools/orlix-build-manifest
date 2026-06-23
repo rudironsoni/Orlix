@@ -140,8 +140,19 @@ def iter_files(path: Path) -> Iterable[Path]:
                 yield candidate
 
 
+def repo_owned_path(repo_root: Path, relative: str) -> Path:
+    candidate = Path(relative)
+    path = candidate if candidate.is_absolute() else repo_root / candidate
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(repo_root.resolve())
+    except ValueError as error:
+        raise ValueError(f"input-outside-repo: {relative}") from error
+    return path
+
+
 def hash_path(repo_root: Path, relative: str) -> dict[str, object]:
-    path = repo_root / relative
+    path = repo_owned_path(repo_root, relative)
     entry: dict[str, object] = {"path": relative, "exists": path.exists()}
     if not path.exists():
         return entry
