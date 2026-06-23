@@ -18596,3 +18596,61 @@ ORLIX-HARNESS-WARN: docs/plans/active/oci-derived-environments-virtio-plane/IMPL
 Open issue:
 
 - This checkpoint does not prove OrlixMLibC runtime conformance. The single-simulator runtime path now launches and cleans up correctly, but the controlled proof reaches a real mlibc test failure at `ansi/sscanf`. That failure must be triaged at the owning libc/kernel boundary before claiming the mlibc proof green.
+
+### 2026-06-23: OrlixMLibC `ansi/sscanf` locale failure narrowed
+
+Status: diagnostic evidence captured; no runtime-readiness claim.
+
+Current status marker: OrlixMLibC proof remains blocked on `de_DE.utf8` locale loading/selection. Single-simulator runtime launch and cleanup are working on `iPhone 17 Pro`; `iPhone 17` remains shut down.
+
+Scope:
+
+- Continued to use only `iPhone 17 Pro` (`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`) for simulator proof work.
+- Verified `iPhone 17` (`E65F0D05-980C-4368-8CDC-2D2BF3E05757`) remained shut down.
+- Kept proof runs serialized; no parallel mlibc/kselftest/Xcode workloads were started.
+
+Focused command:
+
+```sh
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
+xcrun simctl terminate 5E2E003E-F434-4B1F-8E5C-BED59BBC177D org.orlix.OrlixTerminal 2>/dev/null || true
+ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+  make -f OrlixMLibC/Makefile test PROFILE=release \
+  MLIBC_TEST_CASES='ansi/sscanf' \
+  MLIBC_TEST_RUN_TIMEOUT_SECONDS=180
+```
+
+Decoded guest-stream evidence from `Build/OrlixKernel/run/release/OrlixTerminal-runtime.log`:
+
+```text
+ORLIX-MLIBC-TEST-INIT
+1..2
+ok 1 - installed upstream mlibc test list is readable
+# exec /mlibc-tests/ansi-sscanf (ansi/sscanf)
+# ansi/sscanf exited with status 1
+not ok 2 - ansi/sscanf
+ORLIX-MLIBC-TEST-END
+```
+
+Triage result:
+
+- `Build/OrlixMLibC/src/mlibc-43ab07732cdf/tests/ansi/sscanf.c` contains one explicit `exit(1)` path: `setlocale(LC_ALL, "de_DE.utf8")` failure.
+- `Build/OrlixMLibC/locale-data/release/root/usr/lib/locale/de_DE.utf8` exists in host staging data.
+- `Build/OrlixMLibC/test-initramfs/release/OrlixMLibCTestInitramfs.bundle/initramfs.list` includes `/usr/lib/locale/...` directory and file entries.
+- The mlibc loader in `options/internal/generic/locale.cpp` searches `LOCPATH`, `/usr/lib/locale`, and `/usr/share/i18n/locales`.
+- Temporary diagnostic `LOCPATH=/usr/lib/locale` in `OrlixMLibC/Tests/mlibc_test_init.c` was tested and reverted. It did not fix the proof; it changed the focused run into a hang after the TAP plan and before `# exec`.
+
+Current blocker:
+
+- The mlibc proof blocker is now narrowed to locale loading/selection for `de_DE.utf8`, not simulator launch, app installation, or generic test-list packaging.
+- Next owning-layer work should inspect why mlibc `setlocale(LC_ALL, "de_DE.utf8")` returns null inside Orlix despite staged locale data. Candidate areas are OrlixMLibC locale-data packaging format, mlibc locale loader expectations, or Linux file/mmap/stat behavior used by the loader.
+
+Cleanup evidence:
+
+- After diagnostic runs, no `OrlixMLibC/Makefile`, `OrlixKernel/Makefile`, `ORLIX_KERNEL_RUN_TIMEOUT_SECONDS`, `simctl launch`, `log stream --style compact`, `OrlixTerminal`, or Orlix make processes remained.
+- Final simulator state:
+
+```text
+iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D) (Booted)
+iPhone 17 (E65F0D05-980C-4368-8CDC-2D2BF3E05757) (Shutdown)
+```
