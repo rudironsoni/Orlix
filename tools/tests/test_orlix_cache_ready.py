@@ -24,6 +24,23 @@ class CacheReadyTests(unittest.TestCase):
     def setUp(self):
         self.module = load_tool()
 
+    def test_default_stages_are_valid_manifest_stages(self):
+        manifest_tool = importlib.machinery.SourceFileLoader(
+            "orlix_build_manifest_for_cache_ready_test",
+            str(REPO_ROOT / "tools" / "orlix-build-manifest"),
+        ).load_module()
+        manifest_stages = {
+            component: {stage.name for stage in stages}
+            for component, stages in manifest_tool.STAGES.items()
+        }
+
+        for component, default_stages in self.module.DEFAULT_STAGES.items():
+            with self.subTest(component=component):
+                self.assertLessEqual(set(default_stages), manifest_stages[component])
+
+    def test_linux_default_stages_do_not_require_kselftest_package(self):
+        self.assertNotIn("kselftest-package", self.module.DEFAULT_STAGES["linux"])
+
     def write_manifest(self, root, profile, component, stage):
         path = Path(root) / "manifests" / profile / component / f"{stage}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
