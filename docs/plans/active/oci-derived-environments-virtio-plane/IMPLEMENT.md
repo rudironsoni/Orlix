@@ -17749,3 +17749,21 @@ rtk python3 .codex/hooks/compact_plan_check.py
 ```
 
 Results: cache-ready probes still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; `git diff --check` passed; `tools.tests.test_orlix_cache_ready` passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
+
+Current status:
+
+Linux, mlibc, and Coreutils cache-ready wrapper audits now forward the selected stage set to `tools/orlix-build-manifest`. A focused cache-ready check no longer audits unrelated stages in the same component, which reduces time and avoids unrelated stale/missing manifests while preserving reliability through the manifest tool's dependency audit. For example, mlibc release cache readiness now reports the selected default wrapper stages (`source-prep`, `compiler-rt`) rather than later unrelated stages. No generated Linux, mlibc, Coreutils, or build output trees were edited. Validation:
+
+```bash
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk git diff --check
+rtk python3 -m unittest tools.tests.test_orlix_cache_ready
+python3 -m unittest discover -q tools/tests
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: cache-ready probes still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; `git diff --check` passed; `tools.tests.test_orlix_cache_ready` passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
