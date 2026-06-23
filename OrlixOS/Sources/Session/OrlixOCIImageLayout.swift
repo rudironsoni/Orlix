@@ -1187,6 +1187,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "apparmor",
 			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
 			reason: "No AppArmor policy loading or enforcement proof exists for Orlix OCI-derived environments."
 		),
 		OrlixOCIRuntimeFeature(
@@ -1309,11 +1310,13 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "seccomp",
 			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
 			reason: "No seccomp filter loading or enforcement proof exists for Orlix OCI-derived environments."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "selinux",
 			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
 			reason: "No SELinux policy loading or enforcement proof exists for Orlix OCI-derived environments."
 		),
 		OrlixOCIRuntimeFeature(

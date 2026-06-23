@@ -17316,3 +17316,34 @@ PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" rtk err 
 - `.codex/rules/tests`: 5 tests pass.
 - `compact_plan_check.py`: pass.
 - Focused OrlixOS XCTest feature-report run completed without reported errors.
+
+## 2026-06-23 - OCI deterministic security rejections carry parser proof
+
+Current status:
+
+- Normalized OCI Runtime feature-report proof metadata for deterministic security-policy rejections:
+  - `apparmor`
+  - `seccomp`
+  - `selinux`
+- Each now reports `proof: "orlix:runtime_config_parser"`.
+- This keeps feature reporting aligned with parser-enforced deterministic rejection and avoids implying that security-policy loading or enforcement exists.
+- This is an OrlixOS feature-reporting change only.
+  - It does not add AppArmor, seccomp, or SELinux enforcement.
+  - It does not move security-policy semantics into OrlixOS.
+  - It keeps enforcement claims blocked until Linux-owned proof exists.
+
+Validation:
+
+```bash
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" rtk err xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON test
+```
+
+- `git diff --check`: pass.
+- `.codex/hooks/tests`: 32 tests pass.
+- `.codex/rules/tests`: 5 tests pass.
+- `compact_plan_check.py`: exits 0 with the known historical stale-status warning.
+- Focused OrlixOS XCTest feature-report run completed without reported errors.
