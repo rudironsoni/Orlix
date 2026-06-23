@@ -103,7 +103,7 @@ def audit_component(
 def readiness_errors(args: argparse.Namespace) -> list[str]:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
-    stages = tuple(args.stage or DEFAULT_STAGES[args.component])
+    stages = tuple(dict.fromkeys(args.stage or DEFAULT_STAGES[args.component]))
     stage_errors = stage_selection_errors(args.component, stages)
     if stage_errors:
         return stage_errors
@@ -146,7 +146,7 @@ def main(argv: list[str]) -> int:
             print(f"not ready: {error}", file=sys.stderr)
         return 1
 
-    stages = ", ".join(args.stage or DEFAULT_STAGES[args.component])
+    stages = ", ".join(tuple(dict.fromkeys(args.stage or DEFAULT_STAGES[args.component])))
     if command:
         print(f"skip: {args.component} {args.profile} cache ready ({stages})")
     else:
