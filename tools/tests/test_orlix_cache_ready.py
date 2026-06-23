@@ -149,6 +149,30 @@ class CacheReadyTests(unittest.TestCase):
 
             self.assertEqual(result, 1)
 
+    def test_unknown_stage_fails_even_when_manifest_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_root = root / "manifests"
+            self.write_manifest(manifest_root, "release", "linux", "typo")
+            args = self.module.parse_args(
+                [
+                    "--repo-root",
+                    str(REPO_ROOT),
+                    "--manifest-root",
+                    str(manifest_root),
+                    "--profile",
+                    "release",
+                    "--component",
+                    "linux",
+                    "--stage",
+                    "typo",
+                ]
+            )
+
+            errors = self.module.readiness_errors(args)
+
+            self.assertEqual(errors, ["stage-unknown linux typo"])
+
     def test_ready_command_mode_skips_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.write_manifest(tmp, "release", "coreutils", "source-prep")
