@@ -493,6 +493,41 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertIn("stage-unknown synthetic typo", output.getvalue())
 
+    def test_write_rejects_unknown_component(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(
+                    Namespace(
+                        repo_root=str(root),
+                        manifest_root=str(root / "manifests"),
+                        component=("typo",),
+                        stage=None,
+                        profile="release",
+                    )
+                )
+            self.assertEqual(result, 1)
+            self.assertIn("component-unknown typo", output.getvalue())
+            self.assertFalse((root / "manifests").exists())
+
+    def test_audit_rejects_unknown_component(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.audit(
+                    Namespace(
+                        repo_root=str(root),
+                        manifest_root=str(root / "manifests"),
+                        component=("typo",),
+                        stage=None,
+                        profile="release",
+                    )
+                )
+            self.assertEqual(result, 1)
+            self.assertIn("component-unknown typo", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
