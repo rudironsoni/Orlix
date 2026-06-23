@@ -17614,3 +17614,54 @@ Results:
 HANDOFF: cache manifest dependency freshness is now enforced. Current owner
 readiness for Linux, mlibc, and Coreutils remains fail-closed until local
 manifests/artifacts are refreshed.
+
+## 2026-06-23 - Recursive cache manifest dependency audit
+
+Current status: cache manifest dependency audits now walk dependency chains
+recursively. A selected Linux, mlibc, or Coreutils stage can no longer pass when
+its direct dependency manifest is fresh but that dependency's own manifest chain
+is missing, stale, or cyclic.
+
+Changes:
+
+- Made `dependency_miss_reasons` recursively visit dependency manifests.
+- Added `dependency-of <stage>` diagnostics for transitive dependency failures.
+- Added `dependency-cycle` diagnostics so malformed stage dependency graphs fail
+  loudly instead of looping or passing.
+- Added regression tests for a transitive missing dependency and a dependency
+  cycle.
+
+Validation:
+
+```bash
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+python3 -m unittest discover -q tools/tests
+make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+make -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk cache-ready PROFILE=release
+make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results:
+
+- `tools.tests.test_orlix_build_manifest`: 14 tests passed.
+- Synthetic transitive probe now fails as intended:
+  `AUDIT_C_WITH_B_PRESENT_A_MISSING 1` with
+  `dependency-of b dependency-missing a`.
+- `tools/tests`: passed (`TOOLS_TEST_RESULT:PASS`).
+- `.codex/hooks/tests`: 32 tests passed.
+- `.codex/rules/tests`: 5 tests passed.
+- `compact_plan_check.py`: exited 0 with the pre-existing historical
+  stale-status warning.
+- Linux cache readiness still fails closed because this checkout lacks Linux
+  manifests and the `OrlixKernel.xcframework` sentinel.
+- mlibc cache readiness still fails closed with
+  `mlibc:source-prep tool-changed`.
+- Coreutils cache readiness still fails closed on missing manifests/cache
+  outputs in this checkout.
+
+HANDOFF: cache dependency freshness is now recursive. Current owner readiness
+for Linux, mlibc, and Coreutils remains fail-closed until local manifests and
+artifacts are refreshed.
