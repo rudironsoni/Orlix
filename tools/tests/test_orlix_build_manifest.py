@@ -781,13 +781,25 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
                 Args.requires = []
                 Args.stage = ["source-prep"]
 
+                fsynced_dirs = []
+                original_fsync_directory = self.module.fsync_directory
+
+                def recording_fsync_directory(path):
+                    fsynced_dirs.append(path)
+                    original_fsync_directory(path)
+
                 stdout = io.StringIO()
-                with contextlib.redirect_stdout(stdout):
-                    result = self.module.write(Args)
+                try:
+                    self.module.fsync_directory = recording_fsync_directory
+                    with contextlib.redirect_stdout(stdout):
+                        result = self.module.write(Args)
+                finally:
+                    self.module.fsync_directory = original_fsync_directory
 
                 self.assertEqual(result, 0)
                 self.assertIn(f"wrote: {component}:source-prep", stdout.getvalue())
                 self.assertEqual("source-prep", json.loads(manifest_path.read_text())["stage"])
+                self.assertEqual([manifest_path.parent], fsynced_dirs)
                 self.assertEqual([], list(manifest_path.parent.glob(f".{manifest_path.name}.*.tmp")))
 
 
