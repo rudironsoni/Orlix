@@ -18866,3 +18866,55 @@ Current interpretation:
 - File visibility, read, and mmap evidence still points away from kernel filesystem routing.
 - Authoritative green proof is still missing because `LC_MESSAGES`, `LC_NUMERIC`, and therefore `LC_ALL` fail, and `make test` does not complete cleanly.
 - Do not claim OrlixMLibC proof green until `orlix/locale_probe` and the original upstream blocker are green through the Makefile proof path or an explicitly documented equivalent runtime proof.
+
+## 2026-06-23 Linux-Surface Locale Probe Expansion
+
+Boundary correction:
+
+- mlibc remains the oracle. No OrlixMLibC behavioral patch is present in this checkpoint.
+- The next diagnostic target is the Linux-facing surface consumed by mlibc locale loading, not mlibc internals.
+- Current worktree after cleanup has no `OrlixMLibC/Sources/patches/0004-*` patch.
+
+Linux-facing syscall path under test:
+
+- mlibc locale file loading uses normal Linux file semantics for locale files: open path, stat/fstat size, mmap the file read-only/private, and parse bytes at category-file offsets.
+- Existing `orlix/locale_probe` already covered path `stat`, `open`, `read`, and whole-file `mmap`.
+- The probe now also checks fd-backed `fstat`, validates the exact glibc category headers for the two failing files, and compares `pread` bytes with `mmap` bytes at every parsed offset for:
+  - `/usr/lib/locale/de_DE.utf8/LC_MESSAGES/SYS_LC_MESSAGES`
+  - `/usr/lib/locale/de_DE.utf8/LC_NUMERIC`
+
+Host-side/current initramfs evidence:
+
+```sh
+rtk make -f OrlixMLibC/Makefile __test-build PROFILE=release MLIBC_TEST_CASES='orlix/locale_probe'
+rtk make -f OrlixMLibC/Makefile __test-initramfs PROFILE=release MLIBC_TEST_CASES='orlix/locale_probe'
+```
+
+The rebuilt installed probe binary contains the new diagnostics:
+
+```text
+# LP FSTAT %s size=%lld mode=%o
+# LP HEADER %s magic=0x%08x count=%u
+# LP OFFSET %s index=%zu off=%u mmap=%02x pread=%02x
+```
+
+The rebuilt compressed initramfs also contains the same diagnostics, proving the current rootfs input was regenerated.
+
+Runtime caveat:
+
+- A direct `OrlixKernel/Makefile run` attempt with `ORLIX_KERNEL_TEST_INITRAMFS_INPUT=Build/OrlixMLibC/test-initramfs/release/OrlixMLibCTestInitramfs.bundle/rootfs/initramfs.cpio.gz` did not reach a fresh runtime log before interruption.
+- `Build/OrlixKernel/run/release/OrlixTerminal-runtime.log` remained stale during that attempt, so no runtime claim is made from it.
+- No Orlix build/simulator helper remained after cleanup.
+
+Next proof step:
+
+- Get the direct run target to stage and boot the current initramfs, then decode the new `# LP FSTAT`, `# LP HEADER`, and `# LP OFFSET` lines.
+- If those Linux-surface checks fail, fix the owning Linux path in `OrlixKernel/Sources/ports/orlix/...` or the OrlixOS/rootfs construction path.
+- If those checks pass while `setlocale()` still fails, continue tracing the next Linux-visible behavior mlibc consumes, without adding mlibc patches.
+
+### Current status / handoff - 2026-06-23
+
+- Latest tracked code mutation is the `orlix/locale_probe` Linux-surface diagnostic expansion.
+- It is intentionally test-side only: no mlibc behavioral patch is present.
+- Build/package evidence exists for the focused probe and initramfs; runtime evidence is still incomplete because the direct run did not reach a fresh runtime log before interruption.
+- Next agent action should continue from the direct run staging problem, not from mlibc patching.
