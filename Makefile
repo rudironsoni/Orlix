@@ -8,7 +8,7 @@ ORLIXOS_MAKE := $(MAKE) -f OrlixOS/Makefile
 TERMINAL_MAKE := $(MAKE) -f OrlixTerminal/Makefile
 PROFILE ?= release
 ORLIXOS_BASE_ROOT_TREE := $(CURDIR)/Build/OrlixOS/rootfs/$(PROFILE)/base-tree
-.PHONY: all help setup-env build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -22,8 +22,22 @@ help:
 	@printf '%s\n' '  OrlixOS/Makefile'
 	@printf '%s\n' '  OrlixTerminal/Makefile'
 
-setup-env xcodeproj:
-	@$(KERNEL_MAKE) $@
+setup-env: check-build-tools
+	@$(KERNEL_MAKE) setup-env
+
+check-build-tools:
+	@set -euo pipefail; \
+	if ! command -v brew >/dev/null 2>&1; then \
+		echo "Homebrew is required to check Orlix build tool dependencies; install Homebrew, then run: brew bundle --file Brewfile" >&2; \
+		exit 1; \
+	fi; \
+	if ! brew bundle check --file Brewfile; then \
+		echo "missing Orlix build tool dependencies; install them with: brew bundle --file Brewfile" >&2; \
+		exit 1; \
+	fi
+
+xcodeproj:
+	@$(KERNEL_MAKE) xcodeproj
 
 build:
 	@$(MAKE) clean
