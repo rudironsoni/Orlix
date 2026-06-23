@@ -18,6 +18,7 @@ LLVM_PROJECT_REF ?= llvmorg-22.1.6
 LLVM_PROJECT_COMMIT ?= fc4aad7b5db3fff421df9a9637605b9ca5667881
 MLIBC_UPSTREAM_DIR := $(REPO_ROOT)/Build/OrlixMLibC/upstream/mlibc-$(MLIBC_VERSION).git
 MLIBC_SRC_DIR := $(REPO_ROOT)/Build/OrlixMLibC/src/mlibc-$(MLIBC_VERSION)
+MLIBC_ORLIX_TEST_SRC_DIR := $(REPO_ROOT)/OrlixMLibC/Tests
 LLVM_PROJECT_UPSTREAM_DIR := $(REPO_ROOT)/Build/OrlixMLibC/upstream/llvm-project
 MLIBC_BUILD_DIR := $(REPO_ROOT)/Build/OrlixMLibC/build/$(PROFILE)
 MLIBC_SYSROOT := $(REPO_ROOT)/Build/OrlixMLibC/sysroot/$(PROFILE)
@@ -444,9 +445,12 @@ __test-build: build __build-compiler-rt
 	[ -s "$$sysroot/usr/lib/libc.a" ] || { echo "missing OrlixMLibC libc archive: $$sysroot/usr/lib/libc.a" >&2; exit 1; }; \
 	command -v "$(MLIBC_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package OrlixMLibC tests; set MLIBC_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
 	for test_name in $(MLIBC_TEST_CASES); do \
-		source="$(MLIBC_SRC_DIR)/tests/$$test_name.c"; \
+		case "$$test_name" in \
+			orlix/*) source="$(MLIBC_ORLIX_TEST_SRC_DIR)/$${test_name#orlix/}.c";; \
+			*) source="$(MLIBC_SRC_DIR)/tests/$$test_name.c";; \
+		esac; \
 		binary_name="$${test_name////-}"; \
-		[ -s "$$source" ] || { echo "missing upstream mlibc test source: $$source" >&2; exit 1; }; \
+		[ -s "$$source" ] || { echo "missing mlibc test source: $$source" >&2; exit 1; }; \
 		"$(MLIBC_CC)" $$cflags $$ldflags $$crt_flags "$$source" $$ldlibs -o "$$install_dir/mlibc-tests/$$binary_name"; \
 		"$(MLIBC_STRIP)" "$$install_dir/mlibc-tests/$$binary_name"; \
 		printf '%s:%s\n' "$$test_name" "/mlibc-tests/$$binary_name" >> "$$install_dir/mlibc-test-list.txt"; \
