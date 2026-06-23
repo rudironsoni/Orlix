@@ -5905,6 +5905,8 @@ extension OrlixTerminalSessionTests {
 			.implemented
 		)
 		XCTAssertEqual(report.feature(named: "seccomp")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "userNamespaceMappings")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "apparmor")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "selinux")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "ociBindMounts")?.status, .deterministicallyRejected)
@@ -5949,6 +5951,8 @@ extension OrlixTerminalSessionTests {
 			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
 		}
 		XCTAssertEqual(features["seccomp"]?.status, .deterministicallyRejected)
+		XCTAssertEqual(features["userNamespaceMappings"]?.status, .deterministicallyRejected)
+		XCTAssertEqual(features["idmappedMounts"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["selinux"]?.status, .deterministicallyRejected)
 	}
 

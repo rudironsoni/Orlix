@@ -1295,6 +1295,18 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Opening rtnetlink sockets is covered by Orlix kselftest."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "userNamespaceMappings",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI uidMappings and gidMappings are rejected until Orlix reports Linux-owned user namespace mapping support."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "idmappedMounts",
+			status: .deterministicallyRejected,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI idmapped mounts are rejected until Orlix reports Linux-owned idmapped mount support."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "seccomp",
 			status: .deterministicallyRejected,
 			reason: "No seccomp filter loading or enforcement proof exists for Orlix OCI-derived environments."

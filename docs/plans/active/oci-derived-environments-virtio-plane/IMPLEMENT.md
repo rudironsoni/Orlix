@@ -17281,3 +17281,38 @@ rtk python3 .codex/hooks/compact_plan_check.py
 - `.codex/hooks/tests`: 32 tests pass.
 - `.codex/rules/tests`: 5 tests pass.
 - `compact_plan_check.py`: pass.
+
+## 2026-06-23 - OCI feature report covers namespace/idmapped rejections
+
+Current status:
+
+- Extended OrlixOS OCI Runtime feature reporting to make two deterministic non-support claims explicit:
+  - `userNamespaceMappings`
+    - status: `deterministicallyRejected`
+    - proof: `orlix:runtime_config_parser`
+    - reason: OCI `uidMappings` and `gidMappings` are rejected until Orlix reports Linux-owned user namespace mapping support.
+  - `idmappedMounts`
+    - status: `deterministicallyRejected`
+    - proof: `orlix:runtime_config_parser`
+    - reason: OCI idmapped mounts are rejected until Orlix reports Linux-owned idmapped mount support.
+- This is an OrlixOS feature-reporting change only.
+  - It does not add namespace support.
+  - It does not add idmapped mount support.
+  - It does not move namespace or mount semantics into OrlixOS.
+  - It keeps the feature report aligned with the existing deterministic parser rejections instead of silently omitting these unsupported OCI surfaces.
+
+Validation:
+
+```bash
+rtk git diff --check
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" rtk err xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON test
+```
+
+- `git diff --check`: pass.
+- `.codex/hooks/tests`: 32 tests pass.
+- `.codex/rules/tests`: 5 tests pass.
+- `compact_plan_check.py`: pass.
+- Focused OrlixOS XCTest feature-report run completed without reported errors.
