@@ -17731,3 +17731,21 @@ rtk python3 .codex/hooks/compact_plan_check.py
 ```
 
 Results: cache-ready probes still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; `git diff --check` passed; `tools.tests.test_orlix_cache_ready` passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log and the now-addressed warning about needing a recent current-status marker.
+
+Current status:
+
+Linux, mlibc, and Coreutils cache-ready sentinel type checks now fail closed on directories or other non-file paths. `tools/orlix-cache-ready` now requires manifests and explicit `--requires` cache output sentinels to be regular files, returning `not-file <label>: <path>` when a path exists with the wrong type. This prevents stale directory placeholders from satisfying the high-level cache-ready gate for Linux manifests, mlibc manifests, Coreutils manifests, or Makefile-supplied output sentinels. No generated Linux, mlibc, Coreutils, or build output trees were edited. Validation:
+
+```bash
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk git diff --check
+rtk python3 -m unittest tools.tests.test_orlix_cache_ready
+python3 -m unittest discover -q tools/tests
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: cache-ready probes still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; `git diff --check` passed; `tools.tests.test_orlix_cache_ready` passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.

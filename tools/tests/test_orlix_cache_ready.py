@@ -173,6 +173,60 @@ class CacheReadyTests(unittest.TestCase):
 
             self.assertEqual(errors, ["stage-unknown linux typo"])
 
+    def test_manifest_directory_is_not_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_root = root / "manifests"
+            manifest = self.module.manifest_path(root, manifest_root, "release", "linux", "source-prep")
+            manifest.mkdir(parents=True)
+            args = self.module.parse_args(
+                [
+                    "--repo-root",
+                    str(root),
+                    "--manifest-root",
+                    str(manifest_root),
+                    "--profile",
+                    "release",
+                    "--component",
+                    "linux",
+                    "--stage",
+                    "source-prep",
+                ]
+            )
+
+            errors = self.module.readiness_errors(args)
+
+            self.assertIn(f"not-file linux/source-prep manifest: {manifest}", errors)
+
+    def test_required_cache_output_directory_is_not_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_root = root / "manifests"
+            required = root / "cache-output"
+            required.mkdir()
+            self.write_manifest(root, "release", "linux", "source-prep")
+            args = self.module.parse_args(
+                [
+                    "--repo-root",
+                    str(root),
+                    "--manifest-root",
+                    str(manifest_root),
+                    "--profile",
+                    "release",
+                    "--component",
+                    "linux",
+                    "--stage",
+                    "source-prep",
+                    "--requires",
+                    str(required),
+                ]
+            )
+            self.module.audit_component = lambda *unused: []
+
+            errors = self.module.readiness_errors(args)
+
+            self.assertEqual(errors, [f"not-file cache output: {required}"])
+
     def test_ready_command_mode_skips_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.write_manifest(tmp, "release", "coreutils", "source-prep")
