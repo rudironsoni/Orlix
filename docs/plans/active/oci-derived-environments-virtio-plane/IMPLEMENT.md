@@ -17448,3 +17448,44 @@ XCTest remains blocked only by the missing local
 HANDOFF: OCI Linux-policy feature-report truthfulness batch is implemented and
 non-Xcode validations pass; focused OrlixOS XCTest is blocked by the missing
 local `Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a` artifact.
+
+## 2026-06-23 - Cache manifest freshness audit tightening
+
+Current status: build cache manifest audits now compare freshness-critical
+manifest metadata instead of trusting `input_digest` alone. The audit remains
+resource-conscious by ignoring recorded `git_head` drift: component input file
+digests already cover source changes, while treating every commit hash movement
+as stale would force unrelated Linux, mlibc, and Coreutils rebuilds.
+
+Changes:
+
+- Added `manifest_miss_reason` and `freshness_environment` in
+  `tools/orlix-build-manifest`.
+- Audits now fail closed on manifest version, dependency, toolchain/profile
+  environment, aggregate input digest, input list, and optional input list
+  changes.
+- Audits intentionally exclude `git_head` from freshness comparison so unrelated
+  commits do not invalidate otherwise identical Linux, mlibc, or Coreutils cache
+  manifests.
+- Added tests for environment drift detection, `git_head` drift tolerance, and
+  audit-command environment drift reporting.
+
+Validation:
+
+```bash
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+python3 -m unittest discover -q tools/tests
+make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+```
+
+Results:
+
+- `tools.tests.test_orlix_build_manifest`: 7 tests passed.
+- `tools/tests`: passed (`TOOLS_TEST_RESULT:PASS`).
+- `OrlixMLibC/Makefile cache-ready`: still fails closed for the real stale
+  `mlibc:source-prep input-digest-changed` manifest, not merely because
+  `git_head` changed.
+
+HANDOFF: cache manifest audit now fails closed on freshness-critical metadata
+while ignoring commit-hash-only drift; current mlibc cache readiness remains
+blocked by a real `OrlixMLibC/Makefile` input digest change.

@@ -16,6 +16,7 @@ from typing import Iterable
 
 
 DEFAULT_COMPONENTS = ("linux", "mlibc", "coreutils")
+FRESHNESS_IGNORED_ENVIRONMENT_KEYS = frozenset(("git_head",))
 MANIFEST_VERSION = 1
 
 
@@ -218,6 +219,32 @@ def selected_stages(args: argparse.Namespace, component: str) -> tuple[StageSpec
     return tuple(stage for stage in stages if stage.name in wanted)
 
 
+def freshness_environment(manifest: dict[str, object]) -> dict[str, object]:
+    environment = manifest.get("environment")
+    if not isinstance(environment, dict):
+        return {}
+    return {
+        key: value
+        for key, value in environment.items()
+        if key not in FRESHNESS_IGNORED_ENVIRONMENT_KEYS
+    }
+
+
+def manifest_miss_reason(recorded: dict[str, object], current: dict[str, object]) -> str | None:
+    if freshness_environment(recorded) != freshness_environment(current):
+        return "environment-changed"
+    for key in (
+        "manifest_version",
+        "depends_on",
+        "input_digest",
+        "inputs",
+        "optional_inputs",
+    ):
+        if recorded.get(key) != current.get(key):
+            return f"{key.replace('_', '-')}-changed"
+    return None
+
+
 def audit(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
@@ -230,9 +257,9 @@ def audit(args: argparse.Namespace) -> int:
             if not recorded:
                 failed = True
                 print(f"miss: {component}:{stage.name} manifest-missing {path}")
-            elif recorded.get("input_digest") != current.get("input_digest"):
+            elif reason := manifest_miss_reason(recorded, current):
                 failed = True
-                print(f"miss: {component}:{stage.name} input-digest-changed {path}")
+                print(f"miss: {component}:{stage.name} {reason} {path}")
             else:
                 print(f"hit: {component}:{stage.name} {path}")
     return 1 if failed else 0
