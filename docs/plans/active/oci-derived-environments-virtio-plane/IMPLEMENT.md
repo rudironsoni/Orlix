@@ -17886,3 +17886,21 @@ rtk python3 .codex/hooks/compact_plan_check.py
 ```
 
 Results: dry-run `cache-manifest-write` commands include the intended `--requires` sentinels and did not write manifests; `git diff --check` passed; `tools.tests.test_orlix_build_manifest` ran 27 tests and passed; `tools/tests` discovery passed; Linux, mlibc, and Coreutils cache-ready probes still fail closed on the same missing/stale release manifests or output sentinels; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log. Real `cache-manifest-write` targets were intentionally not executed against this checkout because a present sentinel may legitimately update generated `Build/orlix-build-manifests`; the shared tool tests cover missing, non-file, and present sentinel behavior in scratch roots.
+
+Current status:
+
+OCI Runtime config unsupported-hook proof now covers every decoded lifecycle hook phase in the shared unsupported process-feature table: `hooks.prestart`, `hooks.createRuntime`, `hooks.createContainer`, `hooks.startContainer`, `hooks.poststart`, and `hooks.poststop`. This preserves the current deterministic rejection behavior for host-executed OCI hooks without claiming lifecycle hook support, and makes the rejection proof phase-complete instead of relying on a single representative hook. No OrlixKernel, OrlixMLibC, generated upstream, or generated build-output tree was edited. Validation:
+
+```bash
+rtk git diff --check
+rtk rg -n "hooks\\.prestart|hooks\\.createRuntime|hooks\\.createContainer|hooks\\.startContainer|hooks\\.poststart|hooks\\.poststop" OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+xcode-storage-doctor
+xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsUnsupportedProcessFeatures test
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: `git diff --check` passed; source grep confirms all six hook phases are rejected in `OrlixOCIImageLayout.swift` and covered in `OrlixTerminalSessionTests.swift`; `xcode-storage-doctor` exited 0; the focused `OrlixOSTests` XCTest was blocked before test execution by the already-known missing `Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a` linker input; `OrlixKernel` cache-ready still fails closed on missing release manifests and framework sentinels; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
