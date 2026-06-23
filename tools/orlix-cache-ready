@@ -83,14 +83,17 @@ def audit_component(
     ]
     for stage in stages:
         command.extend(["--stage", stage])
-    result = subprocess.run(
-        command,
-        cwd=repo_root,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=repo_root,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    except OSError as error:
+        return [f"manifest audit failed for {component}: {error}"]
     if result.returncode == 0:
         return []
 

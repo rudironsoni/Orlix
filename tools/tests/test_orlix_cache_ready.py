@@ -365,5 +365,24 @@ class CacheReadyTests(unittest.TestCase):
             self.assertEqual(marker.read_text(), "ran")
 
 
+    def test_manifest_audit_launch_error_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_root = Path(tmp) / "manifests"
+            for stage in ("source-prep", "headers-install", "kernel-archive"):
+                self.write_manifest(tmp, "release", "linux", stage)
+
+            with mock.patch.object(self.module.subprocess, "run", side_effect=OSError("audit unavailable")):
+                result = self.module.main([
+                    "--profile",
+                    "release",
+                    "--component",
+                    "linux",
+                    "--manifest-root",
+                    str(manifest_root),
+                ])
+
+            self.assertEqual(result, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
