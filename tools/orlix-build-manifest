@@ -216,6 +216,42 @@ def load_manifest(path: Path) -> dict[str, object] | None:
         return None
 
 
+def stage_map(stages: tuple[StageSpec, ...]) -> dict[str, StageSpec]:
+    return {stage.name: stage for stage in stages}
+
+
+def validate_stage_graph(stages: tuple[StageSpec, ...]) -> list[str]:
+    stages_by_name = stage_map(stages)
+    diagnostics: list[str] = []
+    for stage in stages_by_name.values():
+        for dependency in stage.depends_on:
+            if dependency not in stages_by_name:
+                diagnostics.append(f"dependency-unknown {stage.name} {dependency}")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(stage_name: str, path: tuple[str, ...]) -> None:
+        if stage_name in visited:
+            return
+        if stage_name in visiting:
+            cycle = path[path.index(stage_name) :] + (stage_name,)
+            diagnostics.append(f"dependency-cycle {' '.join(cycle)}")
+            return
+        visiting.add(stage_name)
+        stage = stages_by_name[stage_name]
+        for dependency in stage.depends_on:
+            if dependency in stages_by_name:
+                visit(dependency, path + (dependency,))
+        visiting.remove(stage_name)
+        visited.add(stage_name)
+
+    for stage_name in stages_by_name:
+        visit(stage_name, (stage_name,))
+
+    return diagnostics
+
+
 def selected_components(args: argparse.Namespace) -> tuple[str, ...]:
     return tuple(dict.fromkeys(args.component)) if args.component else DEFAULT_COMPONENTS
 
@@ -226,6 +262,17 @@ def selected_stages(args: argparse.Namespace, component: str) -> tuple[StageSpec
         return stages
     wanted = set(args.stage)
     return tuple(stage for stage in stages if stage.name in wanted)
+
+
+def selected_stage_diagnostics(args: argparse.Namespace, component: str) -> list[str]:
+    if not args.stage:
+        return []
+    stage_names = {stage.name for stage in STAGES[component]}
+    return [
+        f"stage-unknown {component} {stage_name}"
+        for stage_name in dict.fromkeys(args.stage)
+        if stage_name not in stage_names
+    ]
 
 
 def freshness_environment(manifest: dict[str, object]) -> dict[str, object]:
@@ -300,6 +347,16 @@ def audit(args: argparse.Namespace) -> int:
     manifest_root = Path(args.manifest_root)
     failed = False
     for component in selected_components(args):
+        graph_diagnostics = validate_stage_graph(STAGES[component])
+        if graph_diagnostics:
+            for diagnostic in graph_diagnostics:
+                print(diagnostic)
+            return 1
+        stage_diagnostics = selected_stage_diagnostics(args, component)
+        if stage_diagnostics:
+            for diagnostic in stage_diagnostics:
+                print(diagnostic)
+            return 1
         for stage in selected_stages(args, component):
             current = stage_manifest(repo_root, component, stage, args.profile)
             path = manifest_path(repo_root, manifest_root, args.profile, component, stage.name)
@@ -323,6 +380,16 @@ def write(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
     for component in selected_components(args):
+        graph_diagnostics = validate_stage_graph(STAGES[component])
+        if graph_diagnostics:
+            for diagnostic in graph_diagnostics:
+                print(diagnostic)
+            return 1
+        stage_diagnostics = selected_stage_diagnostics(args, component)
+        if stage_diagnostics:
+            for diagnostic in stage_diagnostics:
+                print(diagnostic)
+            return 1
         for stage in selected_stages(args, component):
             path = manifest_path(repo_root, manifest_root, args.profile, component, stage.name)
             path.parent.mkdir(parents=True, exist_ok=True)

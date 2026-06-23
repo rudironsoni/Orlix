@@ -17665,3 +17665,27 @@ Results:
 HANDOFF: cache dependency freshness is now recursive. Current owner readiness
 for Linux, mlibc, and Coreutils remains fail-closed until local manifests and
 artifacts are refreshed.
+2026-06-23 status: Linux, mlibc, and Coreutils cache-manifest dependency graph validation is now enforced before both audit and write operations. The shared `tools/orlix-build-manifest` substrate rejects unknown `depends_on` edges, dependency cycles, and unknown selected stage names before writing or accepting manifests, so a typo or invalid stage graph cannot silently no-op or refresh a cache hit for any of the three component gates. Added regression coverage in `tools/tests/test_orlix_build_manifest.py` using synthetic stages only; no generated Linux, mlibc, Coreutils, or build output trees were edited. Validation so far:
+
+```bash
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+python3 -m unittest discover -q tools/tests
+```
+
+Results: `tools.tests.test_orlix_build_manifest` ran 18 tests and passed; `tools/tests` discovery passed. Current readiness remains fail-closed until real release manifests/artifacts are refreshed: Linux is still blocked on missing release manifests and `OrlixKernel.xcframework`/archive outputs, mlibc release cache readiness is still expected to reject stale manifests after manifest-tool changes, and Coreutils release cache readiness still rejects missing manifests/cache outputs.
+
+Full checkpoint validation:
+
+```bash
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk git diff --check
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+python3 -m unittest discover -q tools/tests
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: cache-ready probes still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; `git diff --check` passed; `tools.tests.test_orlix_build_manifest` ran 18 tests and passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
