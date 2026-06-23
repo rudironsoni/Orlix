@@ -6171,6 +6171,12 @@ extension OrlixTerminalSessionTests {
 		let unsupportedProcessConfigs: [(String, String)] = [
 			("capabilities", #""capabilities": { "bounding": ["CAP_ORLIX_ONLY"] }"#),
 			("apparmorProfile", #""apparmorProfile": "container-default""#),
+			("hooks.prestart", #""hooks": { "prestart": [{ "path": "/usr/bin/prepare-container" }] }"#),
+			("hooks.createRuntime", #""hooks": { "createRuntime": [{ "path": "/usr/bin/create-runtime" }] }"#),
+			("hooks.createContainer", #""hooks": { "createContainer": [{ "path": "/usr/bin/create-container" }] }"#),
+			("hooks.startContainer", #""hooks": { "startContainer": [{ "path": "/usr/bin/start-container" }] }"#),
+			("hooks.poststart", #""hooks": { "poststart": [{ "path": "/usr/bin/poststart" }] }"#),
+			("hooks.poststop", #""hooks": { "poststop": [{ "path": "/usr/bin/poststop" }] }"#),
 			("selinuxLabel", #""selinuxLabel": "system_u:system_r:container_t:s0""#)
 		]
 
