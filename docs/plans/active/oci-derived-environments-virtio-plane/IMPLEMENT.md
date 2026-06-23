@@ -18339,3 +18339,80 @@ Validation caveats:
 Current status:
 
 The build-speed path now uses Homebrew-managed standard tools plus optional `ccache`/`sccache` compiler launchers for Linux, mlibc, and Coreutils. No custom Python cache/manifest system is active. Full target build validation remains a separate expensive checkpoint.
+## 2026-06-23 - Standard-tooling full build assertion
+
+Full release-build validation for the standard build-acceleration approach
+covered Linux/OrlixKernel, OrlixMLibC/mlibc, and OrlixOS/Coreutils through
+their owning Make targets. This checkpoint replaces the earlier unproven
+cache-manifest status with verified build evidence for the Homebrew +
+ccache/sccache + native build-system incrementality direction.
+
+Implementation fix found by the full build:
+
+- `OrlixMLibC/Makefile` now stages Meson build-time kernel headers under
+  `Build/OrlixMLibC/build-kernel-headers/$(PROFILE)/include` instead of under
+  `$(MLIBC_BUILD_DIR)`. The old path was deleted by `meson setup --wipe`,
+  causing release mlibc builds to fail before Meson could validate
+  `-Dlinux_kernel_headers`.
+
+Full build commands run outside the restrictive sandbox:
+
+- `brew bundle check --file Brewfile` passed before the full-build pass.
+- `make check-build-tools` passed before the full-build pass.
+- `make -f OrlixMLibC/Makefile build PROFILE=release` initially failed with
+  `linux_kernel_headers is not set to a valid path`; after the header staging
+  fix, it passed.
+- `make -f OrlixOS/Makefile build PROFILE=release` passed after completing the
+  owning Coreutils/Findutils/package build.
+- `make -f OrlixKernel/Makefile build PROFILE=release` passed and produced the
+  kernel XCFramework.
+- Repeat `make -f OrlixMLibC/Makefile build PROFILE=release` passed.
+- Repeat `make -f OrlixOS/Makefile build PROFILE=release` passed.
+- Repeat `make -f OrlixKernel/Makefile build PROFILE=release` passed; the
+  simulator framework build reported `SUCCEEDED` in 4431 ms.
+
+Artifact assertions:
+
+- `Build/OrlixMLibC/sysroot/release/usr/lib/libc.a` exists and is non-empty.
+- `Build/OrlixMLibC/compiler-rt/release/liborlix_compiler_rt.a` exists and is
+  non-empty.
+- `Build/OrlixOS/packages/release/usr/bin/bash` exists and is non-empty.
+- `Build/OrlixOS/packages/release/usr/bin/ls` exists and is non-empty.
+- `Build/OrlixOS/packages/release/usr/bin/cat` exists and is non-empty.
+- `Build/OrlixOS/packages/release/coreutils.proof` exists and is non-empty.
+- `Build/OrlixOS/packages/release/findutils.proof` exists and is non-empty.
+- `Build/OrlixOS/packages/release/usr/bin/getconf` exists and is non-empty.
+- `Build/OrlixOS/packages/release/usr/bin/getent` exists and is non-empty.
+- `Build/OrlixKernel/xcframework/OrlixKernel.xcframework` exists.
+- `Build/OrlixKernel/xcframework/OrlixKernel.xcframework/ios-arm64-simulator/OrlixKernel.framework/OrlixKernel`
+  exists and is non-empty.
+
+Compiler-cache evidence:
+
+- Cold mlibc release build after `ccache --zero-stats`: 484 cacheable calls,
+  2 hits, 482 misses, 28 uncacheable calls.
+- OrlixOS/Coreutils pass after resumed/repeated build work: 2587 cacheable
+  calls, 890 hits, 1697 misses, 1652 uncacheable calls.
+- After full kernel build: 3473 cacheable calls, 890 hits, 2583 misses,
+  1652 uncacheable calls.
+- After repeating mlibc, OrlixOS, and kernel release builds, ccache stats
+  remained at 3473 cacheable calls, 890 hits, and 2583 misses, which shows the
+  owning build systems avoided additional compiler work on the repeat pass.
+
+Harness validation:
+
+- `rtk git diff --check` passed.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed, 5 tests.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed, 32 tests.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known
+  historical warning about stale pending/blocked status in this implementation
+  log.
+
+Current status:
+
+Linux/OrlixKernel, OrlixMLibC/mlibc, and OrlixOS/Coreutils full release builds
+have passed with the standard build-acceleration wiring, and the repeat-build
+pass verified native incrementality without additional compiler calls. This is
+build reliability evidence only; it does not claim product runtime readiness,
+upstream Linux conformance, libc conformance, Coreutils test suite conformance,
+or OCI runtime proof.
