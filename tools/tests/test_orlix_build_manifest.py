@@ -145,6 +145,57 @@ class BuildManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "input-outside-repo"):
                 self.module.hash_path(root, "input")
 
+    def test_manifest_path_rejects_manifest_root_outside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside_tmp:
+            root = Path(tmp)
+            manifest_root = Path(outside_tmp) / "manifests"
+
+            with self.assertRaisesRegex(ValueError, "manifest-root-outside-repo"):
+                self.module.manifest_path(root, manifest_root, "release", "linux", "source-prep")
+
+    def test_audit_rejects_manifest_root_outside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside_tmp:
+            root = Path(tmp)
+            manifest_root = Path(outside_tmp) / "manifests"
+
+            class Args:
+                pass
+
+            Args.repo_root = root
+            Args.manifest_root = manifest_root
+            Args.profile = "release"
+            Args.component = ["linux"]
+            Args.stage = ["source-prep"]
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.audit(Args)
+
+            self.assertEqual(1, result)
+            self.assertIn("manifest-root-outside-repo", output.getvalue())
+
+    def test_write_rejects_manifest_root_outside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside_tmp:
+            root = Path(tmp)
+            manifest_root = Path(outside_tmp) / "manifests"
+
+            class Args:
+                pass
+
+            Args.repo_root = root
+            Args.manifest_root = manifest_root
+            Args.profile = "release"
+            Args.component = ["linux"]
+            Args.stage = ["source-prep"]
+            Args.requires = []
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(Args)
+
+            self.assertEqual(1, result)
+            self.assertIn("manifest-root-outside-repo", output.getvalue())
+
 
     def test_audit_hits_after_write_and_misses_after_change(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -447,7 +498,8 @@ class BuildManifestTests(unittest.TestCase):
     def test_audit_treats_directory_manifest_as_miss(self):
         for component in ("linux", "mlibc", "coreutils"):
             with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
-                manifest_root = Path(tmp) / "manifests"
+                root = Path(tmp)
+                manifest_root = root / "manifests"
                 manifest_path = manifest_root / "release" / component / "source-prep.json"
                 manifest_path.mkdir(parents=True)
 
@@ -456,7 +508,7 @@ class BuildManifestTests(unittest.TestCase):
 
                 Args.component = [component]
                 Args.manifest_root = manifest_root
-                Args.repo_root = REPO_ROOT
+                Args.repo_root = root
                 Args.profile = "release"
                 Args.stage = ["source-prep"]
 
@@ -470,7 +522,8 @@ class BuildManifestTests(unittest.TestCase):
     def test_audit_treats_non_object_manifest_json_as_miss(self):
         for component, manifest_text in (("linux", '"scalar"'), ("mlibc", "[]"), ("coreutils", "null")):
             with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
-                manifest_root = Path(tmp) / "manifests"
+                root = Path(tmp)
+                manifest_root = root / "manifests"
                 manifest_path = manifest_root / "release" / component / "source-prep.json"
                 manifest_path.parent.mkdir(parents=True)
                 manifest_path.write_text(manifest_text + "\n")
@@ -480,7 +533,7 @@ class BuildManifestTests(unittest.TestCase):
 
                 Args.component = [component]
                 Args.manifest_root = manifest_root
-                Args.repo_root = REPO_ROOT
+                Args.repo_root = root
                 Args.profile = "release"
                 Args.stage = ["source-prep"]
 
@@ -890,7 +943,8 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
     def test_write_rejects_directory_manifest_path(self):
         for component in ("linux", "mlibc", "coreutils"):
             with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
-                manifest_root = Path(tmp) / "manifests"
+                root = Path(tmp)
+                manifest_root = root / "manifests"
                 manifest_path = manifest_root / "release" / component / "source-prep.json"
                 manifest_path.mkdir(parents=True)
 
@@ -899,7 +953,7 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
 
                 Args.component = [component]
                 Args.manifest_root = manifest_root
-                Args.repo_root = REPO_ROOT
+                Args.repo_root = root
                 Args.profile = "release"
                 Args.requires = []
                 Args.stage = ["source-prep"]
@@ -915,7 +969,8 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
     def test_write_replaces_existing_manifest_atomically(self):
         for component in ("linux", "mlibc", "coreutils"):
             with self.subTest(component=component), tempfile.TemporaryDirectory() as tmp:
-                manifest_root = Path(tmp) / "manifests"
+                root = Path(tmp)
+                manifest_root = root / "manifests"
                 manifest_path = manifest_root / "release" / component / "source-prep.json"
                 manifest_path.parent.mkdir(parents=True)
                 manifest_path.write_text("old manifest\n")
@@ -925,7 +980,7 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
 
                 Args.component = [component]
                 Args.manifest_root = manifest_root
-                Args.repo_root = REPO_ROOT
+                Args.repo_root = root
                 Args.profile = "release"
                 Args.requires = []
                 Args.stage = ["source-prep"]
