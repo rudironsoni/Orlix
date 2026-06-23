@@ -256,6 +256,10 @@ def selected_components(args: argparse.Namespace) -> tuple[str, ...]:
     return tuple(dict.fromkeys(args.component)) if args.component else DEFAULT_COMPONENTS
 
 
+def selected_component_diagnostics(components: tuple[str, ...]) -> list[str]:
+    return [f"component-unknown {component}" for component in components if component not in STAGES]
+
+
 def selected_stages(args: argparse.Namespace, component: str) -> tuple[StageSpec, ...]:
     stages = STAGES[component]
     if not args.stage:
@@ -345,8 +349,14 @@ def dependency_miss_reasons(
 def audit(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
+    components = selected_components(args)
+    component_diagnostics = selected_component_diagnostics(components)
+    if component_diagnostics:
+        for diagnostic in component_diagnostics:
+            print(diagnostic)
+        return 1
     failed = False
-    for component in selected_components(args):
+    for component in components:
         graph_diagnostics = validate_stage_graph(STAGES[component])
         if graph_diagnostics:
             for diagnostic in graph_diagnostics:
@@ -379,7 +389,13 @@ def audit(args: argparse.Namespace) -> int:
 def write(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
-    for component in selected_components(args):
+    components = selected_components(args)
+    component_diagnostics = selected_component_diagnostics(components)
+    if component_diagnostics:
+        for diagnostic in component_diagnostics:
+            print(diagnostic)
+        return 1
+    for component in components:
         graph_diagnostics = validate_stage_graph(STAGES[component])
         if graph_diagnostics:
             for diagnostic in graph_diagnostics:
