@@ -395,5 +395,104 @@ class BuildManifestTests(unittest.TestCase):
             self.assertIn("dependency-cycle a", output.getvalue())
 
 
+class BuildManifestWriteGraphTests(unittest.TestCase):
+    def setUp(self) -> None:
+        loader = SourceFileLoader("orlix_build_manifest_write_graph", str(MODULE_PATH))
+        spec = spec_from_loader("orlix_build_manifest_write_graph", loader)
+        assert spec is not None
+        module = module_from_spec(spec)
+        sys.modules["orlix_build_manifest_write_graph"] = module
+        loader.exec_module(module)
+        self.module = module
+
+    def test_write_rejects_unknown_dependency_graph(self) -> None:
+        self.module.STAGES["synthetic"] = (
+            self.module.StageSpec("payload", ("input",), depends_on=("missing",)),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").write_text("payload\n")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(
+                    Namespace(
+                        repo_root=str(root),
+                        manifest_root=str(root / "manifests"),
+                        component=("synthetic",),
+                        stage="payload",
+                        profile="release",
+                    )
+                )
+            self.assertEqual(result, 1)
+            self.assertIn("dependency-unknown payload missing", output.getvalue())
+            self.assertFalse((root / "manifests" / "release" / "synthetic" / "payload.json").exists())
+
+    def test_write_rejects_dependency_cycle_graph(self) -> None:
+        self.module.STAGES["synthetic"] = (
+            self.module.StageSpec("a", ("input",), depends_on=("b",)),
+            self.module.StageSpec("b", ("input",), depends_on=("a",)),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").write_text("payload\n")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(
+                    Namespace(
+                        repo_root=str(root),
+                        manifest_root=str(root / "manifests"),
+                        component=("synthetic",),
+                        stage="a",
+                        profile="release",
+                    )
+                )
+            self.assertEqual(result, 1)
+            self.assertIn("dependency-cycle", output.getvalue())
+            self.assertFalse((root / "manifests" / "release" / "synthetic" / "a.json").exists())
+
+    def test_write_rejects_unknown_selected_stage(self) -> None:
+        self.module.STAGES["synthetic"] = (
+            self.module.StageSpec("payload", ("input",)),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").write_text("payload\n")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.write(
+                    Namespace(
+                        repo_root=str(root),
+                        manifest_root=str(root / "manifests"),
+                        component=("synthetic",),
+                        stage=("payload", "typo"),
+                        profile="release",
+                    )
+                )
+            self.assertEqual(result, 1)
+            self.assertIn("stage-unknown synthetic typo", output.getvalue())
+            self.assertFalse((root / "manifests" / "release" / "synthetic" / "payload.json").exists())
+
+    def test_audit_rejects_unknown_selected_stage(self) -> None:
+        self.module.STAGES["synthetic"] = (
+            self.module.StageSpec("payload", ("input",)),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input").write_text("payload\n")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = self.module.audit(
+                    Namespace(
+                        repo_root=str(root),
+                        manifest_root=str(root / "manifests"),
+                        component=("synthetic",),
+                        stage=("payload", "typo"),
+                        profile="release",
+                    )
+                )
+            self.assertEqual(result, 1)
+            self.assertIn("stage-unknown synthetic typo", output.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
