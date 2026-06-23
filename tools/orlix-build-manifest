@@ -255,6 +255,31 @@ def manifest_miss_reason(recorded: dict[str, object], current: dict[str, object]
     return None
 
 
+def dependency_miss_reasons(
+    repo_root: Path,
+    manifest_root: Path,
+    profile: str,
+    component: str,
+    stage: StageSpec,
+) -> list[str]:
+    stages = {candidate.name: candidate for candidate in STAGES[component]}
+    misses = []
+    for dependency in stage.depends_on:
+        dependency_stage = stages.get(dependency)
+        if dependency_stage is None:
+            misses.append(f"dependency-unknown {dependency}")
+            continue
+        path = manifest_path(repo_root, manifest_root, profile, component, dependency)
+        recorded = load_manifest(path)
+        if not recorded:
+            misses.append(f"dependency-missing {dependency} {path}")
+            continue
+        current = stage_manifest(repo_root, component, dependency_stage, profile)
+        if reason := manifest_miss_reason(recorded, current):
+            misses.append(f"dependency-stale {dependency} {reason} {path}")
+    return misses
+
+
 def audit(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
@@ -270,6 +295,10 @@ def audit(args: argparse.Namespace) -> int:
             elif reason := manifest_miss_reason(recorded, current):
                 failed = True
                 print(f"miss: {component}:{stage.name} {reason} {path}")
+            elif dependency_misses := dependency_miss_reasons(repo_root, manifest_root, args.profile, component, stage):
+                failed = True
+                for reason in dependency_misses:
+                    print(f"miss: {component}:{stage.name} {reason}")
             else:
                 print(f"hit: {component}:{stage.name} {path}")
     return 1 if failed else 0
