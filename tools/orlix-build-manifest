@@ -376,7 +376,6 @@ def manifest_miss_reason(recorded: dict[str, object], current: dict[str, object]
     for key in (
         "manifest_version",
         "depends_on",
-        "tool",
         "input_digest",
         "inputs",
         "optional_inputs",

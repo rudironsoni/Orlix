@@ -95,7 +95,7 @@ class BuildManifestTests(unittest.TestCase):
             second = self.module.stage_manifest(root, "sample", stage, "release")
 
             self.assertEqual(first["input_digest"], second["input_digest"])
-            self.assertEqual(self.module.manifest_miss_reason(first, second), "tool-changed")
+            self.assertIsNone(self.module.manifest_miss_reason(first, second))
 
     def test_audit_hits_after_write_and_misses_after_change(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -179,7 +179,7 @@ class BuildManifestTests(unittest.TestCase):
 
         self.assertIsNone(self.module.manifest_miss_reason(recorded, current))
 
-    def test_manifest_miss_reason_detects_tool_drift(self):
+    def test_manifest_miss_reason_ignores_tool_provenance_drift(self):
         current = {
             "manifest_version": 1,
             "depends_on": ["source-prep"],
@@ -194,7 +194,7 @@ class BuildManifestTests(unittest.TestCase):
 
         self.assertEqual(
             self.module.manifest_miss_reason(recorded, current),
-            "tool-changed",
+            None,
         )
 
     def test_audit_misses_when_recorded_environment_changes(self):
@@ -227,7 +227,7 @@ class BuildManifestTests(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertIn("environment-changed", output.getvalue())
 
-    def test_audit_misses_when_manifest_tool_changes(self):
+    def test_audit_hits_when_only_manifest_tool_provenance_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "input").mkdir()
@@ -254,8 +254,8 @@ class BuildManifestTests(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 result = self.module.audit(args)
 
-            self.assertEqual(result, 1)
-            self.assertIn("tool-changed", output.getvalue())
+            self.assertEqual(result, 0)
+            self.assertIn("hit: test:sample", output.getvalue())
 
     def test_audit_misses_when_dependency_manifest_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
