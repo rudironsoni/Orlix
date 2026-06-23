@@ -192,7 +192,14 @@ def stage_manifest(repo_root: Path, component: str, stage: StageSpec, profile: s
         "optional_inputs": [hash_path(repo_root, path) for path in stage.optional_inputs],
     }
     payload["input_digest"] = sha256_bytes(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(
+            {
+                "inputs": payload["inputs"],
+                "optional_inputs": payload["optional_inputs"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
     )
     return payload
 
