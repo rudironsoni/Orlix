@@ -18802,3 +18802,67 @@ Current status marker: OrlixMLibC locale proof is still blocked. The next fix
 must be a durable OrlixMLibC source/patch input after comparing the upstream
 mlibc category parser behavior for `LC_MESSAGES` and `LC_NUMERIC` against the
 Debian `locales-all` category files.
+## 2026-06-23 Current OrlixMLibC Locale Proof Checkpoint
+
+Context:
+
+- Work stayed on the OCI-derived environments plan and its dependency proof path for Linux, OrlixMLibC, and Coreutils.
+- No durable edits were made directly to generated upstream trees.
+- `Build/OrlixMLibC/src/mlibc-43ab07732cdf` was refreshed through `OrlixMLibC/Makefile` and now contains only the expected committed OrlixMLibC patch diffs from `OrlixMLibC/Sources/patches/0001-*` through `0003-*`.
+- A temporary diagnostic patch under `OrlixMLibC/Sources/patches/0004-*` was tried, then removed before this checkpoint because the useful evidence did not justify keeping diagnostic instrumentation.
+
+Single-simulator discipline:
+
+- Selected simulator remained `iPhone 17 Pro` (`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`).
+- Plain `iPhone 17` (`E65F0D05-980C-4368-8CDC-2D2BF3E05757`) was explicitly shut down before diagnostic launches.
+- No stale Orlix proof helpers remained after cleanup:
+
+```sh
+rtk proxy pgrep -fl 'OrlixMLibC/Makefile|OrlixKernel/Makefile|ORLIX_KERNEL_RUN_TIMEOUT_SECONDS|simctl launch|log stream --style compact|OrlixTerminal.app/OrlixTerminal'
+```
+
+Focused proof commands run:
+
+```sh
+rtk make -f OrlixMLibC/Makefile __test-build PROFILE=release MLIBC_TEST_CASES='orlix/locale_probe'
+rtk make -f OrlixMLibC/Makefile __test-initramfs PROFILE=release MLIBC_TEST_CASES='orlix/locale_probe'
+```
+
+Focused `make test` was also attempted:
+
+```sh
+ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+  rtk make -f OrlixMLibC/Makefile test PROFILE=release \
+  MLIBC_TEST_CASES='orlix/locale_probe' \
+  MLIBC_TEST_RUN_TIMEOUT_SECONDS=180
+```
+
+Result:
+
+- The wrapper still stalled after emitting guest output and required exact stale-helper cleanup.
+- Decoded runtime output from `Build/OrlixKernel/run/release/OrlixTerminal-runtime.log` still showed:
+
+```text
+1..2
+ok 1 - installed upstream mlibc test list is rea...
+# LP SET LC_COLLATE OK de_DE.utf8
+# LP SET LC_CTYPE OK de_DE
+# LP SET LC_MESSAGES FAIL errno=0 Success
+# LP SET LC_MONETARY OK de_DE
+# LP SET LC_NUMERIC FAIL errno=0 Success
+# LP SET LC_TIME OK de_DE
+# LP SET LC_ALL FAIL errno=0 Success
+```
+
+Additional current-state source checks:
+
+- `LC_MESSAGES/SYS_LC_MESSAGES` has magic `0x20031110`, count `5`, and five NUL-terminated strings: yes expression, no expression, yes string, no string, and `UTF-8`.
+- `LC_NUMERIC` has magic `0x20031114`, count `6`, and entries for decimal point, thousands separator, grouping, wide decimal point, wide thousands separator, and `UTF-8`.
+- Current generated mlibc `numeric_parser` already has six parser entries, including the two wide-character values and codeset. The earlier four-entry parser note is stale for the current checkout.
+
+Current interpretation:
+
+- This remains an OrlixMLibC/mlibc locale loader blocker, not an OrlixKernel VFS/syscall blocker.
+- File visibility, read, and mmap evidence still points away from kernel filesystem routing.
+- Authoritative green proof is still missing because `LC_MESSAGES`, `LC_NUMERIC`, and therefore `LC_ALL` fail, and `make test` does not complete cleanly.
+- Do not claim OrlixMLibC proof green until `orlix/locale_probe` and the original upstream blocker are green through the Makefile proof path or an explicitly documented equivalent runtime proof.
