@@ -23,6 +23,7 @@ MLIBC_BUILD_DIR := $(REPO_ROOT)/Build/OrlixMLibC/build/$(PROFILE)
 MLIBC_SYSROOT := $(REPO_ROOT)/Build/OrlixMLibC/sysroot/$(PROFILE)
 MLIBC_CROSS_FILE := $(REPO_ROOT)/Build/OrlixMLibC/cross/$(PROFILE)-orlix-aarch64-linux.cross
 MLIBC_NATIVE_FILE := $(REPO_ROOT)/Build/OrlixMLibC/cross/$(PROFILE)-host.native
+MLIBC_MESON_CONFIG_STAMP := $(MLIBC_BUILD_DIR)/.orlix-meson-compiler-config
 MLIBC_TARGET_INCLUDE_DIR := $(REPO_ROOT)/Build/OrlixMLibC/target-include/$(PROFILE)
 MLIBC_TARGET_ARCH_DEFS := $(MLIBC_TARGET_INCLUDE_DIR)/mlibc/arch-defs.hpp
 MLIBC_PATCH_DIR := $(PROJECT_DIR)/Sources/patches
@@ -319,7 +320,35 @@ __build: __write-cross-file
 	mkdir -p "$(dir $(MLIBC_BUILD_KERNEL_HEADERS))"; \
 	cp -R "$(MLIBC_KERNEL_HEADERS)" "$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	[ -d "$(MLIBC_BUILD_KERNEL_HEADERS)" ] || { echo "missing OrlixMLibC build-local Linux UAPI headers: $(MLIBC_BUILD_KERNEL_HEADERS)" >&2; exit 1; }; \
-	if [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ]; then \
+	meson_config_tmp="$(MLIBC_BUILD_DIR)/.orlix-meson-compiler-config.tmp"; \
+	{ \
+		printf 'profile=%s\n' "$(PROFILE)"; \
+		printf 'launcher=%s\n' "$(ORLIX_COMPILER_LAUNCHER)"; \
+		printf 'cc=%s\n' "$(MLIBC_CC)"; \
+		printf 'cxx=%s\n' "$(MLIBC_CXX)"; \
+		printf 'host_cc=%s\n' "$(MLIBC_HOST_CC)"; \
+		printf 'host_cxx=%s\n' "$(MLIBC_HOST_CXX)"; \
+		printf 'host_sdkroot=%s\n' "$(MLIBC_HOST_SDKROOT)"; \
+		printf 'target=%s\n' "aarch64-linux-gnu"; \
+		printf 'page_size=%s\n' "$(ORLIX_OS_LINUX_PAGE_SIZE)"; \
+	} > "$$meson_config_tmp"; \
+	if [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ] && { [ ! -s "$(MLIBC_MESON_CONFIG_STAMP)" ] || ! cmp -s "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; }; then \
+		echo "OrlixMLibC Meson compiler configuration changed; wiping Meson build directory"; \
+		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --wipe "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
+			--cross-file "$(MLIBC_CROSS_FILE)" \
+			--native-file "$(MLIBC_NATIVE_FILE)" \
+			--prefix /usr \
+			-Ddefault_library=static \
+			-Dheaders_only=false \
+			-Dno_headers=false \
+			-Dbuild_tests=false \
+			-Dlibgcc_dependency=false \
+			-Dlinux_option=enabled \
+			-Dposix_option=enabled \
+			-Dglibc_option=enabled \
+			-Dbsd_option=enabled \
+			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
+	elif [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ]; then \
 		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --reconfigure "$(MLIBC_BUILD_DIR)" \
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
@@ -350,6 +379,7 @@ __build: __write-cross-file
 			-Dbsd_option=enabled \
 			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	fi; \
+	mv "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; \
 	"$(MESON)" compile -C "$(MLIBC_BUILD_DIR)"; \
 	DESTDIR="$(MLIBC_SYSROOT)" "$(MESON)" install -C "$(MLIBC_BUILD_DIR)"; \
 	$(MAKE) -f "$(PROJECT_DIR)/Makefile" __build-compiler-rt PROFILE="$(PROFILE)"; \

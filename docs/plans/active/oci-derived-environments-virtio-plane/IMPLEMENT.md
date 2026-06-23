@@ -18294,3 +18294,48 @@ Full build dry-run note:
 Current status:
 
 The custom Python cache/manifest layer has been removed from the build-speed path. Linux, mlibc, and Coreutils are now planned and wired around standard build-system incrementality plus optional `ccache`/`sccache` compiler launchers. Lightweight parse and harness validation passed; full build validation still requires a writable external Xcode cache environment and the owning mlibc build artifact.
+
+## 2026-06-23 - Standard build acceleration package management
+
+The build-speed correction now uses standard developer package management and compiler-cache tooling instead of custom Orlix cache metadata.
+
+Implementation changes:
+
+- Added a root `Brewfile` as the macOS/Linux developer dependency declaration for Orlix build acceleration and package bootstrap tools.
+- Added root `make check-build-tools`, and made `make setup-env` run it before the existing OrlixKernel setup path. The check uses `brew bundle check --file Brewfile` and tells the developer to run `brew bundle --file Brewfile` when dependencies are missing.
+- Installed the missing declared formulae through `brew bundle install --file Brewfile`: `ccache`, `flex`, and `sccache`.
+- Added deterministic Kbuild identity defaults for cache effectiveness:
+  - `ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP ?= 1970-01-01 00:00:00 UTC`
+  - `ORLIX_KERNEL_KBUILD_BUILD_USER ?= orlix`
+  - `ORLIX_KERNEL_KBUILD_BUILD_HOST ?= orlix`
+- Passed the deterministic Kbuild identity through existing OrlixKernel Kbuild invocations that use the optional compiler launcher.
+- Added an OrlixMLibC Meson compiler-configuration stamp at `$(MLIBC_BUILD_DIR)/.orlix-meson-compiler-config`. It records only the Meson compiler tuple: launcher, target compilers, host compilers, SDK root, profile, target triple, and page size.
+- OrlixMLibC now uses `meson setup --wipe` when an existing Meson build dir has no compiler-configuration stamp or the recorded tuple changed; otherwise it keeps the build dir and uses `meson setup --reconfigure`.
+- Added a Coreutils build check that an explicit `ORLIX_COMPILER_LAUNCHER` is executable before passing it through `CC`.
+
+Validation:
+
+- `brew bundle check --file Brewfile` passed outside the sandbox: all Brewfile dependencies are satisfied.
+- `make check-build-tools` passed outside the sandbox.
+- `command -v ccache` resolves to `/opt/homebrew/bin/ccache`.
+- `command -v sccache` resolves to `/opt/homebrew/bin/sccache`.
+- `ccache --zero-stats`; two repeated `ccache clang` compiles of a temporary C file; `ccache --show-stats` reported 2 cacheable calls, 1 direct hit, and 1 miss.
+- Two repeated `sccache clang` compiles of the same temporary C file completed and `sccache --show-stats` reported the expected two compile requests with one hit and one miss.
+- `rtk rg -n "ORLIX_BUILD_MANIFEST|orlix-build-manifest|orlix-cache-ready|cache-manifest-write|cache-ready|cache-audit|__build-cache-gated|__coreutils-cache-gated" Makefile OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk OrlixMLibC/Makefile OrlixOS/Makefile OrlixOS/Sources/make tools docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md` returned no matches.
+- `rtk make help PROFILE=debug` passed.
+- `rtk make -f OrlixKernel/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=` passed.
+- `rtk make -f OrlixKernel/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=/usr/bin/true` passed.
+- `rtk make -f OrlixMLibC/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=` passed.
+- `rtk make -f OrlixMLibC/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=/usr/bin/true` passed.
+- `rtk make -n -f OrlixMLibC/Makefile build PROFILE=debug ORLIX_COMPILER_LAUNCHER=/usr/bin/true` passed.
+- `rtk make -f OrlixOS/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=/usr/bin/true` passed.
+
+Validation caveats:
+
+- `rtk brew bundle check --file Brewfile` and sandboxed `rtk make check-build-tools` still fail inside the restrictive sandbox because Homebrew's external cache path is not writable there: `external cache error: /Volumes/1TB/Xcode/Caches is not writable`. The same checks pass outside the sandbox.
+- The ccache and sccache hit checks used a temporary Clang compile to prove tool behavior. They do not claim full OrlixKernel, OrlixMLibC, or Coreutils build completion.
+- Cache statistics are acceleration evidence only. Correctness remains owned by Linux Kbuild, Meson/Ninja, Autotools/Make, and their tests.
+
+Current status:
+
+The build-speed path now uses Homebrew-managed standard tools plus optional `ccache`/`sccache` compiler launchers for Linux, mlibc, and Coreutils. No custom Python cache/manifest system is active. Full target build validation remains a separate expensive checkpoint.

@@ -43,6 +43,7 @@ $(ORLIXOS_COREUTILS_PROOF): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_ACL_PROO
 	[ -d "$$headers" ] || { echo "missing Orlix Linux UAPI headers: $$headers" >&2; exit 1; }; \
 	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_CC)" >/dev/null 2>&1 || { echo "clang is required to build coreutils; set ORLIXOS_CC=/path/to/clang" >&2; exit 1; }; \
+	if [ -n "$(ORLIX_COMPILER_LAUNCHER)" ]; then command -v "$(ORLIX_COMPILER_LAUNCHER)" >/dev/null 2>&1 || { echo "compiler launcher is not executable: $(ORLIX_COMPILER_LAUNCHER)" >&2; exit 1; }; fi; \
 	command -v "$(ORLIXOS_AR)" >/dev/null 2>&1 || { echo "llvm-ar is required to build coreutils; set ORLIXOS_AR=/path/to/llvm-ar" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_RANLIB)" >/dev/null 2>&1 || { echo "llvm-ranlib is required to build coreutils; set ORLIXOS_RANLIB=/path/to/llvm-ranlib" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package coreutils; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
