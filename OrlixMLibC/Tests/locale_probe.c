@@ -52,8 +52,7 @@ static int check_file(const struct locale_file *entry) {
 		return 1;
 	}
 
-	printf("# locale_probe stat %s size=%lld mode=%llo\n",
-			entry->category, (long long)st.st_size, (unsigned long long)st.st_mode);
+	printf("# LP STAT %s size=%lld\n", entry->category, (long long)st.st_size);
 
 	int fd = open(entry->path, O_RDONLY);
 	if (fd < 0) {
@@ -71,7 +70,7 @@ static int check_file(const struct locale_file *entry) {
 		return 1;
 	}
 
-	printf("# locale_probe read %s bytes=%zd header=%02x %02x %02x %02x %02x %02x %02x %02x\n",
+	printf("# LP READ %s n=%zd h=%02x%02x%02x%02x%02x%02x%02x%02x\n",
 			entry->category, nread,
 			header[0], header[1], header[2], header[3],
 			header[4], header[5], header[6], header[7]);
@@ -86,7 +85,7 @@ static int check_file(const struct locale_file *entry) {
 		}
 
 		const unsigned char *mapped = mapping;
-		printf("# locale_probe mmap %s first=%02x %02x %02x %02x\n",
+		printf("# LP MMAP %s h=%02x%02x%02x%02x\n",
 				entry->category, mapped[0], mapped[1], mapped[2], mapped[3]);
 		if (munmap(mapping, (size_t)st.st_size) != 0) {
 			printf("# locale_probe munmap %s errno=%d %s\n",
@@ -111,13 +110,14 @@ static int check_category(const struct locale_category *entry) {
 		return 1;
 	}
 
+	errno = 0;
 	char *result = setlocale(entry->category, "de_DE.utf8");
 	if (!result) {
-		printf("# locale_probe setlocale %s de_DE.utf8 failed\n", entry->name);
+		printf("# LP SET %s FAIL errno=%d %s\n", entry->name, errno, strerror(errno));
 		return 1;
 	}
 
-	printf("# locale_probe setlocale %s de_DE.utf8 -> %s\n", entry->name, result);
+	printf("# LP SET %s OK %s\n", entry->name, result);
 	return 0;
 }
 
@@ -135,14 +135,15 @@ int main(void) {
 		failures++;
 	}
 
+	errno = 0;
 	char *all = setlocale(LC_ALL, "de_DE.utf8");
 	if (!all) {
-		printf("# locale_probe setlocale LC_ALL de_DE.utf8 failed\n");
+		printf("# LP SET LC_ALL FAIL errno=%d %s\n", errno, strerror(errno));
 		failures++;
 	} else {
-		printf("# locale_probe setlocale LC_ALL de_DE.utf8 -> %s\n", all);
+		printf("# LP SET LC_ALL OK %s\n", all);
 	}
 
-	printf("# locale_probe failures=%d\n", failures);
+	printf("# LP FAILURES %d\n", failures);
 	return failures ? 1 : 0;
 }

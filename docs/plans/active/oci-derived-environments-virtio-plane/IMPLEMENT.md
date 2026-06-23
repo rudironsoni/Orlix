@@ -18763,3 +18763,42 @@ Runtime evidence:
 - The hung run was stopped and all `OrlixMLibC/Makefile`, `ORLIX_KERNEL_RUN_TIMEOUT_SECONDS`, `simctl launch`, `log stream --style compact`, and `OrlixTerminal` helper processes were cleaned up.
 
 Current status marker: the OrlixMLibC locale probe is available for the next runtime attempt; the proof still needs a clean guest run to determine whether the `LC_COLLATE` blocker is VFS/syscall visibility or mlibc parser/category behavior.
+### 2026-06-23: OrlixMLibC locale probe single-simulator evidence
+
+The locale proof work is constrained to one simulator because this machine is
+resource constrained. The selected simulator for this checkpoint was `iPhone 17
+Pro` (`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`). The plain `iPhone 17`
+(`E65F0D05-980C-4368-8CDC-2D2BF3E05757`) was kept shutdown after cleanup.
+
+Focused `make -f OrlixMLibC/Makefile test PROFILE=release
+MLIBC_TEST_CASES='orlix/locale_probe' MLIBC_TEST_RUN_TIMEOUT_SECONDS=180`
+attempts reached the OrlixKernel run wrapper but stalled before a complete TAP
+result. Stale helper trees were terminated before any fallback capture, and no
+second simulator was booted.
+
+The Orlix-owned probe was shortened further and rebuilt into the installed
+payload. Manual single-simulator console capture from the already-installed
+`OrlixTerminal` app produced:
+
+```text
+stat_count=12
+read_count=12
+mmap_count=12
+set_ok_count=4
+set_fail_count=3
+# LP SET LC_MESSAGES FAIL errno=0 Success
+# LP SET LC_NUMERIC FAIL errno=0 Success
+# LP SET LC_ALL FAIL errno=0 Success
+```
+
+This proves the staged `de_DE.utf8` locale category files are visible,
+readable, and mappable from the guest. The remaining blocker is in
+OrlixMLibC/mlibc locale category acceptance for `LC_MESSAGES` and `LC_NUMERIC`;
+`LC_ALL` fails because those categories fail. The failure does not report a
+Linux syscall errno. Do not route this to OrlixKernel VFS/syscall handling, and
+do not edit generated upstream mlibc trees.
+
+Current status marker: OrlixMLibC locale proof is still blocked. The next fix
+must be a durable OrlixMLibC source/patch input after comparing the upstream
+mlibc category parser behavior for `LC_MESSAGES` and `LC_NUMERIC` against the
+Debian `locales-all` category files.
