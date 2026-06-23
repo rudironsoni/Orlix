@@ -63,7 +63,13 @@ def require_existing(path: Path, label: str) -> list[str]:
     return [f"missing {label}: {path}"]
 
 
-def audit_component(repo_root: Path, profile: str, component: str, manifest_root: Path) -> list[str]:
+def audit_component(
+    repo_root: Path,
+    profile: str,
+    component: str,
+    manifest_root: Path,
+    stages: tuple[str, ...],
+) -> list[str]:
     command = [
         sys.executable,
         "tools/orlix-build-manifest",
@@ -75,6 +81,8 @@ def audit_component(repo_root: Path, profile: str, component: str, manifest_root
         "--manifest-root",
         str(manifest_root),
     ]
+    for stage in stages:
+        command.extend(["--stage", stage])
     result = subprocess.run(
         command,
         cwd=repo_root,
@@ -116,7 +124,7 @@ def readiness_errors(args: argparse.Namespace) -> list[str]:
         errors.extend(require_existing(required_path, "cache output"))
 
     if not errors:
-        errors.extend(audit_component(repo_root, args.profile, args.component, manifest_root))
+        errors.extend(audit_component(repo_root, args.profile, args.component, manifest_root, stages))
 
     return errors
 

@@ -173,6 +173,40 @@ class CacheReadyTests(unittest.TestCase):
 
             self.assertEqual(errors, ["stage-unknown linux typo"])
 
+    def test_selected_stage_is_forwarded_to_manifest_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_root = root / "manifests"
+            self.write_manifest(root, "release", "linux", "source-prep")
+            args = self.module.parse_args(
+                [
+                    "--repo-root",
+                    str(root),
+                    "--manifest-root",
+                    str(manifest_root),
+                    "--profile",
+                    "release",
+                    "--component",
+                    "linux",
+                    "--stage",
+                    "source-prep",
+                ]
+            )
+            seen_commands = []
+
+            def fake_run(command, **_kwargs):
+                seen_commands.append(command)
+                return self.module.subprocess.CompletedProcess(command, 0, stdout="")
+
+            with mock.patch.object(self.module.subprocess, "run", side_effect=fake_run):
+                errors = self.module.readiness_errors(args)
+
+            self.assertEqual(errors, [])
+            self.assertEqual(seen_commands[0].count("--stage"), 1)
+            self.assertIn("source-prep", seen_commands[0])
+            self.assertNotIn("headers-install", seen_commands[0])
+            self.assertNotIn("kernel-archive", seen_commands[0])
+
     def test_manifest_directory_is_not_ready(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
