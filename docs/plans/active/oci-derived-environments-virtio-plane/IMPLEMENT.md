@@ -17571,3 +17571,46 @@ Results:
 HANDOFF: cache input digest semantics are now precise; cache metadata drift is
 audited separately. Current Linux, mlibc, and Coreutils readiness remains
 fail-closed until their local manifests/artifacts are refreshed.
+
+## 2026-06-23 - Cache manifest dependency audit
+
+Current status: cache manifest audits now enforce declared stage dependencies.
+Auditing a dependent Linux, mlibc, or Coreutils stage can no longer pass when a
+required dependency manifest is missing or stale.
+
+Changes:
+
+- Added `dependency_miss_reasons` to `tools/orlix-build-manifest`.
+- `audit` now checks each selected stage's `depends_on` manifests after the
+  selected stage manifest itself is fresh.
+- Missing dependency manifests report `dependency-missing`.
+- Stale dependency manifests report `dependency-stale <stage> <reason>`.
+- Added regression tests for auditing a dependent stage with a missing
+  dependency manifest and with a stale dependency manifest.
+
+Validation:
+
+```bash
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+python3 -m unittest discover -q tools/tests
+make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+make -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk cache-ready PROFILE=release
+make -f OrlixOS/Makefile cache-ready PROFILE=release
+```
+
+Results:
+
+- `tools.tests.test_orlix_build_manifest`: 12 tests passed.
+- Synthetic dependency probe now fails as intended:
+  `AUDIT_ONLY_B_WITH_MISSING_A 1` with `dependency-missing a`.
+- `tools/tests`: passed (`TOOLS_TEST_RESULT:PASS`).
+- Linux cache readiness still fails closed because this checkout lacks Linux
+  manifests and the `OrlixKernel.xcframework` sentinel.
+- mlibc cache readiness still fails closed with
+  `mlibc:source-prep tool-changed`.
+- Coreutils cache readiness still fails closed on missing manifests/cache
+  outputs in this checkout.
+
+HANDOFF: cache manifest dependency freshness is now enforced. Current owner
+readiness for Linux, mlibc, and Coreutils remains fail-closed until local
+manifests/artifacts are refreshed.
