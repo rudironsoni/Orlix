@@ -1222,6 +1222,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "process.user",
 			status: .implemented,
+			proof: "orlix:runtime_config_parser",
 			reason: "OCI process uid, gid, supplementary groups, umask, and supported rlimits carry into OrlixOS descriptors and init command-line defaults."
 		),
 		OrlixOCIRuntimeFeature(
@@ -1233,31 +1234,37 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "process.noNewPrivileges",
 			status: .implemented,
+			proof: "orlix:runtime_config_parser",
 			reason: "OCI process noNewPrivileges carries into OrlixOS descriptors and init applies PR_SET_NO_NEW_PRIVS."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.closeAdditionalFds",
 			status: .implemented,
+			proof: "orlix:runtime_config_parser",
 			reason: "OCI process closeAdditionalFds carries into OrlixOS descriptors and init closes inherited descriptors above stderr."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.oomScoreAdj",
 			status: .implemented,
+			proof: "orlix:runtime_config_parser",
 			reason: "OCI process oomScoreAdj values in Linux's -1000...1000 range carry into OrlixOS descriptors and init writes /proc/self/oom_score_adj."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.scheduler",
 			status: .implemented,
+			proof: "orlix:runtime_config_parser",
 			reason: "OCI process scheduler policy plus priority carries into OrlixOS descriptors for supported Linux SCHED_* policies and init calls sched_setscheduler."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.ioPriority",
 			status: .implemented,
+			proof: "orlix:runtime_config_parser",
 			reason: "OCI process ioPriority class plus priority carries into OrlixOS descriptors for supported Linux IOPRIO classes and init calls ioprio_set."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.execCPUAffinity",
 			status: .implemented,
+			proof: "orlix:runtime_config_parser",
 			reason: "OCI process execCPUAffinity CPU lists carry into OrlixOS descriptors and init calls sched_setaffinity."
 		),
 		OrlixOCIRuntimeFeature(

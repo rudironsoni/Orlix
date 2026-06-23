@@ -5950,6 +5950,10 @@ extension OrlixTerminalSessionTests {
 			"process.execCPUAffinity"
 		] {
 			XCTAssertEqual(features[name]?.status, .implemented, name)
+			let expectedProof = name == "process.capabilities"
+				? "orlix:process_capability_probe"
+				: "orlix:runtime_config_parser"
+			XCTAssertEqual(features[name]?.proof, expectedProof, name)
 			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
 		}
 		XCTAssertEqual(features["seccomp"]?.status, .deterministicallyRejected)
