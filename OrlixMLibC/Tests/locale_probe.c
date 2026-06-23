@@ -139,6 +139,9 @@ static int check_file(const struct locale_file *entry) {
 			printf("# LP OFFSET %s index=%zu off=%u mmap=%02x pread=%02x\n",
 					entry->category, i, offset, mapped[offset], via_pread);
 			if (mapped[offset] != via_pread) {
+				printf("# LP BAD %s I%zu O%u M%02x P%02x\n",
+						entry->category, i, offset, mapped[offset],
+						via_pread);
 				printf("# locale_probe offset mismatch %s index=%zu\n",
 						entry->category, i);
 				munmap(mapping, (size_t)st.st_size);
