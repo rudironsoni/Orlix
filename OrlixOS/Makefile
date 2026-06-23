@@ -265,7 +265,10 @@ $(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP): $(ORLIXOS_ROOTFS_PROOF) $(ORLIXOS_IN
 	printf 'profile=%s\ninit_sha256=%s\nrootfs_proof_sha256=%s\n' "$(PROFILE)" "$$init_sha256" "$$rootfs_proof_sha256" > "$@"
 
 cache-audit:
-	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component coreutils
+	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component coreutils \
+		--stage source-prep \
+		--stage configure-build \
+		--stage install-rootfs
 
 cache-ready:
 	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils \
@@ -274,6 +277,7 @@ cache-ready:
 		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat"
 
 cache-manifest-write:
-	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component coreutils
+	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component coreutils \
+		--stage install-rootfs
 
 include $(PROJECT_DIR)/Sources/make/rules.mk

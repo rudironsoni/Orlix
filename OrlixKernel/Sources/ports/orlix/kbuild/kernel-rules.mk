@@ -1263,7 +1263,10 @@ run: __ios-simulator-framework xcodeproj
 	validate_runtime_log
 
 cache-audit:
-	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component linux
+	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component linux \
+		--stage source-prep \
+		--stage headers-install \
+		--stage kernel-archive
 
 .PHONY: cache-ready
 cache-ready:
@@ -1272,7 +1275,8 @@ cache-ready:
 		--requires "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)/OrlixKernel"
 
 cache-manifest-write:
-	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component linux
+	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component linux \
+		--stage kernel-archive
 
 clean:
 	@set -euo pipefail; \
