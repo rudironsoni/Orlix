@@ -18223,3 +18223,32 @@ This is cache-tooling reliability evidence only. It is not product runtime readi
 Current status:
 
 Linux, mlibc, and Coreutils cache-readiness tooling now rejects external symlink targets inside directory inputs; the broader OCI-derived environments plan remains active.
+
+## 2026-06-23 - Cache manifest roots must stay inside the repo
+
+Extended the shared cache-manifest trust boundary so Linux, mlibc, and Coreutils cache audits cannot read or write authoritative manifests from machine-local manifest roots outside the checkout. `tools/orlix-build-manifest` now resolves `--manifest-root` through `repo_owned_manifest_root()` for both audit and write paths, and reports `manifest-root-outside-repo` without a Python traceback when a caller supplies an absolute external root or repo-escaping root. `tools/orlix-cache-ready` applies the same check before required-output or manifest-audit work, so product cache gates fail closed before trusting external manifests.
+
+This complements the earlier repo-owned stage input, directory symlink, and output-sentinel checks: cache manifests, their inputs, and their required generated outputs now all stay under the same repo-owned boundary. Tests that need scratch manifests now use scratch repo roots explicitly. No generated upstream trees or disposable build outputs were edited.
+
+Validation:
+
+- `rtk python3 -m py_compile tools/orlix-build-manifest tools/orlix-cache-ready tools/tests/test_orlix_build_manifest.py tools/tests/test_orlix_cache_ready.py` - passed.
+- `rtk python3 -m unittest tools.tests.test_orlix_build_manifest.BuildManifestTests.test_manifest_path_rejects_manifest_root_outside_repo tools.tests.test_orlix_build_manifest.BuildManifestTests.test_audit_rejects_manifest_root_outside_repo tools.tests.test_orlix_build_manifest.BuildManifestTests.test_write_rejects_manifest_root_outside_repo tools.tests.test_orlix_cache_ready.CacheReadyTests.test_manifest_root_outside_repo_fails_closed` - passed, 4 tests.
+- `rtk python3 -m unittest tools.tests.test_orlix_build_manifest tools.tests.test_orlix_cache_ready` - passed; explicit rerun status 0.
+- `rtk python3 -m unittest discover tools/tests` - passed; explicit rerun status 0.
+- `rtk python3 -m unittest discover .codex/hooks/tests` - passed, 32 tests.
+- `rtk python3 -m unittest discover .codex/rules/tests` - passed, 5 tests.
+- `rtk git diff --check` - passed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` - exited 0 with the known historical warning about stale pending/blocked status contradicted by later green status.
+
+Cache readiness probes:
+
+- `make -f OrlixKernel/Makefile cache-ready PROFILE=release` returned status 2, fail-closed against current release Linux manifest/sentinel state.
+- `make -f OrlixMLibC/Makefile cache-ready PROFILE=release` returned status 2, fail-closed with `mlibc:source-prep input-digest-changed` and `mlibc:compiler-rt input-digest-changed`.
+- `make -f OrlixOS/Makefile cache-ready PROFILE=release` returned status 2, fail-closed against current release Coreutils manifest/sentinel state.
+
+This is cache-tooling reliability evidence only. It is not product runtime readiness, upstream Linux readiness, libc conformance, Coreutils conformance, or OCI runtime proof.
+
+Current status:
+
+Linux, mlibc, and Coreutils cache-readiness tooling now rejects external manifest roots as well as external inputs, external symlink targets, and external output sentinels; the broader OCI-derived environments plan remains active.

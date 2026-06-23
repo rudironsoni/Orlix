@@ -46,8 +46,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def manifest_path(repo_root: Path, manifest_root: Path, profile: str, component: str, stage: str) -> Path:
-    root = manifest_root if manifest_root.is_absolute() else repo_root / manifest_root
+    root = repo_owned_manifest_root(repo_root, manifest_root)
     return root / profile / component / f"{stage}.json"
+
+
+def repo_owned_manifest_root(repo_root: Path, manifest_root: Path) -> Path:
+    path = manifest_root if manifest_root.is_absolute() else repo_root / manifest_root
+    try:
+        path.resolve().relative_to(repo_root.resolve())
+    except ValueError as error:
+        raise ValueError(f"manifest-root-outside-repo: {manifest_root}") from error
+    return path
 
 
 def stage_selection_errors(component: str, stages: tuple[str, ...]) -> list[str]:
@@ -106,6 +115,10 @@ def audit_component(
 def readiness_errors(args: argparse.Namespace) -> list[str]:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
+    try:
+        repo_owned_manifest_root(repo_root, manifest_root)
+    except ValueError as error:
+        return [str(error)]
     stages = tuple(dict.fromkeys(args.stage or DEFAULT_STAGES[args.component]))
     stage_errors = stage_selection_errors(args.component, stages)
     if stage_errors:

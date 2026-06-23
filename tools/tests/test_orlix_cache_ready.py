@@ -75,7 +75,8 @@ class CacheReadyTests(unittest.TestCase):
 
     def test_linux_default_requires_kernel_archive_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
-            manifest_root = Path(tmp) / "manifests"
+            repo_root = Path(tmp)
+            manifest_root = repo_root / "manifests"
             linux_manifests = manifest_root / "release" / "linux"
             linux_manifests.mkdir(parents=True)
             for stage in ("source-prep", "headers-install"):
@@ -84,6 +85,8 @@ class CacheReadyTests(unittest.TestCase):
             with mock.patch.object(self.module, "audit_component", return_value=[]) as audit:
                 result = self.module.main(
                     [
+                "--repo-root",
+                str(repo_root),
                         "--manifest-root",
                         str(manifest_root),
                         "--profile",
@@ -101,6 +104,8 @@ class CacheReadyTests(unittest.TestCase):
             with mock.patch.object(self.module, "audit_component", return_value=[]):
                 result = self.module.main(
                     [
+                "--repo-root",
+                str(repo_root),
                         "--manifest-root",
                         str(manifest_root),
                         "--profile",
@@ -169,12 +174,14 @@ class CacheReadyTests(unittest.TestCase):
     def test_unknown_stage_fails_even_when_manifest_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            repo_root = root
+            root = Path(tmp)
             manifest_root = root / "manifests"
             self.write_manifest(manifest_root, "release", "linux", "typo")
             args = self.module.parse_args(
                 [
                     "--repo-root",
-                    str(REPO_ROOT),
+                    str(repo_root),
                     "--manifest-root",
                     str(manifest_root),
                     "--profile",
@@ -365,11 +372,33 @@ class CacheReadyTests(unittest.TestCase):
             self.assertEqual(marker.read_text(), "ran")
 
 
+
+    def test_manifest_root_outside_repo_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside_tmp:
+            repo_root = Path(tmp)
+            manifest_root = Path(outside_tmp) / "manifests"
+
+            args = self.module.parse_args(
+                [
+                    "--repo-root",
+                    str(repo_root),
+                    "--manifest-root",
+                    str(manifest_root),
+                    "--profile",
+                    "release",
+                    "--component",
+                    "linux",
+                ]
+            )
+
+            errors = self.module.readiness_errors(args)
+            self.assertEqual(errors, [f"manifest-root-outside-repo: {manifest_root}"])
     def test_manifest_audit_launch_error_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
-            manifest_root = Path(tmp) / "manifests"
+            repo_root = Path(tmp)
+            manifest_root = repo_root / "manifests"
             for stage in ("source-prep", "headers-install", "kernel-archive"):
-                self.write_manifest(tmp, "release", "linux", stage)
+                self.write_manifest(repo_root, "release", "linux", stage)
 
             with mock.patch.object(self.module.subprocess, "run", side_effect=OSError("audit unavailable")):
                 result = self.module.main([

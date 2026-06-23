@@ -160,6 +160,15 @@ def repo_owned_path(repo_root: Path, relative: str) -> Path:
     return path
 
 
+def repo_owned_manifest_root(repo_root: Path, manifest_root: Path) -> Path:
+    path = manifest_root if manifest_root.is_absolute() else repo_root / manifest_root
+    try:
+        path.resolve().relative_to(repo_root.resolve())
+    except ValueError as error:
+        raise ValueError(f"manifest-root-outside-repo: {manifest_root}") from error
+    return path
+
+
 def hash_path(repo_root: Path, relative: str) -> dict[str, object]:
     path = repo_owned_path(repo_root, relative)
     entry: dict[str, object] = {"path": relative, "exists": path.exists()}
@@ -246,7 +255,7 @@ def cached_stage_manifest(
 
 
 def manifest_path(repo_root: Path, manifest_root: Path, profile: str, component: str, stage: str) -> Path:
-    root = manifest_root if manifest_root.is_absolute() else repo_root / manifest_root
+    root = repo_owned_manifest_root(repo_root, manifest_root)
     return root / profile / component / f"{stage}.json"
 
 
@@ -466,6 +475,11 @@ def dependency_miss_reasons(
 def audit(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
+    try:
+        repo_owned_manifest_root(repo_root, manifest_root)
+    except ValueError as error:
+        print(error)
+        return 1
     components = selected_components(args)
     component_diagnostics = selected_component_diagnostics(components)
     if component_diagnostics:
@@ -514,6 +528,11 @@ def audit(args: argparse.Namespace) -> int:
 def write(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
+    try:
+        repo_owned_manifest_root(repo_root, manifest_root)
+    except ValueError as error:
+        print(error)
+        return 1
     required_output_misses = required_output_errors(repo_root, tuple(getattr(args, "requires", None) or ()))
     if required_output_misses:
         for diagnostic in required_output_misses:
