@@ -18252,3 +18252,45 @@ This is cache-tooling reliability evidence only. It is not product runtime readi
 Current status:
 
 Linux, mlibc, and Coreutils cache-readiness tooling now rejects external manifest roots as well as external inputs, external symlink targets, and external output sentinels; the broader OCI-derived environments plan remains active.
+
+## 2026-06-23 - Build acceleration reset to proven build tools
+
+Course correction: the build-speed work is about reducing time and resource use for OrlixKernel/Linux, OrlixMLibC/mlibc, and OrlixOS Coreutils builds. It is not about package management inside Orlix runtime environments, and it is not a reason to invent an Orlix-specific package manager, package store, or custom manifest/freshness system.
+
+The misdirected runtime-package-management guardrail commit was reverted and pushed as `53ef7577 Revert "Forbid custom OCI package management"`.
+
+Implementation changes:
+
+- Removed the custom Python build-cache entrypoints from the active build path: `tools/orlix-build-manifest`, `tools/orlix-cache-ready`, and their focused tests are deleted.
+- Removed top-level and component `cache-ready`, `cache-audit`, `cache-manifest-write`, `__build-cache-gated`, and `__coreutils-cache-gated` targets.
+- Restored build ownership to the proven build systems:
+  - OrlixKernel/Linux builds through Kbuild and the existing Orlix kernel archive rules.
+  - OrlixMLibC/mlibc builds through Meson/Ninja and now preserves the Meson build directory so Ninja can reuse valid incremental objects.
+  - OrlixOS Coreutils builds through the normal Autotools/Make package target instead of a custom freshness gate.
+- Added optional standard compiler launcher support shared by the three lanes through `ORLIX_COMPILER_LAUNCHER`. If unset, the Makefiles auto-detect `ccache` first and `sccache` second; if neither exists, builds proceed without a launcher. The launcher is an accelerator only and does not become correctness proof.
+
+Reliability rule:
+
+Cache hits may only come from battle-tested tools (`ccache`/`sccache`) sitting in front of the compiler or from the owning build system's own dependency tracking. Cache misses, absent cache tools, stale directories, or changed inputs fall back to normal Kbuild, Meson/Ninja, or Autotools/Make behavior. No Orlix-specific metadata is allowed to decide that Linux, mlibc, or Coreutils outputs are fresh.
+
+Validation so far:
+
+- `rtk rg -n "ORLIX_BUILD_MANIFEST|orlix-build-manifest|orlix-cache-ready|cache-manifest-write|cache-ready|cache-audit|__build-cache-gated|__coreutils-cache-gated" Makefile OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk OrlixMLibC/Makefile OrlixOS/Makefile tools docs/plans/active/oci-derived-environments-virtio-plane/PLAN.md` returned no matches.
+- `rtk make -f OrlixKernel/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=/usr/bin/true` parsed the kernel Makefile and printed help.
+- `rtk make -f OrlixMLibC/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=/usr/bin/true` parsed the mlibc Makefile and printed help.
+- `rtk make -f OrlixOS/Makefile help PROFILE=debug ORLIX_COMPILER_LAUNCHER=/usr/bin/true` parsed the OrlixOS/Coreutils Makefile and printed help.
+- `rtk make help PROFILE=debug` parsed the root Makefile and printed help.
+- `rtk python3 -m unittest discover .codex/rules/tests` passed, 5 tests.
+- `rtk python3 -m unittest discover .codex/hooks/tests` passed, 32 tests.
+- `rtk git diff --check` passed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `rtk command -v ccache` and `rtk command -v sccache` returned nonzero in this sandbox, so the default path currently falls back to unlaunched compiler execution.
+
+Full build dry-run note:
+
+- `rtk make -f OrlixKernel/Makefile -pn PROFILE=debug` and `rtk make -f OrlixOS/Makefile -pn PROFILE=debug` reached environment/build-prerequisite failures, not Makefile parse failures: the sandbox reported `external cache error: /Volumes/1TB/Xcode/Caches is not writable`, and OrlixOS also lacked the debug mlibc archive at `Build/OrlixMLibC/sysroot/debug/usr/lib/libc.a`.
+- `rtk python3 -m unittest discover tools/tests` now reports `NO TESTS RAN` because the custom Python cache-tool tests were deleted with the custom cache tools; this is not counted as a passing validation.
+
+Current status:
+
+The custom Python cache/manifest layer has been removed from the build-speed path. Linux, mlibc, and Coreutils are now planned and wired around standard build-system incrementality plus optional `ccache`/`sccache` compiler launchers. Lightweight parse and harness validation passed; full build validation still requires a writable external Xcode cache environment and the owning mlibc build artifact.

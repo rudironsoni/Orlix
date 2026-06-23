@@ -8,9 +8,7 @@ ORLIXOS_MAKE := $(MAKE) -f OrlixOS/Makefile
 TERMINAL_MAKE := $(MAKE) -f OrlixTerminal/Makefile
 PROFILE ?= release
 ORLIXOS_BASE_ROOT_TREE := $(CURDIR)/Build/OrlixOS/rootfs/$(PROFILE)/base-tree
-ORLIX_BUILD_MANIFEST := python3 tools/orlix-build-manifest
-
-.PHONY: all help setup-env build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run cache-audit cache-ready cache-manifest-write clean mrproper
+.PHONY: all help setup-env build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -43,26 +41,6 @@ headers_install:
 
 run:
 	@$(TERMINAL_MAKE) run PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
-
-cache-audit:
-	@$(ORLIX_BUILD_MANIFEST) audit --profile "$(PROFILE)" $(if $(COMPONENT),--component "$(COMPONENT)")
-
-cache-ready:
-	@if [ -n "$(COMPONENT)" ]; then \
-		case "$(COMPONENT)" in \
-			linux) $(MAKE) -f OrlixKernel/Makefile cache-ready PROFILE="$(PROFILE)" ;; \
-			mlibc) $(MAKE) -f OrlixMLibC/Makefile cache-ready PROFILE="$(PROFILE)" ;; \
-			coreutils) $(MAKE) -f OrlixOS/Makefile cache-ready PROFILE="$(PROFILE)" ;; \
-			*) printf 'unknown cache component: %s\n' "$(COMPONENT)" >&2; exit 2 ;; \
-		esac; \
-	else \
-		$(MAKE) -f OrlixKernel/Makefile cache-ready PROFILE="$(PROFILE)" && \
-		$(MAKE) -f OrlixMLibC/Makefile cache-ready PROFILE="$(PROFILE)" && \
-		$(MAKE) -f OrlixOS/Makefile cache-ready PROFILE="$(PROFILE)"; \
-	fi
-
-cache-manifest-write:
-	@$(ORLIX_BUILD_MANIFEST) write --profile "$(PROFILE)" $(if $(COMPONENT),--component "$(COMPONENT)")
 
 clean:
 	@set -euo pipefail; \

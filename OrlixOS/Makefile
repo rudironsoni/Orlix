@@ -33,7 +33,7 @@ ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP := $(ORLIXOS_BUILD_ROOT)/environment-run
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 
-.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-proof-fixtures test coreutils-test cache-audit cache-ready cache-manifest-write clean mrproper __coreutils-cache-gated __coreutils-source FORCE
+.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-proof-fixtures test coreutils-test clean mrproper __coreutils-source FORCE
 
 all: rootfs
 
@@ -47,18 +47,7 @@ help:
 	@printf '%s\n' '  test     run OrlixOS package tests in the app-hosted Orlix path'
 	@printf '%s\n' '  clean    remove generated OrlixOS outputs'
 
-build: $(ORLIXOS_BASH_BINARY) __coreutils-cache-gated $(ORLIXOS_FINDUTILS_PROOF) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_INIT_BINARY)
-
-__coreutils-cache-gated:
-	@if python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils \
-		--requires "$(ORLIXOS_COREUTILS_PROOF)" \
-		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls" \
-		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat" >/dev/null; then \
-		printf '%s\n' "skip: OrlixOS Coreutils $(PROFILE) cache ready"; \
-	else \
-		$(MAKE) -f OrlixOS/Makefile "$(ORLIXOS_COREUTILS_PROOF)" PROFILE="$(PROFILE)" && \
-		$(MAKE) -f OrlixOS/Makefile cache-manifest-write PROFILE="$(PROFILE)"; \
-	fi
+build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_PROOF) $(ORLIXOS_FINDUTILS_PROOF) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_INIT_BINARY)
 
 rootfs: $(ORLIXOS_ROOTFS_PROOF)
 
@@ -263,24 +252,5 @@ $(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP): $(ORLIXOS_ROOTFS_PROOF) $(ORLIXOS_IN
 		printf 'profile=%s\nfixture=%s\nenvironment=%s\ninit_sha256=%s\n' "$(PROFILE)" "$$fixture" "$$env_id" "$$init_sha256" > "$$fixture_root/.ready"; \
 	done; \
 	printf 'profile=%s\ninit_sha256=%s\nrootfs_proof_sha256=%s\n' "$(PROFILE)" "$$init_sha256" "$$rootfs_proof_sha256" > "$@"
-
-cache-audit:
-	@python3 tools/orlix-build-manifest audit --profile "$(PROFILE)" --component coreutils \
-		--stage source-prep \
-		--stage configure-build \
-		--stage install-rootfs
-
-cache-ready:
-	@python3 tools/orlix-cache-ready --profile "$(PROFILE)" --component coreutils \
-		--requires "$(ORLIXOS_COREUTILS_PROOF)" \
-		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls" \
-		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat"
-
-cache-manifest-write:
-	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component coreutils \
-		--stage install-rootfs \
-		--requires "$(ORLIXOS_COREUTILS_PROOF)" \
-		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/ls" \
-		--requires "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/cat"
 
 include $(PROJECT_DIR)/Sources/make/rules.mk
