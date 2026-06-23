@@ -264,8 +264,8 @@ def selected_stages(args: argparse.Namespace, component: str) -> tuple[StageSpec
     stages = STAGES[component]
     if not args.stage:
         return stages
-    wanted = set(args.stage)
-    return tuple(stage for stage in stages if stage.name in wanted)
+    selected_by_name = {stage.name: stage for stage in stages}
+    return tuple(selected_by_name[name] for name in dict.fromkeys(args.stage) if name in selected_by_name)
 
 
 def selected_stage_diagnostics(args: argparse.Namespace, component: str) -> list[str]:

@@ -450,6 +450,12 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
             self.assertIn("dependency-cycle", output.getvalue())
             self.assertFalse((root / "manifests" / "release" / "synthetic" / "a.json").exists())
 
+    def test_selected_stage_duplicates_are_normalized(self) -> None:
+        args = type("Args", (), {"stage": ["source-prep", "source-prep", "headers-install"]})()
+        stages = self.module.selected_stages(args, "linux")
+
+        self.assertEqual([stage.name for stage in stages], ["source-prep", "headers-install"])
+
     def test_write_rejects_unknown_selected_stage(self) -> None:
         self.module.STAGES["synthetic"] = (
             self.module.StageSpec("payload", ("input",)),
