@@ -266,11 +266,9 @@ def required_output_errors(repo_root: Path, required_outputs: tuple[str, ...]) -
     errors = []
     repo_root = repo_root.resolve()
     for output in required_outputs:
-        relative_path = Path(output)
-        if relative_path.is_absolute():
-            errors.append(f"required-output-not-repo-relative: {output}")
-            continue
-        path = (repo_root / relative_path).resolve()
+        candidate = Path(output)
+        path = candidate if candidate.is_absolute() else repo_root / candidate
+        path = path.resolve()
         try:
             path.relative_to(repo_root)
         except ValueError:
