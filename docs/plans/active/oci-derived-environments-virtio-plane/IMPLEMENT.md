@@ -17767,3 +17767,21 @@ rtk python3 .codex/hooks/compact_plan_check.py
 ```
 
 Results: cache-ready probes still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; `git diff --check` passed; `tools.tests.test_orlix_cache_ready` passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
+
+Current status:
+
+Linux, mlibc, and Coreutils cache-ready stage selection now normalizes duplicate selected stages before manifest existence checks, manifest audit forwarding, and ready/skip status output. This avoids redundant selected-stage work when a wrapper or manual invocation repeats the same `--stage` while preserving fail-closed unknown-stage validation and manifest dependency auditing. No generated Linux, mlibc, Coreutils, or build output trees were edited. Validation:
+
+```bash
+rtk git diff --check
+rtk python3 -m unittest tools.tests.test_orlix_cache_ready
+rtk python3 -m unittest discover -q tools/tests
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: `git diff --check` passed; `tools.tests.test_orlix_cache_ready` passed; `tools/tests` discovery passed; Linux cache-ready still fails closed on missing release manifests and `OrlixKernel.xcframework` outputs; mlibc cache-ready still fails closed on selected-stage manifest tool drift for `source-prep` and `compiler-rt`; Coreutils cache-ready still fails closed on missing release manifests and package output sentinels; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
