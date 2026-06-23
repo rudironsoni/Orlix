@@ -102,6 +102,7 @@ def parse_args() -> argparse.Namespace:
         subparser.add_argument("--repo-root", default=".")
         subparser.add_argument("--manifest-root", default="Build/orlix-build-manifests")
         subparser.add_argument("--stage", action="append")
+        subparser.add_argument("--requires", action="append", default=[])
     return parser.parse_args()
 
 
@@ -226,6 +227,18 @@ def load_manifest(path: Path) -> dict[str, object] | None:
         return json.loads(path.read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         return None
+
+
+def required_output_errors(repo_root: Path, required_outputs: tuple[str, ...]) -> list[str]:
+    errors = []
+    for output in required_outputs:
+        path = Path(output)
+        resolved = path if path.is_absolute() else repo_root / path
+        if not resolved.exists():
+            errors.append(f"missing required-output: {resolved}")
+        elif not resolved.is_file():
+            errors.append(f"not-file required-output: {resolved}")
+    return errors
 
 
 def stage_map(stages: tuple[StageSpec, ...]) -> dict[str, StageSpec]:
@@ -432,6 +445,11 @@ def audit(args: argparse.Namespace) -> int:
 def write(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     manifest_root = Path(args.manifest_root)
+    required_output_misses = required_output_errors(repo_root, tuple(getattr(args, "requires", None) or ()))
+    if required_output_misses:
+        for diagnostic in required_output_misses:
+            print(diagnostic)
+        return 1
     components = selected_components(args)
     component_diagnostics = selected_component_diagnostics(components)
     if component_diagnostics:

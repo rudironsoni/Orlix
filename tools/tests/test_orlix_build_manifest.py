@@ -500,6 +500,93 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
                 ["configure-build.json", "install-rootfs.json", "source-prep.json"],
             )
 
+    def test_write_requires_output_sentinel_file(self) -> None:
+        original_stages = self.module.STAGES.get("synthetic")
+        self.module.STAGES["synthetic"] = (self.module.StageSpec("payload", ("input",)),)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "input").write_text("payload")
+                args = Namespace(
+                    repo_root=str(root),
+                    manifest_root="manifests",
+                    profile="release",
+                    component=["synthetic"],
+                    stage=["payload"],
+                    requires=["missing.output"],
+                )
+                output = io.StringIO()
+
+                with contextlib.redirect_stdout(output):
+                    result = self.module.write(args)
+
+                self.assertEqual(result, 1)
+                self.assertIn("missing required-output", output.getvalue())
+                self.assertEqual(list((root / "manifests").glob("**/*.json")), [])
+        finally:
+            if original_stages is None:
+                del self.module.STAGES["synthetic"]
+            else:
+                self.module.STAGES["synthetic"] = original_stages
+
+    def test_write_rejects_directory_output_sentinel(self) -> None:
+        original_stages = self.module.STAGES.get("synthetic")
+        self.module.STAGES["synthetic"] = (self.module.StageSpec("payload", ("input",)),)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "input").write_text("payload")
+                (root / "output.dir").mkdir()
+                args = Namespace(
+                    repo_root=str(root),
+                    manifest_root="manifests",
+                    profile="release",
+                    component=["synthetic"],
+                    stage=["payload"],
+                    requires=["output.dir"],
+                )
+                output = io.StringIO()
+
+                with contextlib.redirect_stdout(output):
+                    result = self.module.write(args)
+
+                self.assertEqual(result, 1)
+                self.assertIn("not-file required-output", output.getvalue())
+                self.assertEqual(list((root / "manifests").glob("**/*.json")), [])
+        finally:
+            if original_stages is None:
+                del self.module.STAGES["synthetic"]
+            else:
+                self.module.STAGES["synthetic"] = original_stages
+
+    def test_write_accepts_present_output_sentinel(self) -> None:
+        original_stages = self.module.STAGES.get("synthetic")
+        self.module.STAGES["synthetic"] = (self.module.StageSpec("payload", ("input",)),)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "input").write_text("payload")
+                (root / "output.file").write_text("ready")
+                args = Namespace(
+                    repo_root=str(root),
+                    manifest_root="manifests",
+                    profile="release",
+                    component=["synthetic"],
+                    stage=["payload"],
+                    requires=["output.file"],
+                )
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    result = self.module.write(args)
+
+                self.assertEqual(result, 0)
+                self.assertTrue((root / "manifests" / "release" / "synthetic" / "payload.json").is_file())
+        finally:
+            if original_stages is None:
+                del self.module.STAGES["synthetic"]
+            else:
+                self.module.STAGES["synthetic"] = original_stages
+
     def test_audit_reuses_computed_dependency_manifests(self) -> None:
         original_stages = self.module.STAGES.get("synthetic")
         self.module.STAGES["synthetic"] = (

@@ -17865,3 +17865,24 @@ rtk python3 .codex/hooks/compact_plan_check.py
 ```
 
 Results: dry-run audit/write commands include the intended selected stages and did not write manifests; direct cache audits still fail closed on missing/stale Linux, mlibc, and Coreutils release manifests or outputs; cache-ready probes still fail closed in the same expected places; `git diff --check` passed; `tools/tests` discovery passed; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log.
+
+Current status:
+
+`tools/orlix-build-manifest write` now accepts `--requires` output sentinels and refuses to write manifests when any required output is missing or not a regular file. The Linux, mlibc, and Coreutils `cache-manifest-write` targets pass the same output sentinels used by their `cache-ready` gates, so a manual manifest refresh cannot bless a selected cache state without the corresponding artifact proof: Linux requires the xcframework `Info.plist` and simulator framework binary, mlibc requires generated target arch defs, and Coreutils requires the package proof plus `usr/bin/ls` and `usr/bin/cat`. Dry-run write validation confirmed the sentinel wiring without touching generated manifests. No generated Linux, mlibc, Coreutils, or build output trees were edited. Validation:
+
+```bash
+rtk make -f OrlixKernel/Makefile -n cache-manifest-write PROFILE=release
+rtk make -f OrlixMLibC/Makefile -n cache-manifest-write PROFILE=release
+rtk make -f OrlixOS/Makefile -n cache-manifest-write PROFILE=release
+rtk git diff --check
+rtk python3 -m unittest tools.tests.test_orlix_build_manifest
+rtk python3 -m unittest discover -q tools/tests
+rtk make -f OrlixKernel/Makefile cache-ready PROFILE=release
+rtk make -f OrlixMLibC/Makefile cache-ready PROFILE=release
+rtk make -f OrlixOS/Makefile cache-ready PROFILE=release
+rtk python3 -m unittest discover .codex/hooks/tests
+rtk python3 -m unittest discover .codex/rules/tests
+rtk python3 .codex/hooks/compact_plan_check.py
+```
+
+Results: dry-run `cache-manifest-write` commands include the intended `--requires` sentinels and did not write manifests; `git diff --check` passed; `tools.tests.test_orlix_build_manifest` ran 27 tests and passed; `tools/tests` discovery passed; Linux, mlibc, and Coreutils cache-ready probes still fail closed on the same missing/stale release manifests or output sentinels; `.codex/hooks/tests` ran 32 tests and passed; `.codex/rules/tests` ran 5 tests and passed; `compact_plan_check.py` exited 0 with the known historical warning about stale pending/blocked status in this implementation log. Real `cache-manifest-write` targets were intentionally not executed against this checkout because a present sentinel may legitimately update generated `Build/orlix-build-manifests`; the shared tool tests cover missing, non-file, and present sentinel behavior in scratch roots.

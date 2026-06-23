@@ -549,7 +549,8 @@ cache-ready:
 
 cache-manifest-write:
 	@python3 tools/orlix-build-manifest write --profile "$(PROFILE)" --component mlibc \
-		--stage compiler-rt
+		--stage compiler-rt \
+		--requires "$(MLIBC_TARGET_ARCH_DEFS)"
 
 clean:
 	$(call orlix_mlibc_with_profile_lock,__clean)
