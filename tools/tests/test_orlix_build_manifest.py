@@ -480,6 +480,13 @@ class BuildManifestWriteGraphTests(unittest.TestCase):
 
         self.assertEqual([stage.name for stage in stages], ["source-prep", "headers-install"])
 
+    def test_selected_component_duplicates_are_normalized(self) -> None:
+        class Args:
+            pass
+
+        Args.component = ["linux", "linux", "mlibc", "coreutils", "mlibc"]
+        self.assertEqual(("linux", "mlibc", "coreutils"), self.module.selected_components(Args))
+
     def test_selected_stage_write_includes_dependency_closure(self) -> None:
         cases = {
             "linux": ("kernel-archive", ["source-prep", "headers-install", "kernel-archive"]),
