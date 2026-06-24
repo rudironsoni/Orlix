@@ -19816,3 +19816,21 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 App-hosted cgroup pids controller proof refresh
+Checkpoint: refreshed the focused app-hosted Linux/kselftest proof for the cgroup v2 pids controller through the `OrlixOS` session surface on the single known-good iPhone 17 Pro simulator. This supports the existing truthful feature-report entry `cgroupV2PidsController` without broadening OCI `linux.resources` claims.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices available | grep -E 'iPhone 17 Pro|iPhone 17 \('` showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testCgroupPidsProbeCompletesThroughOrlixOSTerminalSession test` exited 0 with `** TEST SUCCEEDED **` and produced result bundle `Test-OrlixKernelUpstreamTests-2026.06.24_18-00-02-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.24_18-00-02-+0200.xcresult` reported `result: Passed`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Post-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This refresh proves the existing app-hosted `cgroup_pids_probe` XCTest currently passes through the OrlixOS terminal-session test surface.
+- The proof covers the test's asserted pids-controller surface: cgroup v2 exposes the `pids` controller, accepts `+pids` in `cgroup.subtree_control`, creates a child cgroup, exposes `pids.max`, accepts `pids.max` writes, and accepts current-task migration into the child cgroup.
+- This does not claim full OCI `linux.resources`, `linux.cgroupsPath`, resource accounting, resource enforcement, cgroup delegation, systemd support, OCI lifecycle compliance, product `orlix run`, registry pull, Coreutils success, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
