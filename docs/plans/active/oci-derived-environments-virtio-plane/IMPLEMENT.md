@@ -19798,3 +19798,21 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 App-hosted virtio-net runtime proof refresh
+Checkpoint: refreshed the focused app-hosted Linux/kselftest proof for the existing virtio-net substrate through the `OrlixOS` session surface on the single known-good iPhone 17 Pro simulator.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices available` showed all listed iOS 26.5 simulators shutdown before the run, including iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioNetDeviceProbeCompletesThroughOrlixOSTerminalSession test` produced result bundle `Test-OrlixKernelUpstreamTests-2026.06.24_17-49-00-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.24_17-49-00-+0200.xcresult` reported `result: Passed`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Post-run `xcrun simctl list devices available` showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This refresh proves the existing app-hosted `virtio_net_device_probe` XCTest currently passes through the OrlixOS terminal-session test surface.
+- The proof covers the test's asserted virtio-net surface: upstream virtio bus device presence, Linux netdev ownership, sysfs exposure, Ethernet hardware type and address length, positive MTU, rtnetlink Ethernet link enumeration with matching MTU and standard operstate, ioctl link flags, AF_PACKET bind, carrier after Linux interface up, AF_PACKET TX packet counter advancement, RX queue packet counter advancement, distinct non-loopback link, and procfs interface reporting.
+- This does not claim external networking, DNS, NAT, OCI `netDevices`, registry pull, product `orlix run`, Coreutils success, OCI lifecycle compliance, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
