@@ -362,6 +362,16 @@ let cgroupV2ObservationKeys: Set<String> = [
     "child-procs-accepts-self",
     "child-cgroup-removed"
 ]
+let networkNamespaceObservationKeys: Set<String> = [
+    "proc-net-readable",
+    "rtnetlink-opens",
+    "rtnetlink-loopback-link",
+    "loopback-udp-datagram",
+    "child-newnet-inode-changed",
+    "child-proc-net-readable",
+    "child-rtnetlink-local",
+    "child-route-error-linux-shaped"
+]
 
 func fdExecResult(
     runner: String,
@@ -593,6 +603,34 @@ func cgroupV2Result(
     )
 }
 
+func networkNamespaceResult(
+    runner: String,
+    stdout: String,
+    stderr: String,
+    exitStatus: Int?,
+    signal: String?,
+    observations: [String: String]
+) throws -> OracleResult {
+    let missing = networkNamespaceObservationKeys.subtracting(observations.keys)
+    guard missing.isEmpty else {
+        throw OracleError.invalidLog(
+            "missing network-namespace observations: \(missing.sorted().joined(separator: ", "))"
+        )
+    }
+    return OracleResult(
+        caseID: "network-namespace",
+        runner: runner,
+        stdout: stdout,
+        stderr: stderr,
+        exitStatus: exitStatus,
+        signal: signal,
+        errnoEvents: [],
+        statEntries: [],
+        mutations: [],
+        observations: observations
+    )
+}
+
 func oracleBlock(caseID: String, in log: String) throws -> [String] {
     let begin = "ORLIX-ORACLE-BEGIN \(caseID)"
     let end = "ORLIX-ORACLE-END \(caseID)"
@@ -716,6 +754,15 @@ func resultFromLinuxFixture(
             signal: signal,
             observations: observations(from: jsonObjectLines(from: stdout))
         )
+    case "network-namespace":
+        return try networkNamespaceResult(
+            runner: "linux",
+            stdout: stdout,
+            stderr: stderr,
+            exitStatus: exitStatus,
+            signal: signal,
+            observations: observations(from: jsonObjectLines(from: stdout))
+        )
     default:
         throw OracleError.invalidCase(
             "linux-result-from-fixture does not support \(testCase.id)"
@@ -743,6 +790,8 @@ func resultFromOrlixLog(testCase: OracleCase, log: String) throws -> OracleResul
         return try mountNamespaceResultFromOrlixLog(log)
     case "cgroup-v2":
         return try cgroupV2ResultFromOrlixLog(log)
+    case "network-namespace":
+        return try networkNamespaceResultFromOrlixLog(log)
     default:
         throw OracleError.invalidCase(
             "orlix-result-from-log does not support \(testCase.id)"
@@ -1200,6 +1249,64 @@ func cgroupV2ResultFromOrlixLog(_ log: String) throws -> OracleResult {
     )
 }
 
+func networkNamespaceResultFromOrlixLog(_ log: String) throws -> OracleResult {
+    var observed = Dictionary(
+        uniqueKeysWithValues: [
+            fdExecObservation(
+                log,
+                "procfs exposes network state",
+                "proc-net-readable"
+            ),
+            fdExecObservation(
+                log,
+                "rtnetlink sockets open in current network namespace",
+                "rtnetlink-opens"
+            ),
+            fdExecObservation(
+                log,
+                "RTM_GETLINK reports loopback interface",
+                "rtnetlink-loopback-link"
+            ),
+            fdExecObservation(
+                log,
+                "loopback UDP exchanges local datagrams",
+                "loopback-udp-datagram"
+            ),
+            fdExecObservation(
+                log,
+                "network namespace child enters isolated net namespace",
+                "child-newnet-inode-changed"
+            ),
+            fdExecObservation(
+                log,
+                "new network namespace keeps procfs network state readable",
+                "child-proc-net-readable"
+            ),
+            fdExecObservation(
+                log,
+                "new network namespace keeps rtnetlink socket local",
+                "child-rtnetlink-local"
+            ),
+            fdExecObservation(
+                log,
+                "new network namespace rejects incomplete route with Linux error",
+                "child-route-error-linux-shaped"
+            )
+        ]
+    )
+    if !log.contains("network_namespace_probe") {
+        observed["network-namespace-log"] = "missing"
+    }
+    return try networkNamespaceResult(
+        runner: "orlix",
+        stdout: "",
+        stderr: "",
+        exitStatus: 0,
+        signal: nil,
+        observations: observed
+    )
+}
+
 func jsonObjectLines(from output: String) -> [String] {
     output
         .split(separator: "\n", omittingEmptySubsequences: false)
@@ -1464,6 +1571,21 @@ func runSelfTest() throws {
         ),
         orlixLogPath: repositoryPath(
             "tools/orlix-linux-oracle/samples/cgroup-v2.orlix-kselftest.log"
+        )
+    )
+    try selfTestCase(
+        casePath: repositoryPath("tools/orlix-linux-oracle/cases/network-namespace.json"),
+        linuxResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/network-namespace.linux.json"
+        ),
+        orlixResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/network-namespace.orlix.json"
+        ),
+        driftResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/network-namespace.orlix-drift.json"
+        ),
+        orlixLogPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/network-namespace.orlix-kselftest.log"
         )
     )
 
