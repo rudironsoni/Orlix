@@ -1971,16 +1971,12 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	}
 
 	private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
-		let supportedTypes = Set(["mount", "pid", "uts", "ipc", "network"])
-
-		return try namespaces.map { namespace in
-			guard supportedTypes.contains(namespace.type) else {
-				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
-					"linux.namespaces.\(namespace.type)"
-				)
-			}
-			return namespace.type
+		if let namespace = namespaces.first {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"linux.namespaces.\(namespace.type)"
+			)
 		}
+		return []
 	}
 
 	private static func validatedMounts(_ mounts: [OCIRuntimeMount]) throws -> [OrlixOCIRuntimeMount] {

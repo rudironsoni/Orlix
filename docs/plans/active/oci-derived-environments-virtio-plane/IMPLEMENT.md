@@ -19859,3 +19859,29 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 OCI namespace config deterministic rejection
+Checkpoint: corrected OCI runtime config parsing so nonempty `linux.namespaces` is deterministically rejected instead of being accepted into `OrlixOCIRuntimeConfigDescriptor.namespaces` without being carried into `OrlixEnvironmentDescriptor` or lifecycle setup. This keeps the existing `ociNamespaces` feature-report rejection truthful until OCI namespace configuration actually drives Linux runtime setup.
+
+Changes:
+- Updated `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` so `validatedNamespaces` rejects the first declared namespace as `unsupportedLinuxFeature("linux.namespaces.<type>")` and returns an empty descriptor namespace list only when no OCI namespaces are declared.
+- Updated `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` so unrelated parser and readonly-root bundle fixtures do not include namespace declarations.
+- Added `namespaces.mount` to the unsupported Linux feature parser matrix.
+
+Verification:
+- Initial focused `OrlixOSTests` run failed during Swift compilation because the test fixture edit left mismatched multiline string indentation. No product/runtime test executed in that failed run.
+- Replaced the affected JSON fixtures with raw single-line string literals.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserConvertsMinimalLinuxConfig -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsUnsupportedLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleCarriesReadonlyRootIntoEnvironmentDescriptors -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures test` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_18-25-28-+0200.xcresult` reported `result: Passed`, `passedTests: 4`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+- Post-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This changes OCI config validation only. It does not implement OCI namespace lifecycle setup and does not change Linux namespace semantics.
+- `ociNamespaces` remains deterministically rejected. This does not claim OCI namespace support, OCI lifecycle compliance, product `orlix run`, registry pull, Coreutils success, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.

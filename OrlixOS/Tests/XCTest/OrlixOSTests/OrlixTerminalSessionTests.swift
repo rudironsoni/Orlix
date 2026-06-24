@@ -6143,54 +6143,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-			"""
-			{
-			  "ociVersion": "1.1.0",
-			  "annotations": {
-			    "org.opencontainers.image.ref.name": "orlix-demo"
-			  },
-			  "root": { "path": "rootfs", "readonly": false },
-			  "mounts": [
-			    {
-			      "destination": "/proc",
-			      "type": "proc",
-			      "source": "proc",
-			      "options": ["nosuid", "noexec", "nodev"]
-			    },
-			    {
-			      "destination": "/tmp",
-			      "type": "tmpfs",
-			      "source": "tmpfs"
-			    }
-			  ],
-			  "process": {
-			    "terminal": true,
-			    "noNewPrivileges": true,
-			    "closeAdditionalFds": true,
-			    "oomScoreAdj": -500,
-			    "scheduler": { "policy": "SCHED_FIFO", "priority": 1 },
-			    "ioPriority": { "class": "IOPRIO_CLASS_BE", "priority": 4 },
-			    "execCPUAffinity": { "initial": "0", "final": "0-1" },
-			    "consoleSize": { "height": 24, "width": 80 },
-			    "args": ["/bin/sh", "-lc", "echo ok"],
-			    "env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
-			    "cwd": "/work",
-			    "user": { "uid": 1000, "gid": 1000, "umask": 18 },
-			    "rlimits": [
-			      { "type": "RLIMIT_NOFILE", "soft": 64, "hard": 64 }
-			    ]
-			  },
-			  "linux": {
-			    "namespaces": [
-			      { "type": "mount" },
-			      { "type": "pid" },
-			      { "type": "uts" },
-			      { "type": "ipc" },
-			      { "type": "network" }
-			    ]
-			  }
-			}
-			""".utf8
+			#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc","options":["nosuid","noexec","nodev"]},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6236,7 +6189,7 @@ extension OrlixTerminalSessionTests {
 		])
 		XCTAssertTrue(descriptor.terminal)
 		XCTAssertEqual(descriptor.consoleSize, OrlixOCIRuntimeConsoleSize(height: 24, width: 80))
-		XCTAssertEqual(descriptor.namespaces, ["mount", "pid", "uts", "ipc", "network"])
+		XCTAssertEqual(descriptor.namespaces, [])
 
 		let environment = try descriptor.environmentDescriptor(
 			id: "oci-runtime-config",
@@ -6270,6 +6223,7 @@ extension OrlixTerminalSessionTests {
 			("readonlyPaths", #""readonlyPaths": ["/proc/sys"]"#),
 			("sysctl", #""sysctl": { "net.ipv4.ip_forward": "1" }"#),
 			("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
+			("namespaces.mount", #""namespaces": [{ "type": "mount" }]"#),
 			("cgroupsPath", #""cgroupsPath": "/orlix/demo""#),
 			("netDevices", #""netDevices": [{ "name": "eth0" }]"#)
 		]
@@ -6711,24 +6665,8 @@ extension OrlixTerminalSessionTests {
 
 		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
 		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
-		try """
-		{
-		  "ociVersion": "1.1.0",
-		  "root": { "path": "rootfs", "readonly": true },
-		  "process": {
-		    "args": ["/usr/bin/env", "sh", "-lc"],
-		    "env": ["PATH=/usr/bin:/bin"],
-		    "cwd": "/work",
-		    "user": { "uid": 1000, "gid": 1000 }
-		  },
-		  "linux": {
-		    "namespaces": [
-		      { "type": "pid" },
-		      { "type": "mount" }
-		    ]
-		  }
-		}
-		""".data(using: .utf8)!.write(
+		try #"{"ociVersion":"1.1.0","root":{"path":"rootfs","readonly":true},"process":{"args":["/usr/bin/env","sh","-lc"],"env":["PATH=/usr/bin:/bin"],"cwd":"/work","user":{"uid":1000,"gid":1000}}}"#
+			.data(using: .utf8)!.write(
 			to: bundleURL.appendingPathComponent("config.json")
 		)
 
