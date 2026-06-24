@@ -20115,3 +20115,29 @@ Boundary:
 - No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+
+### 2026-06-24 OCI hook rejection parser coverage
+
+Checkpoint: strengthened OCI runtime config parser proof for lifecycle hooks. The parser already rejects unsupported OCI hook arrays before descriptor creation; tests now cover every hook field that the feature report marks deterministically rejected instead of proving only `prestart`.
+
+Changes:
+- Updated `testOCIRuntimeConfigParserRejectsUnsupportedHooks` to cover `prestart`, `createRuntime`, `createContainer`, `startContainer`, `poststart`, and `poststop`.
+- Kept behavior in `OrlixOCIRuntimeConfigParser` unchanged: all OCI hook execution remains rejected until Orlix can execute hooks through Linux-owned runtime semantics.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- Focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsUnsupportedHooks test` passed 1 test, 0 failures.
+- Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_21-14-34-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` reported `result: Passed`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known active-plan stale pending/blocked warning.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is parser proof coverage only. It does not implement OCI hook execution, OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, networking, cgroups, arbitrary OCI bind mounts, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
