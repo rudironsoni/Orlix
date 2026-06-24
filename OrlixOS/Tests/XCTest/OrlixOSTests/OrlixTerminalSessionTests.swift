@@ -8238,31 +8238,25 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
-	func testOCIRuntimeConfigParserTranslatesSupportedBindMounts() throws {
+	func testOCIRuntimeConfigParserTranslatesSupportedDocumentsBindMount() throws {
 		let config = Data(
 			"""
 			{
-			  "ociVersion": "1.1.0",
-			  "process": { "args": ["/bin/sh"], "cwd": "/" },
-			  "mounts": [
-			    {
-			      "destination": "/home/root/Documents",
-			      "type": "bind",
-			      "source": "orlix:documents",
-			      "options": ["rbind", "ro"]
-			    },
-			    {
-			      "destination": "/mnt/external",
-			      "type": "bind",
-			      "source": "orlix:security-scoped:selected-folder",
-			      "options": ["bind"]
-			    }
-			  ]
+				"ociVersion": "1.1.0",
+				"process": { "args": ["/bin/sh"], "cwd": "/" },
+				"mounts": [
+					{
+						"destination": "/home/root/Documents",
+						"type": "bind",
+						"source": "orlix:documents",
+						"options": ["rbind", "ro"]
+					}
+				]
 			}
 			""".utf8
 		)
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
-		XCTAssertEqual(descriptor.mounts.count, 2)
+		XCTAssertEqual(descriptor.mounts.count, 1)
 		XCTAssertEqual(descriptor.mounts[0].destination, "/home/root/Documents")
 		XCTAssertEqual(descriptor.mounts[0].type, "bind")
 		XCTAssertEqual(descriptor.mounts[0].source, "orlix:documents")
@@ -8271,16 +8265,10 @@ extension OrlixTerminalSessionTests {
 			id: "oci-bind-mounts",
 			rootMount: .defaultOverlay
 		)
-		XCTAssertEqual(environment.mounts.count, 2)
+		XCTAssertEqual(environment.mounts.count, 1)
 		XCTAssertEqual(environment.mounts[0].source, .documents)
 		XCTAssertEqual(environment.mounts[0].targetPath, "/home/root/Documents")
 		XCTAssertTrue(environment.mounts[0].readOnly)
-		XCTAssertEqual(
-			environment.mounts[1].source,
-			.securityScopedExternal(bookmarkID: "selected-folder")
-		)
-		XCTAssertEqual(environment.mounts[1].targetPath, "/mnt/external")
-		XCTAssertFalse(environment.mounts[1].readOnly)
 	}
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
@@ -8305,13 +8293,17 @@ extension OrlixTerminalSessionTests {
 				#"{ "destination": "/proc", "type": "proc", "source": "proc", "options": ["nosuid"] }"#,
 				.unsupportedLinuxFeature("mounts.options")
 			),
-			(
-				#"{ "destination": "/mnt/host", "type": "bind", "source": "/Users/rudi/Documents", "options": ["rbind"] }"#,
-				.unsupportedLinuxFeature("mounts.source")
-			),
-			(
-				#"{ "destination": "/mnt/host", "type": "bind", "source": "orlix:documents", "options": ["rshared"] }"#,
-				.unsupportedLinuxFeature("mounts.options")
+		(
+			#"{ "destination": "/mnt/host", "type": "bind", "source": "/Users/rudi/Documents", "options": ["rbind"] }"#,
+			.unsupportedLinuxFeature("mounts.source")
+		),
+		(
+			#"{ "destination": "/mnt/external", "type": "bind", "source": "orlix:security-scoped:selected-folder", "options": ["bind"] }"#,
+			.unsupportedLinuxFeature("mounts.source")
+		),
+		(
+			#"{ "destination": "/mnt/host", "type": "bind", "source": "orlix:documents", "options": ["rshared"] }"#,
+			.unsupportedLinuxFeature("mounts.options")
 			)
 		]
 
