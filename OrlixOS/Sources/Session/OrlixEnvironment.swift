@@ -43,6 +43,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let rootMount: OrlixEnvironmentRootMount
     public let rootReadonly: Bool
     public let rootPropagation: OrlixEnvironmentRootPropagation
+    public let sysctls: [String: String]
     public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
@@ -97,6 +98,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
         rootReadonly: Bool = false,
         rootPropagation: OrlixEnvironmentRootPropagation = .private,
+        sysctls: [String: String] = [:],
         mounts: [OrlixEnvironmentMount] = []
     ) {
         self.id = id
@@ -123,6 +125,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.rootMount = rootMount
         self.rootReadonly = rootReadonly
         self.rootPropagation = rootPropagation
+        self.sysctls = sysctls
         self.mounts = mounts
     }
 
@@ -151,6 +154,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case rootMount
         case rootReadonly
         case rootPropagation
+        case sysctls
         case mounts
     }
 
@@ -246,6 +250,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             OrlixEnvironmentRootPropagation.self,
             forKey: .rootPropagation
         ) ?? .private
+        self.sysctls = try container.decodeIfPresent(
+            [String: String].self,
+            forKey: .sysctls
+        ) ?? [:]
         self.mounts = try container.decodeIfPresent(
             [OrlixEnvironmentMount].self,
             forKey: .mounts
@@ -289,6 +297,9 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         try container.encode(rootMount, forKey: .rootMount)
         try container.encode(rootReadonly, forKey: .rootReadonly)
         try container.encode(rootPropagation, forKey: .rootPropagation)
+        if !sysctls.isEmpty {
+            try container.encode(sysctls, forKey: .sysctls)
+        }
         try container.encode(mounts, forKey: .mounts)
     }
 }
@@ -700,6 +711,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let domainnameCommandLineKey = "orlix.domainname"
     public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
     public static let rootPropagationCommandLineKey = "orlix.root.propagation"
+    public static let sysctlCommandLineKeyPrefix = "orlix.sysctl"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
 
     public let environmentID: String
@@ -868,12 +880,30 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
 
     private static func validateRlimit(_ rlimit: OrlixEnvironmentRlimit) throws {
         guard !rlimit.type.isEmpty,
-              !rlimit.type.contains(":"),
-              !rlimit.type.contains("\u{0}"),
-              rlimit.soft <= rlimit.hard
+            !rlimit.type.contains(":"),
+            !rlimit.type.contains("\u{0}"),
+            rlimit.soft <= rlimit.hard
         else {
             throw OrlixEnvironmentRootImageError.invalidDefaultRlimit(rlimit.type)
         }
+    }
+
+    private static func validateSysctl(key: String, value: String) throws -> String {
+        let allowedScalars = CharacterSet.alphanumerics
+            .union(CharacterSet(charactersIn: "._-"))
+        guard !key.isEmpty,
+            key.unicodeScalars.allSatisfy({ allowedScalars.contains($0) }),
+            key.first != ".",
+            key.last != ".",
+            !key.contains(".."),
+            !value.contains("\u{0}"),
+            !value.contains("\n"),
+            !value.contains("\r")
+        else {
+            throw OrlixEnvironmentRootImageError.invalidDefaultSysctl(key)
+        }
+
+        return "\(key)=\(value)"
     }
 
     private static func hostDirectoryRegistrations(
@@ -983,6 +1013,15 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         if descriptor.rootPropagation != .private {
             tokens.append("\(rootPropagationCommandLineKey)=\(descriptor.rootPropagation.rawValue)")
         }
+        for (index, entry) in descriptor.sysctls
+            .sorted(by: { $0.key < $1.key })
+            .enumerated()
+        {
+            let assignment = try validateSysctl(key: entry.key, value: entry.value)
+            tokens.append(
+                "\(sysctlCommandLineKeyPrefix)\(index)=\(percentEncoded(assignment))"
+            )
+        }
         if let mount = descriptor.mounts.first {
             tokens.append(
                 "\(defaultHostMountTargetCommandLineKey)=\(percentEncoded(mount.targetPath))"
@@ -1042,6 +1081,7 @@ public enum OrlixEnvironmentRootImageError:
     case invalidDefaultEnvironment(String)
     case invalidDefaultWorkingDirectory(String)
     case invalidDefaultRlimit(String)
+    case invalidDefaultSysctl(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
 
@@ -1257,9 +1297,12 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultScheduler: parent.defaultScheduler,
                 defaultIOPriority: parent.defaultIOPriority,
                 defaultCPUAffinity: parent.defaultCPUAffinity,
+                defaultUmask: parent.defaultUmask,
+                defaultRlimits: parent.defaultRlimits,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
                 rootPropagation: parent.rootPropagation,
+                sysctls: parent.sysctls,
                 mounts: parent.mounts
             )
             try save(descriptor, fileManager: fileManager)

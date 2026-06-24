@@ -1323,8 +1323,14 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:rootinit_mount_propagation",
 			reason: "OCI linux.rootfsPropagation carries into OrlixOS descriptors and Linux rootinit applies recursive mount propagation flags before switch_root."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "virtioNetDevicePlane",
+        OrlixOCIRuntimeFeature(
+            name: "sysctl",
+            status: .implemented,
+            proof: "orlix:rootinit_procfs_sysctl",
+            reason: "OCI linux.sysctl carries into OrlixOS descriptors Linux rootinit writes validated sysctl key/value pairs through /proc/sys before userspace init."
+        ),
+        OrlixOCIRuntimeFeature(
+            name: "virtioNetDevicePlane",
 			status: .implemented,
 			proof: "orlix:virtio_net_device_probe",
 			reason:
@@ -1509,10 +1515,11 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let annotations: [String: String]
 	public let hostname: String?
 	public let domainname: String?
-	public let rootPath: String?
-	public let rootReadonly: Bool
-	public let rootPropagation: OrlixEnvironmentRootPropagation
-	public let mounts: [OrlixOCIRuntimeMount]
+    public let rootPath: String?
+    public let rootReadonly: Bool
+    public let rootPropagation: OrlixEnvironmentRootPropagation
+    public let sysctls: [String: String]
+    public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
 	public let defaultWorkingDirectory: String
@@ -1562,12 +1569,13 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			defaultRlimits: defaultRlimits,
 			hostname: hostname,
 			domainname: domainname,
-			rootMount: rootMount,
-			rootReadonly: rootReadonly,
-			rootPropagation: rootPropagation,
-			mounts: mounts + ociMounts
-		)
-	}
+            rootMount: rootMount,
+            rootReadonly: rootReadonly,
+            rootPropagation: rootPropagation,
+            sysctls: sysctls,
+            mounts: mounts + ociMounts
+        )
+    }
 }
 
 public struct OrlixOCIRuntimeMount: Equatable, Sendable {
@@ -1660,10 +1668,11 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			domainname: domainname,
 			rootPath: try Self.validatedRootPath(config.root?.path),
 			rootReadonly: config.root?.readonly ?? false,
-			rootPropagation: try Self.validatedRootPropagation(
-				config.linux?.rootfsPropagation
-			),
-			mounts: mounts,
+            rootPropagation: try Self.validatedRootPropagation(
+                config.linux?.rootfsPropagation
+            ),
+            sysctls: try Self.validatedSysctls(config.linux?.sysctl ?? [:]),
+            mounts: mounts,
 			defaultCommand: args,
 			defaultEnvironment: environment,
 			defaultWorkingDirectory: cwd,
@@ -1740,9 +1749,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		return value
 	}
 
-	private static func validatedRootPropagation(
-		_ value: String?
-	) throws -> OrlixEnvironmentRootPropagation {
+    private static func validatedRootPropagation(
+        _ value: String?
+    ) throws -> OrlixEnvironmentRootPropagation {
 		guard let value, !value.isEmpty else {
 			return .private
 		}
@@ -1759,8 +1768,27 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
 				"linux.rootfsPropagation"
 			)
-		}
-	}
+        }
+    }
+
+    private static func validatedSysctls(_ values: [String: String]) throws -> [String: String] {
+        let allowedScalars = CharacterSet.alphanumerics
+            .union(CharacterSet(charactersIn: "._-"))
+        for (key, value) in values {
+            guard !key.isEmpty,
+                key.unicodeScalars.allSatisfy({ allowedScalars.contains($0) }),
+                key.first != ".",
+                key.last != ".",
+                !key.contains(".."),
+                !value.contains("\u{0}"),
+                !value.contains("\n"),
+                !value.contains("\r")
+            else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.sysctl")
+            }
+        }
+        return values
+    }
 
 	private static func validatedUTSName(_ value: String?,
 		feature: String) throws -> String?
@@ -2174,12 +2202,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		if let readonlyPaths = linux.readonlyPaths, !readonlyPaths.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.readonlyPaths")
 		}
-		if let sysctl = linux.sysctl, !sysctl.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.sysctl")
-		}
-		if linux.mountLabel != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
-		}
+        if linux.mountLabel != nil {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
+        }
 		if linux.personality != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.personality")
 		}
