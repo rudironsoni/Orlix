@@ -2915,6 +2915,12 @@ public struct OrlixOCIRuntimeProcessHandle: Sendable {
 		)
 	}
 
+	public func delete() throws -> OrlixOCIRuntimeDeletedProcess {
+		OrlixOCIRuntimeDeletedProcess(
+			lifecycle: try lifecycle.delete()
+		)
+	}
+
 	public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeCompletedProcess {
 		OrlixOCIRuntimeCompletedProcess(
 			lifecycle: try lifecycle.exit(observedProcess: observation)
@@ -2947,6 +2953,21 @@ public struct OrlixOCIRuntimeCompletedProcess: Sendable {
 
 	public func stateReport() throws -> OrlixOCIRuntimeStateReport {
 		try lifecycle.stateReport()
+	}
+
+	public func delete() throws -> OrlixOCIRuntimeDeletedProcess {
+		OrlixOCIRuntimeDeletedProcess(
+			lifecycle: try lifecycle.delete()
+		)
+	}
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeDeletedProcess: Sendable {
+	public let lifecycle: OrlixOCIRuntimeLifecycleController
+
+	public init(lifecycle: OrlixOCIRuntimeLifecycleController) {
+		self.lifecycle = lifecycle
 	}
 }
 
