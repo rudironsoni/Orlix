@@ -6212,6 +6212,25 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
 	}
 
+	func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
+		let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
+			(
+				Data(#"{ "ociVersion": "1.1.0", "root": { "path": "" }, "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
+				.invalidRootPath("")
+			),
+			(
+				Data(#"{ "ociVersion": "1.1.0", "root": { "path": "root\u0000fs" }, "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
+				.invalidRootPath("root\u{0}fs")
+			)
+		]
+
+		for (config, expectedError) in invalidConfigs {
+			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+				XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
+			}
+		}
+	}
+
 	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxFeatures() throws {
 		let unsupportedFeatureConfigs: [(String, String)] = [
 			("uidMappings", #""uidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),

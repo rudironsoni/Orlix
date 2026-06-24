@@ -1450,6 +1450,7 @@ public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
 	case invalidProcessArg(String)
 	case invalidEnvironmentEntry(String)
 	case invalidAnnotationEntry(String)
+	case invalidRootPath(String)
 	case invalidWorkingDirectory(String)
 	case invalidConsoleSize
 	case invalidHostname(String)
@@ -1618,7 +1619,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			annotations: try Self.validatedAnnotations(config.annotations ?? [:]),
 			hostname: hostname,
 			domainname: domainname,
-			rootPath: config.root?.path,
+			rootPath: try Self.validatedRootPath(config.root?.path),
 			rootReadonly: config.root?.readonly ?? false,
 			mounts: mounts,
 			defaultCommand: args,
@@ -1682,6 +1683,14 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 
 		return annotations
+	}
+
+	private static func validatedRootPath(_ value: String?) throws -> String? {
+		guard let value else { return nil }
+		guard !value.isEmpty, !value.contains("\u{0}") else {
+			throw OrlixOCIRuntimeConfigError.invalidRootPath(value)
+		}
+		return value
 	}
 
 	private static func validatedUTSName(_ value: String?,

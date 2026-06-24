@@ -19913,3 +19913,27 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 OCI root path parser validation
+
+Checkpoint: tightened OCI runtime config parsing so explicit invalid `root.path` values fail deterministically before bundle root resolution. Empty `root.path` and decoded NUL-containing `root.path` now report `OrlixOCIRuntimeConfigError.invalidRootPath`, avoiding ambiguous resolution of an explicitly empty OCI root path to the bundle directory. Missing `root.path` still follows existing default `rootfs` bundle behavior.
+
+Changes:
+- Updated `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` so `OrlixOCIRuntimeConfigParser` validates `root.path` before carrying it into `OrlixOCIRuntimeConfigDescriptor`.
+- Added `testOCIRuntimeConfigParserRejectsInvalidRootPaths` to `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices available` showed all listed iOS 26.5 simulators shutdown, including iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsInvalidRootPaths -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsRootPathEscapingBundle -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleResolvesConfiguredRelativeRootPath test` exited 0; result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_19-00-36-+0200.xcresult` reported `result: Passed`, `passedTests: 3`, `failedTests: 0`, `skippedTests: 0`.
+- Post-run simulator check showed all listed iOS 26.5 simulators shutdown, including iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is OCI config validation only. It does not implement OCI lifecycle compliance, `create`/`start`/`state`/`kill`/`delete`, product `orlix run`, registry pull, Coreutils success, arbitrary OCI root handling, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
