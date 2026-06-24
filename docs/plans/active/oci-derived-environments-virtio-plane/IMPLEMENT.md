@@ -19684,3 +19684,46 @@ Boundary:
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, or
   HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 Host-directory fixture for app-hosted virtio-fs mount proof
+Checkpoint: connected the existing Linux `virtio_fs_mount_probe` upstream-test lane to a deterministic private host-directory fixture so the probe runs through the normal OrlixOS session surface and Linux `mount(2)` path.
+
+Changes:
+- `OrlixOS/Sources/Session/OrlixEnvironment.swift` gives `OrlixHostDirectoryRegistration` an explicit SPI-visible initializer.
+- `OrlixOS/Sources/Session/OrlixOS.swift` adds an SPI-only `OrlixLinuxSession` initializer accepting pre-boot host-directory registrations; normal sessions still default to no fixture registrations.
+- `OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` marks only `kernelVirtioFSMount` as requiring a host-directory fixture, creates a temporary read-only host tree, registers it as existing opaque tag `orlix-host0`, and removes it after the run.
+- `OrlixTestRunner/Tests/XCTest/OrlixKernelUpstreamTests/OrlixKernelUpstreamTests.swift` asserts the fixture spec and stable `virtio_fs_mount_probe` step tokens while leaving success/failure to upstream runner TAP validation.
+
+Verification:
+- `xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices available` before runtime proof showed all listed iOS 26.5 simulators shutdown, including `iPhone 17 Pro` `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain `iPhone 17` `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Focused runtime proof:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcodebuild -project OrlixSystem.xcodeproj \
+    -scheme OrlixKernelUpstreamTests \
+    -configuration Debug \
+    -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' \
+    -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioFSMountProbeSpecUsesHostDirectoryFixture \
+    -only-testing:OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession \
+    test
+```
+
+Result: final rerun exited 0 with `** TEST SUCCEEDED **`. Earlier focused runs reached guest Linux and mounted `orlix-host0` through virtio-fs, but failed only because XCTest asserted long human-readable TAP labels that terminal capture can interleave/split. The final test asserts stable probe-step tokens; upstream runner validation still fails on `not ok`, crash, panic, OOM, malformed TAP, or missing `ORLIX-KSELFTEST-END`.
+
+Observed proof surface included `virtio_fs_mount_probe`, `ok 3 - Linux mounts Orlix host folder through virtio-fs`, probe steps for mountinfo/readdir/EROFS/statx/xattr/lseek/nested traversal, no `not ok`, and `ORLIX-KSELFTEST-END`.
+
+Static/boundary checks:
+- `rtk git diff --check` exited 0.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This proves app-hosted Linux/kselftest virtio-fs mount proof for the single opaque test fixture tag `orlix-host0`.
+- It does not claim arbitrary OCI bind mounts, external security-scoped folders, writable host-folder mounts, Coreutils upstream-suite success, OCI Runtime lifecycle compliance, product `orlix run`, registry pull, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.

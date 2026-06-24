@@ -378,6 +378,15 @@ enum OrlixOSPayload {
         )
     }
 
+    static func registerAdditionalHostDirectoriesForTesting(
+        _ directories: [OrlixHostDirectoryRegistration]
+    ) -> Bool {
+        guard !directories.isEmpty else {
+            return true
+        }
+        return registerHostDirectories(directories)
+    }
+
     static func registerMaterializedRootImage(
         _ rootImage: OrlixEnvironmentRootImage,
         payloadBundlePath: String,
@@ -747,6 +756,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
     public let terminal: OrlixTerminalSession
     public let bootConfig: OrlixBootConfig
     private let materializedRootImage: OrlixEnvironmentRootImage?
+    private let hostDirectories: [OrlixHostDirectoryRegistration]
 
     public init(
         bootConfig: OrlixBootConfig,
@@ -755,6 +765,19 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         self.bootConfig = bootConfig
         self.terminal = terminal
         self.materializedRootImage = nil
+        self.hostDirectories = []
+    }
+
+    @_spi(OrlixPrivateTesting)
+    public init(
+        bootConfig: OrlixBootConfig,
+        hostDirectories: [OrlixHostDirectoryRegistration],
+        terminal: OrlixTerminalSession = OrlixTerminalSession()
+    ) {
+        self.bootConfig = bootConfig
+        self.terminal = terminal
+        self.materializedRootImage = nil
+        self.hostDirectories = hostDirectories
     }
 
     public convenience init(
@@ -776,6 +799,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         self.bootConfig = materializedRootImage.bootConfig
         self.terminal = terminal
         self.materializedRootImage = materializedRootImage
+        self.hostDirectories = []
     }
 
     @_spi(OrlixPrivateTesting)
@@ -872,7 +896,12 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         if let materializedRootImage {
             return materializedRootImage.registerWithHostAdapter()
         }
-        return OrlixOSPayload.registerWithHostAdapter()
+        guard OrlixOSPayload.registerWithHostAdapter() else {
+            return false
+        }
+        return OrlixOSPayload.registerAdditionalHostDirectoriesForTesting(
+            hostDirectories
+        )
     }
 }
 

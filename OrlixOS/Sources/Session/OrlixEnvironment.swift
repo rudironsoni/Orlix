@@ -427,6 +427,16 @@ public struct OrlixHostDirectoryRegistration: Equatable, Sendable {
     public let identifier: String
     public let hostPath: String
     public let readOnly: Bool
+
+    public init(
+        identifier: String,
+        hostPath: String,
+        readOnly: Bool
+    ) {
+        self.identifier = identifier
+        self.hostPath = hostPath
+        self.readOnly = readOnly
+    }
 }
 
 @_spi(OrlixPrivateTesting)
