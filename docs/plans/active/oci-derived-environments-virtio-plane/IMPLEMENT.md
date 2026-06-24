@@ -19937,3 +19937,32 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 OCI default virtual mount option rejection
+
+Checkpoint: tightened OCI runtime config parsing so accepted non-bind virtual mount declarations cannot carry options Orlix does not apply. Default virtual mounts remain limited to the already-mounted Orlix init surfaces (`proc` at `/proc`, `sysfs` at `/sys`, `devtmpfs` at `/dev`, `devpts` at `/dev/pts`, `tmpfs` at `/tmp`), and parser now rejects nonempty `options` on those declarations with `unsupportedLinuxFeature("mounts.options")`. This prevents OCI mount options from being silently accepted while ignored.
+
+Changes:
+- Updated `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` so `validateDefaultVirtualMount` rejects non-bind virtual mount options.
+- Updated `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` so the minimal config fixture no longer declares unapplied `/proc` options, and added a rejection case for `proc` options.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices available` showed all listed iOS 26.5 simulators shutdown.
+- First focused `OrlixOSTests` run failed because the existing minimal parser fixture still declared `/proc` options that the new parser correctly rejects.
+- Second focused `OrlixOSTests` run failed because the fixture assertion still expected those removed `/proc` options after parsing.
+- Final focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserConvertsMinimalLinuxConfig -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsUnsupportedMounts -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserTranslatesSupportedBindMounts test` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_19-25-53-+0200.xcresult` reported `result: Passed`, `passedTests: 3`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Post-run simulator shutdown command reported the iPhone 17 Pro already in `Shutdown` state.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is OCI config validation only. It does not implement arbitrary OCI mount setup, cgroup mounts, mount propagation, idmapped mounts, new Linux mount semantics, or OCI lifecycle behavior.
+- Bind mounts remain the only translated mount policy in `OrlixEnvironmentMount`; non-bind virtual mounts remain accepted only as declarations of defaults already mounted by Orlix init.
+- This does not claim arbitrary OCI bind mounts, writable external host folders, OCI lifecycle compliance, product `orlix run`, registry pull, Coreutils success, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.

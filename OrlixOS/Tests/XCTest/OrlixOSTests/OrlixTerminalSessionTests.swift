@@ -6143,7 +6143,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-			#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc","options":["nosuid","noexec","nodev"]},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
+			#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6159,7 +6159,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.mounts[0].destination, "/proc")
 		XCTAssertEqual(descriptor.mounts[0].type, "proc")
 		XCTAssertEqual(descriptor.mounts[0].source, "proc")
-		XCTAssertEqual(descriptor.mounts[0].options, ["nosuid", "noexec", "nodev"])
+		XCTAssertEqual(descriptor.mounts[0].options, [])
 		XCTAssertEqual(descriptor.mounts[1].destination, "/tmp")
 		XCTAssertEqual(descriptor.mounts[1].type, "tmpfs")
 		XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo ok"])
@@ -8082,6 +8082,10 @@ extension OrlixTerminalSessionTests {
 			(
 				#"{ "destination": "/proc", "type": "proc", "source": "not-proc" }"#,
 				.unsupportedLinuxFeature("mounts.source")
+			),
+			(
+				#"{ "destination": "/proc", "type": "proc", "source": "proc", "options": ["nosuid"] }"#,
+				.unsupportedLinuxFeature("mounts.options")
 			),
 			(
 				#"{ "destination": "/mnt/host", "type": "bind", "source": "/Users/rudi/Documents", "options": ["rbind"] }"#,
