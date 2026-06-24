@@ -6061,8 +6061,9 @@ extension OrlixTerminalSessionTests {
 			"orlix:process_capability_probe"
 		)
 		XCTAssertEqual(report.feature(named: "netDevices")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "netDevices")?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.status, .implemented)
-		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.proof, "orlix:virtio_mmio_probe_contract")
+		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.proof, "orlix:virtio_net_device_probe")
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(
 			report.feature(named: "userNamespaceMappings")?.status,
