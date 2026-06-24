@@ -6295,11 +6295,15 @@ extension OrlixTerminalSessionTests {
 	}
 
 	func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
-		let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
-			(
-				Data(#"{ "ociVersion": "1.1.0", "root": { "path": "" }, "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
-				.invalidRootPath("")
-			),
+	let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
+		(
+			Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
+			.missingRootPath
+		),
+		(
+			Data(#"{ "ociVersion": "1.1.0", "root": { "path": "" }, "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
+			.invalidRootPath("")
+		),
 			(
 				Data(#"{ "ociVersion": "1.1.0", "root": { "path": "root\u0000fs" }, "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
 				.invalidRootPath("root\u{0}fs")
@@ -8715,14 +8719,18 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 				Data(#"{ "ociVersion": "1.1.0", "process": { "args": [], "cwd": "/" } }"#.utf8),
 				.emptyProcessArgs
 			),
-			(
-				Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "env": ["BAD"], "cwd": "/" } }"#.utf8),
-				.invalidEnvironmentEntry("BAD")
-			),
-			(
-				Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "cwd": "relative" } }"#.utf8),
-				.invalidWorkingDirectory("relative")
-			)
+		(
+			Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "env": ["BAD"], "cwd": "/" } }"#.utf8),
+			.invalidEnvironmentEntry("BAD")
+		),
+		(
+			Data(#"{ "ociVersion": "1.1.0", "root": { "path": "rootfs" }, "process": { "args": ["/bin/sh"] } }"#.utf8),
+			.missingWorkingDirectory
+		),
+		(
+			Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "cwd": "relative" } }"#.utf8),
+			.invalidWorkingDirectory("relative")
+		)
 		]
 
 		for (config, expectedError) in invalidConfigs {
