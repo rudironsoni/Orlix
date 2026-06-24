@@ -345,6 +345,12 @@ let pseudoFSObservationKeys: Set<String> = [
     "ptmx-allocates",
     "sysfs-virtio-directory"
 ]
+let mountNamespaceObservationKeys: Set<String> = [
+    "mountpoint-exists",
+    "child-started",
+    "child-mountinfo-tmpfs",
+    "parent-marker-hidden"
+]
 
 func fdExecResult(
     runner: String,
@@ -520,6 +526,34 @@ func pseudoFSResult(
     )
 }
 
+func mountNamespaceResult(
+    runner: String,
+    stdout: String,
+    stderr: String,
+    exitStatus: Int?,
+    signal: String?,
+    observations: [String: String]
+) throws -> OracleResult {
+    let missing = mountNamespaceObservationKeys.subtracting(observations.keys)
+    guard missing.isEmpty else {
+        throw OracleError.invalidLog(
+            "missing mount-namespace observations: \(missing.sorted().joined(separator: ", "))"
+        )
+    }
+    return OracleResult(
+        caseID: "mount-namespace",
+        runner: runner,
+        stdout: stdout,
+        stderr: stderr,
+        exitStatus: exitStatus,
+        signal: signal,
+        errnoEvents: [],
+        statEntries: [],
+        mutations: [],
+        observations: observations
+    )
+}
+
 func oracleBlock(caseID: String, in log: String) throws -> [String] {
     let begin = "ORLIX-ORACLE-BEGIN \(caseID)"
     let end = "ORLIX-ORACLE-END \(caseID)"
@@ -625,6 +659,15 @@ func resultFromLinuxFixture(
             signal: signal,
             observations: observations(from: jsonObjectLines(from: stdout))
         )
+    case "mount-namespace":
+        return try mountNamespaceResult(
+            runner: "linux",
+            stdout: stdout,
+            stderr: stderr,
+            exitStatus: exitStatus,
+            signal: signal,
+            observations: observations(from: jsonObjectLines(from: stdout))
+        )
     default:
         throw OracleError.invalidCase(
             "linux-result-from-fixture does not support \(testCase.id)"
@@ -648,6 +691,8 @@ func resultFromOrlixLog(testCase: OracleCase, log: String) throws -> OracleResul
         return try signalWaitResultFromOrlixLog(log)
     case "pseudo-fs":
         return try pseudoFSResultFromOrlixLog(log)
+    case "mount-namespace":
+        return try mountNamespaceResultFromOrlixLog(log)
     default:
         throw OracleError.invalidCase(
             "orlix-result-from-log does not support \(testCase.id)"
@@ -1004,6 +1049,44 @@ func pseudoFSResultFromOrlixLog(_ log: String) throws -> OracleResult {
     )
 }
 
+func mountNamespaceResultFromOrlixLog(_ log: String) throws -> OracleResult {
+    var observed = Dictionary(
+        uniqueKeysWithValues: [
+            fdExecObservation(
+                log,
+                "mount namespace probe mountpoint exists",
+                "mountpoint-exists"
+            ),
+            fdExecObservation(
+                log,
+                "mount namespace child started",
+                "child-started"
+            ),
+            fdExecObservation(
+                log,
+                "mount namespace child verified mountinfo",
+                "child-mountinfo-tmpfs"
+            ),
+            fdExecObservation(
+                log,
+                "child tmpfs mount hidden parent",
+                "parent-marker-hidden"
+            )
+        ]
+    )
+    if !log.contains("mount_namespace_probe") {
+        observed["mount-namespace-log"] = "missing"
+    }
+    return try mountNamespaceResult(
+        runner: "orlix",
+        stdout: "",
+        stderr: "",
+        exitStatus: 0,
+        signal: nil,
+        observations: observed
+    )
+}
+
 func jsonObjectLines(from output: String) -> [String] {
     output
         .split(separator: "\n", omittingEmptySubsequences: false)
@@ -1237,6 +1320,22 @@ func runSelfTest() throws {
         ),
         orlixLogPath: repositoryPath(
             "tools/orlix-linux-oracle/samples/pseudo-fs.orlix-kselftest.log"
+        )
+    )
+
+    try selfTestCase(
+        casePath: repositoryPath("tools/orlix-linux-oracle/cases/mount-namespace.json"),
+        linuxResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/mount-namespace.linux.json"
+        ),
+        orlixResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/mount-namespace.orlix.json"
+        ),
+        driftResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/mount-namespace.orlix-drift.json"
+        ),
+        orlixLogPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/mount-namespace.orlix-kselftest.log"
         )
     )
 

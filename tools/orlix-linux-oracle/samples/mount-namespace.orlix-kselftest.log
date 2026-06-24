@@ -1,0 +1,16 @@
+ORLIX-KSELFTEST-INIT
+TAP version 13
+1..5
+ok 1 - procfs mounted for kselftest
+ok 2 - sysfs mounted kselftest
+ok 3 - devtmpfs mounted kselftest
+ok 4 - installed Orlix kselftest list is readable
+# exec /orlix/mount_namespace_probe
+TAP version 13
+1..4
+ok 1 - mount namespace probe mountpoint exists
+ok 2 - mount namespace child started
+ok 3 - mount namespace child verified mountinfo
+ok 4 - child tmpfs mount hidden parent
+ok 5 - mount_namespace_probe
+ORLIX-KSELFTEST-END

@@ -19727,3 +19727,26 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 Linux oracle mount namespace case
+Checkpoint: expanded the Mac-only Linux oracle scaffold with a mount namespace comparison case. This follows the objective order after the virtio-fs proof and keeps oracle tooling outside iOS runtime.
+
+Changes:
+- Added `tools/orlix-linux-oracle/cases/mount-namespace.json`.
+- Added `tools/orlix-linux-oracle/fixtures/mount_namespace_probe.c`, a real-Linux fixture that creates a mountpoint, forks a child, unshares `CLONE_NEWNS`, mounts tmpfs, checks child `/proc/self/mountinfo`, creates a marker inside the child namespace, and verifies the parent does not see that marker.
+- Added Linux, Orlix, drift, and Orlix kselftest-log samples under `tools/orlix-linux-oracle/samples/`.
+- Updated `tools/orlix-linux-oracle/orlix-linux-oracle.swift` so `mount-namespace` validates required observations, converts Linux fixture JSON stdout, converts Orlix `mount_namespace_probe` kselftest logs, compares sample results, and participates in `self-test` drift detection.
+
+Verification:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test` exited 0 with `oracle self-test passed`.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/mount-namespace.json` exited 0 with `case mount-namespace is valid`.
+- `rtk git diff --check` exited 0.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This adds oracle tooling and sample comparison coverage only. It does not run a fresh real-Linux privileged fixture or fresh app-hosted Orlix mount-namespace runtime proof in this checkpoint.
+- The oracle fixture requires a real Linux runner with mount namespace privileges. macOS remains only the development host for this tool.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, HostAdapter-owned Linux policy, OCI lifecycle claim, product `orlix run`, registry pull, Coreutils success, or full runtime readiness claim was added.

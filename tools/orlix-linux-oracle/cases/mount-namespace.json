@@ -1,0 +1,22 @@
+{
+  "id": "mount-namespace",
+  "description": "Compare Linux mount namespace isolation: child unshares a mount namespace, mounts tmpfs, sees it in mountinfo, and the parent does not see the child marker.",
+  "fixture": "fixtures/mount_namespace_probe.c",
+  "command": [
+    "/oracle/mount_namespace_probe"
+  ],
+  "environment": {
+    "LC_ALL": "C"
+  },
+  "workingDirectory": "/oracle/work",
+  "compare": {
+    "stdout": false,
+    "stderr": true,
+    "exitStatus": true,
+    "signal": true,
+    "errnoEvents": false,
+    "statEntries": false,
+    "mutations": false,
+    "observations": true
+  }
+}
