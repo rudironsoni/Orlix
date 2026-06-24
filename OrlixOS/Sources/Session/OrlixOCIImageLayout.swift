@@ -1280,6 +1280,17 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "OCI netDevices policy remains rejected until Orlix has OCI device selection, external networking, DNS, and NAT proof beyond the internal virtio-net device-plane probe."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "ociLifecycleStateModel",
+			status: .implemented,
+			proof: "orlix:runtime_lifecycle_unit_tests",
+			reason: "OrlixOS models create, start, signal, wait/exit, state, and delete transitions with invalid-transition guards before observation-driver side effects."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociRuntimeSpecLifecycle",
+			status: .recognized,
+			reason: "Full OCI Runtime Spec lifecycle is recognized but not claimed until Linux substrate, process execution, resource setup, and cleanup proofs are complete."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "procfs",
 			status: .implemented,
 			proof: "orlix:pseudo_fs_probe",
