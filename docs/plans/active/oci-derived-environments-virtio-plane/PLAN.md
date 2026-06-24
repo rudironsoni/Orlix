@@ -2004,3 +2004,5 @@ Plan rules:
 ## Proof Boundary Correction
 
 The proof surface is the test suite result, not package assembly. Linux, OrlixMLibC, Coreutils, and OCI/runtime claims must be backed by their corresponding test outputs. Package/rootfs/test-fixture assembly is only harness setup required to launch those suites; it must not become a package manager, distro model, or independent proof framework.
+
+Current OrlixOS harness naming follows that boundary: build-completion markers use `*_STAMP` / `.stamp`, and the environment fixture target is `environment-runtime-test-fixtures`.
