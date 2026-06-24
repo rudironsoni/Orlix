@@ -1488,7 +1488,9 @@ public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
 	case invalidProcessArg(String)
 	case invalidEnvironmentEntry(String)
 	case invalidAnnotationEntry(String)
+	case missingRootPath
 	case invalidRootPath(String)
+	case missingWorkingDirectory
 	case invalidWorkingDirectory(String)
 	case invalidConsoleSize
 	case invalidHostname(String)
@@ -1627,7 +1629,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			return arg
 		}
 		let environment = try Self.environmentDictionary(from: process.env ?? [])
-		let cwd = process.cwd ?? "/"
+		guard let cwd = process.cwd else {
+			throw OrlixOCIRuntimeConfigError.missingWorkingDirectory
+		}
 		guard cwd.hasPrefix("/"), !cwd.contains("\u{0}") else {
 			throw OrlixOCIRuntimeConfigError.invalidWorkingDirectory(cwd)
 		}
@@ -1715,8 +1719,10 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		return annotations
 	}
 
-	private static func validatedRootPath(_ value: String?) throws -> String? {
-		guard let value else { return nil }
+	private static func validatedRootPath(_ value: String?) throws -> String {
+		guard let value else {
+			throw OrlixOCIRuntimeConfigError.missingRootPath
+		}
 		guard !value.isEmpty, !value.contains("\u{0}") else {
 			throw OrlixOCIRuntimeConfigError.invalidRootPath(value)
 		}

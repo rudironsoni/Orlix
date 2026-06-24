@@ -20329,3 +20329,32 @@ Boundary:
 - No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
+
+### 2026-06-24 OCI runtime required field validation
+
+Checkpoint: tightened OrlixOS OCI runtime config parsing so spec-required `root.path` and `process.cwd` are required inputs instead of Orlix silently substituting defaults. This keeps OrlixOS descriptor import truthful: runtime configs missing required fields now fail at parse time rather than producing an environment descriptor that looks OCI-derived but was completed by Orlix policy.
+
+Changes:
+- Added `OrlixOCIRuntimeConfigError.missingRootPath`.
+- Added `OrlixOCIRuntimeConfigError.missingWorkingDirectory`.
+- `OrlixOCIRuntimeConfigParser` now rejects missing `root.path` before validating root path syntax.
+- `OrlixOCIRuntimeConfigParser` now rejects missing `process.cwd` before validating working-directory syntax.
+- Added XCTest cases covering missing `root.path` and missing `process.cwd`.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0, proving current OrlixOS and OrlixOSTests Swift sources compile for the iOS Simulator target.
+- Focused XCTest attempt `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsInvalidRootPaths -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsInvalidProcessSurface test-without-building` was interrupted after no XCTest suite output and Xcode test-log finalization/launch machinery stalled; this is not passing XCTest proof.
+- Interrupted result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_23-57-20-+0200.xcresult` could not be summarized because `Info.plist` was not written, matching incomplete XCTest finalization.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings about stale pending/blocked status and no recent current-status/handoff marker before compaction.
+- `rtk rg --files OrlixMLibC/Sources/patches` produced no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` produced no generated-tree or mlibc patch changes.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This is OrlixOS OCI runtime config parser truthfulness only.
+- This does not implement full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, networking, cgroups, arbitrary OCI bind mounts, external host-folder runtime mounts, multiple live environments in one running OrlixKernel, or full runtime readiness.
+- Focused XCTest runtime proof is missing for this checkpoint because the runner did not reach suite execution.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
