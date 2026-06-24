@@ -19351,3 +19351,5 @@ Current directive: the proof surface is the test suite result, not package assem
 Renamed `OrlixOS/Sources/make/proof-packages.mk` to `OrlixOS/Sources/make/test-fixture-packages.mk` to remove the misleading "proof package" framing. The makefile remains build plumbing for ordinary test-fixture binaries needed to run the actual suites.
 
 Follow-up naming cleanup: OrlixOS make variables and marker files that represented build-completion stamps were renamed from `*_PROOF` / `.proof` to `*_STAMP` / `.stamp`. The environment fixture target was renamed from `environment-runtime-proof-fixtures` to `environment-runtime-test-fixtures`. This is naming-only harness cleanup: no runtime behavior, Linux ABI, upstream package source, mlibc patch, or Coreutils test result is changed by this cleanup.
+
+Manifest follow-up: renamed the distribution manifest package ladder variable from `ORLIXOS_PACKAGE_PROOF_LADDER` to `ORLIXOS_PACKAGE_STAMP_LADDER` so the manifest definition matches the renamed rootfs fixture-stamp consumer. This remains naming-only harness cleanup.
