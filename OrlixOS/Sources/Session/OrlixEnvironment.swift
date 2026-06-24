@@ -423,6 +423,13 @@ public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixHostDirectoryRegistration: Equatable, Sendable {
+    public let identifier: String
+    public let hostPath: String
+    public let readOnly: Bool
+}
+
+@_spi(OrlixPrivateTesting)
 public enum OrlixEnvironmentMountError: Error, Equatable, Sendable {
     case invalidSourceIdentifier(String)
     case invalidTargetPath(String)
@@ -657,15 +664,19 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultCPUAffinityCommandLineKey = "orlix.cpuaffinity"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
     public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
+    public static let defaultHostMountTargetCommandLineKey = "orlix.mount.host0.target"
+    public static let defaultHostMountReadOnlyCommandLineKey = "orlix.mount.host0.readonly"
     public static let hostnameCommandLineKey = "orlix.hostname"
     public static let domainnameCommandLineKey = "orlix.domainname"
     public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
+    public static let defaultHostDirectoryIdentifier = "orlix-host0"
 
     public let environmentID: String
     public let rootImageIdentifier: String
     public let baseImageURL: URL
     public let stateImageURL: URL
     public let bootConfig: OrlixBootConfig
+    public let hostDirectories: [OrlixHostDirectoryRegistration]
     public let hostDirectoryExtendedAttributes: [OrlixHostDirectoryExtendedAttribute]
 
     public static func materialized(
@@ -673,6 +684,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         layout: OrlixEnvironmentStorageLayout,
         bootProfile: OrlixBootProfile = .development,
         kernelCommandLine: String? = defaultKernelCommandLine,
+        documentsDirectory: URL? = nil,
         hostDirectoryExtendedAttributes: [OrlixHostDirectoryExtendedAttribute] = [],
         fileManager: FileManager = .default
     ) throws -> OrlixEnvironmentRootImage {
@@ -692,7 +704,11 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
             expectedRoot: layout.rootDirectory,
             fileManager: fileManager
         )
-        try validateSupportedMounts(descriptor.mounts)
+        let hostDirectories = try hostDirectoryRegistrations(
+            for: descriptor.mounts,
+            documentsDirectory: documentsDirectory,
+            fileManager: fileManager
+        )
         let resolvedCommandLine = try materializedKernelCommandLine(
             descriptor: descriptor,
             kernelCommandLine: kernelCommandLine
@@ -707,6 +723,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
                 kernelCommandLine: resolvedCommandLine,
                 rootImageIdentifier: descriptor.rootImageIdentifier
             ),
+            hostDirectories: hostDirectories,
             hostDirectoryExtendedAttributes: hostDirectoryExtendedAttributes
         )
     }
@@ -828,12 +845,30 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         }
     }
 
-    private static func validateSupportedMounts(
-        _ mounts: [OrlixEnvironmentMount]
-    ) throws {
-        if let mount = mounts.first {
+    private static func hostDirectoryRegistrations(
+        for mounts: [OrlixEnvironmentMount],
+        documentsDirectory: URL?,
+        fileManager: FileManager
+    ) throws -> [OrlixHostDirectoryRegistration] {
+        guard let mount = mounts.first else {
+            return []
+        }
+        guard mounts.count == 1, mount.source == .documents else {
             throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
         }
+        let directory = try documentsDirectory ?? fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        )
+        return [
+            OrlixHostDirectoryRegistration(
+                identifier: defaultHostDirectoryIdentifier,
+                hostPath: directory.path,
+                readOnly: mount.readOnly
+            )
+        ]
     }
 
     private static func materializedExecutionTokens(
@@ -913,6 +948,14 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         }
         if descriptor.rootReadonly {
             tokens.append("\(rootReadonlyCommandLineKey)=1")
+        }
+        if let mount = descriptor.mounts.first {
+            tokens.append(
+                "\(defaultHostMountTargetCommandLineKey)=\(percentEncoded(mount.targetPath))"
+            )
+            if mount.readOnly {
+                tokens.append("\(defaultHostMountReadOnlyCommandLineKey)=1")
+            }
         }
         return tokens
     }

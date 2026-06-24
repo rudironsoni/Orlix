@@ -28,12 +28,18 @@
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
+#define ORLIX_INIT_HOST_MOUNT_TARGET_SIZE 256
 
 struct orlix_rlimit_config {
 	int resource;
 	rlim_t soft;
 	rlim_t hard;
 };
+
+static void die(const char *message);
+static int read_cmdline_decoded(const char *key, char *value,
+				size_t value_size);
+static int read_cmdline_unsigned(const char *key, unsigned long *value);
 
 static int write_all(int fd, const void *bytes, size_t length)
 {
@@ -122,6 +128,27 @@ static int ensure_dir(const char *path, mode_t mode)
 	return -1;
 }
 
+static int ensure_dir_recursive(const char *path, mode_t mode)
+{
+	char buffer[ORLIX_INIT_HOST_MOUNT_TARGET_SIZE];
+	size_t length = strnlen(path, sizeof(buffer));
+
+	if (length == 0 || length >= sizeof(buffer) || path[0] != '/')
+		return -1;
+	memcpy(buffer, path, length + 1);
+
+	for (char *cursor = buffer + 1; *cursor != '\0'; cursor++) {
+		if (*cursor != '/')
+			continue;
+		*cursor = '\0';
+		if (ensure_dir(buffer, mode) != 0)
+			return -1;
+		*cursor = '/';
+	}
+
+	return ensure_dir(buffer, mode);
+}
+
 static int mount_if_needed(const char *source, const char *target,
 			   const char *fstype, unsigned long flags,
 			   const void *data)
@@ -206,6 +233,63 @@ static void mount_runtime_filesystems(void)
 	    mount_if_needed("selinuxfs", "/sys/fs/selinux", "selinuxfs",
 			    MS_NOSUID | MS_NOEXEC, NULL) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: mount /sys/fs/selinux failed\n");
+}
+
+static int linux_mount_target_is_allowed(const char *target)
+{
+	static const char *const reserved[] = {
+		"/dev",
+		"/proc",
+		"/run",
+		"/sys",
+		"/tmp",
+		NULL,
+	};
+
+	if (target[0] != '/' || target[1] == '\0')
+		return 0;
+	for (const char *cursor = target; *cursor != '\0'; cursor++) {
+		if (*cursor == '\0')
+			return 0;
+		if (*cursor == '/' && cursor[1] == '/')
+			return 0;
+		if (*cursor == '.' &&
+		    (cursor == target + 1 || cursor[-1] == '/') &&
+		    cursor[1] == '.' &&
+		    (cursor[2] == '/' || cursor[2] == '\0'))
+			return 0;
+	}
+	for (const char *const *entry = reserved; *entry != NULL; entry++) {
+		size_t length = strlen(*entry);
+
+		if (strcmp(target, *entry) == 0 ||
+		    (strncmp(target, *entry, length) == 0 &&
+		     target[length] == '/'))
+			return 0;
+	}
+	return 1;
+}
+
+static void mount_configured_host_directory(void)
+{
+	char target[ORLIX_INIT_HOST_MOUNT_TARGET_SIZE];
+	unsigned long read_only = 0;
+	unsigned long flags = MS_NOSUID | MS_NODEV;
+
+	if (read_cmdline_decoded("orlix.mount.host0.target=", target,
+				 sizeof(target)) != 0)
+		return;
+	if (!linux_mount_target_is_allowed(target))
+		die("invalid host mount target");
+
+	if (read_cmdline_unsigned("orlix.mount.host0.readonly=", &read_only) == 0 &&
+	    read_only != 0)
+		flags |= MS_RDONLY;
+
+	if (ensure_dir_recursive(target, 0755) != 0)
+		die("create host mount target");
+	if (mount_if_needed("orlix-host0", target, "virtiofs", flags, NULL) != 0)
+		die("mount host directory");
 }
 
 static void make_transport_raw(int fd)
@@ -1438,6 +1522,7 @@ int main(void)
 	write_literal(STDERR_FILENO, "orlix-init: stdio installed\n");
 	mount_runtime_filesystems();
 	write_literal(STDERR_FILENO, "orlix-init: runtime filesystems mounted\n");
+	mount_configured_host_directory();
 	if (run_pty_shell(STDIN_FILENO) != 0)
 		write_literal(STDERR_FILENO,
 			      "orlix-init: PTY shell session ended\n");

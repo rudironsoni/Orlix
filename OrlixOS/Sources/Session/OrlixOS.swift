@@ -55,6 +55,16 @@ private func orlix_host_resources_register_host_directory_xattr(
     _ valueLength: UInt32
 ) -> CInt
 
+@_silgen_name("orlix_host_resources_clear_host_directories")
+private func orlix_host_resources_clear_host_directories() -> CInt
+
+@_silgen_name("orlix_host_resources_register_host_directory")
+private func orlix_host_resources_register_host_directory(
+    _ identifier: UnsafePointer<CChar>,
+    _ hostPath: UnsafePointer<CChar>,
+    _ readOnly: UInt32
+) -> CInt
+
 private struct COrlixBootConfig {
     var profile: CInt
     var kernelCommandLine: UnsafePointer<CChar>?
@@ -402,12 +412,39 @@ enum OrlixOSPayload {
                 }
             }
         }
-        let metadataRegistered = registered
+        let resourcesRegistered = registered
+            && registerHostDirectories(rootImage.hostDirectories)
             && registerHostDirectoryExtendedAttributes(rootImage.hostDirectoryExtendedAttributes)
-        if !metadataRegistered {
+        if !resourcesRegistered {
             _ = orlix_host_resources_clear_root_images()
+            _ = orlix_host_resources_clear_host_directories()
         }
-        return metadataRegistered
+        return resourcesRegistered
+    }
+
+    private static func registerHostDirectories(
+        _ directories: [OrlixHostDirectoryRegistration]
+    ) -> Bool {
+        guard orlix_host_resources_clear_host_directories() == 0 else {
+            return false
+        }
+
+        for directory in directories {
+            let registered = directory.identifier.withCString { identifier in
+                directory.hostPath.withCString { hostPath in
+                    orlix_host_resources_register_host_directory(
+                        identifier,
+                        hostPath,
+                        directory.readOnly ? 1 : 0
+                    ) == 0
+                }
+            }
+            guard registered else {
+                return false
+            }
+        }
+
+        return true
     }
 
     private static func registerHostDirectoryExtendedAttributes(
