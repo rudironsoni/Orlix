@@ -165,7 +165,10 @@ public struct OrlixOCIImageLayoutReader: Sendable {
             else {
                 throw OrlixOCIImageLayoutError.invalidEnvironmentEntry(value)
             }
-            result[key] = String(value[value.index(after: separator)...])
+			guard result[key] == nil else {
+				throw OrlixOCIImageLayoutError.invalidEnvironmentEntry(value)
+			}
+			result[key] = String(value[value.index(after: separator)...])
         }
         return result
     }
@@ -1687,6 +1690,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 			guard !key.isEmpty,
 			      !key.contains("\u{0}"),
 			      !variableValue.contains("\u{0}") else {
+				throw OrlixOCIRuntimeConfigError.invalidEnvironmentEntry(value)
+			}
+			guard environment[key] == nil else {
 				throw OrlixOCIRuntimeConfigError.invalidEnvironmentEntry(value)
 			}
 			environment[key] = variableValue
