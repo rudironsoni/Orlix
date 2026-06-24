@@ -19210,3 +19210,22 @@ Current state:
 - The next implementation step should trace where the ordinary file-backed
   page content is lost before it reaches the host user mapping, rather than
   repeating HostAdapter copy-back by target/source-page heuristics.
+### 2026-06-24: file-backed mmap cacheflush/copy-back experiment
+
+- Confirmed the regular-file `MAP_PRIVATE` failure remains a Linux-visible
+  OrlixKernel hosted mapping issue: focused kselftest still reports mapped
+  bytes as `00` while `pread()` returns file bytes, for example
+  `# FM BAD O0 M00 P6f`, `O1 M00 P72`, `O4 M00 P78`, `O16 M00 P6c`,
+  and `O544 M00 P62`.
+- Tried an Orlix arch cacheflush route modeled on the standard Linux
+  `flush_dcache_page()` / `flush_dcache_folio()` hooks, backed by a private
+  HostAdapter kernel-shadow copy-back helper. This did not fix the focused
+  `file_mmap_content_probe`; the failure shape remained all-zero mapped bytes.
+- Reverted the cacheflush/copy-back code experiment. No `OrlixMLibC` patches
+  were added, no generated upstream/build trees were edited, and no userspace
+  ABI or package/runtime surface was introduced.
+- Next investigation should avoid repeating this path unless new evidence
+  shows the page-cache fill path actually invokes the Orlix cacheflush hooks.
+  The next useful split is to prove whether the present user PTE for the
+  file-backed VMA points at the expected page-cache PFN or at an already-zero
+  page before HostAdapter refresh runs.
