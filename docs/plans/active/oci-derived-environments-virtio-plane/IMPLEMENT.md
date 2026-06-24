@@ -20168,3 +20168,30 @@ Boundary:
 - No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+### 2026-06-24 OCI terminal feature report non-overclaim
+
+Checkpoint: made OCI terminal metadata support visible in `OrlixOCIRuntimeFeatureReport` without claiming OCI terminal runtime semantics. `process.terminal` and `process.consoleSize` are now reported as recognized with descriptor-unit-test proof, because OrlixOS validates and carries those fields into session descriptors, but Linux PTY allocation/resizing behavior for OCI starts is not yet proved.
+
+Changes:
+- Added `process.terminal` and `process.consoleSize` feature-report entries with status `recognized` and proof `orlix:runtime_session_descriptor_unit_tests`.
+- Extended feature-report XCTest coverage so these entries cannot be accidentally promoted to implemented runtime support without stronger Linux PTY lifecycle proof.
+- Kept `OrlixOCIRuntimeLifecycleController` behavior unchanged; this checkpoint is truthful reporting only.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- First focused XCTest attempt against iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` was interrupted after an XCTest attach/finalize-log stall; Xcode reported `NSMachErrorDomain Code=-308` while finalizing test logs, not a Swift test assertion failure. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_21-50-12-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl bootstatus 5E2E003E-F434-4B1F-8E5C-BED59BBC177D -b` reached terminal status `Finished`.
+- Focused rerun `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLifecycleControllerProducesSessionDescriptor test` exited 0.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_21-58-31-+0200.xcresult` reported `result: Passed`, `passedTests: 4`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings about stale pending/blocked status and no recent current-status/handoff marker before compaction.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This is OrlixOS feature-report truthfulness only. It does not implement OCI terminal allocation, terminal resizing, OCI hook execution, OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, networking, cgroups, arbitrary OCI bind mounts, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.

@@ -6110,6 +6110,18 @@ extension OrlixTerminalSessionTests {
 			XCTAssertEqual(features[name]?.proof, expectedProof, name)
 			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
 		}
+		for name in [
+			"process.terminal",
+			"process.consoleSize",
+		] {
+			XCTAssertEqual(features[name]?.status, .recognized, name)
+			XCTAssertEqual(
+				features[name]?.proof,
+				"orlix:runtime_session_descriptor_unit_tests",
+				name
+			)
+			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
+		}
 		XCTAssertEqual(features["seccomp"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["seccomp"]?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(features["intelRdt"]?.status, .deterministicallyRejected)
@@ -6154,6 +6166,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(json.contains(#""name" : "ociLifecycleStateModel""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_lifecycle_unit_tests""#))
 		XCTAssertTrue(json.contains(#""name" : "ociRuntimeSpecLifecycle""#))
+		XCTAssertTrue(json.contains(#""name" : "process.terminal""#))
+		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_session_descriptor_unit_tests""#))
 		XCTAssertTrue(json.contains(#""name" : "virtioNetDevicePlane""#))
 		XCTAssertTrue(json.contains(#""name" : "virtioFsHostFolderMount""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:virtio_fs_mount_probe""#))

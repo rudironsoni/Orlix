@@ -1268,6 +1268,18 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "OCI process execCPUAffinity CPU lists carry into OrlixOS descriptors and init calls sched_setaffinity."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "process.terminal",
+			status: .recognized,
+			proof: "orlix:runtime_session_descriptor_unit_tests",
+			reason: "OCI process terminal requests carry into Orlix runtime session descriptors, but terminal allocation semantics are not claimed until Linux PTY lifecycle proof covers OCI starts."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "process.consoleSize",
+			status: .recognized,
+			proof: "orlix:runtime_session_descriptor_unit_tests",
+			reason: "OCI process consoleSize is validated and carried with terminal session metadata, but runtime terminal resizing is not claimed until Linux PTY lifecycle proof covers OCI starts."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "loopbackNetworking",
 			status: .implemented,
 			proof: "orlix:network_namespace_probe",
