@@ -20196,6 +20196,34 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
 
+### 2026-06-24 OCI readonly root feature-report coverage
+
+Checkpoint: exposed OCI `root.readonly` in `OrlixOCIRuntimeFeatureReport` as implemented with Linux-owned proof. Current OrlixOS already parses `root.readonly`, carries it into environment descriptors/import plans, emits `orlix.root.readonly=1`, and rootinit mounts the environment root read-only. The feature report now reflects that bounded support without broadening OCI lifecycle or runtime readiness claims.
+
+Changes:
+- Added feature-report entry `root.readonly` with status `implemented` and proof `orlix:readonly_root_probe`.
+- Extended feature-report tests to pin `root.readonly` status, proof, and stable JSON encoding.
+- Kept broad OCI readonly path handling separate: `ociReadonlyPaths` remains deterministically rejected until per-path remount policy is wired.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- Focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserAcceptsRootReadonly -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleCarriesRootReadonlyIntoImportPlan test` exited 0; the last selector was a typo and did not match a test.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_22-29-30-+0200.xcresult` reported `result: Passed`, `passedTests: 4`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5. Executed tests were feature-report coverage and `testOCIRuntimeConfigParserAcceptsRootReadonly`.
+- Corrected focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleCarriesReadonlyRootIntoEnvironmentDescriptors test` exited 0.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_22-34-51-+0200.xcresult` reported `result: Passed`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings about stale pending/blocked status and no recent current-status/handoff marker before compaction.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This is truthful OrlixOS feature reporting for already wired readonly-root behavior. It does not implement OCI readonlyPaths, maskedPaths, arbitrary mount policy, OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, networking, cgroups, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
+
 ### 2026-06-24 OCI bind mount source boundary
 
 Checkpoint: narrowed OCI runtime config bind-mount translation to the host-folder source that currently has OrlixOS materialization support: `orlix:documents`. OCI configs using future security-scoped external-folder source identifiers now fail deterministically during config parsing instead of producing an `OrlixEnvironmentDescriptor` that later fails during root-image materialization.
