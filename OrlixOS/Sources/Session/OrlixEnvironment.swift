@@ -46,6 +46,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let sysctls: [String: String]
     public let maskedPaths: [String]
     public let readonlyPaths: [String]
+    public let cgroupsPath: String?
     public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
@@ -103,6 +104,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         sysctls: [String: String] = [:],
         maskedPaths: [String] = [],
         readonlyPaths: [String] = [],
+        cgroupsPath: String? = nil,
         mounts: [OrlixEnvironmentMount] = []
     ) {
         self.id = id
@@ -132,6 +134,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.sysctls = sysctls
         self.maskedPaths = maskedPaths
         self.readonlyPaths = readonlyPaths
+        self.cgroupsPath = cgroupsPath
         self.mounts = mounts
     }
 
@@ -163,6 +166,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case sysctls
         case maskedPaths
         case readonlyPaths
+        case cgroupsPath
         case mounts
     }
 
@@ -270,6 +274,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             [String].self,
             forKey: .readonlyPaths
         ) ?? []
+        self.cgroupsPath = try container.decodeIfPresent(
+            String.self,
+            forKey: .cgroupsPath
+        )
         self.mounts = try container.decodeIfPresent(
             [OrlixEnvironmentMount].self,
             forKey: .mounts
@@ -322,6 +330,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         if !readonlyPaths.isEmpty {
             try container.encode(readonlyPaths, forKey: .readonlyPaths)
         }
+        try container.encodeIfPresent(cgroupsPath, forKey: .cgroupsPath)
         try container.encode(mounts, forKey: .mounts)
     }
 }
@@ -736,6 +745,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let sysctlCommandLineKeyPrefix = "orlix.sysctl"
     public static let maskedPathCommandLineKeyPrefix = "orlix.maskedpath"
     public static let readonlyPathCommandLineKeyPrefix = "orlix.readonlypath"
+    public static let cgroupsPathCommandLineKey = "orlix.cgroups.path"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
 
     public let environmentID: String
@@ -1070,6 +1080,11 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
                 "\(readonlyPathCommandLineKeyPrefix)\(index)=\(percentEncoded(try validateRuntimePath(path)))"
             )
         }
+        if let cgroupsPath = descriptor.cgroupsPath, !cgroupsPath.isEmpty {
+            tokens.append(
+                "\(cgroupsPathCommandLineKey)=\(percentEncoded(try validateRuntimePath(cgroupsPath)))"
+            )
+        }
         if let mount = descriptor.mounts.first {
             tokens.append(
                 "\(defaultHostMountTargetCommandLineKey)=\(percentEncoded(mount.targetPath))"
@@ -1354,6 +1369,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 sysctls: parent.sysctls,
                 maskedPaths: parent.maskedPaths,
                 readonlyPaths: parent.readonlyPaths,
+                cgroupsPath: parent.cgroupsPath,
                 mounts: parent.mounts
             )
             try save(descriptor, fileManager: fileManager)

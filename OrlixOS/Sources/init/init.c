@@ -29,6 +29,7 @@
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
 #define ORLIX_INIT_HOST_MOUNT_TARGET_SIZE 256
+#define ORLIX_INIT_CGROUP_PATH_SIZE 256
 
 struct orlix_rlimit_config {
 	int resource;
@@ -268,6 +269,76 @@ static int linux_mount_target_is_allowed(const char *target)
 			return 0;
 	}
 	return 1;
+}
+
+static int cgroup_path_is_valid(const char *path)
+{
+	if (path[0] != '/' || path[1] == '\0')
+		return 0;
+	for (const char *cursor = path; *cursor != '\0'; cursor++) {
+		if (*cursor == '\n' || *cursor == '\r')
+			return 0;
+		if (*cursor == '/' && cursor[1] == '/')
+			return 0;
+		if (*cursor == '.' && (cursor == path + 1 || cursor[-1] == '/') &&
+		    (cursor[1] == '/' || cursor[1] == '\0'))
+			return 0;
+		if (*cursor == '.' && (cursor == path + 1 || cursor[-1] == '/') &&
+		    cursor[1] == '.' && (cursor[2] == '/' || cursor[2] == '\0'))
+			return 0;
+	}
+	return 1;
+}
+
+static void write_decimal_to_buffer(char *buffer, size_t buffer_size,
+				    unsigned long value)
+{
+	char reversed[32];
+	size_t count = 0;
+	size_t out = 0;
+
+	if (buffer_size == 0)
+		return;
+	if (value == 0)
+		reversed[count++] = '0';
+	while (value > 0 && count < sizeof(reversed)) {
+		reversed[count++] = (char)('0' + (value % 10));
+		value /= 10;
+	}
+	while (count > 0 && out + 1 < buffer_size)
+		buffer[out++] = reversed[--count];
+	if (out + 1 < buffer_size)
+		buffer[out++] = '\n';
+	buffer[out] = '\0';
+}
+
+static void join_configured_cgroup(const char *path)
+{
+	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
+	char procs[ORLIX_INIT_CGROUP_PATH_SIZE + 32];
+	char pid_buffer[32];
+	int fd;
+
+	if (!cgroup_path_is_valid(path))
+		die("invalid cgroups path");
+	if (snprintf(directory, sizeof(directory), "/sys/fs/cgroup%s", path) >=
+	    (int)sizeof(directory))
+		die("cgroups path too long");
+	if (ensure_dir_recursive(directory, 0755) != 0)
+		die("create cgroup path");
+	if (snprintf(procs, sizeof(procs), "%s/cgroup.procs", directory) >=
+	    (int)sizeof(procs))
+		die("cgroup.procs path too long");
+	write_decimal_to_buffer(pid_buffer, sizeof(pid_buffer),
+				(unsigned long)getpid());
+	fd = open(procs, O_WRONLY | O_CLOEXEC);
+	if (fd < 0)
+		die("open cgroup.procs");
+	if (write_all(fd, pid_buffer, strlen(pid_buffer)) != 0) {
+		close(fd);
+		die("write cgroup.procs");
+	}
+	close(fd);
 }
 
 static void mount_configured_host_directory(void)
@@ -967,6 +1038,8 @@ struct orlix_command_config {
 	cpu_set_t cpu_affinity;
 	unsigned long umask_value;
 	int has_umask;
+	char cgroups_path[ORLIX_INIT_CGROUP_PATH_SIZE];
+	int has_cgroups_path;
 };
 
 static void selected_command_config(struct orlix_command_config *config)
@@ -1119,6 +1192,10 @@ static void selected_command_config(struct orlix_command_config *config)
 		config->has_cpu_affinity = 1;
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
+	if (read_cmdline_decoded("orlix.cgroups.path=", config->cgroups_path,
+				 sizeof(config->cgroups_path)) == 0 &&
+	    config->cgroups_path[0] != '\0')
+		config->has_cgroups_path = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
 		char key[32];
 		char value[ORLIX_INIT_VALUE_SIZE];
@@ -1430,6 +1507,8 @@ static pid_t start_command_on_pty(int master, int slave)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
 	if (config->has_umask)
 		(void)umask((mode_t)config->umask_value);
+	if (config->has_cgroups_path)
+		join_configured_cgroup(config->cgroups_path);
 	apply_rlimits(config);
 	apply_capability_bounding_set(&config->capabilities);
 	if (final_capability_set_present(&config->capabilities) &&
