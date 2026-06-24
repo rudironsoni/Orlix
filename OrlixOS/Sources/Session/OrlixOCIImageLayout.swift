@@ -1276,7 +1276,8 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "netDevices",
 			status: .deterministicallyRejected,
-			reason: "No OCI netDevices policy or virtio-net packet transport proof exists yet."
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI netDevices policy remains rejected until Orlix has OCI device selection, external networking, DNS, and NAT proof beyond the internal virtio-net device-plane probe."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "procfs",
@@ -1287,9 +1288,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "virtioNetDevicePlane",
 			status: .implemented,
-			proof: "orlix:virtio_mmio_probe_contract",
+			proof: "orlix:virtio_net_device_probe",
 			reason:
-				"Linux sees a standard virtio-net MMIO device id; link-up and packet transport are not claimed."
+				"Linux sees the virtio-net device as a netdev with sysfs, rtnetlink, carrier, AF_PACKET bind, TX counter, RX queue, and procfs interface proof."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "rtnetlink",
