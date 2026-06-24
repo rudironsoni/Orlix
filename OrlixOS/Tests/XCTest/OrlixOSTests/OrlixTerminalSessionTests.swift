@@ -7778,6 +7778,20 @@ extension OrlixTerminalSessionTests {
 		}
 		XCTAssertEqual(startDriver.events, [])
 
+		let runDriver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 44,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 42, exitStatus: 0)
+			)
+		)
+		XCTAssertThrowsError(try runningSession.runObserved(using: runDriver)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .running, action: .start)
+			)
+		}
+		XCTAssertEqual(runDriver.events, [])
+
 		let invalidSignalDriver = try RecordingOCIRuntimeProcessObservationDriver(
 			startPID: 42,
 			completion: .exited(
