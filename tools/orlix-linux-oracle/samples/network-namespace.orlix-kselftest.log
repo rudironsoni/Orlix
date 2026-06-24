@@ -1,0 +1,24 @@
+ORLIX-KSELFTEST-INIT
+TAP version 13
+1..5
+ok 1 - procfs mounted for kselftest
+ok 2 - sysfs mounted kselftest
+ok 3 - devtmpfs mounted kselftest
+ok 4 - installed Orlix kselftest list is readable
+# exec /orlix/network_namespace_probe
+TAP version 13
+1..12
+ok 1 - procfs exposes network state
+ok 2 - rtnetlink sockets open in current network namespace
+ok 3 - RTM_GETLINK reports loopback interface
+ok 4 - loopback interface accepts Linux address configuration
+ok 5 - RTM_GETADDR reports loopback IPv4 address
+ok 6 - RTM_GETROUTE reports loopback IPv4 route
+ok 7 - network namespace child enters isolated net namespace
+ok 8 - new network namespace keeps procfs network state readable
+ok 9 - new network namespace keeps rtnetlink socket local
+ok 10 - new network namespace rejects incomplete route with Linux error
+ok 11 - loopback TCP accepts local connections
+ok 12 - loopback UDP exchanges local datagrams
+ok 5 - network_namespace_probe
+ORLIX-KSELFTEST-END

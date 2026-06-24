@@ -19728,6 +19728,30 @@ Boundary:
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
 
+### 2026-06-24 Linux oracle network namespace case
+Checkpoint: expanded the Mac-only Linux oracle scaffold with a network namespace comparison case. This advances the networking substrate proof path for procfs network state, rtnetlink, loopback UDP, and `CLONE_NEWNET` child namespace behavior without claiming external networking, NAT, DNS, or OCI `netDevices`.
+
+Changes:
+- Added `tools/orlix-linux-oracle/cases/network-namespace.json`.
+- Added `tools/orlix-linux-oracle/fixtures/network_namespace_probe.c`, a real-Linux fixture that checks `/proc/net/*` readability, rtnetlink route socket creation, RTM_GETLINK loopback visibility, local loopback UDP datagram exchange, child `unshare(CLONE_NEWNET)` namespace identity change, child procfs network readability, child rtnetlink locality, and Linux-shaped route mutation rejection.
+- Added Linux, Orlix, drift, and Orlix kselftest-log samples under `tools/orlix-linux-oracle/samples/`.
+- Updated `tools/orlix-linux-oracle/orlix-linux-oracle.swift` so `network-namespace` validates required observations, converts Linux fixture JSON stdout, converts Orlix `network_namespace_probe` kselftest logs, compares sample results, and participates in `self-test` drift detection.
+
+Verification:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test` exited 0 with `oracle self-test passed`.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/network-namespace.json` exited 0 with `case network-namespace is valid`.
+- `rtk git diff --check` exited 0.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This adds oracle tooling and sample comparison coverage only. It does not run a fresh real-Linux network namespace fixture or fresh app-hosted Orlix network runtime proof in this checkpoint.
+- The oracle fixture requires a real Linux runner with network namespace privileges. macOS remains only the development host for this tool.
+- This does not claim virtio-net packet delivery, external networking, DNS, NAT, OCI `netDevices`, product `orlix run`, registry pull, Coreutils success, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
 ### 2026-06-24 Linux oracle mount namespace case
 Checkpoint: expanded the Mac-only Linux oracle scaffold with a mount namespace comparison case. This follows the objective order after the virtio-fs proof and keeps oracle tooling outside iOS runtime.
 
