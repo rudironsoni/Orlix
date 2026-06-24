@@ -44,6 +44,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let rootReadonly: Bool
     public let rootPropagation: OrlixEnvironmentRootPropagation
     public let sysctls: [String: String]
+    public let maskedPaths: [String]
+    public let readonlyPaths: [String]
     public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
@@ -99,6 +101,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         rootReadonly: Bool = false,
         rootPropagation: OrlixEnvironmentRootPropagation = .private,
         sysctls: [String: String] = [:],
+        maskedPaths: [String] = [],
+        readonlyPaths: [String] = [],
         mounts: [OrlixEnvironmentMount] = []
     ) {
         self.id = id
@@ -126,6 +130,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.rootReadonly = rootReadonly
         self.rootPropagation = rootPropagation
         self.sysctls = sysctls
+        self.maskedPaths = maskedPaths
+        self.readonlyPaths = readonlyPaths
         self.mounts = mounts
     }
 
@@ -155,6 +161,8 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case rootReadonly
         case rootPropagation
         case sysctls
+        case maskedPaths
+        case readonlyPaths
         case mounts
     }
 
@@ -254,6 +262,14 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             [String: String].self,
             forKey: .sysctls
         ) ?? [:]
+        self.maskedPaths = try container.decodeIfPresent(
+            [String].self,
+            forKey: .maskedPaths
+        ) ?? []
+        self.readonlyPaths = try container.decodeIfPresent(
+            [String].self,
+            forKey: .readonlyPaths
+        ) ?? []
         self.mounts = try container.decodeIfPresent(
             [OrlixEnvironmentMount].self,
             forKey: .mounts
@@ -299,6 +315,12 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         try container.encode(rootPropagation, forKey: .rootPropagation)
         if !sysctls.isEmpty {
             try container.encode(sysctls, forKey: .sysctls)
+        }
+        if !maskedPaths.isEmpty {
+            try container.encode(maskedPaths, forKey: .maskedPaths)
+        }
+        if !readonlyPaths.isEmpty {
+            try container.encode(readonlyPaths, forKey: .readonlyPaths)
         }
         try container.encode(mounts, forKey: .mounts)
     }
@@ -712,6 +734,8 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
     public static let rootPropagationCommandLineKey = "orlix.root.propagation"
     public static let sysctlCommandLineKeyPrefix = "orlix.sysctl"
+    public static let maskedPathCommandLineKeyPrefix = "orlix.maskedpath"
+    public static let readonlyPathCommandLineKeyPrefix = "orlix.readonlypath"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
 
     public let environmentID: String
@@ -906,6 +930,20 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         return "\(key)=\(value)"
     }
 
+    private static func validateRuntimePath(_ path: String) throws -> String {
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard path.hasPrefix("/"),
+            path != "/",
+            !path.contains("\u{0}"),
+            !components.contains(where: { $0 == ".." }),
+            !components.contains(where: { $0 == "." })
+        else {
+            throw OrlixEnvironmentRootImageError.invalidRuntimePath(path)
+        }
+
+        return path
+    }
+
     private static func hostDirectoryRegistrations(
         for mounts: [OrlixEnvironmentMount],
         documentsDirectory: URL?,
@@ -1022,6 +1060,16 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
                 "\(sysctlCommandLineKeyPrefix)\(index)=\(percentEncoded(assignment))"
             )
         }
+        for (index, path) in descriptor.maskedPaths.sorted().enumerated() {
+            tokens.append(
+                "\(maskedPathCommandLineKeyPrefix)\(index)=\(percentEncoded(try validateRuntimePath(path)))"
+            )
+        }
+        for (index, path) in descriptor.readonlyPaths.sorted().enumerated() {
+            tokens.append(
+                "\(readonlyPathCommandLineKeyPrefix)\(index)=\(percentEncoded(try validateRuntimePath(path)))"
+            )
+        }
         if let mount = descriptor.mounts.first {
             tokens.append(
                 "\(defaultHostMountTargetCommandLineKey)=\(percentEncoded(mount.targetPath))"
@@ -1082,6 +1130,7 @@ public enum OrlixEnvironmentRootImageError:
     case invalidDefaultWorkingDirectory(String)
     case invalidDefaultRlimit(String)
     case invalidDefaultSysctl(String)
+    case invalidRuntimePath(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
 
@@ -1303,6 +1352,8 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 rootReadonly: parent.rootReadonly,
                 rootPropagation: parent.rootPropagation,
                 sysctls: parent.sysctls,
+                maskedPaths: parent.maskedPaths,
+                readonlyPaths: parent.readonlyPaths,
                 mounts: parent.mounts
             )
             try save(descriptor, fileManager: fileManager)

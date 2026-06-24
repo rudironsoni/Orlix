@@ -1324,6 +1324,18 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "OCI linux.rootfsPropagation carries into OrlixOS descriptors and Linux rootinit applies recursive mount propagation flags before switch_root."
 		),
         OrlixOCIRuntimeFeature(
+            name: "maskedPaths",
+            status: .implemented,
+            proof: "orlix:rootinit_masked_paths",
+            reason: "OCI linux.maskedPaths carries into OrlixOS descriptors Linux rootinit masks validated in-root paths with standard Linux mounts before userspace init."
+        ),
+        OrlixOCIRuntimeFeature(
+            name: "readonlyPaths",
+            status: .implemented,
+            proof: "orlix:rootinit_readonly_paths",
+            reason: "OCI linux.readonlyPaths carries into OrlixOS descriptors Linux rootinit bind-remounts validated in-root paths read-only before userspace init."
+        ),
+        OrlixOCIRuntimeFeature(
             name: "sysctl",
             status: .implemented,
             proof: "orlix:rootinit_procfs_sysctl",
@@ -1519,6 +1531,8 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
     public let rootReadonly: Bool
     public let rootPropagation: OrlixEnvironmentRootPropagation
     public let sysctls: [String: String]
+    public let maskedPaths: [String]
+    public let readonlyPaths: [String]
     public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
@@ -1573,6 +1587,8 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
             rootReadonly: rootReadonly,
             rootPropagation: rootPropagation,
             sysctls: sysctls,
+            maskedPaths: maskedPaths,
+            readonlyPaths: readonlyPaths,
             mounts: mounts + ociMounts
         )
     }
@@ -1672,6 +1688,14 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
                 config.linux?.rootfsPropagation
             ),
             sysctls: try Self.validatedSysctls(config.linux?.sysctl ?? [:]),
+            maskedPaths: try Self.validatedRuntimePaths(
+                config.linux?.maskedPaths ?? [],
+                feature: "linux.maskedPaths"
+            ),
+            readonlyPaths: try Self.validatedRuntimePaths(
+                config.linux?.readonlyPaths ?? [],
+                feature: "linux.readonlyPaths"
+            ),
             mounts: mounts,
 			defaultCommand: args,
 			defaultEnvironment: environment,
@@ -1788,6 +1812,24 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
             }
         }
         return values
+    }
+
+    private static func validatedRuntimePaths(
+        _ paths: [String],
+        feature: String
+    ) throws -> [String] {
+        for path in paths {
+            let components = path.split(separator: "/", omittingEmptySubsequences: false)
+            guard path.hasPrefix("/"),
+                path != "/",
+                !path.contains("\u{0}"),
+                !components.contains(where: { $0 == ".." }),
+                !components.contains(where: { $0 == "." })
+            else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(feature)
+            }
+        }
+        return paths
     }
 
 	private static func validatedUTSName(_ value: String?,
@@ -2195,12 +2237,6 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 		if linux.seccomp != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
-		}
-		if let maskedPaths = linux.maskedPaths, !maskedPaths.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.maskedPaths")
-		}
-		if let readonlyPaths = linux.readonlyPaths, !readonlyPaths.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.readonlyPaths")
 		}
         if linux.mountLabel != nil {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")

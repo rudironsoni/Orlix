@@ -20223,6 +20223,34 @@ Boundary:
 - This does not implement full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, arbitrary masked/readonly paths, arbitrary OCI bind mounts, networking policy, cgroup resource enforcement, Coreutils runtime conformance, or full runtime readiness.
 - No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, runtime-visible host shim, generated upstream edit, or OrlixMLibC patch was added.
 
+### 2026-06-25 OCI masked and readonly path support
+
+Checkpoint: moved OCI `linux.maskedPaths` and `linux.readonlyPaths` out of temporary unsupported parsing and into a Linux-shaped root setup path. OrlixOS now validates absolute in-root OCI paths, carries masked/readonly path lists through runtime config descriptors and environment descriptors, emits deterministic `orlix.maskedpath<N>=...` and `orlix.readonlypath<N>=...` root-image command-line tokens, and rootinit applies the path policies under `/newroot` after API filesystems are mounted and before userspace init runs.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.maskedPaths` and `readonlyPaths` with legacy decode defaults, sorted command-line emission, encoding only when non-empty, and copied-environment preservation.
+- Added OCI parser carriage for `linux.maskedPaths` and `linux.readonlyPaths`, with validation that paths are absolute, non-root, NUL-free, and do not contain `.` or `..` components.
+- Removed `linux.maskedPaths` and `linux.readonlyPaths` from the unsupported OCI Linux feature matrix.
+- Added rootinit runtime-path decoding and `/newroot` containment validation.
+- Added rootinit masked path application: directory paths receive a read-only empty tmpfs, non-directory paths bind `/dev/null` and remount read-only.
+- Added rootinit readonly path application using Linux bind remount read-only semantics.
+- Added feature-report entries `maskedPaths` and `readonlyPaths` implemented with proof tags `orlix:rootinit_masked_paths` and `orlix:rootinit_readonly_paths`.
+- Extended positive OrlixOS tests for command-line emission, OCI parser conversion, feature-report status/proof, and environment descriptor conversion.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 with `** TEST BUILD SUCCEEDED **`.
+- The build compiled the touched OrlixOS Swift files, compiled updated `OrlixOSTests`, rebuilt OrlixOS root initramfs init, and rebuilt current upstream Coreutils package inputs.
+- Focused `test-without-building` for `testEnvironmentRootImageBindsEncodedExecutionDefaultsToInit`, `testOCIRuntimeConfigParserConvertsMinimalLinuxConfig`, and `testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures` did not reach `Testing started` / `Test Suite` output, was interrupted after the bounded wait, and Xcode reported `NSMachErrorDomain Code=-308` while saving launch/test record. This is not passing executed-XCTest proof.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` produced no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` produced no tracked generated-tree or mlibc patch changes.
+
+Boundary:
+- This implements bounded OCI `linux.maskedPaths` and `linux.readonlyPaths` setup through Linux mount operations during rootinit.
+- This does not implement full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, arbitrary OCI bind mounts, external security-scoped folder runtime mounts, networking policy, cgroup resource enforcement, Coreutils runtime conformance, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, runtime-visible host shim, generated upstream edit, or OrlixMLibC patch was added.
+
 ### 2026-06-24 OCI state report PID truthfulness
 Checkpoint: reject OCI runtime state reports that would claim `created` or `running` status without a Linux process PID. The current OrlixOS lifecycle model can prepare a created session descriptor before a Linux process observation exists; emitting an OCI-shaped `state` response for that record would overstate runtime lifecycle compliance. State reporting now fails explicitly until the lifecycle record has a PID for statuses that require one.
 

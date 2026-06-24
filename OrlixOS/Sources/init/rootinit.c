@@ -14,6 +14,9 @@
 #define ORLIX_SYSCTL_ASSIGNMENT_SIZE 512
 #define ORLIX_SYSCTL_PATH_SIZE 256
 #define ORLIX_SYSCTL_KEY_PREFIX "orlix.sysctl"
+#define ORLIX_RUNTIME_PATH_SIZE 512
+#define ORLIX_MASKED_PATH_KEY_PREFIX "orlix.maskedpath"
+#define ORLIX_READONLY_PATH_KEY_PREFIX "orlix.readonlypath"
 
 static void write_literal(int fd, const char *message)
 {
@@ -299,6 +302,146 @@ static int apply_configured_sysctls(void)
 	return 0;
 }
 
+static int newroot_path_from_runtime_path(char *path, size_t path_size,
+					  const char *runtime_path)
+{
+	const char *prefix = "/newroot";
+	size_t out = 0;
+	size_t component_length = 0;
+	size_t component_dot_count = 0;
+
+	if (runtime_path[0] != '/' || runtime_path[1] == '\0')
+		return -1;
+
+	while (prefix[out] != '\0') {
+		if (out + 1 >= path_size)
+			return -1;
+		path[out] = prefix[out];
+		out++;
+	}
+
+	for (size_t index = 0; runtime_path[index] != '\0'; index++) {
+		char c = runtime_path[index];
+
+		if (c == '\n' || c == '\r')
+			return -1;
+		if (c == '/') {
+			if ((component_length == 1 || component_length == 2) &&
+			    component_length == component_dot_count)
+				return -1;
+			component_length = 0;
+			component_dot_count = 0;
+		} else {
+			component_length++;
+			if (c == '.')
+				component_dot_count++;
+		}
+		if (out + 1 >= path_size)
+			return -1;
+		path[out++] = c;
+	}
+	if ((component_length == 1 || component_length == 2) &&
+	    component_length == component_dot_count)
+		return -1;
+
+	path[out] = '\0';
+	return 0;
+}
+
+static int remount_bind_readonly(const char *path, bool recursive)
+{
+	unsigned long flags = MS_BIND | MS_REMOUNT | MS_RDONLY | MS_NOSUID |
+			      MS_NODEV | MS_NOEXEC;
+
+	if (recursive)
+		flags |= MS_REC;
+	return mount(NULL, path, NULL, flags, NULL);
+}
+
+static int apply_masked_path(const char *runtime_path)
+{
+	char path[ORLIX_RUNTIME_PATH_SIZE];
+	struct stat st;
+
+	if (newroot_path_from_runtime_path(path, sizeof(path), runtime_path) != 0)
+		return -1;
+	if (lstat(path, &st) != 0)
+		return -1;
+
+	if (S_ISDIR(st.st_mode)) {
+		if (mount("tmpfs", path, "tmpfs",
+			  MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+			  "mode=000,size=0") == 0)
+			return 0;
+		return -1;
+	}
+
+	if (mount("/dev/null", path, NULL, MS_BIND, NULL) != 0)
+		return -1;
+	return remount_bind_readonly(path, false);
+}
+
+static int apply_readonly_path(const char *runtime_path)
+{
+	char path[ORLIX_RUNTIME_PATH_SIZE];
+	struct stat st;
+
+	if (newroot_path_from_runtime_path(path, sizeof(path), runtime_path) != 0)
+		return -1;
+	if (lstat(path, &st) != 0)
+		return -1;
+	if (mount(path, path, NULL, MS_BIND | (S_ISDIR(st.st_mode) ? MS_REC : 0),
+		  NULL) != 0)
+		return -1;
+	return remount_bind_readonly(path, S_ISDIR(st.st_mode));
+}
+
+static int apply_configured_runtime_paths(const char *prefix,
+					  int (*apply_path)(const char *))
+{
+	char buffer[ORLIX_CMDLINE_BUFFER_SIZE];
+	char *cursor;
+	size_t prefix_len = strlen(prefix);
+
+	if (read_cmdline(buffer, sizeof(buffer)) != 0)
+		return 0;
+
+	cursor = buffer;
+	while (*cursor != '\0') {
+		char *token_start;
+		char *value_start;
+		size_t value_length;
+		char runtime_path[ORLIX_RUNTIME_PATH_SIZE];
+
+		while (is_cmdline_space(*cursor))
+			cursor++;
+		token_start = cursor;
+		while (*cursor != '\0' && !is_cmdline_space(*cursor))
+			cursor++;
+		if (token_start == cursor)
+			continue;
+
+		if (memcmp(token_start, prefix, prefix_len) != 0)
+			continue;
+
+		value_start = token_start + prefix_len;
+		while (*value_start >= '0' && *value_start <= '9')
+			value_start++;
+		if (*value_start != '=')
+			continue;
+		value_start++;
+		value_length = (size_t)(cursor - value_start);
+
+		if (percent_decode(runtime_path, sizeof(runtime_path), value_start,
+				   value_length) != 0)
+			return -1;
+		if (apply_path(runtime_path) != 0)
+			return -1;
+	}
+
+	return 0;
+}
+
 static int apply_new_root_propagation(void)
 {
 	unsigned long propagation = MS_PRIVATE;
@@ -431,6 +574,18 @@ int main(void)
 	if (apply_configured_sysctls() != 0) {
 		write_literal(STDERR_FILENO,
 			      "orlix-rootinit: sysctl setup failed\n");
+		return 127;
+	}
+	if (apply_configured_runtime_paths(ORLIX_MASKED_PATH_KEY_PREFIX,
+					   apply_masked_path) != 0) {
+		write_literal(STDERR_FILENO,
+			      "orlix-rootinit: masked path setup failed\n");
+		return 127;
+	}
+	if (apply_configured_runtime_paths(ORLIX_READONLY_PATH_KEY_PREFIX,
+					   apply_readonly_path) != 0) {
+		write_literal(STDERR_FILENO,
+			      "orlix-rootinit: readonly path setup failed\n");
 		return 127;
 	}
 	if (switch_to_new_root() != 0) {
