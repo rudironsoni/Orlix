@@ -921,7 +921,9 @@ final class OrlixTerminalSessionTests: XCTestCase {
         sysctls: [
             "kernel.hostname": "orlix demo",
             "net.ipv4.ip_forward": "1"
-        ]
+        ],
+        maskedPaths: ["/proc/kcore", "/sys/firmware"],
+        readonlyPaths: ["/proc/sys", "/sys"]
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -970,6 +972,10 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.ioprio.class=IOPRIO_CLASS_BE"))
         XCTAssertTrue(commandLine.contains("orlix.ioprio.priority=4"))
         XCTAssertTrue(commandLine.contains("orlix.cpuaffinity=0-1"))
+        XCTAssertTrue(commandLine.contains("orlix.maskedpath0=/proc/kcore"))
+        XCTAssertTrue(commandLine.contains("orlix.maskedpath1=/sys/firmware"))
+        XCTAssertTrue(commandLine.contains("orlix.readonlypath0=/proc/sys"))
+        XCTAssertTrue(commandLine.contains("orlix.readonlypath1=/sys"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl0=kernel.hostname=orlix%20demo"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl1=net.ipv4.ip_forward=1"))
     }
@@ -6114,6 +6120,16 @@ extension OrlixTerminalSessionTests {
             report.feature(named: "rootfsPropagation")?.proof,
             "orlix:rootinit_mount_propagation"
         )
+        XCTAssertEqual(report.feature(named: "maskedPaths")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "maskedPaths")?.proof,
+            "orlix:rootinit_masked_paths"
+        )
+        XCTAssertEqual(report.feature(named: "readonlyPaths")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "readonlyPaths")?.proof,
+            "orlix:rootinit_readonly_paths"
+        )
         XCTAssertEqual(report.feature(named: "sysctl")?.status, .implemented)
         XCTAssertEqual(
             report.feature(named: "sysctl")?.proof,
@@ -6286,7 +6302,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-            #"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
+            #"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6299,6 +6315,8 @@ extension OrlixTerminalSessionTests {
         XCTAssertEqual(descriptor.rootPath, "rootfs")
         XCTAssertFalse(descriptor.rootReadonly)
         XCTAssertEqual(descriptor.rootPropagation, .shared)
+        XCTAssertEqual(descriptor.maskedPaths, ["/proc/kcore", "/sys/firmware"])
+        XCTAssertEqual(descriptor.readonlyPaths, ["/proc/sys", "/sys"])
         XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
         XCTAssertEqual(descriptor.sysctls["net.ipv4.ip_forward"], "1")
         XCTAssertEqual(descriptor.mounts.count, 2)
@@ -6357,6 +6375,8 @@ extension OrlixTerminalSessionTests {
         XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
         XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
         XCTAssertEqual(environment.rootPropagation, .shared)
+        XCTAssertEqual(environment.maskedPaths, descriptor.maskedPaths)
+        XCTAssertEqual(environment.readonlyPaths, descriptor.readonlyPaths)
         XCTAssertEqual(environment.sysctls, descriptor.sysctls)
     }
 
@@ -6390,8 +6410,6 @@ extension OrlixTerminalSessionTests {
 			("devices", #""devices": [{ "path": "/dev/net/tun", "type": "c" }]"#),
 			("resources", #""resources": { "memory": { "limit": 268435456 } }"#),
 			("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
-			("maskedPaths", #""maskedPaths": ["/proc/kcore"]"#),
-			("readonlyPaths", #""readonlyPaths": ["/proc/sys"]"#),
 			("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
 			("namespaces.mount", #""namespaces": [{ "type": "mount" }]"#),
 			("cgroupsPath", #""cgroupsPath": "/orlix/demo""#),
