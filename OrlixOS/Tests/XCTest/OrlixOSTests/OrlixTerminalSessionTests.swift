@@ -6752,14 +6752,43 @@ extension OrlixTerminalSessionTests {
 			rootMount: .defaultOverlay
 		)
 		XCTAssertEqual(session.id, "bundle-test")
-		XCTAssertEqual(session.lifecycleState, .created)
-		XCTAssertEqual(session.environment.defaultCommand, ["/bin/sh"])
+	XCTAssertEqual(session.lifecycleState, .created)
+	XCTAssertEqual(session.environment.defaultCommand, ["/bin/sh"])
+}
+
+func testOCIRuntimeBundleRejectsSymlinkRootfsEscapingBundle() throws {
+	let fileManager = FileManager.default
+	let bundleURL = fileManager.temporaryDirectory
+		.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+	let outsideRootfsURL = fileManager.temporaryDirectory
+		.appendingPathComponent("orlix-oci-rootfs-outside-\(UUID().uuidString)", isDirectory: true)
+	defer {
+		try? fileManager.removeItem(at: bundleURL)
+		try? fileManager.removeItem(at: outsideRootfsURL)
 	}
 
-	func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
-		let fileManager = FileManager.default
-		let bundleURL = fileManager.temporaryDirectory
-			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+	try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+	try fileManager.createDirectory(at: outsideRootfsURL, withIntermediateDirectories: true)
+	try fileManager.createSymbolicLink(
+		at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+		withDestinationURL: outsideRootfsURL
+	)
+	try minimalOCIRuntimeConfig().write(
+		to: bundleURL.appendingPathComponent("config.json")
+	)
+
+	XCTAssertThrowsError(try OrlixOCIRuntimeBundle.load(from: bundleURL)) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeBundleError,
+			.rootfsEscapesBundle("rootfs")
+		)
+	}
+}
+
+func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
+	let fileManager = FileManager.default
+	let bundleURL = fileManager.temporaryDirectory
+		.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
 		defer { try? fileManager.removeItem(at: bundleURL) }
 
 		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)

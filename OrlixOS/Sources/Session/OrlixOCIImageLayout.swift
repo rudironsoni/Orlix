@@ -2535,8 +2535,14 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 			candidateURL = bundleURL.appendingPathComponent(rootPath, isDirectory: true)
 		}
 
-		let bundlePath = bundleURL.standardizedFileURL.path
-		let candidatePath = candidateURL.standardizedFileURL.path
+		let bundlePath = bundleURL
+			.resolvingSymlinksInPath()
+			.standardizedFileURL
+			.path
+		let candidatePath = candidateURL
+			.resolvingSymlinksInPath()
+			.standardizedFileURL
+			.path
 		guard candidatePath == bundlePath || candidatePath.hasPrefix(bundlePath + "/") else {
 			throw OrlixOCIRuntimeBundleError.rootfsEscapesBundle(rootPath)
 		}
