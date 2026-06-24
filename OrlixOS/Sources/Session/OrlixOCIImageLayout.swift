@@ -1268,11 +1268,6 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "OCI process execCPUAffinity CPU lists carry into OrlixOS descriptors and init calls sched_setaffinity."
 		),
 		OrlixOCIRuntimeFeature(
-			name: "idmappedMounts",
-			status: .deterministicallyRejected,
-			reason: "No idmapped mount proof exists for Orlix OCI-derived environments."
-		),
-		OrlixOCIRuntimeFeature(
 			name: "loopbackNetworking",
 			status: .implemented,
 			proof: "orlix:network_namespace_probe",
@@ -1424,20 +1419,15 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociBindMounts",
-			status: .deterministicallyRejected,
+			status: .recognized,
 			proof: "orlix:runtime_spec_mount_validation",
-			reason: "OCI bind mounts are rejected until host-folder mounts are exposed through Linux mount behavior and virtio-fs without host path leakage."
+			reason: "OCI bind mounts are recognized and validated only for Orlix host-folder source identifiers. End-to-end runtime support remains pending until the Linux-visible environment mount path is proven."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCgroupMounts",
 			status: .deterministicallyRejected,
 			proof: "orlix:runtime_spec_mount_validation",
 			reason: "OCI cgroup mounts are rejected until Orlix reports a Linux-owned cgroup2 hierarchy for OCI-derived environments."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "userNamespaceMappings",
-			status: .deterministicallyRejected,
-			reason: "No OCI uidMappings/gidMappings namespace proof exists for Orlix OCI-derived environments."
 		),
 	])
 
@@ -1495,11 +1485,13 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 
 	@_spi(OrlixPrivateTesting)
 	public func environmentDescriptor(id: String,
-					  rootMount: OrlixEnvironmentRootMount,
-					  mounts: [OrlixEnvironmentMount] = [])
-		-> OrlixEnvironmentDescriptor
+					 rootMount: OrlixEnvironmentRootMount,
+					 mounts: [OrlixEnvironmentMount] = [])
+		throws -> OrlixEnvironmentDescriptor
 	{
-		OrlixEnvironmentDescriptor(
+		let ociMounts = try self.mounts.compactMap { try $0.environmentMount() }
+
+		return OrlixEnvironmentDescriptor(
 			id: id,
 			source: .ociLayout,
 			platform: "linux/arm64",
@@ -1523,7 +1515,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 			domainname: domainname,
 			rootMount: rootMount,
 			rootReadonly: rootReadonly,
-			mounts: mounts
+			mounts: mounts + ociMounts
 		)
 	}
 }
@@ -1533,6 +1525,46 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 	public let type: String
 	public let source: String?
 	public let options: [String]
+
+	private static let documentsSource = "orlix:documents"
+	private static let securityScopedSourcePrefix = "orlix:security-scoped:"
+	private static let supportedBindOptions = Set(["bind", "rbind", "ro", "rw"])
+
+	func environmentMount() throws -> OrlixEnvironmentMount? {
+		guard type == "bind" else {
+			return nil
+		}
+		guard let source, !source.isEmpty, !source.contains("\u{0}") else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
+		}
+		let optionSet = Set(options)
+		guard optionSet.isSubset(of: Self.supportedBindOptions),
+		      !(optionSet.contains("ro") && optionSet.contains("rw")) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
+		}
+		let readOnly = optionSet.contains("ro")
+		do {
+			if source == Self.documentsSource {
+				return try .documents(targetPath: destination, readOnly: readOnly)
+			}
+			if source.hasPrefix(Self.securityScopedSourcePrefix) {
+				let bookmarkID = String(
+					source.dropFirst(Self.securityScopedSourcePrefix.count)
+				)
+				return try .securityScopedExternal(
+					bookmarkID: bookmarkID,
+					targetPath: destination,
+					readOnly: readOnly
+				)
+			}
+		} catch OrlixEnvironmentMountError.invalidTargetPath(_),
+		        OrlixEnvironmentMountError.reservedTargetPath(_) {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.destination")
+		} catch OrlixEnvironmentMountError.invalidSourceIdentifier(_) {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
+		}
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
+	}
 }
 
 public struct OrlixOCIRuntimeConsoleSize: Equatable, Sendable {
@@ -1957,7 +1989,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.destination")
 			}
 
-			let supportedMountTypes = Set(["proc", "sysfs", "devtmpfs", "devpts", "tmpfs"])
+			let supportedMountTypes = Set(["proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "bind"])
 			guard supportedMountTypes.contains(mount.type) else {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.type.\(mount.type)")
 			}
@@ -1969,12 +2001,14 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.gidMappings")
 			}
 
-			return OrlixOCIRuntimeMount(
+			let runtimeMount = OrlixOCIRuntimeMount(
 				destination: mount.destination,
 				type: mount.type,
 				source: mount.source,
 				options: mount.options ?? []
 			)
+			_ = try runtimeMount.environmentMount()
+			return runtimeMount
 		}
 	}
 
@@ -2882,7 +2916,7 @@ public extension OrlixOCIRuntimeLifecycleController {
 			return OrlixOCIRuntimeSessionDescriptor(
 				id: record.id,
 				lifecycleState: record.state,
-				environment: config.environmentDescriptor(
+				environment: try config.environmentDescriptor(
 					id: record.id,
 					rootMount: rootMount
 				)
