@@ -547,10 +547,10 @@ public struct OrlixEnvironmentStorageLayout: Equatable, Sendable {
     public let importScratchDirectory: URL
     public let downloadCacheDirectory: URL
 
-    public static func layout(
-        forEnvironmentID environmentID: String,
-        policy: OrlixStoragePolicy = .current,
-        fileManager: FileManager = .default
+	public static func layout(
+		forEnvironmentID environmentID: String,
+		policy: OrlixStoragePolicy = .current,
+		fileManager: FileManager = .default
     ) throws -> OrlixEnvironmentStorageLayout {
         let storageID = try storageSafeID(environmentID)
         let linuxStateRoot = try policy.linuxStateDirectory(fileManager: fileManager)
@@ -603,11 +603,15 @@ public struct OrlixEnvironmentStorageLayout: Equatable, Sendable {
                 .appendingPathComponent(storageID, isDirectory: true),
             downloadCacheDirectory: cacheRoot
                 .appendingPathComponent("downloads", isDirectory: true)
-        )
-    }
+		)
+	}
 
-    private static func storageSafeID(_ id: String) throws -> String {
-        guard !id.isEmpty,
+	public static func validateEnvironmentID(_ environmentID: String) throws {
+		_ = try storageSafeID(environmentID)
+	}
+
+	private static func storageSafeID(_ id: String) throws -> String {
+		guard !id.isEmpty,
               !id.contains("/"),
               !id.contains("\\"),
               !id.utf8.contains(0)

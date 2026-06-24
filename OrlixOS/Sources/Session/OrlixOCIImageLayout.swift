@@ -2544,7 +2544,8 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 		id: String,
 		rootMount: OrlixEnvironmentRootMount
 	) throws -> OrlixOCIRuntimeSessionDescriptor {
-		try lifecycleController(id: id)
+		try OrlixEnvironmentStorageLayout.validateEnvironmentID(id)
+		return try lifecycleController(id: id)
 			.create()
 			.sessionDescriptor(rootMount: rootMount)
 	}

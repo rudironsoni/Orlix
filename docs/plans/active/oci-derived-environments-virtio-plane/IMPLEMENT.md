@@ -20089,3 +20089,29 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
+### 2026-06-24 OCI bundle environment ID validation
+
+Checkpoint: tightened OCI runtime bundle session descriptor construction so it rejects unsafe Orlix environment IDs before producing an `OrlixOCIRuntimeSessionDescriptor`. This reuses the same storage-safe environment ID rule already used by OrlixOS environment layout/import paths, avoiding descriptor/root-image identifiers that could diverge from storage validation.
+
+Changes:
+- Added `OrlixEnvironmentStorageLayout.validateEnvironmentID(_:)` as a reusable validation entrypoint over the existing storage-safe ID rule.
+- Updated `OrlixOCIRuntimeBundle.sessionDescriptor(id:rootMount:)` to validate the supplied environment ID before lifecycle/session descriptor creation.
+- Added `testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs` and extended storage-layout tests to cover the reusable validator.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run simulator check showed all listed iOS 26.5 simulators shutdown, including iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testEnvironmentStorageLayoutRejectsUnsafeEnvironmentIDs -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLoadsConfigAndRootfs test` passed 3 tests, 0 failures.
+- Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_20-50-46-+0200.xcresult`.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings about stale pending/blocked status and no recent current-status/handoff marker.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is OrlixOS bundle/input validation only. It does not implement OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, arbitrary OCI bind mounts, writable external host folders, cgroup behavior, networking, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.

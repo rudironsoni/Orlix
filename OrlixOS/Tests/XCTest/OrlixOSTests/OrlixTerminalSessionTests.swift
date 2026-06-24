@@ -255,19 +255,28 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertFalse(layout.downloadCacheDirectory.path.contains("Application Support"))
     }
 
-    func testEnvironmentStorageLayoutRejectsUnsafeEnvironmentIDs() {
-        XCTAssertThrowsError(
-            try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: "")
-        )
-        XCTAssertThrowsError(
-            try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: "..")
-        )
-        XCTAssertThrowsError(
-            try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: ".hidden")
-        )
-        XCTAssertThrowsError(
-            try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: "a..b")
-        )
+	func testEnvironmentStorageLayoutRejectsUnsafeEnvironmentIDs() {
+		XCTAssertThrowsError(
+			try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: "")
+		)
+		XCTAssertThrowsError(
+			try OrlixEnvironmentStorageLayout.validateEnvironmentID("")
+		)
+		XCTAssertThrowsError(
+			try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: "..")
+		)
+		XCTAssertThrowsError(
+			try OrlixEnvironmentStorageLayout.validateEnvironmentID("..")
+		)
+		XCTAssertThrowsError(
+			try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: ".hidden")
+		)
+		XCTAssertNoThrow(
+			try OrlixEnvironmentStorageLayout.validateEnvironmentID("alpine-dev")
+		)
+		XCTAssertThrowsError(
+			try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: "a..b")
+		)
         XCTAssertThrowsError(
             try OrlixEnvironmentStorageLayout.layout(forEnvironmentID: "a/b")
         )
@@ -6657,6 +6666,54 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(session.id, "bundle-test")
 		XCTAssertEqual(session.lifecycleState, .created)
 		XCTAssertEqual(session.environment.defaultCommand, ["/bin/sh"])
+	}
+
+	func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+		try fileManager.createDirectory(
+			at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+			withIntermediateDirectories: true
+		)
+		try minimalOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let bundle = try OrlixOCIRuntimeBundle.load(from: bundleURL)
+
+		for unsafeID in ["", "..", ".hidden", "a..b", "a/b", #"a\b"#, "a\u{0}b"] {
+			XCTAssertThrowsError(
+				try bundle.sessionDescriptor(
+					id: unsafeID,
+					rootMount: .defaultOverlay
+				),
+				unsafeID
+			) { error in
+				XCTAssertEqual(
+					error as? OrlixEnvironmentStorageLayoutError,
+					.invalidEnvironmentID(unsafeID)
+				)
+			}
+
+			XCTAssertThrowsError(
+				try bundle.importPlan(
+					id: unsafeID,
+					rootMount: .defaultOverlay,
+					storagePolicy: .current,
+					fileManager: fileManager
+				),
+				unsafeID
+			) { error in
+				XCTAssertEqual(
+					error as? OrlixEnvironmentStorageLayoutError,
+					.invalidEnvironmentID(unsafeID)
+				)
+			}
+		}
 	}
 
 	func testOCIRuntimeBundleResolvesConfiguredRelativeRootPath() throws {
