@@ -1151,6 +1151,15 @@ final class OrlixTerminalSessionTests: XCTestCase {
         )
         XCTAssertTrue(initSource.contains("mount_if_needed(\"orlix-host0\""))
         XCTAssertTrue(initSource.contains("\"virtiofs\""))
+        let runtimeMountRange = try XCTUnwrap(
+            initSource.range(of: "mount_runtime_filesystems();")
+        )
+        let hostMountRange = try XCTUnwrap(
+            initSource.range(of: "mount_configured_host_directory();")
+        )
+        let ptyRange = try XCTUnwrap(initSource.range(of: "if (run_pty_shell("))
+        XCTAssertLessThan(runtimeMountRange.lowerBound, hostMountRange.lowerBound)
+        XCTAssertLessThan(hostMountRange.lowerBound, ptyRange.lowerBound)
         XCTAssertTrue(initSource.contains("SYS_capset"))
         XCTAssertTrue(initSource.contains("SYS_capget"))
         XCTAssertTrue(initSource.contains("PR_CAPBSET_DROP"))
@@ -1691,7 +1700,30 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertFalse(methodBody.contains("registerWithHostAdapter()"))
         XCTAssertTrue(methodBody.contains("orlix_host_resources_set_payload_root_path"))
         XCTAssertTrue(methodBody.contains("orlix_host_resources_clear_root_images()"))
+        XCTAssertTrue(methodBody.contains("registerHostDirectories(rootImage.hostDirectories)"))
+        XCTAssertTrue(methodBody.contains("orlix_host_resources_clear_host_directories()"))
         XCTAssertTrue(methodBody.contains("orlix_host_resources_register_root_image_files"))
+    }
+
+    func testProductRootRegistrationClearsStaleHostDirectories() throws {
+        let sourceRoot = try repositoryRoot()
+        let orlixOSSource = try String(
+            contentsOf: sourceRoot
+                .appendingPathComponent("OrlixOS/Sources/Session/OrlixOS.swift")
+        )
+        let methodRange = try XCTUnwrap(
+            orlixOSSource.range(of: "static func registerWithHostAdapter()")
+        )
+        let materializedRange = try XCTUnwrap(
+            orlixOSSource[methodRange.lowerBound...].range(
+                of: "static func registerMaterializedRootImage("
+            )
+        )
+        let methodBody = orlixOSSource[methodRange.lowerBound..<materializedRange.lowerBound]
+
+        XCTAssertTrue(methodBody.contains("orlix_host_resources_clear_root_images()"))
+        XCTAssertTrue(methodBody.contains("orlix_host_resources_clear_host_directories()"))
+        XCTAssertFalse(methodBody.contains("registerHostDirectories("))
     }
 
     func testEnvironmentImageMaterializationPlanMatchesProductExt4Shape() throws {

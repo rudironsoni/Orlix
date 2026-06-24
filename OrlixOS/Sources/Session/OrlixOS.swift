@@ -345,6 +345,10 @@ enum OrlixOSPayload {
         guard orlix_host_resources_clear_root_images() == 0 else {
             return false
         }
+        guard orlix_host_resources_clear_host_directories() == 0 else {
+            _ = orlix_host_resources_clear_root_images()
+            return false
+        }
 
         for descriptor in rootImageDescriptors {
             guard registerRootImage(
@@ -352,6 +356,7 @@ enum OrlixOSPayload {
                 productResources: productResources
             ) else {
                 _ = orlix_host_resources_clear_root_images()
+                _ = orlix_host_resources_clear_host_directories()
                 return false
             }
         }

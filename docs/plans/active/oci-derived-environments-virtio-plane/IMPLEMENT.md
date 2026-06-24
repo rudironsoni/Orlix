@@ -19619,3 +19619,68 @@ Boundary:
   HostAdapter-owned Linux policy, Coreutils upstream-suite claim, OCI lifecycle
   claim, product `orlix run` claim, registry pull claim, or full runtime
   readiness claim is made by this checkpoint.
+
+### 2026-06-24 Host-directory registration stale-state cleanup
+
+Checkpoint: tightened the OrlixOS host-folder mount bridge so stale private
+HostAdapter host-directory registrations cannot leak from a materialized
+environment boot into a later bundled/default root boot.
+
+Changes:
+- `OrlixOS/Sources/Session/OrlixOS.swift` now clears
+  `orlix_host_resources_clear_host_directories()` in the product/default root
+  registration path, immediately after clearing root images. If later bundled
+  root registration fails, it clears both root images and host directories.
+- `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` now pins
+  the materialized registration path to register `rootImage.hostDirectories`,
+  pins the product/default path to clear stale host directories without
+  registering host directories, and checks that init mounts a configured host
+  directory after runtime filesystems are mounted but before launching the PTY
+  command path.
+
+Verification:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcodebuild -project OrlixSystem.xcodeproj \
+    -scheme OrlixOSTests \
+    -configuration Debug \
+    -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' \
+    build-for-testing
+```
+
+Result: exited 0. This recompiles OrlixOS, the OrlixOS first-stage init payload,
+OrlixTestRunner, and the OrlixOSTests bundle for the arm64 iOS Simulator
+destination without launching the simulator.
+
+Static checks:
+
+```sh
+rtk git diff --check
+rtk python3 .codex/hooks/compact_plan_check.py
+rtk rg --files OrlixMLibC/Sources/patches
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcrun simctl list devices available
+```
+
+Results: `git diff --check` exited 0. `compact_plan_check.py` exited 0 with the
+known stale-status/current-status warnings for this active plan. No
+`OrlixMLibC/Sources/patches` files are present. All listed iOS 26.5 simulators,
+including `iPhone 17 Pro` `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` and plain
+`iPhone 17` `E65F0D05-980C-4368-8CDC-2D2BF3E05757`, were shutdown.
+
+Boundary:
+- This checkpoint still does not claim app-hosted runtime host-folder mount
+  success. The remaining proof is a simulator/runtime execution that observes
+  the requested mount from Linux userspace.
+- This checkpoint does not claim arbitrary OCI bind mounts, security-scoped
+  external folders, Coreutils upstream-suite success, OCI lifecycle behavior,
+  product `orlix run`, registry pull, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, or
+  HostAdapter-owned Linux policy was added.
