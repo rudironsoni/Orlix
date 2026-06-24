@@ -20195,3 +20195,33 @@ Boundary:
 - No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
+
+### 2026-06-24 OCI bind mount source boundary
+
+Checkpoint: narrowed OCI runtime config bind-mount translation to the host-folder source that currently has OrlixOS materialization support: `orlix:documents`. OCI configs using future security-scoped external-folder source identifiers now fail deterministically during config parsing instead of producing an `OrlixEnvironmentDescriptor` that later fails during root-image materialization.
+
+Changes:
+- Removed `orlix:security-scoped:` source translation from `OrlixOCIRuntimeMount.environmentMount()`.
+- Kept lower-level `OrlixEnvironmentMount.securityScopedExternal` intact for future external-folder backend work; this checkpoint only changes OCI runtime config acceptance.
+- Renamed and narrowed `testOCIRuntimeConfigParserTranslatesSupportedDocumentsBindMount`.
+- Extended `testOCIRuntimeConfigParserRejectsUnsupportedMounts` to reject `orlix:security-scoped:selected-folder` as `mounts.source`.
+- Tightened `ociBindMounts` feature-report wording: bind mounts are recognized, but parser translation is bounded to `orlix:documents` until external-folder backends have Linux-visible runtime proof.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- First focused XCTest attempt against iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` was interrupted after an XCTest attach/finalize stall; Xcode produced result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_22-12-36-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl bootstatus 5E2E003E-F434-4B1F-8E5C-BED59BBC177D -b` reached terminal status `Finished`.
+- Focused rerun `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserTranslatesSupportedDocumentsBindMount -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsUnsupportedMounts -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON test` exited 0.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_22-20-18-+0200.xcresult` reported `result: Passed`, `passedTests: 5`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warning about stale pending/blocked status.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This is OrlixOS OCI config/source acceptance truthfulness only. It does not implement arbitrary OCI bind mounts, external security-scoped folders, writable host-folder mounts, OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, cgroup resource behavior, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
