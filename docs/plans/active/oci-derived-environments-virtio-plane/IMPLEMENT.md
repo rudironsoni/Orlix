@@ -20196,6 +20196,29 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
 
+### 2026-06-24 OCI duplicate environment key rejection
+Checkpoint: reject duplicate environment keys while parsing OCI image config `Env` entries and OCI runtime config `process.env` entries. Current OrlixOS environment descriptors store environment as key/value dictionaries, so silently accepting duplicate keys would discard ordered Linux `envp` information. Until the descriptor model preserves duplicate ordered environment entries, duplicate keys now fail deterministically instead of being overwritten.
+
+Changes:
+- `OrlixOCIImageLayoutReader.environmentDictionary(_:)` rejects a repeated key with `OrlixOCIImageLayoutError.invalidEnvironmentEntry`.
+- `OrlixOCIRuntimeConfigParser.environmentDictionary(from:)` rejects a repeated key with `OrlixOCIRuntimeConfigError.invalidEnvironmentEntry`.
+- Added XCTest coverage for duplicate `PATH` entries in OCI image layout import and OCI runtime `process.env` parsing.
+
+Verification:
+- Focused XCTest `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIImageLayoutImporterRejectsDuplicateEnvironmentKey -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsDuplicateEnvironmentKeys -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserConvertsMinimalLinuxConfig test` exited 0.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_22-46-58-+0200.xcresult` reported `result: Passed`, `passedTests: 3`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings about stale pending/blocked status and no recent current-status/handoff marker before compaction.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This is OrlixOS parser truthfulness only. It does not implement ordered duplicate-preserving `envp`, OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, networking, cgroups, arbitrary OCI bind mounts, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
+
 ### 2026-06-24 OCI readonly root feature-report coverage
 
 Checkpoint: exposed OCI `root.readonly` in `OrlixOCIRuntimeFeatureReport` as implemented with Linux-owned proof. Current OrlixOS already parses `root.readonly`, carries it into environment descriptors/import plans, emits `orlix.root.readonly=1`, and rootinit mounts the environment root read-only. The feature report now reflects that bounded support without broadening OCI lifecycle or runtime readiness claims.

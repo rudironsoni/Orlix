@@ -3843,9 +3843,9 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertThrowsError(try registry.load(environmentID: "alpine-bad-env"))
     }
 
-    func testOCIImageLayoutImporterRejectsEmptyEnvironmentKey() throws {
-        let root = temporaryRegistryRoot()
-        let registry = OrlixEnvironmentRegistry(
+	func testOCIImageLayoutImporterRejectsEmptyEnvironmentKey() throws {
+		let root = temporaryRegistryRoot()
+		let registry = OrlixEnvironmentRegistry(
             linuxStateRoot: root.appendingPathComponent(
                 "Application Support/Orlix",
                 isDirectory: true
@@ -3870,12 +3870,42 @@ final class OrlixTerminalSessionTests: XCTestCase {
                 error as? OrlixOCIImageLayoutError,
                 .invalidEnvironmentEntry("=value")
             )
-        }
-    }
+		}
+	}
 
-    func testOCIImageLayoutImporterRejectsNulEnvironmentEntry() throws {
-        let root = temporaryRegistryRoot()
-        let registry = OrlixEnvironmentRegistry(
+	func testOCIImageLayoutImporterRejectsDuplicateEnvironmentKey() throws {
+		let root = temporaryRegistryRoot()
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: root.appendingPathComponent(
+				"Application Support/Orlix",
+				isDirectory: true
+			),
+			cacheRoot: root.appendingPathComponent(
+				"Caches/Orlix",
+				isDirectory: true
+			),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+		)
+		let layout = try writeOCILayout(envEntries: ["PATH=/usr/bin", "PATH=/bin"])
+
+		XCTAssertThrowsError(
+			try OrlixOCIImageLayoutImporter().importLayout(
+				at: layout.root,
+				environmentID: "alpine-duplicate-env",
+				registry: registry,
+				rootImageIdentifier: "orlix.env.alpine-duplicate-env"
+			)
+		) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIImageLayoutError,
+				.invalidEnvironmentEntry("PATH=/bin")
+			)
+		}
+	}
+
+	func testOCIImageLayoutImporterRejectsNulEnvironmentEntry() throws {
+		let root = temporaryRegistryRoot()
+		let registry = OrlixEnvironmentRegistry(
             linuxStateRoot: root.appendingPathComponent(
                 "Application Support/Orlix",
                 isDirectory: true
@@ -6396,7 +6426,7 @@ extension OrlixTerminalSessionTests {
 	func testOCIRuntimeConfigParserAcceptsHostnameAndDomainname() throws {
 		let config = Data("""
 		{
-		  "ociVersion": "1.1.0",
+			"ociVersion": "1.1.0",
 		  "hostname": "container-host",
 		  "domainname": "example.test",
 		  "process": {
@@ -6411,6 +6441,27 @@ extension OrlixTerminalSessionTests {
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
 		XCTAssertEqual(descriptor.hostname, "container-host")
 		XCTAssertEqual(descriptor.domainname, "example.test")
+	}
+
+	func testOCIRuntimeConfigParserRejectsDuplicateEnvironmentKeys() throws {
+		let config = Data("""
+		{
+			"ociVersion": "1.1.0",
+			"process": {
+				"args": ["/bin/sh"],
+				"cwd": "/",
+				"env": ["PATH=/usr/bin", "PATH=/bin"]
+			},
+			"root": { "path": "rootfs" }
+		}
+		""".utf8)
+
+		XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config)) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeConfigError,
+				.invalidEnvironmentEntry("PATH=/bin")
+			)
+		}
 	}
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedNonLinuxPlatformConfig() throws {
