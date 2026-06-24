@@ -19353,3 +19353,112 @@ Renamed `OrlixOS/Sources/make/proof-packages.mk` to `OrlixOS/Sources/make/test-f
 Follow-up naming cleanup: OrlixOS make variables and marker files that represented build-completion stamps were renamed from `*_PROOF` / `.proof` to `*_STAMP` / `.stamp`. The environment fixture target was renamed from `environment-runtime-proof-fixtures` to `environment-runtime-test-fixtures`. This is naming-only harness cleanup: no runtime behavior, Linux ABI, upstream package source, mlibc patch, or Coreutils test result is changed by this cleanup.
 
 Manifest follow-up: renamed the distribution manifest package ladder variable from `ORLIXOS_PACKAGE_PROOF_LADDER` to `ORLIXOS_PACKAGE_STAMP_LADDER` so the manifest definition matches the renamed rootfs fixture-stamp consumer. This remains naming-only harness cleanup.
+
+### 2026-06-24 Linux boot kselftest substrate gate restored
+
+Checkpoint: restored the release app-hosted Orlix kselftest boot gate for the
+OCI substrate lane without adding package-proof machinery, without touching
+generated upstream trees, and without adding any OrlixMLibC patch.
+
+Changes:
+
+- `OrlixOS/Sources/distribution/target-settings.xcconfig` now passes the
+  release/development test-initramfs boot identity tokens expected by the Linux
+  substrate probes: `orlix.hostname=oci-host`, `orlix.domainname=oci.example`,
+  and `orlix.root.readonly=1`.
+- `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/kselftest_init.c`
+  now applies the readonly-root remount only immediately before
+  `readonly_root_probe`. This preserves earlier writable-root probes and still
+  proves the readonly-root Linux surface when requested by the kernel command
+  line.
+- `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/pseudo_fs_probe.c`
+  now NUL-terminates constructed mountinfo search fragments before passing them
+  to `orlix_contains()`. Diagnostic focused run proved Linux
+  `/proc/self/mountinfo` already reported correct `/sys`, `/dev`, `/dev/pts`,
+  and `/tmp` mount lines; the failure was in the Orlix-owned probe helper. The
+  mountinfo read buffer is widened to cover the full pseudo-fs mount table.
+
+Verification:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcode-storage-doctor
+```
+
+Result: exited 0 with `OK xcode external storage doctor passed`.
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcrun simctl list devices available
+```
+
+Result: only `iPhone 17 Pro` (`5E2E003E-F434-4B1F-8E5C-BED59BBC177D`) was
+booted; plain `iPhone 17` (`E65F0D05-980C-4368-8CDC-2D2BF3E05757`) remained
+shutdown.
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc
+```
+
+Result: exited 0 and packaged
+`Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+
+Focused pseudo-fs proof:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+  ORLIX_KERNEL_TEST_INITRAMFS_COMMAND_LINE='console=ttyS0 console=hvc0 rdinit=/init orlix.root=initramfs-only orlix.root.readonly=1 orlix.hostname=oci-host orlix.domainname=oci.example orlix.profile=release orlix.kselftest=pseudo_fs_probe' \
+  ORLIX_KERNEL_RUN_TIMEOUT_SECONDS=180 \
+  make -f OrlixKernel/Makefile run PROFILE=release type=kselftest libc=orlixmlibc
+```
+
+Result: exited 0. Decoded guest log contained:
+
+```text
+ok 7 - mountinfo reports sysfs at /sys
+ok 8 - mountinfo reports devtmpfs at /dev
+ok 9 - mountinfo reports devpts at /dev/pts
+ok 10 - mountinfo reports tmpfs at /tmp
+ok 11 - pseudo_fs_probe
+```
+
+Full release kselftest boot gate:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+  make -f OrlixKernel/Makefile run PROFILE=release type=kselftest libc=orlixmlibc
+```
+
+Result: exited 0. Decoded `Build/OrlixKernel/run/release/OrlixTerminal-runtime.log`
+reported `not_ok_count 0` and included:
+
+```text
+ok 31 - pseudo_fs_probe
+ok 46 - hostname_domainname_probe
+ok 47 - readonly_root_probe
+ok 48 - time_namespace_probe
+```
+
+Boundary audit:
+
+- `OrlixMLibC/Sources/patches` remains empty.
+- No generated upstream or disposable `Build/...` source tree was edited.
+- No package manager, package proof ladder, custom ABI, syscall facade, or
+  Orlix-visible runtime shim was added.
+- This checkpoint proves the app-hosted Linux/kselftest substrate lane only. It
+  does not claim Coreutils upstream tests, OCI Runtime lifecycle behavior,
+  product `orlix run`, registry pull, virtio-fs external folder readiness, or
+  overall product runtime readiness.

@@ -40,8 +40,8 @@ ORLIX_OS_RELEASE_ROOT_MODE = direct
 ORLIX_OS_DEVELOPMENT_ROOT_MODE = overlay
 ORLIX_OS_RELEASE_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 root=/dev/vda rootfstype=ext4 ro orlix.profile=release
 ORLIX_OS_DEVELOPMENT_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=overlay debug ignore_loglevel orlix.profile=development
-ORLIX_OS_RELEASE_TEST_INITRAMFS_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=initramfs-only orlix.profile=release
-ORLIX_OS_DEVELOPMENT_TEST_INITRAMFS_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=initramfs-only debug ignore_loglevel orlix.profile=development
+ORLIX_OS_RELEASE_TEST_INITRAMFS_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=initramfs-only orlix.root.readonly=1 orlix.hostname=oci-host orlix.domainname=oci.example orlix.profile=release
+ORLIX_OS_DEVELOPMENT_TEST_INITRAMFS_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=initramfs-only orlix.root.readonly=1 orlix.hostname=oci-host orlix.domainname=oci.example debug ignore_loglevel orlix.profile=development
 ORLIX_OS_TEST_INITRAMFS_KERNEL_COMMAND_LINE = $(ORLIX_OS_RELEASE_TEST_INITRAMFS_KERNEL_COMMAND_LINE)
 ORLIX_OS_BASE_ROOT_DEVICE = /dev/vda
 ORLIX_OS_STATE_ROOT_DEVICE = /dev/vdb

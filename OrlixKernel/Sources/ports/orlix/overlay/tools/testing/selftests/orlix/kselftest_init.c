@@ -14,6 +14,8 @@
 static char test_list[4096];
 static char selected_test[128];
 
+static bool cmdline_has_token(const char *token);
+
 static void park_init(void)
 {
 	for (;;)
@@ -167,6 +169,13 @@ static bool default_test_is_runnable(const char *name, size_t name_len)
 	       orlix_memcmp(name, crossboot_verify, name_len) != 0;
 }
 
+static bool test_name_equals(const char *name, size_t name_len,
+			     const char *expected)
+{
+	return orlix_strlen(expected) == name_len &&
+	       orlix_memcmp(name, expected, name_len) == 0;
+}
+
 static void build_test_path(char *path, size_t capacity, const char *name,
 			    size_t name_len)
 {
@@ -250,6 +259,11 @@ static void run_orlix_tests(const char *data, size_t size)
 				     &name, &name_len) &&
 		    selected_test_matches(name, name_len) &&
 		    default_test_is_runnable(name, name_len)) {
+			if (test_name_equals(name, name_len,
+					     "readonly_root_probe") &&
+			    cmdline_has_token("orlix.root.readonly=1"))
+				(void)mount(NULL, "/", NULL,
+					     MS_REMOUNT | MS_RDONLY, NULL);
 			int result = run_test(name, name_len);
 
 			orlix_test_result(result == 0, name);
@@ -377,8 +391,6 @@ int main(void)
 			  "tmpfs mounted at /tmp for kselftest");
 	orlix_test_result(have_list && test_count > 0,
 			  "installed Orlix kselftest list is readable");
-	if (cmdline_has_token("orlix.root.readonly=1"))
-		(void)mount(NULL, "/", NULL, MS_REMOUNT | MS_RDONLY, NULL);
 	apply_boot_identity_tokens();
 	if (have_list)
 		run_orlix_tests(test_list, list_size);
