@@ -20358,3 +20358,35 @@ Boundary:
 - No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
+
+### 2026-06-25 OCI rootfs propagation support
+
+Checkpoint: moved OCI `linux.rootfsPropagation` from the temporary unsupported surface into a real supported root mount policy path. OrlixOS now parses valid OCI rootfs propagation values, carries the policy through environment descriptors, emits a rootinit boot token, and rootinit applies recursive Linux mount propagation flags to `/newroot` before `switch_root`.
+
+Changes:
+- Added public `OrlixEnvironmentRootPropagation` values `private`, `shared`, `slave`, and `unbindable`.
+- `OrlixEnvironmentDescriptor` now stores `rootPropagation`, decodes legacy descriptors as `.private`, encodes the field, and preserves it across copied environments.
+- `OrlixEnvironmentRootImage.materializedKernelCommandLine` emits `orlix.root.propagation=<value>` for non-default propagation.
+- `OrlixOCIRuntimeConfigParser` accepts OCI `linux.rootfsPropagation` values `private`, `rprivate`, `shared`, `rshared`, `slave`, `rslave`, `unbindable`, and `runbindable`, mapping recursive OCI variants to the rootinit recursive propagation call.
+- Removed `rootfsPropagation` from the unsupported runtime-field test matrix.
+- `OrlixOCIRuntimeFeatureReport` reports `rootfsPropagation` as implemented with proof name `orlix:rootinit_mount_propagation`.
+- `OrlixOS/Sources/init/rootinit.c` reads `orlix.root.propagation` and applies `MS_REC | MS_PRIVATE`, `MS_REC | MS_SHARED`, `MS_REC | MS_SLAVE`, or `MS_REC | MS_UNBINDABLE` to `/newroot` using Linux `mount(2)` before root switch.
+- Added focused XCTest coverage for feature-report visibility, OCI config parsing to `.shared`, environment descriptor propagation, and materialized kernel command-line emission.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 after compiling OrlixOS Swift, OrlixOSTests Swift, rebuilding OrlixOS root initramfs init, and rebuilding current Coreutils package inputs.
+- Focused XCTest attempt `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testEnvironmentRootImageCarriesRootPropagationToKernelCommandLine -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserConvertsMinimalLinuxConfig -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON test-without-building` was interrupted after no XCTest suite output and Xcode test-log finalization/launch machinery failed with `NSMachErrorDomain Code=-308`; this is not passing XCTest runtime proof.
+- Interrupted result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_00-30-06-+0200.xcresult` could not be summarized because `Info.plist` was not written.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warning about stale pending/blocked status.
+- `rtk rg --files OrlixMLibC/Sources/patches` produced no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` produced no generated-tree or mlibc patch changes.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This is real support for OCI `linux.rootfsPropagation` through OrlixOS descriptors and Linux rootinit mount propagation behavior.
+- This does not implement mount namespaces, arbitrary OCI bind mounts, external host-folder runtime mounts, OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils runtime success, networking, cgroup resource behavior, multiple live environments in one running OrlixKernel, or full runtime readiness.
+- Focused XCTest runtime proof is missing for this checkpoint because the runner did not reach suite execution.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.

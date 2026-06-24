@@ -8,6 +8,13 @@ public enum OrlixEnvironmentSource: Codable, Equatable, Sendable {
     case ociLayout
 }
 
+public enum OrlixEnvironmentRootPropagation: String, Codable, Equatable, Sendable {
+    case `private`
+    case shared
+    case slave
+    case unbindable
+}
+
 @_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public static let defaultEnvironmentID = "default"
@@ -35,6 +42,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let domainname: String?
     public let rootMount: OrlixEnvironmentRootMount
     public let rootReadonly: Bool
+    public let rootPropagation: OrlixEnvironmentRootPropagation
     public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
@@ -88,6 +96,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         domainname: String? = nil,
         rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
         rootReadonly: Bool = false,
+        rootPropagation: OrlixEnvironmentRootPropagation = .private,
         mounts: [OrlixEnvironmentMount] = []
     ) {
         self.id = id
@@ -113,6 +122,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.domainname = domainname
         self.rootMount = rootMount
         self.rootReadonly = rootReadonly
+        self.rootPropagation = rootPropagation
         self.mounts = mounts
     }
 
@@ -140,6 +150,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case domainname
         case rootMount
         case rootReadonly
+        case rootPropagation
         case mounts
     }
 
@@ -231,6 +242,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             Bool.self,
             forKey: .rootReadonly
         ) ?? false
+        self.rootPropagation = try container.decodeIfPresent(
+            OrlixEnvironmentRootPropagation.self,
+            forKey: .rootPropagation
+        ) ?? .private
         self.mounts = try container.decodeIfPresent(
             [OrlixEnvironmentMount].self,
             forKey: .mounts
@@ -273,6 +288,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         try container.encodeIfPresent(domainname, forKey: .domainname)
         try container.encode(rootMount, forKey: .rootMount)
         try container.encode(rootReadonly, forKey: .rootReadonly)
+        try container.encode(rootPropagation, forKey: .rootPropagation)
         try container.encode(mounts, forKey: .mounts)
     }
 }
@@ -683,6 +699,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let hostnameCommandLineKey = "orlix.hostname"
     public static let domainnameCommandLineKey = "orlix.domainname"
     public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
+    public static let rootPropagationCommandLineKey = "orlix.root.propagation"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
 
     public let environmentID: String
@@ -963,6 +980,9 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         if descriptor.rootReadonly {
             tokens.append("\(rootReadonlyCommandLineKey)=1")
         }
+        if descriptor.rootPropagation != .private {
+            tokens.append("\(rootPropagationCommandLineKey)=\(descriptor.rootPropagation.rawValue)")
+        }
         if let mount = descriptor.mounts.first {
             tokens.append(
                 "\(defaultHostMountTargetCommandLineKey)=\(percentEncoded(mount.targetPath))"
@@ -1239,6 +1259,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultCPUAffinity: parent.defaultCPUAffinity,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
+                rootPropagation: parent.rootPropagation,
                 mounts: parent.mounts
             )
             try save(descriptor, fileManager: fileManager)

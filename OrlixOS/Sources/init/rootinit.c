@@ -81,6 +81,64 @@ static bool cmdline_has_token(const char *token)
 	return false;
 }
 
+static int cmdline_value_equals(const char *key, const char *value)
+{
+	char buffer[1024];
+	size_t key_len;
+	size_t value_len;
+	ssize_t nread;
+	char *cursor;
+	int fd;
+
+	fd = open("/proc/cmdline", O_RDONLY);
+	if (fd < 0)
+		return 0;
+
+	nread = read(fd, buffer, sizeof(buffer) - 1);
+	close(fd);
+	if (nread <= 0)
+		return 0;
+
+	buffer[nread] = '\0';
+	key_len = strlen(key);
+	value_len = strlen(value);
+	cursor = buffer;
+	while (*cursor != '\0') {
+		while (*cursor == ' ' || *cursor == '\n' || *cursor == '\t')
+			cursor++;
+		if (memcmp(cursor, key, key_len) == 0 &&
+		    cursor[key_len] == '=' &&
+		    memcmp(cursor + key_len + 1, value, value_len) == 0 &&
+		    (cursor[key_len + 1 + value_len] == '\0' ||
+		     cursor[key_len + 1 + value_len] == ' ' ||
+		     cursor[key_len + 1 + value_len] == '\n' ||
+		     cursor[key_len + 1 + value_len] == '\t'))
+			return 1;
+		while (*cursor != '\0' && *cursor != ' ' && *cursor != '\n' &&
+		       *cursor != '\t')
+			cursor++;
+	}
+
+	return 0;
+}
+
+static int apply_new_root_propagation(void)
+{
+	unsigned long propagation = MS_PRIVATE;
+
+	if (cmdline_value_equals("orlix.root.propagation", "shared"))
+		propagation = MS_SHARED;
+	else if (cmdline_value_equals("orlix.root.propagation", "slave"))
+		propagation = MS_SLAVE;
+	else if (cmdline_value_equals("orlix.root.propagation", "unbindable"))
+		propagation = MS_UNBINDABLE;
+
+	if (mount(NULL, "/newroot", NULL, MS_REC | propagation, NULL) == 0)
+		return 0;
+
+	return -1;
+}
+
 static int wait_for_path(const char *path)
 {
 	for (int attempt = 0; attempt < 250; attempt++) {
@@ -186,6 +244,11 @@ int main(void)
 	if (mount_new_root_api_filesystems() != 0) {
 		write_literal(STDERR_FILENO,
 			      "orlix-rootinit: api filesystem setup failed\n");
+		return 127;
+	}
+	if (apply_new_root_propagation() != 0) {
+		write_literal(STDERR_FILENO,
+			      "orlix-rootinit: root propagation setup failed\n");
 		return 127;
 	}
 	if (switch_to_new_root() != 0) {
