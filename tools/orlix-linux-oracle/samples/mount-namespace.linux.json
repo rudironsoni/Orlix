@@ -1,0 +1,17 @@
+{
+  "caseID": "mount-namespace",
+  "runner": "linux",
+  "stdout": "",
+  "stderr": "",
+  "exitStatus": 0,
+  "signal": null,
+  "errnoEvents": [],
+  "statEntries": [],
+  "mutations": [],
+  "observations": {
+    "mountpoint-exists": "ok",
+    "child-started": "ok",
+    "child-mountinfo-tmpfs": "ok",
+    "parent-marker-hidden": "ok"
+  }
+}
