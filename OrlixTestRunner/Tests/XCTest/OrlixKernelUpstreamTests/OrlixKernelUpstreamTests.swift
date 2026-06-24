@@ -438,6 +438,24 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         let output = try OrlixUpstreamXCTest.run(.kernelVirtioFSMount)
 
         XCTAssertTrue(output.contains("virtio_fs_mount_probe"))
+        XCTAssertTrue(output.contains("probe step mount_host_virtiofs"))
+        XCTAssertTrue(output.contains("probe step mounted_root_is_directory"))
+        XCTAssertTrue(output.contains("probe step mountinfo_reports_virtiofs"))
+        XCTAssertTrue(output.contains("probe step mounted_root_can_readdir"))
+        XCTAssertTrue(output.contains("probe step mounted_root_rejects_create_with_erofs"))
+        XCTAssertTrue(output.contains("probe step mounted_root_supports_statx"))
+        XCTAssertTrue(output.contains("probe step mounted_root_has_empty_xattr_list"))
+        XCTAssertTrue(output.contains("probe step mounted_root_reports_missing_xattr"))
+        XCTAssertTrue(output.contains("probe step mounted_regular_file_supports_lseek"))
+        XCTAssertTrue(output.contains("probe step mounted_nested_directory_supports_readdir_statx"))
+        XCTAssertTrue(output.contains("ORLIX-KSELFTEST-END"))
+        XCTAssertFalse(output.contains("not ok"))
+    }
+
+    func testVirtioFSMountProbeSpecUsesHostDirectoryFixture() {
+        XCTAssertTrue(OrlixUpstreamTestRunSpec.kernelVirtioFSMount.hostDirectoryFixture)
+        XCTAssertFalse(OrlixUpstreamTestRunSpec.kernelVirtioMMIOContract.hostDirectoryFixture)
+        XCTAssertFalse(OrlixUpstreamTestRunSpec.kernelVirtioNetDevice.hostDirectoryFixture)
     }
 
     func testVirtioBlockEnvironmentProbeCompletesThroughOrlixOSTerminalSession()

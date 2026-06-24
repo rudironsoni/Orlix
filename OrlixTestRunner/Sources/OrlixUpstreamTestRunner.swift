@@ -13,6 +13,23 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     let expectedCoreutilsTotal: Int?
     let timeout: TimeInterval
     let kernelCommandLineSuffix: String?
+    let hostDirectoryFixture: Bool
+
+    init(
+        suite: OrlixUpstreamTestSuite,
+        completionMarker: String,
+        expectedCoreutilsTotal: Int?,
+        timeout: TimeInterval,
+        kernelCommandLineSuffix: String?,
+        hostDirectoryFixture: Bool = false
+    ) {
+        self.suite = suite
+        self.completionMarker = completionMarker
+        self.expectedCoreutilsTotal = expectedCoreutilsTotal
+        self.timeout = timeout
+        self.kernelCommandLineSuffix = kernelCommandLineSuffix
+        self.hostDirectoryFixture = hostDirectoryFixture
+    }
 
     func bootConfig(rootImage: OrlixRootImageDescriptor) throws
         -> OrlixBootConfig
@@ -269,7 +286,8 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: "ORLIX-KSELFTEST-END",
         expectedCoreutilsTotal: nil,
         timeout: 300,
-        kernelCommandLineSuffix: "orlix.kselftest=virtio_fs_mount_probe"
+        kernelCommandLineSuffix: "orlix.kselftest=virtio_fs_mount_probe",
+        hostDirectoryFixture: true
     )
 
     static let kernelNetworkNamespace = OrlixUpstreamTestRunSpec(
@@ -643,13 +661,31 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
             withExtension: rootBundleExtension
         ) != nil else {
             throw OrlixUpstreamTestRunError.missingRootfsBundle(
-                "\(rootBundleResourceName).\(rootBundleExtension)"
+            "\(rootBundleResourceName).\(rootBundleExtension)"
             )
+        }
+
+        let hostDirectoryFixture = try Self.prepareHostDirectoryFixture(
+            ifNeededFor: spec
+        )
+        defer {
+            if let hostDirectoryFixture {
+                try? FileManager.default.removeItem(
+                    at: hostDirectoryFixture.rootDirectory
+                )
+            }
         }
 
         let session: OrlixLinuxSession
         if let injectedSession {
             session = injectedSession
+        } else if let hostDirectoryFixture {
+            session = OrlixLinuxSession(
+                bootConfig: try spec.bootConfig(
+                    rootImage: rootImage
+                ),
+                hostDirectories: hostDirectoryFixture.registrations
+            )
         } else {
             session = OrlixLinuxSession(
                 bootConfig: try spec.bootConfig(
@@ -697,6 +733,49 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
         try parser.validate(text, for: spec)
         return text
     }
+
+    private static func prepareHostDirectoryFixture(
+        ifNeededFor spec: OrlixUpstreamTestRunSpec
+    ) throws -> HostDirectoryFixture? {
+        guard spec.hostDirectoryFixture else {
+            return nil
+        }
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "orlix-host-directory-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let nested = root
+            .appendingPathComponent("nested", isDirectory: true)
+            .appendingPathComponent("deeper", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: nested,
+            withIntermediateDirectories: true
+        )
+        try Data("orlix virtio-fs fixture\n".utf8).write(
+            to: root.appendingPathComponent("root-file.txt")
+        )
+        try Data("nested fixture\n".utf8).write(
+            to: nested.appendingPathComponent("nested-file.txt")
+        )
+
+        return HostDirectoryFixture(
+            rootDirectory: root,
+            registrations: [
+                OrlixHostDirectoryRegistration(
+                    identifier: OrlixEnvironmentRootImage.defaultHostDirectoryIdentifier,
+                    hostPath: root.path,
+                    readOnly: true
+                )
+            ]
+        )
+    }
+}
+
+private struct HostDirectoryFixture {
+    let rootDirectory: URL
+    let registrations: [OrlixHostDirectoryRegistration]
 }
 
 private final class BootStatusRecorder: @unchecked Sendable {
