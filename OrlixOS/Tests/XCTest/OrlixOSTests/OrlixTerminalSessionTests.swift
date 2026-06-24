@@ -1344,14 +1344,57 @@ final class OrlixTerminalSessionTests: XCTestCase {
                 "\(OrlixEnvironmentRootImage.defaultHostMountTargetCommandLineKey)=/home/root/Documents"
             )
         )
-        XCTAssertTrue(
-            commandLine.contains(
-                "\(OrlixEnvironmentRootImage.defaultHostMountReadOnlyCommandLineKey)=1"
-            )
-        )
-    }
+		XCTAssertTrue(
+			commandLine.contains(
+				"\(OrlixEnvironmentRootImage.defaultHostMountReadOnlyCommandLineKey)=1"
+			)
+		)
+	}
 
-    func testEnvironmentRootImageRejectsMountsWithoutLinuxBackend() throws {
+	func testEnvironmentRootImageCarriesRootPropagationToKernelCommandLine() throws {
+		let root = temporaryRegistryRoot()
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: "shared-root-propagation",
+			linuxStateRoot: root.appendingPathComponent(
+				"Application Support/Orlix",
+				isDirectory: true
+			),
+			cacheRoot: root.appendingPathComponent("Caches/Orlix", isDirectory: true),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+		)
+		try FileManager.default.createDirectory(
+			at: layout.rootDirectory,
+			withIntermediateDirectories: true
+		)
+		try Data("base".utf8).write(to: layout.baseImageURL)
+		try Data("state".utf8).write(to: layout.stateImageURL)
+		let descriptor = OrlixEnvironmentDescriptor(
+			id: "shared-root-propagation",
+			source: .ociLayout,
+			platform: "linux/arm64",
+			rootImageIdentifier: "orlix.env.shared-root-propagation",
+			defaultCommand: ["/bin/sh"],
+			defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+			defaultWorkingDirectory: "/",
+			defaultUserID: 0,
+			defaultGroupID: 0,
+			rootPropagation: .shared
+		)
+
+		let rootImage = try OrlixEnvironmentRootImage.materialized(
+			descriptor: descriptor,
+			layout: layout
+		)
+		let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
+
+		XCTAssertTrue(
+			commandLine.contains(
+				"\(OrlixEnvironmentRootImage.rootPropagationCommandLineKey)=shared"
+			)
+		)
+	}
+
+	func testEnvironmentRootImageRejectsMountsWithoutLinuxBackend() throws {
         let root = temporaryRegistryRoot()
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: "unsupported-mounts",
@@ -6060,6 +6103,11 @@ extension OrlixTerminalSessionTests {
 			report.feature(named: "root.readonly")?.proof,
 			"orlix:readonly_root_probe"
 		)
+		XCTAssertEqual(report.feature(named: "rootfsPropagation")?.status, .implemented)
+		XCTAssertEqual(
+			report.feature(named: "rootfsPropagation")?.proof,
+			"orlix:rootinit_mount_propagation"
+		)
 		XCTAssertEqual(report.feature(named: "seccomp")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "intelRdt")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "ociCgroupPath")?.status, .deterministicallyRejected)
@@ -6201,6 +6249,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(json.contains(#""proof" : "orlix:pseudo_fs_probe""#))
 		XCTAssertTrue(json.contains(#""name" : "root.readonly""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:readonly_root_probe""#))
+		XCTAssertTrue(json.contains(#""name" : "rootfsPropagation""#))
+		XCTAssertTrue(json.contains(#""proof" : "orlix:rootinit_mount_propagation""#))
 		XCTAssertTrue(json.contains(#""name" : "netDevices""#))
 		XCTAssertTrue(json.contains(#""name" : "ociLifecycleStateModel""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_lifecycle_unit_tests""#))
@@ -6225,7 +6275,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-			#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
+			#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared"},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6237,6 +6287,7 @@ extension OrlixTerminalSessionTests {
 		)
 		XCTAssertEqual(descriptor.rootPath, "rootfs")
 		XCTAssertFalse(descriptor.rootReadonly)
+		XCTAssertEqual(descriptor.rootPropagation, .shared)
 		XCTAssertEqual(descriptor.mounts.count, 2)
 		XCTAssertEqual(descriptor.mounts[0].destination, "/proc")
 		XCTAssertEqual(descriptor.mounts[0].type, "proc")
@@ -6292,6 +6343,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(environment.defaultCPUAffinity, descriptor.defaultCPUAffinity)
 		XCTAssertEqual(environment.defaultUmask, descriptor.defaultUmask)
 		XCTAssertEqual(environment.defaultRlimits, descriptor.defaultRlimits)
+		XCTAssertEqual(environment.rootPropagation, .shared)
 	}
 
 	func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
@@ -6660,7 +6712,6 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxRuntimeFields() throws {
 		let fragments: [(feature: String, json: String)] = [
-			("rootfsPropagation", #""rootfsPropagation": "shared""#),
 			("personality", #""personality": { "domain": "LINUX" }"#),
 			("timeOffsets", #""timeOffsets": { "monotonic": "1 0" }"#),
 			("unified", #""unified": { "memory.max": "1048576" }"#),
