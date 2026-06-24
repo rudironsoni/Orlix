@@ -2022,6 +2022,10 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 	private static func validateDefaultVirtualMount(_ mount: OrlixOCIRuntimeMount) throws {
 		guard mount.type != "bind" else { return }
 
+		guard mount.options.isEmpty else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
+		}
+
 		let expectedSource: String?
 		let expectedDestination: String
 		switch mount.type {
