@@ -8057,6 +8057,14 @@ extension OrlixTerminalSessionTests {
 				.unsupportedLinuxFeature("mounts.destination")
 			),
 			(
+				#"{ "destination": "/run", "type": "tmpfs", "source": "tmpfs" }"#,
+				.unsupportedLinuxFeature("mounts.destination")
+			),
+			(
+				#"{ "destination": "/proc", "type": "proc", "source": "not-proc" }"#,
+				.unsupportedLinuxFeature("mounts.source")
+			),
+			(
 				#"{ "destination": "/mnt/host", "type": "bind", "source": "/Users/rudi/Documents", "options": ["rbind"] }"#,
 				.unsupportedLinuxFeature("mounts.source")
 			),
