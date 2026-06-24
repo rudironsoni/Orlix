@@ -2887,14 +2887,20 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 public struct OrlixOCIRuntimeSessionDescriptor: Equatable, Sendable {
 	public let id: String
 	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+	public let terminal: Bool
+	public let consoleSize: OrlixOCIRuntimeConsoleSize?
 	public let environment: OrlixEnvironmentDescriptor
 
 	public init(id: String,
-		    lifecycleState: OrlixOCIRuntimeLifecycleState,
-		    environment: OrlixEnvironmentDescriptor)
+	            lifecycleState: OrlixOCIRuntimeLifecycleState,
+	            terminal: Bool,
+	            consoleSize: OrlixOCIRuntimeConsoleSize?,
+	            environment: OrlixEnvironmentDescriptor)
 	{
 		self.id = id
 		self.lifecycleState = lifecycleState
+		self.terminal = terminal
+		self.consoleSize = consoleSize
 		self.environment = environment
 	}
 }
@@ -2999,6 +3005,8 @@ public extension OrlixOCIRuntimeLifecycleController {
 			return OrlixOCIRuntimeSessionDescriptor(
 				id: record.id,
 				lifecycleState: record.state,
+				terminal: config.terminal,
+				consoleSize: config.consoleSize,
 				environment: try config.environmentDescriptor(
 					id: record.id,
 					rootMount: rootMount
