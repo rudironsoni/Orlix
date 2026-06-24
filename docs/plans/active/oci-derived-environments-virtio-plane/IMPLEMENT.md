@@ -19324,3 +19324,17 @@ Boundary audit:
   introduced.
 - The fix remains in Orlix-owned Linux port code and uses private
   HostAdapter synchronization behind the Linux `mmap(2)` surface.
+### 2026-06-24 Serena config checkpoint
+
+Checkpoint: removed the speculative Coreutils/Perl packaging detour from the worktree before committing. The Coreutils runtime proof remains unproven and must be pursued through the upstream test suite as the proof surface, not by inventing a separate proof/package mechanism.
+
+Current committed scope for this checkpoint is limited to Serena project metadata:
+
+- `.serena/project.yml`
+- `.serena/.gitignore`
+
+Boundary audit:
+
+- No upstream Linux, OrlixMLibC, Coreutils, or generated `Build/...` source tree changes are part of this checkpoint.
+- `OrlixMLibC/Sources/patches` remains outside the change scope.
+- No runtime readiness, Coreutils pass, OCI environment completion, or Linux-surface conformance claim is made by this checkpoint.
