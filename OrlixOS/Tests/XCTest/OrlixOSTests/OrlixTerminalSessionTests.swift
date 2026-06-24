@@ -923,7 +923,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             "net.ipv4.ip_forward": "1"
         ],
         maskedPaths: ["/proc/kcore", "/sys/firmware"],
-        readonlyPaths: ["/proc/sys", "/sys"]
+        readonlyPaths: ["/proc/sys", "/sys"],
+        cgroupsPath: "/orlix/demo"
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -976,6 +977,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.maskedpath1=/sys/firmware"))
         XCTAssertTrue(commandLine.contains("orlix.readonlypath0=/proc/sys"))
         XCTAssertTrue(commandLine.contains("orlix.readonlypath1=/sys"))
+        XCTAssertTrue(commandLine.contains("orlix.cgroups.path=/orlix/demo"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl0=kernel.hostname=orlix%20demo"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl1=net.ipv4.ip_forward=1"))
     }
@@ -6137,12 +6139,15 @@ extension OrlixTerminalSessionTests {
         )
         XCTAssertEqual(report.feature(named: "seccomp")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "intelRdt")?.status, .deterministicallyRejected)
-		XCTAssertEqual(report.feature(named: "ociCgroupPath")?.status, .deterministicallyRejected)
-		XCTAssertEqual(report.feature(named: "ociHugepageLimits")?.status, .deterministicallyRejected)
-		XCTAssertEqual(report.feature(named: "ociLinuxDevices")?.status, .deterministicallyRejected)
-		XCTAssertEqual(report.feature(named: "ociLinuxResources")?.status, .deterministicallyRejected)
-		XCTAssertEqual(report.feature(named: "ociMaskedPaths")?.status, .deterministicallyRejected)
-		XCTAssertEqual(report.feature(named: "ociNamespaces")?.status, .deterministicallyRejected)
+        XCTAssertEqual(report.feature(named: "ociCgroupPath")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "ociCgroupPath")?.proof,
+            "orlix:init_cgroup_path_join"
+        )
+        XCTAssertEqual(report.feature(named: "ociHugepageLimits")?.status, .deterministicallyRejected)
+        XCTAssertEqual(report.feature(named: "ociLinuxDevices")?.status, .deterministicallyRejected)
+        XCTAssertEqual(report.feature(named: "ociLinuxResources")?.status, .deterministicallyRejected)
+        XCTAssertEqual(report.feature(named: "ociNamespaces")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "ociReadonlyPaths")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "ociUnifiedCgroupResources")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "userNamespaceMappings")?.status, .deterministicallyRejected)
@@ -6236,17 +6241,15 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(features["seccomp"]?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(features["intelRdt"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["intelRdt"]?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(features["ociCgroupPath"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["ociCgroupPath"]?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(features["ociHugepageLimits"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["ociHugepageLimits"]?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(features["ociLinuxDevices"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["ociLinuxDevices"]?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(features["ociLinuxResources"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["ociLinuxResources"]?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(features["ociMaskedPaths"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["ociMaskedPaths"]?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(features["ociNamespaces"]?.status, .deterministicallyRejected)
+        XCTAssertEqual(features["ociCgroupPath"]?.status, .implemented)
+        XCTAssertEqual(features["ociCgroupPath"]?.proof, "orlix:init_cgroup_path_join")
+        XCTAssertEqual(features["ociHugepageLimits"]?.status, .deterministicallyRejected)
+        XCTAssertEqual(features["ociHugepageLimits"]?.proof, "orlix:runtime_config_parser")
+        XCTAssertEqual(features["ociLinuxDevices"]?.status, .deterministicallyRejected)
+        XCTAssertEqual(features["ociLinuxDevices"]?.proof, "orlix:runtime_config_parser")
+        XCTAssertEqual(features["ociLinuxResources"]?.status, .deterministicallyRejected)
+        XCTAssertEqual(features["ociLinuxResources"]?.proof, "orlix:runtime_config_parser")
+        XCTAssertEqual(features["ociNamespaces"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["ociNamespaces"]?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(features["ociReadonlyPaths"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:runtime_config_parser")
@@ -6302,7 +6305,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-            #"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
+            #"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"cgroupsPath":"/orlix/demo","sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6317,6 +6320,7 @@ extension OrlixTerminalSessionTests {
         XCTAssertEqual(descriptor.rootPropagation, .shared)
         XCTAssertEqual(descriptor.maskedPaths, ["/proc/kcore", "/sys/firmware"])
         XCTAssertEqual(descriptor.readonlyPaths, ["/proc/sys", "/sys"])
+        XCTAssertEqual(descriptor.cgroupsPath, "/orlix/demo")
         XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
         XCTAssertEqual(descriptor.sysctls["net.ipv4.ip_forward"], "1")
         XCTAssertEqual(descriptor.mounts.count, 2)
@@ -6377,6 +6381,7 @@ extension OrlixTerminalSessionTests {
         XCTAssertEqual(environment.rootPropagation, .shared)
         XCTAssertEqual(environment.maskedPaths, descriptor.maskedPaths)
         XCTAssertEqual(environment.readonlyPaths, descriptor.readonlyPaths)
+        XCTAssertEqual(environment.cgroupsPath, descriptor.cgroupsPath)
         XCTAssertEqual(environment.sysctls, descriptor.sysctls)
     }
 
@@ -6412,7 +6417,6 @@ extension OrlixTerminalSessionTests {
 			("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
 			("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
 			("namespaces.mount", #""namespaces": [{ "type": "mount" }]"#),
-			("cgroupsPath", #""cgroupsPath": "/orlix/demo""#),
 			("netDevices", #""netDevices": [{ "name": "eth0" }]"#)
 		]
 

@@ -1420,12 +1420,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:runtime_config_parser",
 			reason: "OCI Intel RDT policy is parsed and rejected because Orlix does not expose Intel RDT controls."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "ociCgroupPath",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI cgroupsPath is parsed and rejected until Orlix can place processes in OCI-requested cgroups."
-		),
+        OrlixOCIRuntimeFeature(
+            name: "ociCgroupPath",
+            status: .implemented,
+            proof: "orlix:init_cgroup_path_join",
+            reason: "OCI cgroupsPath carries into OrlixOS descriptors and init creates the requested cgroup v2 path then writes the child PID to cgroup.procs before exec."
+        ),
 		OrlixOCIRuntimeFeature(
 			name: "ociHugepageLimits",
 			status: .deterministicallyRejected,
@@ -1533,6 +1533,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
     public let sysctls: [String: String]
     public let maskedPaths: [String]
     public let readonlyPaths: [String]
+    public let cgroupsPath: String?
     public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
@@ -1589,6 +1590,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
             sysctls: sysctls,
             maskedPaths: maskedPaths,
             readonlyPaths: readonlyPaths,
+            cgroupsPath: cgroupsPath,
             mounts: mounts + ociMounts
         )
     }
@@ -1695,6 +1697,10 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
             readonlyPaths: try Self.validatedRuntimePaths(
                 config.linux?.readonlyPaths ?? [],
                 feature: "linux.readonlyPaths"
+            ),
+            cgroupsPath: try Self.validatedOptionalRuntimePath(
+                config.linux?.cgroupsPath,
+                feature: "linux.cgroupsPath"
             ),
             mounts: mounts,
 			defaultCommand: args,
@@ -1830,6 +1836,16 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
             }
         }
         return paths
+    }
+
+    private static func validatedOptionalRuntimePath(
+        _ path: String?,
+        feature: String
+    ) throws -> String? {
+        guard let path else {
+            return nil
+        }
+        return try validatedRuntimePaths([path], feature: feature).first
     }
 
 	private static func validatedUTSName(_ value: String?,
@@ -2259,10 +2275,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		if let rdma = linux.rdma, !rdma.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.rdma")
 		}
-		if linux.cgroupsPath != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.cgroupsPath")
-		}
-		if let netDevices = linux.netDevices, !netDevices.isEmpty {
+        if let netDevices = linux.netDevices, !netDevices.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.netDevices")
 		}
 	}

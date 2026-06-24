@@ -20445,3 +20445,27 @@ Boundary:
 - No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
+### 2026-06-25 OCI cgroupsPath support
+
+Checkpoint: implemented real OCI `linux.cgroupsPath` carriage for OrlixOS-derived environments. `OrlixOCIRuntimeConfigParser` now accepts a validated absolute OCI cgroups path, stores it on `OrlixEnvironmentDescriptor`, carries it into materialized root command-line metadata as `orlix.cgroups.path`, and `OrlixOS/Sources/init/init.c` creates the requested cgroup v2 path under `/sys/fs/cgroup` and writes the child process PID to `cgroup.procs` before process limits, credential changes, and exec. This is Linux cgroup v2 userspace setup through the mounted Linux cgroup filesystem, not a HostAdapter ABI, syscall facade, package manager, or generated upstream-source edit.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.cgroupsPath` Codable/session propagation and copied-environment preservation.
+- Added OCI runtime parser acceptance for `linux.cgroupsPath` through existing runtime-path validation.
+- Added first-stage init cgroup path validation, recursive cgroup directory creation, and `cgroup.procs` join.
+- Updated OCI feature report and OrlixOS XCTest coverage for descriptor encoding, parser conversion, and feature-report status.
+
+Evidence:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl bootstatus 5E2E003E-F434-4B1F-8E5C-BED59BBC177D -b` exited 0 with terminal `Finished` for the single selected iPhone 17 Pro simulator.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused `test-without-building` for `testEnvironmentRootImageBindsEncodedExecutionDefaultsToInit`, `testOCIRuntimeConfigParserConvertsMinimalLinuxConfig`, and `testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures` was attempted against the same simulator but did not reach `Testing started` or `Test Suite` output after the bounded wait; it was interrupted and is not claimed as executed XCTest proof.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known warnings about stale active-plan status and no recent handoff marker.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or mlibc patch changes.
+- Final simulator check showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+
+Not claimed:
+- No cgroup controller enablement, delegation, accounting, resource enforcement, or OCI `linux.resources` support.
+- No full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, networking policy, or runtime-ready claim.
