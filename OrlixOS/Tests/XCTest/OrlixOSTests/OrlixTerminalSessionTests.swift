@@ -5930,7 +5930,11 @@ extension OrlixTerminalSessionTests {
 			XCTAssertEqual(report.feature(named: hookFeature)?.status, .deterministicallyRejected)
 		}
 		XCTAssertEqual(report.feature(named: "selinux")?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(report.feature(named: "ociBindMounts")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "ociBindMounts")?.status, .recognized)
+		XCTAssertEqual(
+			report.feature(named: "ociBindMounts")?.proof,
+			"orlix:runtime_spec_mount_validation"
+		)
 		XCTAssertEqual(report.feature(named: "ociCgroupMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(
 			report.feature(named: "cgroupV2PidsController")?.status,
@@ -6121,7 +6125,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(descriptor.consoleSize, OrlixOCIRuntimeConsoleSize(height: 24, width: 80))
 		XCTAssertEqual(descriptor.namespaces, ["mount", "pid", "uts", "ipc", "network"])
 
-		let environment = descriptor.environmentDescriptor(
+		let environment = try descriptor.environmentDescriptor(
 			id: "oci-runtime-config",
 			rootMount: .defaultOverlay
 		)
@@ -6191,22 +6195,39 @@ extension OrlixTerminalSessionTests {
 		]
 
 		for (feature, processFragment) in unsupportedProcessConfigs {
-			let config = Data(
-				"""
-				{
-				  "ociVersion": "1.1.0",
-				  "process": {
-				    "args": ["/bin/sh"],
-				    "cwd": "/",
-				    \(processFragment)
-				  }
-				}
-				""".utf8
-			)
-
-			let expectedFeature = feature == "capabilities"
-				? "process.capabilities.bounding"
-				: "process.\(feature)"
+			let config: Data
+			let expectedFeature: String
+			if feature.hasPrefix("hooks.") {
+				config = Data(
+					"""
+					{
+					  "ociVersion": "1.1.0",
+					  "process": {
+					    "args": ["/bin/sh"],
+					    "cwd": "/"
+					  },
+					  \(processFragment)
+					}
+					""".utf8
+				)
+				expectedFeature = feature
+			} else {
+				config = Data(
+					"""
+					{
+					  "ociVersion": "1.1.0",
+					  "process": {
+					    "args": ["/bin/sh"],
+					    "cwd": "/",
+					    \(processFragment)
+					  }
+					}
+					""".utf8
+				)
+				expectedFeature = feature == "capabilities"
+					? "process.capabilities.bounding"
+					: "process.\(feature)"
+			}
 			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
 				XCTAssertEqual(
 					error as? OrlixOCIRuntimeConfigError,
@@ -6510,7 +6531,7 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(bundle.rootfsURL.lastPathComponent, "rootfs")
 		XCTAssertEqual(bundle.config.ociVersion, "1.1.0")
 		XCTAssertEqual(
-			bundle.config.environmentDescriptor(
+			try bundle.config.environmentDescriptor(
 				id: "bundle-test",
 				rootMount: .defaultOverlay,
 				mounts: []
@@ -7877,7 +7898,12 @@ extension OrlixTerminalSessionTests {
 		)
 		.create()
 		.start(pid: 42)
-		.kill(signal: 15)
+		.exit(
+			observedSignal: OrlixOCIRuntimeProcessSignalObservation(
+				pid: 42,
+				signal: 15
+			)
+		)
 
 		let report = try stopped.stateReport()
 		XCTAssertEqual(report.ociVersion, "1.1.0")
@@ -7924,6 +7950,51 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeConfigParserTranslatesSupportedBindMounts() throws {
+		let config = Data(
+			"""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": { "args": ["/bin/sh"], "cwd": "/" },
+			  "mounts": [
+			    {
+			      "destination": "/home/root/Documents",
+			      "type": "bind",
+			      "source": "orlix:documents",
+			      "options": ["rbind", "ro"]
+			    },
+			    {
+			      "destination": "/mnt/external",
+			      "type": "bind",
+			      "source": "orlix:security-scoped:selected-folder",
+			      "options": ["bind"]
+			    }
+			  ]
+			}
+			""".utf8
+		)
+		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+		XCTAssertEqual(descriptor.mounts.count, 2)
+		XCTAssertEqual(descriptor.mounts[0].destination, "/home/root/Documents")
+		XCTAssertEqual(descriptor.mounts[0].type, "bind")
+		XCTAssertEqual(descriptor.mounts[0].source, "orlix:documents")
+
+		let environment = try descriptor.environmentDescriptor(
+			id: "oci-bind-mounts",
+			rootMount: .defaultOverlay
+		)
+		XCTAssertEqual(environment.mounts.count, 2)
+		XCTAssertEqual(environment.mounts[0].source, .documents)
+		XCTAssertEqual(environment.mounts[0].targetPath, "/home/root/Documents")
+		XCTAssertTrue(environment.mounts[0].readOnly)
+		XCTAssertEqual(
+			environment.mounts[1].source,
+			.securityScopedExternal(bookmarkID: "selected-folder")
+		)
+		XCTAssertEqual(environment.mounts[1].targetPath, "/mnt/external")
+		XCTAssertFalse(environment.mounts[1].readOnly)
+	}
+
 	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 		let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [
 			(
@@ -7933,6 +8004,14 @@ extension OrlixTerminalSessionTests {
 			(
 				#"{ "destination": "relative", "type": "tmpfs", "source": "tmpfs" }"#,
 				.unsupportedLinuxFeature("mounts.destination")
+			),
+			(
+				#"{ "destination": "/mnt/host", "type": "bind", "source": "/Users/rudi/Documents", "options": ["rbind"] }"#,
+				.unsupportedLinuxFeature("mounts.source")
+			),
+			(
+				#"{ "destination": "/mnt/host", "type": "bind", "source": "orlix:documents", "options": ["rshared"] }"#,
+				.unsupportedLinuxFeature("mounts.options")
 			)
 		]
 

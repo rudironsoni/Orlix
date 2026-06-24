@@ -19462,3 +19462,63 @@ Boundary audit:
   does not claim Coreutils upstream tests, OCI Runtime lifecycle behavior,
   product `orlix run`, registry pull, virtio-fs external folder readiness, or
   overall product runtime readiness.
+
+### 2026-06-24 OCI runtime config/report boundary correction
+
+Checkpoint: kept the current OrlixOS OCI runtime work on the descriptor and
+feature-report boundary instead of package proof/stamp machinery.
+
+Changes:
+
+- `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` now translates OCI
+  `type: "bind"` mount entries only when the source is an Orlix host-folder
+  source identifier: `orlix:documents` or
+  `orlix:security-scoped:<bookmarkID>`.
+- Raw host paths, missing bind sources, NUL-containing bind sources,
+  conflicting `ro`/`rw`, and unsupported bind options remain rejected through
+  `OrlixOCIRuntimeConfigError.unsupportedLinuxFeature`.
+- The OCI runtime feature report no longer overclaims broad bind-mount runtime
+  support. `ociBindMounts` is `recognized` with parser validation proof only;
+  end-to-end support still waits for the Linux-visible environment mount path.
+- Removed duplicate `idmappedMounts` and `userNamespaceMappings` feature-report
+  entries that caused `Dictionary(uniqueKeysWithValues:)` crashes in XCTest.
+- Corrected OCI hook rejection coverage to place hooks at the OCI top level,
+  not inside `process`.
+- Corrected the lifecycle JSON test to report an observed Linux signal exit
+  rather than treating `kill(2)` alone as process completion.
+
+Focused verification:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcodebuild -project OrlixSystem.xcodeproj \
+    -scheme OrlixOSTests \
+    -configuration Debug \
+    -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' \
+    -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserRejectsUnsupportedProcessFeatures \
+    -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults \
+    -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLifecycleControllerProducesStateReportJSON \
+    -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserTranslatesSupportedBindMounts \
+    test
+```
+
+Result: exited 0 on the single active `iPhone 17 Pro`
+`5E2E003E-F434-4B1F-8E5C-BED59BBC177D` simulator.
+
+Static checks:
+
+- `rtk git diff --check` exited 0.
+- A feature-name duplicate scan over
+  `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` reported no duplicates.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no patch files.
+
+Boundary:
+
+- No Linux boot, Coreutils upstream suite, OCI lifecycle, product `orlix run`,
+  registry pull, or full runtime-readiness claim is made by this checkpoint.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added.
+- No package manager, package proof framework, custom ABI, syscall facade, or
+  Orlix-visible runtime shim was added.
