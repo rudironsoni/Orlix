@@ -7372,11 +7372,17 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		XCTAssertEqual(configured.record.state, .configured)
 		XCTAssertNil(configured.record.pid)
 
-		let created = try configured.create()
-		XCTAssertEqual(created.record.state, .created)
-		XCTAssertNil(created.record.pid)
+	let created = try configured.create()
+	XCTAssertEqual(created.record.state, .created)
+	XCTAssertNil(created.record.pid)
+	XCTAssertThrowsError(try created.stateReport()) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeLifecycleError,
+			.stateReportRequiresPID(.created)
+		)
+	}
 
-		let running = try created.start(pid: 42)
+	let running = try created.start(pid: 42)
 		XCTAssertEqual(running.record.state, .running)
 		XCTAssertEqual(running.record.pid, 42)
 

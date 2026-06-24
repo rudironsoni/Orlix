@@ -2626,6 +2626,7 @@ public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
 	case invalidSignal(Int32)
 	case processPIDMismatch(expected: Int32, observed: Int32)
 	case stateUnavailable(OrlixOCIRuntimeLifecycleState)
+	case stateReportRequiresPID(OrlixOCIRuntimeStateStatus)
 }
 
 public struct OrlixOCIRuntimeProcessStartObservation: Equatable, Sendable {
@@ -2871,11 +2872,17 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 			status = .running
 		case .stopped:
 			status = .stopped
-		case .configured, .deleted:
-			throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
-		}
+	case .configured, .deleted:
+		throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
+	}
 
-		return OrlixOCIRuntimeStateReport(
+	if status == .created || status == .running {
+		guard record.pid != nil else {
+			throw OrlixOCIRuntimeLifecycleError.stateReportRequiresPID(status)
+		}
+	}
+
+	return OrlixOCIRuntimeStateReport(
 			ociVersion: config.ociVersion,
 			id: record.id,
 			status: status,

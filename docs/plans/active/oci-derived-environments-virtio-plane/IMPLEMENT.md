@@ -20196,6 +20196,33 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
 
+### 2026-06-24 OCI state report PID truthfulness
+Checkpoint: reject OCI runtime state reports that would claim `created` or `running` status without a Linux process PID. The current OrlixOS lifecycle model can prepare a created session descriptor before a Linux process observation exists; emitting an OCI-shaped `state` response for that record would overstate runtime lifecycle compliance. State reporting now fails explicitly until the lifecycle record has a PID for statuses that require one.
+
+Changes:
+- Added `OrlixOCIRuntimeLifecycleError.stateReportRequiresPID`.
+- `OrlixOCIRuntimeLifecycleController.stateReport()` now throws `stateReportRequiresPID(.created)` or `stateReportRequiresPID(.running)` if a report would otherwise contain no PID.
+- Extended `testOCIRuntimeLifecycleControllerFollowsCreateStartKillDeleteOrder` to assert that a descriptor-only `created` lifecycle record cannot produce an OCI state report.
+
+Verification:
+- OCI Runtime Spec check: current upstream runtime spec requires `pid` for `created` or `running` state reports; this checkpoint keeps OrlixOS from emitting that shape until it has a real observed PID.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0, proving the edited OrlixOS and OrlixOSTests Swift sources compile for the arm64 iOS Simulator target.
+- Focused `test-without-building` attempt for `OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLifecycleControllerFollowsCreateStartKillDeleteOrder` stalled in Xcode test operation and was interrupted. Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_23-37-51-+0200.xcresult` summarized as `result: Failed`, `passedTests: 0`, `failedTests: 1`, failure text `Testing was canceled`. This is not passing XCTest proof.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings about stale pending/blocked status and no recent current-status/handoff marker before compaction.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+- Final simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+
+Boundary:
+- This is OrlixOS lifecycle state-report truthfulness only. It does not implement OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, networking, cgroups, arbitrary OCI bind mounts, external host-folder runtime mounts, or full runtime readiness.
+- The focused XCTest runtime proof is missing because the runner attempt was canceled; do not cite this checkpoint as a passing XCTest result.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, or runtime-visible host shim was added.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
+
 ### 2026-06-24 OCI bundle rootfs symlink containment
 Checkpoint: tighten OCI runtime bundle rootfs containment so `root.path` is checked after symlink resolution. A bundle-local `rootfs` symlink that resolves outside the bundle now fails the existing `rootfsEscapesBundle` path instead of being accepted as an OrlixOS materialization input. This keeps OCI bundle import rooted in the supplied bundle and avoids treating an arbitrary host path as an OCI root filesystem.
 
