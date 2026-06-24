@@ -7494,6 +7494,43 @@ extension OrlixTerminalSessionTests {
 		}
 	}
 
+	func testOCIRuntimeProcessHandleExposesDeleteTransition() throws {
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let createdProcess = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: try configured.create(),
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay
+		)
+
+		let deletedCreatedProcess = try createdProcess.delete()
+		XCTAssertEqual(deletedCreatedProcess.lifecycle.record.state, .deleted)
+		XCTAssertNil(deletedCreatedProcess.lifecycle.record.pid)
+		XCTAssertNil(deletedCreatedProcess.lifecycle.record.exitStatus)
+
+		let runningProcess = try createdProcess.start(observedPID: 42)
+		XCTAssertThrowsError(try runningProcess.delete()) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .running, action: .delete)
+			)
+		}
+
+		let completedProcess = try runningProcess.exit(
+			observedProcess: OrlixOCIRuntimeProcessExitObservation(
+				pid: 42,
+				exitStatus: 0
+			)
+		)
+		let deletedCompletedProcess = try completedProcess.delete()
+		XCTAssertEqual(deletedCompletedProcess.lifecycle.record.state, .deleted)
+		XCTAssertEqual(deletedCompletedProcess.lifecycle.record.pid, 42)
+		XCTAssertEqual(deletedCompletedProcess.lifecycle.record.exitStatus, 0)
+	}
+
 	func testOCIRuntimeProcessSessionBindsHandleToLinuxSession() throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(

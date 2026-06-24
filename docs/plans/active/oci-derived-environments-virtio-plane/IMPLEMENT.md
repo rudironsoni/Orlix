@@ -19728,6 +19728,31 @@ Boundary:
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
 
+### 2026-06-24 OCI process delete transition wrapper
+Checkpoint: exposed the existing OCI lifecycle `delete` transition at the OrlixOS process-result layer. Created process handles and stopped completed processes can now produce a typed deleted-process lifecycle result, while running-process deletion still rejects through the existing lifecycle controller. This keeps delete visible in the process lifecycle surface without claiming runtime resource cleanup or OCI Runtime Spec compliance.
+
+Changes:
+- Added `OrlixOCIRuntimeDeletedProcess` in `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Added `delete()` on `OrlixOCIRuntimeProcessHandle` and `OrlixOCIRuntimeCompletedProcess`.
+- Added `testOCIRuntimeProcessHandleExposesDeleteTransition` in `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` covering created delete, running delete rejection, and stopped delete.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLifecycleControllerFollowsCreateStartKillDeleteOrder -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLifecycleControllerRejectsInvalidTransitions -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeProcessHandleExposesDeleteTransition test` exited 0 with `** TEST SUCCEEDED **`.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_20-10-45-+0200.xcresult` reported `result: Passed`, `passedTests: 3`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Post-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is OrlixOS lifecycle/session modeling only. It does not implement OCI runtime resource cleanup, OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Coreutils success, arbitrary OCI mount setup, cgroup resource behavior, or full runtime readiness.
+- Linux process, signal, wait/reaping, mount, and filesystem semantics still belong to upstream Linux and the OrlixOS session surface.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
 ### 2026-06-24 OCI runObserved lifecycle side-effect ordering
 Checkpoint: tightened the OrlixOS OCI process-session `runObserved(using:)` helper so it validates lifecycle state before invoking an observation driver. The helper now rejects non-created sessions with the same `.start` invalid-transition error used by `start(using:)`, preventing invalid `runObserved` calls from causing driver start/wait side effects.
 
