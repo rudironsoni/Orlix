@@ -10,6 +10,11 @@
 #include <time.h>
 #include <unistd.h>
 
+#define ORLIX_CMDLINE_BUFFER_SIZE 4096
+#define ORLIX_SYSCTL_ASSIGNMENT_SIZE 512
+#define ORLIX_SYSCTL_PATH_SIZE 256
+#define ORLIX_SYSCTL_KEY_PREFIX "orlix.sysctl"
+
 static void write_literal(int fd, const char *message)
 {
 	size_t length = 0;
@@ -46,35 +51,48 @@ static int mount_if_needed(const char *source, const char *target,
 	return -1;
 }
 
-static bool cmdline_has_token(const char *token)
+static int read_cmdline(char *buffer, size_t buffer_size)
 {
-	char buffer[1024];
-	size_t token_len;
 	ssize_t nread;
-	char *cursor;
 	int fd;
 
 	fd = open("/proc/cmdline", O_RDONLY);
 	if (fd < 0)
-		return false;
+		return -1;
 
-	nread = read(fd, buffer, sizeof(buffer) - 1);
+	nread = read(fd, buffer, buffer_size - 1);
 	close(fd);
 	if (nread <= 0)
-		return false;
+		return -1;
 
 	buffer[nread] = '\0';
+	return 0;
+}
+
+static bool is_cmdline_space(char c)
+{
+	return c == ' ' || c == '\n' || c == '\t';
+}
+
+static bool cmdline_has_token(const char *token)
+{
+	char buffer[ORLIX_CMDLINE_BUFFER_SIZE];
+	size_t token_len;
+	char *cursor;
+
+	if (read_cmdline(buffer, sizeof(buffer)) != 0)
+		return false;
+
 	token_len = strlen(token);
 	cursor = buffer;
 	while (*cursor != '\0') {
-		while (*cursor == ' ' || *cursor == '\n' || *cursor == '\t')
+		while (is_cmdline_space(*cursor))
 			cursor++;
 		if (memcmp(cursor, token, token_len) == 0 &&
-		    (cursor[token_len] == '\0' || cursor[token_len] == ' ' ||
-		     cursor[token_len] == '\n' || cursor[token_len] == '\t'))
+		    (cursor[token_len] == '\0' ||
+		     is_cmdline_space(cursor[token_len])))
 			return true;
-		while (*cursor != '\0' && *cursor != ' ' && *cursor != '\n' &&
-		       *cursor != '\t')
+		while (*cursor != '\0' && !is_cmdline_space(*cursor))
 			cursor++;
 	}
 
@@ -83,40 +101,199 @@ static bool cmdline_has_token(const char *token)
 
 static int cmdline_value_equals(const char *key, const char *value)
 {
-	char buffer[1024];
+	char buffer[ORLIX_CMDLINE_BUFFER_SIZE];
 	size_t key_len;
 	size_t value_len;
-	ssize_t nread;
 	char *cursor;
-	int fd;
 
-	fd = open("/proc/cmdline", O_RDONLY);
-	if (fd < 0)
+	if (read_cmdline(buffer, sizeof(buffer)) != 0)
 		return 0;
 
-	nread = read(fd, buffer, sizeof(buffer) - 1);
-	close(fd);
-	if (nread <= 0)
-		return 0;
-
-	buffer[nread] = '\0';
 	key_len = strlen(key);
 	value_len = strlen(value);
 	cursor = buffer;
 	while (*cursor != '\0') {
-		while (*cursor == ' ' || *cursor == '\n' || *cursor == '\t')
+		while (is_cmdline_space(*cursor))
 			cursor++;
 		if (memcmp(cursor, key, key_len) == 0 &&
 		    cursor[key_len] == '=' &&
 		    memcmp(cursor + key_len + 1, value, value_len) == 0 &&
 		    (cursor[key_len + 1 + value_len] == '\0' ||
-		     cursor[key_len + 1 + value_len] == ' ' ||
-		     cursor[key_len + 1 + value_len] == '\n' ||
-		     cursor[key_len + 1 + value_len] == '\t'))
+		     is_cmdline_space(cursor[key_len + 1 + value_len])))
 			return 1;
-		while (*cursor != '\0' && *cursor != ' ' && *cursor != '\n' &&
-		       *cursor != '\t')
+		while (*cursor != '\0' && !is_cmdline_space(*cursor))
 			cursor++;
+	}
+
+	return 0;
+}
+
+static int hex_value(char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	return -1;
+}
+
+static int percent_decode(char *destination, size_t destination_size,
+			  const char *source, size_t source_length)
+{
+	size_t out = 0;
+
+	for (size_t index = 0; index < source_length; index++) {
+		char value = source[index];
+
+		if (out + 1 >= destination_size)
+			return -1;
+		if (value == '%') {
+			int high;
+			int low;
+
+			if (index + 2 >= source_length)
+				return -1;
+			high = hex_value(source[index + 1]);
+			low = hex_value(source[index + 2]);
+			if (high < 0 || low < 0)
+				return -1;
+			value = (char)((high << 4) | low);
+			index += 2;
+		}
+		if (value == '\0' || value == '\n' || value == '\r')
+			return -1;
+		destination[out++] = value;
+	}
+
+	destination[out] = '\0';
+	return 0;
+}
+
+static bool is_sysctl_key_char(char c)
+{
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+	       (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+}
+
+static int sysctl_path_from_key(char *path, size_t path_size, const char *key)
+{
+	const char *prefix = "/newroot/proc/sys/";
+	size_t out = 0;
+	bool previous_dot = true;
+
+	while (prefix[out] != '\0') {
+		if (out + 1 >= path_size)
+			return -1;
+		path[out] = prefix[out];
+		out++;
+	}
+
+	for (size_t index = 0; key[index] != '\0'; index++) {
+		char c = key[index];
+
+		if (!is_sysctl_key_char(c))
+			return -1;
+		if (c == '.') {
+			if (previous_dot)
+				return -1;
+			c = '/';
+			previous_dot = true;
+		} else {
+			previous_dot = false;
+		}
+		if (out + 1 >= path_size)
+			return -1;
+		path[out++] = c;
+	}
+	if (previous_dot)
+		return -1;
+
+	path[out] = '\0';
+	return 0;
+}
+
+static int write_all(int fd, const char *buffer, size_t length)
+{
+	while (length > 0) {
+		ssize_t written = write(fd, buffer, length);
+
+		if (written <= 0)
+			return -1;
+		buffer += written;
+		length -= (size_t)written;
+	}
+
+	return 0;
+}
+
+static int apply_sysctl_assignment(char *assignment)
+{
+	char path[ORLIX_SYSCTL_PATH_SIZE];
+	char *separator;
+	char *value;
+	int fd;
+	int result;
+
+	separator = strchr(assignment, '=');
+	if (separator == NULL || separator == assignment)
+		return -1;
+	*separator = '\0';
+	value = separator + 1;
+
+	if (sysctl_path_from_key(path, sizeof(path), assignment) != 0)
+		return -1;
+
+	fd = open(path, O_WRONLY);
+	if (fd < 0)
+		return -1;
+
+	result = write_all(fd, value, strlen(value));
+	close(fd);
+	return result;
+}
+
+static int apply_configured_sysctls(void)
+{
+	char buffer[ORLIX_CMDLINE_BUFFER_SIZE];
+	char *cursor;
+	size_t prefix_len = strlen(ORLIX_SYSCTL_KEY_PREFIX);
+
+	if (read_cmdline(buffer, sizeof(buffer)) != 0)
+		return 0;
+
+	cursor = buffer;
+	while (*cursor != '\0') {
+		char *token_start;
+		char *value_start;
+		size_t value_length;
+		char assignment[ORLIX_SYSCTL_ASSIGNMENT_SIZE];
+
+		while (is_cmdline_space(*cursor))
+			cursor++;
+		token_start = cursor;
+		while (*cursor != '\0' && !is_cmdline_space(*cursor))
+			cursor++;
+		if (token_start == cursor)
+			continue;
+
+		if (memcmp(token_start, ORLIX_SYSCTL_KEY_PREFIX, prefix_len) != 0)
+			continue;
+
+		value_start = token_start + prefix_len;
+		while (*value_start >= '0' && *value_start <= '9')
+			value_start++;
+		if (*value_start != '=')
+			continue;
+		value_start++;
+		value_length = (size_t)(cursor - value_start);
+
+		if (percent_decode(assignment, sizeof(assignment), value_start,
+				   value_length) != 0)
+			return -1;
+		if (apply_sysctl_assignment(assignment) != 0)
+			return -1;
 	}
 
 	return 0;
@@ -249,6 +426,11 @@ int main(void)
 	if (apply_new_root_propagation() != 0) {
 		write_literal(STDERR_FILENO,
 			      "orlix-rootinit: root propagation setup failed\n");
+		return 127;
+	}
+	if (apply_configured_sysctls() != 0) {
+		write_literal(STDERR_FILENO,
+			      "orlix-rootinit: sysctl setup failed\n");
 		return 127;
 	}
 	if (switch_to_new_root() != 0) {

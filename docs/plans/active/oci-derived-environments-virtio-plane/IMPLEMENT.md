@@ -20196,6 +20196,33 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch added; `OrlixMLibC/Sources/patches` remains empty.
 
+### 2026-06-25 OCI sysctl support
+
+Checkpoint: moved OCI `linux.sysctl` out of temporary unsupported parsing and into a real Linux-shaped setup path. OrlixOS now validates OCI sysctl key/value shape, carries sysctls through runtime config descriptors and environment descriptors, emits deterministic `orlix.sysctl<N>=key%3Dvalue` root-image command-line tokens, and rootinit writes those values through `/newroot/proc/sys/...` after procfs is mounted and before userspace init runs. This keeps Linux procfs as the authority for whether a sysctl exists and accepts a value; failed writes fail root setup loudly instead of silently pretending support.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.sysctls` with legacy decode default, sorted encoding, copied-environment preservation, and root-image command-line emission.
+- Fixed copied-environment preservation for existing `defaultUmask` and `defaultRlimits` while extending that path for sysctls.
+- Added `OrlixOCIRuntimeConfigDescriptor.sysctls` and parser validation for OCI `linux.sysctl`.
+- Removed `linux.sysctl` from the unsupported OCI Linux feature matrix.
+- Added rootinit percent-decoding and `/proc/sys` write support for configured sysctls under `/newroot`.
+- Added feature-report entry `sysctl` implemented with proof tag `orlix:rootinit_procfs_sysctl`.
+- Extended positive OrlixOS tests for command-line emission, OCI parser conversion, feature-report status/proof, and environment descriptor conversion.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 with `** TEST BUILD SUCCEEDED **`.
+- The build compiled the touched OrlixOS Swift files, compiled updated `OrlixOSTests`, rebuilt OrlixOS root initramfs init, and rebuilt current upstream Coreutils package inputs.
+- Focused `test-without-building` for `testEnvironmentRootImageBindsEncodedExecutionDefaultsToInit`, `testOCIRuntimeConfigParserConvertsMinimalLinuxConfig`, and `testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures` did not reach `Testing started` / `Test Suite` output, was interrupted after the bounded wait, and Xcode reported `NSMachErrorDomain Code=-308` while saving launch/test record. This is not passing executed-XCTest proof.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` produced no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` produced no tracked generated-tree or mlibc patch changes.
+
+Boundary:
+- This implements bounded OCI `linux.sysctl` setup through Linux procfs during rootinit.
+- This does not implement full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, arbitrary masked/readonly paths, arbitrary OCI bind mounts, networking policy, cgroup resource enforcement, Coreutils runtime conformance, or full runtime readiness.
+- No Linux ABI, syscall facade, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, runtime-visible host shim, generated upstream edit, or OrlixMLibC patch was added.
+
 ### 2026-06-24 OCI state report PID truthfulness
 Checkpoint: reject OCI runtime state reports that would claim `created` or `running` status without a Linux process PID. The current OrlixOS lifecycle model can prepare a created session descriptor before a Linux process observation exists; emitting an OCI-shaped `state` response for that record would overstate runtime lifecycle compliance. State reporting now fails explicitly until the lifecycle record has a PID for statuses that require one.
 
