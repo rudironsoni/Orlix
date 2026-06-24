@@ -29,11 +29,11 @@ include $(PROJECT_DIR)/Sources/make/config.mk
 ORLIXOS_ENVIRONMENT_IMAGE_WORK_DIR ?= $(ORLIXOS_BUILD_ROOT)/environment-images/$(PROFILE)
 ORLIXOS_ENVIRONMENT_BASE_IMAGE_SIZE ?= $(ORLIX_OS_BASE_ROOT_IMAGE_SIZE)
 ORLIXOS_ENVIRONMENT_STATE_IMAGE_SIZE ?= $(ORLIX_OS_STATE_ROOT_IMAGE_SIZE)
-ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP := $(ORLIXOS_BUILD_ROOT)/environment-runtime-proof/.fixtures-ready
+ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP := $(ORLIXOS_BUILD_ROOT)/environment-runtime-test-fixtures/.fixtures-ready
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 
-.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-proof-fixtures test coreutils-test clean mrproper __coreutils-source FORCE
+.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-test-fixtures test coreutils-test clean mrproper __coreutils-source FORCE
 
 all: rootfs
 
@@ -43,13 +43,13 @@ help:
 	@printf '%s\n' '  rootfs   build the immutable OrlixOS base root tree'
 	@printf '%s\n' '  kernel-payload package the OrlixOS rootfs for the OrlixOS framework payload'
 	@printf '%s\n' '  environment-root-image materialize a staged environment root into base/state ext4 images'
-	@printf '%s\n' '  environment-runtime-proof-fixtures materialize tar and OCI runtime proof images'
+	@printf '%s\n' '  environment-runtime-test-fixtures materialize tar and OCI runtime test fixture images'
 	@printf '%s\n' '  test     run OrlixOS package tests in the app-hosted Orlix path'
 	@printf '%s\n' '  clean    remove generated OrlixOS outputs'
 
-build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_PROOF) $(ORLIXOS_FINDUTILS_PROOF) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_INIT_BINARY)
+build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_INIT_BINARY)
 
-rootfs: $(ORLIXOS_ROOTFS_PROOF)
+rootfs: $(ORLIXOS_ROOTFS_STAMP)
 
 kernel-payload: rootfs
 	@set -euo pipefail; \
@@ -139,52 +139,52 @@ environment-root-image:
 	fi; \
 	printf 'materialized Orlix environment root images: %s %s\n' "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)" "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)"
 
-environment-runtime-proof-fixtures:
+environment-runtime-test-fixtures:
 	@set -euo pipefail; \
-	proof_root="$(ORLIXOS_BUILD_ROOT)/environment-runtime-proof"; \
-	stamp="$(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP)"; \
+	proof_root="$(ORLIXOS_BUILD_ROOT)/environment-runtime-test-fixtures"; \
+	stamp="$(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP)"; \
 	fixtures_ready=1; \
 	for fixture in tar-imported oci-imported; do \
 		if [ ! -s "$$proof_root/$$fixture/.ready" ]; then \
 			fixtures_ready=0; \
 		fi; \
 	done; \
-	if [ "$$fixtures_ready" -eq 1 ] && [ -s "$$stamp" ] && [ -s "$(ORLIXOS_INIT_BINARY)" ] && [ -s "$(ORLIXOS_ROOTFS_PROOF)" ]; then \
+	if [ "$$fixtures_ready" -eq 1 ] && [ -s "$$stamp" ] && [ -s "$(ORLIXOS_INIT_BINARY)" ] && [ -s "$(ORLIXOS_ROOTFS_STAMP)" ]; then \
 		init_sha256="$$(shasum -a 256 "$(ORLIXOS_INIT_BINARY)" | awk '{print $$1}')"; \
-		rootfs_proof_sha256="$$(shasum -a 256 "$(ORLIXOS_ROOTFS_PROOF)" | awk '{print $$1}')"; \
+		rootfs_stamp_sha256="$$(shasum -a 256 "$(ORLIXOS_ROOTFS_STAMP)" | awk '{print $$1}')"; \
 		if grep -F -q "profile=$(PROFILE)" "$$stamp" && \
 			grep -F -q "init_sha256=$$init_sha256" "$$stamp" && \
-			grep -F -q "rootfs_proof_sha256=$$rootfs_proof_sha256" "$$stamp" && \
+			grep -F -q "rootfs_stamp_sha256=$$rootfs_stamp_sha256" "$$stamp" && \
 			[ ! "$(ORLIXOS_INIT_SOURCE)" -nt "$$stamp" ] && \
 			[ ! "$(ORLIXOS_MANIFEST)" -nt "$$stamp" ] && \
 			[ ! "$(PROJECT_DIR)/Makefile" -nt "$$stamp" ] && \
 			[ ! "$(PROJECT_DIR)/Sources/make/rootfs.mk" -nt "$$stamp" ]; then \
-			printf 'Orlix environment runtime proof fixtures ready: %s\n' "$$proof_root"; \
+			printf 'Orlix environment runtime test fixture fixtures ready: %s\n' "$$proof_root"; \
 			exit 0; \
 		fi; \
 	fi; \
 	rm -f "$$stamp"; \
-	$(MAKE) -f "$(PROJECT_DIR)/Makefile" "$(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP)" PROFILE="$(PROFILE)"
+	$(MAKE) -f "$(PROJECT_DIR)/Makefile" "$(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP)" PROFILE="$(PROFILE)"
 
-$(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP): $(ORLIXOS_ROOTFS_PROOF) $(ORLIXOS_INIT_BINARY) $(PROJECT_DIR)/Makefile $(PROJECT_DIR)/Sources/make/rootfs.mk
+$(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP): $(ORLIXOS_ROOTFS_STAMP) $(ORLIXOS_INIT_BINARY) $(PROJECT_DIR)/Makefile $(PROJECT_DIR)/Sources/make/rootfs.mk
 	@set -euo pipefail; \
 	init_sha256="$$(shasum -a 256 "$(ORLIXOS_INIT_BINARY)" | awk '{print $$1}')"; \
-	rootfs_proof_sha256="$$(shasum -a 256 "$(ORLIXOS_ROOTFS_PROOF)" | awk '{print $$1}')"; \
-	proof_root="$(ORLIXOS_BUILD_ROOT)/environment-runtime-proof"; \
+	rootfs_stamp_sha256="$$(shasum -a 256 "$(ORLIXOS_ROOTFS_STAMP)" | awk '{print $$1}')"; \
+	proof_root="$(ORLIXOS_BUILD_ROOT)/environment-runtime-test-fixtures"; \
 	for fixture in tar-imported oci-imported; do \
 		case "$$fixture" in \
 			tar-imported) \
-				env_id=tar-imported-runtime-proof; \
-				name='Orlix Tar Runtime Proof'; \
-				id=orlix-tar-runtime-proof; \
+				env_id=tar-imported-runtime-test-fixture; \
+				name='Orlix Tar Runtime Test Fixture'; \
+				id=orlix-tar-runtime-test-fixture; \
 				;; \
 			oci-imported) \
-				env_id=oci-imported-runtime-proof; \
-				name='Orlix OCI Runtime Proof'; \
-				id=orlix-oci-runtime-proof; \
+				env_id=oci-imported-runtime-test-fixture; \
+				name='Orlix OCI Runtime Test Fixture'; \
+				id=orlix-oci-runtime-test-fixture; \
 				;; \
 			*) \
-				echo "unknown environment runtime proof fixture: $$fixture" >&2; \
+				echo "unknown environment runtime test fixture fixture: $$fixture" >&2; \
 				exit 1; \
 				;; \
 		esac; \
@@ -194,7 +194,7 @@ $(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP): $(ORLIXOS_ROOTFS_PROOF) $(ORLIXOS_IN
 		work_root="$$fixture_root/work/image-materialization"; \
 		base_metadata_commands="$$work_root/base-debugfs-metadata.commands"; \
 		state_metadata_commands="$$work_root/state-debugfs-metadata.commands"; \
-		case "$$fixture_root" in "$(ORLIXOS_BUILD_ROOT)"/environment-runtime-proof/*) ;; *) echo "refusing unsafe environment runtime proof root: $$fixture_root" >&2; exit 1 ;; esac; \
+		case "$$fixture_root" in "$(ORLIXOS_BUILD_ROOT)"/environment-runtime-test-fixtures/*) ;; *) echo "refusing unsafe environment runtime test fixture root: $$fixture_root" >&2; exit 1 ;; esac; \
 		rm -rf "$$fixture_root"; \
 		mkdir -p "$$imported_root" "$$state_root" "$$work_root"; \
 		(cd "$(ORLIXOS_BASE_ROOT_TREE)" && tar -cf - .) | (cd "$$imported_root" && tar -xf -); \
@@ -251,6 +251,6 @@ $(ORLIXOS_ENVIRONMENT_RUNTIME_PROOF_STAMP): $(ORLIXOS_ROOTFS_PROOF) $(ORLIXOS_IN
 			ORLIXOS_ENVIRONMENT_STATE_DEBUGFS_COMMANDS="$$state_metadata_commands"; \
 		printf 'profile=%s\nfixture=%s\nenvironment=%s\ninit_sha256=%s\n' "$(PROFILE)" "$$fixture" "$$env_id" "$$init_sha256" > "$$fixture_root/.ready"; \
 	done; \
-	printf 'profile=%s\ninit_sha256=%s\nrootfs_proof_sha256=%s\n' "$(PROFILE)" "$$init_sha256" "$$rootfs_proof_sha256" > "$@"
+	printf 'profile=%s\ninit_sha256=%s\nrootfs_stamp_sha256=%s\n' "$(PROFILE)" "$$init_sha256" "$$rootfs_stamp_sha256" > "$@"
 
 include $(PROJECT_DIR)/Sources/make/rules.mk
