@@ -947,7 +947,13 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
     }
 
     public func start(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessSession {
-        try start(observedProcess: driver.start(processSession: self))
+        guard processHandle.lifecycle.record.state == .created else {
+            throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+                from: processHandle.lifecycle.record.state,
+                action: .start
+            )
+        }
+        return try start(observedProcess: driver.start(processSession: self))
     }
 
     public func kill(signal: Int32) throws -> OrlixOCIRuntimeProcessSession {
@@ -958,8 +964,12 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
     }
 
     public func kill(signal: Int32, using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessSession {
+        let signaledHandle = try processHandle.kill(signal: signal)
         try driver.signal(processSession: self, signal: signal)
-        return try kill(signal: signal)
+        return OrlixOCIRuntimeProcessSession(
+            processHandle: signaledHandle,
+            linuxSession: linuxSession
+        )
     }
 
     public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeCompletedProcess {
@@ -975,7 +985,13 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
     }
 
     public func wait(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeCompletedProcess {
-        try exit(observedCompletion: driver.wait(processSession: self))
+        guard processHandle.lifecycle.record.state == .running else {
+            throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+                from: processHandle.lifecycle.record.state,
+                action: .exit
+            )
+        }
+        return try exit(observedCompletion: driver.wait(processSession: self))
     }
 
     public func run(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeCompletedProcess {

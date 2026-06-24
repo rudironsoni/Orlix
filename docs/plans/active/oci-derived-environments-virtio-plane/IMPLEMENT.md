@@ -19914,6 +19914,34 @@ Boundary:
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
 
+### 2026-06-24 OCI process-session driver side-effect ordering
+
+Checkpoint: tightened the OrlixOS OCI process-session lifecycle wrapper so observation drivers are not invoked before the lifecycle model accepts the requested transition. `start(using:)` now rejects non-created states before asking a driver to start a Linux process, `kill(signal:using:)` validates state and signal before asking a driver to signal, and `wait(using:)` rejects non-running states before asking a driver to wait. This keeps invalid OCI lifecycle operations from performing Linux-session side effects.
+
+Changes:
+- Updated `OrlixOS/Sources/Session/OrlixOS.swift` process-session driver wrappers to validate lifecycle state before calling `start`, `signal`, or `wait` on the observation driver.
+- Added `testOCIRuntimeProcessSessionValidatesLifecycleBeforeDriverSideEffects` to `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`.
+- Added a file-local test fixture helper for constructing a created OCI process session backed by the existing OrlixOS environment registry/session surface.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Pre-run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices available` showed all listed iOS 26.5 simulators shutdown.
+- First focused `OrlixOSTests` run failed during Swift compilation because the guarded methods needed explicit `return` statements after adding validation blocks. No XCTest cases executed in that failed run.
+- Final focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeProcessSessionUsesObservationDriverForStartSignalAndWait -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeProcessSessionValidatesLifecycleBeforeDriverSideEffects -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeProcessSessionRunsThroughObservationDriver -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeProcessSessionRunObservedPreservesStartAndCompletionEvidence test` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_19-42-52-+0200.xcresult` reported `result: Passed`, `passedTests: 4`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Post-run simulator shutdown command reported the iPhone 17 Pro already in `Shutdown` state.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is OrlixOS lifecycle/session ordering only. It does not implement OCI runtime process execution by itself, OCI lifecycle compliance, product `orlix run`, registry pull, Coreutils success, arbitrary OCI mount setup, or full runtime readiness.
+- Observation drivers remain test/session adapters; Linux process semantics still belong to upstream Linux and the OrlixOS session surface.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+
 ### 2026-06-24 OCI root path parser validation
 
 Checkpoint: tightened OCI runtime config parsing so explicit invalid `root.path` values fail deterministically before bundle root resolution. Empty `root.path` and decoded NUL-containing `root.path` now report `OrlixOCIRuntimeConfigError.invalidRootPath`, avoiding ambiguous resolution of an explicitly empty OCI root path to the bundle directory. Missing `root.path` still follows existing default `rootfs` bundle behavior.
