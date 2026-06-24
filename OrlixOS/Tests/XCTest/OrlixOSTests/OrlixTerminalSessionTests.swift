@@ -6064,6 +6064,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(report.feature(named: "netDevices")?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.status, .implemented)
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.proof, "orlix:virtio_net_device_probe")
+		XCTAssertEqual(report.feature(named: "virtioFsHostFolderMount")?.status, .implemented)
+		XCTAssertEqual(report.feature(named: "virtioFsHostFolderMount")?.proof, "orlix:virtio_fs_mount_probe")
 		XCTAssertEqual(report.feature(named: "ociLifecycleStateModel")?.status, .implemented)
 		XCTAssertEqual(
 			report.feature(named: "ociLifecycleStateModel")?.proof,
@@ -6123,6 +6125,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(features["ociLifecycleStateModel"]?.proof, "orlix:runtime_lifecycle_unit_tests")
 		XCTAssertEqual(features["ociRuntimeSpecLifecycle"]?.status, .recognized)
 		XCTAssertNil(features["ociRuntimeSpecLifecycle"]?.proof)
+		XCTAssertEqual(features["virtioFsHostFolderMount"]?.status, .implemented)
+		XCTAssertEqual(features["virtioFsHostFolderMount"]?.proof, "orlix:virtio_fs_mount_probe")
 		XCTAssertEqual(features["userNamespaceMappings"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["idmappedMounts"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["selinux"]?.status, .deterministicallyRejected)
@@ -6142,6 +6146,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_lifecycle_unit_tests""#))
 		XCTAssertTrue(json.contains(#""name" : "ociRuntimeSpecLifecycle""#))
 		XCTAssertTrue(json.contains(#""name" : "virtioNetDevicePlane""#))
+		XCTAssertTrue(json.contains(#""name" : "virtioFsHostFolderMount""#))
+		XCTAssertTrue(json.contains(#""proof" : "orlix:virtio_fs_mount_probe""#))
 		XCTAssertTrue(json.contains(#""status" : "deterministicallyRejected""#))
 
 		let decoded = try JSONDecoder().decode(

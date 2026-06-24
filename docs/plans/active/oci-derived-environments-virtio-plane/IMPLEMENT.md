@@ -20066,3 +20066,26 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+### 2026-06-24 Virtio-fs host-folder feature-report boundary
+Checkpoint: updated the truthful OCI runtime feature report to expose the bounded app-hosted virtio-fs host-folder mount proof. The new `virtioFsHostFolderMount` feature is implemented with proof `orlix:virtio_fs_mount_probe`, while `ociBindMounts` remains only recognized because arbitrary OCI bind mounts, external security-scoped folders, writable host-folder mounts, and product runtime mount policy are still not claimed.
+
+Changes:
+- Added `virtioFsHostFolderMount` to `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Updated `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` to pin the feature status, proof, and JSON encoding.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON test` exited 0 with `** TEST SUCCEEDED **`.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_20-33-38-+0200.xcresult` reported `result: Passed`, `passedTests: 3`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Post-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is truthful OrlixOS feature reporting only. It does not implement arbitrary OCI bind mounts, external security-scoped folders, writable host-folder mounts, product `orlix run`, registry pull, Coreutils success, OCI Runtime Spec lifecycle compliance, cgroup resource behavior, or full runtime readiness.
+- Linux virtio-fs behavior remains owned by upstream Linux and the OrlixKernel virtio/FUSE path; OrlixOS only reports the bounded proof.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
