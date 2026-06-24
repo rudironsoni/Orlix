@@ -19750,3 +19750,27 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, HostAdapter-owned Linux policy, OCI lifecycle claim, product `orlix run`, registry pull, Coreutils success, or full runtime readiness claim was added.
+
+### 2026-06-24 Linux oracle cgroup v2 case
+Checkpoint: expanded the Mac-only Linux oracle scaffold with a cgroup v2 comparison case. This advances the OCI substrate proof path for cgroup shape and current-task migration without claiming cgroup resource enforcement.
+
+Changes:
+- Added `tools/orlix-linux-oracle/cases/cgroup-v2.json`.
+- Added `tools/orlix-linux-oracle/fixtures/cgroup_v2_probe.c`, a real-Linux fixture that checks `/proc/self/cgroup`, `/proc/self/mountinfo`, cgroup v2 control files, root `cgroup.procs` current-task writes, child cgroup creation, moving the current task into that child, returning to root, and child cleanup.
+- Added Linux, Orlix, drift, and Orlix kselftest-log samples under `tools/orlix-linux-oracle/samples/`.
+- Updated `tools/orlix-linux-oracle/orlix-linux-oracle.swift` so `cgroup-v2` validates required observations, converts Linux fixture JSON stdout, converts Orlix `cgroup_v2_probe` kselftest logs, compares sample results, and participates in `self-test` drift detection.
+
+Verification:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swift tools/orlix-linux-oracle/orlix-linux-oracle.swift self-test` exited 0 with `oracle self-test passed`.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swift tools/orlix-linux-oracle/orlix-linux-oracle.swift validate-case tools/orlix-linux-oracle/cases/cgroup-v2.json` exited 0 with `case cgroup-v2 is valid`.
+- `rtk git diff --check` exited 0.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This adds oracle tooling and sample comparison coverage only. It does not run a fresh real-Linux writable-cgroup fixture or fresh app-hosted Orlix cgroup runtime proof in this checkpoint.
+- The oracle fixture requires a real Linux runner with writable cgroup v2 root semantics. macOS remains only the development host for this tool.
+- This does not claim cgroup resource controller accounting, delegation, enforcement, OCI `linux.resources`, OCI `linux.cgroupsPath`, systemd support, OCI lifecycle compliance, product `orlix run`, registry pull, Coreutils success, or full runtime readiness.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.

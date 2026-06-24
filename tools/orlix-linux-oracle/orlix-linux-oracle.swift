@@ -351,6 +351,17 @@ let mountNamespaceObservationKeys: Set<String> = [
     "child-mountinfo-tmpfs",
     "parent-marker-hidden"
 ]
+let cgroupV2ObservationKeys: Set<String> = [
+    "proc-self-cgroup-v2-root",
+    "mountinfo-cgroup2-root",
+    "controllers-readable",
+    "subtree-control-readable",
+    "procs-readable",
+    "root-procs-accepts-self",
+    "child-cgroup-created",
+    "child-procs-accepts-self",
+    "child-cgroup-removed"
+]
 
 func fdExecResult(
     runner: String,
@@ -554,6 +565,34 @@ func mountNamespaceResult(
     )
 }
 
+func cgroupV2Result(
+    runner: String,
+    stdout: String,
+    stderr: String,
+    exitStatus: Int?,
+    signal: String?,
+    observations: [String: String]
+) throws -> OracleResult {
+    let missing = cgroupV2ObservationKeys.subtracting(observations.keys)
+    guard missing.isEmpty else {
+        throw OracleError.invalidLog(
+            "missing cgroup-v2 observations: \(missing.sorted().joined(separator: ", "))"
+        )
+    }
+    return OracleResult(
+        caseID: "cgroup-v2",
+        runner: runner,
+        stdout: stdout,
+        stderr: stderr,
+        exitStatus: exitStatus,
+        signal: signal,
+        errnoEvents: [],
+        statEntries: [],
+        mutations: [],
+        observations: observations
+    )
+}
+
 func oracleBlock(caseID: String, in log: String) throws -> [String] {
     let begin = "ORLIX-ORACLE-BEGIN \(caseID)"
     let end = "ORLIX-ORACLE-END \(caseID)"
@@ -668,6 +707,15 @@ func resultFromLinuxFixture(
             signal: signal,
             observations: observations(from: jsonObjectLines(from: stdout))
         )
+    case "cgroup-v2":
+        return try cgroupV2Result(
+            runner: "linux",
+            stdout: stdout,
+            stderr: stderr,
+            exitStatus: exitStatus,
+            signal: signal,
+            observations: observations(from: jsonObjectLines(from: stdout))
+        )
     default:
         throw OracleError.invalidCase(
             "linux-result-from-fixture does not support \(testCase.id)"
@@ -693,6 +741,8 @@ func resultFromOrlixLog(testCase: OracleCase, log: String) throws -> OracleResul
         return try pseudoFSResultFromOrlixLog(log)
     case "mount-namespace":
         return try mountNamespaceResultFromOrlixLog(log)
+    case "cgroup-v2":
+        return try cgroupV2ResultFromOrlixLog(log)
     default:
         throw OracleError.invalidCase(
             "orlix-result-from-log does not support \(testCase.id)"
@@ -1087,6 +1137,69 @@ func mountNamespaceResultFromOrlixLog(_ log: String) throws -> OracleResult {
     )
 }
 
+func cgroupV2ResultFromOrlixLog(_ log: String) throws -> OracleResult {
+    var observed = Dictionary(
+        uniqueKeysWithValues: [
+            fdExecObservation(
+                log,
+                "proc self cgroup reports v2 root",
+                "proc-self-cgroup-v2-root"
+            ),
+            fdExecObservation(
+                log,
+                "mountinfo reports cgroup2 at /sys/fs/cgroup",
+                "mountinfo-cgroup2-root"
+            ),
+            fdExecObservation(
+                log,
+                "cgroup v2 controllers file is readable",
+                "controllers-readable"
+            ),
+            fdExecObservation(
+                log,
+                "cgroup v2 subtree control file is readable",
+                "subtree-control-readable"
+            ),
+            fdExecObservation(
+                log,
+                "cgroup v2 procs file is readable",
+                "procs-readable"
+            ),
+            fdExecObservation(
+                log,
+                "cgroup v2 procs accepts current task at root",
+                "root-procs-accepts-self"
+            ),
+            fdExecObservation(
+                log,
+                "cgroup v2 child cgroup directory can be created",
+                "child-cgroup-created"
+            ),
+            fdExecObservation(
+                log,
+                "cgroup v2 child cgroup accepts current task",
+                "child-procs-accepts-self"
+            ),
+            fdExecObservation(
+                log,
+                "cgroup v2 empty child cgroup can be removed",
+                "child-cgroup-removed"
+            )
+        ]
+    )
+    if !log.contains("cgroup_v2_probe") || !log.contains("ORLIX-CGROUP-V2-PROBE") {
+        observed["cgroup-v2-log"] = "missing"
+    }
+    return try cgroupV2Result(
+        runner: "orlix",
+        stdout: "",
+        stderr: "",
+        exitStatus: 0,
+        signal: nil,
+        observations: observed
+    )
+}
+
 func jsonObjectLines(from output: String) -> [String] {
     output
         .split(separator: "\n", omittingEmptySubsequences: false)
@@ -1336,6 +1449,21 @@ func runSelfTest() throws {
         ),
         orlixLogPath: repositoryPath(
             "tools/orlix-linux-oracle/samples/mount-namespace.orlix-kselftest.log"
+        )
+    )
+    try selfTestCase(
+        casePath: repositoryPath("tools/orlix-linux-oracle/cases/cgroup-v2.json"),
+        linuxResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/cgroup-v2.linux.json"
+        ),
+        orlixResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/cgroup-v2.orlix.json"
+        ),
+        driftResultPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/cgroup-v2.orlix-drift.json"
+        ),
+        orlixLogPath: repositoryPath(
+            "tools/orlix-linux-oracle/samples/cgroup-v2.orlix-kselftest.log"
         )
     )
 

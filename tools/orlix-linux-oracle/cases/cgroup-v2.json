@@ -1,0 +1,22 @@
+{
+  "id": "cgroup-v2",
+  "description": "Compare basic Linux cgroup v2 mount shape and current-task migration lifecycle without claiming resource controller enforcement.",
+  "fixture": "fixtures/cgroup_v2_probe.c",
+  "command": [
+    "/oracle/cgroup_v2_probe"
+  ],
+  "environment": {
+    "LC_ALL": "C"
+  },
+  "workingDirectory": "/oracle/work",
+  "compare": {
+    "stdout": false,
+    "stderr": true,
+    "exitStatus": true,
+    "signal": true,
+    "errnoEvents": false,
+    "statEntries": false,
+    "mutations": false,
+    "observations": true
+  }
+}
