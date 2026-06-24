@@ -2004,8 +2004,42 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 				source: mount.source,
 				options: mount.options ?? []
 			)
+			try Self.validateDefaultVirtualMount(runtimeMount)
 			_ = try runtimeMount.environmentMount()
 			return runtimeMount
+		}
+	}
+
+	private static func validateDefaultVirtualMount(_ mount: OrlixOCIRuntimeMount) throws {
+		guard mount.type != "bind" else { return }
+
+		let expectedSource: String?
+		let expectedDestination: String
+		switch mount.type {
+		case "proc":
+			expectedSource = "proc"
+			expectedDestination = "/proc"
+		case "sysfs":
+			expectedSource = "sysfs"
+			expectedDestination = "/sys"
+		case "devtmpfs":
+			expectedSource = "devtmpfs"
+			expectedDestination = "/dev"
+		case "devpts":
+			expectedSource = "devpts"
+			expectedDestination = "/dev/pts"
+		case "tmpfs":
+			expectedSource = "tmpfs"
+			expectedDestination = "/tmp"
+		default:
+			return
+		}
+
+		guard mount.destination == expectedDestination else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.destination")
+		}
+		if let source = mount.source, source != expectedSource {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
 		}
 	}
 
