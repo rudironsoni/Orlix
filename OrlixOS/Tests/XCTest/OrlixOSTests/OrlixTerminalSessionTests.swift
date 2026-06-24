@@ -6064,6 +6064,13 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(report.feature(named: "netDevices")?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.status, .implemented)
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.proof, "orlix:virtio_net_device_probe")
+		XCTAssertEqual(report.feature(named: "ociLifecycleStateModel")?.status, .implemented)
+		XCTAssertEqual(
+			report.feature(named: "ociLifecycleStateModel")?.proof,
+			"orlix:runtime_lifecycle_unit_tests"
+		)
+		XCTAssertEqual(report.feature(named: "ociRuntimeSpecLifecycle")?.status, .recognized)
+		XCTAssertNil(report.feature(named: "ociRuntimeSpecLifecycle")?.proof)
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(
 			report.feature(named: "userNamespaceMappings")?.status,
@@ -6112,6 +6119,10 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(features["ociUnifiedCgroupResources"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["ociUnifiedCgroupResources"]?.proof, "orlix:runtime_config_parser")
+		XCTAssertEqual(features["ociLifecycleStateModel"]?.status, .implemented)
+		XCTAssertEqual(features["ociLifecycleStateModel"]?.proof, "orlix:runtime_lifecycle_unit_tests")
+		XCTAssertEqual(features["ociRuntimeSpecLifecycle"]?.status, .recognized)
+		XCTAssertNil(features["ociRuntimeSpecLifecycle"]?.proof)
 		XCTAssertEqual(features["userNamespaceMappings"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["idmappedMounts"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["selinux"]?.status, .deterministicallyRejected)
@@ -6127,6 +6138,9 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(json.contains(#""name" : "procfs""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:pseudo_fs_probe""#))
 		XCTAssertTrue(json.contains(#""name" : "netDevices""#))
+		XCTAssertTrue(json.contains(#""name" : "ociLifecycleStateModel""#))
+		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_lifecycle_unit_tests""#))
+		XCTAssertTrue(json.contains(#""name" : "ociRuntimeSpecLifecycle""#))
 		XCTAssertTrue(json.contains(#""name" : "virtioNetDevicePlane""#))
 		XCTAssertTrue(json.contains(#""status" : "deterministicallyRejected""#))
 

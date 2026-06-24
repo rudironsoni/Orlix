@@ -20043,3 +20043,26 @@ Boundary:
 - No generated upstream/disposable `Build/...` source tree was edited.
 - No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
 - No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
+### 2026-06-24 OCI lifecycle feature-report boundary
+Checkpoint: updated the truthful OCI runtime feature report to distinguish the implemented OrlixOS lifecycle state model from full OCI Runtime Spec lifecycle compliance. The report now marks `ociLifecycleStateModel` implemented with unit-test proof and `ociRuntimeSpecLifecycle` recognized without proof, preserving the boundary that full lifecycle compliance still depends on Linux substrate, execution, resource setup, and cleanup proofs.
+
+Changes:
+- Added `ociLifecycleStateModel` and `ociRuntimeSpecLifecycle` entries in `OrlixOS/Sources/Session/OrlixOCIImageLayout.swift`.
+- Updated `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` to pin lifecycle feature statuses, proof, and stable JSON encoding.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- Focused run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeFeatureReportEncodesStableJSON test` exited 0 with `** TEST SUCCEEDED **`.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.24_20-23-13-+0200.xcresult` reported `result: Passed`, `passedTests: 3`, `failedTests: 0`, `skippedTests: 0`, device iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iOS 26.5.
+- Post-run simulator check showed iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`, iPhone 17 Pro Max `E88D85F2-5415-435F-A801-01D54683C925`, and plain iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` shutdown.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known active-plan warnings.
+- `rtk rg --files OrlixMLibC/Sources/patches` reported no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` reported no generated-tree or mlibc patch changes.
+
+Boundary:
+- This is truthful OrlixOS feature reporting only. It does not implement OCI Runtime Spec lifecycle compliance, runtime resource cleanup, product `orlix run`, registry pull, Coreutils success, arbitrary OCI mount setup, cgroup resource behavior, or full runtime readiness.
+- Linux process, signal, wait/reaping, mount, filesystem, and cleanup semantics still belong to upstream Linux and the OrlixOS session surface.
+- No generated upstream/disposable `Build/...` source tree edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade, Orlix-visible runtime shim, or HostAdapter-owned Linux policy was added.
