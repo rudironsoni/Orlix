@@ -998,14 +998,20 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
         try runObserved(using: driver).completedProcess
     }
 
-    public func runObserved(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessRunResult {
-        let startObservation = try driver.start(processSession: self)
-        let runningSession = try start(observedProcess: startObservation)
-        let completionObservation = try driver.wait(processSession: runningSession)
-        let completedProcess = try runningSession.exit(observedCompletion: completionObservation)
+	public func runObserved(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessRunResult {
+		guard processHandle.lifecycle.record.state == .created else {
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: processHandle.lifecycle.record.state,
+				action: .start
+			)
+		}
+		let startObservation = try driver.start(processSession: self)
+		let runningSession = try start(observedProcess: startObservation)
+		let completionObservation = try driver.wait(processSession: runningSession)
+		let completedProcess = try runningSession.exit(observedCompletion: completionObservation)
 
-        return OrlixOCIRuntimeProcessRunResult(
-            startObservation: startObservation,
+		return OrlixOCIRuntimeProcessRunResult(
+			startObservation: startObservation,
             runningSession: runningSession,
             completionObservation: completionObservation,
             completedProcess: completedProcess
