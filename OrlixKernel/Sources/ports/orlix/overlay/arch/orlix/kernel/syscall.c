@@ -11,6 +11,7 @@
 #include <asm/signal.h>
 #include <asm/syscall.h>
 #include <asm/time.h>
+#include <internal/asm/host_memory.h>
 
 #undef __SYSCALL
 #define __SYSCALL(nr, call)	[nr] = (call),
@@ -24,10 +25,16 @@ SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 		unsigned long, prot, unsigned long, flags,
 		unsigned long, fd, unsigned long, off)
 {
+	unsigned long mapped;
+
 	if (offset_in_page(off) != 0)
 		return -EINVAL;
 
-	return ksys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
+	mapped = ksys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
+	if (!IS_ERR_VALUE(mapped) && len)
+		orlix_host_user_unmap_pages(mapped, PAGE_ALIGN(len));
+
+	return mapped;
 }
 
 asmlinkage long sys_ni_syscall(void);

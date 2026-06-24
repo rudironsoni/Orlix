@@ -19229,3 +19229,98 @@ Current state:
   The next useful split is to prove whether the present user PTE for the
   file-backed VMA points at the expected page-cache PFN or at an already-zero
   page before HostAdapter refresh runs.
+### 2026-06-24: file-backed mmap host-range invalidation fix
+
+Implemented the Linux-surface fix for the Orlix `MAP_PRIVATE` file-backed
+mapping blocker without touching OrlixMLibC or generated upstream trees.
+
+Change:
+
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/syscall.c`
+  now invalidates the private host user mapping range after a successful
+  Linux `mmap(2)` result.
+- The invalidation calls `orlix_host_user_unmap_pages(mapped,
+  PAGE_ALIGN(len))` only after upstream Linux accepts the mapping via
+  `ksys_mmap_pgoff()`.
+- This keeps the user-visible contract 100% Linux: Linux still owns the VMA,
+  page fault, page cache, and syscall result. The host invalidation is private
+  OrlixHostAdapter synchronization so Darwin cannot keep serving stale bytes
+  for a virtual address that Linux has just rebound to a new VMA.
+
+Validation:
+
+```sh
+PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin" \
+TMPDIR=/private/tmp \
+make -f OrlixKernel/Makefile build PROFILE=release
+```
+
+Result: passed. The command used direct Apple tools instead of the normal
+`~/.local/bin` wrappers because `xcode-storage-doctor` currently reports
+`/Volumes/1TB/Xcode/tmp` as not writable from this execution context. Direct
+Apple tools were used only to work around that wrapper-temp environment issue.
+
+```sh
+PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin" \
+TMPDIR=/private/tmp \
+make -f OrlixKernel/Makefile kselftest PROFILE=release
+```
+
+Result: passed.
+
+Focused runtime proof used only the approved booted simulator:
+
+- `iPhone 17 Pro`: `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`
+- Plain `iPhone 17`: `E65F0D05-980C-4368-8CDC-2D2BF3E05757`, confirmed
+  shutdown before the run.
+
+```sh
+PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin" \
+TMPDIR=/private/tmp \
+make -f OrlixKernel/Makefile run PROFILE=release \
+  ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+  ORLIX_KERNEL_TEST_INITRAMFS_INPUT=/Users/rudironsoni/src/github/rudironsoni/orlix/OrlixSystem/Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/rootfs/initramfs.cpio.gz \
+  ORLIX_KERNEL_RUN_TIMEOUT_SECONDS=180 \
+  ORLIX_KERNEL_RUN_UNTIL_MARKER='file-backed mmap bytes match pread bytes'
+```
+
+Decoded `Build/OrlixKernel/run/release/OrlixTerminal-runtime.log` evidence:
+
+```text
+ok 4 - file-backed mmap bytes match pread bytes
+ok 44 - file_mmap_content_probe
+FM_BAD_COUNT 0
+```
+
+The previous failure shape is gone:
+
+```text
+# FM BAD O0 M00 P6f
+# FM BAD O1 M00 P72
+# FM BAD O4 M00 P78
+# FM BAD O16 M00 P6c
+# FM BAD O544 M00 P62
+```
+
+OrlixMLibC oracle:
+
+```sh
+PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin" \
+TMPDIR=/private/tmp \
+ORLIX_IOS_SIMULATOR_ID=5E2E003E-F434-4B1F-8E5C-BED59BBC177D \
+make -f OrlixMLibC/Makefile test PROFILE=release \
+  MLIBC_TEST_CASES=orlix/locale_probe \
+  MLIBC_TEST_RUN_TIMEOUT_SECONDS=240
+```
+
+Result: command completed with `verified OrlixMLibC upstream tests in simulator
+log`. Decoded runtime log had no `FAIL` or `LP BAD` tokens.
+
+Boundary audit:
+
+- No `OrlixMLibC/Sources/patches` files are present.
+- No generated upstream tree edits were made.
+- No Orlix-visible ABI, syscall facade, package manager, or runtime surface was
+  introduced.
+- The fix remains in Orlix-owned Linux port code and uses private
+  HostAdapter synchronization behind the Linux `mmap(2)` surface.
