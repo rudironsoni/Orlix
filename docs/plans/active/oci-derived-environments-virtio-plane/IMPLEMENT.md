@@ -19338,3 +19338,14 @@ Boundary audit:
 - No upstream Linux, OrlixMLibC, Coreutils, or generated `Build/...` source tree changes are part of this checkpoint.
 - `OrlixMLibC/Sources/patches` remains outside the change scope.
 - No runtime readiness, Coreutils pass, OCI environment completion, or Linux-surface conformance claim is made by this checkpoint.
+## 2026-06-24 Test-Suite Proof Boundary
+
+Current directive: the proof surface is the test suite result, not package assembly.
+
+- Linux proof means Linux/kselftest/runtime behavior test evidence.
+- OrlixMLibC proof means upstream OrlixMLibC test evidence with `OrlixMLibC/Sources/patches` empty.
+- Coreutils proof means upstream Coreutils test-suite evidence.
+- OCI/runtime proof means OrlixOS environment/session tests that exercise Linux-visible behavior.
+- Package/rootfs/test-fixture assembly is harness setup only. It must not be treated as a package manager, a distro model, or an independent proof framework.
+
+Renamed `OrlixOS/Sources/make/proof-packages.mk` to `OrlixOS/Sources/make/test-fixture-packages.mk` to remove the misleading "proof package" framing. The makefile remains build plumbing for ordinary test-fixture binaries needed to run the actual suites.

@@ -378,3 +378,5 @@ $(ORLIXOS_ZSH_BINARY): $(ORLIXOS_ZSH_SOURCE_STAMP) $(ORLIXOS_NCURSES_LIBTINFO) $
 	if "$(ORLIXOS_READELF)" -l "$(ORLIXOS_ZSH_BINARY)" | grep -F -q 'INTERP'; then echo "zsh must be a static Orlix Linux ELF without PT_INTERP" >&2; exit 1; fi; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=zsh\nversion=%s\nsha256=%s\nterminal_library=ncurses-%s-static\nfeatures=static-no-dynamic-modules\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ZSH_VERSION)" "$(ZSH_SHA256)" "$(NCURSES_VERSION)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/zsh.proof"; \
 	echo "built Orlix Linux zsh package input: $(ORLIXOS_ZSH_BINARY)"
+# Test-fixture package assembly only.
+# The proof is the upstream/runtime test-suite result, not these build artifacts.
