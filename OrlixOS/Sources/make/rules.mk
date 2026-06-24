@@ -3,7 +3,7 @@ include $(PROJECT_DIR)/Sources/make/toolchain.mk
 include $(PROJECT_DIR)/Sources/make/linux-feature-packages.mk
 include $(PROJECT_DIR)/Sources/make/packages.mk
 include $(PROJECT_DIR)/Sources/make/coreutils-test.mk
-include $(PROJECT_DIR)/Sources/make/proof-packages.mk
+include $(PROJECT_DIR)/Sources/make/test-fixture-packages.mk
 include $(PROJECT_DIR)/Sources/make/rootfs.mk
 
 clean:

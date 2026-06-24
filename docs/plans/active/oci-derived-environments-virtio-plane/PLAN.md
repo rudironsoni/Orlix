@@ -2001,3 +2001,6 @@ Plan rules:
 
 19. Add registry pull tooling.
     - Proof: registry pull produces the same verified OCI layout input as local layout import, with no OrlixKernel or iOS runtime dependency on Apple container.
+## Proof Boundary Correction
+
+The proof surface is the test suite result, not package assembly. Linux, OrlixMLibC, Coreutils, and OCI/runtime claims must be backed by their corresponding test outputs. Package/rootfs/test-fixture assembly is only harness setup required to launch those suites; it must not become a package manager, distro model, or independent proof framework.
