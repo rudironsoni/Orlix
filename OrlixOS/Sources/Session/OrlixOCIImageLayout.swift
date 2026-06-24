@@ -1309,6 +1309,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Linux /proc mount and /proc/self files are covered by Orlix kselftest."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "root.readonly",
+			status: .implemented,
+			proof: "orlix:readonly_root_probe",
+			reason: "OCI root.readonly carries into OrlixOS descriptors and Linux rootinit mounts the environment root read-only, with mountinfo and EROFS write behavior covered by Orlix kselftest."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "virtioNetDevicePlane",
 			status: .implemented,
 			proof: "orlix:virtio_net_device_probe",

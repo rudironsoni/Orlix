@@ -6025,6 +6025,11 @@ extension OrlixTerminalSessionTests {
 			report.feature(named: "cgroupV2BasicLifecycle")?.status,
 			.implemented
 		)
+		XCTAssertEqual(report.feature(named: "root.readonly")?.status, .implemented)
+		XCTAssertEqual(
+			report.feature(named: "root.readonly")?.proof,
+			"orlix:readonly_root_probe"
+		)
 		XCTAssertEqual(report.feature(named: "seccomp")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "intelRdt")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "ociCgroupPath")?.status, .deterministicallyRejected)
@@ -6146,6 +6151,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertEqual(features["ociLifecycleStateModel"]?.proof, "orlix:runtime_lifecycle_unit_tests")
 		XCTAssertEqual(features["ociRuntimeSpecLifecycle"]?.status, .recognized)
 		XCTAssertNil(features["ociRuntimeSpecLifecycle"]?.proof)
+		XCTAssertEqual(features["root.readonly"]?.status, .implemented)
+		XCTAssertEqual(features["root.readonly"]?.proof, "orlix:readonly_root_probe")
 		XCTAssertEqual(features["virtioFsHostFolderMount"]?.status, .implemented)
 		XCTAssertEqual(features["virtioFsHostFolderMount"]?.proof, "orlix:virtio_fs_mount_probe")
 		XCTAssertEqual(features["userNamespaceMappings"]?.status, .deterministicallyRejected)
@@ -6162,6 +6169,8 @@ extension OrlixTerminalSessionTests {
 		XCTAssertTrue(json.contains(#""proof" : "orlix:fd_alias_probe""#))
 		XCTAssertTrue(json.contains(#""name" : "procfs""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:pseudo_fs_probe""#))
+		XCTAssertTrue(json.contains(#""name" : "root.readonly""#))
+		XCTAssertTrue(json.contains(#""proof" : "orlix:readonly_root_probe""#))
 		XCTAssertTrue(json.contains(#""name" : "netDevices""#))
 		XCTAssertTrue(json.contains(#""name" : "ociLifecycleStateModel""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_lifecycle_unit_tests""#))
