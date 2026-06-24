@@ -17,7 +17,7 @@ static bool file_contains(const char *path, const char *needle)
 
 static bool mountinfo_has_mount(const char *target, const char *fs_type)
 {
-	char buffer[8192];
+	char buffer[65536];
 	char mount_fragment[80];
 	char fs_fragment[80];
 	size_t pos = 0;
@@ -36,11 +36,21 @@ static bool mountinfo_has_mount(const char *target, const char *fs_type)
 	fs_pos = orlix_append_cstr(fs_fragment, fs_pos, sizeof(fs_fragment),
 				  fs_type);
 	fs_pos = orlix_append_cstr(fs_fragment, fs_pos, sizeof(fs_fragment),
-				  " ");
+				 " ");
+	mount_fragment[pos] = '\0';
+	fs_fragment[fs_pos] = '\0';
 
-	return orlix_read_file("/proc/self/mountinfo", buffer, sizeof(buffer),
-			       &size) == 0 &&
-	       orlix_contains(buffer, size, mount_fragment) &&
+	if (orlix_read_file("/proc/self/mountinfo", buffer, sizeof(buffer),
+			 &size) != 0)
+		return false;
+
+	if (!orlix_contains(buffer, size, mount_fragment))
+		orlix_test_comment("missing mountinfo target ", target,
+				   orlix_strlen(target));
+	if (!orlix_contains(buffer, size, fs_fragment))
+		orlix_test_comment("missing mountinfo fs ", fs_type,
+				   orlix_strlen(fs_type));
+	return orlix_contains(buffer, size, mount_fragment) &&
 	       orlix_contains(buffer, size, fs_fragment);
 }
 
