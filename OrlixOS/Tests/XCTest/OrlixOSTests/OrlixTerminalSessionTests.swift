@@ -1139,6 +1139,18 @@ final class OrlixTerminalSessionTests: XCTestCase {
             )
         )
         XCTAssertTrue(initSource.contains("sched_setaffinity("))
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultHostMountTargetCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(
+            initSource.contains(
+                "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultHostMountReadOnlyCommandLineKey)=\","
+            )
+        )
+        XCTAssertTrue(initSource.contains("mount_if_needed(\"orlix-host0\""))
+        XCTAssertTrue(initSource.contains("\"virtiofs\""))
         XCTAssertTrue(initSource.contains("SYS_capset"))
         XCTAssertTrue(initSource.contains("SYS_capget"))
         XCTAssertTrue(initSource.contains("PR_CAPBSET_DROP"))
@@ -1254,10 +1266,77 @@ final class OrlixTerminalSessionTests: XCTestCase {
         }
     }
 
-    func testEnvironmentRootImageRejectsUnimplementedExplicitMounts() throws {
+    func testEnvironmentRootImageRegistersDocumentsMountHostDirectory() throws {
+        let root = temporaryRegistryRoot()
+        let documentsRoot = root.appendingPathComponent("Documents", isDirectory: true)
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: "documents-mount",
+            linuxStateRoot: root.appendingPathComponent(
+                "Application Support/Orlix",
+                isDirectory: true
+            ),
+            cacheRoot: root.appendingPathComponent("Caches/Orlix", isDirectory: true),
+            scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+        )
+        try FileManager.default.createDirectory(
+            at: layout.rootDirectory,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: documentsRoot,
+            withIntermediateDirectories: true
+        )
+        try Data("base".utf8).write(to: layout.baseImageURL)
+        try Data("state".utf8).write(to: layout.stateImageURL)
+        let documentsMount = try OrlixEnvironmentMount.documents(
+            targetPath: "/home/root/Documents",
+            readOnly: true
+        )
+        let descriptor = OrlixEnvironmentDescriptor(
+            id: "documents-mount",
+            source: .copiedEnvironment(parentID: "default"),
+            platform: "linux/arm64",
+            rootImageIdentifier: "orlix.env.documents-mount",
+            defaultCommand: ["/bin/sh"],
+            defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+            defaultWorkingDirectory: "/",
+            defaultUserID: 0,
+            defaultGroupID: 0,
+            mounts: [documentsMount]
+        )
+
+        let rootImage = try OrlixEnvironmentRootImage.materialized(
+            descriptor: descriptor,
+            layout: layout,
+            documentsDirectory: documentsRoot
+        )
+        XCTAssertEqual(
+            rootImage.hostDirectories,
+            [
+                OrlixHostDirectoryRegistration(
+                    identifier: OrlixEnvironmentRootImage.defaultHostDirectoryIdentifier,
+                    hostPath: documentsRoot.path,
+                    readOnly: true
+                )
+            ]
+        )
+        let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
+        XCTAssertTrue(
+            commandLine.contains(
+                "\(OrlixEnvironmentRootImage.defaultHostMountTargetCommandLineKey)=/home/root/Documents"
+            )
+        )
+        XCTAssertTrue(
+            commandLine.contains(
+                "\(OrlixEnvironmentRootImage.defaultHostMountReadOnlyCommandLineKey)=1"
+            )
+        )
+    }
+
+    func testEnvironmentRootImageRejectsMountsWithoutLinuxBackend() throws {
         let root = temporaryRegistryRoot()
         let layout = try OrlixEnvironmentStorageLayout.layout(
-            forEnvironmentID: "documents-mount-pending",
+            forEnvironmentID: "unsupported-mounts",
             linuxStateRoot: root.appendingPathComponent(
                 "Application Support/Orlix",
                 isDirectory: true
@@ -1271,33 +1350,6 @@ final class OrlixTerminalSessionTests: XCTestCase {
         )
         try Data("base".utf8).write(to: layout.baseImageURL)
         try Data("state".utf8).write(to: layout.stateImageURL)
-        let documentsMount = try OrlixEnvironmentMount.documents(
-            targetPath: "/home/root/Documents"
-        )
-        let descriptor = OrlixEnvironmentDescriptor(
-            id: "documents-mount-pending",
-            source: .copiedEnvironment(parentID: "default"),
-            platform: "linux/arm64",
-            rootImageIdentifier: "orlix.env.documents-mount-pending",
-            defaultCommand: ["/bin/sh"],
-            defaultEnvironment: ["PATH": "/usr/bin:/bin"],
-            defaultWorkingDirectory: "/",
-            defaultUserID: 0,
-            defaultGroupID: 0,
-            mounts: [documentsMount]
-        )
-
-        XCTAssertThrowsError(
-            try OrlixEnvironmentRootImage.materialized(
-                descriptor: descriptor,
-                layout: layout
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? OrlixEnvironmentRootImageError,
-                .missingLinuxMountBackend(documentsMount)
-            )
-        }
 
         let externalMount = try OrlixEnvironmentMount.securityScopedExternal(
             bookmarkID: "project-folder-bookmark",
@@ -1305,10 +1357,10 @@ final class OrlixTerminalSessionTests: XCTestCase {
             readOnly: true
         )
         let externalDescriptor = OrlixEnvironmentDescriptor(
-            id: "documents-mount-pending",
+            id: "unsupported-mounts",
             source: .copiedEnvironment(parentID: "default"),
             platform: "linux/arm64",
-            rootImageIdentifier: "orlix.env.documents-mount-pending",
+            rootImageIdentifier: "orlix.env.unsupported-mounts",
             defaultCommand: ["/bin/sh"],
             defaultEnvironment: ["PATH": "/usr/bin:/bin"],
             defaultWorkingDirectory: "/",
@@ -1326,6 +1378,34 @@ final class OrlixTerminalSessionTests: XCTestCase {
             XCTAssertEqual(
                 error as? OrlixEnvironmentRootImageError,
                 .missingLinuxMountBackend(externalMount)
+            )
+        }
+
+        let documentsMount = try OrlixEnvironmentMount.documents(
+            targetPath: "/home/root/Documents"
+        )
+        let multiMountDescriptor = OrlixEnvironmentDescriptor(
+            id: "unsupported-mounts",
+            source: .copiedEnvironment(parentID: "default"),
+            platform: "linux/arm64",
+            rootImageIdentifier: "orlix.env.unsupported-mounts",
+            defaultCommand: ["/bin/sh"],
+            defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+            defaultWorkingDirectory: "/",
+            defaultUserID: 0,
+            defaultGroupID: 0,
+            mounts: [documentsMount, externalMount]
+        )
+
+        XCTAssertThrowsError(
+            try OrlixEnvironmentRootImage.materialized(
+                descriptor: multiMountDescriptor,
+                layout: layout
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OrlixEnvironmentRootImageError,
+                .missingLinuxMountBackend(documentsMount)
             )
         }
     }

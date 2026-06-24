@@ -19522,3 +19522,100 @@ Boundary:
 - No OrlixMLibC patch was added.
 - No package manager, package proof framework, custom ABI, syscall facade, or
   Orlix-visible runtime shim was added.
+
+### 2026-06-24 Documents host-directory mount registration and init hook
+
+Checkpoint: added the first narrow host-folder mount backend slice for
+OCI-derived environment work. The supported scope is exactly one explicit
+Documents mount mapped to the existing opaque virtio-fs tag `orlix-host0`.
+
+Changes:
+- `OrlixOS/Sources/Session/OrlixEnvironment.swift` now materializes a Documents
+  mount into `OrlixHostDirectoryRegistration(identifier: "orlix-host0",
+  hostPath: <private Documents path>, readOnly: <mount flag>)`. Unsupported
+  external security-scoped mounts and multiple mounts still fail with
+  `missingLinuxMountBackend`.
+- `OrlixOS/Sources/Session/OrlixOS.swift` now clears stale HostAdapter host
+  directory registrations and registers the materialized root image's opaque
+  host directory list before boot. Host paths remain private HostAdapter input,
+  not Linux-visible ABI.
+- `OrlixOS/Sources/init/init.c` now reads only Linux target/read-only metadata
+  from private `orlix.mount.host0.*` boot tokens, creates the requested Linux
+  mountpoint, and calls normal Linux `mount("orlix-host0", target, "virtiofs",
+  ...)`. A requested host mount failure aborts init instead of silently booting
+  with the wrong filesystem shape.
+- `OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` now covers
+  Documents host-directory registration, command-line metadata, unsupported
+  external mounts, unsupported multiple mounts, and the init parser contract for
+  the virtio-fs mount path.
+
+Verification:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcodebuild -project OrlixSystem.xcodeproj \
+    -scheme OrlixOSTests \
+    -configuration Debug \
+    -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' \
+    build-for-testing
+```
+
+Result: exited 0. This proves the Swift sources, OrlixOS payload build,
+OrlixOS first-stage init C compilation, OrlixTestRunner app, and OrlixOSTests
+test bundle build for the arm64 iOS Simulator destination.
+
+Attempted focused XCTest execution:
+
+```sh
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp \
+  USER=rudironsoni LOGNAME=rudironsoni \
+  xcodebuild -project OrlixSystem.xcodeproj \
+    -scheme OrlixOSTests \
+    -configuration Debug \
+    -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' \
+    -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testEnvironmentRootImageRegistersDocumentsMountHostDirectory \
+    -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testEnvironmentRootImageRejectsMountsWithoutLinuxBackend \
+    -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testEnvironmentRootImageCommandLineKeysMatchInitParserContract \
+    test
+```
+
+Result: first run failed in `init.c` compilation because the new helper was
+placed before existing static function definitions. Fixed with local static
+prototypes. Second run compiled through `built OrlixOS first-stage init` and
+reached `Testing started`, then hung in the iPhone Simulator launch worker until
+interrupted to avoid further resource use. xcodebuild reported
+`NSMachErrorDomain -308` from `IDELaunchiPhoneSimulatorLauncher`. A subsequent
+single-simulator bootstatus attempt for `iPhone 17 Pro`
+`5E2E003E-F434-4B1F-8E5C-BED59BBC177D` stayed at `Waiting on System App` for
+about two minutes and was interrupted; the simulator was then shut down
+successfully. `xcrun simctl list devices available` showed all listed devices
+shutdown before the boot attempt, and only this one simulator was started.
+
+Static checks:
+
+```sh
+rtk git diff --check
+rtk rg --files OrlixMLibC/Sources/patches
+```
+
+Results: `git diff --check` exited 0. `OrlixMLibC/Sources/patches` reported no
+files.
+
+Boundary:
+- This checkpoint does not claim app-hosted runtime host-folder mount success.
+  The Linux-visible runtime proof still requires a successful simulator test
+  that observes the mounted target through Linux userspace, such as
+  `/proc/self/mountinfo`, `stat`, `readdir`, and read-only behavior.
+- This checkpoint does not claim arbitrary OCI bind mounts. OCI bind mounts
+  remain feature-report `recognized` only until end-to-end runtime proof exists.
+- Security-scoped external folders remain rejected until bookmark/path
+  resolution and Linux-visible proof exist.
+- No generated upstream/disposable `Build/...` source tree was edited.
+- No OrlixMLibC patch was added; `OrlixMLibC/Sources/patches` remains empty.
+- No package manager, package proof framework, custom ABI, syscall facade,
+  HostAdapter-owned Linux policy, Coreutils upstream-suite claim, OCI lifecycle
+  claim, product `orlix run` claim, registry pull claim, or full runtime
+  readiness claim is made by this checkpoint.
