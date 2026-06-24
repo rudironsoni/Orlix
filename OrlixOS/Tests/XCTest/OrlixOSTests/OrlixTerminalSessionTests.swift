@@ -8327,6 +8327,7 @@ extension OrlixTerminalSessionTests {
 		  },
 		  "process" : {
 		    "terminal" : true,
+		    "consoleSize" : { "height" : 24, "width" : 80 },
 		    "args" : ["/usr/bin/env", "sh"],
 		    "env" : [
 		      "HOME=/root",
@@ -8351,6 +8352,11 @@ extension OrlixTerminalSessionTests {
 
 		XCTAssertEqual(session.id, "oci-session-created")
 		XCTAssertEqual(session.lifecycleState, OrlixOCIRuntimeLifecycleState.created)
+		XCTAssertTrue(session.terminal)
+		XCTAssertEqual(
+			session.consoleSize,
+			OrlixOCIRuntimeConsoleSize(height: 24, width: 80)
+		)
 		XCTAssertEqual(session.environment.id, "oci-session-created")
 		XCTAssertEqual(session.environment.source, OrlixEnvironmentSource.ociLayout)
 		XCTAssertEqual(session.environment.rootImageIdentifier, "oci-session-created")
