@@ -28,3 +28,6 @@ Do not add Docker daemon, `runc`, Apple Containerization runtime, Virtualization
 ## Product Model
 
 One OrlixKernel runs multiple Linux environments: default Orlix root, imported rootfs environments, and OCI-derived environments. OCI metadata may configure an environment, but Linux semantics remain owned by Linux. The final product must feel like a capable Linux terminal on iOS, not a parser demo or unsupported-field report.
+## Goal Size
+
+Keep this `GOAL.md` under 4000 characters. Put execution detail, proof logs, and checkpoint history in `PLAN.md` and `IMPLEMENT.md`.

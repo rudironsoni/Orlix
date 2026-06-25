@@ -436,7 +436,7 @@ class LifecycleGuardTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 2)
-            self.assertIn("GOAL.md files must be <= 4000 characters", result.stderr)
+            self.assertIn("docs/plans/**/GOAL.md files must be <= 4000 characters", result.stderr)
 
     def test_pre_tool_guard_blocks_commit_with_oversized_goal(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as state_tmp:
@@ -469,7 +469,7 @@ class LifecycleGuardTests(unittest.TestCase):
             result = run_hook(PRE_TOOL_GUARD, bash_payload("rtk git commit -m checkpoint"), cwd=root, env=env)
 
             self.assertEqual(result.returncode, 2)
-            self.assertIn("GOAL.md files must be <= 4000 characters", result.stderr)
+            self.assertIn("docs/plans/**/GOAL.md files must be <= 4000 characters", result.stderr)
 
     def test_compact_plan_check_warns_on_stale_status_contradiction(self):
         with tempfile.TemporaryDirectory() as tmp:

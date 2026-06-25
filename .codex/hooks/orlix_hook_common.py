@@ -23,6 +23,7 @@ BASH_TOOL_NAMES = {"bash"}
 READ_TOOL_NAMES = {"read", "grep", "glob", "ls"}
 BASH_COMMAND_PREFIX = r"(^|[;&|]\s*)(?:rtk\s+)?(?:(?:timeout|gtimeout)\s+\d+\s+)?(?:sudo\s+)?"
 GOAL_MAX_CHARS = 4000
+GOAL_GLOB_DESCRIPTION = "docs/plans/**/GOAL.md"
 
 BASH_MUTATING_COMMAND_RE = re.compile(
     BASH_COMMAND_PREFIX +
@@ -257,7 +258,7 @@ def oversized_goal_messages(root):
         if goal_length > GOAL_MAX_CHARS:
             messages.append(
                 f"{goal_path.relative_to(root)} is {goal_length} characters; "
-                f"GOAL.md files must be <= {GOAL_MAX_CHARS} characters."
+                f"{GOAL_GLOB_DESCRIPTION} files must be <= {GOAL_MAX_CHARS} characters."
             )
     return messages
 
