@@ -25,6 +25,7 @@
 
 #define ORLIX_INIT_CMDLINE_SIZE 16384
 #define ORLIX_INIT_MAX_RLIMITS 16
+#define ORLIX_INIT_MAX_CGROUP_UNIFIED 8
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
@@ -32,12 +33,18 @@
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
 #define ORLIX_INIT_HOST_MOUNT_TARGET_SIZE 256
 #define ORLIX_INIT_CGROUP_PATH_SIZE 256
+#define ORLIX_INIT_CGROUP_FILE_SIZE 32
 #define ORLIX_INIT_CGROUP_VALUE_SIZE 32
 
 struct orlix_rlimit_config {
 	int resource;
 	rlim_t soft;
 	rlim_t hard;
+};
+
+struct orlix_cgroup_unified_config {
+	char file[ORLIX_INIT_CGROUP_FILE_SIZE];
+	char value[ORLIX_INIT_CGROUP_VALUE_SIZE];
 };
 
 static void die(const char *message);
@@ -499,6 +506,63 @@ static void apply_cgroup_io_weight(const char *path, const char *value)
 	if (ensure_dir_recursive(directory, 0755) != 0)
 		die("create cgroup path");
 	write_cgroup_control(directory, "io.weight", weight);
+}
+
+static const char *cgroup_controller_for_file(const char *file)
+{
+	if (strcmp(file, "pids.max") == 0)
+		return "+pids\n";
+	if (strcmp(file, "cpu.max") == 0 || strcmp(file, "cpu.weight") == 0)
+		return "+cpu\n";
+	if (strcmp(file, "memory.max") == 0)
+		return "+memory\n";
+	if (strcmp(file, "io.weight") == 0)
+		return "+io\n";
+	return NULL;
+}
+
+static void apply_cgroup_unified_entry(const char *path, const char *file,
+				       const char *value)
+{
+	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
+	const char *controller = cgroup_controller_for_file(file);
+
+	if (!cgroup_path_is_valid(path))
+		die("invalid cgroups path");
+	if (controller == NULL || strchr(file, '/') != NULL ||
+	    strchr(file, '\n') != NULL || strchr(file, '\r') != NULL ||
+	    file[0] == '\0')
+		die("invalid cgroup unified file");
+	if (strchr(value, '\n') != NULL || strchr(value, '\r') != NULL ||
+	    value[0] == '\0')
+		die("invalid cgroup unified value");
+	if (snprintf(directory, sizeof(directory), "/sys/fs/cgroup%s", path) >=
+	    (int)sizeof(directory))
+		die("cgroups path too long");
+	enable_cgroup_controller(path, controller);
+	if (ensure_dir_recursive(directory, 0755) != 0)
+		die("create cgroup path");
+	write_cgroup_control(directory, file, value);
+}
+
+static int parse_cgroup_unified_assignment(
+	char *assignment,
+	struct orlix_cgroup_unified_config *entry)
+{
+	char *separator = strchr(assignment, '=');
+	size_t file_length;
+
+	if (separator == NULL || separator == assignment ||
+	    separator[1] == '\0')
+		return -1;
+	*separator = '\0';
+	file_length = strlen(assignment);
+	if (file_length >= sizeof(entry->file) ||
+	    strlen(separator + 1) >= sizeof(entry->value))
+		return -1;
+	strcpy(entry->file, assignment);
+	strcpy(entry->value, separator + 1);
+	return 0;
 }
 
 static unsigned long namespace_flag_for_name(const char *name)
@@ -1225,6 +1289,9 @@ int has_cgroup_cpu_weight;
 	int has_cgroup_memory_max;
 	char cgroup_io_weight[ORLIX_INIT_CGROUP_VALUE_SIZE];
 	int has_cgroup_io_weight;
+	struct orlix_cgroup_unified_config
+		cgroup_unified[ORLIX_INIT_MAX_CGROUP_UNIFIED];
+	size_t cgroup_unified_count;
 	unsigned long namespace_flags;
 	unsigned long namespace_join_flags[ORLIX_INIT_MAX_NAMESPACE_JOINS];
 	char namespace_join_paths[ORLIX_INIT_MAX_NAMESPACE_JOINS][ORLIX_INIT_VALUE_SIZE];
@@ -1410,6 +1477,20 @@ config->has_cgroup_cpu_weight = 1;
 	    sizeof(config->cgroup_io_weight)) == 0 &&
 	    config->cgroup_io_weight[0] != '\0')
 		config->has_cgroup_io_weight = 1;
+	for (int i = 0; i < ORLIX_INIT_MAX_CGROUP_UNIFIED; i++) {
+		char key[40];
+		char assignment[ORLIX_INIT_CGROUP_FILE_SIZE +
+				ORLIX_INIT_CGROUP_VALUE_SIZE + 2];
+		snprintf(key, sizeof(key), "orlix.cgroups.unified%d=", i);
+		if (read_cmdline_decoded(key, assignment, sizeof(assignment)) != 0)
+			break;
+		if (parse_cgroup_unified_assignment(
+			    assignment,
+			    &config->cgroup_unified[config->cgroup_unified_count]) !=
+		    0)
+			die("invalid cgroup unified assignment");
+		config->cgroup_unified_count++;
+	}
 	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
 		char key[32];
 		char value[ORLIX_INIT_VALUE_SIZE];
@@ -1810,6 +1891,13 @@ static pid_t start_command_on_pty(int master, int slave)
 			die("cgroup io weight without cgroup path");
 		apply_cgroup_io_weight(config->cgroups_path,
 			config->cgroup_io_weight);
+	}
+	for (size_t i = 0; i < config->cgroup_unified_count; i++) {
+		if (!config->has_cgroups_path)
+			die("cgroup unified without cgroup path");
+		apply_cgroup_unified_entry(config->cgroups_path,
+			config->cgroup_unified[i].file,
+			config->cgroup_unified[i].value);
 	}
 	if (config->has_cgroups_path)
 		join_configured_cgroup(config->cgroups_path);

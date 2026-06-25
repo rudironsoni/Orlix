@@ -7,6 +7,7 @@ TEST_GEN_PROGS += cgroup_io_probe
 TEST_GEN_PROGS += cgroup_memory_probe
 TEST_GEN_PROGS += cgroup_namespace_probe
 TEST_GEN_PROGS += cgroup_pids_probe
+TEST_GEN_PROGS += cgroup_unified_probe
 TEST_GEN_PROGS += file_mmap_content_probe
 TEST_GEN_PROGS += overlayfs_probe
 TEST_GEN_PROGS += hostname_domainname_probe
