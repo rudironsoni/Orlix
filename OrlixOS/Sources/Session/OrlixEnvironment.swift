@@ -541,8 +541,9 @@ public struct OrlixEnvironmentCPUAffinity: Codable, Equatable, Sendable {
 
 @_spi(OrlixPrivateTesting)
 public enum OrlixEnvironmentMountSource: Codable, Equatable, Sendable {
-    case documents
-    case securityScopedExternal(bookmarkID: String)
+	case documents
+	case securityScopedExternal(bookmarkID: String)
+	case hostPath(String)
 }
 
 @_spi(OrlixPrivateTesting)
@@ -563,19 +564,33 @@ public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
         )
     }
 
-    public static func securityScopedExternal(
-        bookmarkID: String,
-        targetPath: String,
-        readOnly: Bool = false
+	public static func securityScopedExternal(
+		bookmarkID: String,
+		targetPath: String,
+		readOnly: Bool = false
     ) throws -> OrlixEnvironmentMount {
         try validateSecurityScopedBookmarkID(bookmarkID)
         try validateLinuxMountTarget(targetPath)
         return OrlixEnvironmentMount(
             source: .securityScopedExternal(bookmarkID: bookmarkID),
             targetPath: targetPath,
-            readOnly: readOnly
-        )
-    }
+			readOnly: readOnly
+		)
+	}
+
+	public static func hostPath(
+		_ hostPath: String,
+		targetPath: String,
+		readOnly: Bool = false
+	) throws -> OrlixEnvironmentMount {
+		try validateHostMountPath(hostPath)
+		try validateLinuxMountTarget(targetPath)
+		return OrlixEnvironmentMount(
+			source: .hostPath(hostPath),
+			targetPath: targetPath,
+			readOnly: readOnly
+		)
+	}
 
     private init(
         source: OrlixEnvironmentMountSource,
@@ -605,14 +620,20 @@ public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
         switch source {
         case .documents:
             self = try .documents(targetPath: targetPath, readOnly: readOnly)
-        case let .securityScopedExternal(bookmarkID):
-            self = try .securityScopedExternal(
-                bookmarkID: bookmarkID,
-                targetPath: targetPath,
-                readOnly: readOnly
-            )
-        }
-    }
+		case let .securityScopedExternal(bookmarkID):
+			self = try .securityScopedExternal(
+				bookmarkID: bookmarkID,
+				targetPath: targetPath,
+				readOnly: readOnly
+			)
+		case let .hostPath(hostPath):
+			self = try .hostPath(
+				hostPath,
+				targetPath: targetPath,
+				readOnly: readOnly
+			)
+		}
+	}
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -647,8 +668,8 @@ public enum OrlixEnvironmentMountError: Error, Equatable, Sendable {
 }
 
 private func validateSecurityScopedBookmarkID(_ bookmarkID: String) throws {
-    guard !bookmarkID.isEmpty,
-          !bookmarkID.contains("/"),
+	guard !bookmarkID.isEmpty,
+		!bookmarkID.contains("/"),
           !bookmarkID.contains("\\"),
           !bookmarkID.contains("\u{0}"),
           bookmarkID != ".",
@@ -656,13 +677,24 @@ private func validateSecurityScopedBookmarkID(_ bookmarkID: String) throws {
           !bookmarkID.hasPrefix("."),
           !bookmarkID.contains("..")
     else {
-        throw OrlixEnvironmentMountError.invalidSourceIdentifier(bookmarkID)
-    }
+		throw OrlixEnvironmentMountError.invalidSourceIdentifier(bookmarkID)
+	}
+}
+
+private func validateHostMountPath(_ hostPath: String) throws {
+	guard hostPath.hasPrefix("/"),
+		!hostPath.contains("\u{0}"),
+		!hostPath.contains("//"),
+		!hostPath.split(separator: "/").contains("."),
+		!hostPath.split(separator: "/").contains("..")
+	else {
+		throw OrlixEnvironmentMountError.invalidSourceIdentifier(hostPath)
+	}
 }
 
 private func validateLinuxMountTarget(_ targetPath: String) throws {
-    guard targetPath.hasPrefix("/"),
-          !targetPath.contains("\u{0}"),
+	guard targetPath.hasPrefix("/"),
+		!targetPath.contains("\u{0}"),
           !targetPath.contains("//"),
           !targetPath.split(separator: "/").contains("..")
     else {
@@ -1234,16 +1266,24 @@ private static func validateNamespace(_ namespace: String) throws -> String {
 					resolvedDocumentsDirectory = resolved
 					directory = resolved
 				}
-			case let .securityScopedExternal(bookmarkID):
-				guard let resolved = securityScopedExternalDirectories[bookmarkID] else {
-					throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
-				}
-				directory = resolved
-			}
-			guard directory.isFileURL else {
+		case let .securityScopedExternal(bookmarkID):
+			guard let resolved = securityScopedExternalDirectories[bookmarkID] else {
 				throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
 			}
-			return OrlixHostDirectoryRegistration(
+			directory = resolved
+		case let .hostPath(hostPath):
+			directory = URL(fileURLWithPath: hostPath, isDirectory: true)
+		}
+		guard directory.isFileURL else {
+			throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
+		}
+		var isDirectory = ObjCBool(false)
+		guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+			isDirectory.boolValue
+		else {
+			throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
+		}
+		return OrlixHostDirectoryRegistration(
 				identifier: "\(hostDirectoryIdentifierPrefix)\(index)",
 				hostPath: directory.path,
 				readOnly: mount.readOnly

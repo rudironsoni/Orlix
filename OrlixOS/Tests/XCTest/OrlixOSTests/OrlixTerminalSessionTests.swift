@@ -106,15 +106,53 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(descriptor.mounts.first?.readOnly ?? false)
 
         let encoded = try JSONEncoder().encode(descriptor)
-        let decoded = try JSONDecoder().decode(
-            OrlixEnvironmentDescriptor.self,
-            from: encoded
-        )
-        XCTAssertEqual(decoded, descriptor)
-    }
+	let decoded = try JSONDecoder().decode(
+		OrlixEnvironmentDescriptor.self,
+		from: encoded
+	)
+	XCTAssertEqual(decoded, descriptor)
+}
 
-    func testDocumentsMountRejectsReservedLinuxRuntimeTargets() throws {
-        for target in ["/", "/proc", "/proc/self", "/dev", "/sys", "/run", "/tmp"] {
+func testHostPathMountIsExplicitEnvironmentDescriptorMetadata() throws {
+	let root = temporaryRegistryRoot()
+	let hostDirectory = root.appendingPathComponent("host-bind", isDirectory: true)
+	try FileManager.default.createDirectory(
+		at: hostDirectory,
+		withIntermediateDirectories: true
+	)
+	let hostMount = try OrlixEnvironmentMount.hostPath(
+		hostDirectory.path,
+		targetPath: "/mnt/host-bind",
+		readOnly: true
+	)
+	let descriptor = OrlixEnvironmentDescriptor(
+		id: "host-path-explicit",
+		source: .copiedEnvironment(parentID: "default"),
+		platform: "linux/arm64",
+		rootImageIdentifier: "orlix.env.host-path-explicit",
+		defaultCommand: ["/bin/sh"],
+		defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+		defaultWorkingDirectory: "/",
+		defaultUserID: 0,
+		defaultGroupID: 0,
+		mounts: [hostMount]
+	)
+
+	XCTAssertEqual(descriptor.mounts, [hostMount])
+	XCTAssertEqual(descriptor.mounts.first?.source, .hostPath(hostDirectory.path))
+	XCTAssertEqual(descriptor.mounts.first?.targetPath, "/mnt/host-bind")
+	XCTAssertTrue(descriptor.mounts.first?.readOnly ?? false)
+
+	let encoded = try JSONEncoder().encode(descriptor)
+	let decoded = try JSONDecoder().decode(
+		OrlixEnvironmentDescriptor.self,
+		from: encoded
+	)
+	XCTAssertEqual(decoded, descriptor)
+}
+
+func testDocumentsMountRejectsReservedLinuxRuntimeTargets() throws {
+	for target in ["/", "/proc", "/proc/self", "/dev", "/sys", "/run", "/tmp"] {
             XCTAssertThrowsError(
                 try OrlixEnvironmentMount.documents(targetPath: target)
             ) { error in
@@ -6482,11 +6520,11 @@ report.feature(named: "ociBlockIOControls")?.proof,
 			XCTAssertEqual(report.feature(named: hookFeature)?.status, .deterministicallyRejected)
 		}
 		XCTAssertEqual(report.feature(named: "selinux")?.proof, "orlix:runtime_config_parser")
-		XCTAssertEqual(report.feature(named: "ociBindMounts")?.status, .recognized)
-		XCTAssertEqual(
-			report.feature(named: "ociBindMounts")?.proof,
-			"orlix:runtime_spec_mount_validation"
-		)
+	XCTAssertEqual(report.feature(named: "ociBindMounts")?.status, .implemented)
+	XCTAssertEqual(
+		report.feature(named: "ociBindMounts")?.proof,
+		"orlix:virtio_fs_mount_probe"
+	)
 		XCTAssertEqual(report.feature(named: "ociCgroupMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(
 			report.feature(named: "cgroupV2PidsController")?.status,
@@ -9872,12 +9910,81 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 			environment.mounts[0].source,
 			.securityScopedExternal(bookmarkID: "selected-project")
 		)
-		XCTAssertEqual(environment.mounts[0].targetPath, "/mnt/project")
-		XCTAssertTrue(environment.mounts[0].readOnly)
-	}
+	XCTAssertEqual(environment.mounts[0].targetPath, "/mnt/project")
+	XCTAssertTrue(environment.mounts[0].readOnly)
+}
 
-	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
-		let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [
+func testOCIRuntimeConfigParserTranslatesStandardHostPathBindMount() throws {
+	let root = temporaryRegistryRoot()
+	let hostDirectory = root.appendingPathComponent("oci-host-source", isDirectory: true)
+	try FileManager.default.createDirectory(
+		at: hostDirectory,
+		withIntermediateDirectories: true
+	)
+	let config = Data(
+		"""
+		{
+		  "ociVersion": "1.1.0",
+		  "process": { "args": ["/bin/sh"], "cwd": "/" },
+		  "mounts": [
+		    {
+		      "destination": "/mnt/oci-host",
+		      "type": "bind",
+		      "source": "\(hostDirectory.path)",
+		      "options": ["rbind", "ro"]
+		    }
+		  ]
+		}
+		""".utf8
+	)
+	let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+	XCTAssertEqual(descriptor.mounts.count, 1)
+	XCTAssertEqual(descriptor.mounts[0].destination, "/mnt/oci-host")
+	XCTAssertEqual(descriptor.mounts[0].type, "bind")
+	XCTAssertEqual(descriptor.mounts[0].source, hostDirectory.path)
+
+	let environment = try descriptor.environmentDescriptor(
+		id: "oci-host-bind-mount",
+		rootMount: .defaultOverlay
+	)
+	XCTAssertEqual(environment.mounts.count, 1)
+	XCTAssertEqual(environment.mounts[0].source, .hostPath(hostDirectory.path))
+	XCTAssertEqual(environment.mounts[0].targetPath, "/mnt/oci-host")
+	XCTAssertTrue(environment.mounts[0].readOnly)
+
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: root.appendingPathComponent("Application Support/Orlix"),
+		cacheRoot: root.appendingPathComponent("Caches/Orlix"),
+		scratchRoot: root.appendingPathComponent("tmp/Orlix")
+	)
+	let layout = try registry.prepareStorage(
+		for: environment,
+		fileManager: .default
+	)
+	try Data("base".utf8).write(to: layout.baseImageURL)
+	try Data("state".utf8).write(to: layout.stateImageURL)
+	let rootImage = try OrlixEnvironmentRootImage.materialized(
+		descriptor: environment,
+		layout: layout
+	)
+	XCTAssertEqual(
+		rootImage.hostDirectories,
+		[
+			OrlixHostDirectoryRegistration(
+				identifier: "orlix-host0",
+				hostPath: hostDirectory.path,
+				readOnly: true
+			)
+		]
+	)
+	let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
+	XCTAssertTrue(commandLine.contains("orlix.mount.host0.target=/mnt/oci-host"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.host0.readonly=1"))
+	XCTAssertFalse(commandLine.contains(hostDirectory.path))
+}
+
+func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
+	let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [
 			(
 				#"{ "destination": "/cgroup", "type": "cgroup2", "source": "cgroup2" }"#,
 				.unsupportedLinuxFeature("mounts.destination")
@@ -9907,9 +10014,9 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 				.unsupportedLinuxFeature("mounts.options")
 			),
 		(
-			#"{ "destination": "/mnt/host", "type": "bind", "source": "/Users/rudi/Documents", "options": ["rbind"] }"#,
-			.unsupportedLinuxFeature("mounts.source")
-		),
+		#"{ "destination": "/mnt/host", "type": "bind", "source": "/Users/rudi/../Documents", "options": ["rbind"] }"#,
+		.unsupportedLinuxFeature("mounts.source")
+	),
 		(
 			#"{ "destination": "/mnt/external", "type": "bind", "source": "orlix:security-scoped:selected-folder", "options": ["bind"] }"#,
 			.unsupportedLinuxFeature("mounts.source")
