@@ -8306,6 +8306,65 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		XCTAssertNotNil(processSession.linuxSession.materializedRootImageForTesting)
 	}
 
+	func testOCIRuntimeProcessSessionInitializerAttachesLifecycleStore() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-process-session-store-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+		let stateRoot = scratch.appendingPathComponent("state", isDirectory: true)
+		let cacheRoot = scratch.appendingPathComponent("cache", isDirectory: true)
+		let scratchRoot = scratch.appendingPathComponent("scratch", isDirectory: true)
+		try fileManager.createDirectory(
+			at: stateRoot.appendingPathComponent("environments/oci-demo", isDirectory: true),
+			withIntermediateDirectories: true
+		)
+		try fileManager.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+		try fileManager.createDirectory(at: scratchRoot, withIntermediateDirectories: true)
+		try Data("base".utf8).write(
+			to: stateRoot.appendingPathComponent("environments/oci-demo/base.ext4")
+		)
+		try Data("state".utf8).write(
+			to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
+		)
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: stateRoot,
+			cacheRoot: cacheRoot,
+			scratchRoot: scratchRoot
+		)
+		let lifecycle = try OrlixOCIRuntimeLifecycleController(
+			config: try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig()),
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		).create()
+
+		let processSession = try OrlixOCIRuntimeProcessSession(
+			lifecycle: lifecycle,
+			rootMount: OrlixEnvironmentRootMount.defaultOverlay,
+			registry: registry,
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
+		)
+
+		let store = try XCTUnwrap(processSession.lifecycleStore)
+		let report = try store.stateReport(id: "oci-demo")
+		XCTAssertEqual(processSession.processHandle.lifecycle.record.state, .created)
+		XCTAssertNotNil(processSession.linuxSession.materializedRootImageForTesting)
+		XCTAssertEqual(report.status, .created)
+		XCTAssertNil(report.pid)
+		XCTAssertEqual(report.bundle, "/bundles/oci-demo")
+		XCTAssertTrue(
+			fileManager.fileExists(
+				atPath: try registry.descriptorURL(forEnvironmentID: "oci-demo").path
+			)
+		)
+	}
+
 	func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
