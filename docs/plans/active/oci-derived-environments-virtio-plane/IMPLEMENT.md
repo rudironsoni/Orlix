@@ -20959,3 +20959,29 @@ Verification:
 Non-claims:
 - This is still OrlixOS lifecycle/session facade work. It does not claim final Linux exec supervisor integration, product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, or rejection-coverage work were added.
+
+### 2026-06-25 Store-backed OCI run facade and duplicate-create guard
+
+Current status: extended the OrlixOS-owned OCI runtime lifecycle facade with a one-shot `run(id:)` operation over an already-created, materialized OCI-derived environment and added duplicate lifecycle ID protection during `create`. `OrlixOCIRuntime.run` resumes the persisted created lifecycle record, reconstructs the process session from the stored OCI bundle config and environment registry, starts through the existing observation driver, waits through the same running session, and returns durable running/stopped state reports. `OrlixOCIRuntime.create` now refuses to overwrite an existing lifecycle record for the same environment ID.
+
+Changes:
+- Added `OrlixOCIRuntimeRunResult` with started and completed lifecycle surfaces.
+- Added `OrlixOCIRuntimeError.environmentAlreadyExists`.
+- Added duplicate lifecycle-record guard to `OrlixOCIRuntime.create`.
+- Added `OrlixOCIRuntime.run(id:...)` for created-to-running-to-stopped lifecycle execution through the store-backed process-session path.
+- Refactored the runtime facade's private session reconstruction helper from `session` to `processSession` and reused it for start/kill/wait/run.
+- Added OrlixOS XCTest coverage for duplicate create rejection and one-shot run over a created lifecycle record.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused bounded `test-without-building` for `testOCIRuntimeCreateRejectsExistingLifecycleRecord` and `testOCIRuntimeRunStartsAndWaitsCreatedLifecycleRecord` produced no `Testing started`, `Test Suite`, or `Test Case` output before the 180 second alarm terminated the command with signal 14; no executed-XCTest pass is claimed.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- This is an OrlixOS lifecycle facade over an already-created environment and observation driver. It does not claim final Linux exec supervisor integration, root image materialization command execution, product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, or rejection-coverage work were added.
