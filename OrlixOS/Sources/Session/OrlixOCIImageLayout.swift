@@ -46,6 +46,10 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 		digest ?? tag ?? "latest"
 	}
 
+	private var distributionRegistry: String {
+		registry == "docker.io" ? "registry-1.docker.io" : registry
+	}
+
 	public func manifestURL() throws -> URL {
 		try distributionURL(kind: "manifests", reference: manifestReference)
 	}
@@ -189,7 +193,7 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 
 	private func distributionURL(kind: String, reference: String) throws -> URL {
 		let path = "/v2/\(repository)/\(kind)/\(reference)"
-		guard let url = URL(string: "\(scheme)://\(registry)\(path)") else {
+		guard let url = URL(string: "\(scheme)://\(distributionRegistry)\(path)") else {
 			throw OrlixOCIRegistryReferenceError.invalidEndpoint(path)
 		}
 		return url
