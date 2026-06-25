@@ -1272,6 +1272,11 @@ public struct OrlixOCIEnvironmentRunResult: Sendable {
 	public let completedStateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIEnvironmentInstallRunResult: Sendable {
+	public let installResult: OrlixOCIEnvironmentInstallResult
+	public let runResult: OrlixOCIEnvironmentRunResult
+}
+
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
 	public let id: String
 	public let lifecycleState: OrlixOCIRuntimeLifecycleState
@@ -1383,6 +1388,65 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			try? registry.delete(environmentID: id, fileManager: fileManager)
 			throw error
 		}
+	}
+
+	@discardableResult
+	public func run(
+		bundleURL: URL,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) throws -> OrlixOCIEnvironmentInstallRunResult {
+		let installResult = try install(
+			bundleURL: bundleURL,
+			id: id,
+			tools: tools,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+		let runResult = try run(
+			id: id,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentInstallRunResult(
+			installResult: installResult,
+			runResult: runResult
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	@discardableResult
+	public func run(
+		bundleURL: URL,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) throws -> OrlixOCIEnvironmentInstallRunResult {
+		let installResult = try install(
+			bundleURL: bundleURL,
+			id: id,
+			tools: tools,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+		let runResult = try run(
+			id: id,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentInstallRunResult(
+			installResult: installResult,
+			runResult: runResult
+		)
 	}
 
 	public func session(

@@ -9555,8 +9555,93 @@ func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
 		XCTAssertFalse(fileManager.fileExists(atPath: layout.rootDirectory.path))
 	}
 
-func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
-	let fileManager = FileManager.default
+	func testOCIEnvironmentInstallerRunsBundleByInstallingThenStarting() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-installer-run-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+		defer { try? fileManager.removeItem(at: scratch) }
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("root-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try Data("""
+		{
+			"ociVersion" : "1.1.0",
+			"root" : { "path" : "rootfs" },
+			"process" : {
+				"terminal" : false,
+				"args" : ["/bin/true"],
+				"cwd" : "/"
+			}
+		}
+		""".utf8).write(to: bundleURL.appendingPathComponent("config.json"))
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		)
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let tools = OrlixOCIEnvironmentMaterializationTools(
+			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
+			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		)
+		let recorder = RecordingPublicOCIInstallerCommandRunner()
+		let driver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 110,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 110, exitStatus: 0)
+			)
+		)
+
+		let result = try installer.run(
+			bundleURL: bundleURL,
+			id: "oci-installed-run",
+			tools: tools,
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			using: driver,
+			fileManager: fileManager
+		) { executable, arguments in
+			try recorder.run(executable: executable, arguments: arguments)
+		}
+		let layout = try registry.layout(forEnvironmentID: "oci-installed-run")
+
+		XCTAssertEqual(result.installResult.id, "oci-installed-run")
+		XCTAssertEqual(result.installResult.stateReport.status, .created)
+		XCTAssertEqual(result.runResult.id, "oci-installed-run")
+		XCTAssertEqual(result.runResult.startedStateReport.status, .running)
+		XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
+		XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
+		XCTAssertEqual(
+			try installer.state(id: "oci-installed-run"),
+			result.runResult.completedStateReport
+		)
+		XCTAssertEqual(recorder.executables.first, tools.truncate)
+		XCTAssertEqual(recorder.executables.filter { $0 == tools.mke2fs }.count, 2)
+		XCTAssertEqual(recorder.executables.filter { $0 == tools.debugfs }.count, 2)
+		XCTAssertEqual(
+			driver.events,
+			[
+				"start:created:nil",
+				"wait:running:110",
+			]
+		)
+		XCTAssertTrue(fileManager.fileExists(atPath: layout.rootDirectory.path))
+
+		let deleted = try installer.delete(id: "oci-installed-run")
+		XCTAssertEqual(deleted.lifecycleState, .deleted)
+		XCTAssertFalse(fileManager.fileExists(atPath: layout.rootDirectory.path))
+	}
+
+	func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
+		let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 			"orlix-oci-runtime-materialized-run-\(UUID().uuidString)",
 			isDirectory: true

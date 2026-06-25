@@ -10,6 +10,34 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI installer bundle run facade
+
+Checkpoint: added a product-level one-shot bundle run facade on `OrlixOCIEnvironmentInstaller`. Callers can now materialize an OCI bundle and run the installed environment through OrlixOS in one API call while still receiving public install/run state reports. The public path uses the real Linux observation runtime; the SPI overload exists only for deterministic orchestration tests.
+
+Changes:
+- Added `OrlixOCIEnvironmentInstallRunResult`.
+- Added public `OrlixOCIEnvironmentInstaller.run(bundleURL:id:tools:terminal:observationTimeout:fileManager:runCommand:)`.
+- Added SPI `OrlixOCIEnvironmentInstaller.run(bundleURL:id:tools:terminal:using:fileManager:runCommand:)` for focused tests.
+- Added XCTest coverage for one-shot bundle install plus run, including materialization command execution, lifecycle state transitions, persisted stopped state, and explicit delete cleanup.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsBundleByInstallingThenStarting test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_23-50-36-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that OrlixOS bundle reported 2 passed, 0 failed, 0 skipped.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_23-51-44-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that app-hosted bundle reported 1 passed, 0 failed, 0 skipped.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This moves toward product `orlix run` by reducing bundle execution to an installer-level OrlixOS API over existing materialization and real runtime observation paths.
+- This does not prove a Linux userspace `orlix run` command, registry one-shot run, real signal/kill delivery, live public registry compatibility, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+- The app-hosted run again emitted Thread Performance Checker warnings and post-test kernel `I/O error, dev vdb` lines after the selected XCTest had reported success. These remain runtime log caveats.
+
 ### 2026-06-25 OCI installer delete facade
 
 Checkpoint: added a product-level `OrlixOCIEnvironmentInstaller.delete(id:)` facade so installed OCI-derived environments can be cleaned up through the same OrlixOS surface used for install, state, and run. The public delete result exposes only the environment ID and lifecycle state, keeping runtime deletion internals SPI.
