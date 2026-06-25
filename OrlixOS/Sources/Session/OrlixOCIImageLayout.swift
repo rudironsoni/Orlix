@@ -1378,12 +1378,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:network_namespace_probe",
 			reason: "Opening rtnetlink sockets is covered by Orlix kselftest."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "userNamespaceMappings",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI uidMappings and gidMappings are rejected until Orlix reports Linux-owned user namespace mapping support."
-		),
+        OrlixOCIRuntimeFeature(
+            name: "userNamespaceMappings",
+            status: .implemented,
+            proof: "orlix:runtime_config_parser",
+            reason: "OCI uidMappings and gidMappings carry into OrlixOS descriptors and first-stage init writes Linux uid_map, gid_map, and setgroups procfs controls after CLONE_NEWUSER."
+        ),
 		OrlixOCIRuntimeFeature(
 			name: "idmappedMounts",
 			status: .deterministicallyRejected,
@@ -1602,6 +1602,8 @@ public let cgroupIOWeight: UInt64?
     public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
     public let deviceNodes: [OrlixEnvironmentDeviceNode]
     public let timeOffsets: [OrlixEnvironmentTimeOffset]
+    public let uidMappings: [OrlixEnvironmentIDMapping]
+    public let gidMappings: [OrlixEnvironmentIDMapping]
     public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
@@ -1670,6 +1672,8 @@ public let cgroupIOWeight: UInt64?
             cgroupUnified: cgroupUnified,
             deviceNodes: deviceNodes,
             timeOffsets: timeOffsets,
+            uidMappings: uidMappings,
+            gidMappings: gidMappings,
             namespaces: namespaces,
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
@@ -1827,6 +1831,16 @@ cgroupsPath: config.linux?.cgroupsPath
             timeOffsets: try Self.validatedTimeOffsets(
                 config.linux?.timeOffsets,
                 namespaces: namespaces
+            ),
+            uidMappings: try Self.validatedIDMappings(
+                config.linux?.uidMappings,
+                namespaces: namespaces,
+                feature: "linux.uidMappings"
+            ),
+            gidMappings: try Self.validatedIDMappings(
+                config.linux?.gidMappings,
+                namespaces: namespaces,
+                feature: "linux.gidMappings"
             ),
             mounts: mounts,
 			defaultCommand: args,
@@ -2410,6 +2424,33 @@ private static func validatedTimeOffsets(
         }
 }
 
+private static func validatedIDMappings(
+    _ mappings: [OCIRuntimeIDMapping]?,
+    namespaces: [String],
+    feature: String
+) throws -> [OrlixEnvironmentIDMapping] {
+    guard let mappings, !mappings.isEmpty else {
+        return []
+    }
+    guard namespaces.contains("user") else {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("\(feature).namespace")
+    }
+    return try mappings.map { mapping in
+        guard let containerID = mapping.containerID,
+              let hostID = mapping.hostID,
+              let size = mapping.size,
+              size > 0
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("\(feature).size")
+        }
+        return OrlixEnvironmentIDMapping(
+            containerID: containerID,
+            hostID: hostID,
+            size: size
+        )
+    }
+}
+
 private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? {
     guard let value else {
         return nil
@@ -2668,7 +2709,7 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
     private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
         var seen = Set<String>()
         var result: [String] = []
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time"])
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time", "user"])
 
         for namespace in namespaces {
             guard !seen.contains(namespace.type) else {
@@ -2818,12 +2859,6 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
 			return
 		}
 
-		if let uidMappings = linux.uidMappings, !uidMappings.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.uidMappings")
-		}
-		if let gidMappings = linux.gidMappings, !gidMappings.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.gidMappings")
-		}
     if linux.seccomp != nil {
         throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
     }
