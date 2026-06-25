@@ -7830,6 +7830,133 @@ func testOCIRegistryPullerRejectsBlobDigestMismatch() async throws {
 	XCTAssertFalse(fileManager.fileExists(atPath: layoutURL.path))
 }
 
+func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-registry-installer-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+	defer { try? fileManager.removeItem(at: scratch) }
+
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+		cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+		scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+	)
+	let image = try OrlixOCIRegistryImageReference(
+		"registry.example.org/library/orlix-registry:latest"
+	)
+	let layerData = tarArchive(entries: [
+		TarFixtureEntry(
+			path: "root-marker",
+			payload: Data("registry-root\n".utf8)
+		),
+	])
+	let layerDigest = "sha256:\(OrlixOCIDigest.sha256Hex(layerData))"
+	let configData = Data(
+		"""
+		{
+		  "config": {
+		    "Env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
+		    "Entrypoint": ["/bin/sh"],
+		    "Cmd": ["-lc", "echo registry"],
+		    "WorkingDir": "/",
+		    "User": "0"
+		  },
+		  "rootfs": {
+		    "type": "layers",
+		    "diff_ids": ["\(layerDigest)"]
+		  }
+		}
+		""".utf8
+	)
+	let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+	let manifestData = Data(
+		"""
+		{
+		  "schemaVersion": 2,
+		  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		  "config": {
+		    "mediaType": "application/vnd.oci.image.config.v1+json",
+		    "digest": "\(configDigest)",
+		    "size": \(configData.count)
+		  },
+		  "layers": [
+		    {
+		      "mediaType": "application/vnd.oci.image.layer.v1.tar",
+		      "digest": "\(layerDigest)",
+		      "size": \(layerData.count)
+		    }
+		  ]
+		}
+		""".utf8
+	)
+	let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+	let registryFetch = RecordingOCIRegistryFetch(responses: [
+		try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: [
+				"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+				"Docker-Content-Digest": manifestDigest,
+			],
+			body: manifestData
+		),
+		try image.blobURL(digest: configDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Docker-Content-Digest": configDigest],
+			body: configData
+		),
+		try image.blobURL(digest: layerDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Docker-Content-Digest": layerDigest],
+			body: layerData
+		),
+	])
+	let tools = OrlixOCIEnvironmentMaterializationTools(
+		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
+		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+	)
+	let recorder = RecordingPublicOCIInstallerCommandRunner()
+	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+
+	let installed = try await installer.install(
+		image: image,
+		id: "registry-installed-session",
+		tools: tools,
+		puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
+		fileManager: fileManager
+	) { executable, arguments in
+		try recorder.run(executable: executable, arguments: arguments)
+	}
+
+	let layout = try registry.layout(forEnvironmentID: "registry-installed-session")
+	let descriptor = try registry.load(environmentID: "registry-installed-session")
+	XCTAssertEqual(installed.id, "registry-installed-session")
+	XCTAssertEqual(installed.image, image)
+	XCTAssertEqual(installed.pullResult.manifestDigest, manifestDigest)
+	XCTAssertEqual(installed.stateReport.status, .created)
+	XCTAssertEqual(installed.stateReport.bundle, "oci://registry.example.org/library/orlix-registry@\(manifestDigest)")
+	XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo registry"])
+	XCTAssertEqual(descriptor.defaultEnvironment["TERM"], "xterm-256color")
+	XCTAssertTrue(fileManager.fileExists(atPath: layout.baseImageURL.path))
+	XCTAssertTrue(fileManager.fileExists(atPath: layout.stateImageURL.path))
+	XCTAssertEqual(recorder.executables.first, tools.truncate)
+	XCTAssertEqual(recorder.executables.filter { $0 == tools.mke2fs }.count, 2)
+	XCTAssertEqual(recorder.executables.filter { $0 == tools.debugfs }.count, 2)
+
+	let session = try installer.session(
+		id: "registry-installed-session",
+		terminal: OrlixTerminalSession()
+	)
+	let rootImage = try XCTUnwrap(session.materializedRootImageForTesting)
+	XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
+	XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
+	let requests = await registryFetch.requests
+	XCTAssertEqual(requests.count, 3)
+}
+
 func testOCIRuntimeBundleRejectsSymlinkRootfsEscapingBundle() throws {
 	let fileManager = FileManager.default
 	let bundleURL = fileManager.temporaryDirectory
