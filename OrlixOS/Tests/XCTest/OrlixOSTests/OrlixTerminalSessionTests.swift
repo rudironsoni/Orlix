@@ -7633,6 +7633,17 @@ func testOCIRegistryImageReferenceParsesDistributionEndpoints() throws {
 		try dockerNamespace.manifestURL().absoluteString,
 		"https://registry-1.docker.io/v2/rudironsoni/orlix/manifests/latest"
 	)
+
+	let dockerEndpoint = try OrlixOCIRegistryImageReference(
+		"registry-1.docker.io/library/alpine:latest"
+	)
+	XCTAssertEqual(dockerEndpoint.registry, "docker.io")
+	XCTAssertEqual(dockerEndpoint.repository, "library/alpine")
+	XCTAssertEqual(dockerEndpoint.tag, "latest")
+	XCTAssertEqual(
+		try dockerEndpoint.manifestURL().absoluteString,
+		"https://registry-1.docker.io/v2/library/alpine/manifests/latest"
+	)
 }
 
 func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
