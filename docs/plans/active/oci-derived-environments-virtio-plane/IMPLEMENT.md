@@ -21323,6 +21323,57 @@ Boundary:
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
   dependency, or Swift-side fake Linux behavior was added.
 
+### 2026-06-25 OCI user namespace map-write proof
+
+Checkpoint: strengthened OCI user namespace mapping evidence from parser-only
+coverage to Linux-owned runtime proof. `user_namespace_probe` now enters a child
+user namespace, writes `deny` to `/proc/self/setgroups`, writes a one-entry
+current-user mapping to `/proc/self/uid_map`, writes a one-entry current-group
+mapping to `/proc/self/gid_map`, and verifies the map files remain readable.
+The OCI feature report now anchors `userNamespaceMappings` to
+`orlix:user_namespace_probe` instead of parser-only proof.
+
+Changes:
+- Extended `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/user_namespace_probe.c`
+  from three assertions to four by adding `user namespace accepts uid_map and
+  gid_map writes`.
+- Updated `OrlixTestRunner` focused upstream XCTest to require the new probe
+  output line.
+- Updated `OrlixOS` OCI runtime feature report proof for
+  `userNamespaceMappings` to `orlix:user_namespace_probe`, and updated
+  feature-report XCTest expectations.
+
+Evidence:
+- First sandboxed `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  failed because ccache could not write under
+  `/Users/rudironsoni/Library/Caches/ccache`; no source failure was indicated.
+- Unsandboxed `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release`
+  exited 0 after the stronger probe was added.
+- Focused `OrlixKernelUpstreamTests` run for
+  `testUserNamespaceProbeCompletesThroughOrlixOSTerminalSession` reached
+  `Testing started`; the polling session ended before final stdout was returned,
+  so the result bundle was inspected directly.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.25_13-12-18-+0200.xcresult`
+  reported `result: Passed`, `passedTests: 1`, `failedTests: 0`, `skippedTests:
+  0` on `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing`
+  exited 0 after the feature-report proof update.
+- Focused `OrlixOSTests` `test-without-building` for
+  `testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures`,
+  `testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults`, and
+  `testOCIRuntimeFeatureReportEncodesStableJSON` exited 0.
+
+Boundary:
+- This proves Linux-owned uid/gid map write behavior through the Orlix kselftest
+  lane and aligns OCI feature-report proof with that evidence. It does not claim
+  full user namespace capability modeling, nested mapping policy, arbitrary
+  supplementary group behavior, idmapped mounts, full OCI Runtime Spec lifecycle
+  completion, product `orlix run`, registry pull, broad imported-root execution
+  proof, systemd support, or full runtime readiness.
+- No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
+  custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
+  dependency, or Swift-side fake Linux behavior was added.
+
 ### 2026-06-25 OCI user namespace mapping coverage reconciliation
 
 Checkpoint: reconciled OrlixOS XCTest coverage for the current OCI user namespace

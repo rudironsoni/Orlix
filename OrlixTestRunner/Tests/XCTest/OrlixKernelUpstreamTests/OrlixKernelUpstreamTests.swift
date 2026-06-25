@@ -271,6 +271,7 @@ final class OrlixKernelUpstreamTests: XCTestCase {
         XCTAssertTrue(output.contains("user namespace unshare changes /proc/self/ns/user"))
         XCTAssertTrue(output.contains("user namespace exposes readable uid_map and gid_map"))
         XCTAssertTrue(output.contains("user namespace exposes setgroups control"))
+        XCTAssertTrue(output.contains("user namespace accepts uid_map and gid_map writes"))
     }
 
     func testOverlayFSProbeCompletesThroughOrlixOSTerminalSession() throws {
