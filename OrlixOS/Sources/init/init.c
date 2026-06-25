@@ -118,6 +118,39 @@ static void write_errno_message(int fd, const char *prefix, int error)
 	write_literal(fd, "\n");
 }
 
+static void write_process_started(pid_t pid)
+{
+	char buffer[96];
+	int length = snprintf(buffer, sizeof(buffer),
+			      "orlix-init: process started pid=%ld\n",
+			      (long)pid);
+	if (length > 0 && (size_t)length < sizeof(buffer))
+		(void)write_all(STDERR_FILENO, buffer, (size_t)length);
+}
+
+static void write_process_completion(pid_t pid, int status)
+{
+	char buffer[128];
+	int length;
+
+	if (WIFEXITED(status)) {
+		length = snprintf(buffer, sizeof(buffer),
+				  "orlix-init: process exited pid=%ld status=%d\n",
+				  (long)pid, WEXITSTATUS(status));
+	} else if (WIFSIGNALED(status)) {
+		length = snprintf(buffer, sizeof(buffer),
+				  "orlix-init: process signaled pid=%ld signal=%d\n",
+				  (long)pid, WTERMSIG(status));
+	} else {
+		length = snprintf(buffer, sizeof(buffer),
+				  "orlix-init: process completed pid=%ld status=%d\n",
+				  (long)pid, status);
+	}
+
+	if (length > 0 && (size_t)length < sizeof(buffer))
+		(void)write_all(STDERR_FILENO, buffer, (size_t)length);
+}
+
 static void write_unsigned_decimal(int fd, unsigned long value)
 {
 	char buffer[32];
@@ -2372,6 +2405,7 @@ static pid_t start_command_on_pty(int master, int slave)
 
 	install_stdio(slave);
 	run_configured_command_child();
+	_exit(127);
 }
 
 static int run_stdio_command(void)
@@ -2386,10 +2420,12 @@ static int run_stdio_command(void)
 	if (child == 0)
 		run_configured_command_child();
 
+	write_process_started(child);
 	while (waitpid(child, &status, 0) < 0) {
 		if (errno != EINTR)
 			return 1;
 	}
+	write_process_completion(child, status);
 	return shell_exit_status(status);
 }
 
