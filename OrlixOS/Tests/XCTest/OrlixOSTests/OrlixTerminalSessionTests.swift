@@ -7570,6 +7570,78 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 	XCTAssertEqual(session.environment.defaultCommand, ["/bin/sh"])
 }
 
+func testOCIRegistryImageReferenceParsesDistributionEndpoints() throws {
+	let digest = "sha256:\(String(repeating: "a", count: 64))"
+	let tagged = try OrlixOCIRegistryImageReference(
+		"registry.example.org:5000/library/alpine:3.20"
+	)
+	XCTAssertEqual(tagged.scheme, "https")
+	XCTAssertEqual(tagged.registry, "registry.example.org:5000")
+	XCTAssertEqual(tagged.repository, "library/alpine")
+	XCTAssertEqual(tagged.tag, "3.20")
+	XCTAssertNil(tagged.digest)
+	XCTAssertEqual(tagged.manifestReference, "3.20")
+	XCTAssertEqual(
+		try tagged.manifestURL().absoluteString,
+		"https://registry.example.org:5000/v2/library/alpine/manifests/3.20"
+	)
+	XCTAssertEqual(
+		try tagged.blobURL(digest: digest).absoluteString,
+		"https://registry.example.org:5000/v2/library/alpine/blobs/\(digest)"
+	)
+
+	let digested = try OrlixOCIRegistryImageReference(
+		"https://ghcr.io/rudironsoni/orlix@\(digest)"
+	)
+	XCTAssertEqual(digested.scheme, "https")
+	XCTAssertEqual(digested.registry, "ghcr.io")
+	XCTAssertEqual(digested.repository, "rudironsoni/orlix")
+	XCTAssertNil(digested.tag)
+	XCTAssertEqual(digested.digest, digest)
+	XCTAssertEqual(digested.manifestReference, digest)
+	XCTAssertEqual(
+		try digested.manifestURL().absoluteString,
+		"https://ghcr.io/v2/rudironsoni/orlix/manifests/\(digest)"
+	)
+
+	let implicitLatest = try OrlixOCIRegistryImageReference("localhost:5000/orlix/rootfs")
+	XCTAssertNil(implicitLatest.tag)
+	XCTAssertEqual(implicitLatest.manifestReference, "latest")
+	XCTAssertEqual(
+		try implicitLatest.manifestURL().absoluteString,
+		"https://localhost:5000/v2/orlix/rootfs/manifests/latest"
+	)
+}
+
+func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
+	let digest = "sha256:\(String(repeating: "b", count: 64))"
+	let invalidReferences: [(String, OrlixOCIRegistryReferenceError)] = [
+		("", .emptyReference),
+		("alpine", .missingRepository("alpine")),
+		("registry.example.org/Upper/Name:latest", .invalidRepository("Upper/Name")),
+		("registry.example.org/library/alpine:bad tag", .invalidTag("bad tag")),
+		("registry.example.org/library/alpine@sha256:bad", .invalidDigest("sha256:bad")),
+		("ftp://registry.example.org/library/alpine:latest", .unsupportedScheme("ftp")),
+		(
+			"https://registry.example.org/library/alpine:latest?x=1",
+			.invalidEndpoint("https://registry.example.org/library/alpine:latest?x=1")
+		),
+	]
+	for (reference, expectedError) in invalidReferences {
+		XCTAssertThrowsError(try OrlixOCIRegistryImageReference(reference)) { error in
+			XCTAssertEqual(error as? OrlixOCIRegistryReferenceError, expectedError)
+		}
+	}
+	let valid = try OrlixOCIRegistryImageReference("registry.example.org/library/alpine")
+	let invalidDigest = String(digest.dropLast()) + "x"
+	XCTAssertThrowsError(try valid.blobURL(digest: invalidDigest)) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRegistryReferenceError,
+			.invalidDigest(invalidDigest)
+		)
+	}
+}
+
 func testOCIRuntimeBundleRejectsSymlinkRootfsEscapingBundle() throws {
 	let fileManager = FileManager.default
 	let bundleURL = fileManager.temporaryDirectory
