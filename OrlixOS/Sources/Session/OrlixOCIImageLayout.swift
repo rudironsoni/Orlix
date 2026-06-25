@@ -1452,9 +1452,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
         ),
 		OrlixOCIRuntimeFeature(
 			name: "ociMaskedPaths",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI masked paths are parsed and rejected until Linux mount masking is wired."
+			status: .implemented,
+			proof: "orlix:rootinit_masked_paths",
+			reason: "OCI linux.maskedPaths carry into OrlixOS descriptors and Linux rootinit masks validated in-root paths with standard Linux mounts before userspace init."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociNamespaces",
@@ -1476,9 +1476,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociReadonlyPaths",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI readonly paths are parsed and rejected until Linux mount remount policy is wired."
+			status: .implemented,
+			proof: "orlix:rootinit_readonly_paths",
+			reason: "OCI linux.readonlyPaths carry into OrlixOS descriptors and Linux rootinit bind-remounts validated in-root paths read-only before userspace init."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociUnifiedCgroupResources",
@@ -1506,9 +1506,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCgroupMounts",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_spec_mount_validation",
-			reason: "OCI cgroup mounts are rejected until Orlix reports a Linux-owned cgroup2 hierarchy for OCI-derived environments."
+			status: .implemented,
+			proof: "orlix:cgroup_v2_probe",
+			reason: "OCI cgroup2 mounts are accepted for the standard /sys/fs/cgroup hierarchy that Orlix init mounts with Linux cgroup2."
 		),
 	])
 
@@ -2268,7 +2268,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.destination")
 			}
 
-			let supportedMountTypes = Set(["proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "bind"])
+		let supportedMountTypes = Set(["proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "cgroup2", "bind"])
 			guard supportedMountTypes.contains(mount.type) else {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.type.\(mount.type)")
 			}
@@ -2317,6 +2317,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		case "tmpfs":
 			expectedSource = "tmpfs"
 			expectedDestination = "/tmp"
+		case "cgroup2":
+			expectedSource = "cgroup2"
+			expectedDestination = "/sys/fs/cgroup"
 		default:
 			return
 		}
