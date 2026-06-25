@@ -7611,13 +7611,34 @@ func testOCIRegistryImageReferenceParsesDistributionEndpoints() throws {
 		try implicitLatest.manifestURL().absoluteString,
 		"https://localhost:5000/v2/orlix/rootfs/manifests/latest"
 	)
+
+	let dockerOfficial = try OrlixOCIRegistryImageReference("alpine:3.20")
+	XCTAssertEqual(dockerOfficial.scheme, "https")
+	XCTAssertEqual(dockerOfficial.registry, "docker.io")
+	XCTAssertEqual(dockerOfficial.repository, "library/alpine")
+	XCTAssertEqual(dockerOfficial.tag, "3.20")
+	XCTAssertEqual(dockerOfficial.manifestReference, "3.20")
+	XCTAssertEqual(
+		try dockerOfficial.manifestURL().absoluteString,
+		"https://docker.io/v2/library/alpine/manifests/3.20"
+	)
+
+	let dockerNamespace = try OrlixOCIRegistryImageReference(
+		"rudironsoni/orlix:latest"
+	)
+	XCTAssertEqual(dockerNamespace.registry, "docker.io")
+	XCTAssertEqual(dockerNamespace.repository, "rudironsoni/orlix")
+	XCTAssertEqual(dockerNamespace.tag, "latest")
+	XCTAssertEqual(
+		try dockerNamespace.manifestURL().absoluteString,
+		"https://docker.io/v2/rudironsoni/orlix/manifests/latest"
+	)
 }
 
 func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	let digest = "sha256:\(String(repeating: "b", count: 64))"
 	let invalidReferences: [(String, OrlixOCIRegistryReferenceError)] = [
 		("", .emptyReference),
-		("alpine", .missingRepository("alpine")),
 		("registry.example.org/Upper/Name:latest", .invalidRepository("Upper/Name")),
 		("registry.example.org/library/alpine:bad tag", .invalidTag("bad tag")),
 		("registry.example.org/library/alpine@sha256:bad", .invalidDigest("sha256:bad")),
