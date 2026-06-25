@@ -50,6 +50,10 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 		try distributionURL(kind: "manifests", reference: manifestReference)
 	}
 
+	public func manifestURL(reference: String) throws -> URL {
+		try distributionURL(kind: "manifests", reference: reference)
+	}
+
 	public func blobURL(digest: String) throws -> URL {
 		try Self.validate(digest: digest)
 		return try distributionURL(kind: "blobs", reference: digest.lowercased())
@@ -176,6 +180,339 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 		}
 		return url
 	}
+}
+
+public enum OrlixOCIRegistryPullError: Error, Equatable, Sendable {
+	case destinationExists(String)
+	case invalidHTTPResponse(String)
+	case unexpectedStatus(url: String, statusCode: Int)
+	case missingPlatform(String)
+	case unsupportedManifestMediaType(String)
+	case invalidManifestSchemaVersion(Int)
+	case responseDigestMismatch(url: String, expected: String, actual: String)
+	case sizeMismatch(digest: String, expected: UInt64, actual: UInt64)
+}
+
+public struct OrlixOCIRegistryFetchRequest: Equatable, Sendable {
+	public let url: URL
+	public let accept: [String]
+
+	public init(url: URL, accept: [String]) {
+		self.url = url
+		self.accept = accept
+	}
+}
+
+public struct OrlixOCIRegistryFetchResponse: Equatable, Sendable {
+	public let statusCode: Int
+	public let headers: [String: String]
+	public let body: Data
+
+	public init(statusCode: Int, headers: [String: String], body: Data) {
+		self.statusCode = statusCode
+		self.headers = headers
+		self.body = body
+	}
+}
+
+public struct OrlixOCIRegistryPullResult: Equatable, Sendable {
+	public let layoutURL: URL
+	public let image: OrlixOCIRegistryImageReference
+	public let manifestDigest: String
+	public let configDigest: String
+	public let layerDigests: [String]
+}
+
+public struct OrlixOCIRegistryPuller: Sendable {
+	public typealias Fetch = @Sendable (OrlixOCIRegistryFetchRequest) async throws
+		-> OrlixOCIRegistryFetchResponse
+
+	public let fetch: Fetch
+
+	public init() {
+		self.fetch = Self.urlSessionFetch
+	}
+
+	public init(fetch: @escaping Fetch) {
+		self.fetch = fetch
+	}
+
+	public func pull(
+		_ image: OrlixOCIRegistryImageReference,
+		to layoutURL: URL,
+		platform: String = "linux/arm64",
+		fileManager: FileManager = .default
+	) async throws -> OrlixOCIRegistryPullResult {
+		if fileManager.fileExists(atPath: layoutURL.path) {
+			throw OrlixOCIRegistryPullError.destinationExists(layoutURL.path)
+		}
+		let requestedPlatform = try OrlixOCIPlatform(platform)
+		let selectedManifest = try await fetchSelectedManifest(
+			image: image,
+			requestedPlatform: requestedPlatform
+		)
+		let manifest = try JSONDecoder().decode(OCIManifest.self, from: selectedManifest.data)
+		guard manifest.schemaVersion == 2 else {
+			throw OrlixOCIRegistryPullError.invalidManifestSchemaVersion(
+				manifest.schemaVersion
+			)
+		}
+
+		let configData = try await fetchBlob(image: image, descriptor: manifest.config)
+		var layerData: [(descriptor: OCIDescriptor, data: Data)] = []
+		for layer in manifest.layers {
+			layerData.append((layer, try await fetchBlob(image: image, descriptor: layer)))
+		}
+
+		try fileManager.createDirectory(at: layoutURL, withIntermediateDirectories: true)
+		try Self.writeJSON(
+			OCILayout(imageLayoutVersion: "1.0.0"),
+			to: layoutURL.appendingPathComponent("oci-layout")
+		)
+		try writeBlob(selectedManifest.data, digest: selectedManifest.digest, to: layoutURL)
+		try writeBlob(configData, digest: manifest.config.digest, to: layoutURL)
+		for layer in layerData {
+			try writeBlob(layer.data, digest: layer.descriptor.digest, to: layoutURL)
+		}
+
+		let index = OCIIndex(manifests: [
+			OCIDescriptor(
+				mediaType: selectedManifest.mediaType,
+				digest: selectedManifest.digest,
+				size: UInt64(selectedManifest.data.count),
+				platform: requestedPlatform
+			)
+		])
+		try Self.writeJSON(index, to: layoutURL.appendingPathComponent("index.json"))
+
+		return OrlixOCIRegistryPullResult(
+			layoutURL: layoutURL,
+			image: image,
+			manifestDigest: selectedManifest.digest,
+			configDigest: manifest.config.digest,
+			layerDigests: manifest.layers.map(\.digest)
+		)
+	}
+
+	private func fetchSelectedManifest(
+		image: OrlixOCIRegistryImageReference,
+		requestedPlatform: OrlixOCIPlatform
+	) async throws -> (data: Data, digest: String, mediaType: String) {
+		let response = try await fetchOK(
+			OrlixOCIRegistryFetchRequest(
+				url: try image.manifestURL(),
+				accept: Self.manifestAcceptMediaTypes
+			)
+		)
+		guard let mediaType = Self.responseMediaType(response) else {
+			throw OrlixOCIRegistryPullError.unsupportedManifestMediaType("")
+		}
+		if Self.indexMediaTypes.contains(mediaType) {
+			_ = try verifiedManifestDigest(response, image: image)
+			let index = try JSONDecoder().decode(OCIIndex.self, from: response.body)
+			guard let descriptor = index.manifests.first(
+				where: { $0.platform == requestedPlatform }
+			) else {
+				throw OrlixOCIRegistryPullError.missingPlatform(
+					"\(requestedPlatform.os)/\(requestedPlatform.architecture)"
+				)
+			}
+			guard Self.imageManifestMediaTypes.contains(descriptor.mediaType) else {
+				throw OrlixOCIRegistryPullError.unsupportedManifestMediaType(
+					descriptor.mediaType
+				)
+			}
+			let manifestURL = try image.manifestURL(reference: descriptor.digest)
+			let manifestResponse = try await fetchOK(
+				OrlixOCIRegistryFetchRequest(
+					url: manifestURL,
+					accept: Self.imageManifestAcceptMediaTypes
+				)
+			)
+			try verifyBody(
+				manifestResponse.body,
+				expectedDigest: descriptor.digest,
+				expectedSize: descriptor.size,
+				url: manifestURL
+			)
+			return (manifestResponse.body, descriptor.digest, descriptor.mediaType)
+		}
+		guard Self.imageManifestMediaTypes.contains(mediaType) else {
+			throw OrlixOCIRegistryPullError.unsupportedManifestMediaType(mediaType)
+		}
+		let digest = try verifiedManifestDigest(response, image: image)
+		return (response.body, digest, mediaType)
+	}
+
+	private func fetchBlob(
+		image: OrlixOCIRegistryImageReference,
+		descriptor: OCIDescriptor
+	) async throws -> Data {
+		let url = try image.blobURL(digest: descriptor.digest)
+		let response = try await fetchOK(
+			OrlixOCIRegistryFetchRequest(url: url, accept: [])
+		)
+		try verifyBody(
+			response.body,
+			expectedDigest: descriptor.digest,
+			expectedSize: descriptor.size,
+			url: url
+		)
+		return response.body
+	}
+
+	private func fetchOK(
+		_ request: OrlixOCIRegistryFetchRequest
+	) async throws -> OrlixOCIRegistryFetchResponse {
+		let response = try await fetch(request)
+		guard response.statusCode == 200 else {
+			throw OrlixOCIRegistryPullError.unexpectedStatus(
+				url: request.url.absoluteString,
+				statusCode: response.statusCode
+			)
+		}
+		return response
+	}
+
+	private func verifiedManifestDigest(
+		_ response: OrlixOCIRegistryFetchResponse,
+		image: OrlixOCIRegistryImageReference
+	) throws -> String {
+		let actual = "sha256:\(OrlixOCIDigest.sha256Hex(response.body))"
+		if image.manifestReference.hasPrefix("sha256:") {
+			try verifyBody(
+				response.body,
+				expectedDigest: image.manifestReference,
+				expectedSize: nil,
+				url: try image.manifestURL()
+			)
+			return image.manifestReference.lowercased()
+		}
+		if let contentDigest = Self.header(
+			"Docker-Content-Digest",
+			in: response.headers
+		) {
+			guard contentDigest.lowercased() == actual else {
+				throw OrlixOCIRegistryPullError.responseDigestMismatch(
+					url: try image.manifestURL().absoluteString,
+					expected: contentDigest.lowercased(),
+					actual: actual
+				)
+			}
+		}
+		return actual
+	}
+
+	private func verifyBody(
+		_ body: Data,
+		expectedDigest: String,
+		expectedSize: UInt64?,
+		url: URL
+	) throws {
+		let digest = try OrlixOCIDigest(expectedDigest)
+		let expected = "\(digest.algorithm):\(digest.hex)"
+		let actual = "sha256:\(OrlixOCIDigest.sha256Hex(body))"
+		guard expected == actual else {
+			throw OrlixOCIRegistryPullError.responseDigestMismatch(
+				url: url.absoluteString,
+				expected: expected,
+				actual: actual
+			)
+		}
+		if let expectedSize {
+			let actualSize = UInt64(body.count)
+			guard actualSize == expectedSize else {
+				throw OrlixOCIRegistryPullError.sizeMismatch(
+					digest: expected,
+					expected: expectedSize,
+					actual: actualSize
+				)
+			}
+		}
+	}
+
+	private func writeBlob(_ data: Data, digest: String, to layoutURL: URL) throws {
+		let parsed = try OrlixOCIDigest(digest)
+		let blobURL = layoutURL
+			.appendingPathComponent("blobs", isDirectory: true)
+			.appendingPathComponent(parsed.algorithm, isDirectory: true)
+			.appendingPathComponent(parsed.hex, isDirectory: false)
+		try FileManager.default.createDirectory(
+			at: blobURL.deletingLastPathComponent(),
+			withIntermediateDirectories: true
+		)
+		try data.write(to: blobURL, options: .atomic)
+	}
+
+	private static func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+		try encoder.encode(value).write(to: url, options: .atomic)
+	}
+
+	private static func responseMediaType(
+		_ response: OrlixOCIRegistryFetchResponse
+	) -> String? {
+		guard let value = header("Content-Type", in: response.headers) else {
+			return nil
+		}
+		return value.split(separator: ";", maxSplits: 1).first
+			.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+	}
+
+	private static func header(_ name: String, in headers: [String: String]) -> String? {
+		headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+	}
+
+	private static func urlSessionFetch(
+		_ request: OrlixOCIRegistryFetchRequest
+	) async throws -> OrlixOCIRegistryFetchResponse {
+		var urlRequest = URLRequest(url: request.url)
+		urlRequest.httpMethod = "GET"
+		if !request.accept.isEmpty {
+			urlRequest.setValue(
+				request.accept.joined(separator: ", "),
+				forHTTPHeaderField: "Accept"
+			)
+		}
+		let (data, response) = try await URLSession.shared.data(for: urlRequest)
+		guard let httpResponse = response as? HTTPURLResponse else {
+			throw OrlixOCIRegistryPullError.invalidHTTPResponse(
+				request.url.absoluteString
+			)
+		}
+		var headers: [String: String] = [:]
+		for (key, value) in httpResponse.allHeaderFields {
+			headers[String(describing: key)] = String(describing: value)
+		}
+		return OrlixOCIRegistryFetchResponse(
+			statusCode: httpResponse.statusCode,
+			headers: headers,
+			body: data
+		)
+	}
+
+	private static let indexMediaTypes: Set<String> = [
+		"application/vnd.oci.image.index.v1+json",
+		"application/vnd.docker.distribution.manifest.list.v2+json",
+	]
+
+	private static let imageManifestMediaTypes: Set<String> = [
+		"application/vnd.oci.image.manifest.v1+json",
+		"application/vnd.docker.distribution.manifest.v2+json",
+	]
+
+	private static let manifestAcceptMediaTypes = [
+		"application/vnd.oci.image.index.v1+json",
+		"application/vnd.docker.distribution.manifest.list.v2+json",
+		"application/vnd.oci.image.manifest.v1+json",
+		"application/vnd.docker.distribution.manifest.v2+json",
+	]
+
+	private static let imageManifestAcceptMediaTypes = [
+		"application/vnd.oci.image.manifest.v1+json",
+		"application/vnd.docker.distribution.manifest.v2+json",
+	]
 }
 
 @_spi(OrlixPrivateTesting)

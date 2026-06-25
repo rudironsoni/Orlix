@@ -7642,6 +7642,194 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	}
 }
 
+func testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex() async throws {
+	let fileManager = FileManager.default
+	let root = temporaryRegistryRoot()
+	let layoutURL = root.appendingPathComponent("pulled-layout", isDirectory: true)
+	defer { try? fileManager.removeItem(at: root) }
+
+	let image = try OrlixOCIRegistryImageReference(
+		"registry.example.org/library/alpine:3.20"
+	)
+	let layerData = Data("registry layer payload\n".utf8)
+	let layerDigest = "sha256:\(OrlixOCIDigest.sha256Hex(layerData))"
+	let configData = Data(
+		"""
+		{
+		  "config": {
+		    "Env": ["PATH=/usr/bin:/bin"],
+		    "Entrypoint": ["/bin/sh"],
+		    "WorkingDir": "/",
+		    "User": "0"
+		  },
+		  "rootfs": {
+		    "type": "layers",
+		    "diff_ids": ["\(layerDigest)"]
+		  }
+		}
+		""".utf8
+	)
+	let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+	let manifestData = Data(
+		"""
+		{
+		  "schemaVersion": 2,
+		  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		  "config": {
+		    "mediaType": "application/vnd.oci.image.config.v1+json",
+		    "digest": "\(configDigest)",
+		    "size": \(configData.count)
+		  },
+		  "layers": [
+		    {
+		      "mediaType": "application/vnd.oci.image.layer.v1.tar",
+		      "digest": "\(layerDigest)",
+		      "size": \(layerData.count)
+		    }
+		  ]
+		}
+		""".utf8
+	)
+	let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+	let indexData = Data(
+		"""
+		{
+		  "schemaVersion": 2,
+		  "mediaType": "application/vnd.oci.image.index.v1+json",
+		  "manifests": [
+		    {
+		      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		      "digest": "\(manifestDigest)",
+		      "size": \(manifestData.count),
+		      "platform": {
+		        "os": "linux",
+		        "architecture": "arm64"
+		      }
+		    }
+		  ]
+		}
+		""".utf8
+	)
+	let indexDigest = "sha256:\(OrlixOCIDigest.sha256Hex(indexData))"
+
+	let registry = RecordingOCIRegistryFetch(responses: [
+		try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: [
+				"Content-Type": "application/vnd.oci.image.index.v1+json",
+				"Docker-Content-Digest": indexDigest,
+			],
+			body: indexData
+		),
+		try image.manifestURL(reference: manifestDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Content-Type": "application/vnd.oci.image.manifest.v1+json"],
+			body: manifestData
+		),
+		try image.blobURL(digest: configDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Docker-Content-Digest": configDigest],
+			body: configData
+		),
+		try image.blobURL(digest: layerDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Docker-Content-Digest": layerDigest],
+			body: layerData
+		),
+	])
+
+	let result = try await OrlixOCIRegistryPuller(fetch: registry.fetch).pull(
+		image,
+		to: layoutURL
+	)
+	XCTAssertEqual(result.manifestDigest, manifestDigest)
+	XCTAssertEqual(result.configDigest, configDigest)
+	XCTAssertEqual(result.layerDigests, [layerDigest])
+
+	let pulled = try OrlixOCIImageLayoutReader().readLayout(at: layoutURL)
+	XCTAssertEqual(pulled.manifestDigest, manifestDigest)
+	XCTAssertEqual(pulled.configDigest, configDigest)
+	XCTAssertEqual(pulled.layers.map(\.digest), [layerDigest])
+	XCTAssertEqual(pulled.rootfsDiffIDs, [layerDigest])
+	XCTAssertEqual(pulled.processDefaults.entrypoint, ["/bin/sh"])
+
+	let requests = await registry.requests
+	XCTAssertEqual(requests.map(\.url.absoluteString), [
+		try image.manifestURL().absoluteString,
+		try image.manifestURL(reference: manifestDigest).absoluteString,
+		try image.blobURL(digest: configDigest).absoluteString,
+		try image.blobURL(digest: layerDigest).absoluteString,
+	])
+	XCTAssertTrue(
+		requests[0].accept.contains("application/vnd.oci.image.index.v1+json")
+	)
+	XCTAssertTrue(
+		requests[0].accept.contains("application/vnd.oci.image.manifest.v1+json")
+	)
+}
+
+func testOCIRegistryPullerRejectsBlobDigestMismatch() async throws {
+	let fileManager = FileManager.default
+	let root = temporaryRegistryRoot()
+	let layoutURL = root.appendingPathComponent("bad-pull-layout", isDirectory: true)
+	defer { try? fileManager.removeItem(at: root) }
+
+	let image = try OrlixOCIRegistryImageReference(
+		"registry.example.org/library/alpine:3.20"
+	)
+	let expectedConfigData = Data(#"{"rootfs":{"type":"layers","diff_ids":[]}}"#.utf8)
+	let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(expectedConfigData))"
+	let badConfigData = Data("tampered config\n".utf8)
+	let manifestData = Data(
+		"""
+		{
+		  "schemaVersion": 2,
+		  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		  "config": {
+		    "mediaType": "application/vnd.oci.image.config.v1+json",
+		    "digest": "\(configDigest)",
+		    "size": \(expectedConfigData.count)
+		  },
+		  "layers": []
+		}
+		""".utf8
+	)
+	let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+	let registry = RecordingOCIRegistryFetch(responses: [
+		try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: [
+				"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+				"Docker-Content-Digest": manifestDigest,
+			],
+			body: manifestData
+		),
+		try image.blobURL(digest: configDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Docker-Content-Digest": configDigest],
+			body: badConfigData
+		),
+	])
+
+	do {
+		_ = try await OrlixOCIRegistryPuller(fetch: registry.fetch).pull(
+			image,
+			to: layoutURL
+		)
+		XCTFail("registry pull should reject tampered config blob")
+	} catch {
+		XCTAssertEqual(
+			error as? OrlixOCIRegistryPullError,
+			.responseDigestMismatch(
+				url: try image.blobURL(digest: configDigest).absoluteString,
+				expected: configDigest,
+				actual: "sha256:\(OrlixOCIDigest.sha256Hex(badConfigData))"
+			)
+		)
+	}
+	XCTAssertFalse(fileManager.fileExists(atPath: layoutURL.path))
+}
+
 func testOCIRuntimeBundleRejectsSymlinkRootfsEscapingBundle() throws {
 	let fileManager = FileManager.default
 	let bundleURL = fileManager.temporaryDirectory
@@ -11105,6 +11293,30 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 				XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
 			}
 		}
+	}
+}
+
+private actor RecordingOCIRegistryFetch {
+	private var storage: [String: OrlixOCIRegistryFetchResponse]
+	private var recordedRequests: [OrlixOCIRegistryFetchRequest] = []
+
+	init(responses: [String: OrlixOCIRegistryFetchResponse]) {
+		self.storage = responses
+	}
+
+	var requests: [OrlixOCIRegistryFetchRequest] {
+		recordedRequests
+	}
+
+	func fetch(
+		_ request: OrlixOCIRegistryFetchRequest
+	) async throws -> OrlixOCIRegistryFetchResponse {
+		recordedRequests.append(request)
+		let response = storage[request.url.absoluteString]
+		if let response {
+			return response
+		}
+		return OrlixOCIRegistryFetchResponse(statusCode: 404, headers: [:], body: Data())
 	}
 }
 
