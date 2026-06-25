@@ -86,7 +86,7 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 			}
 		} else {
 			scheme = defaultScheme.lowercased()
-			registryAndPath = reference
+			registryAndPath = Self.defaultRegistryReference(reference)
 		}
 		guard let firstSlash = registryAndPath.firstIndex(of: "/") else {
 			throw OrlixOCIRegistryReferenceError.missingRepository(reference)
@@ -136,6 +136,20 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 			tag: tag,
 			digest: digest
 		)
+	}
+
+	private static func defaultRegistryReference(_ reference: String) -> String {
+		guard let firstSlash = reference.firstIndex(of: "/") else {
+			return "docker.io/library/\(reference)"
+		}
+		let firstComponent = String(reference[..<firstSlash])
+		if firstComponent.contains(".")
+			|| firstComponent.contains(":")
+			|| firstComponent == "localhost"
+		{
+			return reference
+		}
+		return "docker.io/\(reference)"
 	}
 
 	private static func validate(scheme: String) throws {
