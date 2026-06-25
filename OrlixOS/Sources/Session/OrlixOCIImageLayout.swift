@@ -3376,6 +3376,139 @@ public struct OrlixOCIRuntimeLifecycleRecord: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeLifecycleSnapshot: Codable, Equatable, Sendable {
+	public let record: OrlixOCIRuntimeLifecycleRecord
+	public let ociVersion: String
+	public let annotations: [String: String]
+
+	public init(
+		record: OrlixOCIRuntimeLifecycleRecord,
+		ociVersion: String,
+		annotations: [String: String]
+	) {
+		self.record = record
+		self.ociVersion = ociVersion
+		self.annotations = annotations
+	}
+
+	public func stateReport() throws -> OrlixOCIRuntimeStateReport {
+		let status: OrlixOCIRuntimeStateStatus
+
+		switch record.state {
+		case .created:
+			status = .created
+		case .running:
+			status = .running
+		case .stopped:
+			status = .stopped
+		case .configured, .deleted:
+			throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
+		}
+
+		if status == .running, record.pid == nil {
+			throw OrlixOCIRuntimeLifecycleError.stateReportRequiresPID(status)
+		}
+
+		return OrlixOCIRuntimeStateReport(
+			ociVersion: ociVersion,
+			id: record.id,
+			status: status,
+			pid: record.pid,
+			bundle: record.bundlePath,
+			annotations: annotations,
+			exitStatus: record.exitStatus
+		)
+	}
+}
+
+@_spi(OrlixPrivateTesting)
+public enum OrlixOCIRuntimeLifecycleStoreError: Error, Equatable, Sendable {
+	case missingRecord(String)
+	case recordIDMismatch(expected: String, actual: String)
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeLifecycleStore: Sendable {
+	public let registry: OrlixEnvironmentRegistry
+
+	public init(registry: OrlixEnvironmentRegistry) {
+		self.registry = registry
+	}
+
+	public func recordURL(forID id: String) throws -> URL {
+		try registry.layout(forEnvironmentID: id)
+			.rootDirectory
+			.appendingPathComponent("oci-lifecycle.json", isDirectory: false)
+	}
+
+	public func save(
+		_ controller: OrlixOCIRuntimeLifecycleController,
+		fileManager: FileManager = .default
+	) throws {
+		try save(
+			OrlixOCIRuntimeLifecycleSnapshot(
+				record: controller.record,
+				ociVersion: controller.config.ociVersion,
+				annotations: controller.config.annotations
+			),
+			fileManager: fileManager
+		)
+	}
+
+	public func save(
+		_ snapshot: OrlixOCIRuntimeLifecycleSnapshot,
+		fileManager: FileManager = .default
+	) throws {
+		let url = try recordURL(forID: snapshot.record.id)
+		try fileManager.createDirectory(
+			at: url.deletingLastPathComponent(),
+			withIntermediateDirectories: true
+		)
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+		try encoder.encode(snapshot).write(to: url, options: [.atomic])
+	}
+
+	public func load(
+		id: String,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeLifecycleSnapshot {
+		let url = try recordURL(forID: id)
+		guard fileManager.fileExists(atPath: url.path) else {
+			throw OrlixOCIRuntimeLifecycleStoreError.missingRecord(id)
+		}
+		let snapshot = try JSONDecoder().decode(
+			OrlixOCIRuntimeLifecycleSnapshot.self,
+			from: try Data(contentsOf: url)
+		)
+		guard snapshot.record.id == id else {
+			throw OrlixOCIRuntimeLifecycleStoreError.recordIDMismatch(
+				expected: id,
+				actual: snapshot.record.id
+			)
+		}
+		return snapshot
+	}
+
+	public func stateReport(
+		id: String,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeStateReport {
+		try load(id: id, fileManager: fileManager).stateReport()
+	}
+
+	public func delete(
+		id: String,
+		fileManager: FileManager = .default
+	) throws {
+		let url = try recordURL(forID: id)
+		if fileManager.fileExists(atPath: url.path) {
+			try fileManager.removeItem(at: url)
+		}
+	}
+}
+
 public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 	public let config: OrlixOCIRuntimeConfigDescriptor
 	public let record: OrlixOCIRuntimeLifecycleRecord

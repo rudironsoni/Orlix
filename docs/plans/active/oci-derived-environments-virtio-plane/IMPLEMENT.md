@@ -20837,3 +20837,28 @@ Verification:
 Non-claims:
 - This supports Orlix-managed external bookmark bind mounts only after OrlixOS receives a resolved private host URL for the bookmark ID. It does not claim arbitrary OCI host path bind mounts, app UI document-picker flow, security-scoped bookmark persistence lifecycle, full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Docker/runc compatibility, or full runtime readiness.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, or package-manager/proof-package mechanisms were added.
+
+### 2026-06-25 Durable OCI lifecycle state store
+
+Current status: added an OrlixOS-owned durable OCI lifecycle state store for configured OCI-derived environments. `OrlixOCIRuntimeLifecycleStore` persists `OrlixOCIRuntimeLifecycleSnapshot` JSON under the existing per-environment storage directory, preserving lifecycle record, OCI version, annotations, PID, bundle path, and exit status so later `state`/`delete` product surfaces can read authoritative state outside the in-memory Swift controller. This advances OCI Runtime lifecycle groundwork without executing through runc/Docker, introducing a custom Linux ABI, moving Linux policy into HostAdapter, inventing package/proof machinery, editing generated upstream sources, or patching OrlixMLibC.
+
+Changes:
+- Added `OrlixOCIRuntimeLifecycleSnapshot`, which can produce OCI-shaped state reports for created/running/stopped lifecycle records.
+- Added `OrlixOCIRuntimeLifecycleStore` backed by `OrlixEnvironmentRegistry` per-environment storage, writing `oci-lifecycle.json` with stable sorted JSON.
+- Added load/stateReport/delete operations with validated environment IDs and record ID mismatch protection.
+- Added OrlixOS XCTest coverage for saving a running lifecycle, reloading OCI state report data, updating to stopped with exit status, and deleting the durable record.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused `xcodebuild ... test-without-building` for `testOCIRuntimeLifecycleStorePersistsStateReports` produced no `Testing started`, `Test Suite`, or `Test Case` output after a bounded wait and was manually interrupted; no executed-XCTest pass is claimed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale active-plan warning about older pending/blocked status.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- This is durable lifecycle state storage, not full OCI Runtime Spec lifecycle compliance. It does not claim Linux process execution, process supervisor integration, product `orlix run`, a user-facing CLI, registry pull, Docker/runc compatibility, or full runtime readiness.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, or package-manager/proof-package mechanisms were added.

@@ -7922,6 +7922,75 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		}
 	}
 
+	func testOCIRuntimeLifecycleStorePersistsStateReports() throws {
+		let fileManager = FileManager.default
+		let root = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-lifecycle-store-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		defer { try? fileManager.removeItem(at: root) }
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: root.appendingPathComponent("Application Support/Orlix"),
+			cacheRoot: root.appendingPathComponent("Caches/Orlix"),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix")
+		)
+		let store = OrlixOCIRuntimeLifecycleStore(registry: registry)
+		let config = try OrlixOCIRuntimeConfigParser().parse(
+			Data(
+				"""
+				{
+					"ociVersion": "1.1.0",
+					"annotations": {
+						"org.opencontainers.image.ref.name": "orlix-demo"
+					},
+					"process": {
+						"args": ["/bin/sh"],
+						"cwd": "/"
+					}
+				}
+				""".utf8
+			)
+		)
+		let running = try OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-lifecycle-store",
+			bundlePath: "/bundles/oci-lifecycle-store"
+		)
+		.create()
+		.start(pid: 4242)
+
+		try store.save(running)
+
+		let runningReport = try store.stateReport(id: "oci-lifecycle-store")
+		XCTAssertEqual(runningReport.ociVersion, "1.1.0")
+		XCTAssertEqual(runningReport.id, "oci-lifecycle-store")
+		XCTAssertEqual(runningReport.status, .running)
+		XCTAssertEqual(runningReport.pid, 4242)
+		XCTAssertEqual(runningReport.bundle, "/bundles/oci-lifecycle-store")
+		XCTAssertEqual(
+			runningReport.annotations["org.opencontainers.image.ref.name"],
+			"orlix-demo"
+		)
+		XCTAssertNil(runningReport.exitStatus)
+
+		let stopped = try running.exit(exitStatus: 9)
+		try store.save(stopped)
+
+		let stoppedReport = try store.stateReport(id: "oci-lifecycle-store")
+		XCTAssertEqual(stoppedReport.status, .stopped)
+		XCTAssertEqual(stoppedReport.pid, 4242)
+		XCTAssertEqual(stoppedReport.exitStatus, 9)
+
+		try store.delete(id: "oci-lifecycle-store")
+		XCTAssertThrowsError(try store.load(id: "oci-lifecycle-store")) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleStoreError,
+				.missingRecord("oci-lifecycle-store")
+			)
+		}
+	}
+
 	func testOCIRuntimeLifecycleControllerRecordsObservedLinuxProcessExit() throws {
 		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
 		let configured = OrlixOCIRuntimeLifecycleController(
