@@ -1241,6 +1241,92 @@ public struct OrlixOCIRuntimeEphemeralRunFailure: Error {
 	public let deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment?
 }
 
+public struct OrlixOCIEnvironmentMaterializationTools: Equatable, Sendable {
+	public let mke2fs: URL
+	public let truncate: URL
+	public let debugfs: URL
+
+	public init(mke2fs: URL, truncate: URL, debugfs: URL) {
+		self.mke2fs = mke2fs
+		self.truncate = truncate
+		self.debugfs = debugfs
+	}
+}
+
+public struct OrlixOCIEnvironmentInstallResult: Sendable {
+	public let id: String
+	public let bundleURL: URL
+	public let stateReport: OrlixOCIRuntimeStateReport
+}
+
+public struct OrlixOCIEnvironmentInstaller: Sendable {
+	private let registry: OrlixEnvironmentRegistry
+
+	public init() throws {
+		self.registry = try OrlixEnvironmentRegistry()
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public init(registry: OrlixEnvironmentRegistry) {
+		self.registry = registry
+	}
+
+	@discardableResult
+	public func install(
+		bundleURL: URL,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) throws -> OrlixOCIEnvironmentInstallResult {
+		let runtime = OrlixOCIRuntime(registry: registry)
+		let created = try runtime.createMaterialized(
+			bundleURL: bundleURL,
+			id: id,
+			mke2fsExecutable: tools.mke2fs.path,
+			truncateExecutable: tools.truncate.path,
+			debugfsExecutable: tools.debugfs.path,
+			fileManager: fileManager,
+			runner: OrlixOCIEnvironmentInstallerCommandRunner(
+				runCommand: runCommand
+			)
+		)
+		return OrlixOCIEnvironmentInstallResult(
+			id: id,
+			bundleURL: bundleURL,
+			stateReport: created.stateReport
+		)
+	}
+
+	public func session(
+		bundleURL: URL,
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default
+	) throws -> OrlixLinuxSession {
+		try OrlixLinuxSession(
+			ociRuntimeBundle: OrlixOCIRuntimeBundle.load(
+				from: bundleURL,
+				fileManager: fileManager
+			),
+			id: id,
+			rootMount: .defaultOverlay,
+			registry: registry,
+			terminal: terminal
+		)
+	}
+}
+
+private struct OrlixOCIEnvironmentInstallerCommandRunner:
+	OrlixEnvironmentImageMaterializationCommandRunner
+{
+	let runCommand: @Sendable (URL, [String]) throws -> Void
+
+	func run(_ command: OrlixEnvironmentImageMaterializationCommand) throws {
+		try runCommand(URL(fileURLWithPath: command.executable), command.arguments)
+	}
+}
+
 @_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntime: Sendable {
 	public let registry: OrlixEnvironmentRegistry

@@ -8942,13 +8942,86 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 
 		XCTAssertFalse(fileManager.fileExists(atPath: baseImageURL.path))
 		XCTAssertFalse(fileManager.fileExists(atPath: stateImageURL.path))
-		XCTAssertFalse(fileManager.fileExists(atPath: rootDirectory.path))
-		XCTAssertFalse(fileManager.fileExists(atPath: importScratchDirectory.path))
-	}
+	XCTAssertFalse(fileManager.fileExists(atPath: rootDirectory.path))
+	XCTAssertFalse(fileManager.fileExists(atPath: importScratchDirectory.path))
+}
 
-	func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
-		let fileManager = FileManager.default
-		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-installer-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+	defer { try? fileManager.removeItem(at: scratch) }
+	let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+	let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+	try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+	try "bundle-root\n".write(
+		to: rootfsURL.appendingPathComponent("root-marker"),
+		atomically: true,
+		encoding: .utf8
+	)
+	try Data("""
+	{
+		"ociVersion" : "1.1.0",
+		"root" : { "path" : "rootfs" },
+		"process" : {
+			"terminal" : false,
+			"args" : ["/bin/true"],
+			"cwd" : "/"
+		}
+	}
+	""".utf8).write(to: bundleURL.appendingPathComponent("config.json"))
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+		cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+		scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+	)
+	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+	let tools = OrlixOCIEnvironmentMaterializationTools(
+		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
+		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+	)
+	let recorder = RecordingPublicOCIInstallerCommandRunner()
+	let installed = try installer.install(
+		bundleURL: bundleURL,
+		id: "oci-installed-session",
+		tools: tools,
+		fileManager: fileManager
+	) { executable, arguments in
+		try recorder.run(executable: executable, arguments: arguments)
+	}
+	let layout = try registry.layout(forEnvironmentID: "oci-installed-session")
+	XCTAssertEqual(installed.id, "oci-installed-session")
+	XCTAssertEqual(installed.bundleURL, bundleURL)
+	XCTAssertEqual(installed.stateReport.status, .created)
+	XCTAssertEqual(recorder.executables.first, tools.truncate)
+	XCTAssertEqual(recorder.executables.filter { $0 == tools.mke2fs }.count, 2)
+	XCTAssertEqual(recorder.executables.filter { $0 == tools.debugfs }.count, 2)
+	XCTAssertTrue(fileManager.fileExists(atPath: layout.baseImageURL.path))
+	XCTAssertTrue(fileManager.fileExists(atPath: layout.stateImageURL.path))
+	XCTAssertEqual(
+		try registry.load(environmentID: "oci-installed-session").defaultCommand,
+		["/bin/true"]
+	)
+	let session = try installer.session(
+		bundleURL: bundleURL,
+		id: "oci-installed-session",
+		terminal: OrlixTerminalSession()
+	)
+	let rootImage = try XCTUnwrap(session.materializedRootImageForTesting)
+	XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
+	XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
+	let commandLine = try XCTUnwrap(session.bootConfig.kernelCommandLine)
+	XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
+	XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
+}
+
+func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 			"orlix-oci-runtime-materialized-run-\(UUID().uuidString)",
 			isDirectory: true
 		)
@@ -11002,9 +11075,27 @@ private final class RecordingMaterializationCommandRunner:
 	}
 }
 
+private final class RecordingPublicOCIInstallerCommandRunner: @unchecked Sendable {
+	private(set) var executables: [URL] = []
+
+	func run(executable: URL, arguments: [String]) throws {
+		if executable.lastPathComponent.contains("truncate"),
+		   let imagePath = arguments.last
+		{
+			let imageURL = URL(fileURLWithPath: imagePath, isDirectory: false)
+			try FileManager.default.createDirectory(
+				at: imageURL.deletingLastPathComponent(),
+				withIntermediateDirectories: true
+			)
+			try Data("placeholder ext4 image\n".utf8).write(to: imageURL)
+		}
+		executables.append(executable)
+	}
+}
+
 private final class DataRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [Data] = []
+	private let lock = NSLock()
+	private var storage: [Data] = []
 
     var values: [Data] {
         lock.lock()
