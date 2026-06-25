@@ -1,9 +1,186 @@
 import Foundation
 import zlib
 
+public enum OrlixOCIRegistryReferenceError: Error, Equatable, Sendable {
+	case emptyReference
+	case unsupportedScheme(String)
+	case missingRegistry(String)
+	case missingRepository(String)
+	case invalidRegistry(String)
+	case invalidRepository(String)
+	case invalidTag(String)
+	case invalidDigest(String)
+	case invalidEndpoint(String)
+}
+
+public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
+	public let scheme: String
+	public let registry: String
+	public let repository: String
+	public let tag: String?
+	public let digest: String?
+
+	public init(_ reference: String, defaultScheme: String = "https") throws {
+		let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else {
+			throw OrlixOCIRegistryReferenceError.emptyReference
+		}
+		let parsed = try Self.parseReference(trimmed, defaultScheme: defaultScheme)
+		try Self.validate(scheme: parsed.scheme)
+		try Self.validate(registry: parsed.registry)
+		try Self.validate(repository: parsed.repository)
+		if let tag = parsed.tag {
+			try Self.validate(tag: tag)
+		}
+		if let digest = parsed.digest {
+			try Self.validate(digest: digest)
+		}
+		self.scheme = parsed.scheme
+		self.registry = parsed.registry
+		self.repository = parsed.repository
+		self.tag = parsed.tag
+		self.digest = parsed.digest?.lowercased()
+	}
+
+	public var manifestReference: String {
+		digest ?? tag ?? "latest"
+	}
+
+	public func manifestURL() throws -> URL {
+		try distributionURL(kind: "manifests", reference: manifestReference)
+	}
+
+	public func blobURL(digest: String) throws -> URL {
+		try Self.validate(digest: digest)
+		return try distributionURL(kind: "blobs", reference: digest.lowercased())
+	}
+
+	private static func parseReference(
+		_ reference: String,
+		defaultScheme: String
+	) throws -> (
+		scheme: String,
+		registry: String,
+		repository: String,
+		tag: String?,
+		digest: String?
+	) {
+		let scheme: String
+		let registryAndPath: String
+		if reference.contains("://") {
+			guard let components = URLComponents(string: reference),
+			      let parsedScheme = components.scheme,
+			      let host = components.host
+			else {
+				throw OrlixOCIRegistryReferenceError.missingRegistry(reference)
+			}
+			scheme = parsedScheme.lowercased()
+			let port = components.port.map { ":\($0)" } ?? ""
+			registryAndPath = host + port + components.path
+			if components.query != nil || components.fragment != nil {
+				throw OrlixOCIRegistryReferenceError.invalidEndpoint(reference)
+			}
+		} else {
+			scheme = defaultScheme.lowercased()
+			registryAndPath = reference
+		}
+		guard let firstSlash = registryAndPath.firstIndex(of: "/") else {
+			throw OrlixOCIRegistryReferenceError.missingRepository(reference)
+		}
+		let registry = String(registryAndPath[..<firstSlash])
+		var remainder = String(registryAndPath[registryAndPath.index(after: firstSlash)...])
+		guard !registry.isEmpty else {
+			throw OrlixOCIRegistryReferenceError.missingRegistry(reference)
+		}
+		guard !remainder.isEmpty else {
+			throw OrlixOCIRegistryReferenceError.missingRepository(reference)
+		}
+
+		let digest: String?
+		if let digestSeparator = remainder.lastIndex(of: "@") {
+			digest = String(remainder[remainder.index(after: digestSeparator)...])
+			remainder = String(remainder[..<digestSeparator])
+		} else {
+			digest = nil
+		}
+		guard !remainder.isEmpty else {
+			throw OrlixOCIRegistryReferenceError.missingRepository(reference)
+		}
+
+		let repository: String
+		let tag: String?
+		let lastPathComponent = remainder.split(separator: "/").last.map(String.init) ?? ""
+		if let colon = lastPathComponent.lastIndex(of: ":") {
+			let tagStart = lastPathComponent.index(after: colon)
+			tag = String(lastPathComponent[tagStart...])
+			let repositoryEnd = remainder.index(
+				remainder.endIndex,
+				offsetBy: -lastPathComponent.distance(
+					from: colon,
+					to: lastPathComponent.endIndex
+				)
+			)
+			repository = String(remainder[..<repositoryEnd])
+		} else {
+			repository = remainder
+			tag = nil
+		}
+		return (
+			scheme: scheme,
+			registry: registry,
+			repository: repository,
+			tag: tag,
+			digest: digest
+		)
+	}
+
+	private static func validate(scheme: String) throws {
+		guard scheme == "https" || scheme == "http" else {
+			throw OrlixOCIRegistryReferenceError.unsupportedScheme(scheme)
+		}
+	}
+
+	private static func validate(registry: String) throws {
+		guard !registry.isEmpty,
+		      registry.range(of: #"\s|/|\\|\0"#, options: .regularExpression) == nil
+		else {
+			throw OrlixOCIRegistryReferenceError.invalidRegistry(registry)
+		}
+	}
+
+	private static func validate(repository: String) throws {
+		let pattern = #"^[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*(\/[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*)*$"#
+		guard repository.range(of: pattern, options: .regularExpression) != nil else {
+			throw OrlixOCIRegistryReferenceError.invalidRepository(repository)
+		}
+	}
+
+	private static func validate(tag: String) throws {
+		let pattern = #"^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$"#
+		guard tag.range(of: pattern, options: .regularExpression) != nil else {
+			throw OrlixOCIRegistryReferenceError.invalidTag(tag)
+		}
+	}
+
+	private static func validate(digest: String) throws {
+		let pattern = #"^sha256:[0-9a-fA-F]{64}$"#
+		guard digest.range(of: pattern, options: .regularExpression) != nil else {
+			throw OrlixOCIRegistryReferenceError.invalidDigest(digest)
+		}
+	}
+
+	private func distributionURL(kind: String, reference: String) throws -> URL {
+		let path = "/v2/\(repository)/\(kind)/\(reference)"
+		guard let url = URL(string: "\(scheme)://\(registry)\(path)") else {
+			throw OrlixOCIRegistryReferenceError.invalidEndpoint(path)
+		}
+		return url
+	}
+}
+
 @_spi(OrlixPrivateTesting)
 public struct OrlixOCIImageLayoutImport: Equatable, Sendable {
-    public let manifestDigest: String
+	public let manifestDigest: String
     public let configDigest: String
     public let platform: String
     public let layers: [OrlixOCIImageLayer]

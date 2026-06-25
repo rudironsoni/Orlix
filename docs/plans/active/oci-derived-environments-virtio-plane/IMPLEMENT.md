@@ -10,6 +10,33 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 Public OCI registry reference input
+
+Checkpoint: added public OrlixOS registry image-reference parsing and OCI Distribution endpoint construction for registry-derived environment input.
+
+Changes:
+- Added `OrlixOCIRegistryImageReference` with explicit scheme, registry, repository, tag, digest, and manifest reference fields.
+- Added validation for supported `http`/`https` schemes, registry text, repository components, tag syntax, and `sha256` digests.
+- Added manifest and blob endpoint construction for OCI Distribution paths: `/v2/<repository>/manifests/<reference>` and `/v2/<repository>/blobs/<digest>`.
+- Added focused OrlixOS XCTest coverage for tagged references, digest references, implicit `latest`, localhost registries, and invalid references.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceParsesDistributionEndpoints -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceRejectsInvalidInput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_22-08-54-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that bundle reported 2 passed, 0 failed, 0 skipped.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_22-09-41-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that bundle reported 1 passed, 0 failed, 0 skipped.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This is registry input and OCI Distribution endpoint groundwork only. It does not pull manifests or blobs yet.
+- It does not claim product `orlix run`, registry pull, real signal/kill delivery, arbitrary imported-image compatibility, systemd support, broad cgroup/namespace/device/filesystem/network readiness, or full product runtime readiness.
+
 ### 2026-06-25 OCI linux.personality domain support
 
 Checkpoint: implemented bounded OCI `linux.personality` support through OrlixOS descriptor carriage and first-stage Linux init `personality(2)` application. OCI runtime configs now accept `linux.personality.domain` values `LINUX` and `LINUX32`, reject absent/unknown domains and non-empty `flags`, persist the domain in environment descriptors, emit `orlix.personality=<domain>` kernel command-line metadata, and apply the corresponding Linux `PER_LINUX` / `PER_LINUX32` value before `execve`.
