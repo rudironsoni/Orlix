@@ -418,7 +418,7 @@ targets:
         script: |
           set -eu
           profile="${ORLIX_PROFILE:-release}"
-          "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-proof-fixtures PROFILE="$profile"
+          "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-test-fixtures PROFILE="$profile"
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

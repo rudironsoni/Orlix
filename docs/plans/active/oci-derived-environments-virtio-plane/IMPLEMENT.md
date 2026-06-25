@@ -21323,6 +21323,68 @@ Boundary:
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
   dependency, or Swift-side fake Linux behavior was added.
 
+### 2026-06-25 App-hosted OCI user namespace mapping runtime proof
+
+Checkpoint: proved the OCI-derived environment descriptor path can carry a
+focused user namespace mapping into an app-hosted OrlixOS terminal session, and
+the resulting Linux process observes the expected `/proc` mapping files.
+
+Current status:
+
+- Focused app-hosted runtime proof passed on the single booted `iPhone 17 Pro`
+  simulator. This is a checkpoint toward OCI runtime delivery, not full OCI
+  Runtime Spec completion.
+
+Changes:
+
+- Added `testOCIUserNamespaceMappingsApplyThroughOrlixOSTerminalSession`.
+- Added `RuntimeProof.userNamespaceMappings` with `namespaces = ["user"]`,
+  `uidMappings = [0:0:1]`, and `gidMappings = [0:0:1]`.
+- Extended the environment descriptor builder so runtime proofs can carry
+  namespace, uid-map, and gid-map metadata through OrlixOS.
+- Added an in-guest shell proof that reads `/proc/self/uid_map`,
+  `/proc/self/gid_map`, and `/proc/self/setgroups`, then emits
+  `ORLIX_ENV_USERNS_*` markers only after those Linux surfaces are visible.
+- Aligned runtime fixture references with the existing
+  `environment-runtime-test-fixtures` Makefile target and fixture IDs.
+- Added narrow `orlix-init` exec errno diagnostics for failed exec paths.
+- Changed OrlixOS `rootinit` root switching to call `SYS_chroot` directly,
+  avoiding an OrlixMLibC patch while keeping the Linux bootstrap behavior in
+  OrlixOS init orchestration.
+
+Evidence:
+
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted`
+  before the focused run showed only `iPhone 17 Pro
+  (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIUserNamespaceMappingsApplyThroughOrlixOSTerminalSession test`
+  passed: 1 test executed, 0 failures.
+- Result bundle:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_14-25-16-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni sh -c 'latest=$(ls -dt "$(external-ssd-root)"/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-*.xcresult | head -1); echo "$latest"; xcrun xcresulttool get test-results summary --path "$latest"'`
+  reported result `Passed`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0`,
+  device `iPhone 17 Pro`, UDID `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print`
+  printed no recent Orlix diagnostic reports.
+- Post-run `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted`
+  still showed only the same `iPhone 17 Pro` booted.
+- `rtk git diff --check` exited 0.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches OrlixMLibC/Sources/patches Build/OrlixKernel Build/OrlixOS`
+  returned no generated-tree or OrlixMLibC patch changes.
+
+Boundary:
+
+- This proves the focused app-hosted OrlixOS OCI user namespace mapping path for
+  one `0:0:1` uid/gid mapping through descriptor metadata, first-stage init,
+  Linux process execution, and procfs-visible map files.
+- It does not claim arbitrary or nested user namespace mapping support, idmapped
+  mounts, complete OCI namespace/cgroup/device coverage, full OCI Runtime Spec
+  lifecycle completion, product `orlix run`, registry pull, broad imported-root
+  execution proof, systemd support, or full runtime readiness.
+- No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
+  custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
+  dependency, or Swift-side fake Linux behavior was added.
+
 ### 2026-06-25 OCI user namespace map-write proof
 
 Checkpoint: strengthened OCI user namespace mapping evidence from parser-only
