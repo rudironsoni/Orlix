@@ -95,7 +95,9 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 		guard let firstSlash = registryAndPath.firstIndex(of: "/") else {
 			throw OrlixOCIRegistryReferenceError.missingRepository(reference)
 		}
-		let registry = String(registryAndPath[..<firstSlash])
+		let registry = Self.canonicalRegistry(
+			String(registryAndPath[..<firstSlash])
+		)
 		var remainder = String(registryAndPath[registryAndPath.index(after: firstSlash)...])
 		guard !registry.isEmpty else {
 			throw OrlixOCIRegistryReferenceError.missingRegistry(reference)
@@ -154,6 +156,10 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 			return reference
 		}
 		return "docker.io/\(reference)"
+	}
+
+	private static func canonicalRegistry(_ registry: String) -> String {
+		registry == "registry-1.docker.io" ? "docker.io" : registry
 	}
 
 	private static func validate(scheme: String) throws {
