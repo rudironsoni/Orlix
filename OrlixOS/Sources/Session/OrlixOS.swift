@@ -1488,12 +1488,17 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 		rootMount: OrlixEnvironmentRootMount,
 		registry: OrlixEnvironmentRegistry,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		lifecycleStore: OrlixOCIRuntimeLifecycleStore? = nil
+	    terminal: OrlixTerminalSession = OrlixTerminalSession(),
+	    lifecycleStore: OrlixOCIRuntimeLifecycleStore? = nil
 	) throws {
+		let rootImageIdentifier = try Self.persistedRootImageIdentifier(
+			for: lifecycle.record.id,
+			in: registry
+		)
 		let processHandle = try OrlixOCIRuntimeProcessHandle(
 			lifecycle: lifecycle,
-			rootMount: rootMount
+			rootMount: rootMount,
+			rootImageIdentifier: rootImageIdentifier
 		)
 		try registry.save(processHandle.sessionDescriptor.environment)
 		let linuxSession = try OrlixLinuxSession(
@@ -1511,6 +1516,17 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 			linuxSession: linuxSession,
 			lifecycleStore: resolvedStore
 		)
+	}
+
+	private static func persistedRootImageIdentifier(
+		for environmentID: String,
+		in registry: OrlixEnvironmentRegistry
+	) throws -> String? {
+		let descriptorURL = try registry.descriptorURL(forEnvironmentID: environmentID)
+		guard FileManager.default.fileExists(atPath: descriptorURL.path) else {
+			return nil
+		}
+		return try registry.load(environmentID: environmentID).rootImageIdentifier
 	}
 
 	public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessSession {
