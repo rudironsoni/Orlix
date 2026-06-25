@@ -21927,3 +21927,25 @@ Boundary:
 Current status:
 
 The latest coherent checkpoint is real app-hosted OCI terminal-false lifecycle observation: OrlixOS boots a real OCI-derived Linux session asynchronously, init emits Linux process start/exit markers, and the OrlixOS lifecycle record reaches stopped with exit status 0 in the focused runtime proof. Next work remains real signal/kill delivery, product `orlix run`, registry input, and broader Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-25 OrlixOS runtime manager lifecycle proof
+
+Checkpoint: moved the focused app-hosted OCI lifecycle proof through the higher-level `OrlixOCIRuntime.run(id:using:)` manager path, not only a direct `OrlixOCIRuntimeProcessSession`.
+
+Changes:
+- The OCI-derived runtime fixture now writes a temporary OCI `config.json` into the copied fixture root, pointing `root.path` at the existing `imported-root` tree.
+- The app-hosted lifecycle proof saves the created environment and lifecycle through `OrlixOCIRuntimeLifecycleStore`, runs through `OrlixOCIRuntime.run(id:terminal:using:)`, and checks the started, completed, and final persisted state reports.
+- The test still uses the existing materialized OCI root images for real Linux boot and process execution.
+
+Evidence:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0 after an initial failed attempt exposed the missing `config.json` in the copied fixture. `xcresulttool` reported 1 passed, 0 failed, 0 skipped. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_21-17-09-+0200.xcresult`.
+
+Boundary:
+- This proves `OrlixOCIRuntime.run` can drive the focused OCI-derived terminal-false session through real app-hosted Linux, observe process start/exit, and persist stopped state with exit status 0.
+- This does not claim product `orlix run`, registry pull, real signal/kill delivery, arbitrary imported-image compatibility, systemd support, or broad cgroup/namespace/device/filesystem/network readiness.
+
+## Current Status
+
+Current status:
+
+The latest coherent checkpoint is the high-level OrlixOS OCI runtime manager proof: `OrlixOCIRuntime.run(id:terminal:using:)` now has app-hosted evidence for a focused OCI-derived terminal-false environment, with Linux init start/exit markers and persisted stopped state. Next work remains real signal/kill delivery, product `orlix run`, registry input, and broader Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
