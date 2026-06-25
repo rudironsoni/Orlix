@@ -26,6 +26,22 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_EXEC_BEGIN"))
     }
 
+    func testOCIUserNamespaceMappingsApplyThroughOrlixOSTerminalSession()
+        throws
+    {
+        let runner = OrlixEnvironmentRootRuntimeProofRunner(
+            fixture: .ociDerived,
+            proof: .userNamespaceMappings
+        )
+        let output = try runner.run()
+
+        XCTAssertTrue(output.contains("ORLIX_ENV_USERNS_BEGIN"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_USERNS_UID_MAP_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_USERNS_GID_MAP_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_USERNS_SETGROUPS_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_USERNS_DONE"))
+    }
+
     private static func makeOCIRuntimeProcessDefaultsDescriptor()
         throws -> OrlixEnvironmentDescriptor
     {
@@ -49,7 +65,7 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
             """#.utf8
         )
         let parsed = try OrlixOCIRuntimeConfigParser().parse(config)
-        return parsed.environmentDescriptor(
+        return try parsed.environmentDescriptor(
             id: "orlix.oci-runtime-defaults",
             rootMount: .defaultOverlay
         )
@@ -62,7 +78,7 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         let output = try runner.run()
 
         XCTAssertTrue(output.contains("ORLIX_ENV_OS_RELEASE_BEGIN"))
-        XCTAssertTrue(output.contains("ID=orlix-tar-runtime-proof"))
+        XCTAssertTrue(output.contains("ID=orlix-tar-runtime-test-fixture"))
         XCTAssertTrue(output.contains("ORLIX_ENV_OS_RELEASE_DONE"))
     }
 
@@ -116,7 +132,7 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         let output = try runner.runCopiedNamedEnvironment()
 
         XCTAssertTrue(output.contains("ORLIX_ENV_OS_RELEASE_BEGIN"))
-        XCTAssertTrue(output.contains("ID=orlix-tar-runtime-proof"))
+        XCTAssertTrue(output.contains("ID=orlix-tar-runtime-test-fixture"))
         XCTAssertTrue(output.contains("ORLIX_ENV_OS_RELEASE_DONE"))
     }
 
@@ -153,7 +169,7 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("pwd=/tmp"))
         XCTAssertTrue(output.contains("Uid:\t1000"))
         XCTAssertTrue(output.contains("Gid:\t100"))
-        XCTAssertTrue(output.contains("ID=orlix-oci-runtime-proof"))
+        XCTAssertTrue(output.contains("ID=orlix-oci-runtime-test-fixture"))
         XCTAssertTrue(output.contains("ORLIX_ENV_EXEC_DONE"))
     }
 
@@ -218,7 +234,7 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         let output = try runner.run()
 
         XCTAssertTrue(output.contains("ORLIX_ENV_OS_RELEASE_BEGIN"))
-        XCTAssertTrue(output.contains("ID=orlix-oci-runtime-proof"))
+        XCTAssertTrue(output.contains("ID=orlix-oci-runtime-test-fixture"))
         XCTAssertTrue(output.contains("ORLIX_ENV_OS_RELEASE_DONE"))
     }
 
@@ -784,7 +800,10 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
             defaultEnvironment: proof.defaultEnvironment,
             defaultWorkingDirectory: proof.defaultWorkingDirectory,
             defaultUserID: proof.defaultUserID,
-            defaultGroupID: proof.defaultGroupID
+            defaultGroupID: proof.defaultGroupID,
+            uidMappings: proof.uidMappings,
+            gidMappings: proof.gidMappings,
+            namespaces: proof.namespaces
         )
     }
 
@@ -854,7 +873,7 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         let root = repoRoot
             .appendingPathComponent("Build", isDirectory: true)
             .appendingPathComponent("OrlixOS", isDirectory: true)
-            .appendingPathComponent("environment-runtime-proof", isDirectory: true)
+            .appendingPathComponent("environment-runtime-test-fixtures", isDirectory: true)
             .appendingPathComponent(fixture.directoryName, isDirectory: true)
         let marker = root.appendingPathComponent(readyFile, isDirectory: false)
 
@@ -1044,10 +1063,13 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
             "ORLIX_ENV_TMPFS_PROOF_FAILED_TMP_MOUNT",
             "ORLIX_ENV_TMPFS_PROOF_FAILED_RUN_MOUNT",
             "ORLIX_ENV_TMPFS_PROOF_FAILED_DEV_SHM_MOUNT",
-            "ORLIX_ENV_TMPFS_PROOF_FAILED_TMP_WRITE",
-            "ORLIX_ENV_TMPFS_PROOF_FAILED_RUN_WRITE",
-            "ORLIX_ENV_TMPFS_PROOF_FAILED_DEV_SHM_WRITE",
-            "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_WRITE",
+        "ORLIX_ENV_TMPFS_PROOF_FAILED_TMP_WRITE",
+        "ORLIX_ENV_TMPFS_PROOF_FAILED_RUN_WRITE",
+        "ORLIX_ENV_TMPFS_PROOF_FAILED_DEV_SHM_WRITE",
+        "ORLIX_ENV_USERNS_PROOF_FAILED_UID_MAP",
+        "ORLIX_ENV_USERNS_PROOF_FAILED_GID_MAP",
+        "ORLIX_ENV_USERNS_PROOF_FAILED_SETGROUPS",
+        "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_WRITE",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_SYNC",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_REREAD",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_VERIFY",
@@ -1079,6 +1101,7 @@ private enum RuntimeProof: Sendable {
     case pseudoFilesystems
     case ptyStdio
     case runtimeTmpfs
+    case userNamespaceMappings
     case crossBootWrite
     case crossBootVerify
 
@@ -1120,6 +1143,12 @@ private enum RuntimeProof: Sendable {
                 "path-fallback-argv0",
                 "argument after fallback path lookup"
             ]
+        case .userNamespaceMappings:
+            return [
+                "/bin/sh",
+                "-c",
+                Self.userNamespaceMappingScript
+            ]
         }
     }
 
@@ -1149,7 +1178,8 @@ private enum RuntimeProof: Sendable {
     var defaultWorkingDirectory: String {
         switch self {
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
-             .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .crossBootVerify:
             return "/"
         case .descriptorExecution, .longDescriptorExecution:
             return "/tmp"
@@ -1164,7 +1194,8 @@ private enum RuntimeProof: Sendable {
         case .osRelease, .overlayMutation, .linuxPathDescriptorExecution,
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
-             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
             return 1000
@@ -1176,10 +1207,50 @@ private enum RuntimeProof: Sendable {
         case .osRelease, .overlayMutation, .linuxPathDescriptorExecution,
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
-             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
             return 100
+        }
+    }
+
+    var namespaces: [String] {
+        switch self {
+        case .userNamespaceMappings:
+            return ["user"]
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+            return []
+        }
+    }
+
+    var uidMappings: [OrlixEnvironmentIDMapping] {
+        switch self {
+        case .userNamespaceMappings:
+            return [OrlixEnvironmentIDMapping(containerID: 0, hostID: 0, size: 1)]
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+            return []
+        }
+    }
+
+    var gidMappings: [OrlixEnvironmentIDMapping] {
+        switch self {
+        case .userNamespaceMappings:
+            return [OrlixEnvironmentIDMapping(containerID: 0, hostID: 0, size: 1)]
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+            return []
         }
     }
 
@@ -1190,7 +1261,7 @@ private enum RuntimeProof: Sendable {
             return true
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-             .pathLookupWithoutPATHDescriptorExecution:
+             .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings:
             return false
         }
     }
@@ -1274,7 +1345,7 @@ private enum RuntimeProof: Sendable {
             ].joined(separator: "\r") + "\r"
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-             .pathLookupWithoutPATHDescriptorExecution:
+             .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings:
             return ""
         }
     }
@@ -1295,6 +1366,8 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_PTY_DONE"
         case .runtimeTmpfs:
             return "ORLIX_ENV_TMPFS_DONE"
+        case .userNamespaceMappings:
+            return "ORLIX_ENV_USERNS_DONE"
         case .crossBootWrite:
             return "ORLIX_ENV_CROSSBOOT_WRITE_DONE"
         case .crossBootVerify:
@@ -1307,7 +1380,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return "ORLIX_ENV_PTY_WAITING_FOR_INPUT"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .crossBootWrite, .crossBootVerify,
+             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution:
@@ -1320,7 +1394,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return "orlix-pty-delayed-input\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .crossBootWrite, .crossBootVerify,
+             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution:
@@ -1333,7 +1408,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return "ORLIX_ENV_PTY_DELAYED_INPUT_OK"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .crossBootWrite, .crossBootVerify,
+             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution:
@@ -1346,7 +1422,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return #"printf '%s%s\n' ORLIX_ENV_ PTY_DONE"# + "\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .crossBootWrite, .crossBootVerify,
+             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution:
@@ -1406,6 +1483,14 @@ private enum RuntimeProof: Sendable {
                 "env=descriptor value without path",
                 "pwd=/",
                 "ORLIX_ENV_EXEC_DONE"
+            ]
+        case .userNamespaceMappings:
+            return [
+                "ORLIX_ENV_USERNS_BEGIN",
+                "ORLIX_ENV_USERNS_UID_MAP_OK",
+                "ORLIX_ENV_USERNS_GID_MAP_OK",
+                "ORLIX_ENV_USERNS_SETGROUPS_OK",
+                "ORLIX_ENV_USERNS_DONE"
             ]
         case .pseudoFilesystems:
             return [
@@ -1472,7 +1557,8 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution:
             return Self.descriptorExecutionScript
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
-             .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .crossBootVerify:
             return ""
         }
     }
@@ -1486,10 +1572,21 @@ private enum RuntimeProof: Sendable {
         case .osRelease, .overlayMutation, .linuxPathDescriptorExecution,
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
-             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .crossBootWrite, .crossBootVerify:
             return ""
         }
     }
+
+    private static let userNamespaceMappingScript = [
+        #"printf '%s%s\n' ORLIX_ENV_ USERNS_BEGIN"#,
+        #"set -- $(/bin/cat /proc/self/uid_map)"#,
+        #"if [ "$1:$2:$3" = "0:0:1" ]; then printf '%s%s\n' ORLIX_ENV_ USERNS_UID_MAP_OK; else printf '%s%s\n' ORLIX_ENV_USERNS_ PROOF_FAILED_UID_MAP; fi"#,
+        #"set -- $(/bin/cat /proc/self/gid_map)"#,
+        #"if [ "$1:$2:$3" = "0:0:1" ]; then printf '%s%s\n' ORLIX_ENV_ USERNS_GID_MAP_OK; else printf '%s%s\n' ORLIX_ENV_USERNS_ PROOF_FAILED_GID_MAP; fi"#,
+        #"if /bin/test -e /proc/self/setgroups; then printf '%s%s\n' ORLIX_ENV_ USERNS_SETGROUPS_OK; else printf '%s%s\n' ORLIX_ENV_USERNS_ PROOF_FAILED_SETGROUPS; fi"#,
+        #"printf '%s%s\n' ORLIX_ENV_ USERNS_DONE"#,
+    ].joined(separator: "\n")
 
     private static let descriptorExecutionScript = (
         [": descriptor-start"] + descriptorExecutionLines
@@ -1533,9 +1630,9 @@ private enum RuntimeFixture: Sendable {
     var environmentID: String {
         switch self {
         case .tarDerived:
-            return "tar-imported-runtime-proof"
+            return "tar-imported-runtime-test-fixture"
         case .ociDerived:
-            return "oci-imported-runtime-proof"
+            return "oci-imported-runtime-test-fixture"
         }
     }
 
@@ -1555,9 +1652,9 @@ private enum RuntimeFixture: Sendable {
     var rootImageIdentifier: String {
         switch self {
         case .tarDerived:
-            return "orlix.test.environment.tar-runtime-proof"
+            return "orlix.test.environment.tar-runtime-test-fixture"
         case .ociDerived:
-            return "orlix.test.environment.oci-runtime-proof"
+            return "orlix.test.environment.oci-runtime-test-fixture"
         }
     }
 
@@ -1568,9 +1665,9 @@ private enum RuntimeFixture: Sendable {
     var expectedOSReleaseID: String {
         switch self {
         case .tarDerived:
-            return "ID=orlix-tar-runtime-proof"
+            return "ID=orlix-tar-runtime-test-fixture"
         case .ociDerived:
-            return "ID=orlix-oci-runtime-proof"
+            return "ID=orlix-oci-runtime-test-fixture"
         }
     }
 }

@@ -111,6 +111,13 @@ static void write_literal(int fd, const char *message)
 	(void)write_all(fd, message, length);
 }
 
+static void write_errno_message(int fd, const char *prefix, int error)
+{
+	write_literal(fd, prefix);
+	write_literal(fd, strerror(error));
+	write_literal(fd, "\n");
+}
+
 static void write_unsigned_decimal(int fd, unsigned long value)
 {
 	char buffer[32];
@@ -2222,7 +2229,9 @@ static void exec_or_fork_configured_command(struct orlix_command_config *config)
 		die("fork time namespace child");
 	if (child == 0) {
 		exec_configured_command(config);
-		write_literal(STDERR_FILENO, "orlix-init: exec command failed\n");
+		write_errno_message(STDERR_FILENO,
+				     "orlix-init: exec command failed: ",
+				     errno);
 		_exit(127);
 	}
 
@@ -2344,7 +2353,9 @@ static pid_t start_command_on_pty(int master, int slave)
 			write_literal(STDERR_FILENO, "orlix-init: prctl(PR_SET_NO_NEW_PRIVS) failed\n");
 	}
 	exec_or_fork_configured_command(config);
-	write_literal(STDERR_FILENO, "orlix-init: exec command failed\n");
+	write_errno_message(STDERR_FILENO,
+			     "orlix-init: exec command failed: ",
+			     errno);
 	_exit(127);
 }
 

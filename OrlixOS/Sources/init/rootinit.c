@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -538,7 +539,7 @@ static int switch_to_new_root(void)
 		return -1;
 	if (mount(".", "/", NULL, MS_MOVE, NULL) != 0)
 		return -1;
-	if (chroot(".") != 0)
+	if (syscall(SYS_chroot, ".") != 0)
 		return -1;
 
 	return chdir("/");
