@@ -400,12 +400,17 @@ static void enable_cgroup_pids_controller(const char *path)
 
 static void enable_cgroup_cpu_controller(const char *path)
 {
-	enable_cgroup_controller(path, "+cpu\n");
+enable_cgroup_controller(path, "+cpu\n");
+}
+
+static void enable_cgroup_memory_controller(const char *path)
+{
+enable_cgroup_controller(path, "+memory\n");
 }
 
 static void apply_cgroup_pids_limit(const char *path, const char *value)
 {
-	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
+char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
 
 	if (!cgroup_path_is_valid(path))
 		die("invalid cgroups path");
@@ -436,12 +441,30 @@ static void apply_cgroup_cpu_max(const char *path, const char *value)
 	enable_cgroup_cpu_controller(path);
 	if (ensure_dir_recursive(directory, 0755) != 0)
 		die("create cgroup path");
-	write_cgroup_control(directory, "cpu.max", value);
+write_cgroup_control(directory, "cpu.max", value);
+}
+
+static void apply_cgroup_memory_max(const char *path, const char *value)
+{
+char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
+
+if (!cgroup_path_is_valid(path))
+die("invalid cgroups path");
+if (strchr(value, '\n') != NULL || strchr(value, '\r') != NULL ||
+value[0] == '\0')
+die("invalid cgroup memory max");
+if (snprintf(directory, sizeof(directory), "/sys/fs/cgroup%s", path) >=
+(int)sizeof(directory))
+die("cgroups path too long");
+enable_cgroup_memory_controller(path);
+if (ensure_dir_recursive(directory, 0755) != 0)
+die("create cgroup path");
+write_cgroup_control(directory, "memory.max", value);
 }
 
 static unsigned long namespace_flag_for_name(const char *name)
 {
-	if (strcmp(name, "mount") == 0)
+if (strcmp(name, "mount") == 0)
 		return CLONE_NEWNS;
 	if (strcmp(name, "ipc") == 0)
 		return CLONE_NEWIPC;
@@ -1153,11 +1176,13 @@ struct orlix_command_config {
 	int has_umask;
 	char cgroups_path[ORLIX_INIT_CGROUP_PATH_SIZE];
 	int has_cgroups_path;
-	char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
-	int has_cgroup_pids_max;
-	char cgroup_cpu_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
-	int has_cgroup_cpu_max;
-	unsigned long namespace_flags;
+char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
+int has_cgroup_pids_max;
+char cgroup_cpu_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
+int has_cgroup_cpu_max;
+char cgroup_memory_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
+int has_cgroup_memory_max;
+unsigned long namespace_flags;
 	unsigned long namespace_join_flags[ORLIX_INIT_MAX_NAMESPACE_JOINS];
 	char namespace_join_paths[ORLIX_INIT_MAX_NAMESPACE_JOINS][ORLIX_INIT_VALUE_SIZE];
 	size_t namespace_join_count;
@@ -1327,6 +1352,11 @@ static void selected_command_config(struct orlix_command_config *config)
 		sizeof(config->cgroup_cpu_max)) == 0 &&
 	    config->cgroup_cpu_max[0] != '\0')
 		config->has_cgroup_cpu_max = 1;
+	if (read_cmdline_decoded("orlix.cgroups.memory.max=",
+		config->cgroup_memory_max,
+		sizeof(config->cgroup_memory_max)) == 0 &&
+	    config->cgroup_memory_max[0] != '\0')
+		config->has_cgroup_memory_max = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
 		char key[32];
 		char value[ORLIX_INIT_VALUE_SIZE];
@@ -1712,6 +1742,12 @@ static pid_t start_command_on_pty(int master, int slave)
 			die("cgroup cpu limit without cgroup path");
 		apply_cgroup_cpu_max(config->cgroups_path,
 			config->cgroup_cpu_max);
+	}
+	if (config->has_cgroup_memory_max) {
+		if (!config->has_cgroups_path)
+			die("cgroup memory limit without cgroup path");
+		apply_cgroup_memory_max(config->cgroups_path,
+			config->cgroup_memory_max);
 	}
 	if (config->has_cgroups_path)
 		join_configured_cgroup(config->cgroups_path);

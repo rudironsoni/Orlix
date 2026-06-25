@@ -20609,3 +20609,33 @@ Evidence:
 Not claimed:
 - No cgroup controller enablement, delegation, accounting, resource enforcement, or OCI `linux.resources` support.
 - No full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, networking policy, or runtime-ready claim.
+
+### 2026-06-25 OCI memory cgroup limit
+
+Checkpoint: implemented bounded OCI `linux.resources.memory.limit` carriage to real Linux cgroup v2 `memory.max`. This extends the existing cgroup resource path without adding package-manager logic, proof-package ladders, HostAdapter Linux policy, custom ABI, generated upstream edits, or OrlixMLibC patches.
+
+Changes:
+- Enabled upstream Linux memory cgroup support in release and development defconfigs with `CONFIG_MEMCG=y`.
+- Added Orlix-owned kselftest `cgroup_memory_probe`, packaged in the Orlix selftest initramfs, proving the mounted cgroup v2 surface reports the `memory` controller and accepts a byte limit in child `memory.max`.
+- Added `OrlixEnvironmentDescriptor.cgroupMemoryMax` Codable/session propagation, copied-environment preservation, validation, and materialized command-line emission as `orlix.cgroups.memory.max`.
+- Added OCI runtime parser support for `linux.resources.memory.limit`, requiring `linux.cgroupsPath`, accepting OCI `-1` as unlimited, rejecting invalid limits, and rejecting unimplemented memory knobs (`reservation`, `swap`, `kernel`, `kernelTCP`, `swappiness`, `disableOOMKiller`, `useHierarchy`) by precise feature names.
+- Added first-stage init support for `orlix.cgroups.memory.max`: enables `+memory`, creates the configured cgroup path, writes `memory.max`, then joins the process cgroup.
+- Updated OCI feature reporting with implemented `ociMemoryLimit` proof `orlix:cgroup_memory_probe`.
+- Updated OrlixOS tests for descriptor command-line emission, OCI config conversion, feature-report status/proof, and unsupported memory resource fields.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` exited 0 and compiled `cgroup_memory_probe`.
+- `rtk rg -n "cgroup_memory_probe|CONFIG_MEMCG" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list Build/OrlixKernel/build/release/.config OrlixKernel/Sources/ports/orlix/configs` confirmed `CONFIG_MEMCG=y` in generated release `.config` and both durable defconfigs, `orlix:cgroup_memory_probe` in the kselftest list, and `cgroup_memory_probe` in the test initramfs file list.
+- Focused `test-without-building` for the modified descriptor, parser, unsupported-resource, and feature-report tests was interrupted after it did not reach `Testing started` or `Test Suite` output in the bounded wait; no executed-XCTest proof is claimed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale active-plan warning.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Not claimed:
+- No full memory accounting/enforcement runtime proof beyond cgroup v2 `memory.max` setup and kselftest surface proof.
+- No cgroup delegation, arbitrary nested cgroup management, systemd support, full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, networking, or runtime-ready claim.
