@@ -7620,7 +7620,7 @@ func testOCIRegistryImageReferenceParsesDistributionEndpoints() throws {
 	XCTAssertEqual(dockerOfficial.manifestReference, "3.20")
 	XCTAssertEqual(
 		try dockerOfficial.manifestURL().absoluteString,
-		"https://docker.io/v2/library/alpine/manifests/3.20"
+		"https://registry-1.docker.io/v2/library/alpine/manifests/3.20"
 	)
 
 	let dockerNamespace = try OrlixOCIRegistryImageReference(
@@ -7631,7 +7631,7 @@ func testOCIRegistryImageReferenceParsesDistributionEndpoints() throws {
 	XCTAssertEqual(dockerNamespace.tag, "latest")
 	XCTAssertEqual(
 		try dockerNamespace.manifestURL().absoluteString,
-		"https://docker.io/v2/rudironsoni/orlix/manifests/latest"
+		"https://registry-1.docker.io/v2/rudironsoni/orlix/manifests/latest"
 	)
 }
 

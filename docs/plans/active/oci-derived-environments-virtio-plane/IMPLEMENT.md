@@ -10,6 +10,30 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI registry Docker Hub distribution endpoint
+
+Checkpoint: Docker Hub shorthand references keep canonical image registry `docker.io`, but distribution requests now use the live Docker Hub registry endpoint `registry-1.docker.io`. A direct network probe of `https://registry-1.docker.io/v2/library/alpine/manifests/latest` returned the expected registry v2 `401` challenge with `realm="https://auth.docker.io/token"`, `service="registry.docker.io"`, and `scope="repository:library/alpine:pull"`.
+
+Changes:
+- Added Docker Hub distribution-host mapping inside `OrlixOCIRegistryImageReference` URL construction.
+- Updated registry reference XCTest expectations for Docker Hub shorthand manifest URLs.
+
+Evidence:
+- `rtk proxy curl -I -sS https://registry-1.docker.io/v2/library/alpine/manifests/latest` returned HTTP 401 with Docker registry v2 bearer challenge headers.
+- `rtk git diff --check` exited 0.
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- Focused registry reference XCTest passed for `testOCIRegistryImageReferenceParsesDistributionEndpoints` and `testOCIRegistryImageReferenceRejectsInvalidInput`.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_01-02-47-+0200.xcresult` reported `Passed`, 5 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This moves registry input closer to live Docker Hub pulls for `orlix run IMAGE` and registry-backed installer APIs.
+- This does not prove a complete live Docker Hub image pull, product Linux userspace `orlix run`, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, real signal/kill delivery, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+
 ### 2026-06-26 OCI registry Docker Hub shorthand input
 
 Checkpoint: registry image references now accept Docker Hub shorthand used by normal container tooling. Single-component references such as `alpine:3.20` resolve to `docker.io/library/alpine:3.20`, and two-component namespace references such as `rudironsoni/orlix:latest` resolve to `docker.io/rudironsoni/orlix:latest`. Explicit registries, including `localhost:5000/...`, remain unchanged.
