@@ -1628,8 +1628,9 @@ public let cgroupIOWeight: UInt64?
 
 	@_spi(OrlixPrivateTesting)
 	public func environmentDescriptor(id: String,
-					 rootMount: OrlixEnvironmentRootMount,
-					 mounts: [OrlixEnvironmentMount] = [])
+	                                  rootMount: OrlixEnvironmentRootMount,
+	                                  rootImageIdentifier: String? = nil,
+	                                  mounts: [OrlixEnvironmentMount] = [])
 		throws -> OrlixEnvironmentDescriptor
 	{
 		let ociMounts = try self.mounts.compactMap { try $0.environmentMount() }
@@ -1638,7 +1639,7 @@ public let cgroupIOWeight: UInt64?
 			id: id,
 			source: .ociLayout,
 			platform: "linux/arm64",
-			rootImageIdentifier: id,
+			rootImageIdentifier: rootImageIdentifier ?? id,
 			defaultCommand: defaultCommand,
 			defaultEnvironment: defaultEnvironment,
 			defaultWorkingDirectory: defaultWorkingDirectory,

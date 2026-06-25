@@ -21750,3 +21750,22 @@ Evidence:
 
 Boundary:
 - This is a harness/documentation checkpoint only. It does not claim OCI runtime feature completion, product runtime readiness, package readiness, cgroup/namespace/device/filesystem/network implementation, or build-speed implementation.
+
+### 2026-06-25 OCI environment descriptor root-image override checkpoint
+
+Checkpoint: added a narrow OrlixOS session API needed by OCI runtime/session paths that must bind a parsed OCI config to a target-derived root image identifier instead of assuming the environment ID and root image identifier are identical.
+
+Changes:
+- Extended `OrlixOCIRuntimeConfigDescriptor.environmentDescriptor(...)` with an optional `rootImageIdentifier` parameter that defaults to the environment ID, preserving existing callers.
+- Added OrlixOS XCTest coverage proving the default root image identifier remains the environment ID and an explicit target-derived identifier is preserved.
+
+Evidence:
+- `rtk git diff --check` exited 0 before the focused XCTest run.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeConfigParserConvertsMinimalLinuxConfig test` passed: 1 test, 0 failures.
+
+Boundary:
+- This is OrlixOS session/descriptor plumbing for target-derived payload metadata. It does not implement product `orlix run`, registry pull, OCI terminal false semantics, broader OCI lifecycle compliance, app-hosted runtime readiness, or Linux kernel behavior.
+
+Current status:
+
+- Target-derived OCI environment root image identifier override is implemented and covered by focused OrlixOS XCTest.
