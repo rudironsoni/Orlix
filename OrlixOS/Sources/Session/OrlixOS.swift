@@ -1028,6 +1028,14 @@ public enum OrlixOCIRuntimeError: Error, Equatable, Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeEphemeralRunFailure: Error {
+	public let id: String
+	public let originalError: Error
+	public let cleanupError: Error?
+	public let deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment?
+}
+
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntime: Sendable {
 	public let registry: OrlixEnvironmentRegistry
 	public let lifecycleStore: OrlixOCIRuntimeLifecycleStore
@@ -1310,19 +1318,49 @@ public struct OrlixOCIRuntime: Sendable {
 		processDriver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIRuntimeEphemeralRunResult {
-		let materializedRunResult = try run(
-			bundleURL: bundleURL,
-			id: id,
-			rootMount: rootMount,
-			mke2fsExecutable: mke2fsExecutable,
-			truncateExecutable: truncateExecutable,
-			debugfsExecutable: debugfsExecutable,
-			kernelCommandLine: kernelCommandLine,
-			terminal: terminal,
-			materializationRunner: materializationRunner,
-			processDriver: processDriver,
-			fileManager: fileManager
-		)
+		let materializedRunResult: OrlixOCIRuntimeMaterializedRunResult
+		do {
+			materializedRunResult = try run(
+				bundleURL: bundleURL,
+				id: id,
+				rootMount: rootMount,
+				mke2fsExecutable: mke2fsExecutable,
+				truncateExecutable: truncateExecutable,
+				debugfsExecutable: debugfsExecutable,
+				kernelCommandLine: kernelCommandLine,
+				terminal: terminal,
+				materializationRunner: materializationRunner,
+				processDriver: processDriver,
+				fileManager: fileManager
+			)
+		} catch {
+			guard fileManager.fileExists(
+				atPath: try lifecycleStore.recordURL(forID: id).path
+			) else {
+				throw error
+			}
+			do {
+				let deletedEnvironment = try delete(
+					id: id,
+					fileManager: fileManager
+				)
+				throw OrlixOCIRuntimeEphemeralRunFailure(
+					id: id,
+					originalError: error,
+					cleanupError: nil,
+					deletedEnvironment: deletedEnvironment
+				)
+			} catch let cleanupError as OrlixOCIRuntimeEphemeralRunFailure {
+				throw cleanupError
+			} catch let cleanupError {
+				throw OrlixOCIRuntimeEphemeralRunFailure(
+					id: id,
+					originalError: error,
+					cleanupError: cleanupError,
+					deletedEnvironment: nil
+				)
+			}
+		}
 		let deletedEnvironment = try delete(
 			id: id,
 			fileManager: fileManager

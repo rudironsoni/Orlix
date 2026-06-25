@@ -21151,3 +21151,27 @@ Evidence:
 Boundary:
 - This implements standard OCI host-path bind mount translation and registration into the existing Linux `virtiofs` mount path. It does not claim arbitrary security-scoped user-folder UX, product `orlix run`, registry pull, OCI Runtime Spec lifecycle completion, systemd support, full runtime readiness, or app-hosted runtime execution proof for the new test because XCTest did not attach.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, Docker/runc dependency, or Swift-side fake mount success were added.
+### 2026-06-25 OCI ephemeral run failure cleanup
+
+Checkpoint: tightened one-shot OCI ephemeral run lifecycle cleanup. `runEphemeral(...)` now preserves normal materialization failures unchanged until a lifecycle record exists; once an environment has been created/materialized, process start/run failures trigger best-effort `delete(id:)` cleanup through the normal OCI lifecycle deletion path. If cleanup succeeds, the thrown `OrlixOCIRuntimeEphemeralRunFailure` carries the original run error plus the deleted lifecycle record. If cleanup is unsafe or rejected, for example because the environment is already running, the same failure carries both the original error and cleanup error without bypassing the existing running-delete guard.
+
+Changes:
+- Added `OrlixOCIRuntimeEphemeralRunFailure` to preserve the original process/run error, optional cleanup error, and optional deleted environment record.
+- Updated `OrlixOCIRuntime.runEphemeral(...)` to attempt cleanup after post-create run failures while leaving pre-lifecycle materialization errors unchanged.
+- Extended the recording OCI process observation driver with explicit start/signal/wait failure modes for lifecycle tests.
+- Added OrlixOS XCTest coverage proving ephemeral start failure after materialization deletes lifecycle state and per-environment storage while preserving the original start failure.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused bounded `test-without-building` for `testOCIRuntimeRunEphemeralCleansUpAfterStartFailure` produced no `Testing started`, `Test Suite`, or `Test Case` output before 240 second alarm terminated command signal 14; no executed-XCTest pass is claimed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale active-plan warnings.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+
+Boundary:
+- This improves OrlixOS OCI lifecycle/resource behavior for one-shot ephemeral runs. It does not claim product `orlix run`, registry pull, OCI Runtime Spec lifecycle completion, app-hosted runtime execution proof, full runtime readiness, or Linux process supervision beyond the existing observation-driver API.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, Docker/runc dependency, or Swift-side Linux behavior shim were added.
