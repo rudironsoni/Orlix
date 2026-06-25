@@ -426,22 +426,34 @@ char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
 	write_cgroup_control(directory, "pids.max", value);
 }
 
-static void apply_cgroup_cpu_max(const char *path, const char *value)
+static void apply_cgroup_cpu_settings(const char *path,
+				      const char *max_value,
+				      int has_max,
+				      const char *weight_value,
+				      int has_weight)
 {
 	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
 
 	if (!cgroup_path_is_valid(path))
 		die("invalid cgroups path");
-	if (strchr(value, '\n') != NULL || strchr(value, '\r') != NULL ||
-	    value[0] == '\0')
+	if (has_max && (strchr(max_value, '\n') != NULL ||
+			strchr(max_value, '\r') != NULL ||
+			max_value[0] == '\0'))
 		die("invalid cgroup cpu max");
+	if (has_weight && (strchr(weight_value, '\n') != NULL ||
+			   strchr(weight_value, '\r') != NULL ||
+			   weight_value[0] == '\0'))
+		die("invalid cgroup cpu weight");
 	if (snprintf(directory, sizeof(directory), "/sys/fs/cgroup%s", path) >=
 	    (int)sizeof(directory))
 		die("cgroups path too long");
 	enable_cgroup_cpu_controller(path);
 	if (ensure_dir_recursive(directory, 0755) != 0)
 		die("create cgroup path");
-write_cgroup_control(directory, "cpu.max", value);
+	if (has_max)
+		write_cgroup_control(directory, "cpu.max", max_value);
+	if (has_weight)
+		write_cgroup_control(directory, "cpu.weight", weight_value);
 }
 
 static void apply_cgroup_memory_max(const char *path, const char *value)
@@ -1180,6 +1192,8 @@ char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
 int has_cgroup_pids_max;
 char cgroup_cpu_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
 int has_cgroup_cpu_max;
+char cgroup_cpu_weight[ORLIX_INIT_CGROUP_VALUE_SIZE];
+int has_cgroup_cpu_weight;
 char cgroup_memory_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
 int has_cgroup_memory_max;
 unsigned long namespace_flags;
@@ -1347,14 +1361,19 @@ static void selected_command_config(struct orlix_command_config *config)
 		sizeof(config->cgroup_pids_max)) == 0 &&
 	    config->cgroup_pids_max[0] != '\0')
 		config->has_cgroup_pids_max = 1;
-	if (read_cmdline_decoded("orlix.cgroups.cpu.max=",
-		config->cgroup_cpu_max,
-		sizeof(config->cgroup_cpu_max)) == 0 &&
-	    config->cgroup_cpu_max[0] != '\0')
-		config->has_cgroup_cpu_max = 1;
-	if (read_cmdline_decoded("orlix.cgroups.memory.max=",
-		config->cgroup_memory_max,
-		sizeof(config->cgroup_memory_max)) == 0 &&
+if (read_cmdline_decoded("orlix.cgroups.cpu.max=",
+config->cgroup_cpu_max,
+sizeof(config->cgroup_cpu_max)) == 0 &&
+config->cgroup_cpu_max[0] != '\0')
+config->has_cgroup_cpu_max = 1;
+if (read_cmdline_decoded("orlix.cgroups.cpu.weight=",
+config->cgroup_cpu_weight,
+sizeof(config->cgroup_cpu_weight)) == 0 &&
+config->cgroup_cpu_weight[0] != '\0')
+config->has_cgroup_cpu_weight = 1;
+if (read_cmdline_decoded("orlix.cgroups.memory.max=",
+config->cgroup_memory_max,
+sizeof(config->cgroup_memory_max)) == 0 &&
 	    config->cgroup_memory_max[0] != '\0')
 		config->has_cgroup_memory_max = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
@@ -1737,11 +1756,14 @@ static pid_t start_command_on_pty(int master, int slave)
 		apply_cgroup_pids_limit(config->cgroups_path,
 			config->cgroup_pids_max);
 	}
-	if (config->has_cgroup_cpu_max) {
+	if (config->has_cgroup_cpu_max || config->has_cgroup_cpu_weight) {
 		if (!config->has_cgroups_path)
-			die("cgroup cpu limit without cgroup path");
-		apply_cgroup_cpu_max(config->cgroups_path,
-			config->cgroup_cpu_max);
+			die("cgroup cpu setting without cgroup path");
+		apply_cgroup_cpu_settings(config->cgroups_path,
+			config->cgroup_cpu_max,
+			config->has_cgroup_cpu_max,
+			config->cgroup_cpu_weight,
+			config->has_cgroup_cpu_weight);
 	}
 	if (config->has_cgroup_memory_max) {
 		if (!config->has_cgroups_path)

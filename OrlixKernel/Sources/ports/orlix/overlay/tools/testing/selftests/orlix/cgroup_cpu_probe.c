@@ -65,7 +65,7 @@ int main(void)
 {
 	bool child_created;
 
-	orlix_test_plan(5);
+	orlix_test_plan(7);
 
 	orlix_test_result(file_contains(CGROUP_ROOT "/cgroup.controllers", "cpu"),
 			  "cgroup v2 reports cpu controller");
@@ -80,6 +80,12 @@ int main(void)
 				  write_file(CGROUP_CHILD "/cpu.max", "50000 100000\n") &&
 				  file_contains(CGROUP_CHILD "/cpu.max", "50000 100000"),
 			  "cgroup v2 child accepts cpu.max quota period");
+	orlix_test_result(child_created && file_is_readable(CGROUP_CHILD "/cpu.weight"),
+			  "cgroup v2 child exposes cpu.weight");
+	orlix_test_result(child_created &&
+				  write_file(CGROUP_CHILD "/cpu.weight", "39\n") &&
+				  file_contains(CGROUP_CHILD "/cpu.weight", "39"),
+			  "cgroup v2 child accepts cpu.weight");
 
 	cleanup_child_cgroup();
 	orlix_test_exit();

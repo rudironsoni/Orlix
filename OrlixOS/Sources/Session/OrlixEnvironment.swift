@@ -47,9 +47,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let maskedPaths: [String]
 	public let readonlyPaths: [String]
 	public let cgroupsPath: String?
-	public let cgroupPidsLimit: Int64?
-	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
-	public let cgroupMemoryMax: Int64?
+public let cgroupPidsLimit: Int64?
+public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
+public let cgroupCPUWeight: UInt64?
+public let cgroupMemoryMax: Int64?
 	public let namespaces: [String]
     public let namespacePaths: [String: String]
     public let mounts: [OrlixEnvironmentMount]
@@ -109,10 +110,11 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         sysctls: [String: String] = [:],
         maskedPaths: [String] = [],
 		readonlyPaths: [String] = [],
-		cgroupsPath: String? = nil,
-		cgroupPidsLimit: Int64? = nil,
-		cgroupCPUMax: OrlixEnvironmentCgroupCPUMax? = nil,
-		cgroupMemoryMax: Int64? = nil,
+cgroupsPath: String? = nil,
+cgroupPidsLimit: Int64? = nil,
+cgroupCPUMax: OrlixEnvironmentCgroupCPUMax? = nil,
+cgroupCPUWeight: UInt64? = nil,
+cgroupMemoryMax: Int64? = nil,
 		namespaces: [String] = [],
         namespacePaths: [String: String] = [:],
         mounts: [OrlixEnvironmentMount] = []
@@ -144,10 +146,11 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.sysctls = sysctls
         self.maskedPaths = maskedPaths
 		self.readonlyPaths = readonlyPaths
-		self.cgroupsPath = cgroupsPath
-		self.cgroupPidsLimit = cgroupPidsLimit
-		self.cgroupCPUMax = cgroupCPUMax
-		self.cgroupMemoryMax = cgroupMemoryMax
+self.cgroupsPath = cgroupsPath
+self.cgroupPidsLimit = cgroupPidsLimit
+self.cgroupCPUMax = cgroupCPUMax
+self.cgroupCPUWeight = cgroupCPUWeight
+self.cgroupMemoryMax = cgroupMemoryMax
 		self.namespaces = namespaces
         self.namespacePaths = namespacePaths
         self.mounts = mounts
@@ -182,9 +185,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case maskedPaths
 		case readonlyPaths
 		case cgroupsPath
-		case cgroupPidsLimit
-		case cgroupCPUMax
-		case cgroupMemoryMax
+case cgroupPidsLimit
+case cgroupCPUMax
+case cgroupCPUWeight
+case cgroupMemoryMax
 		case namespaces
         case namespacePaths
         case mounts
@@ -302,14 +306,18 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 			Int64.self,
 			forKey: .cgroupPidsLimit
 		)
-		self.cgroupCPUMax = try container.decodeIfPresent(
-			OrlixEnvironmentCgroupCPUMax.self,
-			forKey: .cgroupCPUMax
-		)
-		self.cgroupMemoryMax = try container.decodeIfPresent(
-			Int64.self,
-			forKey: .cgroupMemoryMax
-		)
+self.cgroupCPUMax = try container.decodeIfPresent(
+OrlixEnvironmentCgroupCPUMax.self,
+forKey: .cgroupCPUMax
+)
+self.cgroupCPUWeight = try container.decodeIfPresent(
+UInt64.self,
+forKey: .cgroupCPUWeight
+)
+self.cgroupMemoryMax = try container.decodeIfPresent(
+Int64.self,
+forKey: .cgroupMemoryMax
+)
 		self.namespaces = try container.decodeIfPresent(
             [String].self,
             forKey: .namespaces
@@ -370,10 +378,11 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         if !readonlyPaths.isEmpty {
             try container.encode(readonlyPaths, forKey: .readonlyPaths)
         }
-		try container.encodeIfPresent(cgroupsPath, forKey: .cgroupsPath)
-		try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
-		try container.encodeIfPresent(cgroupCPUMax, forKey: .cgroupCPUMax)
-		try container.encodeIfPresent(cgroupMemoryMax, forKey: .cgroupMemoryMax)
+try container.encodeIfPresent(cgroupsPath, forKey: .cgroupsPath)
+try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
+try container.encodeIfPresent(cgroupCPUMax, forKey: .cgroupCPUMax)
+try container.encodeIfPresent(cgroupCPUWeight, forKey: .cgroupCPUWeight)
+try container.encodeIfPresent(cgroupMemoryMax, forKey: .cgroupMemoryMax)
 		if !namespaces.isEmpty {
             try container.encode(namespaces, forKey: .namespaces)
         }
@@ -810,9 +819,10 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let maskedPathCommandLineKeyPrefix = "orlix.maskedpath"
 	public static let readonlyPathCommandLineKeyPrefix = "orlix.readonlypath"
 	public static let cgroupsPathCommandLineKey = "orlix.cgroups.path"
-	public static let cgroupPidsMaxCommandLineKey = "orlix.cgroups.pids.max"
-	public static let cgroupCPUMaxCommandLineKey = "orlix.cgroups.cpu.max"
-	public static let cgroupMemoryMaxCommandLineKey = "orlix.cgroups.memory.max"
+public static let cgroupPidsMaxCommandLineKey = "orlix.cgroups.pids.max"
+public static let cgroupCPUMaxCommandLineKey = "orlix.cgroups.cpu.max"
+public static let cgroupCPUWeightCommandLineKey = "orlix.cgroups.cpu.weight"
+public static let cgroupMemoryMaxCommandLineKey = "orlix.cgroups.memory.max"
 	public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
     public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
@@ -1039,19 +1049,27 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
 		return limit == -1 ? "max" : String(limit)
 	}
 
-	private static func validateCgroupCPUMax(_ cpuMax: OrlixEnvironmentCgroupCPUMax) throws -> String {
-		guard cpuMax.quotaMicros == -1 || cpuMax.quotaMicros > 0 else {
-			throw OrlixEnvironmentRootImageError.invalidCgroupCPUMax(cpuMax)
+private static func validateCgroupCPUMax(_ cpuMax: OrlixEnvironmentCgroupCPUMax) throws -> String {
+guard cpuMax.quotaMicros == -1 || cpuMax.quotaMicros > 0 else {
+throw OrlixEnvironmentRootImageError.invalidCgroupCPUMax(cpuMax)
 		}
 		guard cpuMax.periodMicros > 0 else {
 			throw OrlixEnvironmentRootImageError.invalidCgroupCPUMax(cpuMax)
 		}
 
-		let quota = cpuMax.quotaMicros == -1 ? "max" : String(cpuMax.quotaMicros)
-		return "\(quota) \(cpuMax.periodMicros)"
-	}
+let quota = cpuMax.quotaMicros == -1 ? "max" : String(cpuMax.quotaMicros)
+return "\(quota) \(cpuMax.periodMicros)"
+}
 
-	private static func validateNamespace(_ namespace: String) throws -> String {
+private static func validateCgroupCPUWeight(_ weight: UInt64) throws -> String {
+guard (1...10_000).contains(weight) else {
+throw OrlixEnvironmentRootImageError.invalidCgroupCPUWeight(weight)
+}
+
+return String(weight)
+}
+
+private static func validateNamespace(_ namespace: String) throws -> String {
         let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup"])
         guard supportedNamespaces.contains(namespace) else {
             throw OrlixEnvironmentRootImageError.invalidNamespace(namespace)
@@ -1211,6 +1229,14 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
 				"\(cgroupCPUMaxCommandLineKey)=\(percentEncoded(try validateCgroupCPUMax(cgroupCPUMax)))"
 			)
 		}
+		if let cgroupCPUWeight = descriptor.cgroupCPUWeight {
+			guard descriptor.cgroupsPath != nil else {
+				throw OrlixEnvironmentRootImageError.invalidCgroupCPUWeight(cgroupCPUWeight)
+			}
+			tokens.append(
+				"\(cgroupCPUWeightCommandLineKey)=\(try validateCgroupCPUWeight(cgroupCPUWeight))"
+			)
+		}
 		if let cgroupMemoryMax = descriptor.cgroupMemoryMax {
 			guard descriptor.cgroupsPath != nil else {
 				throw OrlixEnvironmentRootImageError.invalidCgroupMemoryMax(cgroupMemoryMax)
@@ -1296,6 +1322,7 @@ public enum OrlixEnvironmentRootImageError:
 	case invalidRuntimePath(String)
 	case invalidCgroupPidsLimit(Int64)
 	case invalidCgroupCPUMax(OrlixEnvironmentCgroupCPUMax)
+	case invalidCgroupCPUWeight(UInt64)
 	case invalidCgroupMemoryMax(Int64)
 	case invalidNamespace(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
@@ -1521,10 +1548,11 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 sysctls: parent.sysctls,
                 maskedPaths: parent.maskedPaths,
 				readonlyPaths: parent.readonlyPaths,
-				cgroupsPath: parent.cgroupsPath,
-				cgroupPidsLimit: parent.cgroupPidsLimit,
-				cgroupCPUMax: parent.cgroupCPUMax,
-				cgroupMemoryMax: parent.cgroupMemoryMax,
+cgroupsPath: parent.cgroupsPath,
+cgroupPidsLimit: parent.cgroupPidsLimit,
+cgroupCPUMax: parent.cgroupCPUMax,
+cgroupCPUWeight: parent.cgroupCPUWeight,
+cgroupMemoryMax: parent.cgroupMemoryMax,
 				namespaces: parent.namespaces,
                 namespacePaths: parent.namespacePaths,
                 mounts: parent.mounts

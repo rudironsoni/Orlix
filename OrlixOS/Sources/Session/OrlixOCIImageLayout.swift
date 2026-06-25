@@ -1442,13 +1442,19 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociLinuxResources",
 			status: .recognized,
 			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux resources object is parsed. Pids, CPU quota, and memory limits are implemented through cgroup v2; unproven block IO, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
+			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, and memory limits are implemented through cgroup v2; unproven block IO, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCPUQuota",
 			status: .implemented,
 			proof: "orlix:cgroup_cpu_probe",
 			reason: "OCI linux.resources.cpu quota and period carry into OrlixOS descriptors and init writes cgroup v2 cpu.max before joining the process cgroup."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociCPUShares",
+			status: .implemented,
+			proof: "orlix:cgroup_cpu_probe",
+			reason: "OCI linux.resources.cpu.shares maps to cgroup v2 cpu.weight and init writes it before joining the process cgroup."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociPidsLimit",
@@ -1566,6 +1572,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 public let cgroupsPath: String?
 public let cgroupPidsLimit: Int64?
 public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
+public let cgroupCPUWeight: UInt64?
 public let cgroupMemoryMax: Int64?
 public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
@@ -1627,6 +1634,7 @@ public let mounts: [OrlixOCIRuntimeMount]
             cgroupsPath: cgroupsPath,
             cgroupPidsLimit: cgroupPidsLimit,
             cgroupCPUMax: cgroupCPUMax,
+            cgroupCPUWeight: cgroupCPUWeight,
             cgroupMemoryMax: cgroupMemoryMax,
             namespaces: namespaces,
             namespacePaths: namespacePaths,
@@ -1746,6 +1754,10 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
                 cgroupsPath: config.linux?.cgroupsPath
             ),
 cgroupCPUMax: try Self.validatedCgroupCPUMax(
+config.linux?.resources,
+cgroupsPath: config.linux?.cgroupsPath
+),
+cgroupCPUWeight: try Self.validatedCgroupCPUWeight(
 config.linux?.resources,
 cgroupsPath: config.linux?.cgroupsPath
 ),
@@ -1986,12 +1998,9 @@ cgroupsPath: String?
 		guard let cpu = resources?.cpu else {
 			return nil
 		}
-		if cpu.shares != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.shares")
-		}
-		if cpu.realtimeRuntime != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.realtimeRuntime")
-		}
+    if cpu.realtimeRuntime != nil {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.realtimeRuntime")
+    }
 		if cpu.realtimePeriod != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.realtimePeriod")
 		}
@@ -2015,10 +2024,26 @@ cgroupsPath: String?
 		guard period > 0 else {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.period")
 		}
-		return OrlixEnvironmentCgroupCPUMax(quotaMicros: quota, periodMicros: period)
-	}
+    return OrlixEnvironmentCgroupCPUMax(quotaMicros: quota, periodMicros: period)
+}
 
-	private static func validatedUTSName(_ value: String?,
+private static func validatedCgroupCPUWeight(
+_ resources: OCIRuntimeResources?,
+cgroupsPath: String?
+) throws -> UInt64? {
+guard let shares = resources?.cpu?.shares else {
+return nil
+}
+guard cgroupsPath != nil else {
+throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.shares.cgroupsPath")
+}
+guard shares >= 2 && shares <= 262_144 else {
+throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.shares")
+}
+return 1 + ((shares - 2) * 9_999) / 262_142
+}
+
+private static func validatedUTSName(_ value: String?,
 		feature: String) throws -> String?
 	{
 		guard let value, !value.isEmpty else {

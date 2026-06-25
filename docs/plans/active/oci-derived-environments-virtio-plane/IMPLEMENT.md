@@ -20639,3 +20639,29 @@ Verification:
 Not claimed:
 - No full memory accounting/enforcement runtime proof beyond cgroup v2 `memory.max` setup and kselftest surface proof.
 - No cgroup delegation, arbitrary nested cgroup management, systemd support, full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, networking, or runtime-ready claim.
+### 2026-06-25 OCI CPU shares via cgroup v2 cpu.weight
+
+Current status: implemented OCI `linux.resources.cpu.shares` as real Linux cgroup v2 `cpu.weight` setup for OrlixOS-derived environment descriptors. This continues Phase 13 resource-controller work by adding a supported Linux cgroup surface, not rejection coverage.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.cgroupCPUWeight` Codable/session propagation, copied-environment preservation, command-line key `orlix.cgroups.cpu.weight`, and validation for cgroup v2 weight range `1...10000`.
+- Added OCI runtime-config parsing for `linux.resources.cpu.shares` with Linux scheduler share bounds `2...262144`, requiring `linux.cgroupsPath`, and mapping shares to cgroup v2 weight with the standard integer transform `1 + ((shares - 2) * 9999) / 262142`; OCI default-style `shares: 1024` maps to `cpu.weight: 39`.
+- Extended first-stage init cgroup CPU setup so `cpu.max` and `cpu.weight` are written through the same Linux cgroup v2 path after enabling `+cpu`.
+- Extended `orlix:cgroup_cpu_probe` to assert the child cgroup exposes `cpu.weight` and accepts writing/reading `39`.
+- Updated OrlixOS XCTest fixtures and feature-report expectations so `ociCPUShares` is reported implemented with proof tag `orlix:cgroup_cpu_probe`; invalid shares and missing `cgroupsPath` fail loudly.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 with `** TEST BUILD SUCCEEDED **`.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` exited 0 and compiled `cgroup_cpu_probe`.
+- `rtk rg -n "cgroup_cpu_probe|cpu.weight|CONFIG_CGROUP_SCHED|CONFIG_FAIR_GROUP_SCHED|CONFIG_CFS_BANDWIDTH" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list Build/OrlixKernel/build/release/.config OrlixKernel/Sources/ports/orlix/configs OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/cgroup_cpu_probe.c` confirmed `CONFIG_CGROUP_SCHED=y`, `CONFIG_FAIR_GROUP_SCHED=y`, `CONFIG_CFS_BANDWIDTH=y`, `orlix:cgroup_cpu_probe` in the generated kselftest list, `cgroup_cpu_probe` in the generated test initramfs, and `cpu.weight` assertions in the durable Orlix-owned probe.
+- Focused XCTest `test-without-building` for the changed descriptor, parser, unsupported-resource, and feature-report tests was interrupted after about 90 seconds because it did not reach `Testing started` or `Test Suite`; no executed-XCTest proof is claimed from that run.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- This does not claim full OCI runtime lifecycle compliance, registry pull, product `orlix run`, systemd support, arbitrary cgroup delegation, or real CPU fairness/accounting beyond the Linux cgroup v2 file setup/probe described above.
+- This does not claim executed XCTest coverage for this checkpoint because the focused runner did not attach before the bounded interruption.
