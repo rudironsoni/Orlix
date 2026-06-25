@@ -1259,6 +1259,13 @@ public struct OrlixOCIEnvironmentInstallResult: Sendable {
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIRegistryEnvironmentInstallResult: Sendable {
+	public let id: String
+	public let image: OrlixOCIRegistryImageReference
+	public let pullResult: OrlixOCIRegistryPullResult
+	public let stateReport: OrlixOCIRuntimeStateReport
+}
+
 public struct OrlixOCIEnvironmentInstaller: Sendable {
 	private let registry: OrlixEnvironmentRegistry
 
@@ -1298,6 +1305,75 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 	}
 
+	@discardableResult
+	public func install(
+		image: OrlixOCIRegistryImageReference,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		platform: String = "linux/arm64",
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
+		let layout = try registry.layout(forEnvironmentID: id)
+		let pulledLayoutURL = layout.importScratchDirectory
+			.appendingPathComponent("registry-layout", isDirectory: true)
+		if fileManager.fileExists(atPath: layout.rootDirectory.path) {
+			throw OrlixOCIImageLayoutError.destinationExists(id)
+		}
+		if fileManager.fileExists(atPath: layout.importScratchDirectory.path) {
+			try fileManager.removeItem(at: layout.importScratchDirectory)
+		}
+		try fileManager.createDirectory(
+			at: layout.importScratchDirectory,
+			withIntermediateDirectories: true
+		)
+		do {
+			let pullResult = try await puller.pull(
+				image,
+				to: pulledLayoutURL,
+				platform: platform,
+				fileManager: fileManager
+			)
+			let importResult = try OrlixOCIImageLayoutImporter().importLayout(
+				at: pulledLayoutURL,
+				environmentID: id,
+				registry: registry,
+				rootImageIdentifier: "orlix.env.\(id)",
+				platform: platform,
+				fileManager: fileManager
+			)
+			_ = try importResult.materializationPlan.materialize(
+				mke2fsExecutable: tools.mke2fs.path,
+				truncateExecutable: tools.truncate.path,
+				debugfsExecutable: tools.debugfs.path,
+				runner: OrlixOCIEnvironmentInstallerCommandRunner(
+					runCommand: runCommand
+				)
+			)
+			let config = try registryLifecycleConfig(for: importResult.descriptor)
+			let lifecycleStore = OrlixOCIRuntimeLifecycleStore(registry: registry)
+			let lifecycle = try OrlixOCIRuntimeLifecycleController(
+				config: config,
+				id: id,
+				bundlePath: "oci://\(image.registry)/\(image.repository)@\(pullResult.manifestDigest)"
+			).create()
+			try lifecycleStore.save(lifecycle, fileManager: fileManager)
+			return OrlixOCIRegistryEnvironmentInstallResult(
+				id: id,
+				image: image,
+				pullResult: pullResult,
+				stateReport: try lifecycleStore.stateReport(
+					id: id,
+					fileManager: fileManager
+				)
+			)
+		} catch {
+			try? registry.delete(environmentID: id, fileManager: fileManager)
+			throw error
+		}
+	}
+
 	public func session(
 		bundleURL: URL,
 		id: String,
@@ -1314,6 +1390,48 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			registry: registry,
 			terminal: terminal
 		)
+	}
+
+	public func session(
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default
+	) throws -> OrlixLinuxSession {
+		try OrlixLinuxSession(
+			environmentID: id,
+			registry: registry,
+			terminal: terminal
+		)
+	}
+
+	private func registryLifecycleConfig(
+		for descriptor: OrlixEnvironmentDescriptor
+	) throws -> OrlixOCIRuntimeConfigDescriptor {
+		let environment = descriptor.defaultEnvironment
+			.keys
+			.sorted()
+			.map { "\($0)=\(descriptor.defaultEnvironment[$0] ?? "")" }
+		let config = [
+			"ociVersion": "1.1.0",
+			"root": [
+				"path": "rootfs",
+			],
+			"process": [
+				"terminal": false,
+				"args": descriptor.defaultCommand,
+				"env": environment,
+				"cwd": descriptor.defaultWorkingDirectory,
+				"user": [
+					"uid": descriptor.defaultUserID,
+					"gid": descriptor.defaultGroupID,
+				],
+			],
+		] as [String: Any]
+		let data = try JSONSerialization.data(
+			withJSONObject: config,
+			options: [.sortedKeys]
+		)
+		return try OrlixOCIRuntimeConfigParser().parse(data)
 	}
 }
 
