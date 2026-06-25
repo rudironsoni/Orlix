@@ -90,11 +90,11 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
         )
     }
 
-    public func commands(
-        mke2fsExecutable: String = "mke2fs",
-        truncateExecutable: String = "truncate",
-        debugfsExecutable: String = "debugfs"
-    ) throws -> [OrlixEnvironmentImageMaterializationCommand] {
+	public func commands(
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs"
+	) throws -> [OrlixEnvironmentImageMaterializationCommand] {
         try validateExecutableName(mke2fsExecutable)
         try validateExecutableName(truncateExecutable)
         try validateExecutableName(debugfsExecutable)
@@ -130,13 +130,31 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
                 executable: debugfsExecutable,
                 commandsURL: stateMetadataCommandsURL,
                 imageURL: stateImageURL
-            )
-        ]
-    }
+			)
+		]
+	}
 
-    public func baseImageMetadataCommands(
-        manifest: [OrlixRootfsTarManifestEntry]
-    ) throws -> [String] {
+	@discardableResult
+	public func materialize(
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		runner: OrlixEnvironmentImageMaterializationCommandRunner
+	) throws -> OrlixEnvironmentImageMaterializationResult {
+		let commands = try self.commands(
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable
+		)
+		for command in commands {
+			try runner.run(command)
+		}
+		return OrlixEnvironmentImageMaterializationResult(commands: commands)
+	}
+
+	public func baseImageMetadataCommands(
+		manifest: [OrlixRootfsTarManifestEntry]
+	) throws -> [String] {
         try manifest.flatMap { entry -> [String] in
             if let commands = try specialFileCommands(for: entry) {
                 return commands
@@ -293,8 +311,18 @@ public struct OrlixEnvironmentImageMaterializationCommand:
     Equatable,
     Sendable
 {
-    public let executable: String
-    public let arguments: [String]
+	public let executable: String
+	public let arguments: [String]
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixEnvironmentImageMaterializationResult: Equatable, Sendable {
+	public let commands: [OrlixEnvironmentImageMaterializationCommand]
+}
+
+@_spi(OrlixPrivateTesting)
+public protocol OrlixEnvironmentImageMaterializationCommandRunner: Sendable {
+	func run(_ command: OrlixEnvironmentImageMaterializationCommand) throws
 }
 
 @_spi(OrlixPrivateTesting)
