@@ -49,6 +49,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 	public let cgroupsPath: String?
 	public let cgroupPidsLimit: Int64?
 	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
+	public let cgroupMemoryMax: Int64?
 	public let namespaces: [String]
     public let namespacePaths: [String: String]
     public let mounts: [OrlixEnvironmentMount]
@@ -111,6 +112,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 		cgroupsPath: String? = nil,
 		cgroupPidsLimit: Int64? = nil,
 		cgroupCPUMax: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupMemoryMax: Int64? = nil,
 		namespaces: [String] = [],
         namespacePaths: [String: String] = [:],
         mounts: [OrlixEnvironmentMount] = []
@@ -145,6 +147,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 		self.cgroupsPath = cgroupsPath
 		self.cgroupPidsLimit = cgroupPidsLimit
 		self.cgroupCPUMax = cgroupCPUMax
+		self.cgroupMemoryMax = cgroupMemoryMax
 		self.namespaces = namespaces
         self.namespacePaths = namespacePaths
         self.mounts = mounts
@@ -181,6 +184,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 		case cgroupsPath
 		case cgroupPidsLimit
 		case cgroupCPUMax
+		case cgroupMemoryMax
 		case namespaces
         case namespacePaths
         case mounts
@@ -302,6 +306,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 			OrlixEnvironmentCgroupCPUMax.self,
 			forKey: .cgroupCPUMax
 		)
+		self.cgroupMemoryMax = try container.decodeIfPresent(
+			Int64.self,
+			forKey: .cgroupMemoryMax
+		)
 		self.namespaces = try container.decodeIfPresent(
             [String].self,
             forKey: .namespaces
@@ -365,6 +373,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 		try container.encodeIfPresent(cgroupsPath, forKey: .cgroupsPath)
 		try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 		try container.encodeIfPresent(cgroupCPUMax, forKey: .cgroupCPUMax)
+		try container.encodeIfPresent(cgroupMemoryMax, forKey: .cgroupMemoryMax)
 		if !namespaces.isEmpty {
             try container.encode(namespaces, forKey: .namespaces)
         }
@@ -803,6 +812,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
 	public static let cgroupsPathCommandLineKey = "orlix.cgroups.path"
 	public static let cgroupPidsMaxCommandLineKey = "orlix.cgroups.pids.max"
 	public static let cgroupCPUMaxCommandLineKey = "orlix.cgroups.cpu.max"
+	public static let cgroupMemoryMaxCommandLineKey = "orlix.cgroups.memory.max"
 	public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
     public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
@@ -1021,6 +1031,14 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
 		return limit == -1 ? "max" : String(limit)
 	}
 
+	private static func validateCgroupMemoryMax(_ limit: Int64) throws -> String {
+		guard limit >= -1 else {
+			throw OrlixEnvironmentRootImageError.invalidCgroupMemoryMax(limit)
+		}
+
+		return limit == -1 ? "max" : String(limit)
+	}
+
 	private static func validateCgroupCPUMax(_ cpuMax: OrlixEnvironmentCgroupCPUMax) throws -> String {
 		guard cpuMax.quotaMicros == -1 || cpuMax.quotaMicros > 0 else {
 			throw OrlixEnvironmentRootImageError.invalidCgroupCPUMax(cpuMax)
@@ -1193,6 +1211,14 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
 				"\(cgroupCPUMaxCommandLineKey)=\(percentEncoded(try validateCgroupCPUMax(cgroupCPUMax)))"
 			)
 		}
+		if let cgroupMemoryMax = descriptor.cgroupMemoryMax {
+			guard descriptor.cgroupsPath != nil else {
+				throw OrlixEnvironmentRootImageError.invalidCgroupMemoryMax(cgroupMemoryMax)
+			}
+			tokens.append(
+				"\(cgroupMemoryMaxCommandLineKey)=\(try validateCgroupMemoryMax(cgroupMemoryMax))"
+			)
+		}
 		for (index, namespace) in descriptor.namespaces.sorted().enumerated() {
             tokens.append(
                 "\(namespaceCommandLineKeyPrefix)\(index)=\(try validateNamespace(namespace))"
@@ -1270,6 +1296,7 @@ public enum OrlixEnvironmentRootImageError:
 	case invalidRuntimePath(String)
 	case invalidCgroupPidsLimit(Int64)
 	case invalidCgroupCPUMax(OrlixEnvironmentCgroupCPUMax)
+	case invalidCgroupMemoryMax(Int64)
 	case invalidNamespace(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
@@ -1497,6 +1524,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
 				cgroupsPath: parent.cgroupsPath,
 				cgroupPidsLimit: parent.cgroupPidsLimit,
 				cgroupCPUMax: parent.cgroupCPUMax,
+				cgroupMemoryMax: parent.cgroupMemoryMax,
 				namespaces: parent.namespaces,
                 namespacePaths: parent.namespacePaths,
                 mounts: parent.mounts
