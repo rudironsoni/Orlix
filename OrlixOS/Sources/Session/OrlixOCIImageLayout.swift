@@ -1438,12 +1438,18 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:runtime_config_parser",
 			reason: "OCI Linux device declarations are parsed and rejected until device policy has Linux-owned proof."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "ociLinuxResources",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux resource limits are parsed and rejected until cgroup resource controller wiring exists."
-		),
+        OrlixOCIRuntimeFeature(
+            name: "ociLinuxResources",
+            status: .recognized,
+            proof: "orlix:runtime_config_parser",
+            reason: "OCI Linux resources object is parsed. Pids limits are implemented through cgroup v2; unproven CPU, memory, block IO, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
+        ),
+        OrlixOCIRuntimeFeature(
+            name: "ociPidsLimit",
+            status: .implemented,
+            proof: "orlix:cgroup_pids_probe",
+            reason: "OCI linux.resources.pids.limit carries into OrlixOS descriptors and init writes pids.max in the configured cgroup v2 path before joining the process."
+        ),
 		OrlixOCIRuntimeFeature(
 			name: "ociMaskedPaths",
 			status: .deterministicallyRejected,
@@ -1534,6 +1540,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
     public let maskedPaths: [String]
     public let readonlyPaths: [String]
     public let cgroupsPath: String?
+    public let cgroupPidsLimit: Int64?
     public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
@@ -1591,6 +1598,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
             maskedPaths: maskedPaths,
             readonlyPaths: readonlyPaths,
             cgroupsPath: cgroupsPath,
+            cgroupPidsLimit: cgroupPidsLimit,
             mounts: mounts + ociMounts
         )
     }
@@ -1701,6 +1709,10 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
             cgroupsPath: try Self.validatedOptionalRuntimePath(
                 config.linux?.cgroupsPath,
                 feature: "linux.cgroupsPath"
+            ),
+            cgroupPidsLimit: try Self.validatedCgroupPidsLimit(
+                config.linux?.resources,
+                cgroupsPath: config.linux?.cgroupsPath
             ),
             mounts: mounts,
 			defaultCommand: args,
@@ -1846,6 +1858,51 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
             return nil
         }
         return try validatedRuntimePaths([path], feature: feature).first
+    }
+
+    private static func validatedCgroupPidsLimit(
+        _ resources: OCIRuntimeResources?,
+        cgroupsPath: String?
+    ) throws -> Int64? {
+        guard let resources else {
+            return nil
+        }
+
+        if resources.devices != nil {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.devices")
+        }
+        if resources.memory != nil {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.memory")
+        }
+        if resources.cpu != nil {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu")
+        }
+        if resources.blockIO != nil {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO")
+        }
+        if resources.network != nil {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.network")
+        }
+        if let hugepageLimits = resources.hugepageLimits, !hugepageLimits.isEmpty {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.hugepageLimits")
+        }
+        if let rdma = resources.rdma, !rdma.isEmpty {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.rdma")
+        }
+        if let unified = resources.unified, !unified.isEmpty {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.unified")
+        }
+
+        guard let limit = resources.pids?.limit else {
+            return nil
+        }
+        guard cgroupsPath != nil else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.pids.cgroupsPath")
+        }
+        guard limit >= -1 else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.pids.limit")
+        }
+        return limit
     }
 
 	private static func validatedUTSName(_ value: String?,
@@ -2248,12 +2305,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		if let devices = linux.devices, !devices.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices")
 		}
-		if linux.resources != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources")
-		}
-		if linux.seccomp != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
-		}
+        if linux.seccomp != nil {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
+        }
         if linux.mountLabel != nil {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
         }
@@ -2424,7 +2478,25 @@ private struct OCIRuntimeIDMapping: Decodable {
 }
 
 private struct OCIRuntimeDevice: Decodable {}
-private struct OCIRuntimeResources: Decodable {}
+private struct OCIRuntimeResources: Decodable {
+    let devices: [OCIRuntimeResourceDevice]?
+    let memory: OCIRuntimeResourceMemory?
+    let cpu: OCIRuntimeResourceCPU?
+    let blockIO: OCIRuntimeResourceBlockIO?
+    let hugepageLimits: [OCIRuntimeHugepageLimit]?
+    let network: OCIRuntimeResourceNetwork?
+    let pids: OCIRuntimeResourcePids?
+    let rdma: [String: OCIRuntimeRdmaLimit]?
+    let unified: [String: String]?
+}
+private struct OCIRuntimeResourceDevice: Decodable {}
+private struct OCIRuntimeResourceMemory: Decodable {}
+private struct OCIRuntimeResourceCPU: Decodable {}
+private struct OCIRuntimeResourceBlockIO: Decodable {}
+private struct OCIRuntimeResourceNetwork: Decodable {}
+private struct OCIRuntimeResourcePids: Decodable {
+    let limit: Int64?
+}
 private struct OCIRuntimeSeccomp: Decodable {}
 private struct OCIProcessConsoleSize: Decodable {
 	let height: UInt32
