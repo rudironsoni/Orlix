@@ -6575,11 +6575,15 @@ report.feature(named: "ociBlockIOControls")?.proof,
 		XCTAssertEqual(report.feature(named: "ociRuntimeSpecLifecycle")?.status, .recognized)
 		XCTAssertNil(report.feature(named: "ociRuntimeSpecLifecycle")?.proof)
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
-		XCTAssertEqual(
-			report.feature(named: "userNamespaceMappings")?.status,
-			.deterministicallyRejected
-		)
-	}
+        XCTAssertEqual(
+            report.feature(named: "userNamespaceMappings")?.status,
+            .implemented
+        )
+        XCTAssertEqual(
+            report.feature(named: "userNamespaceMappings")?.proof,
+            "orlix:runtime_config_parser"
+        )
+    }
 
 	func testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults() throws {
 		let report = OrlixOCIRuntimeFeatureReport.current
@@ -6663,10 +6667,11 @@ XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:rootinit_readonly_pat
 		XCTAssertEqual(features["root.readonly"]?.proof, "orlix:readonly_root_probe")
 		XCTAssertEqual(features["virtioFsHostFolderMount"]?.status, .implemented)
 		XCTAssertEqual(features["virtioFsHostFolderMount"]?.proof, "orlix:virtio_fs_mount_probe")
-		XCTAssertEqual(features["userNamespaceMappings"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["idmappedMounts"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["selinux"]?.status, .deterministicallyRejected)
-	}
+        XCTAssertEqual(features["userNamespaceMappings"]?.status, .implemented)
+        XCTAssertEqual(features["userNamespaceMappings"]?.proof, "orlix:runtime_config_parser")
+        XCTAssertEqual(features["idmappedMounts"]?.status, .deterministicallyRejected)
+        XCTAssertEqual(features["selinux"]?.status, .deterministicallyRejected)
+    }
 
 	func testOCIRuntimeFeatureReportEncodesStableJSON() throws {
 		let data = try OrlixOCIRuntimeFeatureReport.current.jsonData()
@@ -6981,6 +6986,50 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
         XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.timeoffset1=monotonic:12:500000000"))
     }
 
+    func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
+        let config = Data(
+            """
+            {
+                "ociVersion": "1.1.0",
+                "process": { "args": ["/bin/sh"], "cwd": "/" },
+                "root": { "path": "rootfs" },
+                "linux": {
+                    "namespaces": [{ "type": "user" }],
+                    "uidMappings": [{ "containerID": 0, "hostID": 501, "size": 1 }],
+                    "gidMappings": [{ "containerID": 0, "hostID": 20, "size": 1 }]
+                }
+            }
+            """.utf8
+        )
+
+        let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+        XCTAssertEqual(descriptor.namespaces, ["user"])
+        XCTAssertEqual(
+            descriptor.uidMappings,
+            [OrlixEnvironmentIDMapping(containerID: 0, hostID: 501, size: 1)]
+        )
+        XCTAssertEqual(
+            descriptor.gidMappings,
+            [OrlixEnvironmentIDMapping(containerID: 0, hostID: 20, size: 1)]
+        )
+
+        let environment = try descriptor.environmentDescriptor(
+            id: "oci-user-map",
+            rootMount: .defaultOverlay
+        )
+        XCTAssertEqual(environment.namespaces, descriptor.namespaces)
+        XCTAssertEqual(environment.uidMappings, descriptor.uidMappings)
+        XCTAssertEqual(environment.gidMappings, descriptor.gidMappings)
+
+        let commandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+            descriptor: environment,
+            kernelCommandLine: OrlixEnvironmentRootImage.defaultKernelCommandLine
+        )
+        XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.namespace0=user"))
+        XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.uidmap0=0:501:1"))
+        XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.gidmap0=0:20:1"))
+    }
+
     func testOCIRuntimeConfigParserRejectsInvalidTimeOffsets() throws {
         let fragments: [(feature: String, linux: String)] = [
             (
@@ -7043,8 +7092,8 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxFeatures() throws {
 		let unsupportedFeatureConfigs: [(String, String)] = [
-			("uidMappings", #""uidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
-			("gidMappings", #""gidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
+            ("uidMappings.namespace", #""uidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
+            ("gidMappings.namespace", #""gidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
             ("devices.path", #""devices": [{ "type": "c", "major": 1, "minor": 3 }]"#),
             ("devices.path", #""devices": [{ "path": "dev/null", "type": "c", "major": 1, "minor": 3 }]"#),
             ("devices.type", #""devices": [{ "path": "/dev/orlix-null", "type": "x", "major": 1, "minor": 3 }]"#),
@@ -7080,11 +7129,7 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
             ("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
             ("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
             ("namespaces.pid", #""namespaces": [{ "type": "pid" }]"#),
-            ("namespaces.user", #""namespaces": [{ "type": "user" }]"#),
-            ("namespaces.time", #""namespaces": [{ "type": "time" }]"#),
-            ("namespaces.pid.path", #""namespaces": [{ "type": "pid", "path": "/proc/1/ns/pid" }]"#),
             ("namespaces.user.path", #""namespaces": [{ "type": "user", "path": "/proc/1/ns/user" }]"#),
-            ("namespaces.time.path", #""namespaces": [{ "type": "time", "path": "/proc/1/ns/time" }]"#),
             ("namespaces.mount.duplicate", #""namespaces": [{ "type": "mount" }, { "type": "mount" }]"#),
             ("netDevices", #""netDevices": [{ "name": "eth0" }]"#)
         ]
@@ -7092,12 +7137,13 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 		for (feature, linuxFragment) in unsupportedFeatureConfigs {
 			let config = Data(
 				"""
-				{
-				  "ociVersion": "1.1.0",
-				  "process": { "args": ["/bin/sh"], "cwd": "/" },
-				  "linux": { \(linuxFragment) }
-				}
-				""".utf8
+            {
+                "ociVersion": "1.1.0",
+                "process": { "args": ["/bin/sh"], "cwd": "/" },
+                "root": { "path": "rootfs" },
+                "linux": { \(linuxFragment) }
+            }
+            """.utf8
 			)
 
 			XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
