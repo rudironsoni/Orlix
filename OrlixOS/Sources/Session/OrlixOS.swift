@@ -822,19 +822,43 @@ public final class OrlixLinuxSession: @unchecked Sendable {
     }
 
     @_spi(OrlixPrivateTesting)
-    public convenience init(
-        ociRuntimeSession: OrlixOCIRuntimeSessionDescriptor,
-        registry: OrlixEnvironmentRegistry,
-        kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
-        terminal: OrlixTerminalSession = OrlixTerminalSession()
-    ) throws {
-        try self.init(
-            environmentID: ociRuntimeSession.environment.id,
-            registry: registry,
-            kernelCommandLine: kernelCommandLine,
-            terminal: terminal
-        )
-    }
+	public convenience init(
+		ociRuntimeSession: OrlixOCIRuntimeSessionDescriptor,
+		registry: OrlixEnvironmentRegistry,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession()
+	) throws {
+		let resolvedKernelCommandLine = try Self.ociRuntimeKernelCommandLine(
+			for: ociRuntimeSession,
+			kernelCommandLine: kernelCommandLine
+		)
+		try self.init(
+			environmentID: ociRuntimeSession.environment.id,
+			registry: registry,
+			kernelCommandLine: resolvedKernelCommandLine,
+			terminal: terminal
+		)
+	}
+
+	private static func ociRuntimeKernelCommandLine(
+		for session: OrlixOCIRuntimeSessionDescriptor,
+		kernelCommandLine: String?
+	) throws -> String? {
+		guard kernelCommandLine == OrlixEnvironmentRootImage.defaultKernelCommandLine else {
+			return kernelCommandLine
+		}
+		let base = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+			descriptor: session.environment,
+			kernelCommandLine: kernelCommandLine
+		)
+		guard !session.terminal else {
+			return base
+		}
+		guard let base, !base.isEmpty else {
+			return "orlix.terminal=0"
+		}
+		return base + " orlix.terminal=0"
+	}
 
     convenience init(
         ociRuntimeBundle: OrlixOCIRuntimeBundle,
