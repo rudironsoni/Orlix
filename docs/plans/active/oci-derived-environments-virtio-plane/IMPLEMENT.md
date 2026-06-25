@@ -21733,3 +21733,20 @@ Boundary:
 - This cleanup removes test/proof-harness bleed from the product terminal and removes proof/stamp ladder metadata from delivered rootfs metadata.
 - It does not claim additional OCI runtime feature completion, package readiness, Linux cgroup/namespace behavior, Coreutils/mlibc/kernel build-speed completion, or product runtime readiness.
 - No OrlixKernel, OrlixMLibC, generated upstream source, HostAdapter Linux policy, custom ABI, package manager, or proof-package mechanism was added.
+
+### 2026-06-25 GOAL.md ownership and proof alignment checkpoint
+
+Checkpoint: updated the active OCI goal to make session decisions explicit while staying under the enforced 4000-character limit.
+
+Changes:
+- Added a Linux Surface section: cgroups, namespaces, devices, mounts, procfs/sysfs/devfs/devpts, sockets, signals, wait, fd tables, exec, interpreter behavior, and filesystem semantics must be implemented through Linux-owned code and Linux-visible interfaces.
+- Restored build-efficiency scope for OrlixKernel/Linux, OrlixMLibC/mlibc, and OrlixOS/Coreutils, constrained to owning build-system incrementality and proven compiler accelerators with fallback.
+- Tightened proof language: the test suite is proof; package/rootfs/test-fixture assembly is setup only, not a package manager, proof-package system, stamp ladder, freshness database, or independent proof framework.
+
+Evidence:
+- `rtk python3 -c "from pathlib import Path; p=Path('docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md'); n=len(p.read_text()); print(('OK' if n<=4000 else 'TOO_LONG'), n, p)"` printed `OK 3997 docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with only the existing stale-status warning.
+- `rtk git diff --check` exited 0.
+
+Boundary:
+- This is a harness/documentation checkpoint only. It does not claim OCI runtime feature completion, product runtime readiness, package readiness, cgroup/namespace/device/filesystem/network implementation, or build-speed implementation.
