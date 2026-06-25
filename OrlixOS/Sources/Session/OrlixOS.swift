@@ -1400,6 +1400,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		bundleURL: URL,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
+		command: [String]? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -1414,6 +1415,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		let runResult = try run(
 			id: id,
+			command: command,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager
@@ -1431,6 +1433,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		tools: OrlixOCIEnvironmentMaterializationTools,
 		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
 		platform: String = "linux/arm64",
+		command: [String]? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -1447,6 +1450,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		let runResult = try run(
 			id: id,
+			command: command,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager
@@ -1465,6 +1469,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		tools: OrlixOCIEnvironmentMaterializationTools,
 		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
 		platform: String = "linux/arm64",
+		command: [String]? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
@@ -1481,6 +1486,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		let runResult = try run(
 			id: id,
+			command: command,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager
@@ -1497,6 +1503,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		bundleURL: URL,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
+		command: [String]? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
@@ -1511,6 +1518,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		let runResult = try run(
 			id: id,
+			command: command,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager
@@ -1563,12 +1571,14 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 
 	public func run(
 		id: String,
+		command: [String]? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentRunResult {
 		let runtimeResult = try OrlixOCIRuntime(registry: registry).run(
 			id: id,
+			command: command,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager
@@ -1579,6 +1589,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 	@_spi(OrlixPrivateTesting)
 	public func run(
 		id: String,
+		command: [String]? = nil,
 		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -1587,6 +1598,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 	) throws -> OrlixOCIEnvironmentRunResult {
 		let runtimeResult = try OrlixOCIRuntime(registry: registry).run(
 			id: id,
+			command: command,
 			rootMount: rootMount,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
@@ -1632,20 +1644,27 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 private func runtimeLifecycleConfig(
 	for snapshot: OrlixOCIRuntimeLifecycleSnapshot,
 	registry: OrlixEnvironmentRegistry,
+	command: [String]? = nil,
 	fileManager: FileManager
 ) throws -> OrlixOCIRuntimeConfigDescriptor {
+	let config: OrlixOCIRuntimeConfigDescriptor
 	if snapshot.record.bundlePath.hasPrefix("oci://") {
-		return try orlixOCIRuntimeConfig(
+		config = try orlixOCIRuntimeConfig(
 			for: registry.load(
 				environmentID: snapshot.record.id,
 				fileManager: fileManager
 			)
 		)
+	} else {
+		config = try OrlixOCIRuntimeBundle.load(
+			from: URL(fileURLWithPath: snapshot.record.bundlePath),
+			fileManager: fileManager
+		).config
 	}
-	return try OrlixOCIRuntimeBundle.load(
-		from: URL(fileURLWithPath: snapshot.record.bundlePath),
-		fileManager: fileManager
-	).config
+	guard let command else {
+		return config
+	}
+	return try config.replacingDefaultCommand(command)
 }
 
 private func orlixOCIRuntimeConfig(
@@ -1925,6 +1944,7 @@ public struct OrlixOCIRuntime: Sendable {
 
 	public func run(
 		id: String,
+		command: [String]? = nil,
 		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -1933,6 +1953,7 @@ public struct OrlixOCIRuntime: Sendable {
 	) throws -> OrlixOCIRuntimeRunResult {
 		let processSession = try processSession(
 			snapshot: try lifecycleStore.load(id: id, fileManager: fileManager),
+			command: command,
 			rootMount: rootMount,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
@@ -1962,6 +1983,7 @@ public struct OrlixOCIRuntime: Sendable {
 
 	public func run(
 		id: String,
+		command: [String]? = nil,
 		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -1970,6 +1992,7 @@ public struct OrlixOCIRuntime: Sendable {
 	) throws -> OrlixOCIRuntimeRunResult {
 		try run(
 			id: id,
+			command: command,
 			rootMount: rootMount,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
@@ -2174,6 +2197,7 @@ public struct OrlixOCIRuntime: Sendable {
 
 	private func processSession(
 		id: String,
+		command: [String]? = nil,
 		rootMount: OrlixEnvironmentRootMount,
 		kernelCommandLine: String?,
 		terminal: OrlixTerminalSession,
@@ -2181,6 +2205,7 @@ public struct OrlixOCIRuntime: Sendable {
 	) throws -> OrlixOCIRuntimeProcessSession {
 		try processSession(
 			snapshot: try lifecycleStore.load(id: id, fileManager: fileManager),
+			command: command,
 			rootMount: rootMount,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
@@ -2190,6 +2215,7 @@ public struct OrlixOCIRuntime: Sendable {
 
 	private func processSession(
 		snapshot: OrlixOCIRuntimeLifecycleSnapshot,
+		command: [String]? = nil,
 		rootMount: OrlixEnvironmentRootMount,
 		kernelCommandLine: String?,
 		terminal: OrlixTerminalSession,
@@ -2203,6 +2229,7 @@ public struct OrlixOCIRuntime: Sendable {
 			config: try runtimeLifecycleConfig(
 				for: snapshot,
 				registry: registry,
+				command: command,
 				fileManager: fileManager
 			),
 			record: snapshot.record
@@ -2272,7 +2299,13 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 			rootMount: rootMount,
 			rootImageIdentifier: rootImageIdentifier
 		)
-		try registry.save(processHandle.sessionDescriptor.environment)
+		if !FileManager.default.fileExists(
+			atPath: try registry.descriptorURL(
+				forEnvironmentID: lifecycle.record.id
+			).path
+		) {
+			try registry.save(processHandle.sessionDescriptor.environment)
+		}
 		let linuxSession = try OrlixLinuxSession(
 			ociRuntimeSession: processHandle.sessionDescriptor,
 			registry: registry,

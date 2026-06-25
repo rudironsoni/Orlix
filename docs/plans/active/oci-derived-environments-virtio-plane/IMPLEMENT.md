@@ -10,6 +10,33 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI per-run command override
+
+Checkpoint: added per-run command override support to the OrlixOS OCI environment run APIs. Registry and bundle install-run facades can now accept a command override that is carried into the existing Linux session descriptor and boot command-line path for that run. The installed environment descriptor remains unchanged, so `orlix run IMAGE COMMAND` can be modeled without mutating the image default command.
+
+Changes:
+- Added `command: [String]?` to installer-level `run(id:)`, bundle install-run, registry install-run, and matching SPI deterministic overloads.
+- Added runtime-level command override propagation through `OrlixOCIRuntime.run`.
+- Added `OrlixOCIRuntimeConfigDescriptor.replacingDefaultCommand(_:)` with OCI argument validation.
+- Changed `OrlixOCIRuntimeProcessSession` setup so it does not overwrite an existing persisted environment descriptor while building a per-run session descriptor.
+- Extended the registry install-run XCTest to run `/bin/echo override`, assert the run session receives that command, and assert the installed descriptor still keeps its image default command.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_00-27-26-+0200.xcresult` reported `Passed`, 3 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.26_00-28-17-+0200.xcresult` reported `Passed`, 1 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This moves toward product `orlix run IMAGE COMMAND` by proving command override flows through OrlixOS into the existing Linux session path without mutating installed OCI-derived environment metadata.
+- This does not prove the Linux userspace `orlix` command exists, live public registry compatibility, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, real signal/kill delivery, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+- The app-hosted proof again emitted Thread Performance Checker warnings and post-test kernel `I/O error, dev vdb` lines after the selected XCTest reported success. These remain runtime log caveats.
+
 ### 2026-06-26 OCI installer registry run facade
 
 Checkpoint: added product-level one-shot registry image run facade on `OrlixOCIEnvironmentInstaller`. Callers can pull a registry image into an OrlixOS environment, materialize it, run the persisted Linux environment, observe lifecycle state, and clean it up through one OrlixOS API path. Registry-backed lifecycle execution now derives runtime process config from the persisted Orlix environment descriptor instead of reopening the `oci://` image identity as a local bundle path.
