@@ -21904,3 +21904,26 @@ Evidence:
 Boundary:
 - This checkpoint does not claim full OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, arbitrary imported-image compatibility, systemd support, kill/signal support, broad cgroup/namespace/device/filesystem/network readiness, or full product runtime readiness.
 - No OrlixKernel, OrlixMLibC, HostAdapter, generated upstream source, package manager, proof-package, or stamp-ladder changes were made.
+
+### 2026-06-25 App-hosted OCI lifecycle observation proof
+
+Checkpoint: proved the Linux init lifecycle observation driver against a real app-hosted OCI-derived Linux session instead of only injected test output.
+
+Changes:
+- Changed `OrlixOCIRuntimeLinuxSessionObservationDriver.start` to boot the `OrlixLinuxSession` asynchronously, because app-hosted Linux boot enters the kernel path and does not synchronously return while userspace is running.
+- Kept boot failure reporting explicit: if boot returns a non-OK status before a start marker is observed, the driver throws `bootFailed`.
+- Added `OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput`, which runs an OCI terminal-false session through the real OrlixOS fixture, observes `orlix-init` process start/exit markers, and asserts the stopped lifecycle record with exit status 0.
+
+Evidence:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLinuxSessionObservationDriverRunsFromInitOutput -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLinuxSessionObservationDriverRejectsUnsupportedSignal test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_21-05-51-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. `xcresulttool` reported 1 passed, 0 failed, 0 skipped. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_21-06-42-+0200.xcresult`.
+
+Boundary:
+- This proves real app-hosted observation of OCI process start and normal exit for the focused OCI-derived terminal-false fixture.
+- This does not claim full OCI Runtime Spec lifecycle completion, `orlix run`, registry pull, arbitrary imported-image compatibility, systemd support, kill/signal support, or broad cgroup/namespace/device/filesystem/network readiness.
+
+## Current Status
+
+Current status:
+
+The latest coherent checkpoint is real app-hosted OCI terminal-false lifecycle observation: OrlixOS boots a real OCI-derived Linux session asynchronously, init emits Linux process start/exit markers, and the OrlixOS lifecycle record reaches stopped with exit status 0 in the focused runtime proof. Next work remains real signal/kill delivery, product `orlix run`, registry input, and broader Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.

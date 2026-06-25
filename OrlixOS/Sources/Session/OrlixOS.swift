@@ -954,6 +954,7 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 	private let condition = NSCondition()
 	private var output: OrlixTerminalOutput?
 	private var text = ""
+	private var bootStatus: OrlixBootStatus?
 	private var startObservation: OrlixOCIRuntimeProcessStartObservation?
 	private var completionObservation: OrlixOCIRuntimeProcessCompletionObservation?
 
@@ -976,6 +977,7 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 	) throws -> OrlixOCIRuntimeProcessStartObservation {
 		condition.lock()
 		text = ""
+		bootStatus = nil
 		startObservation = nil
 		completionObservation = nil
 		condition.unlock()
@@ -984,11 +986,12 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 			self?.append(data)
 		}
 
-		let status = bootSession(processSession.linuxSession)
-		guard status == .ok else {
-			output?.cancel()
-			output = nil
-			throw OrlixOCIRuntimeLinuxSessionObservationError.bootFailed(status)
+		DispatchQueue.global(qos: .userInitiated).async { [bootSession] in
+			let status = bootSession(processSession.linuxSession)
+			self.condition.lock()
+			self.bootStatus = status
+			self.condition.broadcast()
+			self.condition.unlock()
 		}
 
 		return try waitForStartObservation()
@@ -1081,6 +1084,10 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 		condition.lock()
 		defer { condition.unlock() }
 		while startObservation == nil {
+			if let bootStatus, bootStatus != .ok {
+				throw OrlixOCIRuntimeLinuxSessionObservationError
+					.bootFailed(bootStatus)
+			}
 			if !condition.wait(until: deadline) {
 				throw OrlixOCIRuntimeLinuxSessionObservationError
 					.timedOutWaitingForStart
