@@ -21322,3 +21322,67 @@ Boundary:
 - No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
   dependency, or Swift-side fake Linux behavior was added.
+
+### 2026-06-25 OCI user namespace mapping coverage reconciliation
+
+Checkpoint: reconciled OrlixOS XCTest coverage for the current OCI user namespace
+mapping implementation. The current OrlixOS parser and environment descriptor
+path accept OCI `linux.namespaces: [{ "type": "user" }]` with
+`linux.uidMappings` and `linux.gidMappings`, carry those mappings into
+`OrlixEnvironmentDescriptor`, and emit first-stage init metadata
+`orlix.uidmap<N>=container:host:size` and
+`orlix.gidmap<N>=container:host:size`. This checkpoint adds the missing positive
+parser-to-descriptor-to-command-line test and removes stale rejection
+expectations for now-supported bare `user` and `time` namespaces.
+
+Changes:
+- Added `testOCIRuntimeConfigParserCarriesUserNamespaceMappings` covering valid
+  OCI user namespace mappings, descriptor `uidMappings`/`gidMappings`,
+  environment descriptor propagation, and `orlix.namespace0=user`,
+  `orlix.uidmap0=0:501:1`, `orlix.gidmap0=0:20:1` command-line emission.
+- Updated feature-report XCTest expectations so `userNamespaceMappings` is
+  `implemented` with proof `orlix:runtime_config_parser`.
+- Tightened unsupported-feature parser fixtures to include `root`, assert
+  mapping-without-user-namespace as `linux.uidMappings.namespace` /
+  `linux.gidMappings.namespace`, and remove stale generic unsupported entries
+  for bare `user` namespace, bare `time` namespace, PID namespace path join, and
+  time namespace path join.
+
+Evidence:
+- Prior in-flight `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination "platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D" build-for-testing`
+  exited 0 on the user namespace mapping implementation before this
+  reconciliation.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing`
+  exited 0 after the test reconciliation.
+- Focused `test-without-building` for
+  `testOCIRuntimeConfigParserCarriesUserNamespaceMappings` executed under XCTest
+  and passed: 1 test, 0 failures.
+- Focused `test-without-building` for
+  `testOCIRuntimeConfigParserCarriesUserNamespaceMappings`,
+  `testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures`,
+  `testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults`,
+  `testOCIRuntimeConfigParserRejectsUnsupportedLinuxFeatures`, and
+  `testOCIRuntimeConfigParserRejectsUnsupportedMountIDMappings` exited 0 after
+  stale expectations were reconciled.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale
+  active-plan warnings only.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no
+  generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print`
+  found no recent Orlix diagnostic reports.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted`
+  showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This checkpoint proves parser/descriptor/materialized-command-line coverage
+  and feature-report reconciliation for OCI user namespace mappings. It does not
+  claim app-hosted runtime proof that Linux successfully writes
+  `/proc/self/uid_map` or `/proc/self/gid_map`, full user namespace capability
+  modeling, nested mapping policy, full OCI Runtime Spec lifecycle completion,
+  product `orlix run`, registry pull, broad imported-root execution proof,
+  systemd support, or full runtime readiness.
+- No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
+  custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
+  dependency, or Swift-side fake Linux behavior was added.
