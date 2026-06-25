@@ -20811,3 +20811,29 @@ Verification:
 Non-claims:
 - This supports indexed `orlix:documents` bind mounts only. It does not claim arbitrary OCI host path bind mounts, security-scoped external folders, broad OCI bind-mount feature completion, full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Docker/runc compatibility, or full runtime readiness.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, or custom Linux ABI shims were added.
+
+### 2026-06-25 External bookmark OCI bind mounts through indexed virtiofs
+
+Current status: implemented Orlix-managed external folder bind mounts for OCI-derived environments using opaque bookmark IDs and the same indexed virtiofs host-directory plane as Documents mounts. OCI runtime configs may now use `source: "orlix:external:<bookmarkID>"`; OrlixOS converts that into `.securityScopedExternal(bookmarkID:)`, materialization resolves the bookmark ID through an app-supplied private host URL map, registers `orlix-host<N>`, and first-stage init mounts the target through Linux `mount(2)` as `virtiofs`. This moves host-folder mount support toward real user-selected external folders without exposing raw host paths in OCI config, adding HostAdapter Linux policy, creating a custom ABI, inventing package/proof machinery, depending on Docker/runc, editing generated upstream sources, or patching OrlixMLibC.
+
+Changes:
+- Added `securityScopedExternalDirectories: [String: URL]` to `OrlixEnvironmentRootImage.materialized` as a private materialization resolver for already-authorized bookmark IDs.
+- Extended host-directory materialization so `.documents` and `.securityScopedExternal(bookmarkID:)` mounts share indexed `orlix-host<N>` registration and command-line emission.
+- Added OCI bind source parsing for `orlix:external:<bookmarkID>`, reusing existing bookmark ID and Linux target validation.
+- Updated broad `ociBindMounts` feature-report wording to say bind mount translation is bounded to Orlix-managed Documents and external bookmark sources, not arbitrary host paths.
+- Added OrlixOS XCTest coverage for external bookmark materialization and OCI parser translation while preserving missing-backend failure when a bookmark ID is not resolved.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused `xcodebuild ... test-without-building` for `testEnvironmentRootImageMaterializesExternalBookmarkHostMount`, `testOCIRuntimeConfigParserTranslatesExternalBookmarkBindMount`, and `testEnvironmentRootImageRejectsMountsWithoutLinuxBackend` produced no `Testing started`, `Test Suite`, or `Test Case` output after a bounded wait and was manually interrupted; no executed-XCTest pass is claimed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale active-plan warnings about older pending/blocked status and no recent handoff marker.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- This supports Orlix-managed external bookmark bind mounts only after OrlixOS receives a resolved private host URL for the bookmark ID. It does not claim arbitrary OCI host path bind mounts, app UI document-picker flow, security-scoped bookmark persistence lifecycle, full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Docker/runc compatibility, or full runtime readiness.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, or package-manager/proof-package mechanisms were added.

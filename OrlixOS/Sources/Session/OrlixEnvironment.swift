@@ -920,7 +920,8 @@ public static let hostDirectoryIdentifierPrefix = "orlix-host"
         layout: OrlixEnvironmentStorageLayout,
         bootProfile: OrlixBootProfile = .development,
         kernelCommandLine: String? = defaultKernelCommandLine,
-        documentsDirectory: URL? = nil,
+		documentsDirectory: URL? = nil,
+		securityScopedExternalDirectories: [String: URL] = [:],
         hostDirectoryExtendedAttributes: [OrlixHostDirectoryExtendedAttribute] = [],
         fileManager: FileManager = .default
     ) throws -> OrlixEnvironmentRootImage {
@@ -942,7 +943,8 @@ public static let hostDirectoryIdentifierPrefix = "orlix-host"
         )
 		let hostDirectories = try hostDirectoryRegistrations(
 			mounts: descriptor.mounts,
-            documentsDirectory: documentsDirectory,
+			documentsDirectory: documentsDirectory,
+			securityScopedExternalDirectories: securityScopedExternalDirectories,
             fileManager: fileManager
         )
         let resolvedCommandLine = try materializedKernelCommandLine(
@@ -1209,28 +1211,45 @@ private static func validateNamespace(_ namespace: String) throws -> String {
         "\(try validateNamespace(type))=\(try validateRuntimePath(path))"
     }
 
-    private static func hostDirectoryRegistrations(
- mounts: [OrlixEnvironmentMount],
- documentsDirectory: URL?,
- fileManager: FileManager
- ) throws -> [OrlixHostDirectoryRegistration] {
-		let directory = try documentsDirectory ?? fileManager.url(
- for: .documentDirectory,
- in: .userDomainMask,
- appropriateFor: nil,
- create: false
- )
- return try mounts.enumerated().map { index, mount in
- guard mount.source == .documents else {
- throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
- }
- return OrlixHostDirectoryRegistration(
- identifier: "\(hostDirectoryIdentifierPrefix)\(index)",
- hostPath: directory.path,
- readOnly: mount.readOnly
- )
- }
- }
+	private static func hostDirectoryRegistrations(
+		mounts: [OrlixEnvironmentMount],
+		documentsDirectory: URL?,
+		securityScopedExternalDirectories: [String: URL],
+		fileManager: FileManager
+	) throws -> [OrlixHostDirectoryRegistration] {
+		var resolvedDocumentsDirectory: URL?
+		return try mounts.enumerated().map { index, mount in
+			let directory: URL
+			switch mount.source {
+			case .documents:
+				if let resolvedDocumentsDirectory {
+					directory = resolvedDocumentsDirectory
+				} else {
+					let resolved = try documentsDirectory ?? fileManager.url(
+						for: .documentDirectory,
+						in: .userDomainMask,
+						appropriateFor: nil,
+						create: false
+					)
+					resolvedDocumentsDirectory = resolved
+					directory = resolved
+				}
+			case let .securityScopedExternal(bookmarkID):
+				guard let resolved = securityScopedExternalDirectories[bookmarkID] else {
+					throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
+				}
+				directory = resolved
+			}
+			guard directory.isFileURL else {
+				throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
+			}
+			return OrlixHostDirectoryRegistration(
+				identifier: "\(hostDirectoryIdentifierPrefix)\(index)",
+				hostPath: directory.path,
+				readOnly: mount.readOnly
+			)
+		}
+	}
 
  private static func materializedExecutionTokens(
         _ descriptor: OrlixEnvironmentDescriptor
