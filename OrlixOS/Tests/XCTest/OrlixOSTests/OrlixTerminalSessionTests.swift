@@ -8565,6 +8565,126 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		}
 	}
 
+	func testOCIRuntimeCreateMaterializedRunsMaterializationBeforeCreatedState() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-runtime-materialized-create-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("root-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+		let runtime = OrlixOCIRuntime(
+			registry: OrlixEnvironmentRegistry(
+				linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+				cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+				scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+			)
+		)
+		let runner = RecordingMaterializationCommandRunner(
+			createsPlaceholderImagesForTruncateCommands: true
+		)
+
+		let created = try runtime.createMaterialized(
+			bundleURL: bundleURL,
+			id: "oci-materialized-create",
+			mke2fsExecutable: "orlix-mke2fs",
+			truncateExecutable: "orlix-truncate",
+			debugfsExecutable: "orlix-debugfs",
+			runner: runner
+		)
+
+		XCTAssertEqual(created.stateReport.status, .created)
+		XCTAssertEqual(
+			created.materializationResult.commands,
+			try created.importPlan.materializationCommands(
+				mke2fsExecutable: "orlix-mke2fs",
+				truncateExecutable: "orlix-truncate",
+				debugfsExecutable: "orlix-debugfs"
+			)
+		)
+		XCTAssertEqual(runner.commands, created.materializationResult.commands)
+		XCTAssertTrue(
+			fileManager.fileExists(atPath: created.importPlan.storageLayout.baseImageURL.path)
+		)
+		XCTAssertTrue(
+			fileManager.fileExists(atPath: created.importPlan.storageLayout.stateImageURL.path)
+		)
+		XCTAssertEqual(try runtime.state(id: "oci-materialized-create").status, .created)
+	}
+
+	func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-runtime-materialized-run-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+		let runtime = OrlixOCIRuntime(
+			registry: OrlixEnvironmentRegistry(
+				linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+				cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+				scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+			)
+		)
+		let materializationRunner = RecordingMaterializationCommandRunner(
+			createsPlaceholderImagesForTruncateCommands: true
+		)
+		_ = try runtime.createMaterialized(
+			bundleURL: bundleURL,
+			id: "oci-materialized-run",
+			runner: materializationRunner
+		)
+		let driver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 103,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 103, exitStatus: 0)
+			)
+		)
+
+		let result = try runtime.run(
+			id: "oci-materialized-run",
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			using: driver
+		)
+
+		XCTAssertEqual(result.startedEnvironment.stateReport.status, .running)
+		XCTAssertEqual(result.completedEnvironment.stateReport.status, .stopped)
+		XCTAssertEqual(result.completedEnvironment.stateReport.exitStatus, 0)
+		XCTAssertEqual(
+			driver.events,
+			[
+				"start:created:nil",
+				"wait:running:103",
+			]
+		)
+	}
+
 	func testOCIRuntimeDeleteRejectsRunningLifecycleRecord() throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
@@ -9934,15 +10054,31 @@ private final class RecordingMaterializationCommandRunner:
 	@unchecked Sendable
 {
 	private let failingCommandIndex: Int?
+	private let createsPlaceholderImagesForTruncateCommands: Bool
 	private(set) var commands: [OrlixEnvironmentImageMaterializationCommand] = []
 
-	init(failingCommandIndex: Int? = nil) {
+	init(
+		failingCommandIndex: Int? = nil,
+		createsPlaceholderImagesForTruncateCommands: Bool = false
+	) {
 		self.failingCommandIndex = failingCommandIndex
+		self.createsPlaceholderImagesForTruncateCommands = createsPlaceholderImagesForTruncateCommands
 	}
 
 	func run(_ command: OrlixEnvironmentImageMaterializationCommand) throws {
 		if commands.count == failingCommandIndex {
 			throw RecordingMaterializationCommandRunnerError.requestedFailure(command)
+		}
+		if createsPlaceholderImagesForTruncateCommands,
+			command.executable.contains("truncate"),
+			let imagePath = command.arguments.last
+		{
+			let imageURL = URL(fileURLWithPath: imagePath, isDirectory: false)
+			try FileManager.default.createDirectory(
+				at: imageURL.deletingLastPathComponent(),
+				withIntermediateDirectories: true
+			)
+			try Data("placeholder ext4 image\n".utf8).write(to: imageURL)
 		}
 		commands.append(command)
 	}
