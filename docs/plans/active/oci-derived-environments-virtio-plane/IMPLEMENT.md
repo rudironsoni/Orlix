@@ -10,6 +10,31 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI registry index arm64 variant selection
+
+Checkpoint: registry pulls now accept OCI index descriptors like `linux/arm64/v8` when the requested platform is the default `linux/arm64` and no exact `linux/arm64` entry exists. Explicit requested variants still require exact matching.
+
+Changes:
+- Added registry index descriptor selection helper in `OrlixOCIRegistryPuller`.
+- Added deterministic XCTest coverage for an OCI index containing only a `linux/arm64/v8` descriptor selected by the default arm64 request.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- Focused new XCTest passed: `xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerSelectsArm64VariantForDefaultPlatform test`.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_00-43-02-+0200.xcresult` reported `Passed`, 5 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.26_00-44-03-+0200.xcresult` reported `Passed`, 1 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This improves deterministic registry index compatibility for common ARM OCI manifest variants while preserving exact variant matching when requested.
+- This does not prove live public registry compatibility, arbitrary imported-image compatibility, product Linux userspace `orlix run`, multiple live environments inside one already-running OrlixKernel, real signal/kill delivery, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+- The app-hosted proof again emitted UIKit/CoreSimulator warnings and known noisy kernel/ext4 output after the selected XCTest reported success. These remain runtime log caveats.
+
 ### 2026-06-26 OCI per-run command override
 
 Checkpoint: added per-run command override support to the OrlixOS OCI environment run APIs. Registry and bundle install-run facades can now accept a command override that is carried into the existing Linux session descriptor and boot command-line path for that run. The installed environment descriptor remains unchanged, so `orlix run IMAGE COMMAND` can be modeled without mutating the image default command.

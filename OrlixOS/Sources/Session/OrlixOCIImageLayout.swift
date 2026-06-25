@@ -499,8 +499,9 @@ public struct OrlixOCIRegistryPuller: Sendable {
 		if Self.indexMediaTypes.contains(mediaType) {
 			_ = try verifiedManifestDigest(response, image: image)
 			let index = try JSONDecoder().decode(OCIIndex.self, from: response.body)
-			guard let descriptor = index.manifests.first(
-				where: { $0.platform == requestedPlatform }
+			guard let descriptor = selectedManifestDescriptor(
+				from: index,
+				requestedPlatform: requestedPlatform
 			) else {
 				throw OrlixOCIRegistryPullError.missingPlatform(
 					"\(requestedPlatform.os)/\(requestedPlatform.architecture)"
@@ -531,6 +532,27 @@ public struct OrlixOCIRegistryPuller: Sendable {
 		}
 		let digest = try verifiedManifestDigest(response, image: image)
 		return (response.body, digest, mediaType)
+	}
+
+	private func selectedManifestDescriptor(
+		from index: OCIIndex,
+		requestedPlatform: OrlixOCIPlatform
+	) -> OCIDescriptor? {
+		if let exact = index.manifests.first(
+			where: { $0.platform == requestedPlatform }
+		) {
+			return exact
+		}
+		guard requestedPlatform.variant == nil else {
+			return nil
+		}
+		return index.manifests.first {
+			guard let platform = $0.platform else {
+				return false
+			}
+			return platform.os == requestedPlatform.os
+				&& platform.architecture == requestedPlatform.architecture
+		}
 	}
 
 	private func fetchBlob(
