@@ -3552,8 +3552,8 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 		)
 	}
 
-	private init(config: OrlixOCIRuntimeConfigDescriptor,
-		     record: OrlixOCIRuntimeLifecycleRecord)
+	public init(config: OrlixOCIRuntimeConfigDescriptor,
+		    record: OrlixOCIRuntimeLifecycleRecord)
 	{
 		self.config = config
 		self.record = record

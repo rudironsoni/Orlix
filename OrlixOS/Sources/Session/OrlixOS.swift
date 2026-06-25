@@ -939,6 +939,25 @@ public struct OrlixOCIRuntimeDeletedEnvironment: Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeStartedEnvironment: Sendable {
+	public let processSession: OrlixOCIRuntimeProcessSession
+	public let stateReport: OrlixOCIRuntimeStateReport
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeSignaledEnvironment: Sendable {
+	public let processSession: OrlixOCIRuntimeProcessSession
+	public let signal: Int32
+	public let stateReport: OrlixOCIRuntimeStateReport
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeCompletedEnvironment: Sendable {
+	public let completedProcess: OrlixOCIRuntimeCompletedProcess
+	public let stateReport: OrlixOCIRuntimeStateReport
+}
+
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntime: Sendable {
 	public let registry: OrlixEnvironmentRegistry
 	public let lifecycleStore: OrlixOCIRuntimeLifecycleStore
@@ -989,6 +1008,86 @@ public struct OrlixOCIRuntime: Sendable {
 		try lifecycleStore.stateReport(id: id, fileManager: fileManager)
 	}
 
+	public func start(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeStartedEnvironment {
+		let processSession = try session(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			fileManager: fileManager
+		)
+		let runningSession = try processSession.start(using: driver)
+		return OrlixOCIRuntimeStartedEnvironment(
+			processSession: runningSession,
+			stateReport: try lifecycleStore.stateReport(
+				id: id,
+				fileManager: fileManager
+			)
+		)
+	}
+
+	public func kill(
+		id: String,
+		signal: Int32,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeSignaledEnvironment {
+		let processSession = try session(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			fileManager: fileManager
+		)
+		let signaledSession = try processSession.kill(
+			signal: signal,
+			using: driver
+		)
+		return OrlixOCIRuntimeSignaledEnvironment(
+			processSession: signaledSession,
+			signal: signal,
+			stateReport: try lifecycleStore.stateReport(
+				id: id,
+				fileManager: fileManager
+			)
+		)
+	}
+
+	public func wait(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeCompletedEnvironment {
+		let processSession = try session(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			fileManager: fileManager
+		)
+		let completedProcess = try processSession.wait(using: driver)
+		return OrlixOCIRuntimeCompletedEnvironment(
+			completedProcess: completedProcess,
+			stateReport: try lifecycleStore.stateReport(
+				id: id,
+				fileManager: fileManager
+			)
+		)
+	}
+
 	public func delete(
 		id: String,
 		fileManager: FileManager = .default
@@ -1014,6 +1113,32 @@ public struct OrlixOCIRuntime: Sendable {
 		return OrlixOCIRuntimeDeletedEnvironment(
 			id: id,
 			deletedRecord: deletedRecord
+		)
+	}
+
+	private func session(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount,
+		kernelCommandLine: String?,
+		terminal: OrlixTerminalSession,
+		fileManager: FileManager
+	) throws -> OrlixOCIRuntimeProcessSession {
+		let snapshot = try lifecycleStore.load(id: id, fileManager: fileManager)
+		let bundle = try OrlixOCIRuntimeBundle.load(
+			from: URL(fileURLWithPath: snapshot.record.bundlePath),
+			fileManager: fileManager
+		)
+		let lifecycle = OrlixOCIRuntimeLifecycleController(
+			config: bundle.config,
+			record: snapshot.record
+		)
+		return try OrlixOCIRuntimeProcessSession(
+			lifecycle: lifecycle,
+			rootMount: rootMount,
+			registry: registry,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			lifecycleStore: lifecycleStore
 		)
 	}
 }
