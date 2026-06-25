@@ -6808,9 +6808,10 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 			id: "oci-runtime-config",
 			rootMount: .defaultOverlay
 		)
-	XCTAssertEqual(environment.id, "oci-runtime-config")
+		XCTAssertEqual(environment.id, "oci-runtime-config")
 		XCTAssertEqual(environment.source, .ociLayout)
 		XCTAssertEqual(environment.platform, "linux/arm64")
+		XCTAssertEqual(environment.rootImageIdentifier, "oci-runtime-config")
 		XCTAssertEqual(environment.defaultCommand, descriptor.defaultCommand)
 		XCTAssertEqual(environment.defaultWorkingDirectory, descriptor.defaultWorkingDirectory)
 		XCTAssertEqual(environment.defaultUserID, descriptor.defaultUserID)
@@ -6835,9 +6836,19 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 		XCTAssertEqual(environment.cgroupCPUWeight, descriptor.cgroupCPUWeight)
         XCTAssertEqual(environment.cgroupMemoryMax, descriptor.cgroupMemoryMax)
         XCTAssertEqual(environment.cgroupIOWeight, descriptor.cgroupIOWeight)
-        XCTAssertEqual(environment.cgroupUnified, descriptor.cgroupUnified)
-        XCTAssertEqual(environment.deviceNodes, descriptor.deviceNodes)
-}
+		XCTAssertEqual(environment.cgroupUnified, descriptor.cgroupUnified)
+		XCTAssertEqual(environment.deviceNodes, descriptor.deviceNodes)
+
+		let targetRootEnvironment = try descriptor.environmentDescriptor(
+			id: "oci-runtime-config",
+			rootMount: .defaultOverlay,
+			rootImageIdentifier: "orlix.test.environment.oci-runtime-test-fixture"
+		)
+		XCTAssertEqual(
+			targetRootEnvironment.rootImageIdentifier,
+			"orlix.test.environment.oci-runtime-test-fixture"
+		)
+	}
 
 func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 	let config = Data(
