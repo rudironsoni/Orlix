@@ -8685,6 +8685,129 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		)
 	}
 
+	func testOCIRuntimeRunBundleMaterializesCreatesStartsAndWaits() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-runtime-bundle-run-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("root-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+		let runtime = OrlixOCIRuntime(
+			registry: OrlixEnvironmentRegistry(
+				linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+				cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+				scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+			)
+		)
+		let materializationRunner = RecordingMaterializationCommandRunner(
+			createsPlaceholderImagesForTruncateCommands: true
+		)
+		let processDriver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 104,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 104, exitStatus: 9)
+			)
+		)
+
+		let result = try runtime.run(
+			bundleURL: bundleURL,
+			id: "oci-bundle-run",
+			mke2fsExecutable: "orlix-mke2fs",
+			truncateExecutable: "orlix-truncate",
+			debugfsExecutable: "orlix-debugfs",
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			materializationRunner: materializationRunner,
+			processDriver: processDriver
+		)
+
+		XCTAssertEqual(result.createdEnvironment.stateReport.status, .created)
+		XCTAssertEqual(result.startedEnvironment.stateReport.status, .running)
+		XCTAssertEqual(result.completedEnvironment.stateReport.status, .stopped)
+		XCTAssertEqual(result.completedEnvironment.stateReport.exitStatus, 9)
+		XCTAssertEqual(try runtime.state(id: "oci-bundle-run"), result.completedEnvironment.stateReport)
+		XCTAssertEqual(
+			materializationRunner.commands,
+			result.createdEnvironment.materializationResult.commands
+		)
+		XCTAssertEqual(
+			processDriver.events,
+			[
+				"start:created:nil",
+				"wait:running:104",
+			]
+		)
+	}
+
+	func testOCIRuntimeRunBundleRejectsExistingLifecycleBeforeMaterialization() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-runtime-bundle-run-duplicate-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+		let runtime = OrlixOCIRuntime(
+			registry: OrlixEnvironmentRegistry(
+				linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+				cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+				scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+			)
+		)
+		_ = try runtime.create(bundleURL: bundleURL, id: "oci-bundle-run-duplicate")
+		let materializationRunner = RecordingMaterializationCommandRunner(
+			createsPlaceholderImagesForTruncateCommands: true
+		)
+		let processDriver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 105,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 105, exitStatus: 0)
+			)
+		)
+
+		XCTAssertThrowsError(
+			try runtime.run(
+				bundleURL: bundleURL,
+				id: "oci-bundle-run-duplicate",
+				materializationRunner: materializationRunner,
+				processDriver: processDriver
+			)
+		) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeError,
+				.environmentAlreadyExists("oci-bundle-run-duplicate")
+			)
+		}
+		XCTAssertEqual(materializationRunner.commands, [])
+		XCTAssertEqual(processDriver.events, [])
+		XCTAssertEqual(try runtime.state(id: "oci-bundle-run-duplicate").status, .created)
+	}
+
 	func testOCIRuntimeDeleteRejectsRunningLifecycleRecord() throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
