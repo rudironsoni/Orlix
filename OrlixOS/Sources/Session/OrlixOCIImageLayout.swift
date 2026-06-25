@@ -1378,12 +1378,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:network_namespace_probe",
 			reason: "Opening rtnetlink sockets is covered by Orlix kselftest."
 		),
-        OrlixOCIRuntimeFeature(
-            name: "userNamespaceMappings",
-            status: .implemented,
-            proof: "orlix:runtime_config_parser",
-            reason: "OCI uidMappings and gidMappings carry into OrlixOS descriptors and first-stage init writes Linux uid_map, gid_map, and setgroups procfs controls after CLONE_NEWUSER."
-        ),
+            OrlixOCIRuntimeFeature(
+                name: "userNamespaceMappings",
+                status: .implemented,
+                proof: "orlix:user_namespace_probe",
+                reason: "OCI uidMappings and gidMappings carry into OrlixOS descriptors and first-stage init writes Linux uid_map, gid_map, and setgroups procfs controls after CLONE_NEWUSER; Linux-owned kselftest proves uid_map and gid_map writes."
+            ),
 		OrlixOCIRuntimeFeature(
 			name: "idmappedMounts",
 			status: .deterministicallyRejected,
