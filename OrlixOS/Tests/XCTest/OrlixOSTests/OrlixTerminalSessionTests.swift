@@ -10608,10 +10608,11 @@ func testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine() th
 		ociRuntimeSession: sessionDescriptor,
 		registry: registry
 	)
-	let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
-	XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
-	XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
-}
+		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+		XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
+		XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
+		XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
+	}
 
 func testOCIRuntimeLifecycleControllerRejectsStoppedSessionDescriptor() throws {
 	let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
