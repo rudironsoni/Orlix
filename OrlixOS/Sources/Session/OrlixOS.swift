@@ -1004,6 +1004,24 @@ public struct OrlixOCIRuntimeMaterializedRunResult: Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeEphemeralRunResult: Sendable {
+	public let materializedRunResult: OrlixOCIRuntimeMaterializedRunResult
+	public let deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment
+
+	public var createdEnvironment: OrlixOCIRuntimeMaterializedCreatedEnvironment {
+		materializedRunResult.createdEnvironment
+	}
+
+	public var startedEnvironment: OrlixOCIRuntimeStartedEnvironment {
+		materializedRunResult.startedEnvironment
+	}
+
+	public var completedEnvironment: OrlixOCIRuntimeCompletedEnvironment {
+		materializedRunResult.completedEnvironment
+	}
+}
+
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeError: Error, Equatable, Sendable {
 	case environmentAlreadyExists(String)
 	case missingMaterializedRootImage(String)
@@ -1276,6 +1294,42 @@ public struct OrlixOCIRuntime: Sendable {
 		return OrlixOCIRuntimeMaterializedRunResult(
 			createdEnvironment: createdEnvironment,
 			runResult: runResult
+		)
+	}
+
+	public func runEphemeral(
+		bundleURL: URL,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
+		processDriver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeEphemeralRunResult {
+		let materializedRunResult = try run(
+			bundleURL: bundleURL,
+			id: id,
+			rootMount: rootMount,
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			materializationRunner: materializationRunner,
+			processDriver: processDriver,
+			fileManager: fileManager
+		)
+		let deletedEnvironment = try delete(
+			id: id,
+			fileManager: fileManager
+		)
+		return OrlixOCIRuntimeEphemeralRunResult(
+			materializedRunResult: materializedRunResult,
+			deletedEnvironment: deletedEnvironment
 		)
 	}
 

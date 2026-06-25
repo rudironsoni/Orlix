@@ -8821,6 +8821,76 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		XCTAssertEqual(try runtime.state(id: "oci-bundle-run-duplicate").status, .created)
 	}
 
+	func testOCIRuntimeRunEphemeralDeletesResourcesAfterCompletion() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-runtime-ephemeral-run-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+		let runtime = OrlixOCIRuntime(
+			registry: OrlixEnvironmentRegistry(
+				linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+				cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+				scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+			)
+		)
+		let materializationRunner = RecordingMaterializationCommandRunner(
+			createsPlaceholderImagesForTruncateCommands: true
+		)
+		let processDriver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 106,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 106, exitStatus: 11)
+			)
+		)
+
+		let result = try runtime.runEphemeral(
+			bundleURL: bundleURL,
+			id: "oci-ephemeral-run",
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			materializationRunner: materializationRunner,
+			processDriver: processDriver
+		)
+		let storageLayout = result.createdEnvironment.importPlan.storageLayout
+
+		XCTAssertEqual(result.startedEnvironment.stateReport.status, .running)
+		XCTAssertEqual(result.completedEnvironment.stateReport.status, .stopped)
+		XCTAssertEqual(result.completedEnvironment.stateReport.exitStatus, 11)
+		XCTAssertEqual(result.deletedEnvironment.id, "oci-ephemeral-run")
+		XCTAssertEqual(result.deletedEnvironment.deletedRecord.state, .deleted)
+		XCTAssertEqual(
+			materializationRunner.commands,
+			result.createdEnvironment.materializationResult.commands
+		)
+		XCTAssertEqual(
+			processDriver.events,
+			[
+				"start:created:nil",
+				"wait:running:106",
+			]
+		)
+		XCTAssertThrowsError(try runtime.state(id: "oci-ephemeral-run")) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleStoreError,
+				.missingRecord("oci-ephemeral-run")
+			)
+		}
+		XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.rootDirectory.path))
+		XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.importScratchDirectory.path))
+	}
+
 	func testOCIRuntimeDeleteRejectsRunningLifecycleRecord() throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
