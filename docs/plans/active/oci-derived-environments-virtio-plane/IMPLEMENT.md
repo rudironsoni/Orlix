@@ -21974,3 +21974,31 @@ Boundary:
 ## Current Status
 
 Current status: latest coherent checkpoint high-level OrlixOS OCI runtime manager proof now has app-hosted evidence for a focused OCI-derived terminal-false environment: Linux init start/exit observation, persisted stopped state, and stopped-state delete cleanup of lifecycle record and materialized environment storage. Next work remains real Linux-owned signal/kill delivery, product `orlix run`, registry input, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, imported-image compatibility.
+
+### 2026-06-25 Public OCI bundle Linux session entrypoint
+
+Checkpoint: exposed a narrow app-facing OCI bundle session initializer and fixed the existing bundle path to use registry-backed materialized root images.
+
+Changes:
+- Added public `OrlixLinuxSession(ociRuntimeBundle:id:terminal:)` so app code can construct a Linux session from an OCI runtime bundle without importing private testing SPI.
+- Kept registry/root-mount/kernel-command-line controls behind `OrlixPrivateTesting` SPI rather than making storage and root-image internals public.
+- Changed the OCI bundle session initializer to save the OCI-derived environment descriptor and reuse the existing `ociRuntimeSession` path, so boot uses the registry-backed materialized root image and preserves terminal-false metadata.
+- Added OrlixOS XCTest coverage that builds a temporary OCI bundle, prepares materialized base/state images in a registry, constructs an OCI Linux session, verifies the registered root image paths, persisted descriptor command, and `orlix.terminal=0` boot metadata.
+
+Evidence:
+- Initial focused `OrlixOSTests` attempt failed at compile because SPI root/storage types were exposed through a public signature; fixed by narrowing the public initializer to public-only types.
+- Second focused `OrlixOSTests` attempt failed because the bundle initializer constructed the registry-backed session before saving `environment.json`; fixed by saving the descriptor first.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination platform=iOS\ Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLinuxSessionUsesMaterializedRootAndTerminalFalseMetadata test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_21-43-17-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that bundle reported 2 passed, 0 failed, 0 skipped.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination platform=iOS\ Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_21-44-21-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that bundle reported 1 passed, 0 failed, 0 skipped.
+
+Boundary:
+- This moves OCI bundle Linux session construction onto a public OrlixOS app-facing entrypoint and proves it still uses real materialized root images and terminal-false boot metadata.
+- It does not claim product `orlix run`, registry pull, real signal/kill delivery, arbitrary imported-image compatibility, systemd support, broad cgroup/namespace/device/filesystem/network readiness, or full product runtime readiness.
+
+## Current Status
+
+Current status:
+
+Latest coherent checkpoint exposes a narrow public OrlixOS OCI bundle Linux session entrypoint and keeps the app-facing session path aligned with registry-backed materialized roots, terminal-false metadata, and existing app-hosted OCI lifecycle proof. Next work remains real Linux-owned signal/kill delivery, product `orlix run`, registry input, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
