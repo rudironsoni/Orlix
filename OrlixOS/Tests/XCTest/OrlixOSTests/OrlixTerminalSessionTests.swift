@@ -476,10 +476,11 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertEqual(copied.defaultEnvironment, parent.defaultEnvironment)
         XCTAssertEqual(copied.defaultWorkingDirectory, parent.defaultWorkingDirectory)
 		XCTAssertEqual(copied.defaultUserID, parent.defaultUserID)
-		XCTAssertEqual(copied.defaultGroupID, parent.defaultGroupID)
-		XCTAssertEqual(copied.rootMount, parent.rootMount)
-		XCTAssertEqual(copied.cgroupUnified, parent.cgroupUnified)
-		XCTAssertEqual(copied.mounts, parent.mounts)
+        XCTAssertEqual(copied.defaultGroupID, parent.defaultGroupID)
+        XCTAssertEqual(copied.rootMount, parent.rootMount)
+        XCTAssertEqual(copied.cgroupUnified, parent.cgroupUnified)
+        XCTAssertEqual(copied.deviceNodes, parent.deviceNodes)
+        XCTAssertEqual(copied.mounts, parent.mounts)
         XCTAssertEqual(
             try Data(contentsOf: copiedLayout.baseImageURL),
             try Data(contentsOf: parentLayout.baseImageURL)
@@ -931,11 +932,29 @@ cgroupPidsLimit: 64,
 		cgroupCPUWeight: 39,
 		cgroupMemoryMax: 268_435_456,
 		cgroupIOWeight: 100,
-		cgroupUnified: [
-			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
-			OrlixEnvironmentCgroupUnifiedEntry(file: "memory.max", value: "268435456")
-		],
-		namespaces: ["mount", "ipc", "uts", "cgroup"],
+            cgroupUnified: [
+                OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
+                OrlixEnvironmentCgroupUnifiedEntry(file: "memory.max", value: "268435456")
+            ],
+            deviceNodes: [
+                OrlixEnvironmentDeviceNode(
+                    path: "/dev/orlix-null",
+                    type: "c",
+                    major: 1,
+                    minor: 3,
+                    fileMode: 0o666,
+                    uid: 0,
+                    gid: 0
+                ),
+                OrlixEnvironmentDeviceNode(
+                    path: "/dev/orlix-pipe",
+                    type: "p",
+                    fileMode: 0o644,
+                    uid: 0,
+                    gid: 0
+                )
+            ],
+            namespaces: ["mount", "ipc", "uts", "cgroup"],
             namespacePaths: ["network": "/proc/1/ns/net"]
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
@@ -994,10 +1013,24 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.pids.max=64"))
 XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 		XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.weight=39"))
 		XCTAssertTrue(commandLine.contains("orlix.cgroups.memory.max=268435456"))
-		XCTAssertTrue(commandLine.contains("orlix.cgroups.io.weight=100"))
-		XCTAssertTrue(commandLine.contains("orlix.cgroups.unified0=cpu.weight=39"))
-		XCTAssertTrue(commandLine.contains("orlix.cgroups.unified1=memory.max=268435456"))
-		XCTAssertTrue(commandLine.contains("orlix.namespace0=cgroup"))
+        XCTAssertTrue(commandLine.contains("orlix.cgroups.io.weight=100"))
+        XCTAssertTrue(commandLine.contains("orlix.cgroups.unified0=cpu.weight=39"))
+        XCTAssertTrue(commandLine.contains("orlix.cgroups.unified1=memory.max=268435456"))
+        XCTAssertTrue(commandLine.contains("orlix.device.path0=/dev/orlix-null"))
+        XCTAssertTrue(commandLine.contains("orlix.device.type0=c"))
+        XCTAssertTrue(commandLine.contains("orlix.device.major0=1"))
+        XCTAssertTrue(commandLine.contains("orlix.device.minor0=3"))
+        XCTAssertTrue(commandLine.contains("orlix.device.mode0=438"))
+        XCTAssertTrue(commandLine.contains("orlix.device.uid0=0"))
+        XCTAssertTrue(commandLine.contains("orlix.device.gid0=0"))
+        XCTAssertTrue(commandLine.contains("orlix.device.path1=/dev/orlix-pipe"))
+        XCTAssertTrue(commandLine.contains("orlix.device.type1=p"))
+        XCTAssertTrue(commandLine.contains("orlix.device.major1=0"))
+        XCTAssertTrue(commandLine.contains("orlix.device.minor1=0"))
+        XCTAssertTrue(commandLine.contains("orlix.device.mode1=420"))
+        XCTAssertTrue(commandLine.contains("orlix.device.uid1=0"))
+        XCTAssertTrue(commandLine.contains("orlix.device.gid1=0"))
+        XCTAssertTrue(commandLine.contains("orlix.namespace0=cgroup"))
         XCTAssertTrue(commandLine.contains("orlix.namespace1=ipc"))
         XCTAssertTrue(commandLine.contains("orlix.namespace2=mount"))
         XCTAssertTrue(commandLine.contains("orlix.namespace3=uts"))
@@ -6169,7 +6202,11 @@ extension OrlixTerminalSessionTests {
             "orlix:init_cgroup_path_join"
         )
         XCTAssertEqual(report.feature(named: "ociHugepageLimits")?.status, .deterministicallyRejected)
-		XCTAssertEqual(report.feature(named: "ociLinuxDevices")?.status, .deterministicallyRejected)
+        XCTAssertEqual(report.feature(named: "ociLinuxDevices")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "ociLinuxDevices")?.proof,
+            "orlix:device_node_probe"
+        )
 		XCTAssertEqual(report.feature(named: "ociLinuxResources")?.status, .recognized)
 XCTAssertEqual(report.feature(named: "ociCPUQuota")?.status, .implemented)
 XCTAssertEqual(
@@ -6321,8 +6358,8 @@ report.feature(named: "ociBlockIOControls")?.proof,
         XCTAssertEqual(features["ociCgroupPath"]?.proof, "orlix:init_cgroup_path_join")
         XCTAssertEqual(features["ociHugepageLimits"]?.status, .deterministicallyRejected)
         XCTAssertEqual(features["ociHugepageLimits"]?.proof, "orlix:runtime_config_parser")
-        XCTAssertEqual(features["ociLinuxDevices"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["ociLinuxDevices"]?.proof, "orlix:runtime_config_parser")
+        XCTAssertEqual(features["ociLinuxDevices"]?.status, .implemented)
+        XCTAssertEqual(features["ociLinuxDevices"]?.proof, "orlix:device_node_probe")
 		XCTAssertEqual(features["ociLinuxResources"]?.status, .recognized)
 XCTAssertEqual(features["ociLinuxResources"]?.proof, "orlix:runtime_config_parser")
 XCTAssertEqual(features["ociCPUQuota"]?.status, .implemented)
@@ -6396,7 +6433,7 @@ XCTAssertEqual(features["ociBlockIOControls"]?.proof, "orlix:cgroup_io_probe")
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/sys/fs/cgroup","type":"cgroup2","source":"cgroup2"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","namespaces":[{"type":"mount"},{"type":"ipc"},{"type":"uts"},{"type":"network","path":"/proc/1/ns/net"},{"type":"cgroup"}],"maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"cgroupsPath":"/orlix/demo","resources":{"pids":{"limit":64},"cpu":{"shares":1024,"quota":50000,"period":100000},"memory":{"limit":268435456},"blockIO":{"weight":100,"weightDevice":[{"major":1,"minor":0,"weight":200}],"throttleReadBpsDevice":[{"major":1,"minor":0,"rate":1048576}],"throttleWriteIOPSDevice":[{"major":1,"minor":0,"rate":120}]},"unified":{"cpu.weight":"39","memory.max":"268435456"}},"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
+#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/sys/fs/cgroup","type":"cgroup2","source":"cgroup2"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","namespaces":[{"type":"mount"},{"type":"ipc"},{"type":"uts"},{"type":"network","path":"/proc/1/ns/net"},{"type":"cgroup"}],"maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"devices":[{"path":"/dev/orlix-null","type":"c","major":1,"minor":3,"fileMode":438,"uid":0,"gid":0},{"path":"/dev/orlix-pipe","type":"p","fileMode":420,"uid":0,"gid":0}],"cgroupsPath":"/orlix/demo","resources":{"pids":{"limit":64},"cpu":{"shares":1024,"quota":50000,"period":100000},"memory":{"limit":268435456},"blockIO":{"weight":100,"weightDevice":[{"major":1,"minor":0,"weight":200}],"throttleReadBpsDevice":[{"major":1,"minor":0,"rate":1048576}],"throttleWriteIOPSDevice":[{"major":1,"minor":0,"rate":120}]},"unified":{"cpu.weight":"39","memory.max":"268435456"}},"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6464,13 +6501,31 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 		XCTAssertEqual(descriptor.cgroupCPUWeight, 39)
 		XCTAssertEqual(descriptor.cgroupMemoryMax, 268_435_456)
 		XCTAssertEqual(descriptor.cgroupIOWeight, 100)
-		XCTAssertEqual(descriptor.cgroupUnified, [
-			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
-			OrlixEnvironmentCgroupUnifiedEntry(file: "memory.max", value: "268435456"),
-			OrlixEnvironmentCgroupUnifiedEntry(file: "io.weight", value: "1:0 200"),
-			OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "1:0 rbps=1048576"),
-			OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "1:0 wiops=120")
-		])
+        XCTAssertEqual(descriptor.cgroupUnified, [
+            OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
+            OrlixEnvironmentCgroupUnifiedEntry(file: "memory.max", value: "268435456"),
+            OrlixEnvironmentCgroupUnifiedEntry(file: "io.weight", value: "1:0 200"),
+            OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "1:0 rbps=1048576"),
+            OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "1:0 wiops=120")
+        ])
+        XCTAssertEqual(descriptor.deviceNodes, [
+            OrlixEnvironmentDeviceNode(
+                path: "/dev/orlix-null",
+                type: "c",
+                major: 1,
+                minor: 3,
+                fileMode: 0o666,
+                uid: 0,
+                gid: 0
+            ),
+            OrlixEnvironmentDeviceNode(
+                path: "/dev/orlix-pipe",
+                type: "p",
+                fileMode: 0o644,
+                uid: 0,
+                gid: 0
+            )
+        ])
 
 		let environment = try descriptor.environmentDescriptor(
 			id: "oci-runtime-config",
@@ -6501,10 +6556,11 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 		XCTAssertEqual(environment.sysctls, descriptor.sysctls)
 		XCTAssertEqual(environment.cgroupCPUMax, descriptor.cgroupCPUMax)
 		XCTAssertEqual(environment.cgroupCPUWeight, descriptor.cgroupCPUWeight)
-		XCTAssertEqual(environment.cgroupMemoryMax, descriptor.cgroupMemoryMax)
-		XCTAssertEqual(environment.cgroupIOWeight, descriptor.cgroupIOWeight)
-		XCTAssertEqual(environment.cgroupUnified, descriptor.cgroupUnified)
-	}
+        XCTAssertEqual(environment.cgroupMemoryMax, descriptor.cgroupMemoryMax)
+        XCTAssertEqual(environment.cgroupIOWeight, descriptor.cgroupIOWeight)
+        XCTAssertEqual(environment.cgroupUnified, descriptor.cgroupUnified)
+        XCTAssertEqual(environment.deviceNodes, descriptor.deviceNodes)
+    }
 
 	func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
 	let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
@@ -6533,7 +6589,11 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 		let unsupportedFeatureConfigs: [(String, String)] = [
 			("uidMappings", #""uidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
 			("gidMappings", #""gidMappings": [{ "containerID": 0, "hostID": 0, "size": 1 }]"#),
-            ("devices", #""devices": [{ "path": "/dev/net/tun", "type": "c" }]"#),
+            ("devices.path", #""devices": [{ "type": "c", "major": 1, "minor": 3 }]"#),
+            ("devices.path", #""devices": [{ "path": "dev/null", "type": "c", "major": 1, "minor": 3 }]"#),
+            ("devices.type", #""devices": [{ "path": "/dev/orlix-null", "type": "x", "major": 1, "minor": 3 }]"#),
+            ("devices.major", #""devices": [{ "path": "/dev/orlix-null", "type": "c", "minor": 3 }]"#),
+            ("devices.fileMode", #""devices": [{ "path": "/dev/orlix-null", "type": "c", "major": 1, "minor": 3, "fileMode": 32768 }]"#),
 ("resources.memory.cgroupsPath", #""resources": { "memory": { "limit": 268435456 } }"#),
 ("resources.memory.limit", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "limit": -2 } }"#),
 ("resources.memory.reservation", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "reservation": 134217728 } }"#),

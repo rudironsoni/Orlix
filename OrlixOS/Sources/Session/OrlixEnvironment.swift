@@ -53,6 +53,7 @@ public let cgroupPidsLimit: Int64?
 	public let cgroupMemoryMax: Int64?
 	public let cgroupIOWeight: UInt64?
 	public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
+	public let deviceNodes: [OrlixEnvironmentDeviceNode]
 	public let namespaces: [String]
     public let namespacePaths: [String: String]
     public let mounts: [OrlixEnvironmentMount]
@@ -119,6 +120,7 @@ cgroupPidsLimit: Int64? = nil,
 		cgroupMemoryMax: Int64? = nil,
 		cgroupIOWeight: UInt64? = nil,
 		cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		deviceNodes: [OrlixEnvironmentDeviceNode] = [],
 		namespaces: [String] = [],
         namespacePaths: [String: String] = [:],
         mounts: [OrlixEnvironmentMount] = []
@@ -157,6 +159,7 @@ self.cgroupPidsLimit = cgroupPidsLimit
 		self.cgroupMemoryMax = cgroupMemoryMax
 		self.cgroupIOWeight = cgroupIOWeight
 		self.cgroupUnified = cgroupUnified
+		self.deviceNodes = deviceNodes
 		self.namespaces = namespaces
         self.namespacePaths = namespacePaths
         self.mounts = mounts
@@ -197,6 +200,7 @@ case cgroupCPUMax
 		case cgroupMemoryMax
 		case cgroupIOWeight
 		case cgroupUnified
+		case deviceNodes
 		case namespaces
         case namespacePaths
         case mounts
@@ -334,6 +338,10 @@ forKey: .cgroupCPUWeight
 			[OrlixEnvironmentCgroupUnifiedEntry].self,
 			forKey: .cgroupUnified
 		) ?? []
+		self.deviceNodes = try container.decodeIfPresent(
+			[OrlixEnvironmentDeviceNode].self,
+			forKey: .deviceNodes
+		) ?? []
 		self.namespaces = try container.decodeIfPresent(
 			[String].self,
             forKey: .namespaces
@@ -403,6 +411,9 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 		if !cgroupUnified.isEmpty {
 			try container.encode(cgroupUnified, forKey: .cgroupUnified)
 		}
+		if !deviceNodes.isEmpty {
+			try container.encode(deviceNodes, forKey: .deviceNodes)
+		}
 		if !namespaces.isEmpty {
             try container.encode(namespaces, forKey: .namespaces)
         }
@@ -447,6 +458,34 @@ public let value: String
 public init(file: String, value: String) {
 self.file = file
 self.value = value
+}
+}
+
+public struct OrlixEnvironmentDeviceNode: Codable, Equatable, Sendable {
+public let path: String
+public let type: String
+public let major: UInt32
+public let minor: UInt32
+public let fileMode: UInt32
+public let uid: UInt32
+public let gid: UInt32
+
+public init(
+path: String,
+type: String,
+major: UInt32 = 0,
+minor: UInt32 = 0,
+fileMode: UInt32 = 0o666,
+uid: UInt32 = 0,
+gid: UInt32 = 0
+) {
+self.path = path
+self.type = type
+self.major = major
+self.minor = minor
+self.fileMode = fileMode
+self.uid = uid
+self.gid = gid
 }
 }
 
@@ -855,6 +894,13 @@ public static let cgroupCPUWeightCommandLineKey = "orlix.cgroups.cpu.weight"
 public static let cgroupMemoryMaxCommandLineKey = "orlix.cgroups.memory.max"
 public static let cgroupIOWeightCommandLineKey = "orlix.cgroups.io.weight"
 public static let cgroupUnifiedCommandLineKeyPrefix = "orlix.cgroups.unified"
+public static let deviceNodePathCommandLineKeyPrefix = "orlix.device.path"
+public static let deviceNodeTypeCommandLineKeyPrefix = "orlix.device.type"
+public static let deviceNodeMajorCommandLineKeyPrefix = "orlix.device.major"
+public static let deviceNodeMinorCommandLineKeyPrefix = "orlix.device.minor"
+public static let deviceNodeModeCommandLineKeyPrefix = "orlix.device.mode"
+public static let deviceNodeUIDCommandLineKeyPrefix = "orlix.device.uid"
+public static let deviceNodeGIDCommandLineKeyPrefix = "orlix.device.gid"
 public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
     public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
@@ -1132,6 +1178,22 @@ throw OrlixEnvironmentRootImageError.invalidCgroupUnified(entry.file)
 return "\(entry.file)=\(entry.value)"
 }
 
+private static func validateDeviceNode(
+_ node: OrlixEnvironmentDeviceNode
+) throws -> OrlixEnvironmentDeviceNode {
+let supportedTypes = Set(["c", "b", "u", "p"])
+guard supportedTypes.contains(node.type),
+node.fileMode <= 0o7777
+else {
+throw OrlixEnvironmentRootImageError.invalidDeviceNode(node.path)
+}
+_ = try validateRuntimePath(node.path)
+if node.type == "p" {
+return node
+}
+return node
+}
+
 private static func validateNamespace(_ namespace: String) throws -> String {
         let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup"])
         guard supportedNamespaces.contains(namespace) else {
@@ -1324,6 +1386,18 @@ private static func validateNamespace(_ namespace: String) throws -> String {
 			"\(cgroupUnifiedCommandLineKeyPrefix)\(index)=\(percentEncoded(try validateCgroupUnified(entry)))"
 		)
 	}
+	for (index, node) in descriptor.deviceNodes.enumerated() {
+		let validated = try validateDeviceNode(node)
+		tokens.append(
+			"\(deviceNodePathCommandLineKeyPrefix)\(index)=\(percentEncoded(validated.path))"
+		)
+		tokens.append("\(deviceNodeTypeCommandLineKeyPrefix)\(index)=\(validated.type)")
+		tokens.append("\(deviceNodeMajorCommandLineKeyPrefix)\(index)=\(validated.major)")
+		tokens.append("\(deviceNodeMinorCommandLineKeyPrefix)\(index)=\(validated.minor)")
+		tokens.append("\(deviceNodeModeCommandLineKeyPrefix)\(index)=\(validated.fileMode)")
+		tokens.append("\(deviceNodeUIDCommandLineKeyPrefix)\(index)=\(validated.uid)")
+		tokens.append("\(deviceNodeGIDCommandLineKeyPrefix)\(index)=\(validated.gid)")
+	}
 	for (index, namespace) in descriptor.namespaces.sorted().enumerated() {
             tokens.append(
                 "\(namespaceCommandLineKeyPrefix)\(index)=\(try validateNamespace(namespace))"
@@ -1405,6 +1479,7 @@ public enum OrlixEnvironmentRootImageError:
 	case invalidCgroupMemoryMax(Int64)
 	case invalidCgroupIOWeight(UInt64)
 	case invalidCgroupUnified(String)
+	case invalidDeviceNode(String)
 	case invalidNamespace(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
@@ -1636,6 +1711,7 @@ cgroupPidsLimit: parent.cgroupPidsLimit,
 				cgroupMemoryMax: parent.cgroupMemoryMax,
 				cgroupIOWeight: parent.cgroupIOWeight,
 				cgroupUnified: parent.cgroupUnified,
+				deviceNodes: parent.deviceNodes,
 				namespaces: parent.namespaces,
                 namespacePaths: parent.namespacePaths,
                 mounts: parent.mounts
