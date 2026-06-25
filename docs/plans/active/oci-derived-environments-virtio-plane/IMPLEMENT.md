@@ -10,6 +10,33 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI runtime real-driver facade
+
+Checkpoint: added real Linux observation convenience overloads to `OrlixOCIRuntime` so callers can `start`, `wait`, `run`, materialized `run`, and `runEphemeral` with an `observationTimeout` instead of injecting a test observation driver. The overloads construct `OrlixOCIRuntimeLinuxSessionObservationDriver` internally. No default `kill` overload was added because the real Linux driver still reports signal delivery as unsupported until there is a real Linux-visible signal path.
+
+Changes:
+- Added default real-driver overloads for OCI runtime lifecycle execution in `OrlixOS/Sources/Session/OrlixOS.swift`.
+- Routed the app-hosted OCI terminal-false lifecycle proof through `runtime.run(... observationTimeout:)`, proving the facade path observes real Linux init output.
+- Kept fake/recording driver tests available for deterministic orchestration coverage only; they are not treated as runtime proof.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeRunUsesMaterializedCreateRootImages test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_23-23-57-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that OrlixOS bundle reported 1 passed, 0 failed, 0 skipped.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_23-25-16-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that app-hosted bundle reported 1 passed, 0 failed, 0 skipped.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This proves the `OrlixOCIRuntime` facade can execute the existing app-hosted OCI lifecycle through the real Linux session observation driver without caller-side driver injection.
+- This does not prove product `orlix run`, real signal/kill delivery, live public registry compatibility, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+- The app-hosted run again emitted Thread Performance Checker warnings and post-test kernel `I/O error, dev vdb` lines after the selected XCTest had reported success. These remain runtime log caveats.
+
 ### 2026-06-25 OCI registry bearer token authentication
 
 Checkpoint: added OCI Distribution Bearer challenge support to the OrlixOS registry puller. A `401` `WWW-Authenticate: Bearer ...` response now drives token endpoint retrieval with `service` and `scope` query values, accepts `token` or `access_token`, and retries the original registry request with `Authorization: Bearer <token>`.

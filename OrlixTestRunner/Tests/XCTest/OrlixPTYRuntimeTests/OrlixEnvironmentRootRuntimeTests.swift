@@ -976,11 +976,10 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 		)
 		try registry.save(processHandle.sessionDescriptor.environment)
 		try runtime.lifecycleStore.save(lifecycle)
-		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 60)
 		let run = try runtime.run(
 			id: descriptor.id,
 			terminal: terminal,
-			using: driver
+			observationTimeout: 60
 		)
 		let finalState = try runtime.state(id: descriptor.id)
 		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
