@@ -22430,3 +22430,44 @@ Boundary:
 Current status:
 
 Latest coherent checkpoint exposes public OrlixOS APIs to install an OCI bundle into registry-backed base/state images with caller-supplied ext4 tools, then build an `OrlixLinuxSession` for that installed OCI environment. Existing app-hosted OCI lifecycle proof still passes. Next work remains real Linux-owned signal/kill delivery, product `orlix run`, registry input, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-26 live Docker Hub official-image pull coverage
+
+- Added opt-in live registry XCTest coverage for Docker Hub official-image pull behavior:
+  `testOCIRegistryPullerPullsDockerHubOfficialImageWhenLiveRegistryTestsEnabled`.
+- The test is disabled by default and only runs when `OrlixOSTests` is built with
+  `OTHER_SWIFT_FLAGS='$(inherited) -DORLIXOS_LIVE_REGISTRY_TESTS'`.
+- First live attempt with shell environment `ORLIXOS_LIVE_REGISTRY_TESTS=1`
+  skipped because the simulator XCTest process did not receive that shell
+  environment. The guard was changed to an explicit Swift build flag.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- Live pull command exited 0:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' OTHER_SWIFT_FLAGS='$(inherited) -DORLIXOS_LIVE_REGISTRY_TESTS' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerPullsDockerHubOfficialImageWhenLiveRegistryTestsEnabled test`.
+- Live pull result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_01-25-53-+0200.xcresult` reported `Passed`, 1 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- Deterministic registry/runtime follow-up command exited 0:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceParsesDistributionEndpoints -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceRejectsInvalidInput -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerSelectsArm64VariantForDefaultPlatform -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting test`.
+- Deterministic result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_01-27-04-+0200.xcresult` reported `Passed`, 5 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This proves the registry puller can resolve `alpine:latest` to Docker Hub
+  `library/alpine`, fetch the live official image, verify manifest/config/layer
+  digests, and read the resulting OCI layout.
+- This does not prove product `orlix run` exists as a Linux userspace command,
+  arbitrary imported-image compatibility, multiple live environments inside one
+  already-running OrlixKernel, full OCI Runtime Spec lifecycle support, real
+  signal/kill delivery, or broad namespace/cgroup/device/filesystem/network
+  readiness.
+
+## Current Status
+
+Current status:
+
+Latest coherent checkpoint proves opt-in live Docker Hub official-image pull coverage plus deterministic registry/runtime follow-up on the single `iPhone 17 Pro` simulator. Public OrlixOS APIs can install an OCI bundle into registry-backed base/state images with caller-supplied ext4 tools, then build an `OrlixLinuxSession` for installed OCI environment. Next work remains product `orlix run`, real Linux-owned signal/kill delivery, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.

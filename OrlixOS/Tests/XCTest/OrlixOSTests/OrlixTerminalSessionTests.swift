@@ -7931,6 +7931,40 @@ func testOCIRegistryPullerSelectsArm64VariantForDefaultPlatform() async throws {
 	])
 }
 
+func testOCIRegistryPullerPullsDockerHubOfficialImageWhenLiveRegistryTestsEnabled() async throws {
+#if ORLIXOS_LIVE_REGISTRY_TESTS
+	let fileManager = FileManager.default
+	let root = temporaryRegistryRoot()
+	let layoutURL = root.appendingPathComponent(
+		"docker-hub-live-layout",
+		isDirectory: true
+	)
+	defer { try? fileManager.removeItem(at: root) }
+
+	let image = try OrlixOCIRegistryImageReference("alpine:latest")
+	XCTAssertEqual(image.registry, "docker.io")
+	XCTAssertEqual(image.repository, "library/alpine")
+	XCTAssertEqual(
+		try image.manifestURL().absoluteString,
+		"https://registry-1.docker.io/v2/library/alpine/manifests/latest"
+	)
+
+	let result = try await OrlixOCIRegistryPuller().pull(image, to: layoutURL)
+	XCTAssertEqual(result.image, image)
+	XCTAssertTrue(result.manifestDigest.hasPrefix("sha256:"))
+	XCTAssertTrue(result.configDigest.hasPrefix("sha256:"))
+	XCTAssertFalse(result.layerDigests.isEmpty)
+
+	let pulled = try OrlixOCIImageLayoutReader().readLayout(at: layoutURL)
+	XCTAssertEqual(pulled.manifestDigest, result.manifestDigest)
+	XCTAssertEqual(pulled.configDigest, result.configDigest)
+	XCTAssertEqual(pulled.layers.map(\.digest), result.layerDigests)
+	XCTAssertFalse(pulled.rootfsDiffIDs.isEmpty)
+#else
+	throw XCTSkip("Build with ORLIXOS_LIVE_REGISTRY_TESTS to run live registry pull coverage.")
+#endif
+}
+
 func testOCIRegistryPullerRejectsBlobDigestMismatch() async throws {
 	let fileManager = FileManager.default
 	let root = temporaryRegistryRoot()
