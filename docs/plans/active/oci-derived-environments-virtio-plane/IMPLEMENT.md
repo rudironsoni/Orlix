@@ -20665,3 +20665,34 @@ Verification:
 Non-claims:
 - This does not claim full OCI runtime lifecycle compliance, registry pull, product `orlix run`, systemd support, arbitrary cgroup delegation, or real CPU fairness/accounting beyond the Linux cgroup v2 file setup/probe described above.
 - This does not claim executed XCTest coverage for this checkpoint because the focused runner did not attach before the bounded interruption.
+### 2026-06-25 OCI block IO weight via cgroup v2 io.weight
+
+Current status: implemented OCI `linux.resources.blockIO.weight` carriage into real Linux cgroup v2 `io.weight` for OrlixOS-derived environments. This extends the existing cgroup path used for pids, CPU, and memory resources; it does not introduce HostAdapter Linux policy, package-manager logic, custom ABI, generated upstream edits, or OrlixMLibC patches.
+
+Changes:
+- Enabled upstream Linux block cgroup support in durable release/development defconfigs with `CONFIG_BLK_CGROUP=y` and `CONFIG_BLK_CGROUP_IOCOST=y`.
+- Added Orlix-owned kselftest `orlix:cgroup_io_probe`, packaged through the normal Orlix kselftest initramfs, proving the cgroup v2 surface reports the `io` controller and exposes/writes `io.weight` on a child cgroup.
+- Added `OrlixEnvironmentDescriptor.cgroupIOWeight` Codable/session propagation, copied-environment preservation, validation, and materialized command-line emission `orlix.cgroups.io.weight`.
+- Added OCI runtime-config parsing for `linux.resources.blockIO.weight`, requiring `linux.cgroupsPath`, accepting Linux cgroup v2 weight range `1...10000`, and carrying the value unchanged to `io.weight` default weight syntax.
+- Added first-stage init support for `orlix.cgroups.io.weight`: enables `+io`, creates the configured cgroup path, writes `io.weight` as `default <weight>`, then joins the process cgroup.
+- Updated OCI feature reporting with implemented `ociBlockIOWeight` proof `orlix:cgroup_io_probe`.
+- Updated OrlixOS tests for descriptor command-line emission, OCI config conversion, feature-report status/proof, and precise parser failures for unimplemented block I/O subfields.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` succeeded; `/private/tmp/orlix-oci-xcodebuild.log` contains `** TEST BUILD SUCCEEDED **`.
+- `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` exited 0 and compiled `cgroup_io_probe`.
+- `rtk rg -n "cgroup_io_probe|io\\.weight|CONFIG_BLK_CGROUP|CONFIG_BLK_CGROUP_IOCOST|CONFIG_BLK_RQ_ALLOC_TIME" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list Build/OrlixKernel/build/release/.config OrlixKernel/Sources/ports/orlix/configs OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/cgroup_io_probe.c` confirmed `orlix:cgroup_io_probe` in the kselftest list, `cgroup_io_probe` in the initramfs, generated release `.config` has `CONFIG_BLK_CGROUP=y`, `CONFIG_BLK_CGROUP_IOCOST=y`, `CONFIG_BLK_RQ_ALLOC_TIME=y`, and the durable probe checks `io.weight`.
+- `rtk rg -n "CONFIG_BLK_CGROUP|CONFIG_BLK_CGROUP_IOCOST" OrlixKernel/Sources/ports/orlix/configs/development_defconfig OrlixKernel/Sources/ports/orlix/configs/release_defconfig` confirmed both durable defconfigs carry the required upstream Linux config.
+- Focused `xcodebuild ... test-without-building` against `OrlixOSTests` reached `Testing started` but emitted no `Test Suite` lines before manual interruption after roughly two minutes; no executed-XCTest pass claimed from that run.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- No claim of full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, systemd support, arbitrary cgroup delegation, or block-device-specific throttling/weight policy.
+- No claim of full block I/O enforcement/accounting beyond Linux cgroup v2 `io.weight` setup and kselftest surface proof.
+- No cpuset support claimed; upstream `CONFIG_CPUSETS` depends on `SMP`, and current Orlix release config is not ready for SMP.
+- No OrlixMLibC patch or generated upstream source edit was made.
