@@ -7768,6 +7768,116 @@ func testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex() async throws {
 	)
 }
 
+func testOCIRegistryPullerSelectsArm64VariantForDefaultPlatform() async throws {
+	let fileManager = FileManager.default
+	let root = temporaryRegistryRoot()
+	let layoutURL = root.appendingPathComponent(
+		"variant-pulled-layout",
+		isDirectory: true
+	)
+	defer { try? fileManager.removeItem(at: root) }
+
+	let image = try OrlixOCIRegistryImageReference(
+		"registry.example.org/library/alpine:3.20"
+	)
+	let configData = Data(
+		#"""
+		{
+			"config": {
+				"Entrypoint": ["/bin/sh"],
+				"WorkingDir": "/"
+			},
+			"rootfs": {
+				"type": "layers",
+				"diff_ids": []
+			}
+		}
+		"""#.utf8
+	)
+	let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+	let manifestData = Data(
+		"""
+		{
+			"schemaVersion": 2,
+			"mediaType": "application/vnd.oci.image.manifest.v1+json",
+			"config": {
+				"mediaType": "application/vnd.oci.image.config.v1+json",
+				"digest": "\(configDigest)",
+				"size": \(configData.count)
+			},
+			"layers": []
+		}
+		""".utf8
+	)
+	let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+	let indexData = Data(
+		"""
+		{
+			"schemaVersion": 2,
+			"mediaType": "application/vnd.oci.image.index.v1+json",
+			"manifests": [
+				{
+					"mediaType": "application/vnd.oci.image.manifest.v1+json",
+					"digest": "\(manifestDigest)",
+					"size": \(manifestData.count),
+					"platform": {
+						"os": "linux",
+						"architecture": "arm64",
+						"variant": "v8"
+					}
+				}
+			]
+		}
+		""".utf8
+	)
+	let indexDigest = "sha256:\(OrlixOCIDigest.sha256Hex(indexData))"
+
+	let registry = RecordingOCIRegistryFetch(responses: [
+		try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: [
+				"Content-Type": "application/vnd.oci.image.index.v1+json",
+				"Docker-Content-Digest": indexDigest,
+			],
+			body: indexData
+		),
+		try image.manifestURL(reference: manifestDigest).absoluteString:
+			OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: ["Content-Type": "application/vnd.oci.image.manifest.v1+json"],
+				body: manifestData
+			),
+		try image.blobURL(digest: configDigest).absoluteString:
+			OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: ["Docker-Content-Digest": configDigest],
+				body: configData
+			),
+	])
+
+	let result = try await OrlixOCIRegistryPuller(fetch: registry.fetch).pull(
+		image,
+		to: layoutURL
+	)
+	XCTAssertEqual(result.manifestDigest, manifestDigest)
+	XCTAssertEqual(result.configDigest, configDigest)
+	XCTAssertEqual(result.layerDigests, [])
+
+	let pulled = try OrlixOCIImageLayoutReader().readLayout(at: layoutURL)
+	XCTAssertEqual(pulled.manifestDigest, manifestDigest)
+	XCTAssertEqual(pulled.configDigest, configDigest)
+	XCTAssertEqual(pulled.layers.map(\.digest), [])
+	XCTAssertEqual(pulled.rootfsDiffIDs, [])
+	XCTAssertEqual(pulled.processDefaults.entrypoint, ["/bin/sh"])
+
+	let requests = await registry.requests
+	XCTAssertEqual(requests.map(\.url.absoluteString), [
+		try image.manifestURL().absoluteString,
+		try image.manifestURL(reference: manifestDigest).absoluteString,
+		try image.blobURL(digest: configDigest).absoluteString,
+	])
+}
+
 func testOCIRegistryPullerRejectsBlobDigestMismatch() async throws {
 	let fileManager = FileManager.default
 	let root = temporaryRegistryRoot()
