@@ -3227,6 +3227,39 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 		storagePolicy: OrlixStoragePolicy = .current,
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIRuntimeBundleImportPlan {
+		try importPlan(
+			id: id,
+			rootMount: rootMount,
+			storageLayout: OrlixEnvironmentStorageLayout.layout(
+				forEnvironmentID: id,
+				policy: storagePolicy,
+				fileManager: fileManager
+			),
+			fileManager: fileManager
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public func importPlan(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount,
+		registry: OrlixEnvironmentRegistry,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeBundleImportPlan {
+		try importPlan(
+			id: id,
+			rootMount: rootMount,
+			storageLayout: registry.layout(forEnvironmentID: id),
+			fileManager: fileManager
+		)
+	}
+
+	private func importPlan(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount,
+		storageLayout: OrlixEnvironmentStorageLayout,
+		fileManager: FileManager
+	) throws -> OrlixOCIRuntimeBundleImportPlan {
 		var isDirectory = ObjCBool(false)
 		guard fileManager.fileExists(atPath: rootfsURL.path, isDirectory: &isDirectory) else {
 			throw OrlixOCIRuntimeBundleError.missingRootfs(rootfsURL.path)
@@ -3235,11 +3268,6 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 			throw OrlixOCIRuntimeBundleError.rootfsIsNotDirectory(rootfsURL.path)
 		}
 		let ociRuntimeSession = try sessionDescriptor(id: id, rootMount: rootMount)
-		let storageLayout = try OrlixEnvironmentStorageLayout.layout(
-			forEnvironmentID: ociRuntimeSession.environment.id,
-			policy: storagePolicy,
-			fileManager: fileManager
-		)
 		let materializationPlan = try OrlixEnvironmentImageMaterializationPlan.plan(
 			stagingRootDirectory: rootfsURL,
 			storageLayout: storageLayout

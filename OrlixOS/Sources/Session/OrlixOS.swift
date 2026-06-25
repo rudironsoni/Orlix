@@ -914,10 +914,108 @@ public protocol OrlixOCIRuntimeProcessObservationDriver: Sendable {
 
 @_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessRunResult: Sendable {
-    public let startObservation: OrlixOCIRuntimeProcessStartObservation
-    public let runningSession: OrlixOCIRuntimeProcessSession
-    public let completionObservation: OrlixOCIRuntimeProcessCompletionObservation
-    public let completedProcess: OrlixOCIRuntimeCompletedProcess
+	public let startObservation: OrlixOCIRuntimeProcessStartObservation
+	public let runningSession: OrlixOCIRuntimeProcessSession
+	public let completionObservation: OrlixOCIRuntimeProcessCompletionObservation
+	public let completedProcess: OrlixOCIRuntimeCompletedProcess
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeCreatedEnvironment: Sendable {
+	public let importPlan: OrlixOCIRuntimeBundleImportPlan
+	public let lifecycleStore: OrlixOCIRuntimeLifecycleStore
+	public let lifecycle: OrlixOCIRuntimeLifecycleController
+	public let stateReport: OrlixOCIRuntimeStateReport
+
+	public var environment: OrlixEnvironmentDescriptor {
+		importPlan.environment
+	}
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeDeletedEnvironment: Sendable {
+	public let id: String
+	public let deletedRecord: OrlixOCIRuntimeLifecycleRecord
+}
+
+@_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntime: Sendable {
+	public let registry: OrlixEnvironmentRegistry
+	public let lifecycleStore: OrlixOCIRuntimeLifecycleStore
+
+	public init(registry: OrlixEnvironmentRegistry) {
+		self.registry = registry
+		self.lifecycleStore = OrlixOCIRuntimeLifecycleStore(registry: registry)
+	}
+
+	public func create(
+		bundleURL: URL,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeCreatedEnvironment {
+		let bundle = try OrlixOCIRuntimeBundle.load(
+			from: bundleURL,
+			fileManager: fileManager
+		)
+		let importPlan = try bundle.importPlan(
+			id: id,
+			rootMount: rootMount,
+			registry: registry,
+			fileManager: fileManager
+		)
+		try importPlan.prepareMaterializationInputs(fileManager: fileManager)
+		try importPlan.saveEnvironment(
+			to: registry,
+			fileManager: fileManager
+		)
+		let lifecycle = try bundle.lifecycleController(id: id).create()
+		try lifecycleStore.save(lifecycle, fileManager: fileManager)
+		return OrlixOCIRuntimeCreatedEnvironment(
+			importPlan: importPlan,
+			lifecycleStore: lifecycleStore,
+			lifecycle: lifecycle,
+			stateReport: try lifecycleStore.stateReport(
+				id: id,
+				fileManager: fileManager
+			)
+		)
+	}
+
+	public func state(
+		id: String,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeStateReport {
+		try lifecycleStore.stateReport(id: id, fileManager: fileManager)
+	}
+
+	public func delete(
+		id: String,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeDeletedEnvironment {
+		let snapshot = try lifecycleStore.load(id: id, fileManager: fileManager)
+		switch snapshot.record.state {
+		case .created, .stopped, .configured:
+			break
+		case .running, .deleted:
+			throw OrlixOCIRuntimeLifecycleError.invalidTransition(
+				from: snapshot.record.state,
+				action: .delete
+			)
+		}
+		let deletedRecord = OrlixOCIRuntimeLifecycleRecord(
+			id: snapshot.record.id,
+			bundlePath: snapshot.record.bundlePath,
+			pid: snapshot.record.pid,
+			exitStatus: snapshot.record.exitStatus,
+			state: .deleted
+		)
+		try lifecycleStore.delete(id: id, fileManager: fileManager)
+		return OrlixOCIRuntimeDeletedEnvironment(
+			id: id,
+			deletedRecord: deletedRecord
+		)
+	}
 }
 
 @_spi(OrlixPrivateTesting)

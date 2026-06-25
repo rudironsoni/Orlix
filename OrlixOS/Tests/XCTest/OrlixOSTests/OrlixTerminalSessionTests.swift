@@ -8365,6 +8365,121 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		)
 	}
 
+	func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-runtime-api-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("root-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let stateRoot = scratch.appendingPathComponent("state", isDirectory: true)
+		let cacheRoot = scratch.appendingPathComponent("cache", isDirectory: true)
+		let scratchRoot = scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: stateRoot,
+			cacheRoot: cacheRoot,
+			scratchRoot: scratchRoot
+		)
+		let runtime = OrlixOCIRuntime(registry: registry)
+
+		let created = try runtime.create(
+			bundleURL: bundleURL,
+			id: "oci-created"
+		)
+		let report = try runtime.state(id: "oci-created")
+		let savedEnvironment = try registry.load(environmentID: "oci-created")
+		let preparedMarker = created.importPlan.materializationPlan
+			.baseTreeDirectory
+			.appendingPathComponent("root-marker")
+
+		XCTAssertEqual(created.lifecycle.record.state, .created)
+		XCTAssertEqual(created.stateReport.status, .created)
+		XCTAssertEqual(report.status, .created)
+		XCTAssertNil(report.pid)
+		XCTAssertEqual(report.bundle, bundleURL.path)
+		XCTAssertEqual(savedEnvironment, created.environment)
+		XCTAssertEqual(
+			try String(contentsOf: preparedMarker, encoding: .utf8),
+			"bundle-root\n"
+		)
+
+		let deleted = try runtime.delete(id: "oci-created")
+		XCTAssertEqual(deleted.id, "oci-created")
+		XCTAssertEqual(deleted.deletedRecord.state, .deleted)
+		XCTAssertTrue(fileManager.fileExists(atPath: preparedMarker.path))
+		XCTAssertEqual(
+			try registry.load(environmentID: "oci-created"),
+			created.environment
+		)
+		XCTAssertThrowsError(try runtime.state(id: "oci-created")) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleStoreError,
+				.missingRecord("oci-created")
+			)
+		}
+	}
+
+	func testOCIRuntimeDeleteRejectsRunningLifecycleRecord() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-runtime-running-delete-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		)
+		let runtime = OrlixOCIRuntime(registry: registry)
+		let created = try runtime.create(
+			bundleURL: bundleURL,
+			id: "oci-running"
+		)
+		try runtime.lifecycleStore.save(
+			try created.lifecycle.start(pid: 123),
+			fileManager: fileManager
+		)
+
+		XCTAssertThrowsError(try runtime.delete(id: "oci-running")) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleError,
+				.invalidTransition(from: .running, action: .delete)
+			)
+		}
+		XCTAssertEqual(try runtime.state(id: "oci-running").status, .running)
+		XCTAssertEqual(try runtime.state(id: "oci-running").pid, 123)
+	}
+
 	func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
