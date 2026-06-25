@@ -8730,6 +8730,49 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		)
 	}
 
+	func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached() throws {
+		let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+			scratchName: "orlix-oci-process-store"
+		)
+		defer { try? FileManager.default.removeItem(at: fixture.scratch) }
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: fixture.scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: fixture.scratch.appendingPathComponent("scratch", isDirectory: true)
+		)
+		let store = OrlixOCIRuntimeLifecycleStore(registry: registry)
+		let processSession = OrlixOCIRuntimeProcessSession(
+			processHandle: fixture.session.processHandle,
+			linuxSession: fixture.session.linuxSession,
+			lifecycleStore: store
+		)
+		let driver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 42,
+			completion: .exited(
+				try OrlixOCIRuntimeProcessExitObservation(
+					pid: 42,
+					exitStatus: 0
+				)
+			)
+		)
+
+		let result = try processSession.runObserved(using: driver)
+		let report = try store.stateReport(id: "oci-demo")
+
+		XCTAssertNotNil(result.runningSession.lifecycleStore)
+		XCTAssertEqual(report.status, .stopped)
+		XCTAssertEqual(report.pid, 42)
+		XCTAssertEqual(report.exitStatus, 0)
+		XCTAssertEqual(report.bundle, "/bundles/oci-demo")
+		XCTAssertEqual(
+			driver.events,
+			[
+				"start:created:nil",
+				"wait:running:42"
+			]
+		)
+	}
+
 	func testOCIRuntimeLifecycleControllerRejectsInvalidObservedLinuxExitStatus() throws {
 		XCTAssertThrowsError(try OrlixOCIRuntimeProcessExitObservation(pid: 42, exitStatus: 256)) { error in
 			XCTAssertEqual(
