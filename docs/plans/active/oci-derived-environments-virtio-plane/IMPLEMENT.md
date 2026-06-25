@@ -21855,3 +21855,33 @@ Non-claims:
 Current status:
 - Init-side inherited-stdio command launch for OCI `process.terminal=false` is implemented and builds through the OrlixOS development kernel payload.
 - Next proof gap is app-hosted runtime evidence that a non-terminal OCI command runs on inherited stdio inside the selected root, plus cleanup of unrelated OCI bundle/rootfs/lifecycle test failures.
+### 2026-06-25 OCI terminal false inherited-stdio runtime proof checkpoint
+
+Checkpoint: proved OCI `process.terminal: false` reaches app-hosted Orlix Linux runtime through the OrlixOS OCI session path and executes the configured process without the PTY session path.
+
+Changes:
+- Changed `OrlixLinuxSession.ociRuntimeKernelCommandLine` so default OCI terminal-false sessions prefix `orlix.terminal=0` before the materialized environment command line. This keeps the terminal flag visible even when long encoded `orlix.argv*` values approach kernel command-line limits.
+- Tightened OrlixOS XCTest metadata coverage to require `orlix.terminal=0 ` at the start of the default OCI terminal-false boot command line.
+- Added an app-hosted `OrlixPTYRuntimeTests` proof for OCI-derived roots using `OrlixOCIRuntimeSessionDescriptor(terminal: false)` through `OrlixLinuxSession(ociRuntimeSession:registry:terminal:)`.
+- Added stdio runtime markers proving stdout, stderr, non-PTY tty result, and completion. Markers are split in the shell script so kernel `Kernel command line:` logging does not satisfy proof assertions or fatal-marker scans.
+- Removed temporary command-line logging from the proof runner after diagnosing the marker false positive.
+
+Evidence:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin xcrun simctl bootstatus 5E2E003E-F434-4B1F-8E5C-BED59BBC177D -b` exited 0 with `Device already booted, nothing to do.`
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0: fixtures ready.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination platform=iOS\ Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine test` exited 0: 1 test, 0 failures. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_19-49-06-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination platform=iOS\ Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeTerminalFalseUsesInheritedStdio test` exited 0: 1 test, 0 failures. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_19-53-52-+0200.xcresult`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with existing `IMPLEMENT.md` stale-status warning only.
+- `rtk python3 -c "from pathlib import Path; p=Path('docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md'); n=len(p.read_text()); print(('OK' if n<=4000 else 'TOO_LONG'), n, p)"` printed `OK 3997 docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md`.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches OrlixKernel/Sources/ports/orlix/patches OrlixOS/Sources/init/init.c` returned no files.
+- Diagnostic report check found no host `Orlix*` reports under `~/Library/Logs/DiagnosticReports`; selected simulator diagnostic report directory did not exist.
+
+Boundary:
+- This proves OCI terminal-false session metadata and app-hosted inherited-stdio execution for the focused OCI-derived runtime fixture. It does not claim full OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, arbitrary imported-image compatibility, systemd support, broader cgroup/namespace/device/filesystem/network readiness, or full product runtime readiness.
+- No OrlixKernel, OrlixMLibC, HostAdapter, generated upstream source, custom Linux ABI shim, package manager, proof-package/stamp-ladder system, or feature-report-only implementation was added.
+
+Current status:
+OCI `process.terminal: false` is now proven for the focused OCI-derived runtime fixture through OrlixOS OCI session launch and app-hosted inherited-stdio execution. Next work remains broader OCI lifecycle/product delivery: `orlix run`, registry input, lifecycle `create/start/state/kill/delete`, and deeper Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.

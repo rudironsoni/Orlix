@@ -857,7 +857,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 		guard let base, !base.isEmpty else {
 			return "orlix.terminal=0"
 		}
-		return base + " orlix.terminal=0"
+		return "orlix.terminal=0 " + base
 	}
 
     convenience init(
