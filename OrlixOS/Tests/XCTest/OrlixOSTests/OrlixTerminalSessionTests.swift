@@ -9187,6 +9187,14 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 				"wait:running:106",
 			]
 		)
+		XCTAssertEqual(
+			processDriver.startRootImageIdentifiers,
+			[result.createdEnvironment.environment.rootImageIdentifier]
+		)
+		XCTAssertEqual(
+			processDriver.waitRootImageIdentifiers,
+			[result.createdEnvironment.environment.rootImageIdentifier]
+		)
 		XCTAssertThrowsError(try runtime.state(id: "oci-ephemeral-run")) { error in
 			XCTAssertEqual(
 				error as? OrlixOCIRuntimeLifecycleStoreError,
@@ -10670,6 +10678,8 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 	private let failsOnSignal: Bool
 	private let failsOnWait: Bool
 	private(set) var events: [String] = []
+	private(set) var startRootImageIdentifiers: [String] = []
+	private(set) var waitRootImageIdentifiers: [String] = []
 
 	init(startPID: Int32,
 	     completion: OrlixOCIRuntimeProcessCompletionObservation,
@@ -10687,6 +10697,9 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 	}
 
 	func start(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessStartObservation {
+		startRootImageIdentifiers.append(
+			processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier
+		)
 		events.append(
 			"start:\(processSession.processHandle.lifecycle.record.state):\(String(describing: processSession.processHandle.lifecycle.record.pid))"
 		)
@@ -10706,6 +10719,9 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 	}
 
 	func wait(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessCompletionObservation {
+		waitRootImageIdentifiers.append(
+			processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier
+		)
 		events.append(
 			"wait:\(processSession.processHandle.lifecycle.record.state):\(processSession.processHandle.lifecycle.record.pid ?? 0)"
 		)
