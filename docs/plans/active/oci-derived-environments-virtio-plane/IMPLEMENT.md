@@ -21434,6 +21434,47 @@ Boundary:
   modeling, nested mapping policy, full OCI Runtime Spec lifecycle completion,
   product `orlix run`, registry pull, broad imported-root execution proof,
   systemd support, or full runtime readiness.
+
+### 2026-06-25 GOAL.md size limit harness checkpoint
+
+Checkpoint: tightened the active OCI goal document and moved the 4000-character
+`GOAL.md` limit into shared hook enforcement.
+
+Current status:
+
+- Harness goal-size enforcement is implemented and verified for this checkpoint.
+
+Changes:
+
+- Rewrote `docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md` to
+  keep the session decisions while reducing the file to 3364 characters.
+- Centralized the 4000-character limit in `.codex/hooks/orlix_hook_common.py`.
+- Kept `.codex/hooks/compact_plan_check.py` blocking any `docs/plans/**/GOAL.md`
+  over 4000 characters.
+- Added `.codex/hooks/pre_tool_use_guard.py` commit/push blocking when any
+  `docs/plans/**/GOAL.md` is over 4000 characters, while leaving reduction edits
+  possible.
+- Added lifecycle hook regression coverage for the pre-commit oversized-goal gate.
+
+Evidence:
+
+- `rtk python3 -c "from pathlib import Path; p=Path('docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md'); print(len(p.read_text()))"`
+  printed `3364`.
+- `rtk python3 -c "from pathlib import Path; files=['.codex/hooks/compact_plan_check.py','.codex/hooks/orlix_hook_common.py','.codex/hooks/pre_tool_use_guard.py','.codex/hooks/tests/test_lifecycle_guards.py']; [compile(Path(f).read_text(), f, 'exec') for f in files]; print('ok')"`
+  printed `ok`.
+- `rtk python3 .codex/hooks/tests/test_lifecycle_guards.py` ran 27 tests and passed.
+- `rtk python3 .codex/hooks/tests/test_generated_tree_guards.py` ran 7 tests and passed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with existing
+  active-plan stale-status warnings only.
+- `rtk python3 - <<'PY' ... Path('docs/plans').glob('**/GOAL.md') ... PY`
+  reported `OK 3364 docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md`.
+- `rtk git diff --check` exited 0.
+
+Boundary:
+
+- This is a harness/documentation checkpoint only. It does not claim OCI runtime
+  feature completion, app-hosted runtime proof, Linux namespace readiness,
+  Coreutils/mlibc/kernel build-speed completion, or product runtime readiness.
 - No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
   dependency, or Swift-side fake Linux behavior was added.

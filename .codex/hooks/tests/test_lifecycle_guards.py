@@ -438,6 +438,39 @@ class LifecycleGuardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("GOAL.md files must be <= 4000 characters", result.stderr)
 
+    def test_pre_tool_guard_blocks_commit_with_oversized_goal(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as state_tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            create_active_plan(root)
+            (root / "docs" / "plans" / "active" / "demo" / "GOAL.md").write_text(
+                "# Goal\n" + ("x" * 4000)
+            )
+            env = hook_env(state_tmp)
+            run_hook(
+                POST_TOOL_REVIEW,
+                bash_payload(
+                    "rtk sed -n '1,40p' AGENTS.md "
+                    "docs/plans/active/demo/GOAL.md "
+                    "docs/plans/active/demo/PLAN.md "
+                    "docs/plans/active/demo/IMPLEMENT.md",
+                    event="PostToolUse",
+                ),
+                cwd=root,
+                env=env,
+            )
+            run_hook(
+                POST_TOOL_REVIEW,
+                write_payload("docs/plans/active/demo/IMPLEMENT.md", event="PostToolUse"),
+                cwd=root,
+                env=env,
+            )
+
+            result = run_hook(PRE_TOOL_GUARD, bash_payload("rtk git commit -m checkpoint"), cwd=root, env=env)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("GOAL.md files must be <= 4000 characters", result.stderr)
+
     def test_compact_plan_check_warns_on_stale_status_contradiction(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

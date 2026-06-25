@@ -22,6 +22,7 @@ WRITE_TOOL_NAMES = {"apply_patch", "edit", "write", "multiedit"}
 BASH_TOOL_NAMES = {"bash"}
 READ_TOOL_NAMES = {"read", "grep", "glob", "ls"}
 BASH_COMMAND_PREFIX = r"(^|[;&|]\s*)(?:rtk\s+)?(?:(?:timeout|gtimeout)\s+\d+\s+)?(?:sudo\s+)?"
+GOAL_MAX_CHARS = 4000
 
 BASH_MUTATING_COMMAND_RE = re.compile(
     BASH_COMMAND_PREFIX +
@@ -243,6 +244,22 @@ def active_plan_dirs(root):
     if not active.exists():
         return []
     return [p for p in active.iterdir() if p.is_dir()]
+
+
+def goal_paths(root):
+    return sorted((root / "docs" / "plans").glob("**/GOAL.md"))
+
+
+def oversized_goal_messages(root):
+    messages = []
+    for goal_path in goal_paths(root):
+        goal_length = len(goal_path.read_text(errors="replace"))
+        if goal_length > GOAL_MAX_CHARS:
+            messages.append(
+                f"{goal_path.relative_to(root)} is {goal_length} characters; "
+                f"GOAL.md files must be <= {GOAL_MAX_CHARS} characters."
+            )
+    return messages
 
 
 def required_plan_context_paths(root):
