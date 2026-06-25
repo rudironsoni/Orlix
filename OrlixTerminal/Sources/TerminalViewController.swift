@@ -14,12 +14,6 @@ final class TerminalViewController: UIViewController {
     )
     private var terminalOutput: OrlixTerminalOutput?
     private lazy var terminalView = TerminalView(frame: .zero)
-    private lazy var proofDriver: TerminalProofDriver? = {
-        let terminal = linuxSession.terminal
-        return TerminalProofDriver.fromProcessArguments { data in
-            terminal.send(data)
-        }
-    }()
     private lazy var terminalSession: InMemoryTerminalSession = {
         let terminal = linuxSession.terminal
         return InMemoryTerminalSession(
@@ -134,7 +128,6 @@ final class TerminalViewController: UIViewController {
                 .replacingOccurrences(of: "\n", with: "\r\n")
 
             DispatchQueue.main.async { [weak self] in
-                self?.proofDriver?.receive(text)
                 self?.terminalSession.receive(text)
             }
         }

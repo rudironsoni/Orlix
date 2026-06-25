@@ -402,7 +402,6 @@ Relevant paths:
 
 - `Tests/OrlixHostAdapterTests`
 - `Tests/OrlixLinuxProofOutputParserTests`
-- `Tests/OrlixTerminalProofDriverTests`
 - `Tests/OrlixPTYRuntimeTests`
 - `Tests/OrlixKernelUpstreamTests`
 - `Tests/OrlixMLibCUpstreamTests`
@@ -433,7 +432,6 @@ Important current targets:
 - `OrlixTestRunner`
 - `OrlixHostAdapterTests`
 - `OrlixLinuxProofOutputParserTests`
-- `OrlixTerminalProofDriverTests`
 - `OrlixPTYRuntimeTests`
 - `OrlixKernelUpstreamTests`
 - `OrlixMLibCUpstreamTests`
@@ -988,7 +986,7 @@ Likely touched areas:
 - `OrlixOS/Sources/init`
 - `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix`
 - `Tests/OrlixKernelUpstreamTests`
-- `Tests/OrlixTerminalProofDriverTests`
+- `Tests/OrlixPTYRuntimeTests`
 
 Tests to add:
 
@@ -1003,7 +1001,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1051,7 +1049,6 @@ Likely touched areas:
 - `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix`
 - `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix`
 - `Tests/OrlixPTYRuntimeTests`
-- `Tests/OrlixTerminalProofDriverTests`
 
 Tests to add:
 
@@ -1065,7 +1062,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1108,7 +1105,7 @@ Likely touched areas:
 - `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c`
 - `OrlixOS/Sources/init`
 - `Tests/OrlixOSTests`
-- `Tests/OrlixTerminalProofDriverTests`
+- `Tests/OrlixPTYRuntimeTests`
 
 Tests to add:
 
@@ -1122,7 +1119,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1168,7 +1165,7 @@ Likely touched areas:
 - proposed `OrlixOS/Sources/Environments`
 - proposed `tools/oci-fixtures`
 - `Tests/OrlixOSTests`
-- `Tests/OrlixTerminalProofDriverTests`
+- `Tests/OrlixPTYRuntimeTests`
 
 Tests to add:
 
@@ -1183,7 +1180,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1283,7 +1280,6 @@ Likely touched areas:
 - `OrlixHostAdapter/Sources/OrlixHostAdapter/terminal`
 - `OrlixHostAdapter/Sources/OrlixHostAdapter/runtime/entropy.c`
 - `Tests/OrlixPTYRuntimeTests`
-- `Tests/OrlixTerminalProofDriverTests`
 
 Tests to add:
 
@@ -1298,7 +1294,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1363,7 +1359,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1410,7 +1406,7 @@ Likely touched areas:
 - `OrlixOS/Sources/init`
 - `OrlixKernel/Sources/ports/orlix/configs`
 - `Tests/OrlixOSTests`
-- `Tests/OrlixTerminalProofDriverTests`
+- `Tests/OrlixPTYRuntimeTests`
 
 Tests to add:
 
@@ -1426,7 +1422,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1528,7 +1524,7 @@ Likely touched areas:
 - `OrlixOS/Sources/Session`
 - `OrlixOS/Sources/Environments`
 - `OrlixOS/Sources/init`
-- `Tests/OrlixTerminalProofDriverTests`
+- `Tests/OrlixPTYRuntimeTests`
 
 Tests to add:
 
@@ -1544,7 +1540,7 @@ Tests to add:
 Build commands to run:
 
 ```bash
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
@@ -1592,7 +1588,7 @@ Likely touched areas:
 - `OrlixHostAdapter/Sources/OrlixHostAdapter`
 - `OrlixKernel/Sources/ports/orlix/configs`
 - `Tests/OrlixKernelUpstreamTests`
-- `Tests/OrlixTerminalProofDriverTests`
+- `Tests/OrlixPTYRuntimeTests`
 
 Tests to add:
 
@@ -1607,7 +1603,7 @@ Build commands to run:
 
 ```bash
 rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
-rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminalProofDriverTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
+rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .deriveddata/OrlixSystem-sim test
 ```
 
 Proof criteria:
