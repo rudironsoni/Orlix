@@ -6,6 +6,7 @@ from orlix_hook_common import (
     generated_tree_write_violation,
     is_git_commit_or_push,
     load_plan_context_state,
+    oversized_goal_messages,
     parse_json,
     plan_context_loaded,
     read_stdin_text,
@@ -32,6 +33,10 @@ if active_plan_dirs(root):
 
 if generated_tree_write_violation(payload):
     block("Generated upstream/build trees are read-only for agents. Move the fix to the owning Orlix layer.")
+
+if is_git_commit_or_push(payload):
+    for message in oversized_goal_messages(root):
+        block(message)
 
 if "RUN_VERY_EXPENSIVE_TESTS=no" in text or "RUN_EXPENSIVE_TESTS=no" in text:
     block("Do not disable upstream expensive tests when upstream conformance is the claim.")
