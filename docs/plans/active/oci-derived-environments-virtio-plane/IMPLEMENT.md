@@ -21788,3 +21788,21 @@ Evidence:
 
 Boundary:
 - This is OrlixOS OCI session/lifecycle plumbing for target-derived payload metadata. It does not implement product `orlix run`, registry pull, OCI terminal false semantics, full OCI Runtime Spec lifecycle compliance, app-hosted imported-root runtime readiness, or Linux kernel behavior.
+
+### 2026-06-25 OCI ephemeral run root-target observation checkpoint
+
+Checkpoint: strengthened the OrlixOS materialized `runEphemeral` test path so the process observation driver proves it sees the environment root image identifier during both start and wait observations. This keeps OCI lifecycle observation tied to the OrlixOS session boot target instead of only recording lifecycle state and PID strings.
+
+Current status:
+- Materialized OCI `runEphemeral` unit coverage now asserts start and wait observation paths carry the created environment root image identifier.
+
+Changes:
+- Extended the `RecordingOCIRuntimeProcessObservationDriver` test double with start/wait root image identifier capture.
+- Updated `testOCIRuntimeRunEphemeralDeletesResourcesAfterCompletion` to assert the driver-observed root image identifiers match `result.createdEnvironment.environment.rootImageIdentifier`.
+
+Evidence:
+- `rtk git diff --check` exited 0 before the focused XCTest run.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeRunEphemeralDeletesResourcesAfterCompletion test` passed: 1 test, 0 failures.
+
+Boundary:
+- This is OrlixOS XCTest coverage for the existing materialized OCI lifecycle path. It does not implement product `orlix run`, registry pull, OCI terminal false semantics, full OCI Runtime Spec lifecycle compliance, app-hosted imported-root runtime readiness, or Linux kernel behavior.
