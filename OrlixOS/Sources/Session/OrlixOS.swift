@@ -1301,6 +1301,7 @@ public struct OrlixOCIRuntime: Sendable {
 			state: .deleted
 		)
 		try lifecycleStore.delete(id: id, fileManager: fileManager)
+		try registry.delete(environmentID: id, fileManager: fileManager)
 		return OrlixOCIRuntimeDeletedEnvironment(
 			id: id,
 			deletedRecord: deletedRecord

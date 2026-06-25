@@ -1595,18 +1595,31 @@ public struct OrlixEnvironmentRegistry: Sendable {
         )
     }
 
-    public func load(
-        environmentID: String,
-        fileManager: FileManager = .default
-    ) throws -> OrlixEnvironmentDescriptor {
+	public func load(
+		environmentID: String,
+		fileManager: FileManager = .default
+	) throws -> OrlixEnvironmentDescriptor {
         let url = try descriptorURL(forEnvironmentID: environmentID)
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(OrlixEnvironmentDescriptor.self, from: data)
-    }
+		let data = try Data(contentsOf: url)
+		return try JSONDecoder().decode(OrlixEnvironmentDescriptor.self, from: data)
+	}
 
-    public func list(
-        fileManager: FileManager = .default
-    ) throws -> [OrlixEnvironmentDescriptor] {
+	public func delete(
+		environmentID: String,
+		fileManager: FileManager = .default
+	) throws {
+		let layout = try layout(forEnvironmentID: environmentID)
+		if fileManager.fileExists(atPath: layout.rootDirectory.path) {
+			try fileManager.removeItem(at: layout.rootDirectory)
+		}
+		if fileManager.fileExists(atPath: layout.importScratchDirectory.path) {
+			try fileManager.removeItem(at: layout.importScratchDirectory)
+		}
+	}
+
+	public func list(
+		fileManager: FileManager = .default
+	) throws -> [OrlixEnvironmentDescriptor] {
         let environmentsRoot = linuxStateRoot
             .appendingPathComponent("environments", isDirectory: true)
         guard let contents = try? fileManager.contentsOfDirectory(
