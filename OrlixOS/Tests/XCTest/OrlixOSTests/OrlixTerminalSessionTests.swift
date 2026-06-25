@@ -8537,6 +8537,9 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		let preparedMarker = created.importPlan.materializationPlan
 			.baseTreeDirectory
 			.appendingPathComponent("root-marker")
+		let descriptorURL = try registry.descriptorURL(forEnvironmentID: "oci-created")
+		let rootDirectory = created.importPlan.storageLayout.rootDirectory
+		let importScratchDirectory = created.importPlan.storageLayout.importScratchDirectory
 
 		XCTAssertEqual(created.lifecycle.record.state, .created)
 		XCTAssertEqual(created.stateReport.status, .created)
@@ -8552,11 +8555,10 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		let deleted = try runtime.delete(id: "oci-created")
 		XCTAssertEqual(deleted.id, "oci-created")
 		XCTAssertEqual(deleted.deletedRecord.state, .deleted)
-		XCTAssertTrue(fileManager.fileExists(atPath: preparedMarker.path))
-		XCTAssertEqual(
-			try registry.load(environmentID: "oci-created"),
-			created.environment
-		)
+		XCTAssertFalse(fileManager.fileExists(atPath: descriptorURL.path))
+		XCTAssertFalse(fileManager.fileExists(atPath: rootDirectory.path))
+		XCTAssertFalse(fileManager.fileExists(atPath: importScratchDirectory.path))
+		XCTAssertFalse(fileManager.fileExists(atPath: preparedMarker.path))
 		XCTAssertThrowsError(try runtime.state(id: "oci-created")) { error in
 			XCTAssertEqual(
 				error as? OrlixOCIRuntimeLifecycleStoreError,
@@ -8625,6 +8627,17 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 			fileManager.fileExists(atPath: created.importPlan.storageLayout.stateImageURL.path)
 		)
 		XCTAssertEqual(try runtime.state(id: "oci-materialized-create").status, .created)
+
+		let baseImageURL = created.importPlan.storageLayout.baseImageURL
+		let stateImageURL = created.importPlan.storageLayout.stateImageURL
+		let rootDirectory = created.importPlan.storageLayout.rootDirectory
+		let importScratchDirectory = created.importPlan.storageLayout.importScratchDirectory
+		_ = try runtime.delete(id: "oci-materialized-create")
+
+		XCTAssertFalse(fileManager.fileExists(atPath: baseImageURL.path))
+		XCTAssertFalse(fileManager.fileExists(atPath: stateImageURL.path))
+		XCTAssertFalse(fileManager.fileExists(atPath: rootDirectory.path))
+		XCTAssertFalse(fileManager.fileExists(atPath: importScratchDirectory.path))
 	}
 
 	func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
@@ -8837,6 +8850,8 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 			bundleURL: bundleURL,
 			id: "oci-running"
 		)
+		let rootDirectory = created.importPlan.storageLayout.rootDirectory
+		let importScratchDirectory = created.importPlan.storageLayout.importScratchDirectory
 		try runtime.lifecycleStore.save(
 			try created.lifecycle.start(pid: 123),
 			fileManager: fileManager
@@ -8848,9 +8863,11 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 				.invalidTransition(from: .running, action: .delete)
 			)
 		}
-	XCTAssertEqual(try runtime.state(id: "oci-running").status, .running)
-	XCTAssertEqual(try runtime.state(id: "oci-running").pid, 123)
-}
+		XCTAssertEqual(try runtime.state(id: "oci-running").status, .running)
+		XCTAssertEqual(try runtime.state(id: "oci-running").pid, 123)
+		XCTAssertTrue(fileManager.fileExists(atPath: rootDirectory.path))
+		XCTAssertTrue(fileManager.fileExists(atPath: importScratchDirectory.path))
+	}
 
 func testOCIRuntimeCreateRejectsExistingLifecycleRecord() throws {
 	let fileManager = FileManager.default
