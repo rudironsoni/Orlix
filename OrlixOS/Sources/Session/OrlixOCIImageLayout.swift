@@ -1312,6 +1312,18 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Full OCI Runtime Spec lifecycle is recognized but not claimed until Linux substrate, process execution, resource setup, and cleanup proofs are complete."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "ociTimeNamespace",
+			status: .implemented,
+			proof: "orlix:time_namespace_probe",
+			reason: "OCI time namespace creation carries into first-stage init CLONE_NEWTIME handling, with Orlix kselftest coverage for Linux time namespace proc entries and child namespace entry."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociTimeOffsets",
+			status: .implemented,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI linux.timeOffsets for monotonic and boottime clocks carry into OrlixOS descriptors and first-stage init writes Linux /proc/self/timens_offsets before forking the configured command into the child time namespace."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "procfs",
 			status: .implemented,
 			proof: "orlix:pseudo_fs_probe",
@@ -1587,9 +1599,10 @@ public let cgroupPidsLimit: Int64?
 	public let cgroupCPUWeight: UInt64?
 public let cgroupMemoryMax: Int64?
 public let cgroupIOWeight: UInt64?
-public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
-public let deviceNodes: [OrlixEnvironmentDeviceNode]
-public let mounts: [OrlixOCIRuntimeMount]
+    public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
+    public let deviceNodes: [OrlixEnvironmentDeviceNode]
+    public let timeOffsets: [OrlixEnvironmentTimeOffset]
+    public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
 	public let defaultWorkingDirectory: String
@@ -1654,9 +1667,10 @@ public let mounts: [OrlixOCIRuntimeMount]
 			cgroupCPUWeight: cgroupCPUWeight,
 			cgroupMemoryMax: cgroupMemoryMax,
 			cgroupIOWeight: cgroupIOWeight,
-			cgroupUnified: cgroupUnified,
-			deviceNodes: deviceNodes,
-			namespaces: namespaces,
+            cgroupUnified: cgroupUnified,
+            deviceNodes: deviceNodes,
+            timeOffsets: timeOffsets,
+            namespaces: namespaces,
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
         )
@@ -1802,15 +1816,19 @@ cgroupsPath: config.linux?.cgroupsPath
 				config.linux?.resources,
 				cgroupsPath: config.linux?.cgroupsPath
 			),
-			cgroupUnified: try Self.validatedCgroupUnified(
-				config.linux?.resources,
-				cgroupsPath: config.linux?.cgroupsPath
-			) + Self.validatedCgroupBlockIOUnifiedEntries(
-				config.linux?.resources,
-				cgroupsPath: config.linux?.cgroupsPath
-			),
-			deviceNodes: try Self.validatedDeviceNodes(config.linux?.devices ?? []),
-			mounts: mounts,
+            cgroupUnified: try Self.validatedCgroupUnified(
+                config.linux?.resources,
+                cgroupsPath: config.linux?.cgroupsPath
+            ) + Self.validatedCgroupBlockIOUnifiedEntries(
+                config.linux?.resources,
+                cgroupsPath: config.linux?.cgroupsPath
+            ),
+            deviceNodes: try Self.validatedDeviceNodes(config.linux?.devices ?? []),
+            timeOffsets: try Self.validatedTimeOffsets(
+                config.linux?.timeOffsets,
+                namespaces: namespaces
+            ),
+            mounts: mounts,
 			defaultCommand: args,
 			defaultEnvironment: environment,
 			defaultWorkingDirectory: cwd,
@@ -2364,6 +2382,34 @@ private static func validatedPersonalityDomain(
     return domain
 }
 
+private static func validatedTimeOffsets(
+    _ timeOffsets: [String: OCIRuntimeTimeOffset]?,
+    namespaces: [String]
+) throws -> [OrlixEnvironmentTimeOffset] {
+    guard let timeOffsets, !timeOffsets.isEmpty else {
+        return []
+    }
+    guard namespaces.contains("time") else {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.timeOffsets.namespace")
+    }
+    let supportedClocks = Set(["monotonic", "boottime"])
+    return try timeOffsets
+        .sorted(by: { $0.key < $1.key })
+        .map { clock, offset in
+            guard supportedClocks.contains(clock) else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.timeOffsets.\(clock)")
+            }
+            guard offset.nanosecs >= 0, offset.nanosecs < 1_000_000_000 else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.timeOffsets.\(clock).nanosecs")
+            }
+            return OrlixEnvironmentTimeOffset(
+                clock: clock,
+                secs: offset.secs,
+                nanosecs: offset.nanosecs
+            )
+        }
+}
+
 private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? {
     guard let value else {
         return nil
@@ -2622,7 +2668,7 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
     private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
         var seen = Set<String>()
         var result: [String] = []
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup"])
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time"])
 
         for namespace in namespaces {
             guard !seen.contains(namespace.type) else {
@@ -2648,7 +2694,7 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
         _ namespaces: [OCIRuntimeNamespace]
     ) throws -> [String: String] {
         var result: [String: String] = [:]
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup"])
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time"])
 
         for namespace in namespaces {
             guard let path = namespace.path else {
@@ -2784,12 +2830,9 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
     if linux.mountLabel != nil {
         throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
     }
-    if let timeOffsets = linux.timeOffsets, !timeOffsets.isEmpty {
-        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.timeOffsets")
+    if let unified = linux.unified, !unified.isEmpty {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.unified")
     }
-		if let unified = linux.unified, !unified.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.unified")
-		}
 		if linux.intelRdt != nil {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.intelRdt")
 		}
@@ -2909,7 +2952,7 @@ private struct OCIRuntimeLinux: Decodable {
 	let mountLabel: String?
 	let rootfsPropagation: String?
 	let personality: OCIRuntimePersonality?
-	let timeOffsets: [String: String]?
+	let timeOffsets: [String: OCIRuntimeTimeOffset]?
 	let unified: [String: String]?
 	let intelRdt: OCIRuntimeIntelRdt?
 	let hugepageLimits: [OCIRuntimeHugepageLimit]?
@@ -2921,6 +2964,11 @@ private struct OCIRuntimeLinux: Decodable {
 private struct OCIRuntimePersonality: Decodable {
     let domain: String?
     let flags: [String]?
+}
+
+private struct OCIRuntimeTimeOffset: Decodable {
+    let secs: Int64
+    let nanosecs: Int64
 }
 
 private struct OCIRuntimeIntelRdt: Decodable {

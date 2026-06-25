@@ -52,10 +52,11 @@ public let cgroupPidsLimit: Int64?
 	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
 	public let cgroupCPUWeight: UInt64?
 	public let cgroupMemoryMax: Int64?
-	public let cgroupIOWeight: UInt64?
-	public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
-	public let deviceNodes: [OrlixEnvironmentDeviceNode]
-	public let namespaces: [String]
+    public let cgroupIOWeight: UInt64?
+    public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
+    public let deviceNodes: [OrlixEnvironmentDeviceNode]
+    public let timeOffsets: [OrlixEnvironmentTimeOffset]
+    public let namespaces: [String]
     public let namespacePaths: [String: String]
     public let mounts: [OrlixEnvironmentMount]
 
@@ -120,10 +121,11 @@ cgroupPidsLimit: Int64? = nil,
 		cgroupCPUMax: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeight: UInt64? = nil,
 		cgroupMemoryMax: Int64? = nil,
-		cgroupIOWeight: UInt64? = nil,
-		cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-		deviceNodes: [OrlixEnvironmentDeviceNode] = [],
-		namespaces: [String] = [],
+        cgroupIOWeight: UInt64? = nil,
+        cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+        deviceNodes: [OrlixEnvironmentDeviceNode] = [],
+        timeOffsets: [OrlixEnvironmentTimeOffset] = [],
+        namespaces: [String] = [],
         namespacePaths: [String: String] = [:],
         mounts: [OrlixEnvironmentMount] = []
     ) {
@@ -160,10 +162,11 @@ self.cgroupPidsLimit = cgroupPidsLimit
 		self.cgroupCPUMax = cgroupCPUMax
 		self.cgroupCPUWeight = cgroupCPUWeight
 		self.cgroupMemoryMax = cgroupMemoryMax
-		self.cgroupIOWeight = cgroupIOWeight
-		self.cgroupUnified = cgroupUnified
-		self.deviceNodes = deviceNodes
-		self.namespaces = namespaces
+        self.cgroupIOWeight = cgroupIOWeight
+        self.cgroupUnified = cgroupUnified
+        self.deviceNodes = deviceNodes
+        self.timeOffsets = timeOffsets
+        self.namespaces = namespaces
         self.namespacePaths = namespacePaths
         self.mounts = mounts
     }
@@ -202,10 +205,11 @@ case cgroupPidsLimit
 case cgroupCPUMax
 		case cgroupCPUWeight
 		case cgroupMemoryMax
-		case cgroupIOWeight
-		case cgroupUnified
-		case deviceNodes
-		case namespaces
+        case cgroupIOWeight
+        case cgroupUnified
+        case deviceNodes
+        case timeOffsets
+        case namespaces
         case namespacePaths
         case mounts
     }
@@ -346,12 +350,16 @@ forKey: .cgroupCPUWeight
 			[OrlixEnvironmentCgroupUnifiedEntry].self,
 			forKey: .cgroupUnified
 		) ?? []
-		self.deviceNodes = try container.decodeIfPresent(
-			[OrlixEnvironmentDeviceNode].self,
-			forKey: .deviceNodes
-		) ?? []
-		self.namespaces = try container.decodeIfPresent(
-			[String].self,
+        self.deviceNodes = try container.decodeIfPresent(
+            [OrlixEnvironmentDeviceNode].self,
+            forKey: .deviceNodes
+        ) ?? []
+        self.timeOffsets = try container.decodeIfPresent(
+            [OrlixEnvironmentTimeOffset].self,
+            forKey: .timeOffsets
+        ) ?? []
+        self.namespaces = try container.decodeIfPresent(
+            [String].self,
             forKey: .namespaces
         ) ?? []
         self.namespacePaths = try container.decodeIfPresent(
@@ -423,10 +431,13 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 		if !cgroupUnified.isEmpty {
 			try container.encode(cgroupUnified, forKey: .cgroupUnified)
 		}
-		if !deviceNodes.isEmpty {
-			try container.encode(deviceNodes, forKey: .deviceNodes)
-		}
-		if !namespaces.isEmpty {
+        if !deviceNodes.isEmpty {
+            try container.encode(deviceNodes, forKey: .deviceNodes)
+        }
+        if !timeOffsets.isEmpty {
+            try container.encode(timeOffsets, forKey: .timeOffsets)
+        }
+        if !namespaces.isEmpty {
             try container.encode(namespaces, forKey: .namespaces)
         }
         if !namespacePaths.isEmpty {
@@ -474,8 +485,8 @@ self.value = value
 }
 
 public struct OrlixEnvironmentDeviceNode: Codable, Equatable, Sendable {
-public let path: String
-public let type: String
+    public let path: String
+    public let type: String
 public let major: UInt32
 public let minor: UInt32
 public let fileMode: UInt32
@@ -497,8 +508,20 @@ self.major = major
 self.minor = minor
 self.fileMode = fileMode
 self.uid = uid
-self.gid = gid
+        self.gid = gid
+    }
 }
+
+public struct OrlixEnvironmentTimeOffset: Codable, Equatable, Sendable {
+    public let clock: String
+    public let secs: Int64
+    public let nanosecs: Int64
+
+    public init(clock: String, secs: Int64, nanosecs: Int64) {
+        self.clock = clock
+        self.secs = secs
+        self.nanosecs = nanosecs
+    }
 }
 
 public struct OrlixEnvironmentCapabilities: Codable, Equatable, Sendable {
@@ -944,10 +967,11 @@ public static let deviceNodePathCommandLineKeyPrefix = "orlix.device.path"
 public static let deviceNodeTypeCommandLineKeyPrefix = "orlix.device.type"
 public static let deviceNodeMajorCommandLineKeyPrefix = "orlix.device.major"
 public static let deviceNodeMinorCommandLineKeyPrefix = "orlix.device.minor"
-public static let deviceNodeModeCommandLineKeyPrefix = "orlix.device.mode"
-public static let deviceNodeUIDCommandLineKeyPrefix = "orlix.device.uid"
-public static let deviceNodeGIDCommandLineKeyPrefix = "orlix.device.gid"
-public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
+    public static let deviceNodeModeCommandLineKeyPrefix = "orlix.device.mode"
+    public static let deviceNodeUIDCommandLineKeyPrefix = "orlix.device.uid"
+    public static let deviceNodeGIDCommandLineKeyPrefix = "orlix.device.gid"
+    public static let timeOffsetCommandLineKeyPrefix = "orlix.timeoffset"
+    public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
 public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
 public static let defaultHostDirectoryIdentifier = "orlix-host0"
 public static let hostDirectoryIdentifierPrefix = "orlix-host"
@@ -1243,13 +1267,24 @@ return node
 return node
 }
 
-private static func validateNamespace(_ namespace: String) throws -> String {
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup"])
+    private static func validateNamespace(_ namespace: String) throws -> String {
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time"])
         guard supportedNamespaces.contains(namespace) else {
             throw OrlixEnvironmentRootImageError.invalidNamespace(namespace)
         }
 
         return namespace
+    }
+
+    private static func validateTimeOffset(_ offset: OrlixEnvironmentTimeOffset) throws -> String {
+        let supportedClocks = Set(["monotonic", "boottime"])
+        guard supportedClocks.contains(offset.clock),
+              offset.nanosecs >= 0,
+              offset.nanosecs < 1_000_000_000
+        else {
+            throw OrlixEnvironmentRootImageError.invalidTimeOffset(offset.clock)
+        }
+        return "\(offset.clock):\(offset.secs):\(offset.nanosecs)"
     }
 
     private static func validateNamespaceJoin(type: String, path: String) throws -> String {
@@ -1478,11 +1513,19 @@ private static func validateNamespace(_ namespace: String) throws -> String {
 		tokens.append("\(deviceNodeTypeCommandLineKeyPrefix)\(index)=\(validated.type)")
 		tokens.append("\(deviceNodeMajorCommandLineKeyPrefix)\(index)=\(validated.major)")
 		tokens.append("\(deviceNodeMinorCommandLineKeyPrefix)\(index)=\(validated.minor)")
-		tokens.append("\(deviceNodeModeCommandLineKeyPrefix)\(index)=\(validated.fileMode)")
-		tokens.append("\(deviceNodeUIDCommandLineKeyPrefix)\(index)=\(validated.uid)")
-		tokens.append("\(deviceNodeGIDCommandLineKeyPrefix)\(index)=\(validated.gid)")
-	}
-	for (index, namespace) in descriptor.namespaces.sorted().enumerated() {
+            tokens.append("\(deviceNodeModeCommandLineKeyPrefix)\(index)=\(validated.fileMode)")
+            tokens.append("\(deviceNodeUIDCommandLineKeyPrefix)\(index)=\(validated.uid)")
+            tokens.append("\(deviceNodeGIDCommandLineKeyPrefix)\(index)=\(validated.gid)")
+        }
+        if !descriptor.timeOffsets.isEmpty && !descriptor.namespaces.contains("time") {
+            throw OrlixEnvironmentRootImageError.invalidTimeOffset("time")
+        }
+        for (index, offset) in descriptor.timeOffsets.enumerated() {
+            tokens.append(
+                "\(timeOffsetCommandLineKeyPrefix)\(index)=\(try validateTimeOffset(offset))"
+            )
+        }
+        for (index, namespace) in descriptor.namespaces.sorted().enumerated() {
             tokens.append(
                 "\(namespaceCommandLineKeyPrefix)\(index)=\(try validateNamespace(namespace))"
             )
@@ -1562,10 +1605,11 @@ public enum OrlixEnvironmentRootImageError:
 	case invalidCgroupCPUMax(OrlixEnvironmentCgroupCPUMax)
 	case invalidCgroupCPUWeight(UInt64)
 	case invalidCgroupMemoryMax(Int64)
-	case invalidCgroupIOWeight(UInt64)
-	case invalidCgroupUnified(String)
-	case invalidDeviceNode(String)
-	case invalidNamespace(String)
+    case invalidCgroupIOWeight(UInt64)
+    case invalidCgroupUnified(String)
+    case invalidDeviceNode(String)
+    case invalidTimeOffset(String)
+    case invalidNamespace(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
 
@@ -1808,10 +1852,11 @@ cgroupPidsLimit: parent.cgroupPidsLimit,
 			cgroupCPUMax: parent.cgroupCPUMax,
 				cgroupCPUWeight: parent.cgroupCPUWeight,
 				cgroupMemoryMax: parent.cgroupMemoryMax,
-				cgroupIOWeight: parent.cgroupIOWeight,
-				cgroupUnified: parent.cgroupUnified,
-				deviceNodes: parent.deviceNodes,
-				namespaces: parent.namespaces,
+                cgroupIOWeight: parent.cgroupIOWeight,
+                cgroupUnified: parent.cgroupUnified,
+                deviceNodes: parent.deviceNodes,
+                timeOffsets: parent.timeOffsets,
+                namespaces: parent.namespaces,
                 namespacePaths: parent.namespacePaths,
                 mounts: parent.mounts
             )

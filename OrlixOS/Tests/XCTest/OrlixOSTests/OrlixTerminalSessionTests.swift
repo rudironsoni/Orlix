@@ -6469,6 +6469,16 @@ report.feature(named: "ociCPUShares")?.proof,
             report.feature(named: "ociPersonality")?.proof,
             "orlix:runtime_config_parser"
         )
+        XCTAssertEqual(report.feature(named: "ociTimeNamespace")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "ociTimeNamespace")?.proof,
+            "orlix:time_namespace_probe"
+        )
+        XCTAssertEqual(report.feature(named: "ociTimeOffsets")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "ociTimeOffsets")?.proof,
+            "orlix:runtime_config_parser"
+        )
         XCTAssertEqual(report.feature(named: "ociMemoryLimit")?.status, .implemented)
 		XCTAssertEqual(
 			report.feature(named: "ociMemoryLimit")?.proof,
@@ -6614,6 +6624,10 @@ report.feature(named: "ociBlockIOControls")?.proof,
 XCTAssertEqual(features["ociLinuxResources"]?.proof, "orlix:runtime_config_parser")
         XCTAssertEqual(features["ociPersonality"]?.status, .implemented)
         XCTAssertEqual(features["ociPersonality"]?.proof, "orlix:runtime_config_parser")
+        XCTAssertEqual(features["ociTimeNamespace"]?.status, .implemented)
+        XCTAssertEqual(features["ociTimeNamespace"]?.proof, "orlix:time_namespace_probe")
+        XCTAssertEqual(features["ociTimeOffsets"]?.status, .implemented)
+        XCTAssertEqual(features["ociTimeOffsets"]?.proof, "orlix:runtime_config_parser")
 XCTAssertEqual(features["ociCPUQuota"]?.status, .implemented)
 XCTAssertEqual(features["ociCPUQuota"]?.proof, "orlix:cgroup_cpu_probe")
 XCTAssertEqual(features["ociCPUShares"]?.status, .implemented)
@@ -6907,6 +6921,84 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
                   "process": { "args": ["/bin/sh"], "cwd": "/" },
                   "root": { "path": "rootfs" },
                   "linux": { \(linuxFragment) }
+                }
+                """.utf8
+            )
+
+            XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+                XCTAssertEqual(
+                    error as? OrlixOCIRuntimeConfigError,
+                    .unsupportedLinuxFeature("linux.\(feature)")
+                )
+            }
+        }
+    }
+
+    func testOCIRuntimeConfigParserCarriesTimeNamespaceOffsets() throws {
+        let config = Data(
+            """
+            {
+              "ociVersion": "1.1.0",
+              "process": { "args": ["/bin/sh"], "cwd": "/" },
+              "root": { "path": "rootfs" },
+              "linux": {
+                "namespaces": [{ "type": "time" }],
+                "timeOffsets": {
+                  "boottime": { "secs": -3, "nanosecs": 250 },
+                  "monotonic": { "secs": 12, "nanosecs": 500000000 }
+                }
+              }
+            }
+            """.utf8
+        )
+
+        let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+        XCTAssertEqual(descriptor.namespaces, ["time"])
+        XCTAssertEqual(
+            descriptor.timeOffsets,
+            [
+                OrlixEnvironmentTimeOffset(clock: "boottime", secs: -3, nanosecs: 250),
+                OrlixEnvironmentTimeOffset(clock: "monotonic", secs: 12, nanosecs: 500000000)
+            ]
+        )
+
+        let environment = try descriptor.environmentDescriptor(
+            id: "oci-time-offsets",
+            rootMount: .defaultOverlay
+        )
+        let commandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+            descriptor: environment,
+            kernelCommandLine: OrlixEnvironmentRootImage.defaultKernelCommandLine
+        )
+        XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.namespace0=time"))
+        XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.timeoffset0=boottime:-3:250"))
+        XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.timeoffset1=monotonic:12:500000000"))
+    }
+
+    func testOCIRuntimeConfigParserRejectsInvalidTimeOffsets() throws {
+        let fragments: [(feature: String, linux: String)] = [
+            (
+                "timeOffsets.namespace",
+                #""timeOffsets": { "monotonic": { "secs": 1, "nanosecs": 0 } }"#
+            ),
+            (
+                "timeOffsets.realtime",
+                #""namespaces": [{ "type": "time" }], "timeOffsets": { "realtime": { "secs": 1, "nanosecs": 0 } }"#
+            ),
+            (
+                "timeOffsets.monotonic.nanosecs",
+                #""namespaces": [{ "type": "time" }], "timeOffsets": { "monotonic": { "secs": 1, "nanosecs": 1000000000 } }"#
+            )
+        ]
+
+        for (feature, linux) in fragments {
+            let config = Data(
+                """
+                {
+                  "ociVersion": "1.1.0",
+                  "process": { "args": ["/bin/sh"], "cwd": "/" },
+                  "root": { "path": "rootfs" },
+                  "linux": { \(linux) }
                 }
                 """.utf8
             )
@@ -7318,8 +7410,7 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxRuntimeFields() throws {
 		let fragments: [(feature: String, json: String)] = [
-            ("timeOffsets", #""timeOffsets": { "monotonic": "1 0" }"#),
-			("unified", #""unified": { "memory.max": "1048576" }"#),
+            ("unified", #""unified": { "memory.max": "1048576" }"#),
 			("intelRdt", #""intelRdt": { "l3CacheSchema": "L3:0=ff" }"#),
 			("hugepageLimits", #""hugepageLimits": [{ "pageSize": "2MB", "limit": 1 }]"#),
 			("rdma", #""rdma": { "mlx5_0": { "hcaHandles": 1, "hcaObjects": 1 } }"#)

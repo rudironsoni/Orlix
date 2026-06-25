@@ -20,6 +20,7 @@
 #include <sys/sysmacros.h>
 #include <linux/capability.h>
 #include <linux/personality.h>
+#include <linux/sched.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -29,6 +30,7 @@
 #define ORLIX_INIT_MAX_RLIMITS 16
 #define ORLIX_INIT_MAX_CGROUP_UNIFIED 8
 #define ORLIX_INIT_MAX_DEVICE_NODES 16
+#define ORLIX_INIT_MAX_TIME_OFFSETS 2
 #define ORLIX_INIT_MAX_HOST_DIRECTORIES 16
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
@@ -60,6 +62,12 @@ struct orlix_device_node_config {
 	unsigned long mode;
 	unsigned long uid;
 	unsigned long gid;
+};
+
+struct orlix_time_offset_config {
+	char clock[16];
+	long secs;
+	long nanosecs;
 };
 
 static void die(const char *message);
@@ -653,6 +661,43 @@ static int parse_cgroup_unified_assignment(
 	return 0;
 }
 
+static int parse_time_offset_assignment(char *assignment,
+					struct orlix_time_offset_config *entry)
+{
+	char *secs_text;
+	char *nanosecs_text;
+	char *end = NULL;
+	size_t clock_length;
+
+	secs_text = strchr(assignment, ':');
+	if (secs_text == NULL || secs_text == assignment)
+		return -1;
+	*secs_text++ = '\0';
+	nanosecs_text = strchr(secs_text, ':');
+	if (nanosecs_text == NULL || nanosecs_text == secs_text)
+		return -1;
+	*nanosecs_text++ = '\0';
+	if (*nanosecs_text == '\0')
+		return -1;
+	if (strcmp(assignment, "monotonic") != 0 &&
+	    strcmp(assignment, "boottime") != 0)
+		return -1;
+	clock_length = strlen(assignment);
+	if (clock_length >= sizeof(entry->clock))
+		return -1;
+	errno = 0;
+	entry->secs = strtol(secs_text, &end, 10);
+	if (errno != 0 || end == secs_text || *end != '\0')
+		return -1;
+	errno = 0;
+	entry->nanosecs = strtol(nanosecs_text, &end, 10);
+	if (errno != 0 || end == nanosecs_text || *end != '\0' ||
+	    entry->nanosecs < 0 || entry->nanosecs >= 1000000000L)
+		return -1;
+	strcpy(entry->clock, assignment);
+	return 0;
+}
+
 static unsigned long namespace_flag_for_name(const char *name)
 {
 if (strcmp(name, "mount") == 0)
@@ -665,6 +710,8 @@ if (strcmp(name, "mount") == 0)
 		return CLONE_NEWNET;
 	if (strcmp(name, "cgroup") == 0)
 		return CLONE_NEWCGROUP;
+	if (strcmp(name, "time") == 0)
+		return CLONE_NEWTIME;
 	return 0;
 }
 
@@ -1409,6 +1456,8 @@ int has_cgroup_cpu_weight;
 	size_t cgroup_unified_count;
 	struct orlix_device_node_config device_nodes[ORLIX_INIT_MAX_DEVICE_NODES];
 	size_t device_node_count;
+	struct orlix_time_offset_config time_offsets[ORLIX_INIT_MAX_TIME_OFFSETS];
+	size_t time_offset_count;
 	unsigned long namespace_flags;
 	unsigned long namespace_join_flags[ORLIX_INIT_MAX_NAMESPACE_JOINS];
 	char namespace_join_paths[ORLIX_INIT_MAX_NAMESPACE_JOINS][ORLIX_INIT_VALUE_SIZE];
@@ -1644,6 +1693,18 @@ config->has_cgroup_cpu_weight = 1;
 		if (read_cmdline_unsigned(key, &node->gid) != 0)
 			die("invalid device gid");
 		config->device_node_count++;
+	}
+	for (int i = 0; i < ORLIX_INIT_MAX_TIME_OFFSETS; i++) {
+		char key[32];
+		char assignment[ORLIX_INIT_VALUE_SIZE];
+		snprintf(key, sizeof(key), "orlix.timeoffset%d=", i);
+		if (read_cmdline_decoded(key, assignment, sizeof(assignment)) != 0)
+			break;
+		if (parse_time_offset_assignment(
+			    assignment,
+			    &config->time_offsets[config->time_offset_count]) != 0)
+			die("invalid time offset");
+		config->time_offset_count++;
 	}
 	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
 		char key[32];
@@ -1904,6 +1965,36 @@ static void apply_namespace_config(const struct orlix_command_config *config)
 		die("unshare namespaces");
 }
 
+static void apply_time_offsets(const struct orlix_command_config *config)
+{
+	char buffer[192];
+	size_t used = 0;
+	int fd;
+
+	if (config->time_offset_count == 0)
+		return;
+	if ((config->namespace_flags & CLONE_NEWTIME) == 0)
+		die("time offsets without time namespace");
+	for (size_t i = 0; i < config->time_offset_count; i++) {
+		int length = snprintf(buffer + used, sizeof(buffer) - used,
+				      "%s %ld %ld\n",
+				      config->time_offsets[i].clock,
+				      config->time_offsets[i].secs,
+				      config->time_offsets[i].nanosecs);
+		if (length <= 0 || (size_t)length >= sizeof(buffer) - used)
+			die("format timens_offsets");
+		used += (size_t)length;
+	}
+	fd = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+	if (fd < 0)
+		die("open timens_offsets");
+	if (write_all(fd, buffer, used) != 0) {
+		close(fd);
+		die("write timens_offsets");
+	}
+	close(fd);
+}
+
 static void apply_uts_config(const struct orlix_command_config *config)
 {
 	if (!config->has_hostname && !config->has_domainname)
@@ -1994,6 +2085,30 @@ static void apply_personality(unsigned long personality)
 		die("personality");
 }
 
+static void exec_or_fork_configured_command(struct orlix_command_config *config)
+{
+	if ((config->namespace_flags & CLONE_NEWTIME) == 0) {
+		exec_configured_command(config);
+		return;
+	}
+
+	pid_t child = fork();
+	if (child < 0)
+		die("fork time namespace child");
+	if (child == 0) {
+		exec_configured_command(config);
+		write_literal(STDERR_FILENO, "orlix-init: exec command failed\n");
+		_exit(127);
+	}
+
+	int status;
+	while (waitpid(child, &status, 0) < 0) {
+		if (errno != EINTR)
+			_exit(127);
+	}
+	_exit(shell_exit_status(status));
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -2020,6 +2135,7 @@ static pid_t start_command_on_pty(int master, int slave)
 	}
 	selected_command_config(config);
 	apply_namespace_config(config);
+	apply_time_offsets(config);
 	apply_uts_config(config);
 	if (chdir(config->cwd) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
@@ -2101,7 +2217,7 @@ static pid_t start_command_on_pty(int master, int slave)
 		if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0)
 			write_literal(STDERR_FILENO, "orlix-init: prctl(PR_SET_NO_NEW_PRIVS) failed\n");
 	}
-	exec_configured_command(config);
+	exec_or_fork_configured_command(config);
 	write_literal(STDERR_FILENO, "orlix-init: exec command failed\n");
 	_exit(127);
 }
