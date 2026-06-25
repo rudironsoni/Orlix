@@ -1492,11 +1492,76 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
         XCTAssertTrue(commandLine.contains("orlix.mount.host0.target=/home/root/Documents"))
         XCTAssertTrue(commandLine.contains("orlix.mount.host0.readonly=1"))
-        XCTAssertTrue(commandLine.contains("orlix.mount.host1.target=/mnt/shared"))
-        XCTAssertFalse(commandLine.contains("orlix.mount.host1.readonly=1"))
-    }
+	    XCTAssertTrue(commandLine.contains("orlix.mount.host1.target=/mnt/shared"))
+	    XCTAssertFalse(commandLine.contains("orlix.mount.host1.readonly=1"))
+	}
 
-    func testEnvironmentRootImageCarriesRootPropagationToKernelCommandLine() throws {
+	func testEnvironmentRootImageMaterializesExternalBookmarkHostMount() throws {
+		let root = temporaryRegistryRoot()
+		let externalRoot = root.appendingPathComponent("Selected Project", isDirectory: true)
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: "external-bookmark-mount",
+			linuxStateRoot: root.appendingPathComponent(
+				"Application Support/Orlix",
+				isDirectory: true
+			),
+			cacheRoot: root.appendingPathComponent("Caches/Orlix", isDirectory: true),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+		)
+		try FileManager.default.createDirectory(
+			at: layout.rootDirectory,
+			withIntermediateDirectories: true
+		)
+		try FileManager.default.createDirectory(
+			at: externalRoot,
+			withIntermediateDirectories: true
+		)
+		try Data("base".utf8).write(to: layout.baseImageURL)
+		try Data("state".utf8).write(to: layout.stateImageURL)
+
+		let descriptor = OrlixEnvironmentDescriptor(
+			id: "external-bookmark-mount",
+			source: .copiedEnvironment(parentID: "default"),
+			platform: "linux/arm64",
+			rootImageIdentifier: "orlix.env.external-bookmark-mount",
+			defaultCommand: ["/bin/sh"],
+			defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+			defaultWorkingDirectory: "/",
+			defaultUserID: 0,
+			defaultGroupID: 0,
+			mounts: [
+				try OrlixEnvironmentMount.securityScopedExternal(
+					bookmarkID: "selected-project",
+					targetPath: "/mnt/project",
+					readOnly: true
+				)
+			]
+		)
+
+		let rootImage = try OrlixEnvironmentRootImage.materialized(
+			descriptor: descriptor,
+			layout: layout,
+			securityScopedExternalDirectories: [
+				"selected-project": externalRoot
+			]
+		)
+
+		XCTAssertEqual(
+			rootImage.hostDirectories,
+			[
+				OrlixHostDirectoryRegistration(
+					identifier: "orlix-host0",
+					hostPath: externalRoot.path,
+					readOnly: true
+				)
+			]
+		)
+		let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
+		XCTAssertTrue(commandLine.contains("orlix.mount.host0.target=/mnt/project"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.host0.readonly=1"))
+	}
+
+	func testEnvironmentRootImageCarriesRootPropagationToKernelCommandLine() throws {
 		let root = temporaryRegistryRoot()
 		let layout = try OrlixEnvironmentStorageLayout.layout(
 			forEnvironmentID: "shared-root-propagation",
@@ -8751,9 +8816,45 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
         XCTAssertEqual(environment.mounts[0].targetPath, "/home/root/Documents")
         XCTAssertTrue(environment.mounts[0].readOnly)
         XCTAssertEqual(environment.mounts[1].source, .documents)
-        XCTAssertEqual(environment.mounts[1].targetPath, "/mnt/shared")
-        XCTAssertFalse(environment.mounts[1].readOnly)
-    }
+	    XCTAssertEqual(environment.mounts[1].targetPath, "/mnt/shared")
+	    XCTAssertFalse(environment.mounts[1].readOnly)
+	}
+
+	func testOCIRuntimeConfigParserTranslatesExternalBookmarkBindMount() throws {
+		let config = Data(
+			"""
+			{
+				"ociVersion": "1.1.0",
+				"process": { "args": ["/bin/sh"], "cwd": "/" },
+				"mounts": [
+					{
+						"destination": "/mnt/project",
+						"type": "bind",
+						"source": "orlix:external:selected-project",
+						"options": ["rbind", "ro"]
+					}
+				]
+			}
+			""".utf8
+		)
+		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+		XCTAssertEqual(descriptor.mounts.count, 1)
+		XCTAssertEqual(descriptor.mounts[0].destination, "/mnt/project")
+		XCTAssertEqual(descriptor.mounts[0].type, "bind")
+		XCTAssertEqual(descriptor.mounts[0].source, "orlix:external:selected-project")
+
+		let environment = try descriptor.environmentDescriptor(
+			id: "oci-external-bind-mount",
+			rootMount: .defaultOverlay
+		)
+		XCTAssertEqual(environment.mounts.count, 1)
+		XCTAssertEqual(
+			environment.mounts[0].source,
+			.securityScopedExternal(bookmarkID: "selected-project")
+		)
+		XCTAssertEqual(environment.mounts[0].targetPath, "/mnt/project")
+		XCTAssertTrue(environment.mounts[0].readOnly)
+	}
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 		let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [

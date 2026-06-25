@@ -1526,7 +1526,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociBindMounts",
 			status: .recognized,
 			proof: "orlix:runtime_spec_mount_validation",
-			reason: "OCI bind mounts are recognized, but parser translation is bounded to the Orlix documents host-folder source until external-folder backends have Linux-visible runtime proof."
+			reason: "OCI bind mounts are recognized, but parser translation is bounded to Orlix-managed Documents and external bookmark host-folder sources rather than arbitrary host paths."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCgroupMounts",
@@ -1662,6 +1662,7 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 	public let options: [String]
 
 	private static let documentsSource = "orlix:documents"
+	private static let externalSourcePrefix = "orlix:external:"
 	private static let supportedBindOptions = Set(["bind", "rbind", "ro", "rw"])
 
 	func environmentMount() throws -> OrlixEnvironmentMount? {
@@ -1681,8 +1682,16 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 			if source == Self.documentsSource {
 				return try .documents(targetPath: destination, readOnly: readOnly)
 			}
+			if source.hasPrefix(Self.externalSourcePrefix) {
+				let bookmarkID = String(source.dropFirst(Self.externalSourcePrefix.count))
+				return try .securityScopedExternal(
+					bookmarkID: bookmarkID,
+					targetPath: destination,
+					readOnly: readOnly
+				)
+			}
 		} catch OrlixEnvironmentMountError.invalidTargetPath(_),
-			OrlixEnvironmentMountError.reservedTargetPath(_) {
+		        OrlixEnvironmentMountError.reservedTargetPath(_) {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.destination")
 		} catch OrlixEnvironmentMountError.invalidSourceIdentifier(_) {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
