@@ -21826,3 +21826,32 @@ Evidence:
 
 Boundary:
 - This is OrlixOS session boot-metadata carriage. It does not yet implement init-side non-PTY execution for `process.terminal: false`, product `orlix run`, registry pull, full OCI Runtime Spec lifecycle compliance, app-hosted imported-root runtime readiness, or Linux kernel behavior.
+
+## Checkpoint 2026-06-25: init honors OCI terminal=false with inherited stdio
+
+Scope:
+- Continue OCI process terminal mode delivery beyond metadata carriage into first-stage OrlixOS Linux userspace init.
+- Keep the change in OrlixOS init orchestration. No OrlixKernel, OrlixMLibC, HostAdapter, generated upstream, or package proof-system changes.
+
+Changes:
+- Added init-side `orlix.terminal=` parsing.
+- Kept existing PTY behavior as the default when `orlix.terminal` is absent or not false.
+- Shared configured command setup between PTY and stdio launch paths so namespace, cgroup, device, cwd, uid/gid, env, fd, and exec setup do not drift.
+- Added inherited-stdio command execution for `orlix.terminal=0` and wait status recording through the existing Linux wait-status helper.
+
+Evidence:
+- `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" rtk make -f OrlixOS/Makefile kernel-payload PROFILE=development` exited 0.
+- `rtk git diff --check` exited 0.
+- `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" rtk xcode-storage-doctor` exited 0 before simulator testing.
+- `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" rtk xcrun simctl bootstatus 5E2E003E-F434-4B1F-8E5C-BED59BBC177D -b` reached terminal `Finished` on the single iPhone 17 Pro simulator.
+- `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine test` passed: 1 test, 0 failures.
+- Diagnostic report check after the broader app-hosted test failure found no `Orlix*` reports under `~/Library/Logs/DiagnosticReports`; the selected simulator diagnostic report directory did not exist.
+
+Non-claims:
+- This checkpoint proves init compilation through the product payload build and the Swift-side terminal-false boot metadata path. It does not prove full runtime `process.terminal=false` behavior inside an app-hosted imported OCI root.
+- `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests test` executed but exited 65. The relevant terminal metadata test passed inside that run, while unrelated OCI bundle/rootfs/lifecycle tests failed with `missingRootPath`, expected bundle-rootfs rejection mismatches, lifecycle cleanup mismatch, and one temporary-directory removal error.
+- No product `orlix run`, registry pull, full OCI Runtime lifecycle compliance, cgroup controller behavior, networking, or imported-root terminal-false runtime readiness is claimed by this checkpoint.
+
+Current status:
+- Init-side inherited-stdio command launch for OCI `process.terminal=false` is implemented and builds through the OrlixOS development kernel payload.
+- Next proof gap is app-hosted runtime evidence that a non-terminal OCI command runs on inherited stdio inside the selected root, plus cleanup of unrelated OCI bundle/rootfs/lifecycle test failures.

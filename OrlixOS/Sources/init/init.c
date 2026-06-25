@@ -2242,24 +2242,20 @@ static void exec_or_fork_configured_command(struct orlix_command_config *config)
 	_exit(shell_exit_status(status));
 }
 
-static pid_t start_command_on_pty(int master, int slave)
+static int terminal_enabled(void)
 {
-	pid_t child = fork();
+	char value[16];
+
+	if (read_cmdline_decoded("orlix.terminal=", value, sizeof(value)) != 0)
+		return 1;
+
+	return strcmp(value, "0") != 0 && strcmp(value, "false") != 0;
+}
+
+static void run_configured_command_child(void)
+{
 	struct orlix_command_config *config;
 
-	if (child != 0)
-		return child;
-
-	close(master);
-
-	if (setsid() < 0)
-		write_literal(STDERR_FILENO, "orlix-init: shell setsid failed\n");
-
-	if (ioctl(slave, TIOCSCTTY, 0) < 0)
-		write_literal(STDERR_FILENO,
-			      "orlix-init: shell TIOCSCTTY failed\n");
-
-	install_stdio(slave);
 	config = calloc(1, sizeof(*config));
 	if (config == NULL) {
 		write_literal(STDERR_FILENO,
@@ -2358,6 +2354,45 @@ static pid_t start_command_on_pty(int master, int slave)
 	_exit(127);
 }
 
+static pid_t start_command_on_pty(int master, int slave)
+{
+	pid_t child = fork();
+
+	if (child != 0)
+		return child;
+
+	close(master);
+
+	if (setsid() < 0)
+		write_literal(STDERR_FILENO, "orlix-init: shell setsid failed\n");
+
+	if (ioctl(slave, TIOCSCTTY, 0) < 0)
+		write_literal(STDERR_FILENO,
+			      "orlix-init: shell TIOCSCTTY failed\n");
+
+	install_stdio(slave);
+	run_configured_command_child();
+}
+
+static int run_stdio_command(void)
+{
+	pid_t child = fork();
+	int status;
+
+	if (child < 0) {
+		write_literal(STDERR_FILENO, "orlix-init: fork command failed\n");
+		return 1;
+	}
+	if (child == 0)
+		run_configured_command_child();
+
+	while (waitpid(child, &status, 0) < 0) {
+		if (errno != EINTR)
+			return 1;
+	}
+	return shell_exit_status(status);
+}
+
 static int run_pty_shell(int console_fd)
 {
 	int master = open_pty_master();
@@ -2410,9 +2445,14 @@ int main(void)
 	mount_runtime_filesystems();
 	write_literal(STDERR_FILENO, "orlix-init: runtime filesystems mounted\n");
 	mount_configured_host_directories();
-	if (run_pty_shell(STDIN_FILENO) != 0)
+	if (terminal_enabled()) {
+		if (run_pty_shell(STDIN_FILENO) != 0)
+			write_literal(STDERR_FILENO,
+				      "orlix-init: PTY shell session ended\n");
+	} else if (run_stdio_command() != 0) {
 		write_literal(STDERR_FILENO,
-			      "orlix-init: PTY shell session ended\n");
+			      "orlix-init: stdio command ended\n");
+	}
 
 	for (;;)
 		pause();
