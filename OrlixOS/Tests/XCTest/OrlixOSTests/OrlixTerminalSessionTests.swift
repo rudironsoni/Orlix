@@ -6191,9 +6191,9 @@ report.feature(named: "ociPidsLimit")?.proof,
 			report.feature(named: "ociMemoryLimit")?.proof,
 			"orlix:cgroup_memory_probe"
 		)
-		XCTAssertEqual(report.feature(named: "ociBlockIOWeight")?.status, .implemented)
+XCTAssertEqual(report.feature(named: "ociBlockIOControls")?.status, .implemented)
 		XCTAssertEqual(
-			report.feature(named: "ociBlockIOWeight")?.proof,
+report.feature(named: "ociBlockIOControls")?.proof,
 			"orlix:cgroup_io_probe"
 		)
 		XCTAssertEqual(report.feature(named: "ociMaskedPaths")?.status, .implemented)
@@ -6333,8 +6333,8 @@ XCTAssertEqual(features["ociPidsLimit"]?.status, .implemented)
 XCTAssertEqual(features["ociPidsLimit"]?.proof, "orlix:cgroup_pids_probe")
 		XCTAssertEqual(features["ociMemoryLimit"]?.status, .implemented)
 		XCTAssertEqual(features["ociMemoryLimit"]?.proof, "orlix:cgroup_memory_probe")
-		XCTAssertEqual(features["ociBlockIOWeight"]?.status, .implemented)
-		XCTAssertEqual(features["ociBlockIOWeight"]?.proof, "orlix:cgroup_io_probe")
+XCTAssertEqual(features["ociBlockIOControls"]?.status, .implemented)
+XCTAssertEqual(features["ociBlockIOControls"]?.proof, "orlix:cgroup_io_probe")
 		XCTAssertEqual(features["ociNamespaces"]?.status, .recognized)
         XCTAssertEqual(features["ociNamespaces"]?.proof, "orlix:runtime_config_parser")
         XCTAssertEqual(features["ociMountIpcUtsNetworkCgroupNamespaces"]?.status, .implemented)
@@ -6396,7 +6396,7 @@ XCTAssertEqual(features["ociPidsLimit"]?.proof, "orlix:cgroup_pids_probe")
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-		#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/sys/fs/cgroup","type":"cgroup2","source":"cgroup2"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","namespaces":[{"type":"mount"},{"type":"ipc"},{"type":"uts"},{"type":"network","path":"/proc/1/ns/net"},{"type":"cgroup"}],"maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"cgroupsPath":"/orlix/demo","resources":{"pids":{"limit":64},"cpu":{"shares":1024,"quota":50000,"period":100000},"memory":{"limit":268435456},"blockIO":{"weight":100},"unified":{"cpu.weight":"39","memory.max":"268435456"}},"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
+#"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/sys/fs/cgroup","type":"cgroup2","source":"cgroup2"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","namespaces":[{"type":"mount"},{"type":"ipc"},{"type":"uts"},{"type":"network","path":"/proc/1/ns/net"},{"type":"cgroup"}],"maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"cgroupsPath":"/orlix/demo","resources":{"pids":{"limit":64},"cpu":{"shares":1024,"quota":50000,"period":100000},"memory":{"limit":268435456},"blockIO":{"weight":100,"weightDevice":[{"major":1,"minor":0,"weight":200}],"throttleReadBpsDevice":[{"major":1,"minor":0,"rate":1048576}],"throttleWriteIOPSDevice":[{"major":1,"minor":0,"rate":120}]},"unified":{"cpu.weight":"39","memory.max":"268435456"}},"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6466,7 +6466,10 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 		XCTAssertEqual(descriptor.cgroupIOWeight, 100)
 		XCTAssertEqual(descriptor.cgroupUnified, [
 			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
-			OrlixEnvironmentCgroupUnifiedEntry(file: "memory.max", value: "268435456")
+			OrlixEnvironmentCgroupUnifiedEntry(file: "memory.max", value: "268435456"),
+			OrlixEnvironmentCgroupUnifiedEntry(file: "io.weight", value: "1:0 200"),
+			OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "1:0 rbps=1048576"),
+			OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "1:0 wiops=120")
 		])
 
 		let environment = try descriptor.environmentDescriptor(
@@ -6546,10 +6549,14 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 			("resources.cpu.period", #""cgroupsPath": "/orlix/demo", "resources": { "cpu": { "quota": 50000, "period": 0 } }"#),
 			("resources.cpu.shares", #""cgroupsPath": "/orlix/demo", "resources": { "cpu": { "shares": 1 } }"#),
 			("resources.cpu.cpus", #""cgroupsPath": "/orlix/demo", "resources": { "cpu": { "cpus": "0" } }"#),
-			("resources.blockIO.weight.cgroupsPath", #""resources": { "blockIO": { "weight": 100 } }"#),
-			("resources.blockIO.weight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weight": 0 } }"#),
-			("resources.blockIO.leafWeight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "leafWeight": 100 } }"#),
-		("resources.blockIO.weightDevice", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "weight": 100 }] } }"#),
+		("resources.blockIO.weight.cgroupsPath", #""resources": { "blockIO": { "weight": 100 } }"#),
+		("resources.blockIO.weight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weight": 0 } }"#),
+		("resources.blockIO.leafWeight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "leafWeight": 100 } }"#),
+		("resources.blockIO.weightDevice.cgroupsPath", #""resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "weight": 100 }] } }"#),
+		("resources.blockIO.weightDevice.weight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "weight": 0 }] } }"#),
+		("resources.blockIO.weightDevice.leafWeight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "leafWeight": 100 }] } }"#),
+		("resources.blockIO.throttleReadBpsDevice.cgroupsPath", #""resources": { "blockIO": { "throttleReadBpsDevice": [{ "major": 1, "minor": 0, "rate": 1048576 }] } }"#),
+		("resources.blockIO.throttleReadBpsDevice.rate", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "throttleReadBpsDevice": [{ "major": 1, "minor": 0, "rate": 1 }] } }"#),
 		("resources.unified.cgroupsPath", #""resources": { "unified": { "cpu.weight": "39" } }"#),
 		("resources.unified.cpu.pressure", #""cgroupsPath": "/orlix/demo", "resources": { "unified": { "cpu.pressure": "some 100000 100000" } }"#),
 		("resources.pids.cgroupsPath", #""resources": { "pids": { "limit": 64 } }"#),

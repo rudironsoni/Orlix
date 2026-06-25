@@ -20665,6 +20665,38 @@ Verification:
 Non-claims:
 - This does not claim full OCI runtime lifecycle compliance, registry pull, product `orlix run`, systemd support, arbitrary cgroup delegation, or real CPU fairness/accounting beyond the Linux cgroup v2 file setup/probe described above.
 - This does not claim executed XCTest coverage for this checkpoint because the focused runner did not attach before the bounded interruption.
+### 2026-06-25 OCI block IO device controls via cgroup v2 io.weight/io.max
+
+Current status: extended OCI `linux.resources.blockIO` support beyond default weight to include device-specific weights and device throttle entries backed by upstream Linux cgroup v2 `io.weight` and `io.max`. This is a Linux cgroupfs path: durable Orlix kernel config enables upstream block throttling, OrlixOS parses OCI blockIO fields into descriptor cgroup writes, and first-stage init writes Linux cgroup v2 files before joining the process cgroup. No HostAdapter Linux policy, custom ABI, generated upstream edit, OrlixMLibC patch, Docker/runc path, or package-management mechanism was added.
+
+Changes:
+- Enabled upstream Linux `CONFIG_BLK_DEV_THROTTLING=y` in durable development/release Orlix defconfigs; generated release config selects `CONFIG_BLK_CGROUP_RWSTAT=y` and has `CONFIG_BLK_DEV_THROTTLING=y`.
+- Extended OCI parser support for `linux.resources.blockIO.weightDevice` by mapping entries with `major`, `minor`, and `weight` into cgroup v2 `io.weight` device entries (`MAJ:MIN <weight>`).
+- Extended OCI parser support for `throttleReadBpsDevice`, `throttleWriteBpsDevice`, `throttleReadIOPSDevice`, and `throttleWriteIOPSDevice` by mapping each entry into cgroup v2 `io.max` tokens (`rbps`, `wbps`, `riops`, `wiops`).
+- Kept v1-only `leafWeight` rejected precisely for both top-level blockIO and device-weight entries.
+- Added `io.max` to the validated Orlix cgroup unified allowlist and init controller routing.
+- Strengthened `orlix:cgroup_io_probe` to assert child cgroups expose `io.weight` and `io.max`, read the real `/sys/block/vdb/dev` major/minor, and write device-specific `io.weight` and `io.max`.
+- Strengthened `orlix:cgroup_unified_probe` to include `io.max` as an allowlisted unified cgroup v2 file.
+- Updated OCI feature reporting from `ociBlockIOWeight` to `ociBlockIOControls` with proof `orlix:cgroup_io_probe`.
+- Updated OrlixOS tests for blockIO device weight/throttle parsing and invalid blockIO subfields.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- Initial `OrlixOSTests build-for-testing` caught a probe link failure from `snprintf` pulling mlibc long-double formatting helpers; fixed by removing stdio formatting from the probes rather than changing MLibC.
+- `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` needed unsandboxed execution because ccache writes under `~/Library/Caches/ccache`; rerun exited 0.
+- `rtk rg -n "CONFIG_BLK_DEV_THROTTLING|CONFIG_BLK_CGROUP_RWSTAT|cgroup_io_probe|cgroup_unified_probe|io.max|rbps=1048576|ociBlockIOControls" Build/OrlixKernel/build/release/.config Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list OrlixKernel/Sources/ports/orlix/configs OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` confirmed release `.config` has `CONFIG_BLK_DEV_THROTTLING=y` and `CONFIG_BLK_CGROUP_RWSTAT=y`, durable defconfigs enable throttling, both cgroup probes are in the kselftest list/initramfs, probes cover `io.max`, and OrlixOS/tests expose `ociBlockIOControls`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` rerun succeeded; `/private/tmp/orlix-oci-blockio-xcodebuild-rerun.log` contains `** TEST BUILD SUCCEEDED **`.
+- Focused `xcodebuild ... test-without-building` for changed parser/feature tests reached `Testing started` but emitted no `Test Suite` or `Test Case` lines before manual interruption after roughly two minutes; no executed-XCTest pass claimed from that run.
+- `rtk git diff --check` exited 0.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- No claim of block I/O enforcement/accounting beyond cgroup v2 file setup and Orlix-owned kselftest surface proof.
+- No claim of arbitrary cgroup delegation, systemd compatibility, product `orlix run`, registry pull, Docker/runc compatibility, or full OCI Runtime Spec lifecycle compliance.
+- No OrlixMLibC patch or generated upstream source edit was made.
+
 ### 2026-06-25 OCI unified cgroup v2 allowlist
 
 Current status: implemented OCI `linux.resources.unified` for the cgroup v2 files Orlix already proves through Linux substrate: `pids.max`, `cpu.max`, `cpu.weight`, `memory.max`, and `io.weight`. This advances Phase 13 cgroup behavior by carrying real OCI unified resource inputs into OrlixOS descriptors and first-stage init cgroupfs writes; it does not create HostAdapter Linux policy, a custom ABI, package-manager behavior, generated upstream edits, or OrlixMLibC patches.
