@@ -1456,12 +1456,18 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:runtime_config_parser",
 			reason: "OCI masked paths are parsed and rejected until Linux mount masking is wired."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "ociNamespaces",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux namespaces are parsed and rejected until each namespace type has Linux-owned proof."
-		),
+        OrlixOCIRuntimeFeature(
+            name: "ociNamespaces",
+            status: .recognized,
+            proof: "orlix:runtime_config_parser",
+            reason: "OCI Linux namespaces are parsed. Mount, IPC, UTS, network, and cgroup namespaces are implemented through init unshare; PID, user, time, namespace path joins, and duplicate namespace declarations remain rejected."
+        ),
+        OrlixOCIRuntimeFeature(
+            name: "ociMountIpcUtsNetworkCgroupNamespaces",
+            status: .implemented,
+            proof: "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe",
+            reason: "OCI mount, IPC, UTS, network, and cgroup namespace requests carry into OrlixOS descriptors and init creates them with Linux unshare before exec."
+        ),
 		OrlixOCIRuntimeFeature(
 			name: "ociReadonlyPaths",
 			status: .deterministicallyRejected,
@@ -1599,6 +1605,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
             readonlyPaths: readonlyPaths,
             cgroupsPath: cgroupsPath,
             cgroupPidsLimit: cgroupPidsLimit,
+            namespaces: namespaces,
             mounts: mounts + ociMounts
         )
     }
@@ -2191,14 +2198,33 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
 		}
 	}
 
-	private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
-		if let namespace = namespaces.first {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
-				"linux.namespaces.\(namespace.type)"
-			)
-		}
-		return []
-	}
+    private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup"])
+
+        for namespace in namespaces {
+            guard namespace.path == nil else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "linux.namespaces.\(namespace.type).path"
+                )
+            }
+            guard !seen.contains(namespace.type) else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "linux.namespaces.\(namespace.type).duplicate"
+                )
+            }
+            seen.insert(namespace.type)
+            guard supportedNamespaces.contains(namespace.type) else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "linux.namespaces.\(namespace.type)"
+                )
+            }
+            result.append(namespace.type)
+        }
+
+        return result.sorted()
+    }
 
 	private static func validatedMounts(_ mounts: [OCIRuntimeMount]) throws -> [OrlixOCIRuntimeMount] {
 		try mounts.map { mount in
@@ -2468,7 +2494,8 @@ private struct OCIRuntimeRdmaLimit: Decodable {
 }
 
 private struct OCIRuntimeNamespace: Decodable {
-	let type: String
+    let type: String
+    let path: String?
 }
 
 private struct OCIRuntimeIDMapping: Decodable {

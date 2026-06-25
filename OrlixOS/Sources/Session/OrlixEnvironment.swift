@@ -48,6 +48,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let readonlyPaths: [String]
     public let cgroupsPath: String?
     public let cgroupPidsLimit: Int64?
+    public let namespaces: [String]
     public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
@@ -107,6 +108,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         readonlyPaths: [String] = [],
         cgroupsPath: String? = nil,
         cgroupPidsLimit: Int64? = nil,
+        namespaces: [String] = [],
         mounts: [OrlixEnvironmentMount] = []
     ) {
         self.id = id
@@ -138,6 +140,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.readonlyPaths = readonlyPaths
         self.cgroupsPath = cgroupsPath
         self.cgroupPidsLimit = cgroupPidsLimit
+        self.namespaces = namespaces
         self.mounts = mounts
     }
 
@@ -171,6 +174,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case readonlyPaths
         case cgroupsPath
         case cgroupPidsLimit
+        case namespaces
         case mounts
     }
 
@@ -286,6 +290,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             Int64.self,
             forKey: .cgroupPidsLimit
         )
+        self.namespaces = try container.decodeIfPresent(
+            [String].self,
+            forKey: .namespaces
+        ) ?? []
         self.mounts = try container.decodeIfPresent(
             [OrlixEnvironmentMount].self,
             forKey: .mounts
@@ -340,6 +348,9 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         }
         try container.encodeIfPresent(cgroupsPath, forKey: .cgroupsPath)
         try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
+        if !namespaces.isEmpty {
+            try container.encode(namespaces, forKey: .namespaces)
+        }
         try container.encode(mounts, forKey: .mounts)
     }
 }
@@ -756,6 +767,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let readonlyPathCommandLineKeyPrefix = "orlix.readonlypath"
     public static let cgroupsPathCommandLineKey = "orlix.cgroups.path"
     public static let cgroupPidsMaxCommandLineKey = "orlix.cgroups.pids.max"
+    public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
 
     public let environmentID: String
@@ -972,6 +984,15 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         return limit == -1 ? "max" : String(limit)
     }
 
+    private static func validateNamespace(_ namespace: String) throws -> String {
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup"])
+        guard supportedNamespaces.contains(namespace) else {
+            throw OrlixEnvironmentRootImageError.invalidNamespace(namespace)
+        }
+
+        return namespace
+    }
+
     private static func hostDirectoryRegistrations(
         for mounts: [OrlixEnvironmentMount],
         documentsDirectory: URL?,
@@ -1111,6 +1132,11 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
                 "\(cgroupPidsMaxCommandLineKey)=\(try validateCgroupPidsLimit(cgroupPidsLimit))"
             )
         }
+        for (index, namespace) in descriptor.namespaces.sorted().enumerated() {
+            tokens.append(
+                "\(namespaceCommandLineKeyPrefix)\(index)=\(try validateNamespace(namespace))"
+            )
+        }
         if let mount = descriptor.mounts.first {
             tokens.append(
                 "\(defaultHostMountTargetCommandLineKey)=\(percentEncoded(mount.targetPath))"
@@ -1173,6 +1199,7 @@ public enum OrlixEnvironmentRootImageError:
     case invalidDefaultSysctl(String)
     case invalidRuntimePath(String)
     case invalidCgroupPidsLimit(Int64)
+    case invalidNamespace(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
 
@@ -1398,6 +1425,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 readonlyPaths: parent.readonlyPaths,
                 cgroupsPath: parent.cgroupsPath,
                 cgroupPidsLimit: parent.cgroupPidsLimit,
+                namespaces: parent.namespaces,
                 mounts: parent.mounts
             )
             try save(descriptor, fileManager: fileManager)
