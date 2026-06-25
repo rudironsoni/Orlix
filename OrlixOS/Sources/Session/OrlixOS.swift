@@ -990,6 +990,20 @@ public struct OrlixOCIRuntimeRunResult: Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeMaterializedRunResult: Sendable {
+	public let createdEnvironment: OrlixOCIRuntimeMaterializedCreatedEnvironment
+	public let runResult: OrlixOCIRuntimeRunResult
+
+	public var startedEnvironment: OrlixOCIRuntimeStartedEnvironment {
+		runResult.startedEnvironment
+	}
+
+	public var completedEnvironment: OrlixOCIRuntimeCompletedEnvironment {
+		runResult.completedEnvironment
+	}
+}
+
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeError: Error, Equatable, Sendable {
 	case environmentAlreadyExists(String)
 	case missingMaterializedRootImage(String)
@@ -1225,6 +1239,43 @@ public struct OrlixOCIRuntime: Sendable {
 		return OrlixOCIRuntimeRunResult(
 			startedEnvironment: startedEnvironment,
 			completedEnvironment: completedEnvironment
+		)
+	}
+
+	public func run(
+		bundleURL: URL,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
+		processDriver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeMaterializedRunResult {
+		let createdEnvironment = try createMaterialized(
+			bundleURL: bundleURL,
+			id: id,
+			rootMount: rootMount,
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable,
+			fileManager: fileManager,
+			runner: materializationRunner
+		)
+		let runResult = try run(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			using: processDriver,
+			fileManager: fileManager
+		)
+		return OrlixOCIRuntimeMaterializedRunResult(
+			createdEnvironment: createdEnvironment,
+			runResult: runResult
 		)
 	}
 
