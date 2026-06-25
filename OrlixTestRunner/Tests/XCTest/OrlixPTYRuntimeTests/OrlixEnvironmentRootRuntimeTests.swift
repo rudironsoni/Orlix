@@ -466,10 +466,10 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
 		XCTAssertTrue(result.output.contains("orlix-init: process started pid="))
 		XCTAssertTrue(result.output.contains("orlix-init: process exited pid="))
 		XCTAssertTrue(result.output.contains("ORLIX_ENV_STDIO_DONE"))
-		XCTAssertEqual(result.run.startedEnvironment.stateReport.status, .running)
-		XCTAssertNotNil(result.run.startedEnvironment.stateReport.pid)
-		XCTAssertEqual(result.run.completedEnvironment.stateReport.status, .stopped)
-		XCTAssertEqual(result.run.completedEnvironment.stateReport.exitStatus, 0)
+		XCTAssertEqual(result.run.startedStateReport.status, .running)
+		XCTAssertNotNil(result.run.startedStateReport.pid)
+		XCTAssertEqual(result.run.completedStateReport.status, .stopped)
+		XCTAssertEqual(result.run.completedStateReport.exitStatus, 0)
 		XCTAssertEqual(result.finalState.status, .stopped)
 		XCTAssertEqual(result.finalState.exitStatus, 0)
 		XCTAssertEqual(result.deletedEnvironment.deletedRecord.state, .deleted)
@@ -499,7 +499,7 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
 
 private struct OrlixEnvironmentObservedRuntimeResult {
 	let output: String
-	let run: OrlixOCIRuntimeRunResult
+	let run: OrlixOCIEnvironmentRunResult
 	let finalState: OrlixOCIRuntimeStateReport
 	let deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment
 	let lifecycleRecordURL: URL
@@ -976,12 +976,13 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 		)
 		try registry.save(processHandle.sessionDescriptor.environment)
 		try runtime.lifecycleStore.save(lifecycle)
-		let run = try runtime.run(
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let run = try installer.run(
 			id: descriptor.id,
 			terminal: terminal,
 			observationTimeout: 60
 		)
-		let finalState = try runtime.state(id: descriptor.id)
+		let finalState = try installer.state(id: descriptor.id)
 		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
 			forID: descriptor.id
 		)

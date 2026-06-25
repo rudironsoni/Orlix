@@ -1266,6 +1266,12 @@ public struct OrlixOCIRegistryEnvironmentInstallResult: Sendable {
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIEnvironmentRunResult: Sendable {
+	public let id: String
+	public let startedStateReport: OrlixOCIRuntimeStateReport
+	public let completedStateReport: OrlixOCIRuntimeStateReport
+}
+
 public struct OrlixOCIEnvironmentInstaller: Sendable {
 	private let registry: OrlixEnvironmentRegistry
 
@@ -1401,6 +1407,62 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			environmentID: id,
 			registry: registry,
 			terminal: terminal
+		)
+	}
+
+	public func state(
+		id: String,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeStateReport {
+		try OrlixOCIRuntime(registry: registry).state(
+			id: id,
+			fileManager: fileManager
+		)
+	}
+
+	public func run(
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentRunResult {
+		let runtimeResult = try OrlixOCIRuntime(registry: registry).run(
+			id: id,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
+		)
+		return Self.runResult(id: id, runtimeResult: runtimeResult)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public func run(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentRunResult {
+		let runtimeResult = try OrlixOCIRuntime(registry: registry).run(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+		return Self.runResult(id: id, runtimeResult: runtimeResult)
+	}
+
+	private static func runResult(
+		id: String,
+		runtimeResult: OrlixOCIRuntimeRunResult
+	) -> OrlixOCIEnvironmentRunResult {
+		OrlixOCIEnvironmentRunResult(
+			id: id,
+			startedStateReport: runtimeResult.startedEnvironment.stateReport,
+			completedStateReport: runtimeResult.completedEnvironment.stateReport
 		)
 	}
 
