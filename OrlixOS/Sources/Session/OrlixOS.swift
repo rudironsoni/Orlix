@@ -1586,6 +1586,26 @@ public struct OrlixOCIRuntime: Sendable {
 		)
 	}
 
+	public func start(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeStartedEnvironment {
+		try start(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+				timeout: observationTimeout
+			),
+			fileManager: fileManager
+		)
+	}
+
 	public func kill(
 		id: String,
 		signal: Int32,
@@ -1641,6 +1661,26 @@ public struct OrlixOCIRuntime: Sendable {
 		)
 	}
 
+	public func wait(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeCompletedEnvironment {
+		try wait(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+				timeout: observationTimeout
+			),
+			fileManager: fileManager
+		)
+	}
+
 	public func run(
 		id: String,
 		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
@@ -1679,6 +1719,26 @@ public struct OrlixOCIRuntime: Sendable {
 	}
 
 	public func run(
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeRunResult {
+		try run(
+			id: id,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+				timeout: observationTimeout
+			),
+			fileManager: fileManager
+		)
+	}
+
+	public func run(
 		bundleURL: URL,
 		id: String,
 		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
@@ -1712,6 +1772,36 @@ public struct OrlixOCIRuntime: Sendable {
 		return OrlixOCIRuntimeMaterializedRunResult(
 			createdEnvironment: createdEnvironment,
 			runResult: runResult
+		)
+	}
+
+	public func run(
+		bundleURL: URL,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeMaterializedRunResult {
+		try run(
+			bundleURL: bundleURL,
+			id: id,
+			rootMount: rootMount,
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			materializationRunner: materializationRunner,
+			processDriver: OrlixOCIRuntimeLinuxSessionObservationDriver(
+				timeout: observationTimeout
+			),
+			fileManager: fileManager
 		)
 	}
 
@@ -1778,6 +1868,36 @@ public struct OrlixOCIRuntime: Sendable {
 		return OrlixOCIRuntimeEphemeralRunResult(
 			materializedRunResult: materializedRunResult,
 			deletedEnvironment: deletedEnvironment
+		)
+	}
+
+	public func runEphemeral(
+		bundleURL: URL,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeEphemeralRunResult {
+		try runEphemeral(
+			bundleURL: bundleURL,
+			id: id,
+			rootMount: rootMount,
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			materializationRunner: materializationRunner,
+			processDriver: OrlixOCIRuntimeLinuxSessionObservationDriver(
+				timeout: observationTimeout
+			),
+			fileManager: fileManager
 		)
 	}
 
