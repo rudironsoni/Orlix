@@ -49,6 +49,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let cgroupsPath: String?
     public let cgroupPidsLimit: Int64?
     public let namespaces: [String]
+    public let namespacePaths: [String: String]
     public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
@@ -109,6 +110,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         cgroupsPath: String? = nil,
         cgroupPidsLimit: Int64? = nil,
         namespaces: [String] = [],
+        namespacePaths: [String: String] = [:],
         mounts: [OrlixEnvironmentMount] = []
     ) {
         self.id = id
@@ -141,6 +143,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         self.cgroupsPath = cgroupsPath
         self.cgroupPidsLimit = cgroupPidsLimit
         self.namespaces = namespaces
+        self.namespacePaths = namespacePaths
         self.mounts = mounts
     }
 
@@ -175,6 +178,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         case cgroupsPath
         case cgroupPidsLimit
         case namespaces
+        case namespacePaths
         case mounts
     }
 
@@ -294,6 +298,10 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
             [String].self,
             forKey: .namespaces
         ) ?? []
+        self.namespacePaths = try container.decodeIfPresent(
+            [String: String].self,
+            forKey: .namespacePaths
+        ) ?? [:]
         self.mounts = try container.decodeIfPresent(
             [OrlixEnvironmentMount].self,
             forKey: .mounts
@@ -350,6 +358,9 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
         try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
         if !namespaces.isEmpty {
             try container.encode(namespaces, forKey: .namespaces)
+        }
+        if !namespacePaths.isEmpty {
+            try container.encode(namespacePaths, forKey: .namespacePaths)
         }
         try container.encode(mounts, forKey: .mounts)
     }
@@ -768,6 +779,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let cgroupsPathCommandLineKey = "orlix.cgroups.path"
     public static let cgroupPidsMaxCommandLineKey = "orlix.cgroups.pids.max"
     public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
+    public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
     public static let defaultHostDirectoryIdentifier = "orlix-host0"
 
     public let environmentID: String
@@ -993,6 +1005,10 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         return namespace
     }
 
+    private static func validateNamespaceJoin(type: String, path: String) throws -> String {
+        "\(try validateNamespace(type))=\(try validateRuntimePath(path))"
+    }
+
     private static func hostDirectoryRegistrations(
         for mounts: [OrlixEnvironmentMount],
         documentsDirectory: URL?,
@@ -1135,6 +1151,15 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
         for (index, namespace) in descriptor.namespaces.sorted().enumerated() {
             tokens.append(
                 "\(namespaceCommandLineKeyPrefix)\(index)=\(try validateNamespace(namespace))"
+            )
+        }
+        for (index, entry) in descriptor.namespacePaths
+            .sorted(by: { $0.key < $1.key })
+            .enumerated()
+        {
+            let assignment = try validateNamespaceJoin(type: entry.key, path: entry.value)
+            tokens.append(
+                "\(namespacePathCommandLineKeyPrefix)\(index)=\(percentEncoded(assignment))"
             )
         }
         if let mount = descriptor.mounts.first {
@@ -1426,6 +1451,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 cgroupsPath: parent.cgroupsPath,
                 cgroupPidsLimit: parent.cgroupPidsLimit,
                 namespaces: parent.namespaces,
+                namespacePaths: parent.namespacePaths,
                 mounts: parent.mounts
             )
             try save(descriptor, fileManager: fileManager)

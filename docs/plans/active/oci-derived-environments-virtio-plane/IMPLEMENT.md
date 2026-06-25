@@ -10,6 +10,34 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI namespace path join support
+
+Checkpoint: implemented bounded OCI Linux namespace `path` joins through OrlixOS descriptors and first-stage init using Linux `setns(2)`. OCI runtime configs may now request `path` joins for `mount`, `ipc`, `uts`, `network`, and `cgroup` namespaces. OrlixOS validates and carries those joins separately from namespace creation, emits deterministic `orlix.namespacepath<N>=type=/path` command-line tokens, and init opens the namespace file and calls `setns(2)` before applying any requested `unshare(2)` namespace creation and before exec.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.namespacePaths` Codable/session propagation, copy preservation, root-image command-line emission, and runtime-path validation.
+- Added `OrlixOCIRuntimeConfigDescriptor.namespacePaths` and OCI parser support for supported namespace `path` entries.
+- Kept duplicate namespace declarations rejected and kept `pid`, `user`, `time`, and unknown namespace types rejected because they need lifecycle/mapping semantics not implemented by this checkpoint.
+- Added first-stage init parsing for `orlix.namespacepath<N>` and Linux `setns(2)` joins, with conflict detection when the same namespace type is also requested for creation.
+- Updated OCI runtime feature reporting with implemented `ociNamespacePathJoins` and removed stale wording that claimed all namespace path joins were rejected.
+- Updated OrlixOS XCTest coverage for root-image command-line carriage, OCI parser descriptor conversion, feature report status, and unsupported namespace path cases.
+
+Evidence:
+- Previous in-flight `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 after rebuilding current Coreutils package inputs, first-stage init, and touched Swift/XCTest sources.
+- Fresh current-tree rerun of the same `build-for-testing` command exited 0.
+- Focused `test-without-building` for the modified root-image, parser, feature-report, and unsupported-namespace tests was interrupted after it did not reach `Testing started` or `Test Suite` output in the bounded wait; no executed-XCTest proof is claimed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale active-plan warning.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Boundary:
+- This implements descriptor/parser/init carriage and Linux `setns(2)` joins for supported namespace types. It does not claim PID namespace support, user namespace mappings, time namespace support, full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, hosted runtime execution proof, or full runtime readiness.
+- No Linux ABI shim, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, runtime-visible host shim, generated upstream edit, or OrlixMLibC patch was added.
+
 ### 2026-06-25 OCI mount IPC UTS network cgroup namespace support
 
 Checkpoint: implemented bounded OCI Linux namespace creation through OrlixOS descriptors and first-stage init. OCI runtime configs may now request no-`path` `mount`, `ipc`, `uts`, `network`, and `cgroup` namespaces. OrlixOS validates the namespace set, rejects namespace path joins and duplicates, carries supported namespace requests through `OrlixOCIRuntimeConfigDescriptor` and `OrlixEnvironmentDescriptor`, emits deterministic `orlix.namespace<N>=...` command-line tokens, and first-stage init maps those names to Linux `CLONE_NEW*` flags and calls `unshare(2)` before applying UTS configuration, cgroup setup, limits, credentials, and exec.
