@@ -506,6 +506,8 @@ static void enable_cgroup_controller(const char *path, const char *controller)
 		memcpy(&directory[used], cursor, component_length);
 		used += component_length;
 		directory[used] = '\0';
+		if (ensure_dir_recursive(directory, 0755) != 0)
+			die("create cgroup path");
 		cursor = slash + 1;
 	}
 }

@@ -72,6 +72,22 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_PATHS_DONE"))
     }
 
+    func testOCICgroupPidsLimitAppliesThroughOrlixOSTerminalSession()
+        throws
+    {
+        let runner = OrlixEnvironmentRootRuntimeProofRunner(
+            fixture: .ociDerived,
+            proof: .cgroupPidsLimit
+        )
+        let output = try runner.run()
+
+        XCTAssertTrue(output.contains("ORLIX_ENV_CGROUP_BEGIN"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_CGROUP_PATH_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_CGROUP_PIDS_MAX_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_CGROUP_PROCS_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_CGROUP_DONE"))
+    }
+
     private static func makeOCIRuntimeProcessDefaultsDescriptor()
         throws -> OrlixEnvironmentDescriptor
     {
@@ -833,6 +849,8 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
             defaultGroupID: proof.defaultGroupID,
             maskedPaths: proof.maskedPaths,
             readonlyPaths: proof.readonlyPaths,
+            cgroupsPath: proof.cgroupsPath,
+            cgroupPidsLimit: proof.cgroupPidsLimit,
             timeOffsets: proof.timeOffsets,
             uidMappings: proof.uidMappings,
             gidMappings: proof.gidMappings,
@@ -1106,6 +1124,9 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         "ORLIX_ENV_TIMENS_PROOF_FAILED_BOOTTIME",
         "ORLIX_ENV_PATHS_PROOF_FAILED_MASKED_FILE",
         "ORLIX_ENV_PATHS_PROOF_FAILED_READONLY_DIR",
+        "ORLIX_ENV_CGROUP_PROOF_FAILED_PATH",
+        "ORLIX_ENV_CGROUP_PROOF_FAILED_PIDS_MAX",
+        "ORLIX_ENV_CGROUP_PROOF_FAILED_PROCS",
         "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_WRITE",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_SYNC",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_REREAD",
@@ -1141,6 +1162,7 @@ private enum RuntimeProof: Sendable {
     case userNamespaceMappings
     case timeNamespaceOffsets
     case maskedReadonlyPaths
+    case cgroupPidsLimit
     case crossBootWrite
     case crossBootVerify
 
@@ -1200,6 +1222,12 @@ private enum RuntimeProof: Sendable {
                 "-c",
                 Self.maskedReadonlyPathScript
             ]
+        case .cgroupPidsLimit:
+            return [
+                "/bin/sh",
+                "-c",
+                Self.cgroupPidsLimitScript
+            ]
         }
     }
 
@@ -1230,7 +1258,7 @@ private enum RuntimeProof: Sendable {
         switch self {
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .maskedReadonlyPaths, .crossBootWrite,
+             .maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
              .crossBootVerify:
             return "/"
         case .descriptorExecution, .longDescriptorExecution:
@@ -1247,7 +1275,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets, .maskedReadonlyPaths,
+             .timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
              .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
@@ -1261,7 +1289,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets, .maskedReadonlyPaths,
+             .timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
              .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
@@ -1280,6 +1308,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .maskedReadonlyPaths,
+             .cgroupPidsLimit,
              .crossBootWrite, .crossBootVerify:
             return []
         }
@@ -1294,7 +1323,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
-             .maskedReadonlyPaths,
+             .maskedReadonlyPaths, .cgroupPidsLimit,
              .crossBootWrite, .crossBootVerify:
             return []
         }
@@ -1309,7 +1338,8 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets, .crossBootWrite, .crossBootVerify:
+             .timeNamespaceOffsets, .cgroupPidsLimit,
+             .crossBootWrite, .crossBootVerify:
             return []
         }
     }
@@ -1323,8 +1353,39 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets, .crossBootWrite, .crossBootVerify:
+             .timeNamespaceOffsets, .cgroupPidsLimit,
+             .crossBootWrite, .crossBootVerify:
             return []
+        }
+    }
+
+    var cgroupsPath: String? {
+        switch self {
+        case .cgroupPidsLimit:
+            return "/orlix/runtime-proof"
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets, .maskedReadonlyPaths,
+             .crossBootWrite, .crossBootVerify:
+            return nil
+        }
+    }
+
+    var cgroupPidsLimit: Int64? {
+        switch self {
+        case .cgroupPidsLimit:
+            return 32
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets, .maskedReadonlyPaths,
+             .crossBootWrite, .crossBootVerify:
+            return nil
         }
     }
 
@@ -1340,7 +1401,8 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .maskedReadonlyPaths, .crossBootWrite, .crossBootVerify:
+             .maskedReadonlyPaths, .cgroupPidsLimit,
+             .crossBootWrite, .crossBootVerify:
             return []
         }
     }
@@ -1354,7 +1416,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
-             .maskedReadonlyPaths,
+             .maskedReadonlyPaths, .cgroupPidsLimit,
              .crossBootWrite, .crossBootVerify:
             return []
         }
@@ -1368,7 +1430,7 @@ private enum RuntimeProof: Sendable {
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
-             .timeNamespaceOffsets, .maskedReadonlyPaths:
+             .timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit:
             return false
         }
     }
@@ -1453,7 +1515,7 @@ private enum RuntimeProof: Sendable {
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
-             .timeNamespaceOffsets, .maskedReadonlyPaths:
+             .timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit:
             return ""
         }
     }
@@ -1480,6 +1542,8 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_TIMENS_DONE"
         case .maskedReadonlyPaths:
             return "ORLIX_ENV_PATHS_DONE"
+        case .cgroupPidsLimit:
+            return "ORLIX_ENV_CGROUP_DONE"
         case .crossBootWrite:
             return "ORLIX_ENV_CROSSBOOT_WRITE_DONE"
         case .crossBootVerify:
@@ -1493,7 +1557,7 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_PTY_WAITING_FOR_INPUT"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .maskedReadonlyPaths, .crossBootWrite,
+             .maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1508,7 +1572,7 @@ private enum RuntimeProof: Sendable {
             return "orlix-pty-delayed-input\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .maskedReadonlyPaths, .crossBootWrite,
+             .maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1523,7 +1587,7 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_PTY_DELAYED_INPUT_OK"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .maskedReadonlyPaths, .crossBootWrite,
+             .maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1538,7 +1602,7 @@ private enum RuntimeProof: Sendable {
             return #"printf '%s%s\n' ORLIX_ENV_ PTY_DONE"# + "\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .maskedReadonlyPaths, .crossBootWrite,
+             .maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1622,6 +1686,14 @@ private enum RuntimeProof: Sendable {
                 "ORLIX_ENV_READONLY_DIR_OK",
                 "ORLIX_ENV_PATHS_DONE"
             ]
+        case .cgroupPidsLimit:
+            return [
+                "ORLIX_ENV_CGROUP_BEGIN",
+                "ORLIX_ENV_CGROUP_PATH_OK",
+                "ORLIX_ENV_CGROUP_PIDS_MAX_OK",
+                "ORLIX_ENV_CGROUP_PROCS_OK",
+                "ORLIX_ENV_CGROUP_DONE"
+            ]
         case .pseudoFilesystems:
             return [
                 "ORLIX_ENV_PSEUDOFS_BEGIN",
@@ -1688,7 +1760,7 @@ private enum RuntimeProof: Sendable {
             return Self.descriptorExecutionScript
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .maskedReadonlyPaths, .crossBootWrite,
+             .maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
              .crossBootVerify:
             return ""
         }
@@ -1704,7 +1776,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets, .maskedReadonlyPaths,
+             .timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
              .crossBootWrite, .crossBootVerify:
             return ""
         }
@@ -1733,6 +1805,16 @@ private enum RuntimeProof: Sendable {
         #"if /bin/test ! -s /etc/os-release; then printf '%s%s\n' ORLIX_ENV_ MASKED_FILE_OK; else printf '%s%s\n' ORLIX_ENV_PATHS_ PROOF_FAILED_MASKED_FILE; fi"#,
         #"if /bin/touch /etc/orlix-readonly-proof 2>/dev/null; then /bin/rm -f /etc/orlix-readonly-proof; printf '%s%s\n' ORLIX_ENV_PATHS_ PROOF_FAILED_READONLY_DIR; else printf '%s%s\n' ORLIX_ENV_ READONLY_DIR_OK; fi"#,
         #"printf '%s%s\n' ORLIX_ENV_ PATHS_DONE"#,
+    ].joined(separator: "\n")
+
+    private static let cgroupPidsLimitScript = [
+        #"printf '%s%s\n' ORLIX_ENV_ CGROUP_BEGIN"#,
+        #"cgroup_path=$(/bin/cat /proc/self/cgroup)"#,
+        #"case "$cgroup_path" in *"0::/orlix/runtime-proof"*) printf '%s%s\n' ORLIX_ENV_ CGROUP_PATH_OK;; *) printf '%s%s\n' ORLIX_ENV_CGROUP_ PROOF_FAILED_PATH;; esac"#,
+        #"pids_max=$(/bin/cat /sys/fs/cgroup/orlix/runtime-proof/pids.max)"#,
+        #"if [ "$pids_max" = "32" ]; then printf '%s%s\n' ORLIX_ENV_ CGROUP_PIDS_MAX_OK; else printf '%s%s\n' ORLIX_ENV_CGROUP_ PROOF_FAILED_PIDS_MAX; fi"#,
+        #"found_self=0; for pid in $(/bin/cat /sys/fs/cgroup/orlix/runtime-proof/cgroup.procs); do if [ "$pid" = "$$" ]; then found_self=1; fi; done; if [ "$found_self" = 1 ]; then printf '%s%s\n' ORLIX_ENV_ CGROUP_PROCS_OK; else printf '%s%s\n' ORLIX_ENV_CGROUP_ PROOF_FAILED_PROCS; fi"#,
+        #"printf '%s%s\n' ORLIX_ENV_ CGROUP_DONE"#,
     ].joined(separator: "\n")
 
     private static let descriptorExecutionScript = (

@@ -21321,7 +21321,53 @@ Boundary:
   runtime readiness.
 - No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
-  dependency, or Swift-side fake Linux behavior was added.
+ dependency, or Swift-side fake Linux behavior was added.
+
+### 2026-06-25 OCI cgroup pids limit OrlixOS runtime proof checkpoint
+
+Checkpoint: app-hosted OrlixOS proof now covers OCI-style cgroup path plus
+pids limit flowing through environment descriptors into first-stage init and
+Linux cgroup v2 state.
+
+Current status:
+
+- Focused cgroup pids-limit runtime proof implemented and passing through
+  `OrlixPTYRuntimeTests` on the single booted simulator.
+
+Changes:
+
+- Added `testOCICgroupPidsLimitAppliesThroughOrlixOSTerminalSession`.
+- Wired runtime proofs to pass `cgroupsPath` and `cgroupPidsLimit` through
+  `OrlixEnvironmentDescriptor`.
+- Added an in-guest proof for `/proc/self/cgroup`,
+  `/sys/fs/cgroup/orlix/runtime-proof/pids.max`, and the shell PID in
+  `/sys/fs/cgroup/orlix/runtime-proof/cgroup.procs`.
+- Fixed OrlixOS init cgroup controller setup for nested cgroup paths by creating
+  each intermediate cgroup before enabling controllers below it.
+
+Evidence:
+
+- Initial focused XCTest failed before shell exec with `orlix-init: open cgroup control`, proving the nested cgroup controller setup path was not working.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 600 env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 after the init fix.
+- Focused `OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCICgroupPidsLimitAppliesThroughOrlixOSTerminalSession` exited 0 after the init fix.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_15-25-51-+0200.xcresult` reported `result: Passed`, `totalTestCount: 1`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0` on `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)`.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` returned no fresh Orlix crash reports.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --check` exited 0.
+- `rtk git diff --name-only -- Build OrlixMLibC OrlixKernel/Sources/ports/orlix/patches OrlixKernel/Sources/ports/orlix/overlay` returned no paths.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the existing active-plan stale-status warning only.
+
+Boundary:
+
+- This proves one OrlixOS app-hosted runtime path for nested cgroup v2 path
+  creation, pids controller enabling, `pids.max` application, and task
+  membership visibility. It does not claim full OCI Runtime Spec completion,
+  complete resource-controller enforcement, cgroup namespaces, device/seccomp/
+  network support, product `orlix run`, registry import, Coreutils/mlibc/kernel
+  build-speed completion, or broad runtime readiness.
+- No generated upstream tree, OrlixMLibC patch, HostAdapter Linux policy,
+  custom ABI, package manager, proof-package system, stamp ladder, or Swift-side
+  fake Linux behavior was added.
 
 ### 2026-06-25 OCI masked/readonly paths OrlixOS runtime proof checkpoint
 
