@@ -3030,6 +3030,28 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 		try materializationPlan.prepareInputTrees(fileManager: fileManager)
 	}
 
+	@discardableResult
+	public func materialize(
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		fileManager: FileManager = .default,
+		runner: OrlixEnvironmentImageMaterializationCommandRunner
+	) throws -> OrlixEnvironmentImageMaterializationResult {
+		try prepareMaterializationInputs(fileManager: fileManager)
+		try materializationPlan.writeBaseImageMetadataCommands(
+			manifest: [],
+			fileManager: fileManager
+		)
+		try materializationPlan.writeStateImageMetadataCommands(fileManager: fileManager)
+		return try materializationPlan.materialize(
+			mke2fsExecutable: mke2fsExecutable,
+			truncateExecutable: truncateExecutable,
+			debugfsExecutable: debugfsExecutable,
+			runner: runner
+		)
+	}
+
 	public func materializationToolchainCheck(
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",

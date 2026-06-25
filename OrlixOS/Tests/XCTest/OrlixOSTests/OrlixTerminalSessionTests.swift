@@ -2185,9 +2185,73 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                 )
             ]
         )
-    }
+	}
 
-    func testEnvironmentRootImageMakeTargetConsumesImporterMetadataCommands()
+	func testEnvironmentImageMaterializationRunnerExecutesCanonicalCommandsInOrder() throws {
+		let root = temporaryRegistryRoot()
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: "alpine-ext4-runner",
+			linuxStateRoot: root.appendingPathComponent(
+				"Application Support/Orlix",
+				isDirectory: true
+			),
+			cacheRoot: root.appendingPathComponent("Caches/Orlix", isDirectory: true),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+		)
+		let plan = try OrlixEnvironmentImageMaterializationPlan.plan(
+			stagingRootDirectory: layout.importScratchDirectory
+				.appendingPathComponent("staging-root", isDirectory: true),
+			storageLayout: layout,
+			baseImageSize: "128m",
+			stateImageSize: "64m"
+		)
+		let runner = RecordingMaterializationCommandRunner()
+
+		let result = try plan.materialize(
+			mke2fsExecutable: "/opt/e2fsprogs/bin/mke2fs",
+			truncateExecutable: "/usr/bin/truncate",
+			debugfsExecutable: "/opt/e2fsprogs/sbin/debugfs",
+			runner: runner
+		)
+
+		let expectedCommands = try plan.commands(
+			mke2fsExecutable: "/opt/e2fsprogs/bin/mke2fs",
+			truncateExecutable: "/usr/bin/truncate",
+			debugfsExecutable: "/opt/e2fsprogs/sbin/debugfs"
+		)
+		XCTAssertEqual(result.commands, expectedCommands)
+		XCTAssertEqual(runner.commands, expectedCommands)
+	}
+
+	func testEnvironmentImageMaterializationRunnerStopsAtFailingCommand() throws {
+		let root = temporaryRegistryRoot()
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: "alpine-ext4-runner-fail",
+			linuxStateRoot: root.appendingPathComponent(
+				"Application Support/Orlix",
+				isDirectory: true
+			),
+			cacheRoot: root.appendingPathComponent("Caches/Orlix", isDirectory: true),
+			scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+		)
+		let plan = try OrlixEnvironmentImageMaterializationPlan.plan(
+			stagingRootDirectory: layout.importScratchDirectory
+				.appendingPathComponent("staging-root", isDirectory: true),
+			storageLayout: layout
+		)
+		let expectedCommands = try plan.commands()
+		let runner = RecordingMaterializationCommandRunner(failingCommandIndex: 2)
+
+		XCTAssertThrowsError(try plan.materialize(runner: runner)) { error in
+			XCTAssertEqual(
+				error as? RecordingMaterializationCommandRunnerError,
+				.requestedFailure(expectedCommands[2])
+			)
+		}
+		XCTAssertEqual(runner.commands, Array(expectedCommands.prefix(2)))
+	}
+
+	func testEnvironmentRootImageMakeTargetConsumesImporterMetadataCommands()
         throws
     {
         let sourceRoot = try repositoryRoot()
@@ -7629,6 +7693,71 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		XCTAssertTrue(fileManager.fileExists(atPath: workDirectory.path))
 	}
 
+	func testOCIRuntimeBundleImportPlanMaterializesPreparedRootfsWithRunner() throws {
+		let fileManager = FileManager.default
+		let bundleURL = fileManager.temporaryDirectory
+			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
+		defer { try? fileManager.removeItem(at: bundleURL) }
+
+		let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+		let etcURL = rootfsURL.appendingPathComponent("etc", isDirectory: true)
+		try fileManager.createDirectory(at: etcURL, withIntermediateDirectories: true)
+		try "bundle-root\n".write(
+			to: rootfsURL.appendingPathComponent("root-marker"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try "ID=orlix\n".write(
+			to: etcURL.appendingPathComponent("os-release"),
+			atomically: true,
+			encoding: .utf8
+		)
+		try nonRootOCIRuntimeConfig().write(
+			to: bundleURL.appendingPathComponent("config.json")
+		)
+		let importPlan = try OrlixOCIRuntimeBundle
+			.load(from: bundleURL)
+			.importPlan(
+				id: "bundle-materialized-root",
+				rootMount: OrlixEnvironmentRootMount.defaultOverlay
+			)
+		let runner = RecordingMaterializationCommandRunner()
+
+		let result = try importPlan.materialize(
+			mke2fsExecutable: "orlix-mke2fs",
+			truncateExecutable: "orlix-truncate",
+			debugfsExecutable: "orlix-debugfs",
+			runner: runner
+		)
+
+		let expectedCommands = try importPlan.materializationCommands(
+			mke2fsExecutable: "orlix-mke2fs",
+			truncateExecutable: "orlix-truncate",
+			debugfsExecutable: "orlix-debugfs"
+		)
+		XCTAssertEqual(result.commands, expectedCommands)
+		XCTAssertEqual(runner.commands, expectedCommands)
+		XCTAssertEqual(expectedCommands.count, 6)
+		XCTAssertEqual(
+			try String(
+				contentsOf: importPlan.materializationPlan.baseTreeDirectory
+					.appendingPathComponent("root-marker"),
+				encoding: .utf8
+			),
+			"bundle-root\n"
+		)
+		XCTAssertTrue(
+			fileManager.fileExists(atPath: importPlan.materializationPlan.baseMetadataCommandsURL.path)
+		)
+		XCTAssertTrue(
+			try String(
+				contentsOf: importPlan.materializationPlan.stateMetadataCommandsURL,
+				encoding: .utf8
+			)
+			.contains("set_inode_field /upper mode 040755")
+		)
+	}
+
 	func testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
@@ -9793,6 +9922,29 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 				XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
 			}
 		}
+	}
+}
+
+private enum RecordingMaterializationCommandRunnerError: Error, Equatable {
+	case requestedFailure(OrlixEnvironmentImageMaterializationCommand)
+}
+
+private final class RecordingMaterializationCommandRunner:
+	OrlixEnvironmentImageMaterializationCommandRunner,
+	@unchecked Sendable
+{
+	private let failingCommandIndex: Int?
+	private(set) var commands: [OrlixEnvironmentImageMaterializationCommand] = []
+
+	init(failingCommandIndex: Int? = nil) {
+		self.failingCommandIndex = failingCommandIndex
+	}
+
+	func run(_ command: OrlixEnvironmentImageMaterializationCommand) throws {
+		if commands.count == failingCommandIndex {
+			throw RecordingMaterializationCommandRunnerError.requestedFailure(command)
+		}
+		commands.append(command)
 	}
 }
 

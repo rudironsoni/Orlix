@@ -20862,6 +20862,29 @@ Non-claims:
 - This is durable OrlixOS OCI lifecycle API groundwork. It does not claim OCI `start`, Linux process execution, product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, or rejection-coverage work were added.
 
+### 2026-06-25 OCI runtime bundle materialization runner
+
+Current status: added an OrlixOS-owned materialization execution seam for OCI runtime bundle imports. `OrlixEnvironmentImageMaterializationPlan` now has an injected command-runner path that executes the existing deterministic `truncate`, `mke2fs`, and `debugfs` command list in order and returns the executed command set. `OrlixOCIRuntimeBundleImportPlan.materialize(...)` now prepares the bundle rootfs input trees, emits required base/state debugfs command files, and runs the materialization plan through the injected runner. This advances the create-to-run resource boundary without adding Docker/runc, package/proof machinery, HostAdapter Linux policy, custom ABI behavior, mlibc patches, or generated-tree edits.
+
+Changes:
+- Added `OrlixEnvironmentImageMaterializationCommandRunner` and `OrlixEnvironmentImageMaterializationResult`.
+- Added `OrlixEnvironmentImageMaterializationPlan.materialize(...)` to run the canonical six-command ext4 materialization sequence through an injected runner.
+- Added `OrlixOCIRuntimeBundleImportPlan.materialize(...)` to prepare OCI bundle rootfs inputs, write empty base metadata commands plus state overlay metadata commands, and execute materialization commands.
+- Added OrlixOS XCTest coverage for ordered runner execution, failure propagation before later commands run, and OCI bundle import materialization input/metadata/command wiring.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused bounded `test-without-building` for `testEnvironmentImageMaterializationRunnerExecutesCanonicalCommandsInOrder`, `testEnvironmentImageMaterializationRunnerStopsAtFailingCommand`, and `testOCIRuntimeBundleImportPlanMaterializesPreparedRootfsWithRunner` produced no `Testing started`, `Test Suite`, or `Test Case` output before the 240 second alarm terminated command signal 14; no executed-XCTest pass is claimed.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` produced no recent Orlix diagnostic reports.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` produced no paths.
+- `rtk rg --files OrlixMLibC/Sources/patches` produced no files.
+
+Non-claims:
+- This does not claim the materialization tools were executed for a real ext4 output in XCTest, final Linux exec supervisor integration, product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
+
 ### 2026-06-25 Durable OCI lifecycle state store
 
 Current status: added an OrlixOS-owned durable OCI lifecycle state store for configured OCI-derived environments. `OrlixOCIRuntimeLifecycleStore` persists `OrlixOCIRuntimeLifecycleSnapshot` JSON under the existing per-environment storage directory, preserving lifecycle record, OCI version, annotations, PID, bundle path, and exit status so later `state`/`delete` product surfaces can read authoritative state outside the in-memory Swift controller. This advances OCI Runtime lifecycle groundwork without executing through runc/Docker, introducing a custom Linux ABI, moving Linux policy into HostAdapter, inventing package/proof machinery, editing generated upstream sources, or patching OrlixMLibC.
