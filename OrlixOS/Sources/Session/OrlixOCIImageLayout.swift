@@ -2384,8 +2384,66 @@ public let cgroupIOWeight: UInt64?
             namespaces: namespaces,
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
-        )
-    }
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public func replacingDefaultCommand(
+		_ command: [String]
+	) throws -> OrlixOCIRuntimeConfigDescriptor {
+		guard !command.isEmpty else {
+			throw OrlixOCIRuntimeConfigError.emptyProcessArgs
+		}
+		for argument in command {
+			guard !argument.isEmpty, !argument.contains("\u{0}") else {
+				throw OrlixOCIRuntimeConfigError.invalidProcessArg(argument)
+			}
+		}
+		return OrlixOCIRuntimeConfigDescriptor(
+			ociVersion: ociVersion,
+			annotations: annotations,
+			hostname: hostname,
+			domainname: domainname,
+			rootPath: rootPath,
+			rootReadonly: rootReadonly,
+			rootPropagation: rootPropagation,
+			sysctls: sysctls,
+			maskedPaths: maskedPaths,
+			readonlyPaths: readonlyPaths,
+			cgroupsPath: cgroupsPath,
+			cgroupPidsLimit: cgroupPidsLimit,
+			cgroupCPUMax: cgroupCPUMax,
+			cgroupCPUWeight: cgroupCPUWeight,
+			cgroupMemoryMax: cgroupMemoryMax,
+			cgroupIOWeight: cgroupIOWeight,
+			cgroupUnified: cgroupUnified,
+			deviceNodes: deviceNodes,
+			timeOffsets: timeOffsets,
+			uidMappings: uidMappings,
+			gidMappings: gidMappings,
+			mounts: mounts,
+			defaultCommand: command,
+			defaultEnvironment: defaultEnvironment,
+			defaultWorkingDirectory: defaultWorkingDirectory,
+			defaultUserID: defaultUserID,
+			defaultGroupID: defaultGroupID,
+			defaultSupplementaryGroups: defaultSupplementaryGroups,
+			defaultCapabilities: defaultCapabilities,
+			defaultNoNewPrivileges: defaultNoNewPrivileges,
+			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
+			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
+			defaultScheduler: defaultScheduler,
+			defaultIOPriority: defaultIOPriority,
+			defaultCPUAffinity: defaultCPUAffinity,
+			defaultUmask: defaultUmask,
+			defaultRlimits: defaultRlimits,
+			defaultPersonalityDomain: defaultPersonalityDomain,
+			terminal: terminal,
+			consoleSize: consoleSize,
+			namespaces: namespaces,
+			namespacePaths: namespacePaths
+		)
+	}
 }
 
 public struct OrlixOCIRuntimeMount: Equatable, Sendable {

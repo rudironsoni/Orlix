@@ -8169,6 +8169,7 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 			id: "registry-installed-run",
 			tools: tools,
 			puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
+			command: ["/bin/echo", "override"],
 			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
 			using: driver,
 			fileManager: fileManager
@@ -8191,6 +8192,7 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 			result.runResult.completedStateReport
 		)
 		XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo registry"])
+		XCTAssertEqual(driver.startCommands, [["/bin/echo", "override"]])
 		XCTAssertEqual(recorder.executables.first, tools.truncate)
 		XCTAssertEqual(recorder.executables.filter { $0 == tools.mke2fs }.count, 2)
 		XCTAssertEqual(recorder.executables.filter { $0 == tools.debugfs }.count, 2)
@@ -11673,6 +11675,7 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 	private let failsOnSignal: Bool
 	private let failsOnWait: Bool
 	private(set) var events: [String] = []
+	private(set) var startCommands: [[String]] = []
 	private(set) var startRootImageIdentifiers: [String] = []
 	private(set) var waitRootImageIdentifiers: [String] = []
 
@@ -11692,6 +11695,9 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 	}
 
 	func start(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessStartObservation {
+		startCommands.append(
+			processSession.processHandle.sessionDescriptor.environment.defaultCommand
+		)
 		startRootImageIdentifiers.append(
 			processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier
 		)
