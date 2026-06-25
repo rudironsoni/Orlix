@@ -20957,6 +20957,29 @@ Verification:
 Non-claims:
 - This does not claim product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
 
+### 2026-06-25 OCI runtime explicit ephemeral run
+
+Current status: added an explicit OrlixOS-owned ephemeral one-shot OCI runtime path. Existing persistent `run(bundleURL:id:...)` still materializes, creates, starts, waits, and leaves stopped lifecycle/resources for inspection. New `runEphemeral(bundleURL:id:...)` composes that existing materialized run path with `delete(id:)` after successful completion, returning both the run result and deleted lifecycle record while removing lifecycle JSON and per-environment storage. This moves closer to product-style `orlix run` cleanup behavior without changing persistent lifecycle semantics.
+
+Changes:
+- Added `OrlixOCIRuntimeEphemeralRunResult`.
+- Added `OrlixOCIRuntime.runEphemeral(bundleURL:id:materializationRunner:processDriver:...)`.
+- Added OrlixOS XCTest coverage proving successful ephemeral run records start/wait observations, returns stopped exit status, deletes lifecycle state, and removes environment root/import scratch resources.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused bounded `test-without-building` for `testOCIRuntimeRunEphemeralDeletesResourcesAfterCompletion` produced no `Testing started`, `Test Suite`, or `Test Case` output before the 240 second alarm terminated command signal 14; no executed-XCTest pass is claimed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale-status/no-handoff warnings in this long-running active plan.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` produced no recent Orlix diagnostic reports.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` produced no paths.
+- `rtk rg --files OrlixMLibC/Sources/patches` produced no files.
+
+Non-claims:
+- This does not claim product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
+
 ### 2026-06-25 Durable OCI lifecycle state store
 
 Current status: added an OrlixOS-owned durable OCI lifecycle state store for configured OCI-derived environments. `OrlixOCIRuntimeLifecycleStore` persists `OrlixOCIRuntimeLifecycleSnapshot` JSON under the existing per-environment storage directory, preserving lifecycle record, OCI version, annotations, PID, bundle path, and exit status so later `state`/`delete` product surfaces can read authoritative state outside the in-memory Swift controller. This advances OCI Runtime lifecycle groundwork without executing through runc/Docker, introducing a custom Linux ABI, moving Linux policy into HostAdapter, inventing package/proof machinery, editing generated upstream sources, or patching OrlixMLibC.
