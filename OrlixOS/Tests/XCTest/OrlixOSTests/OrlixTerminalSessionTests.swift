@@ -10663,13 +10663,63 @@ func testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine() th
 	)
 		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
 		XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
-		XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
-		XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
+	XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
+	XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
+}
+
+func testOCIRuntimeBundleLinuxSessionUsesMaterializedRootAndTerminalFalseMetadata() throws {
+	let fileManager = FileManager.default
+	let root = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-bundle-linux-session-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	defer { try? fileManager.removeItem(at: root) }
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: root.appendingPathComponent("Application Support/Orlix"),
+		cacheRoot: root.appendingPathComponent("Caches/Orlix"),
+		scratchRoot: root.appendingPathComponent("tmp/Orlix")
+	)
+	let bundleURL = root.appendingPathComponent("bundle", isDirectory: true)
+	try fileManager.createDirectory(
+		at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+		withIntermediateDirectories: true
+	)
+	try Data("""
+	{
+		"ociVersion" : "1.1.0",
+		"root" : { "path" : "rootfs" },
+		"process" : {
+			"terminal" : false,
+			"args" : ["/bin/true"],
+			"cwd" : "/"
+		}
 	}
+	""".utf8).write(to: bundleURL.appendingPathComponent("config.json"))
+	let layout = try registry.prepareStorage(forEnvironmentID: "oci-bundle-session")
+	try Data("base".utf8).write(to: layout.baseImageURL)
+	try Data("state".utf8).write(to: layout.stateImageURL)
+	let session = try OrlixLinuxSession(
+		ociRuntimeBundle: try OrlixOCIRuntimeBundle.load(from: bundleURL),
+		id: "oci-bundle-session",
+		rootMount: .defaultOverlay,
+		registry: registry,
+		terminal: OrlixTerminalSession()
+	)
+	let rootImage = try XCTUnwrap(session.materializedRootImageForTesting)
+	XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
+	XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
+	XCTAssertEqual(
+		try registry.load(environmentID: "oci-bundle-session").defaultCommand,
+		["/bin/true"]
+	)
+	let commandLine = try XCTUnwrap(session.bootConfig.kernelCommandLine)
+	XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
+	XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
+}
 
 func testOCIRuntimeLifecycleControllerRejectsStoppedSessionDescriptor() throws {
 	let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
-		let stopped = try OrlixOCIRuntimeLifecycleController(
+	let stopped = try OrlixOCIRuntimeLifecycleController(
 			config: config,
 			id: "oci-demo",
 			bundlePath: "/bundles/oci-demo"

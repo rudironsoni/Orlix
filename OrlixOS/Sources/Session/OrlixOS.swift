@@ -860,33 +860,41 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 		return "orlix.terminal=0 " + base
 	}
 
-    convenience init(
-        ociRuntimeBundle: OrlixOCIRuntimeBundle,
-        id: String,
-        rootMount: OrlixEnvironmentRootMount,
-        registry: OrlixEnvironmentRegistry,
-        kernelCommandLine: String = OrlixEnvironmentRootImage.defaultKernelCommandLine,
-        terminal: OrlixTerminalSession
-    ) throws {
-        let ociRuntimeSession = try ociRuntimeBundle.sessionDescriptor(
-            id: id,
-            rootMount: rootMount
-        )
-        try registry.save(ociRuntimeSession.environment)
+	public convenience init(
+		ociRuntimeBundle: OrlixOCIRuntimeBundle,
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession()
+	) throws {
+		try self.init(
+			ociRuntimeBundle: ociRuntimeBundle,
+			id: id,
+			rootMount: .defaultOverlay,
+			registry: try OrlixEnvironmentRegistry(),
+			kernelCommandLine: OrlixEnvironmentRootImage.defaultKernelCommandLine,
+			terminal: terminal
+		)
+	}
 
-        let resolvedCommandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
-            descriptor: ociRuntimeSession.environment,
-            kernelCommandLine: kernelCommandLine
-        )
-        self.init(
-            bootConfig: OrlixBootConfig(
-                profile: .development,
-                kernelCommandLine: resolvedCommandLine,
-                rootImageIdentifier: ociRuntimeSession.environment.rootImageIdentifier
-            ),
-            terminal: terminal
-        )
-    }
+	@_spi(OrlixPrivateTesting) public convenience init(
+		ociRuntimeBundle: OrlixOCIRuntimeBundle,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount,
+		registry: OrlixEnvironmentRegistry,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession
+	) throws {
+		let ociRuntimeSession = try ociRuntimeBundle.sessionDescriptor(
+			id: id,
+			rootMount: rootMount
+		)
+		try registry.save(ociRuntimeSession.environment)
+		try self.init(
+			ociRuntimeSession: ociRuntimeSession,
+			registry: registry,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal
+		)
+	}
 
     public func boot() -> OrlixBootStatus {
         guard registerRootImagesForBoot() else {
