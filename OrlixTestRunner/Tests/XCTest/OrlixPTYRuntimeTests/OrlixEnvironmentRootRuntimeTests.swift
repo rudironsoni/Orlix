@@ -456,6 +456,20 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
 		XCTAssertTrue(output.contains("ORLIX_ENV_STDIO_DONE"))
 	}
 
+	func testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput() throws {
+		let runner = OrlixEnvironmentRootRuntimeProofRunner(
+			fixture: .ociDerived,
+			proof: .stdioExecution
+		)
+		let result = try runner.runOCITerminalFalseObservedOnMutableFixtureCopy()
+
+		XCTAssertTrue(result.output.contains("orlix-init: process started pid="))
+		XCTAssertTrue(result.output.contains("orlix-init: process exited pid="))
+		XCTAssertTrue(result.output.contains("ORLIX_ENV_STDIO_DONE"))
+		XCTAssertEqual(result.run.completedProcess.lifecycle.record.state, .stopped)
+		XCTAssertEqual(result.run.completedProcess.lifecycle.record.exitStatus, 0)
+	}
+
 	func testOCIDerivedMaterializedRootUsesLinuxRuntimeTmpfsMounts()
 	throws
 	{
@@ -474,6 +488,11 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_DEV_SHM_WRITE_OK"))
         XCTAssertTrue(output.contains("ORLIX_ENV_TMPFS_DONE"))
     }
+}
+
+private struct OrlixEnvironmentObservedRuntimeResult {
+	let output: String
+	let run: OrlixOCIRuntimeProcessRunResult
 }
 
 private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable {
@@ -526,6 +545,25 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 				rootImageIdentifier: fixture.rootImageIdentifier
 			),
 			ociTerminal: false
+		)
+	}
+
+	func runOCITerminalFalseObservedOnMutableFixtureCopy()
+	throws -> OrlixEnvironmentObservedRuntimeResult
+	{
+		let sourceRoot = try Self.fixtureRoot(for: fixture)
+		let copiedRoot = try Self.mutableFixtureCopy(of: sourceRoot, fixture: fixture)
+		defer {
+			try? FileManager.default.removeItem(at: copiedRoot.root)
+		}
+
+		return try runObserved(
+			fixtureRoot: copiedRoot,
+			descriptor: descriptor(
+				environmentID: fixture.environmentID,
+				source: fixture.source,
+				rootImageIdentifier: fixture.rootImageIdentifier
+			)
 		)
 	}
 
@@ -874,14 +912,99 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
             throw OrlixEnvironmentRootRuntimeProofError.bootFailed(status)
         }
 
-        let text = Self.normalized(recorder.text)
-        try validate(text, terminalLog: terminalLog)
-        return text
-    }
+		let text = Self.normalized(recorder.text)
+		try validate(text, terminalLog: terminalLog)
+		return text
+	}
 
-    private func descriptor(
-        environmentID: String,
-        source: OrlixEnvironmentSource,
+	private func runObserved(
+		fixtureRoot: EnvironmentRootFixture,
+		descriptor: OrlixEnvironmentDescriptor
+	) throws -> OrlixEnvironmentObservedRuntimeResult {
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixtureRoot.linuxStateRoot,
+			cacheRoot: fixtureRoot.cacheRoot,
+			scratchRoot: fixtureRoot.scratchRoot
+		)
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: descriptor.id,
+			linuxStateRoot: fixtureRoot.linuxStateRoot,
+			cacheRoot: fixtureRoot.cacheRoot,
+			scratchRoot: fixtureRoot.scratchRoot
+		)
+		let terminal = OrlixTerminalSession()
+		let terminalLog = EnvironmentRootTerminalLog()
+		terminalLog.writeLine("fixture=\(fixtureRoot.root.path)")
+		terminalLog.writeLine("base=\(layout.baseImageURL.path)")
+		terminalLog.writeLine("state=\(layout.stateImageURL.path)")
+		terminalLog.writeLine(
+			"rootImageIdentifier=\(descriptor.rootImageIdentifier)"
+		)
+		let recorder = EnvironmentRootOutputRecorder(terminalLog: terminalLog)
+		let output = terminal.attachOutput { data in
+			recorder.append(data)
+		}
+		defer {
+			output.cancel()
+		}
+
+		let config = try ociRuntimeConfig(terminal: false)
+		let lifecycle = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: descriptor.id,
+			bundlePath: fixtureRoot.root.path
+		)
+		let processHandle = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: try lifecycle.create(),
+			rootMount: .defaultOverlay,
+			rootImageIdentifier: descriptor.rootImageIdentifier
+		)
+		try registry.save(processHandle.sessionDescriptor.environment)
+		let processSession = try OrlixOCIRuntimeProcessSession(
+			processHandle: processHandle,
+			linuxSession: OrlixLinuxSession(
+				ociRuntimeSession: processHandle.sessionDescriptor,
+				registry: registry,
+				terminal: terminal
+			)
+		)
+		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 60)
+		let run = try processSession.runObserved(using: driver)
+		let text = Self.normalized(recorder.text)
+		try validate(text, terminalLog: terminalLog)
+		return OrlixEnvironmentObservedRuntimeResult(output: text, run: run)
+	}
+
+	private func ociRuntimeConfig(
+		terminal: Bool
+	) throws -> OrlixOCIRuntimeConfigDescriptor {
+		let environment = proof.defaultEnvironment
+			.sorted { $0.key < $1.key }
+			.map { "\($0.key)=\($0.value)" }
+		let process: [String: Any] = [
+			"terminal": terminal,
+			"args": proof.defaultCommand,
+			"env": environment,
+			"cwd": proof.defaultWorkingDirectory,
+			"user": [
+				"uid": proof.defaultUserID,
+				"gid": proof.defaultGroupID
+			]
+		]
+		let document: [String: Any] = [
+			"ociVersion": "1.1.0",
+			"process": process,
+			"root": [
+				"path": "rootfs"
+			]
+		]
+		let data = try JSONSerialization.data(withJSONObject: document)
+		return try OrlixOCIRuntimeConfigParser().parse(data)
+	}
+
+	private func descriptor(
+		environmentID: String,
+		source: OrlixEnvironmentSource,
         rootImageIdentifier: String
     ) -> OrlixEnvironmentDescriptor {
         OrlixEnvironmentDescriptor(
