@@ -413,8 +413,30 @@ class LifecycleGuardTests(unittest.TestCase):
                 check=False,
             )
 
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("missing IMPLEMENT.md", result.stderr)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("missing IMPLEMENT.md", result.stderr)
+
+    def test_compact_plan_check_blocks_oversized_goal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            plan = root / "docs" / "plans" / "active" / "demo"
+            plan.mkdir(parents=True)
+            (plan / "GOAL.md").write_text("# Goal\n" + ("x" * 4000))
+            (plan / "PLAN.md").write_text("# plan\n")
+            (plan / "IMPLEMENT.md").write_text("# IMPLEMENT.md\n")
+
+            result = subprocess.run(
+                [sys.executable, str(COMPACT_PLAN_CHECK)],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=root,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("GOAL.md files must be <= 4000 characters", result.stderr)
 
     def test_compact_plan_check_warns_on_stale_status_contradiction(self):
         with tempfile.TemporaryDirectory() as tmp:
