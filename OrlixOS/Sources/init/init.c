@@ -31,6 +31,7 @@
 #define ORLIX_INIT_MAX_CGROUP_UNIFIED 8
 #define ORLIX_INIT_MAX_DEVICE_NODES 16
 #define ORLIX_INIT_MAX_TIME_OFFSETS 2
+#define ORLIX_INIT_MAX_ID_MAPPINGS 16
 #define ORLIX_INIT_MAX_HOST_DIRECTORIES 16
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
@@ -68,6 +69,12 @@ struct orlix_time_offset_config {
 	char clock[16];
 	long secs;
 	long nanosecs;
+};
+
+struct orlix_id_mapping_config {
+	unsigned long container_id;
+	unsigned long host_id;
+	unsigned long size;
 };
 
 static void die(const char *message);
@@ -698,6 +705,38 @@ static int parse_time_offset_assignment(char *assignment,
 	return 0;
 }
 
+static int parse_id_mapping_assignment(char *assignment,
+				       struct orlix_id_mapping_config *entry)
+{
+	char *host_text;
+	char *size_text;
+	char *end = NULL;
+
+	host_text = strchr(assignment, ':');
+	if (host_text == NULL || host_text == assignment)
+		return -1;
+	*host_text++ = '\0';
+	size_text = strchr(host_text, ':');
+	if (size_text == NULL || size_text == host_text)
+		return -1;
+	*size_text++ = '\0';
+	if (*size_text == '\0')
+		return -1;
+	errno = 0;
+	entry->container_id = strtoul(assignment, &end, 10);
+	if (errno != 0 || end == assignment || *end != '\0')
+		return -1;
+	errno = 0;
+	entry->host_id = strtoul(host_text, &end, 10);
+	if (errno != 0 || end == host_text || *end != '\0')
+		return -1;
+	errno = 0;
+	entry->size = strtoul(size_text, &end, 10);
+	if (errno != 0 || end == size_text || *end != '\0' || entry->size == 0)
+		return -1;
+	return 0;
+}
+
 static unsigned long namespace_flag_for_name(const char *name)
 {
 if (strcmp(name, "mount") == 0)
@@ -712,6 +751,8 @@ if (strcmp(name, "mount") == 0)
 		return CLONE_NEWCGROUP;
 	if (strcmp(name, "time") == 0)
 		return CLONE_NEWTIME;
+	if (strcmp(name, "user") == 0)
+		return CLONE_NEWUSER;
 	return 0;
 }
 
@@ -1458,6 +1499,10 @@ int has_cgroup_cpu_weight;
 	size_t device_node_count;
 	struct orlix_time_offset_config time_offsets[ORLIX_INIT_MAX_TIME_OFFSETS];
 	size_t time_offset_count;
+	struct orlix_id_mapping_config uid_mappings[ORLIX_INIT_MAX_ID_MAPPINGS];
+	size_t uid_mapping_count;
+	struct orlix_id_mapping_config gid_mappings[ORLIX_INIT_MAX_ID_MAPPINGS];
+	size_t gid_mapping_count;
 	unsigned long namespace_flags;
 	unsigned long namespace_join_flags[ORLIX_INIT_MAX_NAMESPACE_JOINS];
 	char namespace_join_paths[ORLIX_INIT_MAX_NAMESPACE_JOINS][ORLIX_INIT_VALUE_SIZE];
@@ -1705,6 +1750,30 @@ config->has_cgroup_cpu_weight = 1;
 			    &config->time_offsets[config->time_offset_count]) != 0)
 			die("invalid time offset");
 		config->time_offset_count++;
+	}
+	for (int i = 0; i < ORLIX_INIT_MAX_ID_MAPPINGS; i++) {
+		char key[32];
+		char assignment[ORLIX_INIT_VALUE_SIZE];
+		snprintf(key, sizeof(key), "orlix.uidmap%d=", i);
+		if (read_cmdline_decoded(key, assignment, sizeof(assignment)) != 0)
+			break;
+		if (parse_id_mapping_assignment(
+			    assignment,
+			    &config->uid_mappings[config->uid_mapping_count]) != 0)
+			die("invalid uid mapping");
+		config->uid_mapping_count++;
+	}
+	for (int i = 0; i < ORLIX_INIT_MAX_ID_MAPPINGS; i++) {
+		char key[32];
+		char assignment[ORLIX_INIT_VALUE_SIZE];
+		snprintf(key, sizeof(key), "orlix.gidmap%d=", i);
+		if (read_cmdline_decoded(key, assignment, sizeof(assignment)) != 0)
+			break;
+		if (parse_id_mapping_assignment(
+			    assignment,
+			    &config->gid_mappings[config->gid_mapping_count]) != 0)
+			die("invalid gid mapping");
+		config->gid_mapping_count++;
 	}
 	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
 		char key[32];
@@ -1965,6 +2034,62 @@ static void apply_namespace_config(const struct orlix_command_config *config)
 		die("unshare namespaces");
 }
 
+static int write_proc_file(const char *path, const char *value, size_t length)
+{
+	int fd = open(path, O_WRONLY | O_CLOEXEC);
+	int result;
+
+	if (fd < 0)
+		return -1;
+	result = write_all(fd, value, length);
+	close(fd);
+	return result;
+}
+
+static int write_id_mapping_file(const char *path,
+				 const struct orlix_id_mapping_config *mappings,
+				 size_t mapping_count)
+{
+	char buffer[ORLIX_INIT_MAX_ID_MAPPINGS * 48];
+	size_t used = 0;
+
+	for (size_t i = 0; i < mapping_count; i++) {
+		int length = snprintf(buffer + used, sizeof(buffer) - used,
+				      "%lu %lu %lu\n",
+				      mappings[i].container_id,
+				      mappings[i].host_id,
+				      mappings[i].size);
+		if (length <= 0 || (size_t)length >= sizeof(buffer) - used)
+			return -1;
+		used += (size_t)length;
+	}
+	return write_proc_file(path, buffer, used);
+}
+
+static void apply_user_namespace_mappings(const struct orlix_command_config *config)
+{
+	if (config->uid_mapping_count == 0 && config->gid_mapping_count == 0)
+		return;
+	if ((config->namespace_flags & CLONE_NEWUSER) == 0)
+		die("id mappings without user namespace");
+	if (config->uid_mapping_count > 0 &&
+	    write_id_mapping_file("/proc/self/uid_map", config->uid_mappings,
+				  config->uid_mapping_count) != 0)
+		die("write uid_map");
+	if (config->gid_mapping_count == 0)
+		return;
+	if (write_id_mapping_file("/proc/self/gid_map", config->gid_mappings,
+				  config->gid_mapping_count) == 0)
+		return;
+	if (config->supplementary_group_count > 0)
+		die("write gid_map");
+	if (write_proc_file("/proc/self/setgroups", "deny\n", 5) != 0)
+		die("write setgroups deny");
+	if (write_id_mapping_file("/proc/self/gid_map", config->gid_mappings,
+				  config->gid_mapping_count) != 0)
+		die("write gid_map");
+}
+
 static void apply_time_offsets(const struct orlix_command_config *config)
 {
 	char buffer[192];
@@ -2135,6 +2260,7 @@ static pid_t start_command_on_pty(int master, int slave)
 	}
 	selected_command_config(config);
 	apply_namespace_config(config);
+	apply_user_namespace_mappings(config);
 	apply_time_offsets(config);
 	apply_uts_config(config);
 	if (chdir(config->cwd) != 0)

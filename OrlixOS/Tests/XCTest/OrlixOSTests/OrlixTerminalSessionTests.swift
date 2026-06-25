@@ -6523,7 +6523,11 @@ report.feature(named: "ociBlockIOControls")?.proof,
             report.feature(named: "ociUnifiedCgroupResources")?.proof,
             "orlix:cgroup_unified_probe"
         )
-		XCTAssertEqual(report.feature(named: "userNamespaceMappings")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "userNamespaceMappings")?.status, .implemented)
+		XCTAssertEqual(
+			report.feature(named: "userNamespaceMappings")?.proof,
+			"orlix:runtime_config_parser"
+		)
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "apparmor")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "apparmor")?.proof, "orlix:runtime_config_parser")
@@ -6626,9 +6630,11 @@ XCTAssertEqual(features["ociLinuxResources"]?.proof, "orlix:runtime_config_parse
         XCTAssertEqual(features["ociPersonality"]?.proof, "orlix:runtime_config_parser")
         XCTAssertEqual(features["ociTimeNamespace"]?.status, .implemented)
         XCTAssertEqual(features["ociTimeNamespace"]?.proof, "orlix:time_namespace_probe")
-        XCTAssertEqual(features["ociTimeOffsets"]?.status, .implemented)
-        XCTAssertEqual(features["ociTimeOffsets"]?.proof, "orlix:runtime_config_parser")
-XCTAssertEqual(features["ociCPUQuota"]?.status, .implemented)
+		XCTAssertEqual(features["ociTimeOffsets"]?.status, .implemented)
+		XCTAssertEqual(features["ociTimeOffsets"]?.proof, "orlix:runtime_config_parser")
+		XCTAssertEqual(features["userNamespaceMappings"]?.status, .implemented)
+		XCTAssertEqual(features["userNamespaceMappings"]?.proof, "orlix:runtime_config_parser")
+		XCTAssertEqual(features["ociCPUQuota"]?.status, .implemented)
 XCTAssertEqual(features["ociCPUQuota"]?.proof, "orlix:cgroup_cpu_probe")
 XCTAssertEqual(features["ociCPUShares"]?.status, .implemented)
 XCTAssertEqual(features["ociCPUShares"]?.proof, "orlix:cgroup_cpu_probe")

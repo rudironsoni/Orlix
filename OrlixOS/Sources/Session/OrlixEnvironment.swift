@@ -56,6 +56,8 @@ public let cgroupPidsLimit: Int64?
     public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
     public let deviceNodes: [OrlixEnvironmentDeviceNode]
     public let timeOffsets: [OrlixEnvironmentTimeOffset]
+    public let uidMappings: [OrlixEnvironmentIDMapping]
+    public let gidMappings: [OrlixEnvironmentIDMapping]
     public let namespaces: [String]
     public let namespacePaths: [String: String]
     public let mounts: [OrlixEnvironmentMount]
@@ -125,6 +127,8 @@ cgroupPidsLimit: Int64? = nil,
         cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry] = [],
         deviceNodes: [OrlixEnvironmentDeviceNode] = [],
         timeOffsets: [OrlixEnvironmentTimeOffset] = [],
+        uidMappings: [OrlixEnvironmentIDMapping] = [],
+        gidMappings: [OrlixEnvironmentIDMapping] = [],
         namespaces: [String] = [],
         namespacePaths: [String: String] = [:],
         mounts: [OrlixEnvironmentMount] = []
@@ -166,6 +170,8 @@ self.cgroupPidsLimit = cgroupPidsLimit
         self.cgroupUnified = cgroupUnified
         self.deviceNodes = deviceNodes
         self.timeOffsets = timeOffsets
+        self.uidMappings = uidMappings
+        self.gidMappings = gidMappings
         self.namespaces = namespaces
         self.namespacePaths = namespacePaths
         self.mounts = mounts
@@ -209,6 +215,8 @@ case cgroupCPUMax
         case cgroupUnified
         case deviceNodes
         case timeOffsets
+        case uidMappings
+        case gidMappings
         case namespaces
         case namespacePaths
         case mounts
@@ -358,6 +366,14 @@ forKey: .cgroupCPUWeight
             [OrlixEnvironmentTimeOffset].self,
             forKey: .timeOffsets
         ) ?? []
+        self.uidMappings = try container.decodeIfPresent(
+            [OrlixEnvironmentIDMapping].self,
+            forKey: .uidMappings
+        ) ?? []
+        self.gidMappings = try container.decodeIfPresent(
+            [OrlixEnvironmentIDMapping].self,
+            forKey: .gidMappings
+        ) ?? []
         self.namespaces = try container.decodeIfPresent(
             [String].self,
             forKey: .namespaces
@@ -436,6 +452,12 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
         }
         if !timeOffsets.isEmpty {
             try container.encode(timeOffsets, forKey: .timeOffsets)
+        }
+        if !uidMappings.isEmpty {
+            try container.encode(uidMappings, forKey: .uidMappings)
+        }
+        if !gidMappings.isEmpty {
+            try container.encode(gidMappings, forKey: .gidMappings)
         }
         if !namespaces.isEmpty {
             try container.encode(namespaces, forKey: .namespaces)
@@ -521,6 +543,18 @@ public struct OrlixEnvironmentTimeOffset: Codable, Equatable, Sendable {
         self.clock = clock
         self.secs = secs
         self.nanosecs = nanosecs
+    }
+}
+
+public struct OrlixEnvironmentIDMapping: Codable, Equatable, Sendable {
+    public let containerID: UInt32
+    public let hostID: UInt32
+    public let size: UInt32
+
+    public init(containerID: UInt32, hostID: UInt32, size: UInt32) {
+        self.containerID = containerID
+        self.hostID = hostID
+        self.size = size
     }
 }
 
@@ -971,6 +1005,8 @@ public static let deviceNodeMinorCommandLineKeyPrefix = "orlix.device.minor"
     public static let deviceNodeUIDCommandLineKeyPrefix = "orlix.device.uid"
     public static let deviceNodeGIDCommandLineKeyPrefix = "orlix.device.gid"
     public static let timeOffsetCommandLineKeyPrefix = "orlix.timeoffset"
+    public static let uidMappingCommandLineKeyPrefix = "orlix.uidmap"
+    public static let gidMappingCommandLineKeyPrefix = "orlix.gidmap"
     public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
 public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
 public static let defaultHostDirectoryIdentifier = "orlix-host0"
@@ -1268,12 +1304,19 @@ return node
 }
 
     private static func validateNamespace(_ namespace: String) throws -> String {
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time"])
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time", "user"])
         guard supportedNamespaces.contains(namespace) else {
             throw OrlixEnvironmentRootImageError.invalidNamespace(namespace)
         }
 
         return namespace
+    }
+
+    private static func validateIDMapping(_ mapping: OrlixEnvironmentIDMapping) throws -> String {
+        guard mapping.size > 0 else {
+            throw OrlixEnvironmentRootImageError.invalidIDMapping(mapping)
+        }
+        return "\(mapping.containerID):\(mapping.hostID):\(mapping.size)"
     }
 
     private static func validateTimeOffset(_ offset: OrlixEnvironmentTimeOffset) throws -> String {
@@ -1525,6 +1568,23 @@ return node
                 "\(timeOffsetCommandLineKeyPrefix)\(index)=\(try validateTimeOffset(offset))"
             )
         }
+        if (!descriptor.uidMappings.isEmpty || !descriptor.gidMappings.isEmpty) &&
+            !descriptor.namespaces.contains("user")
+        {
+            throw OrlixEnvironmentRootImageError.invalidIDMapping(
+                descriptor.uidMappings.first ?? descriptor.gidMappings[0]
+            )
+        }
+        for (index, mapping) in descriptor.uidMappings.enumerated() {
+            tokens.append(
+                "\(uidMappingCommandLineKeyPrefix)\(index)=\(try validateIDMapping(mapping))"
+            )
+        }
+        for (index, mapping) in descriptor.gidMappings.enumerated() {
+            tokens.append(
+                "\(gidMappingCommandLineKeyPrefix)\(index)=\(try validateIDMapping(mapping))"
+            )
+        }
         for (index, namespace) in descriptor.namespaces.sorted().enumerated() {
             tokens.append(
                 "\(namespaceCommandLineKeyPrefix)\(index)=\(try validateNamespace(namespace))"
@@ -1609,6 +1669,7 @@ public enum OrlixEnvironmentRootImageError:
     case invalidCgroupUnified(String)
     case invalidDeviceNode(String)
     case invalidTimeOffset(String)
+    case invalidIDMapping(OrlixEnvironmentIDMapping)
     case invalidNamespace(String)
     case missingLinuxMountBackend(OrlixEnvironmentMount)
 }
@@ -1856,6 +1917,8 @@ cgroupPidsLimit: parent.cgroupPidsLimit,
                 cgroupUnified: parent.cgroupUnified,
                 deviceNodes: parent.deviceNodes,
                 timeOffsets: parent.timeOffsets,
+                uidMappings: parent.uidMappings,
+                gidMappings: parent.gidMappings,
                 namespaces: parent.namespaces,
                 namespacePaths: parent.namespacePaths,
                 mounts: parent.mounts
