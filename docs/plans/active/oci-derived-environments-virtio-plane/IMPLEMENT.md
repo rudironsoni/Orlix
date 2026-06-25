@@ -21323,6 +21323,74 @@ Boundary:
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
   dependency, or Swift-side fake Linux behavior was added.
 
+### 2026-06-25 App-hosted OCI time namespace offset runtime proof
+
+Checkpoint: proved the OCI-derived environment descriptor path can carry a
+focused time namespace and monotonic/boottime offsets into an app-hosted OrlixOS
+terminal session, and the resulting Linux process observes the expected
+`/proc/self/timens_offsets` values.
+
+Current status:
+
+- Focused app-hosted runtime proof passed on the single booted `iPhone 17 Pro`
+  simulator. This is a checkpoint toward OCI runtime delivery, not full OCI
+  Runtime Spec completion.
+
+Changes:
+
+- Added `testOCITimeNamespaceOffsetsApplyThroughOrlixOSTerminalSession`.
+- Added `RuntimeProof.timeNamespaceOffsets` with `namespaces = ["time"]` and
+  `timeOffsets` for `monotonic 12 500000000` and `boottime 3 250`.
+- Extended the runtime proof descriptor builder to carry `timeOffsets`.
+- Added an in-guest shell proof that tokenizes `/proc/self/timens_offsets` and
+  emits `ORLIX_ENV_TIMENS_*` markers only after the Linux procfs values match.
+- Added fatal markers for `ORLIX_ENV_TIMENS_PROOF_FAILED_MONOTONIC` and
+  `ORLIX_ENV_TIMENS_PROOF_FAILED_BOOTTIME`.
+- Updated OrlixOS first-stage init to write each `timens_offsets` record through
+  the Linux procfs interface separately.
+- Kept the proof boottime offset positive because Linux rejects offsets that
+  would make `boottime + offset` negative immediately after boot.
+
+Evidence:
+
+- First focused run failed at init with `orlix-init: write timens_offsets`; this
+  exposed the need to avoid a runtime-negative boottime offset and to prove the
+  actual procfs-visible values rather than treating parser carriage as enough.
+- Second focused run reached the shell but failed with
+  `ORLIX_ENV_TIMENS_PROOF_FAILED_MONOTONIC` and
+  `ORLIX_ENV_TIMENS_PROOF_FAILED_BOOTTIME`; the terminal log showed procfs uses
+  padded columns, so the proof script now tokenizes whitespace-separated fields.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCITimeNamespaceOffsetsApplyThroughOrlixOSTerminalSession test`
+  passed after the fixes.
+- Result bundle:
+  `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_14-47-16-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni sh -c 'latest=$(ls -dt "$(external-ssd-root)"/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-*.xcresult | head -1); echo "$latest"; xcrun xcresulttool get test-results summary --path "$latest"'`
+  reported result `Passed`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0`,
+  device `iPhone 17 Pro`, UDID `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print`
+  printed no recent Orlix diagnostic reports.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted`
+  showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --check` exited 0.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches OrlixMLibC/Sources/patches Build/OrlixKernel Build/OrlixOS OrlixMLibC`
+  returned no generated-tree or OrlixMLibC changes.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the existing
+  stale active-plan status warning only.
+
+Boundary:
+
+- This proves the focused app-hosted OrlixOS OCI time namespace offset path for
+  one monotonic and one boottime offset through descriptor metadata,
+  first-stage init, Linux process execution, and procfs-visible offset files.
+- It does not claim arbitrary clock offset coverage, negative boottime runtime
+  acceptance, PID/time namespace joining, complete OCI namespace/cgroup/device
+  coverage, full OCI Runtime Spec lifecycle completion, product `orlix run`,
+  registry pull, broad imported-root execution proof, systemd support, or full
+  runtime readiness.
+- No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
+  custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
+  dependency, or Swift-side fake Linux behavior was added.
+
 ### 2026-06-25 App-hosted OCI user namespace mapping runtime proof
 
 Checkpoint: proved the OCI-derived environment descriptor path can carry a
