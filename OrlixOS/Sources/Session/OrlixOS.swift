@@ -1272,6 +1272,11 @@ public struct OrlixOCIEnvironmentRunResult: Sendable {
 	public let completedStateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIEnvironmentDeleteResult: Sendable {
+	public let id: String
+	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+}
+
 public struct OrlixOCIEnvironmentInstaller: Sendable {
 	private let registry: OrlixEnvironmentRegistry
 
@@ -1463,6 +1468,21 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			id: id,
 			startedStateReport: runtimeResult.startedEnvironment.stateReport,
 			completedStateReport: runtimeResult.completedEnvironment.stateReport
+		)
+	}
+
+	@discardableResult
+	public func delete(
+		id: String,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentDeleteResult {
+		let deletedEnvironment = try OrlixOCIRuntime(registry: registry).delete(
+			id: id,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentDeleteResult(
+			id: deletedEnvironment.id,
+			lifecycleState: deletedEnvironment.deletedRecord.state
 		)
 	}
 

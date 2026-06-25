@@ -472,7 +472,7 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
 		XCTAssertEqual(result.run.completedStateReport.exitStatus, 0)
 		XCTAssertEqual(result.finalState.status, .stopped)
 		XCTAssertEqual(result.finalState.exitStatus, 0)
-		XCTAssertEqual(result.deletedEnvironment.deletedRecord.state, .deleted)
+		XCTAssertEqual(result.deletedEnvironment.lifecycleState, .deleted)
 		XCTAssertFalse(FileManager.default.fileExists(atPath: result.lifecycleRecordURL.path))
 		XCTAssertFalse(FileManager.default.fileExists(atPath: result.environmentDirectoryURL.path))
 	}
@@ -501,7 +501,7 @@ private struct OrlixEnvironmentObservedRuntimeResult {
 	let output: String
 	let run: OrlixOCIEnvironmentRunResult
 	let finalState: OrlixOCIRuntimeStateReport
-	let deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment
+	let deletedEnvironment: OrlixOCIEnvironmentDeleteResult
 	let lifecycleRecordURL: URL
 	let environmentDirectoryURL: URL
 }
@@ -987,7 +987,7 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 			forID: descriptor.id
 		)
 		let environmentDirectoryURL = layout.rootDirectory
-		let deletedEnvironment = try runtime.delete(id: descriptor.id)
+		let deletedEnvironment = try installer.delete(id: descriptor.id)
 		let text = Self.normalized(recorder.text)
 		try validate(text, terminalLog: terminalLog)
 		return OrlixEnvironmentObservedRuntimeResult(
