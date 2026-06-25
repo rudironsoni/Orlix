@@ -926,7 +926,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
             readonlyPaths: ["/proc/sys", "/sys"],
             cgroupsPath: "/orlix/demo",
             cgroupPidsLimit: 64,
-            namespaces: ["mount", "ipc", "uts", "network", "cgroup"]
+            namespaces: ["mount", "ipc", "uts", "cgroup"],
+            namespacePaths: ["network": "/proc/1/ns/net"]
         )
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
@@ -984,8 +985,8 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(commandLine.contains("orlix.namespace0=cgroup"))
         XCTAssertTrue(commandLine.contains("orlix.namespace1=ipc"))
         XCTAssertTrue(commandLine.contains("orlix.namespace2=mount"))
-        XCTAssertTrue(commandLine.contains("orlix.namespace3=network"))
-        XCTAssertTrue(commandLine.contains("orlix.namespace4=uts"))
+        XCTAssertTrue(commandLine.contains("orlix.namespace3=uts"))
+        XCTAssertTrue(commandLine.contains("orlix.namespacepath0=network=/proc/1/ns/net"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl0=kernel.hostname=orlix%20demo"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl1=net.ipv4.ip_forward=1"))
     }
@@ -6165,11 +6166,16 @@ extension OrlixTerminalSessionTests {
             report.feature(named: "ociMountIpcUtsNetworkCgroupNamespaces")?.status,
             .implemented
         )
-        XCTAssertEqual(
-            report.feature(named: "ociMountIpcUtsNetworkCgroupNamespaces")?.proof,
-            "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe"
-        )
-        XCTAssertEqual(report.feature(named: "ociReadonlyPaths")?.status, .deterministicallyRejected)
+		XCTAssertEqual(
+			report.feature(named: "ociMountIpcUtsNetworkCgroupNamespaces")?.proof,
+			"orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe"
+		)
+		XCTAssertEqual(report.feature(named: "ociNamespacePathJoins")?.status, .implemented)
+		XCTAssertEqual(
+			report.feature(named: "ociNamespacePathJoins")?.proof,
+			"orlix:runtime_config_parser"
+		)
+		XCTAssertEqual(report.feature(named: "ociReadonlyPaths")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "ociUnifiedCgroupResources")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "userNamespaceMappings")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
@@ -6333,7 +6339,7 @@ extension OrlixTerminalSessionTests {
 
 	func testOCIRuntimeConfigParserConvertsMinimalLinuxConfig() throws {
 		let config = Data(
-            #"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","namespaces":[{"type":"mount"},{"type":"ipc"},{"type":"uts"},{"type":"network"},{"type":"cgroup"}],"maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"cgroupsPath":"/orlix/demo","resources":{"pids":{"limit":64}},"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
+            #"{"ociVersion":"1.1.0","annotations":{"org.opencontainers.image.ref.name":"orlix-demo"},"root":{"path":"rootfs","readonly":false},"mounts":[{"destination":"/proc","type":"proc","source":"proc"},{"destination":"/tmp","type":"tmpfs","source":"tmpfs"}],"linux":{"rootfsPropagation":"rshared","namespaces":[{"type":"mount"},{"type":"ipc"},{"type":"uts"},{"type":"network","path":"/proc/1/ns/net"},{"type":"cgroup"}],"maskedPaths":["/proc/kcore","/sys/firmware"],"readonlyPaths":["/proc/sys","/sys"],"cgroupsPath":"/orlix/demo","resources":{"pids":{"limit":64}},"sysctl":{"kernel.hostname":"orlix-demo","net.ipv4.ip_forward":"1"}},"process":{"terminal":true,"noNewPrivileges":true,"closeAdditionalFds":true,"oomScoreAdj":-500,"scheduler":{"policy":"SCHED_FIFO","priority":1},"ioPriority":{"class":"IOPRIO_CLASS_BE","priority":4},"execCPUAffinity":{"initial":"0","final":"0-1"},"consoleSize":{"height":24,"width":80},"args":["/bin/sh","-lc","echo ok"],"env":["PATH=/usr/bin:/bin","TERM=xterm-256color"],"cwd":"/work","user":{"uid":1000,"gid":1000,"umask":18},"rlimits":[{"type":"RLIMIT_NOFILE","soft":64,"hard":64}]}}"#.utf8
 		)
 
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
@@ -6386,7 +6392,8 @@ extension OrlixTerminalSessionTests {
 		])
 		XCTAssertTrue(descriptor.terminal)
 		XCTAssertEqual(descriptor.consoleSize, OrlixOCIRuntimeConsoleSize(height: 24, width: 80))
-        XCTAssertEqual(descriptor.namespaces, ["cgroup", "ipc", "mount", "network", "uts"])
+        XCTAssertEqual(descriptor.namespaces, ["cgroup", "ipc", "mount", "uts"])
+        XCTAssertEqual(descriptor.namespacePaths, ["network": "/proc/1/ns/net"])
 
 		let environment = try descriptor.environmentDescriptor(
 			id: "oci-runtime-config",
@@ -6413,6 +6420,7 @@ extension OrlixTerminalSessionTests {
         XCTAssertEqual(environment.cgroupsPath, descriptor.cgroupsPath)
         XCTAssertEqual(environment.cgroupPidsLimit, descriptor.cgroupPidsLimit)
         XCTAssertEqual(environment.namespaces, descriptor.namespaces)
+        XCTAssertEqual(environment.namespacePaths, descriptor.namespacePaths)
         XCTAssertEqual(environment.sysctls, descriptor.sysctls)
     }
 
@@ -6452,7 +6460,9 @@ extension OrlixTerminalSessionTests {
             ("namespaces.pid", #""namespaces": [{ "type": "pid" }]"#),
             ("namespaces.user", #""namespaces": [{ "type": "user" }]"#),
             ("namespaces.time", #""namespaces": [{ "type": "time" }]"#),
-            ("namespaces.mount.path", #""namespaces": [{ "type": "mount", "path": "/proc/1/ns/mnt" }]"#),
+            ("namespaces.pid.path", #""namespaces": [{ "type": "pid", "path": "/proc/1/ns/pid" }]"#),
+            ("namespaces.user.path", #""namespaces": [{ "type": "user", "path": "/proc/1/ns/user" }]"#),
+            ("namespaces.time.path", #""namespaces": [{ "type": "time", "path": "/proc/1/ns/time" }]"#),
             ("namespaces.mount.duplicate", #""namespaces": [{ "type": "mount" }, { "type": "mount" }]"#),
             ("netDevices", #""netDevices": [{ "name": "eth0" }]"#)
         ]

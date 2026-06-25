@@ -26,6 +26,7 @@
 #define ORLIX_INIT_CMDLINE_SIZE 16384
 #define ORLIX_INIT_MAX_RLIMITS 16
 #define ORLIX_INIT_MAX_NAMESPACES 8
+#define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
@@ -1125,6 +1126,9 @@ struct orlix_command_config {
 	char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
 	int has_cgroup_pids_max;
 	unsigned long namespace_flags;
+	unsigned long namespace_join_flags[ORLIX_INIT_MAX_NAMESPACE_JOINS];
+	char namespace_join_paths[ORLIX_INIT_MAX_NAMESPACE_JOINS][ORLIX_INIT_VALUE_SIZE];
+	size_t namespace_join_count;
 };
 
 static void selected_command_config(struct orlix_command_config *config)
@@ -1298,6 +1302,30 @@ static void selected_command_config(struct orlix_command_config *config)
 		if (flag == 0)
 			die("invalid namespace");
 		config->namespace_flags |= flag;
+	}
+	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACE_JOINS; i++) {
+		char key[32];
+		char value[ORLIX_INIT_VALUE_SIZE];
+		char *separator;
+		unsigned long flag;
+
+		snprintf(key, sizeof(key), "orlix.namespacepath%d=", i);
+		if (read_cmdline_decoded(key, value, sizeof(value)) != 0)
+			continue;
+		separator = strchr(value, '=');
+		if (separator == NULL || separator == value || separator[1] == '\0')
+			die("invalid namespace path");
+		*separator = '\0';
+		flag = namespace_flag_for_name(value);
+		if (flag == 0)
+			die("invalid namespace path type");
+		if (config->namespace_join_count >= ORLIX_INIT_MAX_NAMESPACE_JOINS)
+			die("too many namespace paths");
+		config->namespace_join_flags[config->namespace_join_count] = flag;
+		strncpy(config->namespace_join_paths[config->namespace_join_count],
+			separator + 1,
+			sizeof(config->namespace_join_paths[config->namespace_join_count]) - 1);
+		config->namespace_join_count++;
 	}
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
 		char key[32];
@@ -1499,6 +1527,22 @@ static void exec_configured_command(struct orlix_command_config *config)
 
 static void apply_namespace_config(const struct orlix_command_config *config)
 {
+	for (size_t i = 0; i < config->namespace_join_count; i++) {
+		int fd;
+
+		if ((config->namespace_flags & config->namespace_join_flags[i]) != 0)
+			die("namespace join conflicts with namespace create");
+		if (!cgroup_path_is_valid(config->namespace_join_paths[i]))
+			die("invalid namespace path");
+		fd = open(config->namespace_join_paths[i], O_RDONLY | O_CLOEXEC);
+		if (fd < 0)
+			die("open namespace path");
+		if (syscall(SYS_setns, fd, (int)config->namespace_join_flags[i]) != 0) {
+			close(fd);
+			die("setns namespace");
+		}
+		close(fd);
+	}
 	if (config->namespace_flags == 0)
 		return;
 	if (unshare((int)config->namespace_flags) != 0)
