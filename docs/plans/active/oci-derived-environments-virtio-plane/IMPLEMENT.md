@@ -22471,3 +22471,37 @@ Boundary:
 Current status:
 
 Latest coherent checkpoint proves opt-in live Docker Hub official-image pull coverage plus deterministic registry/runtime follow-up on the single `iPhone 17 Pro` simulator. Public OrlixOS APIs can install an OCI bundle into registry-backed base/state images with caller-supplied ext4 tools, then build an `OrlixLinuxSession` for installed OCI environment. Next work remains product `orlix run`, real Linux-owned signal/kill delivery, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-26 registry image string install and run API
+
+Changes:
+- Added public `OrlixOCIEnvironmentInstaller.install(image: String, id:tools:...)` overload.
+- Added public `OrlixOCIEnvironmentInstaller.run(image: String, id:tools:...)` overload.
+- Both overloads parse through `OrlixOCIRegistryImageReference` and delegate to the existing registry-image APIs. They do not create a second package system, parser path, HostAdapter behavior, Linux semantic copy, or feature-report layer.
+- Added deterministic XCTest coverage proving `alpine:3.20` canonicalizes to Docker Hub `library/alpine`, pulls via the existing registry puller, imports the OCI image layout, invokes base/state image materialization tools, persists the descriptor command, and builds an `OrlixLinuxSession` with Linux init `orlix.exec`/`orlix.argv*` metadata.
+
+Evidence:
+- First focused XCTest attempt failed at compile because the test tried to mutate captured state from a `@Sendable` closure and used an unsupported terminal initializer. Fixed by reusing `RecordingPublicOCIInstallerCommandRunner` and the default terminal.
+- Second focused XCTest attempt failed at compile because `kernelCommandLine` is optional. Fixed by `XCTUnwrap`.
+- Third focused XCTest attempt failed because the test expected one materialization tool sequence, but the existing implementation correctly materializes both base and state images. Fixed expected tool sequence to two truncate/mke2fs/debugfs sequences.
+- Focused new XCTest passed:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession test`.
+- Broader deterministic registry/runtime XCTest set passed:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceParsesDistributionEndpoints -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceRejectsInvalidInput -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerSelectsArm64VariantForDefaultPlatform -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting test`.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_01-44-04-+0200.xcresult` reported `Passed`, 7 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This improves the app-facing OrlixOS path for registry input and run/install ergonomics using Docker-style image strings.
+- This does not prove a Linux userspace `/usr/bin/orlix run` command, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, full OCI Runtime Spec lifecycle support, real signal/kill delivery, or broad namespace/cgroup/device/filesystem/network readiness.
+
+## Current Status
+
+Current status:
+
+Latest coherent checkpoint adds public OrlixOS registry image string overloads for `install(image:id:...)` and `run(image:id:...)`, so Docker-style shorthand like `alpine:3.20` enters the existing OCI registry pull, image import, base/state materialization, descriptor persistence, and Linux session construction path. Next work remains a real product `orlix run` entrypoint/control surface, real Linux-owned signal/kill delivery, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
