@@ -10,6 +10,37 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI Linux device nodes via init mknod
+
+Checkpoint: implemented OCI `linux.devices` device-node carriage for OrlixOS-derived environments. Valid OCI device declarations now flow from runtime `config.json` into `OrlixOCIRuntimeConfigDescriptor`, into `OrlixEnvironmentDescriptor.deviceNodes`, into materialized kernel command-line metadata, and first-stage init creates the requested character, block, or FIFO nodes with Linux `mknod(2)` / `mkfifo(2)` before process exec. This is Linux userspace/init setup on the Orlix Linux surface, not HostAdapter Linux policy, a custom ABI, Docker/runc integration, or hardware passthrough.
+
+Changes:
+- Added `OrlixEnvironmentDeviceNode` and `OrlixEnvironmentDescriptor.deviceNodes` Codable/session propagation, copy preservation, validation, and command-line emission through indexed `orlix.device.*` keys.
+- Replaced blanket OCI `linux.devices` rejection with validation for absolute runtime paths, supported OCI types `c`, `b`, `u`, `p`, mode range, and required major/minor for non-FIFO device nodes.
+- Added first-stage init parsing for up to 16 device nodes and creation via Linux `mknod(2)` for character/block devices and `mkfifo(2)` for FIFO nodes, followed by `chmod(2)` and `chown(2)` before dropping credentials or execing the configured process.
+- Added Orlix-owned kselftest `orlix:device_node_probe` proving the Linux surface can create character device nodes, FIFO nodes, and apply mode/ownership with `mknod`, `mkfifo`, `chmod`, and `chown`.
+- Updated OCI feature reporting so `ociLinuxDevices` is implemented with proof tag `orlix:device_node_probe`.
+- Updated OrlixOS XCTest fixtures for descriptor command-line materialization, copied environment preservation, positive OCI runtime-config parsing, environment descriptor conversion, feature-report expectations, and invalid device declarations.
+
+Verification:
+- `rtk git diff --check` exited 0 before the build/test runs.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- Initial `OrlixOSTests build-for-testing` caught an init compile error from using `ORLIX_INIT_VALUE_SIZE` before its declaration; fixed by promoting the existing constant to the top-level init define block.
+- Second `OrlixOSTests build-for-testing` caught the new kselftest returning `void` from `main`; fixed by matching existing probe style: call `orlix_test_exit()` and then return `0`.
+- `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` exited 0 after the probe fix.
+- `rtk proxy sh -lc 'set -o pipefail; env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination "platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D" build-for-testing 2>&1 | tee /private/tmp/orlix-oci-devices-xcodebuild.log | tail -160'` produced `/private/tmp/orlix-oci-devices-xcodebuild.log:1490:** TEST BUILD SUCCEEDED **`.
+- `rtk rg -n "device_node_probe|orlix:device_node_probe" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/device_node_probe.c OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` confirmed `orlix:device_node_probe` in the generated kselftest list, `device_node_probe` in the generated initramfs list, and the feature-report proof tag in source.
+- Focused `test-without-building` for modified command-line, copy-preservation, feature-report, parser, and unsupported-feature XCTest methods reached `Testing started` but emitted no `Test Suite` or `Test Case` lines before manual interruption after roughly 150 seconds; no executed-XCTest pass is claimed.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+
+Non-claims:
+- No device-cgroup allow/deny policy, device whitelist enforcement, arbitrary hardware passthrough, hotplug, or host-device exposure is claimed.
+- No systemd compatibility, full OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, Docker/runc compatibility, or runtime-ready container execution claim is made.
+- No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux ABI/policy, package-manager mechanism, or custom Linux ABI was added.
+
 ### 2026-06-25 OCI CPU quota cgroup support
 
 Checkpoint: implemented bounded OCI `linux.resources.cpu` quota/period support through Linux cgroup v2 `cpu.max`. OrlixKernel release and development defconfigs now enable upstream CPU cgroup scheduling and CFS bandwidth control. OrlixOS accepts OCI CPU `quota` and optional `period`, carries them through environment descriptors, emits `orlix.cgroups.cpu.max=<quota-or-max> <period>`, and first-stage init enables the cgroup v2 `cpu` controller and writes `cpu.max` in the configured cgroup before joining the process cgroup.

@@ -17,6 +17,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/sysmacros.h>
 #include <linux/capability.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -26,6 +27,7 @@
 #define ORLIX_INIT_CMDLINE_SIZE 16384
 #define ORLIX_INIT_MAX_RLIMITS 16
 #define ORLIX_INIT_MAX_CGROUP_UNIFIED 8
+#define ORLIX_INIT_MAX_DEVICE_NODES 16
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
@@ -35,6 +37,7 @@
 #define ORLIX_INIT_CGROUP_PATH_SIZE 256
 #define ORLIX_INIT_CGROUP_FILE_SIZE 32
 #define ORLIX_INIT_CGROUP_VALUE_SIZE 64
+#define ORLIX_INIT_VALUE_SIZE 2048
 
 struct orlix_rlimit_config {
 	int resource;
@@ -45,6 +48,16 @@ struct orlix_rlimit_config {
 struct orlix_cgroup_unified_config {
 	char file[ORLIX_INIT_CGROUP_FILE_SIZE];
 	char value[ORLIX_INIT_CGROUP_VALUE_SIZE];
+};
+
+struct orlix_device_node_config {
+	char path[ORLIX_INIT_VALUE_SIZE];
+	char type;
+	unsigned long major;
+	unsigned long minor;
+	unsigned long mode;
+	unsigned long uid;
+	unsigned long gid;
 };
 
 static void die(const char *message);
@@ -298,6 +311,79 @@ static int cgroup_path_is_valid(const char *path)
 			return 0;
 	}
 	return 1;
+}
+
+static int runtime_path_is_valid(const char *path)
+{
+	if (path[0] != '/' || path[1] == '\0')
+		return 0;
+	for (const char *cursor = path; *cursor != '\0'; cursor++) {
+		if (*cursor == '\n' || *cursor == '\r')
+			return 0;
+		if (*cursor == '/' && cursor[1] == '/')
+			return 0;
+		if (*cursor == '.' && (cursor == path + 1 || cursor[-1] == '/') &&
+		    (cursor[1] == '/' || cursor[1] == '\0'))
+			return 0;
+		if (*cursor == '.' && (cursor == path + 1 || cursor[-1] == '/') &&
+		    cursor[1] == '.' && (cursor[2] == '/' || cursor[2] == '\0'))
+			return 0;
+	}
+	return 1;
+}
+
+static int ensure_parent_directory(const char *path)
+{
+	char parent[ORLIX_INIT_VALUE_SIZE];
+	char *slash;
+	size_t length;
+
+	length = strnlen(path, sizeof(parent));
+	if (length == 0 || length >= sizeof(parent))
+		return -1;
+	memcpy(parent, path, length + 1);
+	slash = strrchr(parent, '/');
+	if (slash == NULL || slash == parent)
+		return 0;
+	*slash = '\0';
+	return ensure_dir_recursive(parent, 0755);
+}
+
+static void apply_device_node(const struct orlix_device_node_config *node)
+{
+	mode_t mode = (mode_t)(node->mode & 07777);
+	mode_t type_bits;
+
+	if (!runtime_path_is_valid(node->path))
+		die("invalid device path");
+	if (ensure_parent_directory(node->path) != 0)
+		die("create device parent");
+	switch (node->type) {
+	case 'c':
+	case 'u':
+		type_bits = S_IFCHR;
+		break;
+	case 'b':
+		type_bits = S_IFBLK;
+		break;
+	case 'p':
+		type_bits = S_IFIFO;
+		break;
+	default:
+		die("invalid device type");
+	}
+	if (node->type == 'p') {
+		if (mkfifo(node->path, mode) != 0 && errno != EEXIST)
+			die("mkfifo device");
+	} else if (mknod(node->path, type_bits | mode,
+			 makedev(node->major, node->minor)) != 0 &&
+		   errno != EEXIST) {
+		die("mknod device");
+	}
+	if (chmod(node->path, mode) != 0)
+		die("chmod device");
+	if (chown(node->path, (uid_t)node->uid, (gid_t)node->gid) != 0)
+		die("chown device");
 }
 
 static void write_decimal_to_buffer(char *buffer, size_t buffer_size,
@@ -1056,7 +1142,6 @@ static int valid_environment_assignment(const char *value)
 enum {
 	ORLIX_INIT_MAX_ARGS = 16,
 	ORLIX_INIT_MAX_ENV = 32,
-	ORLIX_INIT_VALUE_SIZE = 2048,
 };
 
 #define ORLIX_CAPABILITY_WORDS _LINUX_CAPABILITY_U32S_3
@@ -1292,6 +1377,8 @@ int has_cgroup_cpu_weight;
 	struct orlix_cgroup_unified_config
 		cgroup_unified[ORLIX_INIT_MAX_CGROUP_UNIFIED];
 	size_t cgroup_unified_count;
+	struct orlix_device_node_config device_nodes[ORLIX_INIT_MAX_DEVICE_NODES];
+	size_t device_node_count;
 	unsigned long namespace_flags;
 	unsigned long namespace_join_flags[ORLIX_INIT_MAX_NAMESPACE_JOINS];
 	char namespace_join_paths[ORLIX_INIT_MAX_NAMESPACE_JOINS][ORLIX_INIT_VALUE_SIZE];
@@ -1490,6 +1577,38 @@ config->has_cgroup_cpu_weight = 1;
 		    0)
 			die("invalid cgroup unified assignment");
 		config->cgroup_unified_count++;
+	}
+	for (int i = 0; i < ORLIX_INIT_MAX_DEVICE_NODES; i++) {
+		char key[40];
+		char type[8];
+		struct orlix_device_node_config *node =
+			&config->device_nodes[config->device_node_count];
+
+		snprintf(key, sizeof(key), "orlix.device.path%d=", i);
+		if (read_cmdline_decoded(key, node->path,
+					 sizeof(node->path)) != 0)
+			break;
+		snprintf(key, sizeof(key), "orlix.device.type%d=", i);
+		if (read_cmdline_decoded(key, type, sizeof(type)) != 0 ||
+		    type[0] == '\0' || type[1] != '\0')
+			die("invalid device type");
+		node->type = type[0];
+		snprintf(key, sizeof(key), "orlix.device.major%d=", i);
+		if (read_cmdline_unsigned(key, &node->major) != 0)
+			die("invalid device major");
+		snprintf(key, sizeof(key), "orlix.device.minor%d=", i);
+		if (read_cmdline_unsigned(key, &node->minor) != 0)
+			die("invalid device minor");
+		snprintf(key, sizeof(key), "orlix.device.mode%d=", i);
+		if (read_cmdline_unsigned(key, &node->mode) != 0)
+			die("invalid device mode");
+		snprintf(key, sizeof(key), "orlix.device.uid%d=", i);
+		if (read_cmdline_unsigned(key, &node->uid) != 0)
+			die("invalid device uid");
+		snprintf(key, sizeof(key), "orlix.device.gid%d=", i);
+		if (read_cmdline_unsigned(key, &node->gid) != 0)
+			die("invalid device gid");
+		config->device_node_count++;
 	}
 	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
 		char key[32];
@@ -1865,6 +1984,8 @@ static pid_t start_command_on_pty(int master, int slave)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
 	if (config->has_umask)
 		(void)umask((mode_t)config->umask_value);
+	for (size_t i = 0; i < config->device_node_count; i++)
+		apply_device_node(&config->device_nodes[i]);
 	if (config->has_cgroup_pids_max) {
 		if (!config->has_cgroups_path)
 			die("cgroup pids limit without cgroup path");

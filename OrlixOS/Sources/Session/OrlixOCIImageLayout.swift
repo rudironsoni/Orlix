@@ -1434,9 +1434,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociLinuxDevices",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux device declarations are parsed and rejected until device policy has Linux-owned proof."
+			status: .implemented,
+			proof: "orlix:device_node_probe",
+			reason: "OCI Linux device declarations carry into OrlixOS descriptors and init creates character, block, and fifo device nodes through Linux mknod/mkfifo before exec."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociLinuxResources",
@@ -1579,10 +1579,11 @@ public let cgroupsPath: String?
 public let cgroupPidsLimit: Int64?
 	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
 	public let cgroupCPUWeight: UInt64?
-	public let cgroupMemoryMax: Int64?
-	public let cgroupIOWeight: UInt64?
-	public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
-	public let mounts: [OrlixOCIRuntimeMount]
+public let cgroupMemoryMax: Int64?
+public let cgroupIOWeight: UInt64?
+public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
+public let deviceNodes: [OrlixEnvironmentDeviceNode]
+public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
 	public let defaultWorkingDirectory: String
@@ -1646,6 +1647,7 @@ public let cgroupPidsLimit: Int64?
 			cgroupMemoryMax: cgroupMemoryMax,
 			cgroupIOWeight: cgroupIOWeight,
 			cgroupUnified: cgroupUnified,
+			deviceNodes: deviceNodes,
 			namespaces: namespaces,
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
@@ -1786,6 +1788,7 @@ cgroupsPath: config.linux?.cgroupsPath
 				config.linux?.resources,
 				cgroupsPath: config.linux?.cgroupsPath
 			),
+			deviceNodes: try Self.validatedDeviceNodes(config.linux?.devices ?? []),
 			mounts: mounts,
 			defaultCommand: args,
 			defaultEnvironment: environment,
@@ -1905,10 +1908,10 @@ cgroupsPath: config.linux?.cgroupsPath
         return values
     }
 
-    private static func validatedRuntimePaths(
-        _ paths: [String],
-        feature: String
-    ) throws -> [String] {
+private static func validatedRuntimePaths(
+	_ paths: [String],
+	feature: String
+) throws -> [String] {
         for path in paths {
             let components = path.split(separator: "/", omittingEmptySubsequences: false)
             guard path.hasPrefix("/"),
@@ -1930,12 +1933,57 @@ cgroupsPath: config.linux?.cgroupsPath
         guard let path else {
             return nil
         }
-        return try validatedRuntimePaths([path], feature: feature).first
-    }
+	return try validatedRuntimePaths([path], feature: feature).first
+}
 
-    private static func validatedCgroupPidsLimit(
-        _ resources: OCIRuntimeResources?,
-        cgroupsPath: String?
+private static func validatedDeviceNodes(
+	_ devices: [OCIRuntimeDevice]
+) throws -> [OrlixEnvironmentDeviceNode] {
+	try devices.map { device in
+		guard let path = device.path else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices.path")
+		}
+		guard let type = device.type else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices.type")
+		}
+		_ = try validatedRuntimePaths([path], feature: "linux.devices.path")
+		guard Set(["c", "b", "u", "p"]).contains(type) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices.type")
+		}
+		let mode = device.fileMode ?? 0o666
+		guard mode <= 0o7777 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices.fileMode")
+		}
+		if type == "p" {
+			return OrlixEnvironmentDeviceNode(
+				path: path,
+				type: type,
+				fileMode: mode,
+				uid: device.uid ?? 0,
+				gid: device.gid ?? 0
+			)
+		}
+		guard let major = device.major else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices.major")
+		}
+		guard let minor = device.minor else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices.minor")
+		}
+		return OrlixEnvironmentDeviceNode(
+			path: path,
+			type: type,
+			major: major,
+			minor: minor,
+			fileMode: mode,
+			uid: device.uid ?? 0,
+			gid: device.gid ?? 0
+		)
+	}
+}
+
+private static func validatedCgroupPidsLimit(
+	_ resources: OCIRuntimeResources?,
+	cgroupsPath: String?
     ) throws -> Int64? {
         guard let resources else {
             return nil
@@ -2671,10 +2719,7 @@ private static func validatedUTSName(_ value: String?,
 		if let gidMappings = linux.gidMappings, !gidMappings.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.gidMappings")
 		}
-		if let devices = linux.devices, !devices.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.devices")
-		}
-        if linux.seccomp != nil {
+if linux.seccomp != nil {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
         }
         if linux.mountLabel != nil {
@@ -2847,7 +2892,15 @@ private struct OCIRuntimeIDMapping: Decodable {
 	let size: UInt32?
 }
 
-private struct OCIRuntimeDevice: Decodable {}
+private struct OCIRuntimeDevice: Decodable {
+	let path: String?
+	let type: String?
+	let major: UInt32?
+	let minor: UInt32?
+	let fileMode: UInt32?
+	let uid: UInt32?
+	let gid: UInt32?
+}
 private struct OCIRuntimeResources: Decodable {
     let devices: [OCIRuntimeResourceDevice]?
     let memory: OCIRuntimeResourceMemory?
