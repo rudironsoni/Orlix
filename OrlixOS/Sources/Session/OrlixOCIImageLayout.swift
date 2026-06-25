@@ -1442,7 +1442,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociLinuxResources",
 			status: .recognized,
 			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, memory limits, block IO weight, and allowlisted unified cgroup v2 writes are implemented; unproven block IO device throttles, device, network, RDMA, and hugepage resources remain rejected."
+			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, memory limits, block IO weights/throttles, and allowlisted unified cgroup v2 writes are implemented; unproven device, network, RDMA, and hugepage resources remain rejected."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCPUQuota",
@@ -1469,10 +1469,10 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "OCI linux.resources.memory.limit carries into OrlixOS descriptors init writes cgroup v2 memory.max before joining process cgroup."
 		),
 		OrlixOCIRuntimeFeature(
-			name: "ociBlockIOWeight",
+			name: "ociBlockIOControls",
 			status: .implemented,
 			proof: "orlix:cgroup_io_probe",
-			reason: "OCI linux.resources.blockIO.weight carries into OrlixOS descriptors init writes cgroup v2 io.weight before joining process cgroup."
+			reason: "OCI linux.resources.blockIO default weight, device weights, and device throttles carry into OrlixOS descriptors and init writes cgroup v2 io.weight/io.max before joining process cgroup."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociMaskedPaths",
@@ -1782,6 +1782,9 @@ cgroupsPath: config.linux?.cgroupsPath
 			cgroupUnified: try Self.validatedCgroupUnified(
 				config.linux?.resources,
 				cgroupsPath: config.linux?.cgroupsPath
+			) + Self.validatedCgroupBlockIOUnifiedEntries(
+				config.linux?.resources,
+				cgroupsPath: config.linux?.cgroupsPath
 			),
 			mounts: mounts,
 			defaultCommand: args,
@@ -2064,21 +2067,6 @@ private static func validatedCgroupIOWeight(
 	if blockIO.leafWeight != nil {
 		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.leafWeight")
 	}
-	if blockIO.weightDevice != nil {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weightDevice")
-	}
-	if blockIO.throttleReadBpsDevice != nil {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleReadBpsDevice")
-	}
-	if blockIO.throttleWriteBpsDevice != nil {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleWriteBpsDevice")
-	}
-	if blockIO.throttleReadIOPSDevice != nil {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleReadIOPSDevice")
-	}
-	if blockIO.throttleWriteIOPSDevice != nil {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleWriteIOPSDevice")
-	}
 	guard let weight = blockIO.weight else {
 		return nil
 	}
@@ -2089,6 +2077,116 @@ private static func validatedCgroupIOWeight(
 		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weight")
 	}
 	return weight
+}
+
+private static func validatedCgroupBlockIOUnifiedEntries(
+	_ resources: OCIRuntimeResources?,
+	cgroupsPath: String?
+) throws -> [OrlixEnvironmentCgroupUnifiedEntry] {
+	guard let blockIO = resources?.blockIO else {
+		return []
+	}
+	if blockIO.leafWeight != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.leafWeight")
+	}
+	var entries: [OrlixEnvironmentCgroupUnifiedEntry] = []
+	if let weightDevice = blockIO.weightDevice, !weightDevice.isEmpty {
+		guard cgroupsPath != nil else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weightDevice.cgroupsPath")
+		}
+		for device in weightDevice {
+			if device.leafWeight != nil {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weightDevice.leafWeight")
+			}
+			let prefix = try Self.validatedBlockIODevicePrefix(
+				major: device.major,
+				minor: device.minor,
+				feature: "linux.resources.blockIO.weightDevice"
+			)
+			guard let weight = device.weight,
+			      (1...10_000).contains(weight)
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weightDevice.weight")
+			}
+			entries.append(
+				OrlixEnvironmentCgroupUnifiedEntry(
+					file: "io.weight",
+					value: "\(prefix) \(weight)"
+				)
+			)
+		}
+	}
+	try Self.appendBlockIOThrottleEntries(
+		blockIO.throttleReadBpsDevice,
+		token: "rbps",
+		feature: "linux.resources.blockIO.throttleReadBpsDevice",
+		cgroupsPath: cgroupsPath,
+		entries: &entries
+	)
+	try Self.appendBlockIOThrottleEntries(
+		blockIO.throttleWriteBpsDevice,
+		token: "wbps",
+		feature: "linux.resources.blockIO.throttleWriteBpsDevice",
+		cgroupsPath: cgroupsPath,
+		entries: &entries
+	)
+	try Self.appendBlockIOThrottleEntries(
+		blockIO.throttleReadIOPSDevice,
+		token: "riops",
+		feature: "linux.resources.blockIO.throttleReadIOPSDevice",
+		cgroupsPath: cgroupsPath,
+		entries: &entries
+	)
+	try Self.appendBlockIOThrottleEntries(
+		blockIO.throttleWriteIOPSDevice,
+		token: "wiops",
+		feature: "linux.resources.blockIO.throttleWriteIOPSDevice",
+		cgroupsPath: cgroupsPath,
+		entries: &entries
+	)
+	return entries
+}
+
+private static func appendBlockIOThrottleEntries(
+	_ devices: [OCIRuntimeResourceBlockIODeviceThrottle]?,
+	token: String,
+	feature: String,
+	cgroupsPath: String?,
+	entries: inout [OrlixEnvironmentCgroupUnifiedEntry]
+) throws {
+	guard let devices, !devices.isEmpty else {
+		return
+	}
+	guard cgroupsPath != nil else {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("\(feature).cgroupsPath")
+	}
+	for device in devices {
+		let prefix = try Self.validatedBlockIODevicePrefix(
+			major: device.major,
+			minor: device.minor,
+			feature: feature
+		)
+		guard let rate = device.rate, rate > 1 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("\(feature).rate")
+		}
+		entries.append(
+			OrlixEnvironmentCgroupUnifiedEntry(
+				file: "io.max",
+				value: "\(prefix) \(token)=\(rate)"
+			)
+		)
+	}
+}
+
+private static func validatedBlockIODevicePrefix(
+	major: UInt32?,
+	minor: UInt32?,
+	feature: String
+) throws -> String {
+	guard let major, let minor else {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(feature)
+	}
+	return "\(major):\(minor)"
 }
 
 private static func validatedCgroupUnified(
@@ -2106,7 +2204,8 @@ private static func validatedCgroupUnified(
 		"cpu.max",
 		"cpu.weight",
 		"memory.max",
-		"io.weight"
+		"io.weight",
+		"io.max"
 	])
 	return try unified
 		.sorted(by: { $0.key < $1.key })
@@ -2790,8 +2889,17 @@ private struct OCIRuntimeResourceBlockIO: Decodable {
 	let throttleWriteIOPSDevice: [OCIRuntimeResourceBlockIODeviceThrottle]?
 }
 
-private struct OCIRuntimeResourceBlockIODeviceWeight: Decodable {}
-private struct OCIRuntimeResourceBlockIODeviceThrottle: Decodable {}
+private struct OCIRuntimeResourceBlockIODeviceWeight: Decodable {
+	let major: UInt32?
+	let minor: UInt32?
+	let weight: UInt64?
+	let leafWeight: UInt64?
+}
+private struct OCIRuntimeResourceBlockIODeviceThrottle: Decodable {
+	let major: UInt32?
+	let minor: UInt32?
+	let rate: UInt64?
+}
 private struct OCIRuntimeResourceNetwork: Decodable {}
 private struct OCIRuntimeResourcePids: Decodable {
     let limit: Int64?

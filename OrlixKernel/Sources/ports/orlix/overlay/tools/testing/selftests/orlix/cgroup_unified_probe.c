@@ -43,6 +43,38 @@ static bool file_is_readable(const char *path)
 	return true;
 }
 
+static bool read_vdb_device(char *buffer, size_t buffer_size)
+{
+	size_t size = 0;
+
+	if (orlix_read_file("/sys/block/vdb/dev", buffer, buffer_size, &size) != 0)
+		return false;
+	if (size == 0 || size >= buffer_size)
+		return false;
+	if (buffer[size - 1] == '\n')
+		size--;
+	buffer[size] = '\0';
+	return size > 0;
+}
+
+static bool build_control_value(char *buffer, size_t buffer_size,
+				const char *device, const char *suffix)
+{
+	size_t device_size = orlix_strlen(device);
+	size_t suffix_size = orlix_strlen(suffix);
+
+	if (device_size + 1 + suffix_size + 1 > buffer_size)
+		return false;
+	for (size_t i = 0; i < device_size; i++)
+		buffer[i] = device[i];
+	buffer[device_size] = ' ';
+	for (size_t i = 0; i < suffix_size; i++)
+		buffer[device_size + 1 + i] = suffix[i];
+	buffer[device_size + 1 + suffix_size] = '\n';
+	buffer[device_size + 1 + suffix_size + 1] = '\0';
+	return true;
+}
+
 static bool ensure_child_cgroup(void)
 {
 	if (mkdir(CGROUP_CHILD, 0755) == 0)
@@ -61,8 +93,11 @@ int main(void)
 	bool controllers_present;
 	bool controllers_enabled;
 	bool child_created;
+	bool device_read;
+	char device[32];
+	char max[64];
 
-	orlix_test_plan(8);
+	orlix_test_plan(10);
 	controllers_present =
 		file_contains(CGROUP_ROOT "/cgroup.controllers", "pids") &&
 		file_contains(CGROUP_ROOT "/cgroup.controllers", "cpu") &&
@@ -86,7 +121,8 @@ int main(void)
 				  file_is_readable(CGROUP_CHILD "/cpu.max") &&
 				  file_is_readable(CGROUP_CHILD "/cpu.weight") &&
 				  file_is_readable(CGROUP_CHILD "/memory.max") &&
-				  file_is_readable(CGROUP_CHILD "/io.weight"),
+				  file_is_readable(CGROUP_CHILD "/io.weight") &&
+				  file_is_readable(CGROUP_CHILD "/io.max"),
 			  "child cgroup exposes unified allowlist files");
 	orlix_test_result(child_created &&
 				  write_file(CGROUP_CHILD "/pids.max", "64\n") &&
@@ -110,6 +146,17 @@ int main(void)
 				  file_contains(CGROUP_CHILD "/io.weight",
 						"default 100"),
 			  "unified io.weight write accepted");
+
+	device_read = read_vdb_device(device, sizeof(device));
+	orlix_test_result(device_read, "writable state block device major:minor is readable");
+	if (device_read)
+		device_read = build_control_value(max, sizeof(max), device,
+						  "rbps=1048576");
+	orlix_test_result(child_created && device_read &&
+				  write_file(CGROUP_CHILD "/io.max", max) &&
+				  file_contains(CGROUP_CHILD "/io.max",
+						"rbps=1048576"),
+			  "unified io.max write accepted");
 
 	if (child_created)
 		cleanup_child_cgroup();

@@ -34,7 +34,7 @@
 #define ORLIX_INIT_HOST_MOUNT_TARGET_SIZE 256
 #define ORLIX_INIT_CGROUP_PATH_SIZE 256
 #define ORLIX_INIT_CGROUP_FILE_SIZE 32
-#define ORLIX_INIT_CGROUP_VALUE_SIZE 32
+#define ORLIX_INIT_CGROUP_VALUE_SIZE 64
 
 struct orlix_rlimit_config {
 	int resource;
@@ -516,7 +516,7 @@ static const char *cgroup_controller_for_file(const char *file)
 		return "+cpu\n";
 	if (strcmp(file, "memory.max") == 0)
 		return "+memory\n";
-	if (strcmp(file, "io.weight") == 0)
+	if (strcmp(file, "io.weight") == 0 || strcmp(file, "io.max") == 0)
 		return "+io\n";
 	return NULL;
 }

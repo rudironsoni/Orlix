@@ -1116,7 +1116,8 @@ let supportedFiles = Set([
 "cpu.max",
 "cpu.weight",
 "memory.max",
-"io.weight"
+"io.weight",
+"io.max"
 ])
 guard supportedFiles.contains(entry.file),
 !entry.value.isEmpty,
