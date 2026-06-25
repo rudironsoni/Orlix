@@ -1442,7 +1442,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociLinuxResources",
 			status: .recognized,
 			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, memory limits, and block IO weight are implemented through cgroup v2; unproven block IO device throttles, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
+			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, memory limits, block IO weight, and allowlisted unified cgroup v2 writes are implemented; unproven block IO device throttles, device, network, RDMA, and hugepage resources remain rejected."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCPUQuota",
@@ -1506,9 +1506,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociUnifiedCgroupResources",
-			status: .deterministicallyRejected,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI unified cgroup resources are parsed and rejected until cgroup v2 controller writes are supported."
+			status: .implemented,
+			proof: "orlix:cgroup_unified_probe",
+			reason: "OCI unified cgroup resources carry allowlisted cgroup v2 files into OrlixOS descriptors and init writes them through the Linux cgroup filesystem before joining the process cgroup."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "selinux",
@@ -1581,6 +1581,7 @@ public let cgroupPidsLimit: Int64?
 	public let cgroupCPUWeight: UInt64?
 	public let cgroupMemoryMax: Int64?
 	public let cgroupIOWeight: UInt64?
+	public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
 	public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
@@ -1641,10 +1642,11 @@ public let cgroupPidsLimit: Int64?
             cgroupsPath: cgroupsPath,
             cgroupPidsLimit: cgroupPidsLimit,
             cgroupCPUMax: cgroupCPUMax,
-            cgroupCPUWeight: cgroupCPUWeight,
-            cgroupMemoryMax: cgroupMemoryMax,
-            cgroupIOWeight: cgroupIOWeight,
-            namespaces: namespaces,
+			cgroupCPUWeight: cgroupCPUWeight,
+			cgroupMemoryMax: cgroupMemoryMax,
+			cgroupIOWeight: cgroupIOWeight,
+			cgroupUnified: cgroupUnified,
+			namespaces: namespaces,
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
         )
@@ -1774,6 +1776,10 @@ cgroupsPath: config.linux?.cgroupsPath
 				cgroupsPath: config.linux?.cgroupsPath
 			),
 			cgroupIOWeight: try Self.validatedCgroupIOWeight(
+				config.linux?.resources,
+				cgroupsPath: config.linux?.cgroupsPath
+			),
+			cgroupUnified: try Self.validatedCgroupUnified(
 				config.linux?.resources,
 				cgroupsPath: config.linux?.cgroupsPath
 			),
@@ -1944,11 +1950,7 @@ cgroupsPath: config.linux?.cgroupsPath
         if let rdma = resources.rdma, !rdma.isEmpty {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.rdma")
         }
-        if let unified = resources.unified, !unified.isEmpty {
-            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.unified")
-        }
-
-        guard let limit = resources.pids?.limit else {
+guard let limit = resources.pids?.limit else {
             return nil
         }
         guard cgroupsPath != nil else {
@@ -2087,6 +2089,42 @@ private static func validatedCgroupIOWeight(
 		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weight")
 	}
 	return weight
+}
+
+private static func validatedCgroupUnified(
+	_ resources: OCIRuntimeResources?,
+	cgroupsPath: String?
+) throws -> [OrlixEnvironmentCgroupUnifiedEntry] {
+	guard let unified = resources?.unified, !unified.isEmpty else {
+		return []
+	}
+	guard cgroupsPath != nil else {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.unified.cgroupsPath")
+	}
+	let supportedFiles = Set([
+		"pids.max",
+		"cpu.max",
+		"cpu.weight",
+		"memory.max",
+		"io.weight"
+	])
+	return try unified
+		.sorted(by: { $0.key < $1.key })
+		.map { entry in
+			let file = entry.key
+			let value = entry.value
+			guard supportedFiles.contains(file),
+			      !file.contains("\u{0}"),
+			      !file.contains("/"),
+			      !value.isEmpty,
+			      !value.contains("\u{0}"),
+			      !value.contains("\n"),
+			      !value.contains("\r")
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.unified.\(file)")
+			}
+			return OrlixEnvironmentCgroupUnifiedEntry(file: file, value: value)
+		}
 }
 
 private static func validatedUTSName(_ value: String?,

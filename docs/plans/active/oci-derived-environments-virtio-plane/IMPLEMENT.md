@@ -20665,6 +20665,35 @@ Verification:
 Non-claims:
 - This does not claim full OCI runtime lifecycle compliance, registry pull, product `orlix run`, systemd support, arbitrary cgroup delegation, or real CPU fairness/accounting beyond the Linux cgroup v2 file setup/probe described above.
 - This does not claim executed XCTest coverage for this checkpoint because the focused runner did not attach before the bounded interruption.
+### 2026-06-25 OCI unified cgroup v2 allowlist
+
+Current status: implemented OCI `linux.resources.unified` for the cgroup v2 files Orlix already proves through Linux substrate: `pids.max`, `cpu.max`, `cpu.weight`, `memory.max`, and `io.weight`. This advances Phase 13 cgroup behavior by carrying real OCI unified resource inputs into OrlixOS descriptors and first-stage init cgroupfs writes; it does not create HostAdapter Linux policy, a custom ABI, package-manager behavior, generated upstream edits, or OrlixMLibC patches.
+
+Changes:
+- Added `OrlixEnvironmentCgroupUnifiedEntry` and `OrlixEnvironmentDescriptor.cgroupUnified` Codable/session propagation, copied-environment preservation, validation, and command-line emission as indexed `orlix.cgroups.unified<N>=file=value` tokens.
+- Added OCI runtime-config parser support for `linux.resources.unified` when `linux.cgroupsPath` is present and every key is one of the proven cgroup v2 files: `pids.max`, `cpu.max`, `cpu.weight`, `memory.max`, `io.weight`.
+- Added first-stage init decode/apply support for unified cgroup entries: init enables the owning cgroup controller, creates the configured cgroup path, writes the requested cgroup v2 file, then joins the process cgroup.
+- Added Orlix-owned kselftest `orlix:cgroup_unified_probe`, packaged through the normal Orlix kselftest initramfs, proving the allowlisted controllers/files are exposed and accept writes on a child cgroup.
+- Updated OCI feature reporting so `ociUnifiedCgroupResources` is implemented with proof `orlix:cgroup_unified_probe`.
+- Updated OrlixOS tests for descriptor command-line emission, copied environment preservation, OCI config conversion, feature-report status/proof, missing `cgroupsPath`, and unsupported unified file rejection.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` succeeded; `/private/tmp/orlix-oci-unified-xcodebuild.log` contains `** TEST BUILD SUCCEEDED **`.
+- `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` exited 0 and compiled `cgroup_unified_probe`.
+- `rtk rg -n "cgroup_unified_probe|orlix:cgroup_unified_probe|pids\\.max|cpu\\.max|cpu\\.weight|memory\\.max|io\\.weight" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/cgroup_unified_probe.c OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/init/init.c` confirmed `orlix:cgroup_unified_probe` in the kselftest list, `cgroup_unified_probe` in the initramfs, the probe covers allowlisted cgroup v2 files, and OrlixOS/init carry the allowlist.
+- Focused `xcodebuild ... test-without-building` for changed descriptor/parser/feature-report tests reached `Testing started` but emitted no `Test Suite` or `Test Case` lines before manual interruption after roughly two minutes; no executed-XCTest pass claimed from that run.
+- `rtk git diff --check` exited 0.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- No claim of arbitrary cgroup v2 delegation, systemd compatibility, full resource accounting, pressure metrics, device-specific block throttling, or unknown cgroup file support.
+- No claim of full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Docker/runc compatibility, or runtime-ready container execution.
+- No OrlixMLibC patch or generated upstream source edit was made.
+
 ### 2026-06-25 OCI block IO weight via cgroup v2 io.weight
 
 Current status: implemented OCI `linux.resources.blockIO.weight` carriage into real Linux cgroup v2 `io.weight` for OrlixOS-derived environments. This extends the existing cgroup path used for pids, CPU, and memory resources; it does not introduce HostAdapter Linux policy, package-manager logic, custom ABI, generated upstream edits, or OrlixMLibC patches.
