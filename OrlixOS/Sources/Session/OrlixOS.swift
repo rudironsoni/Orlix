@@ -933,6 +933,32 @@ public struct OrlixOCIRuntimeCreatedEnvironment: Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixOCIRuntimeMaterializedCreatedEnvironment: Sendable {
+	public let createdEnvironment: OrlixOCIRuntimeCreatedEnvironment
+	public let materializationResult: OrlixEnvironmentImageMaterializationResult
+
+	public var importPlan: OrlixOCIRuntimeBundleImportPlan {
+		createdEnvironment.importPlan
+	}
+
+	public var lifecycleStore: OrlixOCIRuntimeLifecycleStore {
+		createdEnvironment.lifecycleStore
+	}
+
+	public var lifecycle: OrlixOCIRuntimeLifecycleController {
+		createdEnvironment.lifecycle
+	}
+
+	public var stateReport: OrlixOCIRuntimeStateReport {
+		createdEnvironment.stateReport
+	}
+
+	public var environment: OrlixEnvironmentDescriptor {
+		createdEnvironment.environment
+	}
+}
+
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeDeletedEnvironment: Sendable {
 	public let id: String
 	public let deletedRecord: OrlixOCIRuntimeLifecycleRecord
@@ -985,6 +1011,59 @@ public struct OrlixOCIRuntime: Sendable {
 		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIRuntimeCreatedEnvironment {
+		try createEnvironment(
+			bundleURL: bundleURL,
+			id: id,
+			rootMount: rootMount,
+			fileManager: fileManager,
+			materializationRunner: nil
+		).createdEnvironment
+	}
+
+	public func createMaterialized(
+		bundleURL: URL,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		mke2fsExecutable: String = "mke2fs",
+		truncateExecutable: String = "truncate",
+		debugfsExecutable: String = "debugfs",
+		fileManager: FileManager = .default,
+		runner: OrlixEnvironmentImageMaterializationCommandRunner
+	) throws -> OrlixOCIRuntimeMaterializedCreatedEnvironment {
+		let result = try createEnvironment(
+			bundleURL: bundleURL,
+			id: id,
+			rootMount: rootMount,
+			fileManager: fileManager,
+			materializationRunner: { importPlan in
+				try importPlan.materialize(
+					mke2fsExecutable: mke2fsExecutable,
+					truncateExecutable: truncateExecutable,
+					debugfsExecutable: debugfsExecutable,
+					fileManager: fileManager,
+					runner: runner
+				)
+			}
+		)
+		return OrlixOCIRuntimeMaterializedCreatedEnvironment(
+			createdEnvironment: result.createdEnvironment,
+			materializationResult: result.materializationResult!
+		)
+	}
+
+	private func createEnvironment(
+		bundleURL: URL,
+		id: String,
+		rootMount: OrlixEnvironmentRootMount,
+		fileManager: FileManager,
+		materializationRunner: (
+			(OrlixOCIRuntimeBundleImportPlan) throws
+				-> OrlixEnvironmentImageMaterializationResult
+		)?
+	) throws -> (
+		createdEnvironment: OrlixOCIRuntimeCreatedEnvironment,
+		materializationResult: OrlixEnvironmentImageMaterializationResult?
+	) {
 		if fileManager.fileExists(
 			atPath: try lifecycleStore.recordURL(forID: id).path
 		) {
@@ -1000,14 +1079,20 @@ public struct OrlixOCIRuntime: Sendable {
 			registry: registry,
 			fileManager: fileManager
 		)
-		try importPlan.prepareMaterializationInputs(fileManager: fileManager)
+		let materializationResult: OrlixEnvironmentImageMaterializationResult?
+		if let materializationRunner {
+			materializationResult = try materializationRunner(importPlan)
+		} else {
+			try importPlan.prepareMaterializationInputs(fileManager: fileManager)
+			materializationResult = nil
+		}
 		try importPlan.saveEnvironment(
 			to: registry,
 			fileManager: fileManager
 		)
 		let lifecycle = try bundle.lifecycleController(id: id).create()
 		try lifecycleStore.save(lifecycle, fileManager: fileManager)
-		return OrlixOCIRuntimeCreatedEnvironment(
+		let createdEnvironment = OrlixOCIRuntimeCreatedEnvironment(
 			importPlan: importPlan,
 			lifecycleStore: lifecycleStore,
 			lifecycle: lifecycle,
@@ -1016,6 +1101,7 @@ public struct OrlixOCIRuntime: Sendable {
 				fileManager: fileManager
 			)
 		)
+		return (createdEnvironment, materializationResult)
 	}
 
 	public func state(
