@@ -22002,3 +22002,33 @@ Boundary:
 Current status:
 
 Latest coherent checkpoint exposes a narrow public OrlixOS OCI bundle Linux session entrypoint and keeps the app-facing session path aligned with registry-backed materialized roots, terminal-false metadata, and existing app-hosted OCI lifecycle proof. Next work remains real Linux-owned signal/kill delivery, product `orlix run`, registry input, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-25 Public OCI environment installer facade
+
+Checkpoint: exposed a narrow public OrlixOS OCI environment installer facade that materializes OCI bundle rootfs input into Orlix environment base/state images through the existing ext4 materialization pipeline.
+
+Changes:
+- Added public `OrlixOCIEnvironmentMaterializationTools` for caller-supplied `mke2fs`, `truncate`, and `debugfs` tool URLs.
+- Added public `OrlixOCIEnvironmentInstaller.install(bundleURL:id:tools:fileManager:runCommand:)`, which accepts a public command-execution closure and internally uses the existing `OrlixOCIRuntime.createMaterialized(...)` path.
+- Added public `OrlixOCIEnvironmentInstaller.session(bundleURL:id:terminal:fileManager:)` so callers can construct an `OrlixLinuxSession` for the installed OCI environment through the registry-backed materialized root path.
+- Kept `OrlixEnvironmentRegistry`, root-mount configuration, materialization command structs, and storage-layout internals behind SPI.
+- Added OrlixOS XCTest coverage proving installer materialization invokes the requested ext4 tools, writes base/state images, persists the OCI-derived descriptor, and builds a terminal-false Linux session from the installed environment.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination platform=iOS\ Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeBundleLinuxSessionUsesMaterializedRootAndTerminalFalseMetadata test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_21-54-11-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that bundle reported 2 passed, 0 failed, 0 skipped.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination platform=iOS\ Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_21-55-43-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that bundle reported 1 passed, 0 failed, 0 skipped.
+
+Boundary:
+- This exposes product-facing OCI bundle installation/session preparation through OrlixOS using existing ext4 materialization tooling. It is not a package manager or proof/stamp system.
+- It does not claim product `orlix run`, registry pull, real signal/kill delivery, arbitrary imported-image compatibility, systemd support, broad cgroup/namespace/device/filesystem/network readiness, or full product runtime readiness.
+
+## Current Status
+
+Current status:
+
+Latest coherent checkpoint exposes public OrlixOS APIs to install an OCI bundle into registry-backed base/state images with caller-supplied ext4 tools, then build an `OrlixLinuxSession` for that installed OCI environment. Existing app-hosted OCI lifecycle proof still passes. Next work remains real Linux-owned signal/kill delivery, product `orlix run`, registry input, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
