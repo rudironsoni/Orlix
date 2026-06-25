@@ -922,16 +922,19 @@ public struct OrlixOCIRuntimeProcessRunResult: Sendable {
 
 @_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessSession: Sendable {
-    public let processHandle: OrlixOCIRuntimeProcessHandle
-    public let linuxSession: OrlixLinuxSession
+	public let processHandle: OrlixOCIRuntimeProcessHandle
+	public let linuxSession: OrlixLinuxSession
+	public let lifecycleStore: OrlixOCIRuntimeLifecycleStore?
 
-    public init(
-        processHandle: OrlixOCIRuntimeProcessHandle,
-        linuxSession: OrlixLinuxSession
-    ) {
-        self.processHandle = processHandle
-        self.linuxSession = linuxSession
-    }
+	public init(
+		processHandle: OrlixOCIRuntimeProcessHandle,
+		linuxSession: OrlixLinuxSession,
+		lifecycleStore: OrlixOCIRuntimeLifecycleStore? = nil
+	) {
+		self.processHandle = processHandle
+		self.linuxSession = linuxSession
+		self.lifecycleStore = lifecycleStore
+	}
 
     public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessSession {
         try start(
@@ -939,12 +942,15 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
         )
     }
 
-    public func start(observedProcess observation: OrlixOCIRuntimeProcessStartObservation) throws -> OrlixOCIRuntimeProcessSession {
-        try OrlixOCIRuntimeProcessSession(
-            processHandle: processHandle.start(observedProcess: observation),
-            linuxSession: linuxSession
-        )
-    }
+	public func start(observedProcess observation: OrlixOCIRuntimeProcessStartObservation) throws -> OrlixOCIRuntimeProcessSession {
+		let startedHandle = try processHandle.start(observedProcess: observation)
+		try persist(startedHandle.lifecycle)
+		return OrlixOCIRuntimeProcessSession(
+			processHandle: startedHandle,
+			linuxSession: linuxSession,
+			lifecycleStore: lifecycleStore
+		)
+	}
 
     public func start(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessSession {
         guard processHandle.lifecycle.record.state == .created else {
@@ -956,33 +962,44 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
         return try start(observedProcess: driver.start(processSession: self))
     }
 
-    public func kill(signal: Int32) throws -> OrlixOCIRuntimeProcessSession {
-        try OrlixOCIRuntimeProcessSession(
-            processHandle: processHandle.kill(signal: signal),
-            linuxSession: linuxSession
-        )
-    }
+	public func kill(signal: Int32) throws -> OrlixOCIRuntimeProcessSession {
+		let signaledHandle = try processHandle.kill(signal: signal)
+		try persist(signaledHandle.lifecycle)
+		return OrlixOCIRuntimeProcessSession(
+			processHandle: signaledHandle,
+			linuxSession: linuxSession,
+			lifecycleStore: lifecycleStore
+		)
+	}
 
-    public func kill(signal: Int32, using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessSession {
-        let signaledHandle = try processHandle.kill(signal: signal)
-        try driver.signal(processSession: self, signal: signal)
-        return OrlixOCIRuntimeProcessSession(
-            processHandle: signaledHandle,
-            linuxSession: linuxSession
-        )
-    }
+	public func kill(signal: Int32, using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeProcessSession {
+		let signaledHandle = try processHandle.kill(signal: signal)
+		try driver.signal(processSession: self, signal: signal)
+		try persist(signaledHandle.lifecycle)
+		return OrlixOCIRuntimeProcessSession(
+			processHandle: signaledHandle,
+			linuxSession: linuxSession,
+			lifecycleStore: lifecycleStore
+		)
+	}
 
-    public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeCompletedProcess {
-        try processHandle.exit(observedProcess: observation)
-    }
+	public func exit(observedProcess observation: OrlixOCIRuntimeProcessExitObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+		let completedProcess = try processHandle.exit(observedProcess: observation)
+		try persist(completedProcess.lifecycle)
+		return completedProcess
+	}
 
-    public func exit(observedSignal observation: OrlixOCIRuntimeProcessSignalObservation) throws -> OrlixOCIRuntimeCompletedProcess {
-        try processHandle.exit(observedSignal: observation)
-    }
+	public func exit(observedSignal observation: OrlixOCIRuntimeProcessSignalObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+		let completedProcess = try processHandle.exit(observedSignal: observation)
+		try persist(completedProcess.lifecycle)
+		return completedProcess
+	}
 
-    public func exit(observedCompletion observation: OrlixOCIRuntimeProcessCompletionObservation) throws -> OrlixOCIRuntimeCompletedProcess {
-        try processHandle.exit(observedCompletion: observation)
-    }
+	public func exit(observedCompletion observation: OrlixOCIRuntimeProcessCompletionObservation) throws -> OrlixOCIRuntimeCompletedProcess {
+		let completedProcess = try processHandle.exit(observedCompletion: observation)
+		try persist(completedProcess.lifecycle)
+		return completedProcess
+	}
 
     public func wait(using driver: OrlixOCIRuntimeProcessObservationDriver) throws -> OrlixOCIRuntimeCompletedProcess {
         guard processHandle.lifecycle.record.state == .running else {
@@ -1012,11 +1029,15 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 
 		return OrlixOCIRuntimeProcessRunResult(
 			startObservation: startObservation,
-            runningSession: runningSession,
-            completionObservation: completionObservation,
-            completedProcess: completedProcess
-        )
-    }
+			runningSession: runningSession,
+			completionObservation: completionObservation,
+			completedProcess: completedProcess
+		)
+	}
+
+	private func persist(_ lifecycle: OrlixOCIRuntimeLifecycleController) throws {
+		try lifecycleStore?.save(lifecycle)
+	}
 }
 
 private final class HostConsoleTerminalTransport:
