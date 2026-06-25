@@ -472,6 +472,9 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
 		XCTAssertEqual(result.run.completedEnvironment.stateReport.exitStatus, 0)
 		XCTAssertEqual(result.finalState.status, .stopped)
 		XCTAssertEqual(result.finalState.exitStatus, 0)
+		XCTAssertEqual(result.deletedEnvironment.deletedRecord.state, .deleted)
+		XCTAssertFalse(FileManager.default.fileExists(atPath: result.lifecycleRecordURL.path))
+		XCTAssertFalse(FileManager.default.fileExists(atPath: result.environmentDirectoryURL.path))
 	}
 
 	func testOCIDerivedMaterializedRootUsesLinuxRuntimeTmpfsMounts()
@@ -498,6 +501,9 @@ private struct OrlixEnvironmentObservedRuntimeResult {
 	let output: String
 	let run: OrlixOCIRuntimeRunResult
 	let finalState: OrlixOCIRuntimeStateReport
+	let deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment
+	let lifecycleRecordURL: URL
+	let environmentDirectoryURL: URL
 }
 
 private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable {
@@ -977,12 +983,20 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 			using: driver
 		)
 		let finalState = try runtime.state(id: descriptor.id)
+		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+			forID: descriptor.id
+		)
+		let environmentDirectoryURL = layout.rootDirectory
+		let deletedEnvironment = try runtime.delete(id: descriptor.id)
 		let text = Self.normalized(recorder.text)
 		try validate(text, terminalLog: terminalLog)
 		return OrlixEnvironmentObservedRuntimeResult(
 			output: text,
 			run: run,
-			finalState: finalState
+			finalState: finalState,
+			deletedEnvironment: deletedEnvironment,
+			lifecycleRecordURL: lifecycleRecordURL,
+			environmentDirectoryURL: environmentDirectoryURL
 		)
 	}
 

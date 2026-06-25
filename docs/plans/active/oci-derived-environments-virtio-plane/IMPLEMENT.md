@@ -21949,3 +21949,28 @@ Boundary:
 Current status:
 
 The latest coherent checkpoint is the high-level OrlixOS OCI runtime manager proof: `OrlixOCIRuntime.run(id:terminal:using:)` now has app-hosted evidence for a focused OCI-derived terminal-false environment, with Linux init start/exit markers and persisted stopped state. Next work remains real signal/kill delivery, product `orlix run`, registry input, and broader Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-25 App-hosted OCI lifecycle delete proof
+
+Checkpoint: extended focused app-hosted OCI-derived lifecycle proof through stopped-state delete cleanup.
+
+Changes:
+- Extended `OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput` so the same real app-hosted OCI-derived terminal-false run now calls `OrlixOCIRuntime.delete(id:)` after persisted stopped state.
+- Asserted the delete transition records `.deleted` and removes both the OCI lifecycle record and the materialized environment storage directory.
+- Kept scope in OrlixOS runtime test surface. No `GOAL.md`, OrlixKernel, OrlixMLibC, HostAdapter, generated upstream, package manager, proof-package, or stamp-ladder changes.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- First focused test attempt failed at Swift compile before test execution because of local typo `XCTFalse`; fixed to `XCTAssertFalse`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination platform=iOS\ Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_21-30-14-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that bundle reported 1 passed, 0 failed, 0 skipped.
+
+Boundary:
+- This proves focused `run` then stopped-state `delete` cleanup after real app-hosted Linux execution for the OCI-derived fixture.
+- It does not claim product `orlix run`, registry pull, real signal/kill delivery, arbitrary imported-image compatibility, systemd support, broad cgroup/namespace/device/filesystem/network readiness, or full product runtime readiness.
+
+## Current Status
+
+Current status: latest coherent checkpoint high-level OrlixOS OCI runtime manager proof now has app-hosted evidence for a focused OCI-derived terminal-false environment: Linux init start/exit observation, persisted stopped state, and stopped-state delete cleanup of lifecycle record and materialized environment storage. Next work remains real Linux-owned signal/kill delivery, product `orlix run`, registry input, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, imported-image compatibility.
