@@ -8575,6 +8575,58 @@ func testOCIRuntimeRunStartsAndWaitsCreatedLifecycleRecord() throws {
 	)
 }
 
+func testOCIRuntimeRunRejectsUnmaterializedRootBeforeDriverSideEffects() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-runtime-run-unmaterialized-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(
+		at: scratch,
+		withIntermediateDirectories: true
+	)
+	defer { try? fileManager.removeItem(at: scratch) }
+
+	let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+	let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+	try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+	try nonRootOCIRuntimeConfig().write(
+		to: bundleURL.appendingPathComponent("config.json")
+	)
+
+	let runtime = OrlixOCIRuntime(
+		registry: OrlixEnvironmentRegistry(
+			linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		)
+	)
+	let created = try runtime.create(bundleURL: bundleURL, id: "oci-unmaterialized")
+	let driver = try RecordingOCIRuntimeProcessObservationDriver(
+		startPID: 102,
+		completion: .exited(
+			OrlixOCIRuntimeProcessExitObservation(pid: 102, exitStatus: 0)
+		)
+	)
+
+	XCTAssertThrowsError(
+		try runtime.run(
+			id: "oci-unmaterialized",
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			using: driver
+		)
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeError,
+			.missingMaterializedRootImage(
+				created.importPlan.storageLayout.baseImageURL.path
+			)
+		)
+	}
+	XCTAssertEqual(driver.events, [])
+	XCTAssertEqual(try runtime.state(id: "oci-unmaterialized").status, .created)
+}
+
 func testOCIRuntimeStartAndWaitResumePersistedLifecycle() throws {
 	let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
