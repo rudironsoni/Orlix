@@ -8264,6 +8264,114 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 		XCTAssertEqual(requests.count, 3)
 	}
 
+	func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession() async throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-registry-string-installer-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		)
+		let imageString = "alpine:3.20"
+		let image = try OrlixOCIRegistryImageReference(imageString)
+		let configData = Data(
+			"""
+			{
+			  "config": {
+			    "Env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
+			    "Entrypoint": ["/bin/sh"],
+			    "Cmd": ["-lc", "echo string"],
+			    "WorkingDir": "/",
+			    "User": "0"
+			  },
+			  "rootfs": {
+			    "type": "layers",
+			    "diff_ids": []
+			  }
+			}
+			""".utf8
+		)
+		let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+		let manifestData = Data(
+			"""
+			{
+			  "schemaVersion": 2,
+			  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+			  "config": {
+			    "mediaType": "application/vnd.oci.image.config.v1+json",
+			    "digest": "\(configDigest)",
+			    "size": \(configData.count)
+			  },
+			  "layers": []
+			}
+			""".utf8
+		)
+		let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+		let registryFetch = RecordingOCIRegistryFetch(responses: [
+			try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: [
+					"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+					"Docker-Content-Digest": manifestDigest,
+				],
+				body: manifestData
+			),
+			try image.blobURL(digest: configDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: ["Docker-Content-Digest": configDigest],
+				body: configData
+			),
+		])
+		let tools = OrlixOCIEnvironmentMaterializationTools(
+			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
+			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		)
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let recorder = RecordingPublicOCIInstallerCommandRunner()
+
+		let result = try await installer.install(
+			image: imageString,
+			id: "docker-shorthand-string",
+			tools: tools,
+			puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
+			runCommand: { executable, arguments in
+				try recorder.run(executable: executable, arguments: arguments)
+			}
+		)
+
+		let session = try installer.session(id: result.id)
+
+		XCTAssertEqual(result.image, image)
+		XCTAssertEqual(result.pullResult.image, image)
+		XCTAssertEqual(
+			try registry.load(environmentID: result.id).defaultCommand,
+			["/bin/sh", "-lc", "echo string"]
+		)
+		let kernelCommandLine = try XCTUnwrap(session.bootConfig.kernelCommandLine)
+		XCTAssertTrue(kernelCommandLine.contains("orlix.exec=/bin/sh"))
+		XCTAssertTrue(kernelCommandLine.contains("orlix.argv1=-lc"))
+		XCTAssertEqual(recorder.executables.map(\.lastPathComponent), [
+			"orlix-truncate",
+			"orlix-mke2fs",
+			"orlix-debugfs",
+			"orlix-truncate",
+			"orlix-mke2fs",
+			"orlix-debugfs",
+		])
+		let requests = await registryFetch.requests
+		XCTAssertEqual(requests.map(\.url.absoluteString), [
+			try image.manifestURL().absoluteString,
+			try image.blobURL(digest: configDigest).absoluteString,
+		])
+	}
+
 	func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() async throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(

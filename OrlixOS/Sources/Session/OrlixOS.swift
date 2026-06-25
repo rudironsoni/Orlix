@@ -1328,6 +1328,27 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 
 	@discardableResult
 	public func install(
+		image: String,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		platform: String = "linux/arm64",
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
+		try await install(
+			image: OrlixOCIRegistryImageReference(image),
+			id: id,
+			tools: tools,
+			puller: puller,
+			platform: platform,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+	}
+
+	@discardableResult
+	public func install(
 		image: OrlixOCIRegistryImageReference,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
@@ -1423,6 +1444,33 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		return OrlixOCIEnvironmentInstallRunResult(
 			installResult: installResult,
 			runResult: runResult
+		)
+	}
+
+	@discardableResult
+	public func run(
+		image: String,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		platform: String = "linux/arm64",
+		command: [String]? = nil,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
+		try await run(
+			image: OrlixOCIRegistryImageReference(image),
+			id: id,
+			tools: tools,
+			puller: puller,
+			platform: platform,
+			command: command,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager,
+			runCommand: runCommand
 		)
 	}
 
