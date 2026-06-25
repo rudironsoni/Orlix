@@ -8925,13 +8925,83 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 				.missingRecord("oci-ephemeral-run")
 			)
 		}
-		XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.rootDirectory.path))
-		XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.importScratchDirectory.path))
+	XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.rootDirectory.path))
+	XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.importScratchDirectory.path))
+}
+
+func testOCIRuntimeRunEphemeralCleansUpAfterStartFailure() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-runtime-ephemeral-start-failure-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(
+		at: scratch,
+		withIntermediateDirectories: true
+	)
+	defer { try? fileManager.removeItem(at: scratch) }
+
+	let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+	let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+	try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+	try nonRootOCIRuntimeConfig().write(
+		to: bundleURL.appendingPathComponent("config.json")
+	)
+	let runtime = OrlixOCIRuntime(
+		registry: OrlixEnvironmentRegistry(
+			linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		)
+	)
+	let storageLayout = try runtime.registry.layout(
+		forEnvironmentID: "oci-ephemeral-start-fails"
+	)
+	let materializationRunner = RecordingMaterializationCommandRunner(
+		createsPlaceholderImagesForTruncateCommands: true
+	)
+	let processDriver = try RecordingOCIRuntimeProcessObservationDriver(
+		startPID: 107,
+		completion: .exited(
+			OrlixOCIRuntimeProcessExitObservation(pid: 107, exitStatus: 0)
+		),
+		failsOnStart: true
+	)
+
+	XCTAssertThrowsError(
+		try runtime.runEphemeral(
+			bundleURL: bundleURL,
+			id: "oci-ephemeral-start-fails",
+			materializationRunner: materializationRunner,
+			processDriver: processDriver
+		)
+	) { error in
+		let failure = error as? OrlixOCIRuntimeEphemeralRunFailure
+		XCTAssertEqual(failure?.id, "oci-ephemeral-start-fails")
+		XCTAssertEqual(
+			failure?.originalError as? RecordingOCIRuntimeProcessObservationDriverError,
+			.requestedStartFailure
+		)
+		XCTAssertNil(failure?.cleanupError)
+		XCTAssertEqual(failure?.deletedEnvironment?.id, "oci-ephemeral-start-fails")
+		XCTAssertEqual(failure?.deletedEnvironment?.deletedRecord.state, .created)
 	}
 
-	func testOCIRuntimeDeleteRejectsRunningLifecycleRecord() throws {
-		let fileManager = FileManager.default
-		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+	XCTAssertFalse(materializationRunner.commands.isEmpty)
+	XCTAssertEqual(processDriver.events, ["start:created:nil"])
+	XCTAssertThrowsError(try runtime.state(id: "oci-ephemeral-start-fails")) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeLifecycleStoreError,
+			.missingRecord("oci-ephemeral-start-fails")
+		)
+	}
+	XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.rootDirectory.path))
+	XCTAssertFalse(fileManager.fileExists(atPath: storageLayout.importScratchDirectory.path))
+}
+
+func testOCIRuntimeDeleteRejectsRunningLifecycleRecord() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 			"orlix-oci-runtime-running-delete-\(UUID().uuidString)",
 			isDirectory: true
 		)
@@ -10254,40 +10324,64 @@ private func makeCreatedOCIRuntimeProcessSessionFixture(
 	)
 }
 
+private enum RecordingOCIRuntimeProcessObservationDriverError: Error, Equatable {
+	case requestedStartFailure
+	case requestedSignalFailure
+	case requestedWaitFailure
+}
+
 private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntimeProcessObservationDriver, @unchecked Sendable {
-		private let startObservation: OrlixOCIRuntimeProcessStartObservation
-		private let completion: OrlixOCIRuntimeProcessCompletionObservation
-		private(set) var events: [String] = []
+	private let startObservation: OrlixOCIRuntimeProcessStartObservation
+	private let completion: OrlixOCIRuntimeProcessCompletionObservation
+	private let failsOnStart: Bool
+	private let failsOnSignal: Bool
+	private let failsOnWait: Bool
+	private(set) var events: [String] = []
 
-		init(startPID: Int32,
-		     completion: OrlixOCIRuntimeProcessCompletionObservation) throws
-		{
-			self.startObservation = try OrlixOCIRuntimeProcessStartObservation(
-				pid: startPID
-			)
-			self.completion = completion
+	init(startPID: Int32,
+	     completion: OrlixOCIRuntimeProcessCompletionObservation,
+	     failsOnStart: Bool = false,
+	     failsOnSignal: Bool = false,
+	     failsOnWait: Bool = false) throws
+	{
+		self.startObservation = try OrlixOCIRuntimeProcessStartObservation(
+			pid: startPID
+		)
+		self.completion = completion
+		self.failsOnStart = failsOnStart
+		self.failsOnSignal = failsOnSignal
+		self.failsOnWait = failsOnWait
+	}
+
+	func start(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessStartObservation {
+		events.append(
+			"start:\(processSession.processHandle.lifecycle.record.state):\(String(describing: processSession.processHandle.lifecycle.record.pid))"
+		)
+		if failsOnStart {
+			throw RecordingOCIRuntimeProcessObservationDriverError.requestedStartFailure
 		}
+		return startObservation
+	}
 
-		func start(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessStartObservation {
-			events.append(
-				"start:\(processSession.processHandle.lifecycle.record.state):\(String(describing: processSession.processHandle.lifecycle.record.pid))"
-			)
-			return startObservation
-		}
-
-		func signal(processSession: OrlixOCIRuntimeProcessSession, signal: Int32) throws {
-			events.append(
-				"signal:\(processSession.processHandle.lifecycle.record.state):\(processSession.processHandle.lifecycle.record.pid ?? 0):\(signal)"
-			)
-		}
-
-		func wait(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessCompletionObservation {
-			events.append(
-				"wait:\(processSession.processHandle.lifecycle.record.state):\(processSession.processHandle.lifecycle.record.pid ?? 0)"
-			)
-			return completion
+	func signal(processSession: OrlixOCIRuntimeProcessSession, signal: Int32) throws {
+		events.append(
+			"signal:\(processSession.processHandle.lifecycle.record.state):\(processSession.processHandle.lifecycle.record.pid ?? 0):\(signal)"
+		)
+		if failsOnSignal {
+			throw RecordingOCIRuntimeProcessObservationDriverError.requestedSignalFailure
 		}
 	}
+
+	func wait(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessCompletionObservation {
+		events.append(
+			"wait:\(processSession.processHandle.lifecycle.record.state):\(processSession.processHandle.lifecycle.record.pid ?? 0)"
+		)
+		if failsOnWait {
+			throw RecordingOCIRuntimeProcessObservationDriverError.requestedWaitFailure
+		}
+		return completion
+	}
+}
 
 	private func minimalOCIRuntimeConfig() -> Data {
 		Data(
