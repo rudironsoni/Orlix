@@ -8063,12 +8063,155 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 	let rootImage = try XCTUnwrap(session.materializedRootImageForTesting)
 	XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
 	XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
-	let requests = await registryFetch.requests
-	XCTAssertEqual(requests.count, 3)
-}
+		let requests = await registryFetch.requests
+		XCTAssertEqual(requests.count, 3)
+	}
 
-func testOCIRuntimeBundleRejectsSymlinkRootfsEscapingBundle() throws {
-	let fileManager = FileManager.default
+	func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() async throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-registry-installer-run-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		)
+		let image = try OrlixOCIRegistryImageReference(
+			"registry.example.org/library/orlix-registry:latest"
+		)
+		let layerData = tarArchive(entries: [
+			TarFixtureEntry(
+				path: "root-marker",
+				payload: Data("registry-root\n".utf8)
+			),
+		])
+		let layerDigest = "sha256:\(OrlixOCIDigest.sha256Hex(layerData))"
+		let configData = Data(
+			"""
+			{
+				"config": {
+					"Env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
+					"Entrypoint": ["/bin/sh"],
+					"Cmd": ["-lc", "echo registry"],
+					"WorkingDir": "/",
+					"User": "0"
+				},
+				"rootfs": {
+					"type": "layers",
+					"diff_ids": ["\(layerDigest)"]
+				}
+			}
+			""".utf8
+		)
+		let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+		let manifestData = Data(
+			"""
+			{
+				"schemaVersion": 2,
+				"mediaType": "application/vnd.oci.image.manifest.v1+json",
+				"config": {
+					"mediaType": "application/vnd.oci.image.config.v1+json",
+					"digest": "\(configDigest)",
+					"size": \(configData.count)
+				},
+				"layers": [
+					{
+						"mediaType": "application/vnd.oci.image.layer.v1.tar",
+						"digest": "\(layerDigest)",
+						"size": \(layerData.count)
+					}
+				]
+			}
+			""".utf8
+		)
+		let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+		let registryFetch = RecordingOCIRegistryFetch(responses: [
+			try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: [
+					"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+					"Docker-Content-Digest": manifestDigest,
+				],
+				body: manifestData
+			),
+			try image.blobURL(digest: configDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: ["Docker-Content-Digest": configDigest],
+				body: configData
+			),
+			try image.blobURL(digest: layerDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: ["Docker-Content-Digest": layerDigest],
+				body: layerData
+			),
+		])
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let tools = OrlixOCIEnvironmentMaterializationTools(
+			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
+			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		)
+		let recorder = RecordingPublicOCIInstallerCommandRunner()
+		let driver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 111,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 111, exitStatus: 0)
+			)
+		)
+
+		let result = try await installer.run(
+			image: image,
+			id: "registry-installed-run",
+			tools: tools,
+			puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			using: driver,
+			fileManager: fileManager
+		) { executable, arguments in
+			try recorder.run(executable: executable, arguments: arguments)
+		}
+		let layout = try registry.layout(forEnvironmentID: "registry-installed-run")
+		let descriptor = try registry.load(environmentID: "registry-installed-run")
+
+		XCTAssertEqual(result.installResult.id, "registry-installed-run")
+		XCTAssertEqual(result.installResult.image, image)
+		XCTAssertEqual(result.installResult.pullResult.manifestDigest, manifestDigest)
+		XCTAssertEqual(result.installResult.stateReport.status, .created)
+		XCTAssertEqual(result.runResult.id, "registry-installed-run")
+		XCTAssertEqual(result.runResult.startedStateReport.status, .running)
+		XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
+		XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
+		XCTAssertEqual(
+			try installer.state(id: "registry-installed-run"),
+			result.runResult.completedStateReport
+		)
+		XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo registry"])
+		XCTAssertEqual(recorder.executables.first, tools.truncate)
+		XCTAssertEqual(recorder.executables.filter { $0 == tools.mke2fs }.count, 2)
+		XCTAssertEqual(recorder.executables.filter { $0 == tools.debugfs }.count, 2)
+		XCTAssertEqual(
+			driver.events,
+			[
+				"start:created:nil",
+				"wait:running:111",
+			]
+		)
+		XCTAssertTrue(fileManager.fileExists(atPath: layout.rootDirectory.path))
+		let requests = await registryFetch.requests
+		XCTAssertEqual(requests.count, 3)
+
+		let deleted = try installer.delete(id: "registry-installed-run")
+		XCTAssertEqual(deleted.lifecycleState, .deleted)
+		XCTAssertFalse(fileManager.fileExists(atPath: layout.rootDirectory.path))
+	}
+
+	func testOCIRuntimeBundleRejectsSymlinkRootfsEscapingBundle() throws {
+		let fileManager = FileManager.default
 	let bundleURL = fileManager.temporaryDirectory
 		.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
 	let outsideRootfsURL = fileManager.temporaryDirectory
