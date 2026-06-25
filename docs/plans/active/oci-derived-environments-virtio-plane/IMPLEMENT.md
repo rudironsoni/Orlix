@@ -10,6 +10,32 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI cgroup2 mount acceptance
+
+Checkpoint: implemented bounded OCI Runtime Spec cgroup2 mount acceptance for the Linux cgroup hierarchy Orlix already mounts in first-stage init. OCI runtime configs may now include a standard `mounts` entry with `type: "cgroup2"`, destination `/sys/fs/cgroup`, and absent or `cgroup2` source. The parser still rejects cgroup2 mounts to other destinations, non-cgroup2 sources, or mount options because this checkpoint only exposes the existing Linux-owned cgroup2 hierarchy, not arbitrary cgroup mount policy.
+
+Changes:
+- Added `cgroup2` to the OCI runtime mount types accepted by `OrlixOCIRuntimeConfigParser`.
+- Extended default virtual mount validation so cgroup2 is only accepted as `/sys/fs/cgroup` with source `cgroup2` and no mount options.
+- Updated OCI feature reporting: `ociCgroupMounts` is now implemented with `orlix:cgroup_v2_probe` proof, matching the Linux cgroup2 hierarchy mounted by init.
+- Corrected stale OCI-specific masked/readonly path feature statuses to implemented, using the existing rootinit Linux mount proofs already used by generic `maskedPaths` and `readonlyPaths`.
+- Updated OrlixOS XCTest coverage for cgroup2 mount parsing, invalid cgroup2 mount shapes, and feature-report statuses.
+
+Evidence:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 on the current tree.
+- Focused `test-without-building` for the modified parser and feature-report tests was interrupted after it did not reach `Testing started` or `Test Suite` output in the bounded wait; no executed-XCTest proof is claimed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale active-plan warning.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Boundary:
+- This accepts the standard cgroup2 mount descriptor for Orlix's existing Linux-owned `/sys/fs/cgroup` mount. It does not implement arbitrary cgroup mount destinations, cgroup v1 hierarchies, broader cgroup controller accounting/enforcement, systemd support, OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, hosted runtime execution proof, or full runtime readiness.
+- No Linux ABI shim, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, runtime-visible host shim, generated upstream edit, or OrlixMLibC patch was added.
+
 ### 2026-06-25 OCI namespace path join support
 
 Checkpoint: implemented bounded OCI Linux namespace `path` joins through OrlixOS descriptors and first-stage init using Linux `setns(2)`. OCI runtime configs may now request `path` joins for `mount`, `ipc`, `uts`, `network`, and `cgroup` namespaces. OrlixOS validates and carries those joins separately from namespace creation, emits deterministic `orlix.namespacepath<N>=type=/path` command-line tokens, and init opens the namespace file and calls `setns(2)` before applying any requested `unshare(2)` namespace creation and before exec.
