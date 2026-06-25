@@ -21806,3 +21806,23 @@ Evidence:
 
 Boundary:
 - This is OrlixOS XCTest coverage for the existing materialized OCI lifecycle path. It does not implement product `orlix run`, registry pull, OCI terminal false semantics, full OCI Runtime Spec lifecycle compliance, app-hosted imported-root runtime readiness, or Linux kernel behavior.
+
+### 2026-06-25 OCI terminal false boot-metadata checkpoint
+
+Checkpoint: fixed the OrlixOS OCI session launch path so `process.terminal: false` is no longer dropped when converting an `OrlixOCIRuntimeSessionDescriptor` into an `OrlixLinuxSession`. Default OCI session boot command lines now carry `orlix.terminal=0` for terminal-false sessions while terminal-true sessions keep the existing PTY default.
+
+Current status:
+- OCI terminal mode is carried from parsed runtime config through session descriptor into Orlix Linux boot metadata.
+
+Changes:
+- Added `OrlixLinuxSession` OCI runtime command-line resolution that appends `orlix.terminal=0` only for default-kernel-command-line OCI sessions with `terminal == false`.
+- Kept caller-supplied custom kernel command lines caller-owned.
+- Added focused OrlixOS XCTest coverage for terminal-false boot metadata and terminal-true non-emission.
+
+Evidence:
+- `rtk git diff --check` exited 0 before focused XCTest runs.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine test` passed: 1 test, 0 failures.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeSessionDescriptorLaunchesThroughEnvironmentRegistry test` passed: 1 test, 0 failures.
+
+Boundary:
+- This is OrlixOS session boot-metadata carriage. It does not yet implement init-side non-PTY execution for `process.terminal: false`, product `orlix run`, registry pull, full OCI Runtime Spec lifecycle compliance, app-hosted imported-root runtime readiness, or Linux kernel behavior.

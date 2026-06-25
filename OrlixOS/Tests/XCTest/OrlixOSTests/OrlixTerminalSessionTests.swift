@@ -10559,14 +10559,62 @@ func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 		XCTAssertTrue(commandLine.contains("orlix.argv2=-lc"))
 		XCTAssertTrue(commandLine.contains("orlix.env0=HOME=/root"))
 		XCTAssertTrue(commandLine.contains("orlix.env1=PATH=/usr/bin:/bin"))
-		XCTAssertTrue(commandLine.contains("orlix.env2=TERM=xterm-256color"))
-		XCTAssertTrue(commandLine.contains("orlix.cwd=/work"))
-		XCTAssertTrue(commandLine.contains("orlix.uid=1000"))
-		XCTAssertTrue(commandLine.contains("orlix.gid=1000"))
-	}
+	XCTAssertTrue(commandLine.contains("orlix.env2=TERM=xterm-256color"))
+	XCTAssertTrue(commandLine.contains("orlix.cwd=/work"))
+	XCTAssertTrue(commandLine.contains("orlix.uid=1000"))
+	XCTAssertTrue(commandLine.contains("orlix.gid=1000"))
+	XCTAssertFalse(commandLine.contains("orlix.terminal=0"))
+}
 
-	func testOCIRuntimeLifecycleControllerRejectsStoppedSessionDescriptor() throws {
-		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+func testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine() throws {
+	let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-session-terminal-false-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	defer { try? FileManager.default.removeItem(at: root) }
+
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: root.appendingPathComponent("Application Support/Orlix"),
+		cacheRoot: root.appendingPathComponent("Caches/Orlix"),
+		scratchRoot: root.appendingPathComponent("tmp/Orlix")
+	)
+	let config = try OrlixOCIRuntimeConfigParser().parse(Data("""
+	{
+		"ociVersion" : "1.1.0",
+		"root" : { "path" : "rootfs" },
+		"process" : {
+			"terminal" : false,
+			"args" : ["/bin/true"],
+			"cwd" : "/"
+		}
+	}
+	""".utf8))
+	let controller = try OrlixOCIRuntimeLifecycleController(
+		config: config,
+		id: "oci-session-terminal-false",
+		bundlePath: "/bundles/oci-session-terminal-false"
+	).create()
+	let sessionDescriptor = try controller.sessionDescriptor(
+		rootMount: OrlixEnvironmentRootMount.defaultOverlay
+	)
+	XCTAssertFalse(sessionDescriptor.terminal)
+
+	try registry.save(sessionDescriptor.environment)
+	let layout = try registry.layout(forEnvironmentID: sessionDescriptor.environment.id)
+	try Data().write(to: layout.baseImageURL)
+	try Data().write(to: layout.stateImageURL)
+
+	let linuxSession = try OrlixLinuxSession(
+		ociRuntimeSession: sessionDescriptor,
+		registry: registry
+	)
+	let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+	XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
+	XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
+}
+
+func testOCIRuntimeLifecycleControllerRejectsStoppedSessionDescriptor() throws {
+	let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
 		let stopped = try OrlixOCIRuntimeLifecycleController(
 			config: config,
 			id: "oci-demo",
