@@ -1524,9 +1524,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociBindMounts",
-			status: .recognized,
-			proof: "orlix:runtime_spec_mount_validation",
-			reason: "OCI bind mounts are recognized, but parser translation is bounded to Orlix-managed Documents and external bookmark host-folder sources rather than arbitrary host paths."
+			status: .implemented,
+			proof: "orlix:virtio_fs_mount_probe",
+			reason: "OCI bind mount source paths translate to opaque Orlix host-directory registrations and Linux-visible virtiofs mounts; Documents and security-scoped external folders remain app-managed source conveniences."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCgroupMounts",
@@ -1686,6 +1686,13 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 				let bookmarkID = String(source.dropFirst(Self.externalSourcePrefix.count))
 				return try .securityScopedExternal(
 					bookmarkID: bookmarkID,
+					targetPath: destination,
+					readOnly: readOnly
+				)
+			}
+			if source.hasPrefix("/") {
+				return try .hostPath(
+					source,
 					targetPath: destination,
 					readOnly: readOnly
 				)
