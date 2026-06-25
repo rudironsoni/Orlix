@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI registry Docker Hub official image canonicalization
+
+Checkpoint: explicit Docker Hub official-image references such as `docker.io/alpine:latest`, `registry-1.docker.io/library/alpine:latest`, and `index.docker.io/alpine:latest` now canonicalize to image registry `docker.io` and repository `library/alpine`. Distribution URLs still use `registry-1.docker.io`.
+
+Changes:
+- Added Docker Hub repository canonicalization for single-component repositories after Docker Hub registry alias normalization.
+- Extended registry reference XCTest coverage for explicit Docker Hub official-image and legacy endpoint spellings.
+
+Evidence:
+- Live probe showed authorized `/v2/alpine/manifests/latest` does not resolve as the official image path; it challenges for repository `alpine` and returns unauthorized for that scope. The canonical Docker Hub official image path is `library/alpine`.
+- `rtk git diff --check` exited 0.
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_01-15-41-+0200.xcresult` reported `Passed`, 5 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This improves Docker Hub official-image input handling for registry-backed OrlixOS APIs and product `orlix run IMAGE` direction.
+- This does not prove a complete live Docker Hub image pull, product Linux userspace `orlix run`, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, real signal/kill delivery, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+
 ### 2026-06-26 OCI registry Docker Hub endpoint canonicalization
 
 Checkpoint: explicit Docker Hub distribution endpoint references such as `registry-1.docker.io/library/alpine:latest` now canonicalize to image registry `docker.io` while still using `registry-1.docker.io` for distribution URLs. This avoids persisting a second Docker Hub identity spelling while keeping live pull endpoints correct.
