@@ -936,7 +936,37 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 		self.lifecycleStore = lifecycleStore
 	}
 
-    public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessSession {
+	public init(
+		lifecycle: OrlixOCIRuntimeLifecycleController,
+		rootMount: OrlixEnvironmentRootMount,
+		registry: OrlixEnvironmentRegistry,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		lifecycleStore: OrlixOCIRuntimeLifecycleStore? = nil
+	) throws {
+		let processHandle = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: lifecycle,
+			rootMount: rootMount
+		)
+		try registry.save(processHandle.sessionDescriptor.environment)
+		let linuxSession = try OrlixLinuxSession(
+			ociRuntimeSession: processHandle.sessionDescriptor,
+			registry: registry,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal
+		)
+		let resolvedStore = lifecycleStore ?? OrlixOCIRuntimeLifecycleStore(
+			registry: registry
+		)
+		try resolvedStore.save(processHandle.lifecycle)
+		self.init(
+			processHandle: processHandle,
+			linuxSession: linuxSession,
+			lifecycleStore: resolvedStore
+		)
+	}
+
+	public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessSession {
         try start(
             observedProcess: OrlixOCIRuntimeProcessStartObservation(pid: pid)
         )
