@@ -21252,3 +21252,73 @@ Evidence:
 Boundary:
 - This is OrlixOS OCI config normalization into existing Linux cgroup v2 init behavior. It does not claim cgroup namespace isolation beyond current proofs, full OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, app-hosted process execution proof, or runtime readiness.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, Docker/runc dependency, or Swift-side Linux behavior shim were added.
+### 2026-06-25 OCI time namespace and timeOffsets support
+
+Checkpoint: implemented OCI `time` namespace creation and bounded `linux.timeOffsets`
+support through the OrlixOS descriptor path and first-stage Linux init. OCI
+runtime configs may now include `linux.namespaces: [{ "type": "time" }]` and
+`linux.timeOffsets` entries for `monotonic` and `boottime`. OrlixOS validates
+the config, persists the offsets in environment descriptors, emits
+`orlix.namespace<N>=time` and `orlix.timeoffset<N>=<clock>:<secs>:<nanosecs>`
+metadata, and first-stage init applies `CLONE_NEWTIME`, writes
+`/proc/self/timens_offsets`, then forks the configured process so it enters the
+child time namespace as Linux requires.
+
+Changes:
+- Added `OrlixEnvironmentTimeOffset` and `OrlixEnvironmentDescriptor.timeOffsets`
+  Codable/session propagation, copy preservation, validation, and command-line
+  emission.
+- Added OCI runtime parser support for namespace type `time` and
+  `linux.timeOffsets` values shaped as `{ "secs": Int64, "nanosecs": Int64 }`
+  for the `monotonic` and `boottime` clocks.
+- Kept invalid time-offset shapes rejected precisely: offsets without a time
+  namespace, unsupported clocks such as `realtime`, and nanoseconds outside
+  `0..<1000000000`.
+- Updated first-stage init to parse `orlix.timeoffset<N>`, map namespace type
+  `time` to upstream `CLONE_NEWTIME`, write all configured offsets to
+  `/proc/self/timens_offsets` in a single procfs write at offset zero, and fork
+  the configured command so it enters the child time namespace.
+- Updated OCI feature reporting with `ociTimeNamespace` implemented and proof
+  `orlix:time_namespace_probe`, plus `ociTimeOffsets` implemented and proof
+  `orlix:runtime_config_parser`.
+- Added OrlixOS XCTest coverage for accepted time namespace/offset carriage and
+  invalid time-offset rejection, and updated feature-report coverage for the new
+  feature entries.
+
+Evidence:
+- Local inspection of upstream Linux 6.12 procfs implementation in
+  `Build/OrlixKernel/src/linux-6.12-port/fs/proc/base.c` confirmed
+  `timens_offsets_write` requires writes at file offset zero and parses up to
+  two offset lines from one write; init now writes both offsets in one buffer.
+- `rtk git diff --check` exited 0.
+- `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` exited 0 and
+  rebuilt the release Orlix kselftest set including `time_namespace_probe`.
+- `rtk proxy bash -lc 'env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination "platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D" build-for-testing'`
+  exited 0 on the current tree.
+- Focused bounded `test-without-building` for
+  `testOCIRuntimeConfigParserCarriesTimeNamespaceOffsets` and
+  `testOCIRuntimeConfigParserRejectsInvalidTimeOffsets` executed under XCTest
+  and passed: 2 tests, 0 failures.
+- Focused bounded `test-without-building` for
+  `testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures` and
+  `testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale
+  active-plan warnings only.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no
+  generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print`
+  found no recent Orlix diagnostic reports.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted`
+  showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+
+Boundary:
+- This implements OCI time namespace creation and time-offset parsing/carriage
+  through Linux `CLONE_NEWTIME` and `/proc/self/timens_offsets`. It does not
+  claim full OCI Runtime Spec lifecycle completion, product `orlix run`,
+  registry pull, broad app-hosted imported-root execution proof, systemd
+  support, arbitrary clock offsets beyond Linux `monotonic`/`boottime`, or full
+  runtime readiness.
+- No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
+  custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
+  dependency, or Swift-side fake Linux behavior was added.
