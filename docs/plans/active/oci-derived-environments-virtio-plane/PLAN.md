@@ -2002,6 +2002,19 @@ Plan rules:
 19. Add registry pull tooling.
     - Proof: registry pull produces the same verified OCI layout input as local layout import, with no OrlixKernel or iOS runtime dependency on Apple container.
 ## Proof Boundary Correction
+## First-Stage Init Structure Correction
+
+`OrlixOS/Sources/init/init.c` is the bootstrap/orchestrator for Orlix Linux
+userspace. It must not become the long-term home for every OCI setup concern.
+Before adding further OCI setup surface, split growing Linux userspace setup into
+focused init-side modules, for example namespace, cgroup, device, mount,
+process, or lifecycle setup files.
+
+These modules remain OrlixOS Linux userspace setup code: they may call Linux
+syscalls and Linux procfs/sysfs/cgroupfs, but must not define Linux semantics,
+invent Orlix ABIs, move Linux policy into HostAdapter, or hide OrlixKernel or
+OrlixMLibC defects.
+
 
 The proof surface is the test suite result, not package assembly. Linux, OrlixMLibC, Coreutils, and OCI/runtime claims must be backed by their corresponding test outputs. Package/rootfs/test-fixture assembly is only harness setup required to launch those suites; it must not become a package manager, distro model, or independent proof framework.
 

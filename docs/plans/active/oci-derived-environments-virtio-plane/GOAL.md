@@ -1,4 +1,5 @@
 # Goal
+First-stage Linux userspace setup must remain architecturally small and Linux-shaped. `OrlixOS/Sources/init/init.c` is the bootstrap/orchestrator for Orlix Linux userspace, not the long-term home for every OCI setup concern. As OCI-derived environment support grows, move Linux userspace setup into focused init-side modules such as namespace, cgroup, device, mount, process, or lifecycle setup files, while preserving the same boundary: these modules may call Linux syscalls and Linux procfs/sysfs/cgroupfs, but must not define Linux semantics, invent Orlix ABIs, move policy into HostAdapter, or hide kernel/libc defects.
 
 Design and execute the implementation path for Orlix to run OCI/container-image-derived Linux environments alongside the default Orlix Linux environment while preserving Orlix's Linux-shaped architecture and proof order.
 
