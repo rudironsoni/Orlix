@@ -1442,7 +1442,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociLinuxResources",
 			status: .recognized,
 			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, and memory limits are implemented through cgroup v2; unproven block IO, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
+			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, memory limits, and block IO weight are implemented through cgroup v2; unproven block IO device throttles, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCPUQuota",
@@ -1467,6 +1467,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			status: .implemented,
 			proof: "orlix:cgroup_memory_probe",
 			reason: "OCI linux.resources.memory.limit carries into OrlixOS descriptors init writes cgroup v2 memory.max before joining process cgroup."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociBlockIOWeight",
+			status: .implemented,
+			proof: "orlix:cgroup_io_probe",
+			reason: "OCI linux.resources.blockIO.weight carries into OrlixOS descriptors init writes cgroup v2 io.weight before joining process cgroup."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociMaskedPaths",
@@ -1571,10 +1577,11 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let readonlyPaths: [String]
 public let cgroupsPath: String?
 public let cgroupPidsLimit: Int64?
-public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
-public let cgroupCPUWeight: UInt64?
-public let cgroupMemoryMax: Int64?
-public let mounts: [OrlixOCIRuntimeMount]
+	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
+	public let cgroupCPUWeight: UInt64?
+	public let cgroupMemoryMax: Int64?
+	public let cgroupIOWeight: UInt64?
+	public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
 	public let defaultWorkingDirectory: String
@@ -1636,6 +1643,7 @@ public let mounts: [OrlixOCIRuntimeMount]
             cgroupCPUMax: cgroupCPUMax,
             cgroupCPUWeight: cgroupCPUWeight,
             cgroupMemoryMax: cgroupMemoryMax,
+            cgroupIOWeight: cgroupIOWeight,
             namespaces: namespaces,
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
@@ -1761,11 +1769,15 @@ cgroupCPUWeight: try Self.validatedCgroupCPUWeight(
 config.linux?.resources,
 cgroupsPath: config.linux?.cgroupsPath
 ),
-cgroupMemoryMax: try Self.validatedCgroupMemoryMax(
-config.linux?.resources,
-cgroupsPath: config.linux?.cgroupsPath
-),
-mounts: mounts,
+			cgroupMemoryMax: try Self.validatedCgroupMemoryMax(
+				config.linux?.resources,
+				cgroupsPath: config.linux?.cgroupsPath
+			),
+			cgroupIOWeight: try Self.validatedCgroupIOWeight(
+				config.linux?.resources,
+				cgroupsPath: config.linux?.cgroupsPath
+			),
+			mounts: mounts,
 			defaultCommand: args,
 			defaultEnvironment: environment,
 			defaultWorkingDirectory: cwd,
@@ -1923,12 +1935,9 @@ mounts: mounts,
         if resources.devices != nil {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.devices")
         }
-if resources.blockIO != nil {
-throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO")
-}
-        if resources.network != nil {
-            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.network")
-        }
+	if resources.network != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.network")
+	}
         if let hugepageLimits = resources.hugepageLimits, !hugepageLimits.isEmpty {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.hugepageLimits")
         }
@@ -2028,8 +2037,8 @@ cgroupsPath: String?
 }
 
 private static func validatedCgroupCPUWeight(
-_ resources: OCIRuntimeResources?,
-cgroupsPath: String?
+	_ resources: OCIRuntimeResources?,
+	cgroupsPath: String?
 ) throws -> UInt64? {
 guard let shares = resources?.cpu?.shares else {
 return nil
@@ -2039,8 +2048,45 @@ throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.sh
 }
 guard shares >= 2 && shares <= 262_144 else {
 throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.shares")
+	}
+	return 1 + ((shares - 2) * 9_999) / 262_142
 }
-return 1 + ((shares - 2) * 9_999) / 262_142
+
+private static func validatedCgroupIOWeight(
+	_ resources: OCIRuntimeResources?,
+	cgroupsPath: String?
+) throws -> UInt64? {
+	guard let blockIO = resources?.blockIO else {
+		return nil
+	}
+	if blockIO.leafWeight != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.leafWeight")
+	}
+	if blockIO.weightDevice != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weightDevice")
+	}
+	if blockIO.throttleReadBpsDevice != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleReadBpsDevice")
+	}
+	if blockIO.throttleWriteBpsDevice != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleWriteBpsDevice")
+	}
+	if blockIO.throttleReadIOPSDevice != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleReadIOPSDevice")
+	}
+	if blockIO.throttleWriteIOPSDevice != nil {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.throttleWriteIOPSDevice")
+	}
+	guard let weight = blockIO.weight else {
+		return nil
+	}
+	guard cgroupsPath != nil else {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weight.cgroupsPath")
+	}
+	guard (1...10_000).contains(weight) else {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weight")
+	}
+	return weight
 }
 
 private static func validatedUTSName(_ value: String?,
@@ -2696,7 +2742,18 @@ private struct OCIRuntimeResourceCPU: Decodable {
 	let cpus: String?
 	let mems: String?
 }
-private struct OCIRuntimeResourceBlockIO: Decodable {}
+private struct OCIRuntimeResourceBlockIO: Decodable {
+	let weight: UInt64?
+	let leafWeight: UInt64?
+	let weightDevice: [OCIRuntimeResourceBlockIODeviceWeight]?
+	let throttleReadBpsDevice: [OCIRuntimeResourceBlockIODeviceThrottle]?
+	let throttleWriteBpsDevice: [OCIRuntimeResourceBlockIODeviceThrottle]?
+	let throttleReadIOPSDevice: [OCIRuntimeResourceBlockIODeviceThrottle]?
+	let throttleWriteIOPSDevice: [OCIRuntimeResourceBlockIODeviceThrottle]?
+}
+
+private struct OCIRuntimeResourceBlockIODeviceWeight: Decodable {}
+private struct OCIRuntimeResourceBlockIODeviceThrottle: Decodable {}
 private struct OCIRuntimeResourceNetwork: Decodable {}
 private struct OCIRuntimeResourcePids: Decodable {
     let limit: Int64?
