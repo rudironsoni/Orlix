@@ -10005,19 +10005,84 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 		XCTAssertEqual(report.status, OrlixOCIRuntimeStateStatus.stopped)
 		XCTAssertEqual(report.pid, 42)
 		XCTAssertEqual(report.exitStatus, 0)
+	XCTAssertEqual(
+		driver.events,
+		[
+			"start:created:nil",
+			"wait:running:42"
+		]
+	)
+}
+
+	func testOCIRuntimeProcessSessionUsesPersistedRootImageIdentifier() throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-process-root-id-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(
+			at: scratch,
+			withIntermediateDirectories: true
+		)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let stateRoot = scratch.appendingPathComponent("state", isDirectory: true)
+		let cacheRoot = scratch.appendingPathComponent("cache", isDirectory: true)
+		let scratchRoot = scratch.appendingPathComponent("scratch", isDirectory: true)
+		try fileManager.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+		try fileManager.createDirectory(at: scratchRoot, withIntermediateDirectories: true)
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: stateRoot,
+			cacheRoot: cacheRoot,
+			scratchRoot: scratchRoot
+		)
+		let config = try OrlixOCIRuntimeConfigParser().parse(nonRootOCIRuntimeConfig())
+		let persistedEnvironment = try config.environmentDescriptor(
+			id: "oci-demo",
+			rootMount: .defaultOverlay,
+			rootImageIdentifier: "orlix.test.environment.oci-demo-root"
+		)
+		try registry.save(persistedEnvironment)
+
+		let environmentRoot = stateRoot.appendingPathComponent(
+			"environments/oci-demo",
+			isDirectory: true
+		)
+		try Data("base".utf8).write(
+			to: environmentRoot.appendingPathComponent("base.ext4")
+		)
+		try Data("state".utf8).write(
+			to: environmentRoot.appendingPathComponent("state.ext4")
+		)
+
+		let configured = OrlixOCIRuntimeLifecycleController(
+			config: config,
+			id: "oci-demo",
+			bundlePath: "/bundles/oci-demo"
+		)
+		let processSession = try OrlixOCIRuntimeProcessSession(
+			lifecycle: try configured.create(),
+			rootMount: .defaultOverlay,
+			registry: registry,
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
+		)
 		XCTAssertEqual(
-			driver.events,
-			[
-				"start:created:nil",
-				"wait:running:42"
-			]
+			processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier,
+			"orlix.test.environment.oci-demo-root"
+		)
+
+		let runningSession = try processSession.start(observedPID: 42)
+		XCTAssertEqual(
+			runningSession.processHandle.sessionDescriptor.environment.rootImageIdentifier,
+			"orlix.test.environment.oci-demo-root"
 		)
 	}
 
-	func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached() throws {
-		let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
-			scratchName: "orlix-oci-process-store"
-		)
+func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached() throws {
+	let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+		scratchName: "orlix-oci-process-store"
+	)
 		defer { try? FileManager.default.removeItem(at: fixture.scratch) }
 		let registry = OrlixEnvironmentRegistry(
 			linuxStateRoot: fixture.scratch.appendingPathComponent("state", isDirectory: true),

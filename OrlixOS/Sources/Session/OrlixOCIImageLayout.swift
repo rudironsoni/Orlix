@@ -3904,11 +3904,15 @@ public struct OrlixOCIRuntimeProcessHandle: Sendable {
 	public let sessionDescriptor: OrlixOCIRuntimeSessionDescriptor
 
 	public init(lifecycle: OrlixOCIRuntimeLifecycleController,
-		    rootMount: OrlixEnvironmentRootMount) throws
+		    rootMount: OrlixEnvironmentRootMount,
+		    rootImageIdentifier: String? = nil) throws
 	{
 		self.lifecycle = lifecycle
 		self.rootMount = rootMount
-		self.sessionDescriptor = try lifecycle.sessionDescriptor(rootMount: rootMount)
+		self.sessionDescriptor = try lifecycle.sessionDescriptor(
+			rootMount: rootMount,
+			rootImageIdentifier: rootImageIdentifier
+		)
 	}
 
 	public func start(observedPID pid: Int32) throws -> OrlixOCIRuntimeProcessHandle {
@@ -3920,14 +3924,16 @@ public struct OrlixOCIRuntimeProcessHandle: Sendable {
 	public func start(observedProcess observation: OrlixOCIRuntimeProcessStartObservation) throws -> OrlixOCIRuntimeProcessHandle {
 		try OrlixOCIRuntimeProcessHandle(
 			lifecycle: lifecycle.start(pid: observation.pid),
-			rootMount: rootMount
+			rootMount: rootMount,
+			rootImageIdentifier: sessionDescriptor.environment.rootImageIdentifier
 		)
 	}
 
 	public func kill(signal: Int32) throws -> OrlixOCIRuntimeProcessHandle {
 		try OrlixOCIRuntimeProcessHandle(
 			lifecycle: lifecycle.kill(signal: signal),
-			rootMount: rootMount
+			rootMount: rootMount,
+			rootImageIdentifier: sessionDescriptor.environment.rootImageIdentifier
 		)
 	}
 
@@ -3989,8 +3995,9 @@ public struct OrlixOCIRuntimeDeletedProcess: Sendable {
 
 @_spi(OrlixPrivateTesting)
 public extension OrlixOCIRuntimeLifecycleController {
-	func sessionDescriptor(rootMount: OrlixEnvironmentRootMount)
-		throws -> OrlixOCIRuntimeSessionDescriptor
+	func sessionDescriptor(rootMount: OrlixEnvironmentRootMount,
+			       rootImageIdentifier: String? = nil)
+	throws -> OrlixOCIRuntimeSessionDescriptor
 	{
 		switch record.state {
 		case .created, .running:
@@ -3999,11 +4006,12 @@ public extension OrlixOCIRuntimeLifecycleController {
 				lifecycleState: record.state,
 				terminal: config.terminal,
 				consoleSize: config.consoleSize,
-				environment: try config.environmentDescriptor(
-					id: record.id,
-					rootMount: rootMount
-				)
+			environment: try config.environmentDescriptor(
+				id: record.id,
+				rootMount: rootMount,
+				rootImageIdentifier: rootImageIdentifier
 			)
+		)
 		case .configured, .stopped, .deleted:
 			throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
 		}

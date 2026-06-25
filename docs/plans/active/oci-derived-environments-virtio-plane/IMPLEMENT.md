@@ -21769,3 +21769,22 @@ Boundary:
 Current status:
 
 - Target-derived OCI environment root image identifier override is implemented and covered by focused OrlixOS XCTest.
+
+### 2026-06-25 OCI process session target-root binding checkpoint
+
+Checkpoint: connected persisted OCI environment descriptors to process-session construction so OCI lifecycle start paths use the target-derived root image identifier saved during import/materialization instead of regenerating a descriptor that assumes environment ID equals root image identifier.
+
+Current status:
+- OCI process sessions preserve persisted target root image identifiers through created and running lifecycle handles.
+
+Changes:
+- Extended `OrlixOCIRuntimeProcessHandle` and lifecycle session descriptor construction to accept optional root image identifiers and preserve them across `start` and `kill` handle transitions.
+- Updated `OrlixOCIRuntimeProcessSession` construction to reuse an existing registry descriptor's `rootImageIdentifier` when launching an already-created OCI environment.
+- Added focused OrlixOS XCTest coverage proving a saved descriptor with `rootImageIdentifier != environmentID` survives session construction and `start(observedPID:)`.
+
+Evidence:
+- `rtk git diff --check` exited 0 before focused XCTest run.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeProcessSessionUsesPersistedRootImageIdentifier test` passed: 1 test, 0 failures.
+
+Boundary:
+- This is OrlixOS OCI session/lifecycle plumbing for target-derived payload metadata. It does not implement product `orlix run`, registry pull, OCI terminal false semantics, full OCI Runtime Spec lifecycle compliance, app-hosted imported-root runtime readiness, or Linux kernel behavior.
