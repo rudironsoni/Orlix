@@ -877,10 +877,11 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultIOPriorityPriorityCommandLineKey = "orlix.ioprio.priority"
     public static let defaultCPUAffinityCommandLineKey = "orlix.cpuaffinity"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
-    public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
-    public static let defaultHostMountTargetCommandLineKey = "orlix.mount.host0.target"
-    public static let defaultHostMountReadOnlyCommandLineKey = "orlix.mount.host0.readonly"
-    public static let hostnameCommandLineKey = "orlix.hostname"
+public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
+public static let defaultHostMountTargetCommandLineKey = "orlix.mount.host0.target"
+public static let defaultHostMountReadOnlyCommandLineKey = "orlix.mount.host0.readonly"
+public static let hostMountCommandLineKeyPrefix = "orlix.mount.host"
+public static let hostnameCommandLineKey = "orlix.hostname"
     public static let domainnameCommandLineKey = "orlix.domainname"
     public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
     public static let rootPropagationCommandLineKey = "orlix.root.propagation"
@@ -902,8 +903,9 @@ public static let deviceNodeModeCommandLineKeyPrefix = "orlix.device.mode"
 public static let deviceNodeUIDCommandLineKeyPrefix = "orlix.device.uid"
 public static let deviceNodeGIDCommandLineKeyPrefix = "orlix.device.gid"
 public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
-    public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
-    public static let defaultHostDirectoryIdentifier = "orlix-host0"
+public static let namespacePathCommandLineKeyPrefix = "orlix.namespacepath"
+public static let defaultHostDirectoryIdentifier = "orlix-host0"
+public static let hostDirectoryIdentifierPrefix = "orlix-host"
 
     public let environmentID: String
     public let rootImageIdentifier: String
@@ -938,8 +940,8 @@ public static let namespaceCommandLineKeyPrefix = "orlix.namespace"
             expectedRoot: layout.rootDirectory,
             fileManager: fileManager
         )
-        let hostDirectories = try hostDirectoryRegistrations(
-            for: descriptor.mounts,
+		let hostDirectories = try hostDirectoryRegistrations(
+			mounts: descriptor.mounts,
             documentsDirectory: documentsDirectory,
             fileManager: fileManager
         )
@@ -1208,32 +1210,29 @@ private static func validateNamespace(_ namespace: String) throws -> String {
     }
 
     private static func hostDirectoryRegistrations(
-        for mounts: [OrlixEnvironmentMount],
-        documentsDirectory: URL?,
-        fileManager: FileManager
-    ) throws -> [OrlixHostDirectoryRegistration] {
-        guard let mount = mounts.first else {
-            return []
-        }
-        guard mounts.count == 1, mount.source == .documents else {
-            throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
-        }
-        let directory = try documentsDirectory ?? fileManager.url(
-            for: .documentDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: false
-        )
-        return [
-            OrlixHostDirectoryRegistration(
-                identifier: defaultHostDirectoryIdentifier,
-                hostPath: directory.path,
-                readOnly: mount.readOnly
-            )
-        ]
-    }
+ mounts: [OrlixEnvironmentMount],
+ documentsDirectory: URL?,
+ fileManager: FileManager
+ ) throws -> [OrlixHostDirectoryRegistration] {
+		let directory = try documentsDirectory ?? fileManager.url(
+ for: .documentDirectory,
+ in: .userDomainMask,
+ appropriateFor: nil,
+ create: false
+ )
+ return try mounts.enumerated().map { index, mount in
+ guard mount.source == .documents else {
+ throw OrlixEnvironmentRootImageError.missingLinuxMountBackend(mount)
+ }
+ return OrlixHostDirectoryRegistration(
+ identifier: "\(hostDirectoryIdentifierPrefix)\(index)",
+ hostPath: directory.path,
+ readOnly: mount.readOnly
+ )
+ }
+ }
 
-    private static func materializedExecutionTokens(
+ private static func materializedExecutionTokens(
         _ descriptor: OrlixEnvironmentDescriptor
     ) throws -> [String] {
         var tokens = [
@@ -1412,16 +1411,16 @@ private static func validateNamespace(_ namespace: String) throws -> String {
                 "\(namespacePathCommandLineKeyPrefix)\(index)=\(percentEncoded(assignment))"
             )
         }
-        if let mount = descriptor.mounts.first {
-            tokens.append(
-                "\(defaultHostMountTargetCommandLineKey)=\(percentEncoded(mount.targetPath))"
-            )
-            if mount.readOnly {
-                tokens.append("\(defaultHostMountReadOnlyCommandLineKey)=1")
-            }
-        }
-        return tokens
-    }
+for (index, mount) in descriptor.mounts.enumerated() {
+tokens.append(
+"\(hostMountCommandLineKeyPrefix)\(index).target=\(percentEncoded(mount.targetPath))"
+)
+if mount.readOnly {
+tokens.append("\(hostMountCommandLineKeyPrefix)\(index).readonly=1")
+}
+}
+return tokens
+}
 
     private static func percentEncoded(_ value: String) -> String {
         var encoded = ""

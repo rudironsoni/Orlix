@@ -20788,3 +20788,26 @@ Non-claims:
 - No claim of full block I/O enforcement/accounting beyond Linux cgroup v2 `io.weight` setup and kselftest surface proof.
 - No cpuset support claimed; upstream `CONFIG_CPUSETS` depends on `SMP`, and current Orlix release config is not ready for SMP.
 - No OrlixMLibC patch or generated upstream source edit was made.
+### 2026-06-25 Indexed OCI documents bind mounts through virtiofs
+
+Current status: implemented multiple OCI `orlix:documents` bind mounts for OrlixOS-derived environments using the existing Linux-visible virtio-fs host-directory path. Each supported Documents bind mount now materializes as an indexed host directory registration (`orlix-host0`, `orlix-host1`, ...) and first-stage init mounts each requested target through Linux `mount(2)` as `virtiofs`. This advances host-folder mount backend work without adding HostAdapter Linux policy, a package-manager/proof-package path, custom ABI, arbitrary host path exposure, runc/Docker dependency, generated upstream edits, or OrlixMLibC patches.
+
+Changes:
+- Added indexed OrlixOS host mount command-line constants while preserving existing host0 compatibility constants.
+- Changed OrlixOS root-image materialization from one Documents mount to multiple `.documents` mounts, producing indexed `OrlixHostDirectoryRegistration` identifiers and preserving each mount read-only flag.
+- Changed first-stage init from hardcoded `orlix-host0` handling to bounded indexed host mounts: `orlix.mount.host<N>.target`, optional `orlix.mount.host<N>.readonly`, source tag `orlix-host<N>`, `virtiofs` mount, and target path validation.
+- Extended OrlixOS XCTest coverage for multiple Documents bind mounts, indexed init source checks, mixed-backend rejection, and OCI runtime config parsing of two `orlix:documents` bind mounts.
+
+Verification:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0. The lane rebuilt OrlixOS test products, built upstream Coreutils package inputs through the OrlixMLibC sysroot, and built the OrlixOS first-stage init.
+- Focused `xcodebuild ... test-without-building` for `testEnvironmentRootImageMaterializesMultipleDocumentsHostMounts`, `testEnvironmentRootImageRejectsMountsWithoutLinuxBackend`, and `testOCIRuntimeConfigParserTranslatesSupportedDocumentsBindMount` produced no `Testing started`, `Test Suite`, or `Test Case` output after a bounded wait and was manually interrupted; no executed-XCTest pass is claimed.
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- This supports indexed `orlix:documents` bind mounts only. It does not claim arbitrary OCI host path bind mounts, security-scoped external folders, broad OCI bind-mount feature completion, full OCI Runtime Spec lifecycle compliance, product `orlix run`, registry pull, Docker/runc compatibility, or full runtime readiness.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, or custom Linux ABI shims were added.

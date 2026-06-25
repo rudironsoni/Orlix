@@ -28,6 +28,7 @@
 #define ORLIX_INIT_MAX_RLIMITS 16
 #define ORLIX_INIT_MAX_CGROUP_UNIFIED 8
 #define ORLIX_INIT_MAX_DEVICE_NODES 16
+#define ORLIX_INIT_MAX_HOST_DIRECTORIES 16
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
@@ -666,26 +667,39 @@ if (strcmp(name, "mount") == 0)
 	return 0;
 }
 
-static void mount_configured_host_directory(void)
+static int mount_configured_host_directory(int index)
 {
+	char key[48];
+	char source[32];
 	char target[ORLIX_INIT_HOST_MOUNT_TARGET_SIZE];
 	unsigned long read_only = 0;
 	unsigned long flags = MS_NOSUID | MS_NODEV;
 
-	if (read_cmdline_decoded("orlix.mount.host0.target=", target,
-				 sizeof(target)) != 0)
-		return;
+	snprintf(key, sizeof(key), "orlix.mount.host%d.target=", index);
+	if (read_cmdline_decoded(key, target, sizeof(target)) != 0)
+		return 0;
 	if (!linux_mount_target_is_allowed(target))
 		die("invalid host mount target");
 
-	if (read_cmdline_unsigned("orlix.mount.host0.readonly=", &read_only) == 0 &&
+	snprintf(key, sizeof(key), "orlix.mount.host%d.readonly=", index);
+	if (read_cmdline_unsigned(key, &read_only) == 0 &&
 	    read_only != 0)
 		flags |= MS_RDONLY;
 
 	if (ensure_dir_recursive(target, 0755) != 0)
 		die("create host mount target");
-	if (mount_if_needed("orlix-host0", target, "virtiofs", flags, NULL) != 0)
+	snprintf(source, sizeof(source), "orlix-host%d", index);
+	if (mount_if_needed(source, target, "virtiofs", flags, NULL) != 0)
 		die("mount host directory");
+	return 1;
+}
+
+static void mount_configured_host_directories(void)
+{
+	for (int i = 0; i < ORLIX_INIT_MAX_HOST_DIRECTORIES; i++) {
+		if (!mount_configured_host_directory(i))
+			break;
+	}
 }
 
 static void make_transport_raw(int fd)
@@ -2114,7 +2128,7 @@ int main(void)
 	write_literal(STDERR_FILENO, "orlix-init: stdio installed\n");
 	mount_runtime_filesystems();
 	write_literal(STDERR_FILENO, "orlix-init: runtime filesystems mounted\n");
-	mount_configured_host_directory();
+	mount_configured_host_directories();
 	if (run_pty_shell(STDIN_FILENO) != 0)
 		write_literal(STDERR_FILENO,
 			      "orlix-init: PTY shell session ended\n");

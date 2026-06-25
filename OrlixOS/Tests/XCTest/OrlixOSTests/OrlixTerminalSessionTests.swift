@@ -1221,21 +1221,22 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         XCTAssertTrue(initSource.contains("sched_setaffinity("))
         XCTAssertTrue(
             initSource.contains(
-                "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultHostMountTargetCommandLineKey)=\","
+                "snprintf(key, sizeof(key), \"orlix.mount.host%d.target=\", index);"
             )
         )
         XCTAssertTrue(
             initSource.contains(
-                "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultHostMountReadOnlyCommandLineKey)=\","
+                "snprintf(key, sizeof(key), \"orlix.mount.host%d.readonly=\", index);"
             )
         )
-        XCTAssertTrue(initSource.contains("mount_if_needed(\"orlix-host0\""))
+        XCTAssertTrue(initSource.contains("snprintf(source, sizeof(source), \"orlix-host%d\", index);"))
+        XCTAssertTrue(initSource.contains("mount_if_needed(source, target, \"virtiofs\""))
         XCTAssertTrue(initSource.contains("\"virtiofs\""))
         let runtimeMountRange = try XCTUnwrap(
             initSource.range(of: "mount_runtime_filesystems();")
         )
         let hostMountRange = try XCTUnwrap(
-            initSource.range(of: "mount_configured_host_directory();")
+            initSource.range(of: "mount_configured_host_directories();")
         )
         let ptyRange = try XCTUnwrap(initSource.range(of: "if (run_pty_shell("))
         XCTAssertLessThan(runtimeMountRange.lowerBound, hostMountRange.lowerBound)
@@ -1415,14 +1416,87 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                 "\(OrlixEnvironmentRootImage.defaultHostMountTargetCommandLineKey)=/home/root/Documents"
             )
         )
-		XCTAssertTrue(
-			commandLine.contains(
-				"\(OrlixEnvironmentRootImage.defaultHostMountReadOnlyCommandLineKey)=1"
-			)
-		)
-	}
+        XCTAssertTrue(
+            commandLine.contains(
+                "\(OrlixEnvironmentRootImage.defaultHostMountReadOnlyCommandLineKey)=1"
+            )
+        )
+    }
 
-	func testEnvironmentRootImageCarriesRootPropagationToKernelCommandLine() throws {
+    func testEnvironmentRootImageMaterializesMultipleDocumentsHostMounts() throws {
+        let root = temporaryRegistryRoot()
+        let documentsRoot = root.appendingPathComponent("Documents", isDirectory: true)
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: "multi-documents-mount",
+            linuxStateRoot: root.appendingPathComponent(
+                "Application Support/Orlix",
+                isDirectory: true
+            ),
+            cacheRoot: root.appendingPathComponent("Caches/Orlix", isDirectory: true),
+            scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+        )
+        try FileManager.default.createDirectory(
+            at: layout.rootDirectory,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: documentsRoot,
+            withIntermediateDirectories: true
+        )
+        try Data("base".utf8).write(to: layout.baseImageURL)
+        try Data("state".utf8).write(to: layout.stateImageURL)
+
+        let descriptor = OrlixEnvironmentDescriptor(
+            id: "multi-documents-mount",
+            source: .copiedEnvironment(parentID: "default"),
+            platform: "linux/arm64",
+            rootImageIdentifier: "orlix.env.multi-documents-mount",
+            defaultCommand: ["/bin/sh"],
+            defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+            defaultWorkingDirectory: "/",
+            defaultUserID: 0,
+            defaultGroupID: 0,
+            mounts: [
+                try OrlixEnvironmentMount.documents(
+                    targetPath: "/home/root/Documents",
+                    readOnly: true
+                ),
+                try OrlixEnvironmentMount.documents(
+                    targetPath: "/mnt/shared",
+                    readOnly: false
+                )
+            ]
+        )
+
+        let rootImage = try OrlixEnvironmentRootImage.materialized(
+            descriptor: descriptor,
+            layout: layout,
+            documentsDirectory: documentsRoot
+        )
+
+        XCTAssertEqual(
+            rootImage.hostDirectories,
+            [
+                OrlixHostDirectoryRegistration(
+                    identifier: "orlix-host0",
+                    hostPath: documentsRoot.path,
+                    readOnly: true
+                ),
+                OrlixHostDirectoryRegistration(
+                    identifier: "orlix-host1",
+                    hostPath: documentsRoot.path,
+                    readOnly: false
+                )
+            ]
+        )
+        let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
+        XCTAssertTrue(commandLine.contains("orlix.mount.host0.target=/home/root/Documents"))
+        XCTAssertTrue(commandLine.contains("orlix.mount.host0.readonly=1"))
+        XCTAssertTrue(commandLine.contains("orlix.mount.host1.target=/mnt/shared"))
+        XCTAssertFalse(commandLine.contains("orlix.mount.host1.readonly=1"))
+    }
+
+    func testEnvironmentRootImageCarriesRootPropagationToKernelCommandLine() throws {
 		let root = temporaryRegistryRoot()
 		let layout = try OrlixEnvironmentStorageLayout.layout(
 			forEnvironmentID: "shared-root-propagation",
@@ -1537,7 +1611,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         ) { error in
             XCTAssertEqual(
                 error as? OrlixEnvironmentRootImageError,
-                .missingLinuxMountBackend(documentsMount)
+                .missingLinuxMountBackend(externalMount)
             )
         }
     }
@@ -8648,26 +8722,38 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 						"type": "bind",
 						"source": "orlix:documents",
 						"options": ["rbind", "ro"]
+					},
+					{
+						"destination": "/mnt/shared",
+						"type": "bind",
+						"source": "orlix:documents",
+						"options": ["bind", "rw"]
 					}
 				]
 			}
 			""".utf8
 		)
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
-		XCTAssertEqual(descriptor.mounts.count, 1)
-		XCTAssertEqual(descriptor.mounts[0].destination, "/home/root/Documents")
-		XCTAssertEqual(descriptor.mounts[0].type, "bind")
-		XCTAssertEqual(descriptor.mounts[0].source, "orlix:documents")
+        XCTAssertEqual(descriptor.mounts.count, 2)
+        XCTAssertEqual(descriptor.mounts[0].destination, "/home/root/Documents")
+        XCTAssertEqual(descriptor.mounts[0].type, "bind")
+        XCTAssertEqual(descriptor.mounts[0].source, "orlix:documents")
+        XCTAssertEqual(descriptor.mounts[1].destination, "/mnt/shared")
+        XCTAssertEqual(descriptor.mounts[1].type, "bind")
+        XCTAssertEqual(descriptor.mounts[1].source, "orlix:documents")
 
 		let environment = try descriptor.environmentDescriptor(
 			id: "oci-bind-mounts",
 			rootMount: .defaultOverlay
 		)
-		XCTAssertEqual(environment.mounts.count, 1)
-		XCTAssertEqual(environment.mounts[0].source, .documents)
-		XCTAssertEqual(environment.mounts[0].targetPath, "/home/root/Documents")
-		XCTAssertTrue(environment.mounts[0].readOnly)
-	}
+        XCTAssertEqual(environment.mounts.count, 2)
+        XCTAssertEqual(environment.mounts[0].source, .documents)
+        XCTAssertEqual(environment.mounts[0].targetPath, "/home/root/Documents")
+        XCTAssertTrue(environment.mounts[0].readOnly)
+        XCTAssertEqual(environment.mounts[1].source, .documents)
+        XCTAssertEqual(environment.mounts[1].targetPath, "/mnt/shared")
+        XCTAssertFalse(environment.mounts[1].readOnly)
+    }
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 		let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [
