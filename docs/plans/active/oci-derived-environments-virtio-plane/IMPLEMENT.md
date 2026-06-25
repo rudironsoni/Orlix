@@ -10,6 +10,33 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI installer registry run facade
+
+Checkpoint: added product-level one-shot registry image run facade on `OrlixOCIEnvironmentInstaller`. Callers can pull a registry image into an OrlixOS environment, materialize it, run the persisted Linux environment, observe lifecycle state, and clean it up through one OrlixOS API path. Registry-backed lifecycle execution now derives runtime process config from the persisted Orlix environment descriptor instead of reopening the `oci://` image identity as a local bundle path.
+
+Changes:
+- Added `OrlixOCIRegistryEnvironmentInstallRunResult`.
+- Added public `OrlixOCIEnvironmentInstaller.run(image:id:tools:puller:platform:terminal:observationTimeout:fileManager:runCommand:)`.
+- Added SPI `OrlixOCIEnvironmentInstaller.run(image:id:tools:puller:platform:terminal:using:fileManager:runCommand:)` for deterministic tests.
+- Shared descriptor-to-OCI-runtime-config construction between registry install and registry-backed persisted environment execution.
+- Added XCTest coverage for registry install plus run, including registry manifest/config/layer fetches, materialization command execution, lifecycle state transitions, persisted stopped state, and delete cleanup.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_00-09-50-+0200.xcresult` reported `Passed`, 3 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.26_00-10-50-+0200.xcresult` reported `Passed`, 1 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This moves registry input closer to product `orlix run` by providing a one-shot OrlixOS install-and-run API over the existing real Linux session observation path.
+- This does not prove a Linux userspace `orlix run` command, live public registry compatibility, arbitrary imported-image compatibility, real signal/kill delivery, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+- The app-hosted proof again emitted Thread Performance Checker warnings and runtime kernel log noise after the selected XCTest reported success. These remain runtime log caveats.
+
 ### 2026-06-25 OCI installer bundle run facade
 
 Checkpoint: added a product-level one-shot bundle run facade on `OrlixOCIEnvironmentInstaller`. Callers can now materialize an OCI bundle and run the installed environment through OrlixOS in one API call while still receiving public install/run state reports. The public path uses the real Linux observation runtime; the SPI overload exists only for deterministic orchestration tests.

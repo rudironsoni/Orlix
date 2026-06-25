@@ -1277,6 +1277,11 @@ public struct OrlixOCIEnvironmentInstallRunResult: Sendable {
 	public let runResult: OrlixOCIEnvironmentRunResult
 }
 
+public struct OrlixOCIRegistryEnvironmentInstallRunResult: Sendable {
+	public let installResult: OrlixOCIRegistryEnvironmentInstallResult
+	public let runResult: OrlixOCIEnvironmentRunResult
+}
+
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
 	public let id: String
 	public let lifecycleState: OrlixOCIRuntimeLifecycleState
@@ -1419,6 +1424,73 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 	}
 
+	@discardableResult
+	public func run(
+		image: OrlixOCIRegistryImageReference,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		platform: String = "linux/arm64",
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
+		let installResult = try await install(
+			image: image,
+			id: id,
+			tools: tools,
+			puller: puller,
+			platform: platform,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+		let runResult = try run(
+			id: id,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
+		)
+		return OrlixOCIRegistryEnvironmentInstallRunResult(
+			installResult: installResult,
+			runResult: runResult
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	@discardableResult
+	public func run(
+		image: OrlixOCIRegistryImageReference,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		platform: String = "linux/arm64",
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
+		let installResult = try await install(
+			image: image,
+			id: id,
+			tools: tools,
+			puller: puller,
+			platform: platform,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+		let runResult = try run(
+			id: id,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+		return OrlixOCIRegistryEnvironmentInstallRunResult(
+			installResult: installResult,
+			runResult: runResult
+		)
+	}
+
 	@_spi(OrlixPrivateTesting)
 	@discardableResult
 	public func run(
@@ -1553,6 +1625,32 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 	private func registryLifecycleConfig(
 		for descriptor: OrlixEnvironmentDescriptor
 	) throws -> OrlixOCIRuntimeConfigDescriptor {
+		try orlixOCIRuntimeConfig(for: descriptor)
+	}
+}
+
+private func runtimeLifecycleConfig(
+	for snapshot: OrlixOCIRuntimeLifecycleSnapshot,
+	registry: OrlixEnvironmentRegistry,
+	fileManager: FileManager
+) throws -> OrlixOCIRuntimeConfigDescriptor {
+	if snapshot.record.bundlePath.hasPrefix("oci://") {
+		return try orlixOCIRuntimeConfig(
+			for: registry.load(
+				environmentID: snapshot.record.id,
+				fileManager: fileManager
+			)
+		)
+	}
+	return try OrlixOCIRuntimeBundle.load(
+		from: URL(fileURLWithPath: snapshot.record.bundlePath),
+		fileManager: fileManager
+	).config
+}
+
+private func orlixOCIRuntimeConfig(
+	for descriptor: OrlixEnvironmentDescriptor
+) throws -> OrlixOCIRuntimeConfigDescriptor {
 		let environment = descriptor.defaultEnvironment
 			.keys
 			.sorted()
@@ -1579,8 +1677,6 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		return try OrlixOCIRuntimeConfigParser().parse(data)
 	}
-}
-
 private struct OrlixOCIEnvironmentInstallerCommandRunner:
 	OrlixEnvironmentImageMaterializationCommandRunner
 {
@@ -2103,12 +2199,12 @@ public struct OrlixOCIRuntime: Sendable {
 			id: snapshot.record.id,
 			fileManager: fileManager
 		)
-		let bundle = try OrlixOCIRuntimeBundle.load(
-			from: URL(fileURLWithPath: snapshot.record.bundlePath),
-			fileManager: fileManager
-		)
 		let lifecycle = OrlixOCIRuntimeLifecycleController(
-			config: bundle.config,
+			config: try runtimeLifecycleConfig(
+				for: snapshot,
+				registry: registry,
+				fileManager: fileManager
+			),
 			record: snapshot.record
 		)
 		return try OrlixOCIRuntimeProcessSession(
