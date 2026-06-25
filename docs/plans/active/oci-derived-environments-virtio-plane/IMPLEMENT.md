@@ -21175,3 +21175,25 @@ Evidence:
 Boundary:
 - This improves OrlixOS OCI lifecycle/resource behavior for one-shot ephemeral runs. It does not claim product `orlix run`, registry pull, OCI Runtime Spec lifecycle completion, app-hosted runtime execution proof, full runtime readiness, or Linux process supervision beyond the existing observation-driver API.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, Docker/runc dependency, or Swift-side Linux behavior shim were added.
+### 2026-06-25 OCI created state report without PID
+
+Checkpoint: aligned OCI lifecycle state reporting with prepare-only `create` semantics. A created OCI-derived environment now produces an OCI-shaped state report with `status: created` and no PID. Running state still requires a PID. This removes an internal contradiction where `OrlixOCIRuntime.create(...)` and `createMaterialized(...)` returned `OrlixOCIRuntimeCreatedEnvironment.stateReport` while the direct lifecycle-controller state report path rejected created records without a PID. The persisted lifecycle snapshot path already allowed created-without-PID; this change makes the controller path match the durable store and OrlixOS API behavior.
+
+Changes:
+- Updated `OrlixOCIRuntimeLifecycleController.stateReport()` so only `running` requires a PID.
+- Updated lifecycle unit coverage to assert created state report data (`status: created`, `pid: nil`, bundle path) instead of expecting a created-state report failure.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused bounded `test-without-building` for `testOCIRuntimeLifecycleControllerFollowsCreateStartKillDeleteOrder` produced no `Testing started`, `Test Suite`, or `Test Case` output before 240 second alarm terminated command signal 14; no executed-XCTest pass is claimed.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale active-plan warnings.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+
+Boundary:
+- This is OrlixOS OCI lifecycle model correction. It does not claim product `orlix run`, registry pull, full OCI Runtime Spec lifecycle completion, app-hosted process execution proof, or runtime readiness.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, Docker/runc dependency, or Swift-side Linux behavior shim were added.

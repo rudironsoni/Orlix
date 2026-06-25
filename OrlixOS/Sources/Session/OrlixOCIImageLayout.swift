@@ -3717,11 +3717,11 @@ public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 		throw OrlixOCIRuntimeLifecycleError.stateUnavailable(record.state)
 	}
 
-	if status == .created || status == .running {
-		guard record.pid != nil else {
-			throw OrlixOCIRuntimeLifecycleError.stateReportRequiresPID(status)
+		if status == .running {
+			guard record.pid != nil else {
+				throw OrlixOCIRuntimeLifecycleError.stateReportRequiresPID(status)
+			}
 		}
-	}
 
 	return OrlixOCIRuntimeStateReport(
 			ociVersion: config.ociVersion,
