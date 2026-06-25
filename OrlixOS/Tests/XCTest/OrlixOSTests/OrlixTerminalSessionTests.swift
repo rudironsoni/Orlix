@@ -9542,6 +9542,17 @@ func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
 				"wait:running:109",
 			]
 		)
+
+		let deleted = try installer.delete(id: "oci-installed-session")
+		XCTAssertEqual(deleted.id, "oci-installed-session")
+		XCTAssertEqual(deleted.lifecycleState, .deleted)
+		XCTAssertThrowsError(try installer.state(id: "oci-installed-session")) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleStoreError,
+				.missingRecord("oci-installed-session")
+			)
+		}
+		XCTAssertFalse(fileManager.fileExists(atPath: layout.rootDirectory.path))
 	}
 
 func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
