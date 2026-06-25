@@ -38,6 +38,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultCPUAffinity: OrlixEnvironmentCPUAffinity?
     public let defaultUmask: UInt32?
     public let defaultRlimits: [OrlixEnvironmentRlimit]
+    public let defaultPersonalityDomain: String?
     public let hostname: String?
     public let domainname: String?
     public let rootMount: OrlixEnvironmentRootMount
@@ -105,6 +106,7 @@ public let cgroupPidsLimit: Int64?
         defaultCPUAffinity: OrlixEnvironmentCPUAffinity? = nil,
         defaultUmask: UInt32? = nil,
         defaultRlimits: [OrlixEnvironmentRlimit] = [],
+        defaultPersonalityDomain: String? = nil,
         hostname: String? = nil,
         domainname: String? = nil,
         rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
@@ -144,6 +146,7 @@ cgroupPidsLimit: Int64? = nil,
         self.defaultCPUAffinity = defaultCPUAffinity
         self.defaultUmask = defaultUmask
         self.defaultRlimits = defaultRlimits
+        self.defaultPersonalityDomain = defaultPersonalityDomain
         self.hostname = hostname
         self.domainname = domainname
         self.rootMount = rootMount
@@ -185,6 +188,7 @@ self.cgroupPidsLimit = cgroupPidsLimit
         case defaultCPUAffinity
         case defaultUmask
         case defaultRlimits
+        case defaultPersonalityDomain
         case hostname
         case domainname
         case rootMount
@@ -278,6 +282,10 @@ case cgroupCPUMax
             [OrlixEnvironmentRlimit].self,
             forKey: .defaultRlimits
         ) ?? []
+        self.defaultPersonalityDomain = try container.decodeIfPresent(
+            String.self,
+            forKey: .defaultPersonalityDomain
+        )
         self.hostname = try container.decodeIfPresent(
             String.self,
             forKey: .hostname
@@ -388,6 +396,10 @@ forKey: .cgroupCPUWeight
         if !defaultRlimits.isEmpty {
             try container.encode(defaultRlimits, forKey: .defaultRlimits)
         }
+        try container.encodeIfPresent(
+            defaultPersonalityDomain,
+            forKey: .defaultPersonalityDomain
+        )
         try container.encodeIfPresent(hostname, forKey: .hostname)
         try container.encodeIfPresent(domainname, forKey: .domainname)
         try container.encode(rootMount, forKey: .rootMount)
@@ -908,6 +920,7 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultIOPriorityClassCommandLineKey = "orlix.ioprio.class"
     public static let defaultIOPriorityPriorityCommandLineKey = "orlix.ioprio.priority"
     public static let defaultCPUAffinityCommandLineKey = "orlix.cpuaffinity"
+    public static let defaultPersonalityCommandLineKey = "orlix.personality"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
 public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
 public static let defaultHostMountTargetCommandLineKey = "orlix.mount.host0.target"
@@ -1243,6 +1256,14 @@ private static func validateNamespace(_ namespace: String) throws -> String {
         "\(try validateNamespace(type))=\(try validateRuntimePath(path))"
     }
 
+    private static func validatePersonalityDomain(_ domain: String) throws -> String {
+        let supportedDomains = Set(["LINUX", "LINUX32"])
+        guard supportedDomains.contains(domain) else {
+            throw OrlixEnvironmentRootImageError.invalidDefaultPersonalityDomain(domain)
+        }
+        return domain
+    }
+
 	private static func hostDirectoryRegistrations(
 		mounts: [OrlixEnvironmentMount],
 		documentsDirectory: URL?,
@@ -1350,6 +1371,11 @@ private static func validateNamespace(_ namespace: String) throws -> String {
         }
         if let defaultCPUAffinity = descriptor.defaultCPUAffinity {
             tokens.append("\(defaultCPUAffinityCommandLineKey)=\(defaultCPUAffinity.mask)")
+        }
+        if let defaultPersonalityDomain = descriptor.defaultPersonalityDomain {
+            tokens.append(
+                "\(defaultPersonalityCommandLineKey)=\(try validatePersonalityDomain(defaultPersonalityDomain))"
+            )
         }
         if let defaultUmask = descriptor.defaultUmask {
             tokens.append("\(defaultUmaskCommandLineKey)=\(defaultUmask)")
@@ -1529,7 +1555,8 @@ public enum OrlixEnvironmentRootImageError:
     case invalidDefaultEnvironment(String)
     case invalidDefaultWorkingDirectory(String)
     case invalidDefaultRlimit(String)
-	case invalidDefaultSysctl(String)
+    case invalidDefaultPersonalityDomain(String)
+    case invalidDefaultSysctl(String)
 	case invalidRuntimePath(String)
 	case invalidCgroupPidsLimit(Int64)
 	case invalidCgroupCPUMax(OrlixEnvironmentCgroupCPUMax)
@@ -1769,6 +1796,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultCPUAffinity: parent.defaultCPUAffinity,
                 defaultUmask: parent.defaultUmask,
                 defaultRlimits: parent.defaultRlimits,
+                defaultPersonalityDomain: parent.defaultPersonalityDomain,
                 rootMount: parent.rootMount,
                 rootReadonly: parent.rootReadonly,
                 rootPropagation: parent.rootPropagation,

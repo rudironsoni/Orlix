@@ -19,6 +19,7 @@
 #include <sys/syscall.h>
 #include <sys/sysmacros.h>
 #include <linux/capability.h>
+#include <linux/personality.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -1095,6 +1096,19 @@ static int io_priority_class_from_name(const char *priority_class)
 	return -1;
 }
 
+static int personality_from_domain(const char *domain, unsigned long *personality)
+{
+	if (strcmp(domain, "LINUX") == 0) {
+		*personality = PER_LINUX;
+		return 0;
+	}
+	if (strcmp(domain, "LINUX32") == 0) {
+		*personality = PER_LINUX32;
+		return 0;
+	}
+	return -1;
+}
+
 static int parse_cpu_affinity(const char *value, cpu_set_t *set)
 {
 	CPU_ZERO(set);
@@ -1376,6 +1390,8 @@ struct orlix_command_config {
 	cpu_set_t cpu_affinity;
 	unsigned long umask_value;
 	int has_umask;
+	unsigned long personality;
+	int has_personality;
 	char cgroups_path[ORLIX_INIT_CGROUP_PATH_SIZE];
 	int has_cgroups_path;
 char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
@@ -1547,6 +1563,11 @@ static void selected_command_config(struct orlix_command_config *config)
 	if (read_cmdline_decoded("orlix.cpuaffinity=", cpu_affinity, sizeof(cpu_affinity)) == 0 &&
 	    parse_cpu_affinity(cpu_affinity, &config->cpu_affinity) == 0)
 		config->has_cpu_affinity = 1;
+	char personality_domain[32];
+	if (read_cmdline_decoded("orlix.personality=", personality_domain,
+				 sizeof(personality_domain)) == 0 &&
+	    personality_from_domain(personality_domain, &config->personality) == 0)
+		config->has_personality = 1;
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
 	if (read_cmdline_decoded("orlix.cgroups.path=", config->cgroups_path,
@@ -1967,6 +1988,12 @@ static void apply_cpu_affinity(const cpu_set_t *set)
 		write_literal(STDERR_FILENO, "orlix-init: sched_setaffinity failed\n");
 }
 
+static void apply_personality(unsigned long personality)
+{
+	if (syscall(SYS_personality, personality) < 0)
+		die("personality");
+}
+
 static pid_t start_command_on_pty(int master, int slave)
 {
 	pid_t child = fork();
@@ -2057,6 +2084,8 @@ static pid_t start_command_on_pty(int master, int slave)
 		apply_io_priority(config->io_priority_class, config->io_priority_priority);
 	if (config->has_cpu_affinity)
 		apply_cpu_affinity(&config->cpu_affinity);
+	if (config->has_personality)
+		apply_personality(config->personality);
 	if (config->close_additional_fds)
 		close_additional_fds();
 	if (config->gid != 0 && setgid((gid_t)config->gid) != 0)

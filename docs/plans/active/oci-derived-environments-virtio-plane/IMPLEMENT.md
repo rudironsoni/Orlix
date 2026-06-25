@@ -10,6 +10,36 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI linux.personality domain support
+
+Checkpoint: implemented bounded OCI `linux.personality` support through OrlixOS descriptor carriage and first-stage Linux init `personality(2)` application. OCI runtime configs now accept `linux.personality.domain` values `LINUX` and `LINUX32`, reject absent/unknown domains and non-empty `flags`, persist the domain in environment descriptors, emit `orlix.personality=<domain>` kernel command-line metadata, and apply the corresponding Linux `PER_LINUX` / `PER_LINUX32` value before `execve`.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.defaultPersonalityDomain` Codable persistence, copy preservation, validation, and `orlix.personality` command-line emission.
+- Added `OrlixOCIRuntimeConfigDescriptor.defaultPersonalityDomain` and parser validation for OCI `linux.personality.domain` values `LINUX` / `LINUX32`.
+- Removed the blanket `linux.personality` rejection while keeping unsupported `linux.personality.flags` rejected because the OCI Runtime Spec defines no supported flag values.
+- Added first-stage init parsing for `orlix.personality`, Linux header-backed mapping to `PER_LINUX` / `PER_LINUX32`, and `SYS_personality` application before dropping credentials and executing the configured process.
+- Updated OCI feature reporting with `ociPersonality` implemented and proof anchored to `orlix:runtime_config_parser`.
+- Added OrlixOS XCTest coverage for accepted personality carriage into environment descriptors and command-line metadata, plus unsupported domain/missing domain/non-empty flags rejection.
+- Corrected stale feature-report XCTest expectations for already-implemented OCI readonly paths, cgroup2 mounts, and unified cgroup resources so the report tests reflect current implementation state.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0; first run rebuilt Coreutils package inputs and first-stage init, later incremental runs ended with `** TEST BUILD SUCCEEDED **`.
+- Focused `test-without-building` for `testOCIRuntimeConfigParserCarriesLinuxPersonality` executed under XCTest and passed: 1 test, 0 failures.
+- Focused `test-without-building` for `testOCIRuntimeConfigParserRejectsUnsupportedLinuxPersonalityShapes` exited 0.
+- Focused `test-without-building` for `testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures` and `testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults` executed under XCTest and passed: 2 tests, 0 failures.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with known stale-plan warnings only.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk proxy find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Boundary:
+- This implements OCI personality domain parsing, persistence, init metadata, and Linux `personality(2)` application. It does not claim broad 32-bit userspace compatibility, full OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, app-hosted imported-root execution proof, full runtime readiness, systemd support, or any unsupported OCI personality flags.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc dependency, or Swift-side fake Linux behavior was added.
+
 ### 2026-06-25 OCI Linux device nodes via init mknod
 
 Checkpoint: implemented OCI `linux.devices` device-node carriage for OrlixOS-derived environments. Valid OCI device declarations now flow from runtime `config.json` into `OrlixOCIRuntimeConfigDescriptor`, into `OrlixEnvironmentDescriptor.deviceNodes`, into materialized kernel command-line metadata, and first-stage init creates the requested character, block, or FIFO nodes with Linux `mknod(2)` / `mkfifo(2)` before process exec. This is Linux userspace/init setup on the Orlix Linux surface, not HostAdapter Linux policy, a custom ABI, Docker/runc integration, or hardware passthrough.
