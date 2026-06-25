@@ -2099,32 +2099,29 @@ static void apply_user_namespace_mappings(const struct orlix_command_config *con
 
 static void apply_time_offsets(const struct orlix_command_config *config)
 {
-	char buffer[192];
-	size_t used = 0;
-	int fd;
-
 	if (config->time_offset_count == 0)
 		return;
 	if ((config->namespace_flags & CLONE_NEWTIME) == 0)
 		die("time offsets without time namespace");
 	for (size_t i = 0; i < config->time_offset_count; i++) {
-		int length = snprintf(buffer + used, sizeof(buffer) - used,
-				      "%s %ld %ld\n",
+		char buffer[96];
+		int length = snprintf(buffer, sizeof(buffer), "%s %ld %ld\n",
 				      config->time_offsets[i].clock,
 				      config->time_offsets[i].secs,
 				      config->time_offsets[i].nanosecs);
-		if (length <= 0 || (size_t)length >= sizeof(buffer) - used)
+		int fd;
+
+		if (length <= 0 || (size_t)length >= sizeof(buffer))
 			die("format timens_offsets");
-		used += (size_t)length;
-	}
-	fd = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
-	if (fd < 0)
-		die("open timens_offsets");
-	if (write_all(fd, buffer, used) != 0) {
+		fd = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+		if (fd < 0)
+			die("open timens_offsets");
+		if (write_all(fd, buffer, (size_t)length) != 0) {
+			close(fd);
+			die("write timens_offsets");
+		}
 		close(fd);
-		die("write timens_offsets");
 	}
-	close(fd);
 }
 
 static void apply_uts_config(const struct orlix_command_config *config)

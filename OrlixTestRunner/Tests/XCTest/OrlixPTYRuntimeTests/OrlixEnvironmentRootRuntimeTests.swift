@@ -42,6 +42,21 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_USERNS_DONE"))
     }
 
+    func testOCITimeNamespaceOffsetsApplyThroughOrlixOSTerminalSession()
+        throws
+    {
+        let runner = OrlixEnvironmentRootRuntimeProofRunner(
+            fixture: .ociDerived,
+            proof: .timeNamespaceOffsets
+        )
+        let output = try runner.run()
+
+        XCTAssertTrue(output.contains("ORLIX_ENV_TIMENS_BEGIN"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_TIMENS_MONOTONIC_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_TIMENS_BOOTTIME_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_TIMENS_DONE"))
+    }
+
     private static func makeOCIRuntimeProcessDefaultsDescriptor()
         throws -> OrlixEnvironmentDescriptor
     {
@@ -801,6 +816,7 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
             defaultWorkingDirectory: proof.defaultWorkingDirectory,
             defaultUserID: proof.defaultUserID,
             defaultGroupID: proof.defaultGroupID,
+            timeOffsets: proof.timeOffsets,
             uidMappings: proof.uidMappings,
             gidMappings: proof.gidMappings,
             namespaces: proof.namespaces
@@ -1069,6 +1085,8 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         "ORLIX_ENV_USERNS_PROOF_FAILED_UID_MAP",
         "ORLIX_ENV_USERNS_PROOF_FAILED_GID_MAP",
         "ORLIX_ENV_USERNS_PROOF_FAILED_SETGROUPS",
+        "ORLIX_ENV_TIMENS_PROOF_FAILED_MONOTONIC",
+        "ORLIX_ENV_TIMENS_PROOF_FAILED_BOOTTIME",
         "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_WRITE",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_SYNC",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_REREAD",
@@ -1102,6 +1120,7 @@ private enum RuntimeProof: Sendable {
     case ptyStdio
     case runtimeTmpfs
     case userNamespaceMappings
+    case timeNamespaceOffsets
     case crossBootWrite
     case crossBootVerify
 
@@ -1149,6 +1168,12 @@ private enum RuntimeProof: Sendable {
                 "-c",
                 Self.userNamespaceMappingScript
             ]
+        case .timeNamespaceOffsets:
+            return [
+                "/bin/sh",
+                "-c",
+                Self.timeNamespaceOffsetScript
+            ]
         }
     }
 
@@ -1178,7 +1203,8 @@ private enum RuntimeProof: Sendable {
     var defaultWorkingDirectory: String {
         switch self {
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
-             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
+             .crossBootWrite,
              .crossBootVerify:
             return "/"
         case .descriptorExecution, .longDescriptorExecution:
@@ -1195,6 +1221,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets,
              .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
@@ -1208,6 +1235,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets,
              .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
@@ -1219,11 +1247,14 @@ private enum RuntimeProof: Sendable {
         switch self {
         case .userNamespaceMappings:
             return ["user"]
+        case .timeNamespaceOffsets:
+            return ["time"]
         case .osRelease, .overlayMutation, .descriptorExecution,
              .longDescriptorExecution, .linuxPathDescriptorExecution,
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
-             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
+             .crossBootWrite, .crossBootVerify:
             return []
         }
     }
@@ -1236,7 +1267,25 @@ private enum RuntimeProof: Sendable {
              .longDescriptorExecution, .linuxPathDescriptorExecution,
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
-             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
+             .crossBootWrite, .crossBootVerify:
+            return []
+        }
+    }
+
+    var timeOffsets: [OrlixEnvironmentTimeOffset] {
+        switch self {
+        case .timeNamespaceOffsets:
+            return [
+                OrlixEnvironmentTimeOffset(clock: "monotonic", secs: 12, nanosecs: 500000000),
+                OrlixEnvironmentTimeOffset(clock: "boottime", secs: 3, nanosecs: 250)
+            ]
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .crossBootWrite, .crossBootVerify:
             return []
         }
     }
@@ -1249,7 +1298,8 @@ private enum RuntimeProof: Sendable {
              .longDescriptorExecution, .linuxPathDescriptorExecution,
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
-             .ptyStdio, .runtimeTmpfs, .crossBootWrite, .crossBootVerify:
+             .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
+             .crossBootWrite, .crossBootVerify:
             return []
         }
     }
@@ -1261,7 +1311,8 @@ private enum RuntimeProof: Sendable {
             return true
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-             .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings:
+             .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
+             .timeNamespaceOffsets:
             return false
         }
     }
@@ -1345,7 +1396,8 @@ private enum RuntimeProof: Sendable {
             ].joined(separator: "\r") + "\r"
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-             .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings:
+             .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
+             .timeNamespaceOffsets:
             return ""
         }
     }
@@ -1368,6 +1420,8 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_TMPFS_DONE"
         case .userNamespaceMappings:
             return "ORLIX_ENV_USERNS_DONE"
+        case .timeNamespaceOffsets:
+            return "ORLIX_ENV_TIMENS_DONE"
         case .crossBootWrite:
             return "ORLIX_ENV_CROSSBOOT_WRITE_DONE"
         case .crossBootVerify:
@@ -1380,7 +1434,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return "ORLIX_ENV_PTY_WAITING_FOR_INPUT"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
+             .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1394,7 +1449,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return "orlix-pty-delayed-input\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
+             .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1408,7 +1464,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return "ORLIX_ENV_PTY_DELAYED_INPUT_OK"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
+             .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1422,7 +1479,8 @@ private enum RuntimeProof: Sendable {
         case .ptyStdio:
             return #"printf '%s%s\n' ORLIX_ENV_ PTY_DONE"# + "\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
-             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
+             .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1492,6 +1550,13 @@ private enum RuntimeProof: Sendable {
                 "ORLIX_ENV_USERNS_SETGROUPS_OK",
                 "ORLIX_ENV_USERNS_DONE"
             ]
+        case .timeNamespaceOffsets:
+            return [
+                "ORLIX_ENV_TIMENS_BEGIN",
+                "ORLIX_ENV_TIMENS_MONOTONIC_OK",
+                "ORLIX_ENV_TIMENS_BOOTTIME_OK",
+                "ORLIX_ENV_TIMENS_DONE"
+            ]
         case .pseudoFilesystems:
             return [
                 "ORLIX_ENV_PSEUDOFS_BEGIN",
@@ -1557,7 +1622,8 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution:
             return Self.descriptorExecutionScript
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
-             .runtimeTmpfs, .userNamespaceMappings, .crossBootWrite,
+             .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
+             .crossBootWrite,
              .crossBootVerify:
             return ""
         }
@@ -1573,6 +1639,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets,
              .crossBootWrite, .crossBootVerify:
             return ""
         }
@@ -1586,6 +1653,14 @@ private enum RuntimeProof: Sendable {
         #"if [ "$1:$2:$3" = "0:0:1" ]; then printf '%s%s\n' ORLIX_ENV_ USERNS_GID_MAP_OK; else printf '%s%s\n' ORLIX_ENV_USERNS_ PROOF_FAILED_GID_MAP; fi"#,
         #"if /bin/test -e /proc/self/setgroups; then printf '%s%s\n' ORLIX_ENV_ USERNS_SETGROUPS_OK; else printf '%s%s\n' ORLIX_ENV_USERNS_ PROOF_FAILED_SETGROUPS; fi"#,
         #"printf '%s%s\n' ORLIX_ENV_ USERNS_DONE"#,
+    ].joined(separator: "\n")
+
+    private static let timeNamespaceOffsetScript = [
+        #"printf '%s%s\n' ORLIX_ENV_ TIMENS_BEGIN"#,
+        #"set -- $(/bin/cat /proc/self/timens_offsets)"#,
+        #"if [ "$1:$2:$3" = "monotonic:12:500000000" ]; then printf '%s%s\n' ORLIX_ENV_ TIMENS_MONOTONIC_OK; else printf '%s%s\n' ORLIX_ENV_TIMENS_ PROOF_FAILED_MONOTONIC; fi"#,
+        #"if [ "$4:$5:$6" = "boottime:3:250" ]; then printf '%s%s\n' ORLIX_ENV_ TIMENS_BOOTTIME_OK; else printf '%s%s\n' ORLIX_ENV_TIMENS_ PROOF_FAILED_BOOTTIME; fi"#,
+        #"printf '%s%s\n' ORLIX_ENV_ TIMENS_DONE"#,
     ].joined(separator: "\n")
 
     private static let descriptorExecutionScript = (
