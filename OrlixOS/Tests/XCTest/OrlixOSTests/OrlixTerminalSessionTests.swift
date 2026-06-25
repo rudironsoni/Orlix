@@ -8476,15 +8476,143 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 				.invalidTransition(from: .running, action: .delete)
 			)
 		}
-		XCTAssertEqual(try runtime.state(id: "oci-running").status, .running)
-		XCTAssertEqual(try runtime.state(id: "oci-running").pid, 123)
-	}
+	XCTAssertEqual(try runtime.state(id: "oci-running").status, .running)
+	XCTAssertEqual(try runtime.state(id: "oci-running").pid, 123)
+}
 
-	func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() throws {
-		let fileManager = FileManager.default
-		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
-			"orlix-oci-process-session-\(UUID().uuidString)",
-			isDirectory: true
+func testOCIRuntimeStartAndWaitResumePersistedLifecycle() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-runtime-start-wait-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(
+		at: scratch,
+		withIntermediateDirectories: true
+	)
+	defer { try? fileManager.removeItem(at: scratch) }
+
+	let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+	let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+	try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+	try nonRootOCIRuntimeConfig().write(
+		to: bundleURL.appendingPathComponent("config.json")
+	)
+
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+		cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+		scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+	)
+	let runtime = OrlixOCIRuntime(registry: registry)
+	let created = try runtime.create(
+		bundleURL: bundleURL,
+		id: "oci-start-wait"
+	)
+	try Data("base".utf8).write(to: created.importPlan.storageLayout.baseImageURL)
+	try Data("state".utf8).write(to: created.importPlan.storageLayout.stateImageURL)
+	let driver = try RecordingOCIRuntimeProcessObservationDriver(
+		startPID: 77,
+		completion: .exited(
+			OrlixOCIRuntimeProcessExitObservation(pid: 77, exitStatus: 5)
+		)
+	)
+
+	let started = try runtime.start(
+		id: "oci-start-wait",
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: driver
+	)
+	let completed = try runtime.wait(
+		id: "oci-start-wait",
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: driver
+	)
+
+	XCTAssertEqual(started.stateReport.status, .running)
+	XCTAssertEqual(started.stateReport.pid, 77)
+	XCTAssertNotNil(started.processSession.linuxSession.materializedRootImageForTesting)
+	XCTAssertEqual(completed.stateReport.status, .stopped)
+	XCTAssertEqual(completed.stateReport.pid, 77)
+	XCTAssertEqual(completed.stateReport.exitStatus, 5)
+	XCTAssertEqual(try runtime.state(id: "oci-start-wait"), completed.stateReport)
+	XCTAssertEqual(
+		driver.events,
+		[
+			"start:created:nil",
+			"wait:running:77",
+		]
+	)
+}
+
+func testOCIRuntimeKillResumesRunningLifecycleAndPersistsSignalRequest() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-runtime-kill-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(
+		at: scratch,
+		withIntermediateDirectories: true
+	)
+	defer { try? fileManager.removeItem(at: scratch) }
+
+	let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+	let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+	try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+	try nonRootOCIRuntimeConfig().write(
+		to: bundleURL.appendingPathComponent("config.json")
+	)
+
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+		cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+		scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+	)
+	let runtime = OrlixOCIRuntime(registry: registry)
+	let created = try runtime.create(
+		bundleURL: bundleURL,
+		id: "oci-kill"
+	)
+	try Data("base".utf8).write(to: created.importPlan.storageLayout.baseImageURL)
+	try Data("state".utf8).write(to: created.importPlan.storageLayout.stateImageURL)
+	let driver = try RecordingOCIRuntimeProcessObservationDriver(
+		startPID: 88,
+		completion: .signaled(
+			OrlixOCIRuntimeProcessSignalObservation(pid: 88, signal: 15)
+		)
+	)
+
+	_ = try runtime.start(
+		id: "oci-kill",
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: driver
+	)
+	let signaled = try runtime.kill(
+		id: "oci-kill",
+		signal: 15,
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: driver
+	)
+
+	XCTAssertEqual(signaled.signal, 15)
+	XCTAssertEqual(signaled.stateReport.status, .running)
+	XCTAssertEqual(signaled.stateReport.pid, 88)
+	XCTAssertEqual(try runtime.state(id: "oci-kill"), signaled.stateReport)
+	XCTAssertEqual(
+		driver.events,
+		[
+			"start:created:nil",
+			"signal:running:88:15",
+		]
+	)
+}
+
+func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-process-session-\(UUID().uuidString)",
+		isDirectory: true
 		)
 		try fileManager.createDirectory(
 			at: scratch,
