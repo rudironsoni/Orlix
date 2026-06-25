@@ -117,7 +117,7 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 			throw OrlixOCIRegistryReferenceError.missingRepository(reference)
 		}
 
-		let repository: String
+		let parsedRepository: String
 		let tag: String?
 		let lastPathComponent = remainder.split(separator: "/").last.map(String.init) ?? ""
 		if let colon = lastPathComponent.lastIndex(of: ":") {
@@ -130,11 +130,15 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 					to: lastPathComponent.endIndex
 				)
 			)
-			repository = String(remainder[..<repositoryEnd])
+			parsedRepository = String(remainder[..<repositoryEnd])
 		} else {
-			repository = remainder
+			parsedRepository = remainder
 			tag = nil
 		}
+		let repository = Self.canonicalRepository(
+			parsedRepository,
+			registry: registry
+		)
 		return (
 			scheme: scheme,
 			registry: registry,
@@ -159,7 +163,22 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 	}
 
 	private static func canonicalRegistry(_ registry: String) -> String {
-		registry == "registry-1.docker.io" ? "docker.io" : registry
+		switch registry {
+		case "registry-1.docker.io", "index.docker.io":
+			return "docker.io"
+		default:
+			return registry
+		}
+	}
+
+	private static func canonicalRepository(
+		_ repository: String,
+		registry: String
+	) -> String {
+		if registry == "docker.io", !repository.contains("/") {
+			return "library/\(repository)"
+		}
+		return repository
 	}
 
 	private static func validate(scheme: String) throws {

@@ -7644,6 +7644,27 @@ func testOCIRegistryImageReferenceParsesDistributionEndpoints() throws {
 		try dockerEndpoint.manifestURL().absoluteString,
 		"https://registry-1.docker.io/v2/library/alpine/manifests/latest"
 	)
+
+	let explicitDockerOfficial = try OrlixOCIRegistryImageReference(
+		"docker.io/alpine:latest"
+	)
+	XCTAssertEqual(explicitDockerOfficial.registry, "docker.io")
+	XCTAssertEqual(explicitDockerOfficial.repository, "library/alpine")
+	XCTAssertEqual(explicitDockerOfficial.tag, "latest")
+	XCTAssertEqual(
+		try explicitDockerOfficial.manifestURL().absoluteString,
+		"https://registry-1.docker.io/v2/library/alpine/manifests/latest"
+	)
+
+	let legacyDockerEndpoint = try OrlixOCIRegistryImageReference(
+		"index.docker.io/alpine:latest"
+	)
+	XCTAssertEqual(legacyDockerEndpoint.registry, "docker.io")
+	XCTAssertEqual(legacyDockerEndpoint.repository, "library/alpine")
+	XCTAssertEqual(
+		try legacyDockerEndpoint.manifestURL().absoluteString,
+		"https://registry-1.docker.io/v2/library/alpine/manifests/latest"
+	)
 }
 
 func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
