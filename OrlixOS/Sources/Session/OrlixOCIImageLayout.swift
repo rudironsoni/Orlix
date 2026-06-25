@@ -1438,14 +1438,20 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:runtime_config_parser",
 			reason: "OCI Linux device declarations are parsed and rejected until device policy has Linux-owned proof."
 		),
-        OrlixOCIRuntimeFeature(
-            name: "ociLinuxResources",
-            status: .recognized,
-            proof: "orlix:runtime_config_parser",
-            reason: "OCI Linux resources object is parsed. Pids limits are implemented through cgroup v2; unproven CPU, memory, block IO, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
-        ),
-        OrlixOCIRuntimeFeature(
-            name: "ociPidsLimit",
+		OrlixOCIRuntimeFeature(
+			name: "ociLinuxResources",
+			status: .recognized,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI Linux resources object is parsed. Pids and CPU quota limits are implemented through cgroup v2; unproven memory, block IO, device, network, RDMA, hugepage, and unified cgroup resources remain rejected."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociCPUQuota",
+			status: .implemented,
+			proof: "orlix:cgroup_cpu_probe",
+			reason: "OCI linux.resources.cpu quota and period carry into OrlixOS descriptors and init writes cgroup v2 cpu.max before joining the process cgroup."
+		),
+		OrlixOCIRuntimeFeature(
+			name: "ociPidsLimit",
             status: .implemented,
             proof: "orlix:cgroup_pids_probe",
             reason: "OCI linux.resources.pids.limit carries into OrlixOS descriptors and init writes pids.max in the configured cgroup v2 path before joining the process."
@@ -1550,10 +1556,11 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
     public let rootPropagation: OrlixEnvironmentRootPropagation
     public let sysctls: [String: String]
     public let maskedPaths: [String]
-    public let readonlyPaths: [String]
-    public let cgroupsPath: String?
-    public let cgroupPidsLimit: Int64?
-    public let mounts: [OrlixOCIRuntimeMount]
+	public let readonlyPaths: [String]
+	public let cgroupsPath: String?
+	public let cgroupPidsLimit: Int64?
+	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
+	public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultCommand: [String]
 	public let defaultEnvironment: [String: String]
 	public let defaultWorkingDirectory: String
@@ -1612,6 +1619,7 @@ public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
             readonlyPaths: readonlyPaths,
             cgroupsPath: cgroupsPath,
             cgroupPidsLimit: cgroupPidsLimit,
+            cgroupCPUMax: cgroupCPUMax,
             namespaces: namespaces,
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
@@ -1726,6 +1734,10 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
                 feature: "linux.cgroupsPath"
             ),
             cgroupPidsLimit: try Self.validatedCgroupPidsLimit(
+                config.linux?.resources,
+                cgroupsPath: config.linux?.cgroupsPath
+            ),
+            cgroupCPUMax: try Self.validatedCgroupCPUMax(
                 config.linux?.resources,
                 cgroupsPath: config.linux?.cgroupsPath
             ),
@@ -1890,12 +1902,9 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
         if resources.memory != nil {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.memory")
         }
-        if resources.cpu != nil {
-            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu")
-        }
-        if resources.blockIO != nil {
-            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO")
-        }
+		if resources.blockIO != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO")
+		}
         if resources.network != nil {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.network")
         }
@@ -1917,9 +1926,48 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
         }
         guard limit >= -1 else {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.pids.limit")
-        }
-        return limit
-    }
+		}
+		return limit
+	}
+
+	private static func validatedCgroupCPUMax(
+		_ resources: OCIRuntimeResources?,
+		cgroupsPath: String?
+	) throws -> OrlixEnvironmentCgroupCPUMax? {
+		guard let cpu = resources?.cpu else {
+			return nil
+		}
+		if cpu.shares != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.shares")
+		}
+		if cpu.realtimeRuntime != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.realtimeRuntime")
+		}
+		if cpu.realtimePeriod != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.realtimePeriod")
+		}
+		if cpu.cpus != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.cpus")
+		}
+		if cpu.mems != nil {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.mems")
+		}
+		guard cpu.quota != nil || cpu.period != nil else {
+			return nil
+		}
+		guard cgroupsPath != nil else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.cgroupsPath")
+		}
+		let quota = cpu.quota ?? -1
+		let period = cpu.period ?? OrlixEnvironmentCgroupCPUMax.defaultPeriodMicros
+		guard quota == -1 || quota > 0 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.quota")
+		}
+		guard period > 0 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.period")
+		}
+		return OrlixEnvironmentCgroupCPUMax(quotaMicros: quota, periodMicros: period)
+	}
 
 	private static func validatedUTSName(_ value: String?,
 		feature: String) throws -> String?
@@ -2556,7 +2604,15 @@ private struct OCIRuntimeResources: Decodable {
 }
 private struct OCIRuntimeResourceDevice: Decodable {}
 private struct OCIRuntimeResourceMemory: Decodable {}
-private struct OCIRuntimeResourceCPU: Decodable {}
+private struct OCIRuntimeResourceCPU: Decodable {
+	let shares: UInt64?
+	let quota: Int64?
+	let period: UInt64?
+	let realtimeRuntime: Int64?
+	let realtimePeriod: UInt64?
+	let cpus: String?
+	let mems: String?
+}
 private struct OCIRuntimeResourceBlockIO: Decodable {}
 private struct OCIRuntimeResourceNetwork: Decodable {}
 private struct OCIRuntimeResourcePids: Decodable {
