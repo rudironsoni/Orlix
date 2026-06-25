@@ -10,6 +10,36 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI CPU quota cgroup support
+
+Checkpoint: implemented bounded OCI `linux.resources.cpu` quota/period support through Linux cgroup v2 `cpu.max`. OrlixKernel release and development defconfigs now enable upstream CPU cgroup scheduling and CFS bandwidth control. OrlixOS accepts OCI CPU `quota` and optional `period`, carries them through environment descriptors, emits `orlix.cgroups.cpu.max=<quota-or-max> <period>`, and first-stage init enables the cgroup v2 `cpu` controller and writes `cpu.max` in the configured cgroup before joining the process cgroup.
+
+Changes:
+- Enabled `CONFIG_CGROUP_SCHED`, `CONFIG_FAIR_GROUP_SCHED`, and `CONFIG_CFS_BANDWIDTH` in OrlixKernel release and development defconfigs.
+- Added Orlix-owned `cgroup_cpu_probe` kselftest covering cgroup v2 `cpu` controller visibility, `+cpu` subtree enablement, `cpu.max` readability, and quota/period writes.
+- Added `OrlixEnvironmentCgroupCPUMax` descriptor carriage, Codable persistence, command-line emission, copy preservation, and validation.
+- Added OCI parser support for `linux.resources.cpu.quota` and `linux.resources.cpu.period`; `quota == -1` maps to cgroup v2 `max`, and omitted period defaults to `100000`.
+- Kept unsupported CPU controls rejected precisely: `shares`, `realtimeRuntime`, `realtimePeriod`, `cpus`, and `mems`.
+- Updated first-stage init to parse `orlix.cgroups.cpu.max`, enable cgroup v2 `+cpu`, create the configured cgroup path, and write `cpu.max`; pids limit setup now also creates the cgroup path before writing `pids.max`.
+- Updated OCI feature reporting and XCTest coverage for CPU quota parsing, command-line emission, unsupported CPU cases, and feature-report status.
+
+Evidence:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 after rebuilding touched Swift, Coreutils package inputs, first-stage init, and the release OrlixKernel payload.
+- `TMPDIR=/private/tmp rtk make -f OrlixKernel/Makefile kselftest PROFILE=release` exited 0 and compiled `cgroup_cpu_probe`.
+- `rtk rg -n "cgroup_cpu_probe|CONFIG_CGROUP_SCHED|CONFIG_FAIR_GROUP_SCHED|CONFIG_CFS_BANDWIDTH" Build/OrlixMLibC/kselftest/release/kselftest-list.txt Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle/initramfs.list Build/OrlixKernel/build/release/.config OrlixKernel/Sources/ports/orlix/configs` confirmed the release `.config`, both durable defconfigs, kselftest list, and test initramfs contain the CPU cgroup/probe changes.
+- Focused `test-without-building` for the modified command-line, parser, unsupported-resource, and feature-report tests was interrupted after it did not reach `Testing started` or `Test Suite` output in the bounded wait; no executed-XCTest proof is claimed.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale active-plan warning.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Boundary:
+- This implements OCI CPU quota/period setup through Linux cgroup v2 `cpu.max`. It does not implement CPU shares, realtime CPU controls, cpuset `cpus`/`mems`, memory, block IO, device, network, RDMA, hugepage, unified cgroup resources, arbitrary cgroup delegation, systemd support, OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, hosted runtime execution proof, or full runtime readiness.
+- No Linux ABI shim, package manager, proof-package/stamp-ladder system, HostAdapter Linux policy, runtime-visible host shim, generated upstream edit, or OrlixMLibC patch was added.
+
 ### 2026-06-25 OCI cgroup2 mount acceptance
 
 Checkpoint: implemented bounded OCI Runtime Spec cgroup2 mount acceptance for the Linux cgroup hierarchy Orlix already mounts in first-stage init. OCI runtime configs may now include a standard `mounts` entry with `type: "cgroup2"`, destination `/sys/fs/cgroup`, and absent or `cgroup2` source. The parser still rejects cgroup2 mounts to other destinations, non-cgroup2 sources, or mount options because this checkpoint only exposes the existing Linux-owned cgroup2 hierarchy, not arbitrary cgroup mount policy.

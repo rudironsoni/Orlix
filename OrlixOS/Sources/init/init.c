@@ -369,7 +369,7 @@ static void write_cgroup_control(const char *directory, const char *file,
 	close(fd);
 }
 
-static void enable_cgroup_pids_controller(const char *path)
+static void enable_cgroup_controller(const char *path, const char *controller)
 {
 	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16] = "/sys/fs/cgroup";
 	size_t used = strlen(directory);
@@ -380,7 +380,7 @@ static void enable_cgroup_pids_controller(const char *path)
 		size_t component_length = slash ? (size_t)(slash - cursor) :
 						 strlen(cursor);
 
-		write_cgroup_control(directory, "cgroup.subtree_control", "+pids\n");
+		write_cgroup_control(directory, "cgroup.subtree_control", controller);
 		if (!slash)
 			break;
 		if (used + 1 + component_length >= sizeof(directory))
@@ -391,6 +391,16 @@ static void enable_cgroup_pids_controller(const char *path)
 		directory[used] = '\0';
 		cursor = slash + 1;
 	}
+}
+
+static void enable_cgroup_pids_controller(const char *path)
+{
+	enable_cgroup_controller(path, "+pids\n");
+}
+
+static void enable_cgroup_cpu_controller(const char *path)
+{
+	enable_cgroup_controller(path, "+cpu\n");
 }
 
 static void apply_cgroup_pids_limit(const char *path, const char *value)
@@ -406,7 +416,27 @@ static void apply_cgroup_pids_limit(const char *path, const char *value)
 	    (int)sizeof(directory))
 		die("cgroups path too long");
 	enable_cgroup_pids_controller(path);
+	if (ensure_dir_recursive(directory, 0755) != 0)
+		die("create cgroup path");
 	write_cgroup_control(directory, "pids.max", value);
+}
+
+static void apply_cgroup_cpu_max(const char *path, const char *value)
+{
+	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
+
+	if (!cgroup_path_is_valid(path))
+		die("invalid cgroups path");
+	if (strchr(value, '\n') != NULL || strchr(value, '\r') != NULL ||
+	    value[0] == '\0')
+		die("invalid cgroup cpu max");
+	if (snprintf(directory, sizeof(directory), "/sys/fs/cgroup%s", path) >=
+	    (int)sizeof(directory))
+		die("cgroups path too long");
+	enable_cgroup_cpu_controller(path);
+	if (ensure_dir_recursive(directory, 0755) != 0)
+		die("create cgroup path");
+	write_cgroup_control(directory, "cpu.max", value);
 }
 
 static unsigned long namespace_flag_for_name(const char *name)
@@ -1125,6 +1155,8 @@ struct orlix_command_config {
 	int has_cgroups_path;
 	char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
 	int has_cgroup_pids_max;
+	char cgroup_cpu_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
+	int has_cgroup_cpu_max;
 	unsigned long namespace_flags;
 	unsigned long namespace_join_flags[ORLIX_INIT_MAX_NAMESPACE_JOINS];
 	char namespace_join_paths[ORLIX_INIT_MAX_NAMESPACE_JOINS][ORLIX_INIT_VALUE_SIZE];
@@ -1286,10 +1318,15 @@ static void selected_command_config(struct orlix_command_config *config)
 	    config->cgroups_path[0] != '\0')
 		config->has_cgroups_path = 1;
 	if (read_cmdline_decoded("orlix.cgroups.pids.max=",
-				 config->cgroup_pids_max,
-				 sizeof(config->cgroup_pids_max)) == 0 &&
+		config->cgroup_pids_max,
+		sizeof(config->cgroup_pids_max)) == 0 &&
 	    config->cgroup_pids_max[0] != '\0')
 		config->has_cgroup_pids_max = 1;
+	if (read_cmdline_decoded("orlix.cgroups.cpu.max=",
+		config->cgroup_cpu_max,
+		sizeof(config->cgroup_cpu_max)) == 0 &&
+	    config->cgroup_cpu_max[0] != '\0')
+		config->has_cgroup_cpu_max = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
 		char key[32];
 		char value[ORLIX_INIT_VALUE_SIZE];
@@ -1668,7 +1705,13 @@ static pid_t start_command_on_pty(int master, int slave)
 		if (!config->has_cgroups_path)
 			die("cgroup pids limit without cgroup path");
 		apply_cgroup_pids_limit(config->cgroups_path,
-					 config->cgroup_pids_max);
+			config->cgroup_pids_max);
+	}
+	if (config->has_cgroup_cpu_max) {
+		if (!config->has_cgroups_path)
+			die("cgroup cpu limit without cgroup path");
+		apply_cgroup_cpu_max(config->cgroups_path,
+			config->cgroup_cpu_max);
 	}
 	if (config->has_cgroups_path)
 		join_configured_cgroup(config->cgroups_path);
