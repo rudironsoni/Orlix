@@ -6459,12 +6459,17 @@ XCTAssertEqual(
 report.feature(named: "ociCPUShares")?.proof,
 "orlix:cgroup_cpu_probe"
 )
-XCTAssertEqual(report.feature(named: "ociPidsLimit")?.status, .implemented)
-XCTAssertEqual(
-report.feature(named: "ociPidsLimit")?.proof,
-"orlix:cgroup_pids_probe"
-)
-		XCTAssertEqual(report.feature(named: "ociMemoryLimit")?.status, .implemented)
+        XCTAssertEqual(report.feature(named: "ociPidsLimit")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "ociPidsLimit")?.proof,
+            "orlix:cgroup_pids_probe"
+        )
+        XCTAssertEqual(report.feature(named: "ociPersonality")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "ociPersonality")?.proof,
+            "orlix:runtime_config_parser"
+        )
+        XCTAssertEqual(report.feature(named: "ociMemoryLimit")?.status, .implemented)
 		XCTAssertEqual(
 			report.feature(named: "ociMemoryLimit")?.proof,
 			"orlix:cgroup_memory_probe"
@@ -6503,7 +6508,11 @@ report.feature(named: "ociBlockIOControls")?.proof,
 			report.feature(named: "ociCgroupMounts")?.proof,
 			"orlix:cgroup_v2_probe"
 		)
-		XCTAssertEqual(report.feature(named: "ociUnifiedCgroupResources")?.status, .deterministicallyRejected)
+        XCTAssertEqual(report.feature(named: "ociUnifiedCgroupResources")?.status, .implemented)
+        XCTAssertEqual(
+            report.feature(named: "ociUnifiedCgroupResources")?.proof,
+            "orlix:cgroup_unified_probe"
+        )
 		XCTAssertEqual(report.feature(named: "userNamespaceMappings")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
 		XCTAssertEqual(report.feature(named: "apparmor")?.status, .deterministicallyRejected)
@@ -6525,7 +6534,7 @@ report.feature(named: "ociBlockIOControls")?.proof,
 		report.feature(named: "ociBindMounts")?.proof,
 		"orlix:virtio_fs_mount_probe"
 	)
-		XCTAssertEqual(report.feature(named: "ociCgroupMounts")?.status, .deterministicallyRejected)
+		XCTAssertEqual(report.feature(named: "ociCgroupMounts")?.status, .implemented)
 		XCTAssertEqual(
 			report.feature(named: "cgroupV2PidsController")?.status,
 			.implemented
@@ -6603,6 +6612,8 @@ report.feature(named: "ociBlockIOControls")?.proof,
         XCTAssertEqual(features["ociLinuxDevices"]?.proof, "orlix:device_node_probe")
 		XCTAssertEqual(features["ociLinuxResources"]?.status, .recognized)
 XCTAssertEqual(features["ociLinuxResources"]?.proof, "orlix:runtime_config_parser")
+        XCTAssertEqual(features["ociPersonality"]?.status, .implemented)
+        XCTAssertEqual(features["ociPersonality"]?.proof, "orlix:runtime_config_parser")
 XCTAssertEqual(features["ociCPUQuota"]?.status, .implemented)
 XCTAssertEqual(features["ociCPUQuota"]?.proof, "orlix:cgroup_cpu_probe")
 XCTAssertEqual(features["ociCPUShares"]?.status, .implemented)
@@ -6620,8 +6631,8 @@ XCTAssertEqual(features["ociBlockIOControls"]?.proof, "orlix:cgroup_io_probe")
             features["ociMountIpcUtsNetworkCgroupNamespaces"]?.proof,
             "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe"
         )
-        XCTAssertEqual(features["ociReadonlyPaths"]?.status, .deterministicallyRejected)
-		XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:runtime_config_parser")
+XCTAssertEqual(features["ociReadonlyPaths"]?.status, .implemented)
+XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:rootinit_readonly_paths")
 		XCTAssertEqual(features["ociUnifiedCgroupResources"]?.status, .implemented)
 		XCTAssertEqual(features["ociUnifiedCgroupResources"]?.proof, "orlix:cgroup_unified_probe")
 		XCTAssertEqual(features["ociLifecycleStateModel"]?.status, .implemented)
@@ -6835,12 +6846,81 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 			"orlix.cgroups.path=/orlix/demo.slice/orlix"
 		)
 	)
-	XCTAssertTrue(
-		try XCTUnwrap(commandLine).contains("orlix.cgroups.pids.max=12")
-	)
-}
+        XCTAssertTrue(
+            try XCTUnwrap(commandLine).contains("orlix.cgroups.pids.max=12")
+        )
+    }
 
-func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
+    func testOCIRuntimeConfigParserCarriesLinuxPersonality() throws {
+        let config = Data(
+            """
+            {
+              "ociVersion": "1.1.0",
+              "process": { "args": ["/bin/sh"], "cwd": "/" },
+              "root": { "path": "rootfs" },
+              "linux": {
+                "personality": { "domain": "LINUX32" }
+              }
+            }
+            """.utf8
+        )
+
+        let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+        XCTAssertEqual(descriptor.defaultPersonalityDomain, "LINUX32")
+
+        let environment = try descriptor.environmentDescriptor(
+            id: "oci-personality",
+            rootMount: .defaultOverlay
+        )
+        XCTAssertEqual(environment.defaultPersonalityDomain, "LINUX32")
+
+        let commandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+            descriptor: environment,
+            kernelCommandLine: OrlixEnvironmentRootImage.defaultKernelCommandLine
+        )
+        XCTAssertTrue(
+            try XCTUnwrap(commandLine).contains("orlix.personality=LINUX32")
+        )
+    }
+
+    func testOCIRuntimeConfigParserRejectsUnsupportedLinuxPersonalityShapes() throws {
+        let fragments: [(feature: String, json: String)] = [
+            (
+                "personality.domain",
+                #""personality": { "domain": "BSD" }"#
+            ),
+            (
+                "personality.domain",
+                #""personality": {}"#
+            ),
+            (
+                "personality.flags",
+                #""personality": { "domain": "LINUX", "flags": ["ADDR_NO_RANDOMIZE"] }"#
+            )
+        ]
+
+        for (feature, linuxFragment) in fragments {
+            let config = Data(
+                """
+                {
+                  "ociVersion": "1.1.0",
+                  "process": { "args": ["/bin/sh"], "cwd": "/" },
+                  "root": { "path": "rootfs" },
+                  "linux": { \(linuxFragment) }
+                }
+                """.utf8
+            )
+
+            XCTAssertThrowsError(try OrlixOCIRuntimeConfigParser().parse(config), feature) { error in
+                XCTAssertEqual(
+                    error as? OrlixOCIRuntimeConfigError,
+                    .unsupportedLinuxFeature("linux.\(feature)")
+                )
+            }
+        }
+    }
+
+    func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
 	let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
 		(
 			Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
@@ -7238,8 +7318,7 @@ func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedLinuxRuntimeFields() throws {
 		let fragments: [(feature: String, json: String)] = [
-			("personality", #""personality": { "domain": "LINUX" }"#),
-			("timeOffsets", #""timeOffsets": { "monotonic": "1 0" }"#),
+            ("timeOffsets", #""timeOffsets": { "monotonic": "1 0" }"#),
 			("unified", #""unified": { "memory.max": "1048576" }"#),
 			("intelRdt", #""intelRdt": { "l3CacheSchema": "L3:0=ff" }"#),
 			("hugepageLimits", #""hugepageLimits": [{ "pageSize": "2MB", "limit": 1 }]"#),

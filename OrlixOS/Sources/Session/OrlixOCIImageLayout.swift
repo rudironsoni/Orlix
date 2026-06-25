@@ -1301,6 +1301,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "OrlixOS models create, start, signal, wait/exit, state, and delete transitions with invalid-transition guards before observation-driver side effects."
 		),
 		OrlixOCIRuntimeFeature(
+			name: "ociPersonality",
+			status: .implemented,
+			proof: "orlix:runtime_config_parser",
+			reason: "OCI linux.personality domain values LINUX and LINUX32 carry into OrlixOS descriptors and first-stage init applies Linux personality(2) before exec."
+		),
+		OrlixOCIRuntimeFeature(
 			name: "ociRuntimeSpecLifecycle",
 			status: .recognized,
 			reason: "Full OCI Runtime Spec lifecycle is recognized but not claimed until Linux substrate, process execution, resource setup, and cleanup proofs are complete."
@@ -1596,9 +1602,10 @@ public let mounts: [OrlixOCIRuntimeMount]
 	public let defaultOOMScoreAdjustment: Int32?
 	public let defaultScheduler: OrlixEnvironmentScheduler?
 	public let defaultIOPriority: OrlixEnvironmentIOPriority?
-	public let defaultCPUAffinity: OrlixEnvironmentCPUAffinity?
-	public let defaultUmask: UInt32?
-	public let defaultRlimits: [OrlixEnvironmentRlimit]
+    public let defaultCPUAffinity: OrlixEnvironmentCPUAffinity?
+    public let defaultUmask: UInt32?
+    public let defaultRlimits: [OrlixEnvironmentRlimit]
+    public let defaultPersonalityDomain: String?
     public let terminal: Bool
     public let consoleSize: OrlixOCIRuntimeConsoleSize?
     public let namespaces: [String]
@@ -1629,10 +1636,11 @@ public let mounts: [OrlixOCIRuntimeMount]
 			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
 			defaultScheduler: defaultScheduler,
 			defaultIOPriority: defaultIOPriority,
-			defaultCPUAffinity: defaultCPUAffinity,
-			defaultUmask: defaultUmask,
-			defaultRlimits: defaultRlimits,
-			hostname: hostname,
+            defaultCPUAffinity: defaultCPUAffinity,
+            defaultUmask: defaultUmask,
+            defaultRlimits: defaultRlimits,
+            defaultPersonalityDomain: defaultPersonalityDomain,
+            hostname: hostname,
 			domainname: domainname,
             rootMount: rootMount,
             rootReadonly: rootReadonly,
@@ -1815,9 +1823,10 @@ cgroupsPath: config.linux?.cgroupsPath
 			defaultOOMScoreAdjustment: try Self.validatedOOMScoreAdjustment(process.oomScoreAdj),
 			defaultScheduler: try Self.validatedScheduler(process.scheduler),
 			defaultIOPriority: try Self.validatedIOPriority(process.ioPriority),
-			defaultCPUAffinity: try Self.validatedCPUAffinity(process.execCPUAffinity),
-			defaultUmask: try Self.validatedUmask(process.user?.umask),
-			defaultRlimits: try Self.validatedRlimits(process.rlimits),
+            defaultCPUAffinity: try Self.validatedCPUAffinity(process.execCPUAffinity),
+            defaultUmask: try Self.validatedUmask(process.user?.umask),
+            defaultRlimits: try Self.validatedRlimits(process.rlimits),
+            defaultPersonalityDomain: try Self.validatedPersonalityDomain(config.linux?.personality),
             terminal: terminal,
             consoleSize: consoleSize,
             namespaces: namespaces,
@@ -2328,20 +2337,37 @@ private static func validatedUTSName(_ value: String?,
 		return value
 	}
 
-	private static func validatedUmask(_ value: UInt32?) throws -> UInt32? {
-		guard let value else {
-			return nil
-		}
+private static func validatedUmask(_ value: UInt32?) throws -> UInt32? {
+    guard let value else {
+        return nil
+    }
 		guard value <= 0o777 else {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.user.umask")
 		}
-		return value
-	}
+    return value
+}
 
-	private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? {
-		guard let value else {
-			return nil
-		}
+private static func validatedPersonalityDomain(
+    _ personality: OCIRuntimePersonality?
+) throws -> String? {
+    guard let personality else {
+        return nil
+    }
+    if let flags = personality.flags, !flags.isEmpty {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.personality.flags")
+    }
+    guard let domain = personality.domain,
+          Set(["LINUX", "LINUX32"]).contains(domain)
+    else {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.personality.domain")
+    }
+    return domain
+}
+
+private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? {
+    guard let value else {
+        return nil
+    }
 		guard value >= -1000 && value <= 1000 else {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("process.oomScoreAdj")
 		}
@@ -2752,18 +2778,15 @@ private static func validatedUTSName(_ value: String?,
 		if let gidMappings = linux.gidMappings, !gidMappings.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.gidMappings")
 		}
-if linux.seccomp != nil {
-            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
-        }
-        if linux.mountLabel != nil {
-            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
-        }
-		if linux.personality != nil {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.personality")
-		}
-		if let timeOffsets = linux.timeOffsets, !timeOffsets.isEmpty {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.timeOffsets")
-		}
+    if linux.seccomp != nil {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.seccomp")
+    }
+    if linux.mountLabel != nil {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.mountLabel")
+    }
+    if let timeOffsets = linux.timeOffsets, !timeOffsets.isEmpty {
+        throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.timeOffsets")
+    }
 		if let unified = linux.unified, !unified.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.unified")
 		}
@@ -2896,7 +2919,8 @@ private struct OCIRuntimeLinux: Decodable {
 }
 
 private struct OCIRuntimePersonality: Decodable {
-	let domain: String?
+    let domain: String?
+    let flags: [String]?
 }
 
 private struct OCIRuntimeIntelRdt: Decodable {
