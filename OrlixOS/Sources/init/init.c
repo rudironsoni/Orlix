@@ -30,6 +30,7 @@
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
 #define ORLIX_INIT_HOST_MOUNT_TARGET_SIZE 256
 #define ORLIX_INIT_CGROUP_PATH_SIZE 256
+#define ORLIX_INIT_CGROUP_VALUE_SIZE 32
 
 struct orlix_rlimit_config {
 	int resource;
@@ -339,6 +340,71 @@ static void join_configured_cgroup(const char *path)
 		die("write cgroup.procs");
 	}
 	close(fd);
+}
+
+static void cgroup_control_path(const char *directory, const char *file,
+				char *buffer, size_t buffer_size)
+{
+	if (snprintf(buffer, buffer_size, "%s/%s", directory, file) >=
+	    (int)buffer_size)
+		die("cgroup control path too long");
+}
+
+static void write_cgroup_control(const char *directory, const char *file,
+				 const char *value)
+{
+	char path[ORLIX_INIT_CGROUP_PATH_SIZE + 64];
+	int fd;
+
+	cgroup_control_path(directory, file, path, sizeof(path));
+	fd = open(path, O_WRONLY | O_CLOEXEC);
+	if (fd < 0)
+		die("open cgroup control");
+	if (write_all(fd, value, strlen(value)) != 0) {
+		close(fd);
+		die("write cgroup control");
+	}
+	close(fd);
+}
+
+static void enable_cgroup_pids_controller(const char *path)
+{
+	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16] = "/sys/fs/cgroup";
+	size_t used = strlen(directory);
+	const char *cursor = path + 1;
+
+	while (*cursor != '\0') {
+		const char *slash = strchr(cursor, '/');
+		size_t component_length = slash ? (size_t)(slash - cursor) :
+						 strlen(cursor);
+
+		write_cgroup_control(directory, "cgroup.subtree_control", "+pids\n");
+		if (!slash)
+			break;
+		if (used + 1 + component_length >= sizeof(directory))
+			die("cgroup path too long");
+		directory[used++] = '/';
+		memcpy(&directory[used], cursor, component_length);
+		used += component_length;
+		directory[used] = '\0';
+		cursor = slash + 1;
+	}
+}
+
+static void apply_cgroup_pids_limit(const char *path, const char *value)
+{
+	char directory[ORLIX_INIT_CGROUP_PATH_SIZE + 16];
+
+	if (!cgroup_path_is_valid(path))
+		die("invalid cgroups path");
+	if (strchr(value, '\n') != NULL || strchr(value, '\r') != NULL ||
+	    value[0] == '\0')
+		die("invalid cgroup pids limit");
+	if (snprintf(directory, sizeof(directory), "/sys/fs/cgroup%s", path) >=
+	    (int)sizeof(directory))
+		die("cgroups path too long");
+	enable_cgroup_pids_controller(path);
+	write_cgroup_control(directory, "pids.max", value);
 }
 
 static void mount_configured_host_directory(void)
@@ -1040,6 +1106,8 @@ struct orlix_command_config {
 	int has_umask;
 	char cgroups_path[ORLIX_INIT_CGROUP_PATH_SIZE];
 	int has_cgroups_path;
+	char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
+	int has_cgroup_pids_max;
 };
 
 static void selected_command_config(struct orlix_command_config *config)
@@ -1196,6 +1264,11 @@ static void selected_command_config(struct orlix_command_config *config)
 				 sizeof(config->cgroups_path)) == 0 &&
 	    config->cgroups_path[0] != '\0')
 		config->has_cgroups_path = 1;
+	if (read_cmdline_decoded("orlix.cgroups.pids.max=",
+				 config->cgroup_pids_max,
+				 sizeof(config->cgroup_pids_max)) == 0 &&
+	    config->cgroup_pids_max[0] != '\0')
+		config->has_cgroup_pids_max = 1;
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
 		char key[32];
 		char value[ORLIX_INIT_VALUE_SIZE];
@@ -1507,6 +1580,12 @@ static pid_t start_command_on_pty(int master, int slave)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
 	if (config->has_umask)
 		(void)umask((mode_t)config->umask_value);
+	if (config->has_cgroup_pids_max) {
+		if (!config->has_cgroups_path)
+			die("cgroup pids limit without cgroup path");
+		apply_cgroup_pids_limit(config->cgroups_path,
+					 config->cgroup_pids_max);
+	}
 	if (config->has_cgroups_path)
 		join_configured_cgroup(config->cgroups_path);
 	apply_rlimits(config);

@@ -10,6 +10,33 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI pids resource limit support
+
+Checkpoint: implemented a real OCI `linux.resources.pids.limit` path backed by Linux cgroup v2. OrlixOS now decodes the OCI resources object, accepts the pids controller limit when paired with an explicit `linux.cgroupsPath`, carries the limit through `OrlixOCIRuntimeConfigDescriptor` and `OrlixEnvironmentDescriptor`, emits `orlix.cgroups.pids.max=<limit-or-max>` into the environment command line, and first-stage init enables the pids controller along the configured cgroup path before writing `pids.max` and joining the process to `cgroup.procs`.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.cgroupPidsLimit` Codable/session propagation, copy preservation, command-line emission, and validation. OCI `-1` maps to cgroup v2 `max`; `0` is accepted per OCI pids semantics.
+- Added OCI `linux.resources.pids.limit` parsing. Unsupported resource families still fail loudly as precise `linux.resources.<family>` errors: devices, memory, CPU, block IO, network, hugepages, RDMA, and unified controls.
+- Changed the feature report to mark broad `ociLinuxResources` as recognized, not fully implemented, and added implemented `ociPidsLimit` with proof tag `orlix:cgroup_pids_probe`.
+- Added first-stage init cgroup v2 pids setup: enable `+pids` on ancestor cgroups, write `pids.max`, then join the configured cgroup.
+- Added OrlixOS XCTest coverage for descriptor command-line emission, parser conversion, feature-report status, missing cgroups path rejection, invalid pids limit rejection, and memory-resource rejection.
+
+Evidence:
+- Official OCI runtime-spec `config-linux.md` was checked from `opencontainers/runtime-spec` for `cgroupsPath`, `resources`, and `pids.limit`; it documents `pids.limit` as `int64`, with `-1` meaning no limit (`max`) and `0` valid from the kernel controller perspective.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 after compiling touched Swift, rebuilding current Coreutils package inputs, and building the OrlixOS first-stage init.
+- Incremental rerun of the same `build-for-testing` command exited 0.
+- Focused `test-without-building` for descriptor, parser, feature-report, and unsupported-resource tests was attempted against the same simulator but did not reach `Testing started` or `Test Suite` output after the bounded wait; it was interrupted and is not claimed as executed XCTest proof.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale active-plan warning.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or mlibc patch changes.
+
+Not claimed:
+- No CPU, memory, block IO, device allowlist, network class/prio, RDMA, hugepage, or unified cgroup resource support.
+- No cgroup namespace, cgroup delegation, cgroup ownership, full OCI lifecycle, product `orlix run`, registry pull, networking policy, or runtime-ready claim.
+
 ### 2026-06-20 - Add statx metadata replies to virtio-fs backend
 
 Checkpoint: added standard FUSE `FUSE_STATX` handling to
