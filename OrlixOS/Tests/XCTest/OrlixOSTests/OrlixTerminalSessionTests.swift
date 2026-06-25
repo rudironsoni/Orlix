@@ -9511,10 +9511,38 @@ func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
 	let rootImage = try XCTUnwrap(session.materializedRootImageForTesting)
 	XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
 	XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
-	let commandLine = try XCTUnwrap(session.bootConfig.kernelCommandLine)
-	XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
-	XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
-}
+		let commandLine = try XCTUnwrap(session.bootConfig.kernelCommandLine)
+		XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
+		XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
+
+		let driver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 109,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 109, exitStatus: 0)
+			)
+		)
+		let run = try installer.run(
+			id: "oci-installed-session",
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			using: driver
+		)
+
+		XCTAssertEqual(run.id, "oci-installed-session")
+		XCTAssertEqual(run.startedStateReport.status, .running)
+		XCTAssertEqual(run.completedStateReport.status, .stopped)
+		XCTAssertEqual(run.completedStateReport.exitStatus, 0)
+		XCTAssertEqual(
+			try installer.state(id: "oci-installed-session"),
+			run.completedStateReport
+		)
+		XCTAssertEqual(
+			driver.events,
+			[
+				"start:created:nil",
+				"wait:running:109",
+			]
+		)
+	}
 
 func testOCIRuntimeRunUsesMaterializedCreateRootImages() throws {
 	let fileManager = FileManager.default
