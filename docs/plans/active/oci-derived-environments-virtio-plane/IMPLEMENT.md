@@ -20985,3 +20985,26 @@ Verification:
 Non-claims:
 - This is an OrlixOS lifecycle facade over an already-created environment and observation driver. It does not claim final Linux exec supervisor integration, root image materialization command execution, product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
 - No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, or rejection-coverage work were added.
+
+### 2026-06-25 OCI runtime materialized-root readiness guard
+
+Current status: tightened the OrlixOS OCI runtime lifecycle facade so `start`, `kill`, `wait`, and `run` cannot construct a process session or invoke the observation driver unless the environment's materialized base and state root images exist. This makes the lifecycle/resource-preparation boundary explicit for future product `orlix run`: `create` prepares import/materialization inputs and persists created state; start/run require the materialized Linux root images to exist before lifecycle side effects begin.
+
+Changes:
+- Added `OrlixOCIRuntimeError.missingMaterializedRootImage`.
+- Added runtime facade validation for both `base.ext4` and `state.ext4` before rehydrating an `OrlixOCIRuntimeProcessSession`.
+- Added OrlixOS XCTest coverage proving `run(id:)` rejects an unmaterialized created environment before observation-driver side effects and leaves durable state as `created`.
+
+Verification:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused bounded `test-without-building` for `testOCIRuntimeRunRejectsUnmaterializedRootBeforeDriverSideEffects` produced no `Testing started`, `Test Suite`, or `Test Case` output before the 180 second alarm terminated the command with signal 14; no executed-XCTest pass is claimed.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or OrlixMLibC patch changes.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` found no recent Orlix diagnostic reports.
+
+Non-claims:
+- This is OrlixOS lifecycle/resource-readiness gating. It does not claim root image materialization command execution, final Linux exec supervisor integration, product `orlix run`, registry pull, Docker/runc compatibility, arbitrary OCI host-path bind mounts, full OCI Runtime Spec lifecycle compliance, or full runtime readiness.
+- No OrlixMLibC patches, generated upstream source edits, HostAdapter Linux policy, custom Linux ABI shims, package-manager/proof-package mechanisms, or rejection-coverage work were added.

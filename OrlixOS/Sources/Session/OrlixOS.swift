@@ -966,6 +966,7 @@ public struct OrlixOCIRuntimeRunResult: Sendable {
 @_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeError: Error, Equatable, Sendable {
 	case environmentAlreadyExists(String)
+	case missingMaterializedRootImage(String)
 }
 
 @_spi(OrlixPrivateTesting)
@@ -1192,6 +1193,10 @@ public struct OrlixOCIRuntime: Sendable {
 		terminal: OrlixTerminalSession,
 		fileManager: FileManager
 	) throws -> OrlixOCIRuntimeProcessSession {
+		try validateMaterializedRootImages(
+			id: snapshot.record.id,
+			fileManager: fileManager
+		)
 		let bundle = try OrlixOCIRuntimeBundle.load(
 			from: URL(fileURLWithPath: snapshot.record.bundlePath),
 			fileManager: fileManager
@@ -1208,6 +1213,27 @@ public struct OrlixOCIRuntime: Sendable {
 			terminal: terminal,
 			lifecycleStore: lifecycleStore
 		)
+	}
+
+	private func validateMaterializedRootImages(
+		id: String,
+		fileManager: FileManager
+	) throws {
+		let layout = try registry.layout(forEnvironmentID: id)
+		try validateMaterializedRootImage(layout.baseImageURL, fileManager: fileManager)
+		try validateMaterializedRootImage(layout.stateImageURL, fileManager: fileManager)
+	}
+
+	private func validateMaterializedRootImage(
+		_ url: URL,
+		fileManager: FileManager
+	) throws {
+		var isDirectory = ObjCBool(false)
+		guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+		      !isDirectory.boolValue
+		else {
+			throw OrlixOCIRuntimeError.missingMaterializedRootImage(url.path)
+		}
 	}
 }
 
