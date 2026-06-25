@@ -25,6 +25,7 @@
 
 #define ORLIX_INIT_CMDLINE_SIZE 16384
 #define ORLIX_INIT_MAX_RLIMITS 16
+#define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
@@ -405,6 +406,21 @@ static void apply_cgroup_pids_limit(const char *path, const char *value)
 		die("cgroups path too long");
 	enable_cgroup_pids_controller(path);
 	write_cgroup_control(directory, "pids.max", value);
+}
+
+static unsigned long namespace_flag_for_name(const char *name)
+{
+	if (strcmp(name, "mount") == 0)
+		return CLONE_NEWNS;
+	if (strcmp(name, "ipc") == 0)
+		return CLONE_NEWIPC;
+	if (strcmp(name, "uts") == 0)
+		return CLONE_NEWUTS;
+	if (strcmp(name, "network") == 0)
+		return CLONE_NEWNET;
+	if (strcmp(name, "cgroup") == 0)
+		return CLONE_NEWCGROUP;
+	return 0;
 }
 
 static void mount_configured_host_directory(void)
@@ -1108,6 +1124,7 @@ struct orlix_command_config {
 	int has_cgroups_path;
 	char cgroup_pids_max[ORLIX_INIT_CGROUP_VALUE_SIZE];
 	int has_cgroup_pids_max;
+	unsigned long namespace_flags;
 };
 
 static void selected_command_config(struct orlix_command_config *config)
@@ -1269,6 +1286,19 @@ static void selected_command_config(struct orlix_command_config *config)
 				 sizeof(config->cgroup_pids_max)) == 0 &&
 	    config->cgroup_pids_max[0] != '\0')
 		config->has_cgroup_pids_max = 1;
+	for (int i = 0; i < ORLIX_INIT_MAX_NAMESPACES; i++) {
+		char key[32];
+		char value[ORLIX_INIT_VALUE_SIZE];
+		unsigned long flag;
+
+		snprintf(key, sizeof(key), "orlix.namespace%d=", i);
+		if (read_cmdline_decoded(key, value, sizeof(value)) != 0)
+			continue;
+		flag = namespace_flag_for_name(value);
+		if (flag == 0)
+			die("invalid namespace");
+		config->namespace_flags |= flag;
+	}
 	for (int i = 0; i < ORLIX_INIT_MAX_RLIMITS; i++) {
 		char key[32];
 		char value[ORLIX_INIT_VALUE_SIZE];
@@ -1467,12 +1497,21 @@ static void exec_configured_command(struct orlix_command_config *config)
 	}
 }
 
+static void apply_namespace_config(const struct orlix_command_config *config)
+{
+	if (config->namespace_flags == 0)
+		return;
+	if (unshare((int)config->namespace_flags) != 0)
+		die("unshare namespaces");
+}
+
 static void apply_uts_config(const struct orlix_command_config *config)
 {
 	if (!config->has_hostname && !config->has_domainname)
 		return;
 
-	if (unshare(CLONE_NEWUTS) != 0) {
+	if ((config->namespace_flags & CLONE_NEWUTS) == 0 &&
+	    unshare(CLONE_NEWUTS) != 0) {
 		write_literal(STDERR_FILENO, "orlix-init: unshare UTS failed\n");
 		return;
 	}
@@ -1575,6 +1614,7 @@ static pid_t start_command_on_pty(int master, int slave)
 		_exit(127);
 	}
 	selected_command_config(config);
+	apply_namespace_config(config);
 	apply_uts_config(config);
 	if (chdir(config->cwd) != 0)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");

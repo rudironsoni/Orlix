@@ -10,6 +10,35 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI mount IPC UTS network cgroup namespace support
+
+Checkpoint: implemented bounded OCI Linux namespace creation through OrlixOS descriptors and first-stage init. OCI runtime configs may now request no-`path` `mount`, `ipc`, `uts`, `network`, and `cgroup` namespaces. OrlixOS validates the namespace set, rejects namespace path joins and duplicates, carries supported namespace requests through `OrlixOCIRuntimeConfigDescriptor` and `OrlixEnvironmentDescriptor`, emits deterministic `orlix.namespace<N>=...` command-line tokens, and first-stage init maps those names to Linux `CLONE_NEW*` flags and calls `unshare(2)` before applying UTS configuration, cgroup setup, limits, credentials, and exec.
+
+Changes:
+- Added `OrlixEnvironmentDescriptor.namespaces` Codable/session propagation, copy preservation, root-image command-line emission, and validation.
+- Replaced OCI namespace blanket rejection with support for `mount`, `ipc`, `uts`, `network`, and `cgroup` namespace entries with no `path`.
+- Added explicit rejection for namespace path joins, duplicate namespace declarations, `pid`, `user`, `time`, and unknown namespace types.
+- Added first-stage init namespace parsing and Linux `unshare(2)` application through `CLONE_NEWNS`, `CLONE_NEWIPC`, `CLONE_NEWUTS`, `CLONE_NEWNET`, and `CLONE_NEWCGROUP`.
+- Updated feature report and tests for supported namespace propagation, command-line tokens, implemented feature status, and unsupported namespace cases.
+
+Evidence:
+- Existing Linux substrate evidence is present in the kselftest bundle: `orlix:mount_namespace_probe`, `orlix:ipc_namespace_probe`, `orlix:network_namespace_probe`, and `orlix:cgroup_namespace_probe`; release defconfig enables `CONFIG_NAMESPACES`, `CONFIG_UTS_NS`, `CONFIG_IPC_NS`, `CONFIG_USER_NS`, `CONFIG_PID_NS`, `CONFIG_NET_NS`, and `CONFIG_TIME_NS`.
+- Official OCI runtime-spec `config-linux.md` was checked from `opencontainers/runtime-spec` for namespace `type` and optional `path` semantics.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0 after compiling touched Swift, rebuilding current Coreutils package inputs, and building the OrlixOS first-stage init.
+- Focused `test-without-building` for descriptor, parser, feature-report, and unsupported-namespace tests was attempted against the same simulator but did not reach `Testing started` or `Test Suite` output after the bounded wait; it was interrupted and is not claimed as executed XCTest proof.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale active-plan warning.
+- `rtk rg --files OrlixMLibC/Sources/patches` returned no files.
+- `rtk git diff --name-only -- Build OrlixMLibC/Sources/patches` returned no generated-tree or mlibc patch changes.
+
+Not claimed:
+- No PID namespace support yet; that needs the correct child-process lifecycle rather than a same-process pre-exec unshare.
+- No user namespace support yet; that needs uid/gid mapping support instead of pretending an unmapped namespace is useful.
+- No time namespace support yet; time namespace semantics require a child lifecycle and time offset handling.
+- No namespace `path` join support, `setns(2)` support, full OCI lifecycle, product `orlix run`, registry pull, or runtime-ready claim.
+
 ### 2026-06-25 OCI pids resource limit support
 
 Checkpoint: implemented a real OCI `linux.resources.pids.limit` path backed by Linux cgroup v2. OrlixOS now decodes the OCI resources object, accepts the pids controller limit when paired with an explicit `linux.cgroupsPath`, carries the limit through `OrlixOCIRuntimeConfigDescriptor` and `OrlixEnvironmentDescriptor`, emits `orlix.cgroups.pids.max=<limit-or-max>` into the environment command line, and first-stage init enables the pids controller along the configured cgroup path before writing `pids.max` and joining the process to `cgroup.procs`.
