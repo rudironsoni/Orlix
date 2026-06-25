@@ -1424,7 +1424,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
             name: "ociCgroupPath",
             status: .implemented,
             proof: "orlix:init_cgroup_path_join",
-            reason: "OCI cgroupsPath carries into OrlixOS descriptors and init creates the requested cgroup v2 path then writes the child PID to cgroup.procs before exec."
+            reason: "OCI absolute cgroupsPath carries through unchanged; relative cgroupsPath normalizes under /orlix before init creates the requested cgroup v2 path and writes the child PID to cgroup.procs."
         ),
 		OrlixOCIRuntimeFeature(
 			name: "ociHugepageLimits",
@@ -1773,10 +1773,7 @@ public struct OrlixOCIRuntimeConfigParser: Sendable {
                 config.linux?.readonlyPaths ?? [],
                 feature: "linux.readonlyPaths"
             ),
-            cgroupsPath: try Self.validatedOptionalRuntimePath(
-                config.linux?.cgroupsPath,
-                feature: "linux.cgroupsPath"
-            ),
+cgroupsPath: try Self.validatedCgroupsPath(config.linux?.cgroupsPath),
             cgroupPidsLimit: try Self.validatedCgroupPidsLimit(
                 config.linux?.resources,
                 cgroupsPath: config.linux?.cgroupsPath
@@ -1942,14 +1939,34 @@ private static func validatedRuntimePaths(
         return paths
     }
 
-    private static func validatedOptionalRuntimePath(
-        _ path: String?,
-        feature: String
-    ) throws -> String? {
-        guard let path else {
-            return nil
-        }
-	return try validatedRuntimePaths([path], feature: feature).first
+private static func validatedOptionalRuntimePath(
+_ path: String?,
+feature: String
+) throws -> String? {
+guard let path else {
+return nil
+}
+return try validatedRuntimePaths([path], feature: feature).first
+}
+
+private static func validatedCgroupsPath(_ path: String?) throws -> String? {
+	guard let path else { return nil }
+	let components = path.split(separator: "/", omittingEmptySubsequences: false)
+	guard !path.isEmpty,
+	      !path.contains("\u{0}"),
+	      !path.contains("//"),
+	      !components.contains(where: { $0 == ".." }),
+	      !components.contains(where: { $0 == "." })
+	else {
+		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.cgroupsPath")
+	}
+	if path.hasPrefix("/") {
+		guard path != "/" else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.cgroupsPath")
+		}
+		return path
+	}
+	return "/orlix/\(path)"
 }
 
 private static func validatedDeviceNodes(

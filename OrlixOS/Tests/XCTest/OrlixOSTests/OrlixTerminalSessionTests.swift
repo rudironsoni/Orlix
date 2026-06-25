@@ -6772,7 +6772,7 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 			id: "oci-runtime-config",
 			rootMount: .defaultOverlay
 		)
-		XCTAssertEqual(environment.id, "oci-runtime-config")
+	XCTAssertEqual(environment.id, "oci-runtime-config")
 		XCTAssertEqual(environment.source, .ociLayout)
 		XCTAssertEqual(environment.platform, "linux/arm64")
 		XCTAssertEqual(environment.defaultCommand, descriptor.defaultCommand)
@@ -6801,9 +6801,46 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
         XCTAssertEqual(environment.cgroupIOWeight, descriptor.cgroupIOWeight)
         XCTAssertEqual(environment.cgroupUnified, descriptor.cgroupUnified)
         XCTAssertEqual(environment.deviceNodes, descriptor.deviceNodes)
-    }
+}
 
-	func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
+func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
+	let config = Data(
+		"""
+		{
+		  "ociVersion": "1.1.0",
+		  "process": { "args": ["/bin/sh"], "cwd": "/" },
+		  "linux": {
+		    "cgroupsPath": "demo.slice/orlix",
+		    "resources": { "pids": { "limit": 12 } }
+		  }
+		}
+		""".utf8
+	)
+	let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+	XCTAssertEqual(descriptor.cgroupsPath, "/orlix/demo.slice/orlix")
+	XCTAssertEqual(descriptor.cgroupPidsLimit, 12)
+
+	let environment = try descriptor.environmentDescriptor(
+		id: "oci-relative-cgroup-path",
+		rootMount: .defaultOverlay
+	)
+	XCTAssertEqual(environment.cgroupsPath, "/orlix/demo.slice/orlix")
+	XCTAssertEqual(environment.cgroupPidsLimit, 12)
+	let commandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+		descriptor: environment,
+		kernelCommandLine: OrlixEnvironmentRootImage.defaultKernelCommandLine
+	)
+	XCTAssertTrue(
+		try XCTUnwrap(commandLine).contains(
+			"orlix.cgroups.path=/orlix/demo.slice/orlix"
+		)
+	)
+	XCTAssertTrue(
+		try XCTUnwrap(commandLine).contains("orlix.cgroups.pids.max=12")
+	)
+}
+
+func testOCIRuntimeConfigParserRejectsInvalidRootPaths() throws {
 	let invalidConfigs: [(Data, OrlixOCIRuntimeConfigError)] = [
 		(
 			Data(#"{ "ociVersion": "1.1.0", "process": { "args": ["/bin/sh"], "cwd": "/" } }"#.utf8),
