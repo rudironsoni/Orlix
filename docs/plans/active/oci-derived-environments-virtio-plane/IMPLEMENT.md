@@ -19553,7 +19553,7 @@ Renamed `OrlixOS/Sources/make/proof-packages.mk` to `OrlixOS/Sources/make/test-f
 
 Follow-up naming cleanup: OrlixOS make variables and marker files that represented build-completion stamps were renamed from `*_PROOF` / `.proof` to `*_STAMP` / `.stamp`. The environment fixture target was renamed from `environment-runtime-proof-fixtures` to `environment-runtime-test-fixtures`. This is naming-only harness cleanup: no runtime behavior, Linux ABI, upstream package source, mlibc patch, or Coreutils test result is changed by this cleanup.
 
-Manifest follow-up: renamed the distribution manifest package ladder variable from `ORLIXOS_PACKAGE_PROOF_LADDER` to `ORLIXOS_PACKAGE_STAMP_LADDER` so the manifest definition matches the renamed rootfs fixture-stamp consumer. This remains naming-only harness cleanup.
+Manifest follow-up: removed the remaining distribution-manifest package ladder metadata after the later cleanup below. Delivered rootfs metadata must not expose proof/stamp ladders as a package or proof concept.
 
 ### 2026-06-24 Linux boot kselftest substrate gate restored
 
@@ -21696,3 +21696,40 @@ Boundary:
 - No OrlixMLibC patch, generated upstream source edit, HostAdapter Linux policy,
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
   dependency, or Swift-side fake Linux behavior was added.
+### 2026-06-25 Erroneous proof-surface cleanup checkpoint
+
+Checkpoint: removed the two remaining bad proof-surface artifacts identified in the source audit.
+
+Current status:
+
+- Product terminal no longer carries the shell package proof driver.
+- Delivered OrlixOS distribution metadata no longer exposes package stamp-ladder fields.
+
+Changes:
+
+- Deleted `OrlixTerminal/Sources/TerminalProofDriver.swift`.
+- Deleted `OrlixTerminal/Tests/XCTest/OrlixTerminalProofDriverTests/TerminalProofDriverTests.swift`.
+- Removed `TerminalProofDriver` wiring from `TerminalViewController`.
+- Removed `OrlixTerminalProofDriverTests` target and scheme from `project.yml`, then regenerated `OrlixSystem.xcodeproj`.
+- Removed `ORLIXOS_PACKAGE_STAMP_LADDER` from distribution manifest inputs.
+- Removed `fixture_stamps=` from generated rootfs `distribution.manifest`.
+- Replaced stale active-plan references to `OrlixTerminalProofDriverTests` with `OrlixPTYRuntimeTests`.
+
+Evidence:
+
+- `rtk xcodegen generate --spec project.yml` exited 0 unsandboxed after sandboxed temp-directory writes were blocked.
+- `rtk rg -n "TerminalProofDriver|OrlixTerminalProofDriverTests|--orlix-terminal-proof|shell-package|ORLIXOS_PACKAGE_STAMP_LADDER|fixture_stamps|PACKAGE_PROOF_LADDER|PACKAGE_STAMP_LADDER" . --glob '!Build/**'` has no active source/project hits after this checkpoint; only this historical implementation log records the cleanup.
+
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with only the existing stale-status warning.
+- `rtk python3 -c "from pathlib import Path; p=Path('docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md'); n=len(p.read_text()); print(('OK' if n<=4000 else 'TOO_LONG'), n, p)"` printed `OK 3511 docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md`.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 900 env PATH=/Users/rudironsoni/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminal -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build` exited 0.
+- Earlier generic simulator checks selected invalid `x86_64` simulator destinations while OrlixKernel simulator output is arm64; one parallel build failed with `build.db: database locked`. Both were replaced by sequential arm64 simulator-destination checks above.
+
+
+Boundary:
+
+- This cleanup removes test/proof-harness bleed from the product terminal and removes proof/stamp ladder metadata from delivered rootfs metadata.
+- It does not claim additional OCI runtime feature completion, package readiness, Linux cgroup/namespace behavior, Coreutils/mlibc/kernel build-speed completion, or product runtime readiness.
+- No OrlixKernel, OrlixMLibC, generated upstream source, HostAdapter Linux policy, custom ABI, package manager, or proof-package mechanism was added.

@@ -336,19 +336,6 @@ targets:
         GCC_PREPROCESSOR_DEFINITIONS:
           - $(inherited)
           - ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=$(ORLIX_OS_LINUX_PAGE_SIZE)
-  OrlixTerminalProofDriverTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: OrlixTerminal/Tests/XCTest/OrlixTerminalProofDriverTests
-    dependencies:
-      - target: OrlixTerminal
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixTerminalProofDriverTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTerminal.app/OrlixTerminal
-        BUNDLE_LOADER: $(TEST_HOST)
   OrlixTestRunnerTests:
     type: bundle.unit-test
     platform: iOS
@@ -476,16 +463,6 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixHostAdapterTests
-  OrlixTerminalProofDriverTests:
-    build:
-      targets:
-        OrlixTerminal: all
-        OrlixTerminalProofDriverTests: test
-    test:
-      config: Debug
-      gatherCoverageData: false
-      targets:
-        - name: OrlixTerminalProofDriverTests
   OrlixTestRunnerTests:
     build:
       targets:
