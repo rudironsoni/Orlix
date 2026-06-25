@@ -21323,6 +21323,48 @@ Boundary:
   custom Linux ABI shim, package-manager/proof-package mechanism, Docker/runc
   dependency, or Swift-side fake Linux behavior was added.
 
+### 2026-06-25 OCI masked/readonly paths OrlixOS runtime proof checkpoint
+
+Checkpoint: app-hosted OrlixOS proof now covers OCI `linux.maskedPaths`
+and `linux.readonlyPaths` flowing into environment descriptors and Linux
+rootinit mount behavior.
+
+Current status:
+
+- Focused masked/readonly path runtime proof implemented and passing through
+  `OrlixPTYRuntimeTests` on the single booted simulator.
+
+Changes:
+
+- Added `testOCIMaskedAndReadonlyPathsApplyThroughOrlixOSTerminalSession`.
+- Wired `RuntimeProof.maskedReadonlyPaths` into descriptor `maskedPaths`
+  `/etc/os-release` and `readonlyPaths` `/etc`.
+- The guest shell proof verifies `/etc/os-release` is masked and writing
+  `/etc/orlix-readonly-proof` fails after readonly setup.
+- Added fatal marker detection for masked-file and readonly-directory
+  failures.
+
+Evidence:
+
+- `rtk proxy perl -e 'alarm shift; exec @ARGV' 600 env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build-for-testing` exited 0.
+- Focused `OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIMaskedAndReadonlyPathsApplyThroughOrlixOSTerminalSession` exited 0.
+- `xcrun xcresulttool get test-results summary --path /Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_14-59-24-+0200.xcresult` reported `result: Passed`, `totalTestCount: 1`, `passedTests: 1`, `failedTests: 0`, `skippedTests: 0` on `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)`.
+- `find /Users/rudironsoni/Library/Logs/DiagnosticReports -maxdepth 1 -name '*Orlix*' -mtime -1 -print` returned no fresh Orlix crash reports.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --check` exited 0.
+- `rtk git diff --name-only -- Build OrlixMLibC OrlixKernel/Sources/ports/orlix/patches OrlixKernel/Sources/ports/orlix/overlay` returned no paths.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the existing active-plan stale-status warning only.
+
+Boundary:
+
+- This proves one OrlixOS app-hosted runtime path for OCI masked and readonly
+  paths. It does not claim full OCI Runtime Spec completion, cgroup/device/
+  seccomp/network support, product `orlix run`, registry import, Coreutils/
+  mlibc/kernel build-speed completion, or broad runtime readiness.
+- No generated upstream tree, OrlixMLibC patch, HostAdapter Linux policy,
+  custom ABI, package manager, proof-package system, stamp ladder, or Swift-side
+  fake Linux behavior was added.
+
 ### 2026-06-25 App-hosted OCI time namespace offset runtime proof
 
 Checkpoint: proved the OCI-derived environment descriptor path can carry a

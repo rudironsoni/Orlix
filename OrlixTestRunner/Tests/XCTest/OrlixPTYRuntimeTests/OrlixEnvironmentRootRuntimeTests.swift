@@ -57,6 +57,21 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_TIMENS_DONE"))
     }
 
+    func testOCIMaskedAndReadonlyPathsApplyThroughOrlixOSTerminalSession()
+        throws
+    {
+        let runner = OrlixEnvironmentRootRuntimeProofRunner(
+            fixture: .ociDerived,
+            proof: .maskedReadonlyPaths
+        )
+        let output = try runner.run()
+
+        XCTAssertTrue(output.contains("ORLIX_ENV_PATHS_BEGIN"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_MASKED_FILE_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_READONLY_DIR_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_PATHS_DONE"))
+    }
+
     private static func makeOCIRuntimeProcessDefaultsDescriptor()
         throws -> OrlixEnvironmentDescriptor
     {
@@ -816,6 +831,8 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
             defaultWorkingDirectory: proof.defaultWorkingDirectory,
             defaultUserID: proof.defaultUserID,
             defaultGroupID: proof.defaultGroupID,
+            maskedPaths: proof.maskedPaths,
+            readonlyPaths: proof.readonlyPaths,
             timeOffsets: proof.timeOffsets,
             uidMappings: proof.uidMappings,
             gidMappings: proof.gidMappings,
@@ -1087,6 +1104,8 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         "ORLIX_ENV_USERNS_PROOF_FAILED_SETGROUPS",
         "ORLIX_ENV_TIMENS_PROOF_FAILED_MONOTONIC",
         "ORLIX_ENV_TIMENS_PROOF_FAILED_BOOTTIME",
+        "ORLIX_ENV_PATHS_PROOF_FAILED_MASKED_FILE",
+        "ORLIX_ENV_PATHS_PROOF_FAILED_READONLY_DIR",
         "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_WRITE",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_SYNC",
             "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_REREAD",
@@ -1121,6 +1140,7 @@ private enum RuntimeProof: Sendable {
     case runtimeTmpfs
     case userNamespaceMappings
     case timeNamespaceOffsets
+    case maskedReadonlyPaths
     case crossBootWrite
     case crossBootVerify
 
@@ -1174,6 +1194,12 @@ private enum RuntimeProof: Sendable {
                 "-c",
                 Self.timeNamespaceOffsetScript
             ]
+        case .maskedReadonlyPaths:
+            return [
+                "/bin/sh",
+                "-c",
+                Self.maskedReadonlyPathScript
+            ]
         }
     }
 
@@ -1204,7 +1230,7 @@ private enum RuntimeProof: Sendable {
         switch self {
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .crossBootWrite,
+             .maskedReadonlyPaths, .crossBootWrite,
              .crossBootVerify:
             return "/"
         case .descriptorExecution, .longDescriptorExecution:
@@ -1221,7 +1247,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets,
+             .timeNamespaceOffsets, .maskedReadonlyPaths,
              .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
@@ -1235,7 +1261,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets,
+             .timeNamespaceOffsets, .maskedReadonlyPaths,
              .crossBootWrite, .crossBootVerify:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
@@ -1253,7 +1279,7 @@ private enum RuntimeProof: Sendable {
              .longDescriptorExecution, .linuxPathDescriptorExecution,
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
-             .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
+             .ptyStdio, .runtimeTmpfs, .maskedReadonlyPaths,
              .crossBootWrite, .crossBootVerify:
             return []
         }
@@ -1268,7 +1294,36 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
+             .maskedReadonlyPaths,
              .crossBootWrite, .crossBootVerify:
+            return []
+        }
+    }
+
+    var maskedPaths: [String] {
+        switch self {
+        case .maskedReadonlyPaths:
+            return ["/etc/os-release"]
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets, .crossBootWrite, .crossBootVerify:
+            return []
+        }
+    }
+
+    var readonlyPaths: [String] {
+        switch self {
+        case .maskedReadonlyPaths:
+            return ["/etc"]
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets, .crossBootWrite, .crossBootVerify:
             return []
         }
     }
@@ -1285,7 +1340,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .crossBootWrite, .crossBootVerify:
+             .maskedReadonlyPaths, .crossBootWrite, .crossBootVerify:
             return []
         }
     }
@@ -1299,6 +1354,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .timeNamespaceOffsets,
+             .maskedReadonlyPaths,
              .crossBootWrite, .crossBootVerify:
             return []
         }
@@ -1312,7 +1368,7 @@ private enum RuntimeProof: Sendable {
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
-             .timeNamespaceOffsets:
+             .timeNamespaceOffsets, .maskedReadonlyPaths:
             return false
         }
     }
@@ -1397,7 +1453,7 @@ private enum RuntimeProof: Sendable {
         case .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
-             .timeNamespaceOffsets:
+             .timeNamespaceOffsets, .maskedReadonlyPaths:
             return ""
         }
     }
@@ -1422,6 +1478,8 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_USERNS_DONE"
         case .timeNamespaceOffsets:
             return "ORLIX_ENV_TIMENS_DONE"
+        case .maskedReadonlyPaths:
+            return "ORLIX_ENV_PATHS_DONE"
         case .crossBootWrite:
             return "ORLIX_ENV_CROSSBOOT_WRITE_DONE"
         case .crossBootVerify:
@@ -1435,7 +1493,7 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_PTY_WAITING_FOR_INPUT"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .crossBootWrite,
+             .maskedReadonlyPaths, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1450,7 +1508,7 @@ private enum RuntimeProof: Sendable {
             return "orlix-pty-delayed-input\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .crossBootWrite,
+             .maskedReadonlyPaths, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1465,7 +1523,7 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_PTY_DELAYED_INPUT_OK"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .crossBootWrite,
+             .maskedReadonlyPaths, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1480,7 +1538,7 @@ private enum RuntimeProof: Sendable {
             return #"printf '%s%s\n' ORLIX_ENV_ PTY_DONE"# + "\r"
         case .osRelease, .overlayMutation, .pseudoFilesystems,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .crossBootWrite,
+             .maskedReadonlyPaths, .crossBootWrite,
              .crossBootVerify,
              .descriptorExecution, .longDescriptorExecution,
              .linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
@@ -1557,6 +1615,13 @@ private enum RuntimeProof: Sendable {
                 "ORLIX_ENV_TIMENS_BOOTTIME_OK",
                 "ORLIX_ENV_TIMENS_DONE"
             ]
+        case .maskedReadonlyPaths:
+            return [
+                "ORLIX_ENV_PATHS_BEGIN",
+                "ORLIX_ENV_MASKED_FILE_OK",
+                "ORLIX_ENV_READONLY_DIR_OK",
+                "ORLIX_ENV_PATHS_DONE"
+            ]
         case .pseudoFilesystems:
             return [
                 "ORLIX_ENV_PSEUDOFS_BEGIN",
@@ -1623,7 +1688,7 @@ private enum RuntimeProof: Sendable {
             return Self.descriptorExecutionScript
         case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
              .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
-             .crossBootWrite,
+             .maskedReadonlyPaths, .crossBootWrite,
              .crossBootVerify:
             return ""
         }
@@ -1639,7 +1704,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupDescriptorExecution,
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
              .ptyStdio, .runtimeTmpfs, .userNamespaceMappings,
-             .timeNamespaceOffsets,
+             .timeNamespaceOffsets, .maskedReadonlyPaths,
              .crossBootWrite, .crossBootVerify:
             return ""
         }
@@ -1661,6 +1726,13 @@ private enum RuntimeProof: Sendable {
         #"if [ "$1:$2:$3" = "monotonic:12:500000000" ]; then printf '%s%s\n' ORLIX_ENV_ TIMENS_MONOTONIC_OK; else printf '%s%s\n' ORLIX_ENV_TIMENS_ PROOF_FAILED_MONOTONIC; fi"#,
         #"if [ "$4:$5:$6" = "boottime:3:250" ]; then printf '%s%s\n' ORLIX_ENV_ TIMENS_BOOTTIME_OK; else printf '%s%s\n' ORLIX_ENV_TIMENS_ PROOF_FAILED_BOOTTIME; fi"#,
         #"printf '%s%s\n' ORLIX_ENV_ TIMENS_DONE"#,
+    ].joined(separator: "\n")
+
+    private static let maskedReadonlyPathScript = [
+        #"printf '%s%s\n' ORLIX_ENV_ PATHS_BEGIN"#,
+        #"if /bin/test ! -s /etc/os-release; then printf '%s%s\n' ORLIX_ENV_ MASKED_FILE_OK; else printf '%s%s\n' ORLIX_ENV_PATHS_ PROOF_FAILED_MASKED_FILE; fi"#,
+        #"if /bin/touch /etc/orlix-readonly-proof 2>/dev/null; then /bin/rm -f /etc/orlix-readonly-proof; printf '%s%s\n' ORLIX_ENV_PATHS_ PROOF_FAILED_READONLY_DIR; else printf '%s%s\n' ORLIX_ENV_ READONLY_DIR_OK; fi"#,
+        #"printf '%s%s\n' ORLIX_ENV_ PATHS_DONE"#,
     ].joined(separator: "\n")
 
     private static let descriptorExecutionScript = (
