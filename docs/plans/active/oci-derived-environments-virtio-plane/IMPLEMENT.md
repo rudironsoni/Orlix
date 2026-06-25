@@ -21885,3 +21885,22 @@ Boundary:
 
 Current status:
 OCI `process.terminal: false` is now proven for the focused OCI-derived runtime fixture through OrlixOS OCI session launch and app-hosted inherited-stdio execution. Next work remains broader OCI lifecycle/product delivery: `orlix run`, registry input, lifecycle `create/start/state/kill/delete`, and deeper Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-25 Linux init lifecycle observation checkpoint
+
+Checkpoint: added an OrlixOS OCI process observation driver that derives start and completion from real Linux init output instead of a test-double-only driver.
+
+Changes:
+- Added first-stage init stderr lifecycle markers for non-PTY command execution: process started, process exited, and process signaled.
+- Added `OrlixOCIRuntimeLinuxSessionObservationDriver`, an SPI driver that boots the existing `OrlixLinuxSession`, observes terminal output, and records OCI process lifecycle state from the Linux child PID and wait status emitted by init.
+- Kept signal delivery explicitly unsupported in this driver until there is a real Linux signal path.
+- Added OrlixOS tests for init-output-derived start/completion observation and unsupported signal handling.
+
+Evidence:
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni make -f OrlixOS/Makefile kernel-payload PROFILE=development` exited 0 after rebuilding first-stage init, OrlixOS package inputs, Coreutils, and kernel payload inputs.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLinuxSessionObservationDriverRunsFromInitOutput -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLinuxSessionObservationDriverRejectsUnsupportedSignal test` exited 0: 2 tests, 0 failures. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_20-25-14-+0200.xcresult`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeTerminalFalseUsesInheritedStdio test` exited 0: 1 test, 0 failures.
+
+Boundary:
+- This checkpoint does not claim full OCI Runtime Spec lifecycle completion, product `orlix run`, registry pull, arbitrary imported-image compatibility, systemd support, kill/signal support, broad cgroup/namespace/device/filesystem/network readiness, or full product runtime readiness.
+- No OrlixKernel, OrlixMLibC, HostAdapter, generated upstream source, package manager, proof-package, or stamp-ladder changes were made.

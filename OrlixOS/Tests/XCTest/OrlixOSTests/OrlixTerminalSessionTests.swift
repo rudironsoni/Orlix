@@ -9758,20 +9758,73 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 		XCTAssertEqual(report.status, OrlixOCIRuntimeStateStatus.stopped)
 		XCTAssertEqual(report.pid, 42)
 		XCTAssertEqual(report.exitStatus, 0)
-		XCTAssertEqual(
-			driver.events,
-			[
-				"start:created:nil",
-				"signal:running:42:15",
-				"wait:running:42"
-			]
+	XCTAssertEqual(
+		driver.events,
+		[
+			"start:created:nil",
+			"signal:running:42:15",
+			"wait:running:42"
+		]
+	)
+}
+
+func testOCIRuntimeLinuxSessionObservationDriverRunsFromInitOutput() throws {
+	let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+		scratchName: "orlix-oci-linux-session-driver"
+	)
+	defer { try? FileManager.default.removeItem(at: fixture.scratch) }
+
+	let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+		timeout: 1
+	) { _ in
+		fixture.terminal.emit(
+			Data("orlix-init: process started pid=42\n".utf8)
 		)
+		fixture.terminal.emit(
+			Data("orlix-init: process exited pid=42 status=7\n".utf8)
+		)
+		return .ok
 	}
 
-	func testOCIRuntimeProcessSessionValidatesLifecycleBeforeDriverSideEffects() throws {
-		let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
-			scratchName: "orlix-oci-process-driver-validation"
+	let result = try fixture.session.runObserved(using: driver)
+
+	XCTAssertEqual(result.startObservation.pid, 42)
+	XCTAssertEqual(result.runningSession.processHandle.lifecycle.record.pid, 42)
+	XCTAssertEqual(result.completedProcess.lifecycle.record.state, .stopped)
+	XCTAssertEqual(result.completedProcess.lifecycle.record.exitStatus, 7)
+	XCTAssertEqual(
+		result.completionObservation,
+		.exited(
+			try OrlixOCIRuntimeProcessExitObservation(
+				pid: 42,
+				exitStatus: 7
+			)
 		)
+	)
+}
+
+func testOCIRuntimeLinuxSessionObservationDriverRejectsUnsupportedSignal() throws {
+	let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+		scratchName: "orlix-oci-linux-session-driver-signal"
+	)
+	defer { try? FileManager.default.removeItem(at: fixture.scratch) }
+	let runningSession = try fixture.session.start(observedPID: 42)
+	let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 1)
+
+	XCTAssertThrowsError(
+		try runningSession.kill(signal: 15, using: driver)
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeLinuxSessionObservationError,
+			.signalUnsupported
+		)
+	}
+}
+
+func testOCIRuntimeProcessSessionValidatesLifecycleBeforeDriverSideEffects() throws {
+	let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+		scratchName: "orlix-oci-process-driver-validation"
+	)
 		defer { try? FileManager.default.removeItem(at: fixture.scratch) }
 
 		let createdSession = fixture.session
@@ -10657,7 +10710,11 @@ func testOCIRuntimeLifecycleControllerRejectsStoppedSessionDescriptor() throws {
 
 private func makeCreatedOCIRuntimeProcessSessionFixture(
 	scratchName: String
-) throws -> (session: OrlixOCIRuntimeProcessSession, scratch: URL) {
+) throws -> (
+	session: OrlixOCIRuntimeProcessSession,
+	scratch: URL,
+	terminal: RecordingTerminalTransport
+) {
 	let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 		"\(scratchName)-\(UUID().uuidString)",
@@ -10699,10 +10756,11 @@ private func makeCreatedOCIRuntimeProcessSessionFixture(
 	try Data("state".utf8).write(
 		to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
 	)
+	let terminal = RecordingTerminalTransport()
 	let linuxSession = try OrlixLinuxSession(
 		ociRuntimeSession: processHandle.sessionDescriptor,
 		registry: registry,
-		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
+		terminal: OrlixTerminalSession(transport: terminal)
 	)
 
 	return (
@@ -10710,7 +10768,8 @@ private func makeCreatedOCIRuntimeProcessSessionFixture(
 			processHandle: processHandle,
 			linuxSession: linuxSession
 		),
-		scratch
+		scratch,
+		terminal
 	)
 }
 

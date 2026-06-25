@@ -931,9 +931,176 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 
 @_spi(OrlixPrivateTesting)
 public protocol OrlixOCIRuntimeProcessObservationDriver: Sendable {
-    func start(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessStartObservation
-    func signal(processSession: OrlixOCIRuntimeProcessSession, signal: Int32) throws
-    func wait(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessCompletionObservation
+	func start(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessStartObservation
+	func signal(processSession: OrlixOCIRuntimeProcessSession, signal: Int32) throws
+	func wait(processSession: OrlixOCIRuntimeProcessSession) throws -> OrlixOCIRuntimeProcessCompletionObservation
+}
+
+@_spi(OrlixPrivateTesting)
+public enum OrlixOCIRuntimeLinuxSessionObservationError: Error, Equatable, Sendable {
+	case bootFailed(OrlixBootStatus)
+	case timedOutWaitingForStart
+	case timedOutWaitingForCompletion
+	case signalUnsupported
+}
+
+@_spi(OrlixPrivateTesting)
+public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
+	OrlixOCIRuntimeProcessObservationDriver,
+	@unchecked Sendable
+{
+	private let timeout: TimeInterval
+	private let bootSession: @Sendable (OrlixLinuxSession) -> OrlixBootStatus
+	private let condition = NSCondition()
+	private var output: OrlixTerminalOutput?
+	private var text = ""
+	private var startObservation: OrlixOCIRuntimeProcessStartObservation?
+	private var completionObservation: OrlixOCIRuntimeProcessCompletionObservation?
+
+	public convenience init(timeout: TimeInterval = 600) {
+		self.init(timeout: timeout) { session in
+			session.boot()
+		}
+	}
+
+	init(
+		timeout: TimeInterval = 600,
+		bootSession: @escaping @Sendable (OrlixLinuxSession) -> OrlixBootStatus
+	) {
+		self.timeout = timeout
+		self.bootSession = bootSession
+	}
+
+	public func start(
+		processSession: OrlixOCIRuntimeProcessSession
+	) throws -> OrlixOCIRuntimeProcessStartObservation {
+		condition.lock()
+		text = ""
+		startObservation = nil
+		completionObservation = nil
+		condition.unlock()
+
+		output = processSession.linuxSession.terminal.attachOutput { [weak self] data in
+			self?.append(data)
+		}
+
+		let status = bootSession(processSession.linuxSession)
+		guard status == .ok else {
+			output?.cancel()
+			output = nil
+			throw OrlixOCIRuntimeLinuxSessionObservationError.bootFailed(status)
+		}
+
+		return try waitForStartObservation()
+	}
+
+	public func signal(
+		processSession: OrlixOCIRuntimeProcessSession,
+		signal: Int32
+	) throws {
+		throw OrlixOCIRuntimeLinuxSessionObservationError.signalUnsupported
+	}
+
+	public func wait(
+		processSession: OrlixOCIRuntimeProcessSession
+	) throws -> OrlixOCIRuntimeProcessCompletionObservation {
+		do {
+			let observation = try waitForCompletionObservation()
+			output?.cancel()
+			output = nil
+			return observation
+		} catch {
+			output?.cancel()
+			output = nil
+			throw error
+		}
+	}
+
+	private func append(_ data: Data) {
+		condition.lock()
+		text += String(decoding: data, as: UTF8.self)
+		parseObservations()
+		condition.broadcast()
+		condition.unlock()
+	}
+
+	private func parseObservations() {
+		if startObservation == nil,
+		   let match = firstMatch(
+			#"orlix-init: process started pid=([0-9]+)"#
+		   ),
+		   let pid = Int32(String(match[1])) {
+			startObservation = try? OrlixOCIRuntimeProcessStartObservation(pid: pid)
+		}
+
+		if completionObservation == nil,
+		   let match = firstMatch(
+			#"orlix-init: process exited pid=([0-9]+) status=([0-9]+)"#
+		   ),
+		   let pid = Int32(String(match[1])),
+		   let status = Int32(String(match[2])),
+		   let observation = try? OrlixOCIRuntimeProcessExitObservation(
+			pid: pid,
+			exitStatus: status
+		   ) {
+			completionObservation = .exited(observation)
+		}
+
+		if completionObservation == nil,
+		   let match = firstMatch(
+			#"orlix-init: process signaled pid=([0-9]+) signal=([0-9]+)"#
+		   ),
+		   let pid = Int32(String(match[1])),
+		   let signal = Int32(String(match[2])),
+		   let observation = try? OrlixOCIRuntimeProcessSignalObservation(
+			pid: pid,
+			signal: signal
+		   ) {
+			completionObservation = .signaled(observation)
+		}
+	}
+
+	private func firstMatch(_ pattern: String) -> [Substring]? {
+		guard let expression = try? NSRegularExpression(pattern: pattern) else {
+			return nil
+		}
+		let range = NSRange(text.startIndex..<text.endIndex, in: text)
+		guard let match = expression.firstMatch(in: text, range: range) else {
+			return nil
+		}
+		return (0..<match.numberOfRanges).compactMap { index in
+			guard let range = Range(match.range(at: index), in: text) else {
+				return nil
+			}
+			return text[range]
+		}
+	}
+
+	private func waitForStartObservation() throws -> OrlixOCIRuntimeProcessStartObservation {
+		let deadline = Date().addingTimeInterval(timeout)
+		condition.lock()
+		defer { condition.unlock() }
+		while startObservation == nil {
+			if !condition.wait(until: deadline) {
+				throw OrlixOCIRuntimeLinuxSessionObservationError
+					.timedOutWaitingForStart
+			}
+		}
+		return startObservation!
+	}
+
+	private func waitForCompletionObservation() throws -> OrlixOCIRuntimeProcessCompletionObservation {
+		let deadline = Date().addingTimeInterval(timeout)
+		condition.lock()
+		defer { condition.unlock() }
+		while completionObservation == nil {
+			if !condition.wait(until: deadline) {
+				throw OrlixOCIRuntimeLinuxSessionObservationError
+					.timedOutWaitingForCompletion
+			}
+		}
+		return completionObservation!
+	}
 }
 
 @_spi(OrlixPrivateTesting)
