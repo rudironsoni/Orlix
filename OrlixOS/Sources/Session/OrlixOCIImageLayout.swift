@@ -191,15 +191,21 @@ public enum OrlixOCIRegistryPullError: Error, Equatable, Sendable {
 	case invalidManifestSchemaVersion(Int)
 	case responseDigestMismatch(url: String, expected: String, actual: String)
 	case sizeMismatch(digest: String, expected: UInt64, actual: UInt64)
+	case unsupportedAuthenticationChallenge(String)
+	case invalidAuthenticationChallenge(String)
+	case invalidTokenResponse(String)
+	case missingBearerToken(String)
 }
 
 public struct OrlixOCIRegistryFetchRequest: Equatable, Sendable {
 	public let url: URL
 	public let accept: [String]
+	public let authorization: String?
 
-	public init(url: URL, accept: [String]) {
+	public init(url: URL, accept: [String], authorization: String? = nil) {
 		self.url = url
 		self.accept = accept
+		self.authorization = authorization
 	}
 }
 
@@ -213,6 +219,12 @@ public struct OrlixOCIRegistryFetchResponse: Equatable, Sendable {
 		self.headers = headers
 		self.body = body
 	}
+
+	public var authenticationChallenge: String? {
+		headers.first {
+			$0.key.caseInsensitiveCompare("WWW-Authenticate") == .orderedSame
+		}?.value
+	}
 }
 
 public struct OrlixOCIRegistryPullResult: Equatable, Sendable {
@@ -223,6 +235,179 @@ public struct OrlixOCIRegistryPullResult: Equatable, Sendable {
 	public let layerDigests: [String]
 }
 
+public struct OrlixOCIRegistryBearerAuthorizingFetch: Sendable {
+	public typealias Fetch = OrlixOCIRegistryPuller.Fetch
+
+	public let baseFetch: Fetch
+	public let tokenFetch: Fetch
+
+	public init(fetch: @escaping Fetch, tokenFetch: @escaping Fetch) {
+		self.baseFetch = fetch
+		self.tokenFetch = tokenFetch
+	}
+
+	public func fetch(_ request: OrlixOCIRegistryFetchRequest) async throws
+		-> OrlixOCIRegistryFetchResponse
+	{
+		let response = try await baseFetch(request)
+		guard response.statusCode == 401 else {
+			return response
+		}
+		guard let header = response.authenticationChallenge else {
+			return response
+		}
+		let challenge = try Self.parseBearerChallenge(header)
+		let token = try await bearerToken(for: challenge)
+		let retry = OrlixOCIRegistryFetchRequest(
+			url: request.url,
+			accept: request.accept,
+			authorization: "Bearer \(token)"
+		)
+		return try await baseFetch(retry)
+	}
+
+	private func bearerToken(for challenge: BearerChallenge) async throws -> String {
+		var components = URLComponents(url: challenge.realm, resolvingAgainstBaseURL: false)
+		guard components != nil else {
+			throw OrlixOCIRegistryPullError.invalidAuthenticationChallenge(
+				challenge.realm.absoluteString
+			)
+		}
+		var items = components?.queryItems ?? []
+		if let service = challenge.service {
+			items.append(URLQueryItem(name: "service", value: service))
+		}
+		for scope in challenge.scopes {
+			items.append(URLQueryItem(name: "scope", value: scope))
+		}
+		components?.queryItems = items.isEmpty ? nil : items
+		guard let tokenURL = components?.url else {
+			throw OrlixOCIRegistryPullError.invalidAuthenticationChallenge(
+				challenge.realm.absoluteString
+			)
+		}
+		let response = try await tokenFetch(
+			OrlixOCIRegistryFetchRequest(url: tokenURL, accept: [])
+		)
+		guard response.statusCode == 200 else {
+			throw OrlixOCIRegistryPullError.unexpectedStatus(
+				url: tokenURL.absoluteString,
+				statusCode: response.statusCode
+			)
+		}
+		let tokenResponse = try JSONDecoder().decode(
+			BearerTokenResponse.self,
+			from: response.body
+		)
+		guard let token = tokenResponse.token ?? tokenResponse.accessToken,
+		      !token.isEmpty
+		else {
+			throw OrlixOCIRegistryPullError.missingBearerToken(
+				tokenURL.absoluteString
+			)
+		}
+		return token
+	}
+
+	private struct BearerChallenge: Equatable, Sendable {
+		let realm: URL
+		let service: String?
+		let scopes: [String]
+	}
+
+	private struct BearerTokenResponse: Decodable {
+		let token: String?
+		let accessToken: String?
+
+		enum CodingKeys: String, CodingKey {
+			case token
+			case accessToken = "access_token"
+		}
+	}
+
+	private static func parseBearerChallenge(_ header: String) throws -> BearerChallenge {
+		let trimmed = header.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.lowercased().hasPrefix("bearer ") else {
+			throw OrlixOCIRegistryPullError.unsupportedAuthenticationChallenge(header)
+		}
+		let parameters = try challengeParameters(String(trimmed.dropFirst(7)))
+		guard let realmValue = parameters["realm"]?.first,
+		      let realm = URL(string: realmValue)
+		else {
+			throw OrlixOCIRegistryPullError.invalidAuthenticationChallenge(header)
+		}
+		return BearerChallenge(
+			realm: realm,
+			service: parameters["service"]?.first,
+			scopes: parameters["scope"] ?? []
+		)
+	}
+
+	private static func challengeParameters(
+		_ value: String
+	) throws -> [String: [String]] {
+		var parameters: [String: [String]] = [:]
+		var cursor = value.startIndex
+		while cursor < value.endIndex {
+			while cursor < value.endIndex,
+			      value[cursor] == " " || value[cursor] == "," {
+				cursor = value.index(after: cursor)
+			}
+			guard cursor < value.endIndex else { break }
+			let keyStart = cursor
+			while cursor < value.endIndex, value[cursor] != "=" {
+				cursor = value.index(after: cursor)
+			}
+			guard cursor < value.endIndex else {
+				throw OrlixOCIRegistryPullError.invalidAuthenticationChallenge(value)
+			}
+			let key = String(value[keyStart..<cursor])
+				.trimmingCharacters(in: .whitespacesAndNewlines)
+				.lowercased()
+			cursor = value.index(after: cursor)
+			let parsedValue: String
+			if cursor < value.endIndex, value[cursor] == "\"" {
+				cursor = value.index(after: cursor)
+				var result = ""
+				var closed = false
+				while cursor < value.endIndex {
+					let character = value[cursor]
+					cursor = value.index(after: cursor)
+					if character == "\\" {
+						guard cursor < value.endIndex else {
+							throw OrlixOCIRegistryPullError.invalidAuthenticationChallenge(value)
+						}
+						result.append(value[cursor])
+						cursor = value.index(after: cursor)
+					} else if character == "\"" {
+						closed = true
+						break
+					} else {
+						result.append(character)
+					}
+				}
+				guard closed else {
+					throw OrlixOCIRegistryPullError.invalidAuthenticationChallenge(value)
+				}
+				parsedValue = result
+			} else {
+				let valueStart = cursor
+				while cursor < value.endIndex, value[cursor] != "," {
+					cursor = value.index(after: cursor)
+				}
+				parsedValue = String(value[valueStart..<cursor])
+					.trimmingCharacters(in: .whitespacesAndNewlines)
+			}
+			guard !key.isEmpty else {
+				throw OrlixOCIRegistryPullError.invalidAuthenticationChallenge(value)
+			}
+			parameters[key, default: []].append(parsedValue)
+		}
+		return parameters
+	}
+
+}
+
 public struct OrlixOCIRegistryPuller: Sendable {
 	public typealias Fetch = @Sendable (OrlixOCIRegistryFetchRequest) async throws
 		-> OrlixOCIRegistryFetchResponse
@@ -230,7 +415,11 @@ public struct OrlixOCIRegistryPuller: Sendable {
 	public let fetch: Fetch
 
 	public init() {
-		self.fetch = Self.urlSessionFetch
+		let authorizingFetch = OrlixOCIRegistryBearerAuthorizingFetch(
+			fetch: Self.urlSessionFetch,
+			tokenFetch: Self.urlSessionFetch
+		)
+		self.fetch = authorizingFetch.fetch
 	}
 
 	public init(fetch: @escaping Fetch) {
@@ -474,6 +663,9 @@ public struct OrlixOCIRegistryPuller: Sendable {
 				request.accept.joined(separator: ", "),
 				forHTTPHeaderField: "Accept"
 			)
+		}
+		if let authorization = request.authorization {
+			urlRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
 		}
 		let (data, response) = try await URLSession.shared.data(for: urlRequest)
 		guard let httpResponse = response as? HTTPURLResponse else {

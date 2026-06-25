@@ -7830,6 +7830,116 @@ func testOCIRegistryPullerRejectsBlobDigestMismatch() async throws {
 	XCTAssertFalse(fileManager.fileExists(atPath: layoutURL.path))
 }
 
+func testOCIRegistryPullerUsesBearerTokenChallenge() async throws {
+	let fileManager = FileManager.default
+	let root = temporaryRegistryRoot()
+	let layoutURL = root.appendingPathComponent("authenticated-layout", isDirectory: true)
+
+	let image = try OrlixOCIRegistryImageReference(
+		"registry.example.org/library/authenticated:latest"
+	)
+	let configData = Data(
+		"""
+		{
+		  "config": {
+		    "Env": ["PATH=/usr/bin:/bin"],
+		    "Entrypoint": ["/bin/sh"],
+		    "WorkingDir": "/"
+		  },
+		  "rootfs": {
+		    "type": "layers",
+		    "diff_ids": []
+		  }
+		}
+		""".utf8
+	)
+	let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+	let manifestData = Data(
+		"""
+		{
+		  "schemaVersion": 2,
+		  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		  "config": {
+		    "mediaType": "application/vnd.oci.image.config.v1+json",
+		    "digest": "\(configDigest)",
+		    "size": \(configData.count)
+		  },
+		  "layers": []
+		}
+		""".utf8
+	)
+	let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+	let registryFetch = RecordingOCIRegistryFetch(scriptedResponses: [
+		try image.manifestURL().absoluteString: [
+			OrlixOCIRegistryFetchResponse(
+				statusCode: 401,
+				headers: [
+					"WWW-Authenticate":
+						#"Bearer realm="https://auth.example.org/token",service="registry.example.org",scope="repository:library/authenticated:pull""#,
+				],
+				body: Data()
+			),
+			OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: [
+					"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+					"Docker-Content-Digest": manifestDigest,
+				],
+				body: manifestData
+			),
+		],
+		try image.blobURL(digest: configDigest).absoluteString: [
+			OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: ["Docker-Content-Digest": configDigest],
+				body: configData
+			),
+		],
+	])
+	let tokenFetch = RecordingOCIRegistryFetch(
+		defaultResponse: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Content-Type": "application/json"],
+			body: Data(#"{ "token": "registry-token" }"#.utf8)
+		)
+	)
+	let authorizingFetch = OrlixOCIRegistryBearerAuthorizingFetch(
+		fetch: registryFetch.fetch,
+		tokenFetch: tokenFetch.fetch
+	)
+
+	let result = try await OrlixOCIRegistryPuller(fetch: authorizingFetch.fetch)
+		.pull(image, to: layoutURL)
+	XCTAssertEqual(result.manifestDigest, manifestDigest)
+	let pulled = try OrlixOCIImageLayoutReader().readLayout(at: layoutURL)
+	XCTAssertEqual(pulled.manifestDigest, manifestDigest)
+	XCTAssertEqual(pulled.configDigest, configDigest)
+
+	let registryRequests = await registryFetch.requests
+	let tokenRequests = await tokenFetch.requests
+	XCTAssertEqual(registryRequests.count, 3)
+	XCTAssertNil(registryRequests[0].authorization)
+	XCTAssertEqual(registryRequests[1].authorization, "Bearer registry-token")
+	XCTAssertEqual(registryRequests[2].url, try image.blobURL(digest: configDigest))
+	XCTAssertEqual(tokenRequests.count, 1)
+	let tokenComponents = try XCTUnwrap(
+		URLComponents(url: tokenRequests[0].url, resolvingAgainstBaseURL: false)
+	)
+	XCTAssertEqual(tokenComponents.scheme, "https")
+	XCTAssertEqual(tokenComponents.host, "auth.example.org")
+	XCTAssertEqual(tokenComponents.path, "/token")
+	let queryItems = tokenComponents.queryItems ?? []
+	XCTAssertTrue(
+		queryItems.contains(URLQueryItem(name: "service", value: "registry.example.org"))
+	)
+	XCTAssertTrue(
+		queryItems.contains(URLQueryItem(
+			name: "scope",
+			value: "repository:library/authenticated:pull"
+		))
+	)
+}
+
 func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async throws {
 	let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
@@ -11424,11 +11534,23 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 }
 
 private actor RecordingOCIRegistryFetch {
-	private var storage: [String: OrlixOCIRegistryFetchResponse]
+	private var storage: [String: [OrlixOCIRegistryFetchResponse]]
+	private let defaultResponse: OrlixOCIRegistryFetchResponse?
 	private var recordedRequests: [OrlixOCIRegistryFetchRequest] = []
 
 	init(responses: [String: OrlixOCIRegistryFetchResponse]) {
-		self.storage = responses
+		self.storage = responses.mapValues { [$0] }
+		self.defaultResponse = nil
+	}
+
+	init(scriptedResponses: [String: [OrlixOCIRegistryFetchResponse]]) {
+		self.storage = scriptedResponses
+		self.defaultResponse = nil
+	}
+
+	init(defaultResponse: OrlixOCIRegistryFetchResponse) {
+		self.storage = [:]
+		self.defaultResponse = defaultResponse
 	}
 
 	var requests: [OrlixOCIRegistryFetchRequest] {
@@ -11439,9 +11561,14 @@ private actor RecordingOCIRegistryFetch {
 		_ request: OrlixOCIRegistryFetchRequest
 	) async throws -> OrlixOCIRegistryFetchResponse {
 		recordedRequests.append(request)
-		let response = storage[request.url.absoluteString]
-		if let response {
+		if var responses = storage[request.url.absoluteString],
+		   let response = responses.first {
+			responses.removeFirst()
+			storage[request.url.absoluteString] = responses
 			return response
+		}
+		if let defaultResponse {
+			return defaultResponse
 		}
 		return OrlixOCIRegistryFetchResponse(statusCode: 404, headers: [:], body: Data())
 	}

@@ -10,6 +10,34 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-25 OCI registry bearer token authentication
+
+Checkpoint: added OCI Distribution Bearer challenge support to the OrlixOS registry puller. A `401` `WWW-Authenticate: Bearer ...` response now drives token endpoint retrieval with `service` and `scope` query values, accepts `token` or `access_token`, and retries the original registry request with `Authorization: Bearer <token>`.
+
+Changes:
+- Added request-level registry authorization headers without changing image-reference endpoint construction.
+- Added Bearer challenge parsing, token endpoint fetch, token response decoding, and authenticated retry.
+- Added no-network XCTest coverage for the 401 challenge, token request query, authenticated manifest retry, digest-verified config blob fetch, and resulting OCI image layout.
+- Extended the recording registry test fetcher to support sequential scripted responses per URL.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerRejectsBlobDigestMismatch -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerUsesBearerTokenChallenge -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.25_22-57-56-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that OrlixOS bundle reported 4 passed, 0 failed, 0 skipped.
+- `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixPTYRuntimeTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedRuntimeLifecycleIsObservedFromLinuxInitOutput test` exited 0. Result bundle: `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixPTYRuntimeTests-2026.06.25_22-58-41-+0200.xcresult`.
+- `xcrun xcresulttool get test-results summary` for that app-hosted bundle reported 1 passed, 0 failed, 0 skipped.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only warning about stale contradicted pending/blocked statuses in `IMPLEMENT.md`.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This proves focused registry Bearer challenge handling and keeps the work in `OrlixOS` image pull/import/session assembly.
+- This does not prove live public registry compatibility, end-user `orlix run`, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle support, product runtime readiness, or broad namespace/cgroup/device/filesystem/network readiness.
+- App-hosted log again emitted post-test kernel `I/O error, dev vdb` lines after XCTest had already reported the selected test passed; this remains a runtime log caveat, not hidden.
+
 ### 2026-06-25 Registry image install and session facade
 
 Checkpoint: extended the public OrlixOS OCI environment installer so a verified registry image can be pulled, imported, materialized into base/state images, recorded as a created OCI lifecycle environment, and opened as an `OrlixLinuxSession` by environment ID.
