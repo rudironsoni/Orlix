@@ -1376,6 +1376,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let cgroupPidsLimit: Int64?
 	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
 	public let cgroupCPUWeight: UInt64?
+	public let cgroupMemoryMax: Int64?
 	public let command: [String]?
 	public let removeAfterRun: Bool
 
@@ -1422,6 +1423,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedCgroupPidsLimit: Int64?
 		var parsedCgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
 		var parsedCgroupCPUWeight: UInt64?
+		var parsedCgroupMemoryMax: Int64?
 		var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1528,6 +1530,25 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 						.missingOptionValue("--cpu-weight")
 				}
 				parsedCgroupCPUWeight = try Self.parseCgroupCPUWeight(cpuWeight)
+				continue
+			}
+			if parsedImage == nil, value == "--memory-max" {
+				guard let memoryMax = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedCgroupMemoryMax = try Self.parseCgroupMemoryMax(memoryMax)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--memory-max=") {
+				let separator = value.firstIndex(of: "=")!
+				let memoryMax = String(value[value.index(after: separator)...])
+				guard !memoryMax.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--memory-max")
+				}
+				parsedCgroupMemoryMax = try Self.parseCgroupMemoryMax(memoryMax)
 				continue
 			}
 			if parsedImage == nil, value == "--ulimit" {
@@ -1944,6 +1965,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.cgroupPidsLimit = parsedCgroupPidsLimit
 		self.cgroupCPUMax = parsedCgroupCPUMax
 		self.cgroupCPUWeight = parsedCgroupCPUWeight
+		self.cgroupMemoryMax = parsedCgroupMemoryMax
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
 		self.removeAfterRun = parsedRemoveAfterRun
 	}
@@ -2386,6 +2408,15 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		return weight
 	}
 
+	private static func parseCgroupMemoryMax(_ value: String) throws -> Int64 {
+		guard let limit = Int64(value), limit >= -1 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"linux.resources.memory.limit"
+			)
+		}
+		return limit
+	}
+
 	private static func parseID(
 		_ value: String,
 		feature: String
@@ -2528,7 +2559,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingCgroupsPathWith cgroupsPath: String?,
 		replacingCgroupPidsLimitWith cgroupPidsLimit: Int64?,
 		replacingCgroupCPUMaxWith cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?,
-		replacingCgroupCPUWeightWith cgroupCPUWeight: UInt64?
+		replacingCgroupCPUWeightWith cgroupCPUWeight: UInt64?,
+		replacingCgroupMemoryMaxWith cgroupMemoryMax: Int64?
 	) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -2553,6 +2585,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| cgroupPidsLimit != nil
 			|| cgroupCPUMax != nil
 			|| cgroupCPUWeight != nil
+			|| cgroupMemoryMax != nil
 		else {
 			return descriptor
 		}
@@ -2619,6 +2652,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				required: cgroupPidsLimit != nil
 				|| cgroupCPUMax != nil
 				|| cgroupCPUWeight != nil
+				|| cgroupMemoryMax != nil
 			)
 		return OrlixEnvironmentDescriptor(
 			id: descriptor.id,
@@ -2663,7 +2697,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupCPUMax: cgroupCPUMax ?? descriptor.cgroupCPUMax,
 			cgroupCPUWeight: cgroupCPUWeight
 			?? descriptor.cgroupCPUWeight,
-            cgroupMemoryMax: descriptor.cgroupMemoryMax,
+			cgroupMemoryMax: cgroupMemoryMax
+			?? descriptor.cgroupMemoryMax,
             cgroupIOWeight: descriptor.cgroupIOWeight,
             cgroupUnified: descriptor.cgroupUnified,
             deviceNodes: descriptor.deviceNodes,
@@ -2741,6 +2776,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupPidsLimitOverride: Int64? = nil,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
+		cgroupMemoryMaxOverride: Int64? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2773,6 +2809,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
+			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2808,6 +2845,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupPidsLimitOverride: Int64? = nil,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
+		cgroupMemoryMaxOverride: Int64? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2868,7 +2906,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingCgroupsPathWith: cgroupsPathOverride,
 				replacingCgroupPidsLimitWith: cgroupPidsLimitOverride,
 				replacingCgroupCPUMaxWith: cgroupCPUMaxOverride,
-				replacingCgroupCPUWeightWith: cgroupCPUWeightOverride
+				replacingCgroupCPUWeightWith: cgroupCPUWeightOverride,
+				replacingCgroupMemoryMaxWith: cgroupMemoryMaxOverride
 			)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -2977,6 +3016,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: request.cgroupPidsLimit,
 			cgroupCPUMaxOverride: request.cgroupCPUMax,
 			cgroupCPUWeightOverride: request.cgroupCPUWeight,
+			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3038,6 +3078,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: request.cgroupPidsLimit,
 			cgroupCPUMaxOverride: request.cgroupCPUMax,
 			cgroupCPUWeightOverride: request.cgroupCPUWeight,
+			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -3100,6 +3141,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupPidsLimitOverride: Int64? = nil,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
+		cgroupMemoryMaxOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3134,6 +3176,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
+			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -3171,6 +3214,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupPidsLimitOverride: Int64? = nil,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
+		cgroupMemoryMaxOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3204,6 +3248,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
+			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3250,6 +3295,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupPidsLimitOverride: Int64? = nil,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
+		cgroupMemoryMaxOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3285,6 +3331,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
+			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3323,6 +3370,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupPidsLimitOverride: Int64? = nil,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
+		cgroupMemoryMaxOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3357,6 +3405,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
+			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3417,6 +3466,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupPidsLimitOverride: request.cgroupPidsLimit,
 			cgroupCPUMaxOverride: request.cgroupCPUMax,
 			cgroupCPUWeightOverride: request.cgroupCPUWeight,
+			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -3465,6 +3515,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupPidsLimitOverride: Int64? = nil,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
+		cgroupMemoryMaxOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
