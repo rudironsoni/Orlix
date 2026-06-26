@@ -1272,6 +1272,11 @@ public struct OrlixOCIEnvironmentRunResult: Sendable {
 	public let completedStateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIEnvironmentStartResult: Sendable {
+	public let id: String
+	public let stateReport: OrlixOCIRuntimeStateReport
+}
+
 public struct OrlixOCIEnvironmentInstallRunResult: Sendable {
 	public let installResult: OrlixOCIEnvironmentInstallResult
 	public let runResult: OrlixOCIEnvironmentRunResult
@@ -1766,6 +1771,43 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		try OrlixOCIRuntime(registry: registry).state(
 			id: id,
 			fileManager: fileManager
+		)
+	}
+
+	public func start(
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentStartResult {
+		let started = try OrlixOCIRuntime(registry: registry).start(
+			id: id,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentStartResult(
+			id: id,
+			stateReport: started.stateReport
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public func start(
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentStartResult {
+		let started = try OrlixOCIRuntime(registry: registry).start(
+			id: id,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentStartResult(
+			id: id,
+			stateReport: started.stateReport
 		)
 	}
 

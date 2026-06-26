@@ -22539,3 +22539,34 @@ Boundary:
 Current status:
 
 Latest coherent checkpoint adds an OrlixOS `orlix run` argument surface that parses Docker-style image input and executes it through the existing registry pull, image import, base/state materialization, descriptor persistence, lifecycle start/wait, and Linux session construction path. Next work remains wiring this into a real product terminal command/control path, real Linux-owned signal/kill delivery, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-26 installer start lifecycle facade
+
+Changes:
+- Added public `OrlixOCIEnvironmentStartResult`.
+- Added public `OrlixOCIEnvironmentInstaller.start(id:terminal:observationTimeout:fileManager:)`.
+- Added SPI `OrlixOCIEnvironmentInstaller.start(id:terminal:using:fileManager:)` for deterministic lifecycle tests.
+- Both wrappers delegate to existing `OrlixOCIRuntime.start`; they do not add a second lifecycle store, fake Linux start semantics, HostAdapter policy, or parser-only report.
+
+Evidence:
+- Focused new XCTest passed:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment test`.
+- Broader deterministic OCI registry/runtime XCTest set passed:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceParsesDistributionEndpoints -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceRejectsInvalidInput -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentRunArgumentsParsesOrlixRunCommand -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentRunArgumentsDerivesStorageSafeID -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerSelectsArm64VariantForDefaultPlatform -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting test`.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_02-04-38-+0200.xcresult` reported `Passed`, 11 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership diff check for generated/upstream/HostAdapter/mlibc/kernel patch/init/GOAL paths was empty.
+- Host Orlix crash-report check found no `*Orlix*` reports modified in the last day. The simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This exposes created-environment start through the OrlixOS installer facade and proves the running state report is persisted from observed process start.
+- This does not prove real signal/kill delivery, process completion from this start-only facade, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, full OCI Runtime Spec lifecycle support, or broad namespace/cgroup/device/filesystem/network readiness.
+
+## Current Status
+
+Current status:
+
+Latest coherent checkpoint exposes public installer-level start for created OCI environments, so the app-facing lifecycle now has install/create, start, state, run, and delete surfaces all delegated to existing OrlixOS runtime machinery. Next work remains wiring the `orlix run` control surface into the product terminal experience, real Linux-owned signal/kill delivery, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
