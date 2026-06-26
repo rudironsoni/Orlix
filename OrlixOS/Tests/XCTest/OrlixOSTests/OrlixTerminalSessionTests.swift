@@ -7940,6 +7940,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.terminal)
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTNil(arguments.umask)
+	XCTNil(arguments.oomScoreAdjustment)
 	XCTNil(arguments.noNewPrivileges)
 	XCTNil(arguments.closeAdditionalFds)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
@@ -7971,6 +7972,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.terminal)
 	XCTTrue(nameArguments.rlimits.isEmpty)
 	XCTNil(nameArguments.umask)
+	XCTNil(nameArguments.oomScoreAdjustment)
 	XCTNil(nameArguments.noNewPrivileges)
 	XCTNil(nameArguments.closeAdditionalFds)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
@@ -7995,6 +7997,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.terminal)
 	XCTTrue(equalsArguments.rlimits.isEmpty)
 	XCTNil(equalsArguments.umask)
+	XCTNil(equalsArguments.oomScoreAdjustment)
 	XCTNil(equalsArguments.noNewPrivileges)
 	XCTNil(equalsArguments.closeAdditionalFds)
 	XCTAssertNil(equalsArguments.command)
@@ -8270,6 +8273,42 @@ func testOCIEnvironmentRunArgumentsAcceptsUmaskOverride() throws {
 	XCTAssertEqual(equalsArguments.umask, 18)
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsOOMScoreAdjustmentOverride() throws {
+	let splitArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--oom-score-adj",
+		"-500",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(splitArguments.oomScoreAdjustment, -500)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--oom-score-adj=1000",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(equalsArguments.oomScoreAdjustment, 1000)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidOOMScoreAdjustment() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--oom-score-adj",
+			"1001",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.oomScoreAdj")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 	let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
 		("--id=", .missingOptionValue("--id")),
@@ -8283,6 +8322,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
 		("--umask=", .missingOptionValue("--umask")),
+		("--oom-score-adj=", .missingOptionValue("--oom-score-adj")),
 	]
 
 		for (option, expectedError) in invalidOptions {
@@ -9647,6 +9687,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--ulimit=stack=8388608",
 			"--umask",
 			"022",
+			"--oom-score-adj",
+			"-250",
 			"--hostname",
 			"registry-run-host",
 			"--domainname",
@@ -9694,6 +9736,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 	XCTAssertTrue(descriptor.defaultCloseAdditionalFds)
 	XCTAssertEqual(descriptor.defaultUmask, 0o022)
+	XCTAssertEqual(descriptor.defaultOOMScoreAdjustment, -250)
 	XCTAssertEqual(
 		descriptor.defaultRlimits,
 		[

@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run oom-score-adj override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--oom-score-adj VALUE` and `--oom-score-adj=VALUE` before image.
+- Run parser validates Linux `oom_score_adj` range `-1000...1000` using the same `process.oomScoreAdj` unsupported-feature error as OCI config parsing.
+- Registry-backed install/run and terminal-session preparation persist parsed override into descriptor `defaultOOMScoreAdjustment`.
+- Focused tests cover split and equals parsing, out-of-range rejection, empty equals-form rejection, default nil parser state, observed registry-backed descriptor persistence. Existing descriptor/init tests cover `orlix.oomscoreadj=` boot-token emission and init writing `/proc/self/oom_score_adj`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 known sandbox `xcrun_db` cache messages existing Sendable warnings.
+
+Boundary:
+- advances product-facing `orlix run --oom-score-adj` through existing OrlixOS descriptors and existing OrlixOS init Linux-visible `/proc/self/oom_score_adj` path. does not add HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI Runtime Spec lifecycle support, broad resource-isolation proof, or live simulator proof.
+
 ### 2026-06-26 OCI run close-fds override
 
 Changes:
