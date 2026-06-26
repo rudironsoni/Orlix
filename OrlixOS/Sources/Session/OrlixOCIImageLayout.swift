@@ -787,6 +787,7 @@ public struct OrlixOCIImageLayoutImport: Equatable, Sendable {
 	public let labels: [String: String]
 	public let stopSignal: Int32?
 	public let exposedPorts: [OrlixEnvironmentExposedPort]
+	public let imageVolumes: [String]
 }
 
 @_spi(OrlixPrivateTesting)
@@ -895,7 +896,8 @@ public struct OrlixOCIImageLayoutReader: Sendable {
             stopSignal: try stopSignal(imageConfig.config?.stopSignal),
             exposedPorts: try exposedPorts(
                 imageConfig.config?.exposedPorts ?? [:]
-            )
+            ),
+            imageVolumes: try imageVolumes(imageConfig.config?.volumes ?? [:])
         )
     }
 
@@ -1007,6 +1009,32 @@ public struct OrlixOCIImageLayoutReader: Sendable {
 			return OrlixEnvironmentExposedPort(port: port, proto: proto)
 		}
 	}
+
+	private func imageVolumes(_ values: [String: [String: String]]) throws
+		-> [String]
+	{
+		try values.keys.sorted().map { key in
+			try validatedVolumePath(key)
+		}
+	}
+
+	private func validatedVolumePath(_ value: String) throws -> String {
+		guard value.hasPrefix("/"), !value.contains("\u{0}") else {
+			throw OrlixOCIImageLayoutError.invalidImageVolume(value)
+		}
+		let components = value
+			.split(separator: "/", omittingEmptySubsequences: true)
+			.map(String.init)
+		guard !components.isEmpty else {
+			throw OrlixOCIImageLayoutError.invalidImageVolume(value)
+		}
+		for component in components {
+			guard component != ".", component != ".." else {
+				throw OrlixOCIImageLayoutError.invalidImageVolume(value)
+			}
+		}
+		return "/" + components.joined(separator: "/")
+	}
 }
 
 @_spi(OrlixPrivateTesting)
@@ -1088,6 +1116,14 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
 			manifest: &manifest,
 			fileManager: fileManager
 		)
+		for volume in image.imageVolumes {
+			try materializeImageVolume(
+				volume,
+				under: temporaryRootDirectory,
+				manifest: &manifest,
+				fileManager: fileManager
+			)
+		}
 		let descriptor = try environmentDescriptor(
 			environmentID: environmentID,
 			rootImageIdentifier: rootImageIdentifier,
@@ -1260,6 +1296,24 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
 		return components
 	}
 
+	private func materializeImageVolume(
+		_ volume: String,
+		under rootDirectory: URL,
+		manifest: inout [OrlixRootfsTarManifestEntry],
+		fileManager: FileManager
+	) throws {
+		do {
+			try materializeWorkingDirectory(
+				volume,
+				under: rootDirectory,
+				manifest: &manifest,
+				fileManager: fileManager
+			)
+		} catch OrlixOCIImageLayoutError.invalidWorkingDirectory {
+			throw OrlixOCIImageLayoutError.invalidImageVolume(volume)
+		}
+	}
+
 	private func environmentDescriptor(
         environmentID: String,
         rootImageIdentifier: String,
@@ -1289,6 +1343,7 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
         defaultGroupID: user.gid,
         defaultStopSignal: image.stopSignal,
         exposedPorts: image.exposedPorts,
+        imageVolumes: image.imageVolumes,
         annotations: image.labels
     )
 }
@@ -1477,6 +1532,7 @@ public enum OrlixOCIImageLayoutError:
 	case invalidLabelEntry(String)
 	case invalidStopSignal(String)
 	case invalidExposedPort(String)
+	case invalidImageVolume(String)
 	case invalidWhiteout(String)
     case decompressionFailed(String)
     case decompressedLayerTooLarge(Int)
@@ -1918,6 +1974,7 @@ private struct OCIProcessConfig: Codable {
 	let labels: [String: String]?
 	let stopSignal: String?
 	let exposedPorts: [String: [String: String]]?
+	let volumes: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case env = "Env"
@@ -1928,6 +1985,7 @@ private struct OCIProcessConfig: Codable {
 		case labels = "Labels"
 		case stopSignal = "StopSignal"
 		case exposedPorts = "ExposedPorts"
+		case volumes = "Volumes"
 	}
 }
 
