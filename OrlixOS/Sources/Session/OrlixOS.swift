@@ -1350,13 +1350,21 @@ public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
 }
 
 public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
-	public let image: String
-	public let id: String
-	public let platform: String
-	public let command: [String]?
-	public let removeAfterRun: Bool
+    public let image: String
+    public let id: String
+    public let platform: String
+    public let entrypoint: [String]?
+    public let command: [String]?
+    public let removeAfterRun: Bool
 
-	public init(_ arguments: [String]) throws {
+    var resolvedCommandOverride: [String]? {
+        guard let entrypoint else {
+            return command
+        }
+        return entrypoint + (command ?? [])
+    }
+
+    public init(_ arguments: [String]) throws {
 		var values = arguments
 		if values.first == "orlix" {
 			values.removeFirst()
@@ -1366,11 +1374,12 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		}
 		values.removeFirst()
 
-		var parsedID: String?
-		var parsedPlatform = "linux/arm64"
-		var parsedImage: String?
-		var parsedCommand: [String] = []
-		var parsedRemoveAfterRun = false
+        var parsedID: String?
+        var parsedPlatform = "linux/arm64"
+        var parsedEntrypoint: [String]?
+        var parsedImage: String?
+        var parsedCommand: [String] = []
+        var parsedRemoveAfterRun = false
 
 		while !values.isEmpty {
 			let value = values.removeFirst()
@@ -1379,13 +1388,32 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				values.removeAll()
 				break
 			}
-			if parsedImage == nil, value == "--rm" {
-				parsedRemoveAfterRun = true
-				continue
-			}
-			if parsedImage == nil, value == "--id" || value == "--name" {
-				guard let id = values.first else {
-					throw OrlixOCIEnvironmentRunArgumentsError.missingOptionValue(value)
+            if parsedImage == nil, value == "--rm" {
+                parsedRemoveAfterRun = true
+                continue
+            }
+            if parsedImage == nil, value == "--entrypoint" {
+                guard let entrypoint = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue(value)
+                }
+                parsedEntrypoint = [entrypoint]
+                values.removeFirst()
+                continue
+            }
+            if parsedImage == nil, value.hasPrefix("--entrypoint=") {
+                let separator = value.firstIndex(of: "=")!
+                let entrypoint = String(value[value.index(after: separator)...])
+                guard !entrypoint.isEmpty else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue("--entrypoint")
+                }
+                parsedEntrypoint = [entrypoint]
+                continue
+            }
+            if parsedImage == nil, value == "--id" || value == "--name" {
+                guard let id = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError.missingOptionValue(value)
 				}
 				parsedID = id
 				values.removeFirst()
@@ -1438,12 +1466,13 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		let id = try parsedID ?? Self.defaultEnvironmentID(for: reference)
 		try OrlixEnvironmentStorageLayout.validateEnvironmentID(id)
 
-		self.image = image
-		self.id = id
-		self.platform = parsedPlatform
-		self.command = parsedCommand.isEmpty ? nil : parsedCommand
-		self.removeAfterRun = parsedRemoveAfterRun
-	}
+        self.image = image
+        self.id = id
+        self.platform = parsedPlatform
+        self.entrypoint = parsedEntrypoint
+        self.command = parsedCommand.isEmpty ? nil : parsedCommand
+        self.removeAfterRun = parsedRemoveAfterRun
+    }
 
 	private static func defaultEnvironmentID(
 		for image: OrlixOCIRegistryImageReference
@@ -1480,8 +1509,72 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
     }
 
     @_spi(OrlixPrivateTesting)
-	public init(registry: OrlixEnvironmentRegistry) {
+    public init(registry: OrlixEnvironmentRegistry) {
         self.registry = registry
+    }
+
+    private static func descriptor(
+        _ descriptor: OrlixEnvironmentDescriptor,
+        replacingDefaultCommandWith command: [String]?
+    ) throws -> OrlixEnvironmentDescriptor {
+        guard let command else {
+            return descriptor
+        }
+        guard !command.isEmpty else {
+            throw OrlixOCIRuntimeConfigError.emptyProcessArgs
+        }
+        for argument in command {
+            guard !argument.isEmpty, !argument.contains("\u{0}") else {
+                throw OrlixOCIRuntimeConfigError.invalidProcessArg(argument)
+            }
+        }
+        return OrlixEnvironmentDescriptor(
+            id: descriptor.id,
+            source: descriptor.source,
+            platform: descriptor.platform,
+            rootImageIdentifier: descriptor.rootImageIdentifier,
+            defaultCommand: command,
+            defaultEnvironment: descriptor.defaultEnvironment,
+            defaultWorkingDirectory: descriptor.defaultWorkingDirectory,
+            defaultUserID: descriptor.defaultUserID,
+            defaultGroupID: descriptor.defaultGroupID,
+            defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
+            defaultCapabilities: descriptor.defaultCapabilities,
+            defaultNoNewPrivileges: descriptor.defaultNoNewPrivileges,
+            defaultCloseAdditionalFds: descriptor.defaultCloseAdditionalFds,
+            defaultTerminalRows: descriptor.defaultTerminalRows,
+            defaultTerminalColumns: descriptor.defaultTerminalColumns,
+            defaultOOMScoreAdjustment: descriptor.defaultOOMScoreAdjustment,
+            defaultScheduler: descriptor.defaultScheduler,
+            defaultIOPriority: descriptor.defaultIOPriority,
+            defaultCPUAffinity: descriptor.defaultCPUAffinity,
+            defaultUmask: descriptor.defaultUmask,
+            defaultRlimits: descriptor.defaultRlimits,
+            defaultPersonalityDomain: descriptor.defaultPersonalityDomain,
+            hostname: descriptor.hostname,
+            domainname: descriptor.domainname,
+            rootMount: descriptor.rootMount,
+            rootReadonly: descriptor.rootReadonly,
+            rootPropagation: descriptor.rootPropagation,
+            sysctls: descriptor.sysctls,
+            maskedPaths: descriptor.maskedPaths,
+            readonlyPaths: descriptor.readonlyPaths,
+            cgroupsPath: descriptor.cgroupsPath,
+            cgroupPidsLimit: descriptor.cgroupPidsLimit,
+            cgroupCPUMax: descriptor.cgroupCPUMax,
+            cgroupCPUWeight: descriptor.cgroupCPUWeight,
+            cgroupMemoryMax: descriptor.cgroupMemoryMax,
+            cgroupIOWeight: descriptor.cgroupIOWeight,
+            cgroupUnified: descriptor.cgroupUnified,
+            deviceNodes: descriptor.deviceNodes,
+            timeOffsets: descriptor.timeOffsets,
+            uidMappings: descriptor.uidMappings,
+            gidMappings: descriptor.gidMappings,
+            namespaces: descriptor.namespaces,
+            namespacePaths: descriptor.namespacePaths,
+            tmpfsMounts: descriptor.tmpfsMounts,
+            mounts: descriptor.mounts
+        )
     }
 
     public func listPreparedEnvironments(
@@ -1519,36 +1612,39 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 	}
 
 	@discardableResult
-	public func install(
-		image: String,
-		id: String,
-		tools: OrlixOCIEnvironmentMaterializationTools,
-		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
-		platform: String = "linux/arm64",
-		fileManager: FileManager = .default,
-		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
-	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
+    public func install(
+        image: String,
+        id: String,
+        tools: OrlixOCIEnvironmentMaterializationTools,
+        puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+        platform: String = "linux/arm64",
+        defaultCommandOverride: [String]? = nil,
+        fileManager: FileManager = .default,
+        runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+    ) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
 		try await install(
 			image: OrlixOCIRegistryImageReference(image),
 			id: id,
-			tools: tools,
-			puller: puller,
-			platform: platform,
-			fileManager: fileManager,
-			runCommand: runCommand
-		)
+            tools: tools,
+            puller: puller,
+            platform: platform,
+            defaultCommandOverride: defaultCommandOverride,
+            fileManager: fileManager,
+            runCommand: runCommand
+        )
 	}
 
 	@discardableResult
-	public func install(
-		image: OrlixOCIRegistryImageReference,
-		id: String,
-		tools: OrlixOCIEnvironmentMaterializationTools,
-		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
-		platform: String = "linux/arm64",
-		fileManager: FileManager = .default,
-		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
-	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
+    public func install(
+        image: OrlixOCIRegistryImageReference,
+        id: String,
+        tools: OrlixOCIEnvironmentMaterializationTools,
+        puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+        platform: String = "linux/arm64",
+        defaultCommandOverride: [String]? = nil,
+        fileManager: FileManager = .default,
+        runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+    ) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
 		let layout = try registry.layout(forEnvironmentID: id)
 		let pulledLayoutURL = layout.importScratchDirectory
 			.appendingPathComponent("registry-layout", isDirectory: true)
@@ -1569,23 +1665,30 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				platform: platform,
 				fileManager: fileManager
 			)
-			let importResult = try OrlixOCIImageLayoutImporter().importLayout(
-				at: pulledLayoutURL,
-				environmentID: id,
-				registry: registry,
-				rootImageIdentifier: "orlix.env.\(id)",
-				platform: platform,
-				fileManager: fileManager
-			)
-			_ = try importResult.materializationPlan.materialize(
-				mke2fsExecutable: tools.mke2fs.path,
-				truncateExecutable: tools.truncate.path,
+            let importResult = try OrlixOCIImageLayoutImporter().importLayout(
+                at: pulledLayoutURL,
+                environmentID: id,
+                registry: registry,
+                rootImageIdentifier: "orlix.env.\(id)",
+                platform: platform,
+                fileManager: fileManager
+            )
+            let descriptor = try Self.descriptor(
+                importResult.descriptor,
+                replacingDefaultCommandWith: defaultCommandOverride
+            )
+            if descriptor != importResult.descriptor {
+                try registry.save(descriptor, fileManager: fileManager)
+            }
+            _ = try importResult.materializationPlan.materialize(
+                mke2fsExecutable: tools.mke2fs.path,
+                truncateExecutable: tools.truncate.path,
 				debugfsExecutable: tools.debugfs.path,
 				runner: OrlixOCIEnvironmentInstallerCommandRunner(
 					runCommand: runCommand
 				)
 			)
-			let config = try registryLifecycleConfig(for: importResult.descriptor)
+            let config = try registryLifecycleConfig(for: descriptor)
 			let lifecycleStore = OrlixOCIRuntimeLifecycleStore(registry: registry)
 			let lifecycle = try OrlixOCIRuntimeLifecycleController(
 				config: config,
@@ -1653,13 +1756,14 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		let result = try await run(
 			image: request.image,
 			id: request.id,
-			tools: tools,
-			puller: puller,
-			platform: request.platform,
-			command: request.command,
-			terminal: terminal,
-			observationTimeout: observationTimeout,
-			fileManager: fileManager,
+            tools: tools,
+            puller: puller,
+            platform: request.platform,
+            command: request.resolvedCommandOverride,
+            defaultCommandOverride: request.resolvedCommandOverride,
+            terminal: terminal,
+            observationTimeout: observationTimeout,
+            fileManager: fileManager,
 			runCommand: runCommand
 		)
 		guard request.removeAfterRun else {
@@ -1691,12 +1795,13 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			image: try OrlixOCIRegistryImageReference(request.image),
 			id: request.id,
 			tools: tools,
-			puller: puller,
-			platform: request.platform,
-			command: request.command,
-			terminal: terminal,
-			fileManager: fileManager,
-			runCommand: runCommand
+            puller: puller,
+            platform: request.platform,
+            command: request.resolvedCommandOverride,
+            defaultCommandOverride: request.resolvedCommandOverride,
+            terminal: terminal,
+            fileManager: fileManager,
+            runCommand: runCommand
 		)
 	}
 
@@ -1712,17 +1817,17 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		}
 		let image = try OrlixOCIRegistryImageReference(request.image)
 		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
-			id: request.id,
-			command: request.command,
-			terminal: terminal,
-			fileManager: fileManager
-		)
+            id: request.id,
+            command: request.resolvedCommandOverride,
+            terminal: terminal,
+            fileManager: fileManager
+        )
 		return OrlixOCIEnvironmentTerminalSessionResult(
-			id: request.id,
-			image: image,
-			command: request.command,
-			linuxSession: linuxSession
-		)
+            id: request.id,
+            image: image,
+            command: request.resolvedCommandOverride,
+            linuxSession: linuxSession
+        )
 	}
 
 	@discardableResult
@@ -1730,23 +1835,25 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		image: String,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
-		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
-		platform: String = "linux/arm64",
-		command: [String]? = nil,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		fileManager: FileManager = .default,
-		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+        puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+        platform: String = "linux/arm64",
+        command: [String]? = nil,
+        defaultCommandOverride: [String]? = nil,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        fileManager: FileManager = .default,
+        runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentTerminalSessionResult {
 		try await prepareTerminalSession(
 			image: OrlixOCIRegistryImageReference(image),
 			id: id,
 			tools: tools,
-			puller: puller,
-			platform: platform,
-			command: command,
-			terminal: terminal,
-			fileManager: fileManager,
-			runCommand: runCommand
+            puller: puller,
+            platform: platform,
+            command: command,
+            defaultCommandOverride: defaultCommandOverride,
+            terminal: terminal,
+            fileManager: fileManager,
+            runCommand: runCommand
 		)
 	}
 
@@ -1755,22 +1862,24 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		image: OrlixOCIRegistryImageReference,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
-		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
-		platform: String = "linux/arm64",
-		command: [String]? = nil,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		fileManager: FileManager = .default,
-		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+        puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+        platform: String = "linux/arm64",
+        command: [String]? = nil,
+        defaultCommandOverride: [String]? = nil,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        fileManager: FileManager = .default,
+        runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentTerminalSessionResult {
 		let installResult = try await install(
 			image: image,
 			id: id,
-			tools: tools,
-			puller: puller,
-			platform: platform,
-			fileManager: fileManager,
-			runCommand: runCommand
-		)
+            tools: tools,
+            puller: puller,
+            platform: platform,
+            defaultCommandOverride: defaultCommandOverride,
+            fileManager: fileManager,
+            runCommand: runCommand
+        )
 		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
 			id: id,
 			command: command,
@@ -1788,24 +1897,26 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		image: String,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
-		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
-		platform: String = "linux/arm64",
-		command: [String]? = nil,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		observationTimeout: TimeInterval = 600,
-		fileManager: FileManager = .default,
+        puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+        platform: String = "linux/arm64",
+        command: [String]? = nil,
+        defaultCommandOverride: [String]? = nil,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
+        fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
 		try await run(
 			image: OrlixOCIRegistryImageReference(image),
 			id: id,
 			tools: tools,
-			puller: puller,
-			platform: platform,
-			command: command,
-			terminal: terminal,
-			observationTimeout: observationTimeout,
-			fileManager: fileManager,
+            puller: puller,
+            platform: platform,
+            command: command,
+            defaultCommandOverride: defaultCommandOverride,
+            terminal: terminal,
+            observationTimeout: observationTimeout,
+            fileManager: fileManager,
 			runCommand: runCommand
 		)
 	}
@@ -1815,23 +1926,25 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		image: OrlixOCIRegistryImageReference,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
-		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
-		platform: String = "linux/arm64",
-		command: [String]? = nil,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		observationTimeout: TimeInterval = 600,
-		fileManager: FileManager = .default,
+        puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+        platform: String = "linux/arm64",
+        command: [String]? = nil,
+        defaultCommandOverride: [String]? = nil,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
+        fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
 		let installResult = try await install(
 			image: image,
 			id: id,
-			tools: tools,
-			puller: puller,
-			platform: platform,
-			fileManager: fileManager,
-			runCommand: runCommand
-		)
+            tools: tools,
+            puller: puller,
+            platform: platform,
+            defaultCommandOverride: defaultCommandOverride,
+            fileManager: fileManager,
+            runCommand: runCommand
+        )
 		let runResult = try run(
 			id: id,
 			command: command,
@@ -1861,13 +1974,14 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		let result = try await run(
 			image: OrlixOCIRegistryImageReference(request.image),
 			id: request.id,
-			tools: tools,
-			puller: puller,
-			platform: request.platform,
-			command: request.command,
-			terminal: terminal,
-			using: driver,
-			fileManager: fileManager,
+            tools: tools,
+            puller: puller,
+            platform: request.platform,
+            command: request.resolvedCommandOverride,
+            defaultCommandOverride: request.resolvedCommandOverride,
+            terminal: terminal,
+            using: driver,
+            fileManager: fileManager,
 			runCommand: runCommand
 		)
 		guard request.removeAfterRun else {
@@ -1887,23 +2001,25 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		image: OrlixOCIRegistryImageReference,
 		id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
-		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
-		platform: String = "linux/arm64",
-		command: [String]? = nil,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		using driver: OrlixOCIRuntimeProcessObservationDriver,
-		fileManager: FileManager = .default,
+        puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+        platform: String = "linux/arm64",
+        command: [String]? = nil,
+        defaultCommandOverride: [String]? = nil,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        using driver: OrlixOCIRuntimeProcessObservationDriver,
+        fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
 		let installResult = try await install(
 			image: image,
 			id: id,
-			tools: tools,
-			puller: puller,
-			platform: platform,
-			fileManager: fileManager,
-			runCommand: runCommand
-		)
+            tools: tools,
+            puller: puller,
+            platform: platform,
+            defaultCommandOverride: defaultCommandOverride,
+            fileManager: fileManager,
+            runCommand: runCommand
+        )
 		let runResult = try run(
 			id: id,
 			command: command,

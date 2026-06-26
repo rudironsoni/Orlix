@@ -10,6 +10,28 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run entrypoint override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--entrypoint VALUE` and `--entrypoint=VALUE` before the image.
+- Parsed `orlix run --entrypoint` resolves the command override as entrypoint plus image command arguments, matching the product run surface without adding a new runtime subsystem.
+- Registry-backed install/run and terminal-session preparation save the resolved command into the OrlixOS environment descriptor when the entrypoint override is supplied through parsed `orlix run` arguments.
+- Focused tests cover parser split/equals entrypoint forms, empty entrypoint option rejection, immediate observed run command, and persisted descriptor default command.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused simulator XCTest was not run: unsandboxed `xcode-storage-doctor` was rejected by execution policy, so CoreSimulator/Xcode access could not be validated without a forbidden workaround.
+
+Boundary:
+- This advances product-facing `orlix run --entrypoint` through the existing OrlixOS registry install/run and lifecycle path. It does not claim Linux userspace `/usr/bin/orlix`, live app-hosted registry execution proof, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle, or broader namespace/cgroup/device/filesystem/network readiness.
+
+Current-status: Latest coherent checkpoint implements parsed `orlix run --entrypoint` command resolution and persists that resolved default command for registry-backed installs. Focused simulator XCTest remains blocked by execution policy denying unsandboxed CoreSimulator/Xcode access.
+
 ### 2026-06-26 OCI run remove-after-run cleanup
 
 Changes:
