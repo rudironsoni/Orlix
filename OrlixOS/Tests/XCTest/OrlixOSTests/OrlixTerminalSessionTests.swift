@@ -8293,13 +8293,117 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 	let rootImage = try XCTUnwrap(session.materializedRootImageForTesting)
 	XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
 	XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
-		let requests = await registryFetch.requests
-		XCTAssertEqual(requests.count, 3)
-	}
+	let requests = await registryFetch.requests
+	XCTAssertEqual(requests.count, 3)
+}
 
-	func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession() async throws {
-		let fileManager = FileManager.default
-		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-registry-start-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+	defer { try? fileManager.removeItem(at: scratch) }
+
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+		cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+		scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+	)
+	let image = try OrlixOCIRegistryImageReference(
+		"registry.example.org/library/orlix-registry:latest"
+	)
+	let configData = Data(
+		"""
+		{
+		  "config": {
+		    "Env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
+		    "Entrypoint": ["/bin/sh"],
+		    "Cmd": ["-lc", "echo registry"],
+		    "WorkingDir": "/",
+		    "User": "0"
+		  },
+		  "rootfs": {
+		    "type": "layers",
+		    "diff_ids": []
+		  }
+		}
+		""".utf8
+	)
+	let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+	let manifestData = Data(
+		"""
+		{
+		  "schemaVersion": 2,
+		  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		  "config": {
+		    "mediaType": "application/vnd.oci.image.config.v1+json",
+		    "digest": "\(configDigest)",
+		    "size": \(configData.count)
+		  },
+		  "layers": []
+		}
+		""".utf8
+	)
+	let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+	let registryFetch = RecordingOCIRegistryFetch(responses: [
+		try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: [
+				"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+				"Docker-Content-Digest": manifestDigest,
+			],
+			body: manifestData
+		),
+		try image.blobURL(digest: configDigest).absoluteString: OrlixOCIRegistryFetchResponse(
+			statusCode: 200,
+			headers: ["Docker-Content-Digest": configDigest],
+			body: configData
+		),
+	])
+	let tools = OrlixOCIEnvironmentMaterializationTools(
+		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
+		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+	)
+	let recorder = RecordingPublicOCIInstallerCommandRunner()
+	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+	let installed = try await installer.install(
+		image: image,
+		id: "registry-started-session",
+		tools: tools,
+		puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
+		fileManager: fileManager
+	) { executable, arguments in
+		try recorder.run(executable: executable, arguments: arguments)
+	}
+	let driver = try RecordingOCIRuntimeProcessObservationDriver(
+		startPID: 42,
+		completion: .exited(
+			OrlixOCIRuntimeProcessExitObservation(pid: 42, exitStatus: 0)
+		)
+	)
+
+	let started = try installer.start(
+		id: installed.id,
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: driver,
+		fileManager: fileManager
+	)
+	let report = try installer.state(id: installed.id, fileManager: fileManager)
+
+	XCTAssertEqual(started.id, installed.id)
+	XCTAssertEqual(started.stateReport.status, .running)
+	XCTAssertEqual(started.stateReport.pid, 42)
+	XCTAssertEqual(report.status, .running)
+	XCTAssertEqual(report.pid, 42)
+	XCTAssertEqual(driver.events, ["start:created:nil"])
+}
+
+func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession() async throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 			"orlix-oci-registry-string-installer-\(UUID().uuidString)",
 			isDirectory: true
 		)
