@@ -7942,6 +7942,8 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.terminal)
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTTrue(arguments.sysctls.isEmpty)
+	XCTTrue(arguments.maskedPaths.isEmpty)
+	XCTTrue(arguments.readonlyPaths.isEmpty)
 	XCTNil(arguments.umask)
 	XCTNil(arguments.oomScoreAdjustment)
 	XCTNil(arguments.scheduler)
@@ -8560,6 +8562,71 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidSysctlOverride() throws {
 	}
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsMaskedAndReadonlyPathOverrides()
+	throws
+{
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--mask",
+		"/proc/kcore",
+		"--mask=/sys/firmware",
+		"--readonly",
+		"/proc/sys",
+		"--readonly=/sys",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(arguments.maskedPaths, ["/proc/kcore", "/sys/firmware"])
+	XCTAssertEqual(arguments.readonlyPaths, ["/proc/sys", "/sys"])
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidMaskedAndReadonlyPathOverride()
+	throws
+{
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--mask",
+			"relative",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.maskedPaths")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--readonly",
+			"/proc/../sys",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.readonlyPaths")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--mask",
+			"/proc/kcore",
+			"--mask=/proc/kcore",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.maskedPaths")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsHostnameOverride() throws {
 	let hostnameArguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -9025,6 +9092,8 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--cgroup-unified=", .missingOptionValue("--cgroup-unified")),
 		("--tmpfs=", .missingOptionValue("--tmpfs")),
 		("--sysctl=", .missingOptionValue("--sysctl")),
+		("--mask=", .missingOptionValue("--mask")),
+		("--readonly=", .missingOptionValue("--readonly")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
@@ -10418,6 +10487,12 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--sysctl",
 			"net.ipv4.ip_forward=1",
 			"--sysctl=kernel.hostname=registry-run-host",
+			"--mask",
+			"/proc/kcore",
+			"--mask=/sys/firmware",
+			"--readonly",
+			"/proc/sys",
+			"--readonly=/sys",
 			"--cap-set",
 			"bounding=CAP_CHOWN,CAP_SETUID",
 			"--cap-set",
@@ -10534,6 +10609,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"net.ipv4.ip_forward": "1",
 		]
 	)
+	XCTAssertEqual(descriptor.maskedPaths, ["/proc/kcore", "/sys/firmware"])
+	XCTAssertEqual(descriptor.readonlyPaths, ["/proc/sys", "/sys"])
 	XCTAssertEqual(
 		descriptor.defaultCapabilities,
 		OrlixEnvironmentCapabilities(
