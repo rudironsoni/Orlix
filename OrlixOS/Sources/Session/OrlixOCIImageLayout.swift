@@ -786,6 +786,7 @@ public struct OrlixOCIImageLayoutImport: Equatable, Sendable {
 	public let processDefaults: OrlixOCIProcessDefaults
 	public let labels: [String: String]
 	public let stopSignal: Int32?
+	public let exposedPorts: [OrlixEnvironmentExposedPort]
 }
 
 @_spi(OrlixPrivateTesting)
@@ -891,7 +892,10 @@ public struct OrlixOCIImageLayoutReader: Sendable {
                 user: imageConfig.config?.user
             ),
             labels: try labelDictionary(imageConfig.config?.labels ?? [:]),
-            stopSignal: try stopSignal(imageConfig.config?.stopSignal)
+            stopSignal: try stopSignal(imageConfig.config?.stopSignal),
+            exposedPorts: try exposedPorts(
+                imageConfig.config?.exposedPorts ?? [:]
+            )
         )
     }
 
@@ -983,6 +987,25 @@ public struct OrlixOCIImageLayoutReader: Sendable {
 			throw OrlixOCIImageLayoutError.invalidStopSignal(value)
 		}
 		return signal
+	}
+
+	private func exposedPorts(_ values: [String: [String: String]]) throws
+		-> [OrlixEnvironmentExposedPort]
+	{
+		try values.keys.sorted().map { key in
+			let parts = key.split(separator: "/", omittingEmptySubsequences: false)
+			guard parts.count == 2,
+				let port = UInt16(parts[0]),
+				port > 0
+			else {
+				throw OrlixOCIImageLayoutError.invalidExposedPort(key)
+			}
+			let proto = String(parts[1]).lowercased()
+			guard proto == "tcp" || proto == "udp" || proto == "sctp" else {
+				throw OrlixOCIImageLayoutError.invalidExposedPort(key)
+			}
+			return OrlixEnvironmentExposedPort(port: port, proto: proto)
+		}
 	}
 }
 
@@ -1265,6 +1288,7 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
         defaultUserID: user.uid,
         defaultGroupID: user.gid,
         defaultStopSignal: image.stopSignal,
+        exposedPorts: image.exposedPorts,
         annotations: image.labels
     )
 }
@@ -1452,6 +1476,7 @@ public enum OrlixOCIImageLayoutError:
 	case invalidCommandEntry(String)
 	case invalidLabelEntry(String)
 	case invalidStopSignal(String)
+	case invalidExposedPort(String)
 	case invalidWhiteout(String)
     case decompressionFailed(String)
     case decompressedLayerTooLarge(Int)
@@ -1892,6 +1917,7 @@ private struct OCIProcessConfig: Codable {
 	let user: String?
 	let labels: [String: String]?
 	let stopSignal: String?
+	let exposedPorts: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case env = "Env"
@@ -1901,6 +1927,7 @@ private struct OCIProcessConfig: Codable {
 		case user = "User"
 		case labels = "Labels"
 		case stopSignal = "StopSignal"
+		case exposedPorts = "ExposedPorts"
 	}
 }
 
