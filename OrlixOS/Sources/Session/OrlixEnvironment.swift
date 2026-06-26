@@ -125,6 +125,7 @@ public let cgroupPidsLimit: Int64?
 	public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
 	public let mounts: [OrlixEnvironmentMount]
 	public let exposedPorts: [OrlixEnvironmentExposedPort]
+	public let imageVolumes: [String]
 	public let annotations: [String: String]
 
     public static func defaultEnvironment(
@@ -203,6 +204,7 @@ cgroupPidsLimit: Int64? = nil,
 	tmpfsMounts: [OrlixEnvironmentTmpfsMount] = [],
 	mounts: [OrlixEnvironmentMount] = [],
 	exposedPorts: [OrlixEnvironmentExposedPort] = [],
+	imageVolumes: [String] = [],
 	annotations: [String: String] = [:]
 ) {
         self.id = id
@@ -253,6 +255,7 @@ self.cgroupPidsLimit = cgroupPidsLimit
 	self.tmpfsMounts = tmpfsMounts
 	self.mounts = mounts
 	self.exposedPorts = exposedPorts
+	self.imageVolumes = imageVolumes
 	self.annotations = annotations
 	}
 
@@ -305,6 +308,7 @@ case cgroupCPUMax
 	case tmpfsMounts
 	case mounts
 	case exposedPorts
+	case imageVolumes
 	case annotations
 	}
 
@@ -496,6 +500,10 @@ forKey: .cgroupCPUWeight
 			[OrlixEnvironmentExposedPort].self,
 			forKey: .exposedPorts
 		) ?? []
+		self.imageVolumes = try container.decodeIfPresent(
+			[String].self,
+			forKey: .imageVolumes
+		) ?? []
 		self.annotations = try container.decodeIfPresent(
 			[String: String].self,
 			forKey: .annotations
@@ -589,6 +597,9 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 		try container.encode(mounts, forKey: .mounts)
 		if !exposedPorts.isEmpty {
 			try container.encode(exposedPorts, forKey: .exposedPorts)
+		}
+		if !imageVolumes.isEmpty {
+			try container.encode(imageVolumes, forKey: .imageVolumes)
 		}
 		if !annotations.isEmpty {
 			try container.encode(annotations, forKey: .annotations)

@@ -3664,6 +3664,29 @@ error as? OrlixOCIImageLayoutError,
 }
 }
 
+func testOCIImageLayoutReaderPreservesImageVolumes() throws {
+let layout = try writeOCILayout(volumes: [
+"/var/cache/orlix": [:],
+"/data/": [:]
+])
+let imported = try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+XCTAssertEqual(imported.imageVolumes, ["/data", "/var/cache/orlix"])
+}
+
+func testOCIImageLayoutReaderRejectsInvalidImageVolume() throws {
+let layout = try writeOCILayout(volumes: [
+"relative": [:]
+])
+XCTAssertThrowsError(
+try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIImageLayoutError,
+.invalidImageVolume("relative")
+)
+}
+}
+
 func testOCIImageLayoutReaderSelectsRequestedPlatformVariant() throws {
         let layout = try writeOCILayout(platformVariant: "v8")
 
@@ -4382,6 +4405,92 @@ OrlixEnvironmentExposedPort(port: 8080, proto: "tcp")
 XCTAssertEqual(result.image.exposedPorts, expected)
 XCTAssertEqual(result.descriptor.exposedPorts, expected)
 XCTAssertEqual(loaded.exposedPorts, expected)
+}
+
+func testOCIImageLayoutImporterMaterializesImageVolumes()
+throws
+{
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layout = try writeOCILayout(volumes: [
+"/data": [:],
+"/var/cache/orlix": [:]
+])
+
+let result = try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-image-volumes",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-image-volumes"
+)
+let loaded = try registry.load(environmentID: "alpine-image-volumes")
+
+XCTAssertEqual(result.image.imageVolumes, ["/data", "/var/cache/orlix"])
+XCTAssertEqual(result.descriptor.imageVolumes, ["/data", "/var/cache/orlix"])
+XCTAssertEqual(loaded.imageVolumes, ["/data", "/var/cache/orlix"])
+XCTAssertTrue(
+FileManager.default.fileExists(
+atPath: result.stagingRootDirectory
+.appendingPathComponent("data", isDirectory: true).path
+)
+)
+XCTAssertTrue(
+FileManager.default.fileExists(
+atPath: result.stagingRootDirectory
+.appendingPathComponent("var/cache/orlix", isDirectory: true).path
+)
+)
+XCTAssertTrue(result.manifest.map(\.path).contains("data"))
+XCTAssertTrue(result.manifest.map(\.path).contains("var"))
+XCTAssertTrue(result.manifest.map(\.path).contains("var/cache"))
+XCTAssertTrue(result.manifest.map(\.path).contains("var/cache/orlix"))
+}
+
+func testOCIImageLayoutImporterRejectsImageVolumeBlockedByFile()
+throws
+{
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layer = tarArchive(entries: [
+TarFixtureEntry(path: "data", payload: Data("not-a-dir\n".utf8))
+])
+let layout = try writeOCILayout(layerData: [layer], volumes: [
+"/data/cache": [:]
+])
+
+XCTAssertThrowsError(
+try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-blocked-image-volume",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-blocked-image-volume"
+)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIImageLayoutError,
+.invalidImageVolume("/data/cache")
+)
+}
 }
 
 func testOCIImageLayoutImporterPreservesImageStopSignalAsDescriptorDefault()
@@ -6447,7 +6556,8 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 	command: [String] = ["-c", "echo hello"],
 	labels: [String: String] = [:],
 	stopSignal: String? = nil,
-	exposedPorts: [String: [String: String]] = [:]
+	exposedPorts: [String: [String: String]] = [:],
+	volumes: [String: [String: String]] = [:]
 ) throws -> OCILayoutFixture {
         let root = temporaryRegistryRoot()
         let blobs = root.appendingPathComponent("blobs/sha256", isDirectory: true)
@@ -6494,6 +6604,11 @@ configObject["config"] = config
 if !exposedPorts.isEmpty {
 var config = configObject["config"] as! [String: Any]
 config["ExposedPorts"] = exposedPorts
+configObject["config"] = config
+}
+if !volumes.isEmpty {
+var config = configObject["config"] as! [String: Any]
+config["Volumes"] = volumes
 configObject["config"] = config
 }
 if rootfsType != nil || rootfsDiffIDs != nil {

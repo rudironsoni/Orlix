@@ -10,6 +10,30 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI image volume materialization
+
+Changes:
+- `OrlixOCIImageLayoutReader` now decodes Docker image config `Volumes`, validates absolute in-container paths, normalizes trailing slashes, and exposes sorted image volume paths.
+- `OrlixEnvironmentDescriptor` now persists image-declared volume paths as `imageVolumes` with backward-compatible default-empty decode.
+- `OrlixOCIImageLayoutImporter` materializes missing image volume directories inside the imported rootfs and records created directories in the rootfs manifest.
+- Existing files blocking image volume paths now fail as `invalidImageVolume` instead of silently producing an unusable volume path.
+- Focused tests cover reader preservation, invalid volume rejection, descriptor save/load persistence, staging-root directory creation, manifest entries, and file-conflict rejection.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This advances OrlixOS-owned OCI rootfs import/materialization and descriptor metadata for image-declared volume mount points. It does not claim live simulator proof, Linux mount behavior proof, anonymous volume lifecycle, port publishing, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, Docker daemon support, package/proof/stamp systems, or runtime package execution readiness.
+
+Current status:
+- Image volume checkpoint verified by static Swift parse/typecheck and guard checks above. Generated hook cache from plan checks was removed before this log entry.
+- Post-log harness check stayed warning-only. Generated hook cache from that pass was removed before commit.
+
 ### 2026-06-26 OCI image exposed port metadata
 
 Changes:
