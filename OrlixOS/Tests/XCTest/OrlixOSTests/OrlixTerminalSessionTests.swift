@@ -7951,6 +7951,8 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.closeAdditionalFds)
 	XCTNil(arguments.cgroupsPath)
 	XCTNil(arguments.cgroupPidsLimit)
+	XCTNil(arguments.cgroupCPUMax)
+	XCTNil(arguments.cgroupCPUWeight)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7991,6 +7993,8 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.closeAdditionalFds)
 	XCTNil(nameArguments.cgroupsPath)
 	XCTNil(nameArguments.cgroupPidsLimit)
+	XCTNil(nameArguments.cgroupCPUMax)
+	XCTNil(nameArguments.cgroupCPUWeight)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -8024,6 +8028,8 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.closeAdditionalFds)
 	XCTNil(equalsArguments.cgroupsPath)
 	XCTNil(equalsArguments.cgroupPidsLimit)
+	XCTNil(equalsArguments.cgroupCPUMax)
+	XCTNil(equalsArguments.cgroupCPUWeight)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8192,6 +8198,82 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidCgroupPidsLimit() throws {
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("linux.resources.pids.limit")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsCgroupCPUOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--cpu-max",
+		"50000:100000",
+		"--cpu-weight",
+		"39",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(
+		arguments.cgroupCPUMax,
+		OrlixEnvironmentCgroupCPUMax(
+			quotaMicros: 50_000,
+			periodMicros: 100_000
+		)
+	)
+	XCTAssertEqual(arguments.cgroupCPUWeight, 39)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--cpu-max=max",
+		"--cpu-weight=10000",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(
+		equalsArguments.cgroupCPUMax,
+		OrlixEnvironmentCgroupCPUMax(quotaMicros: -1)
+	)
+	XCTAssertEqual(equalsArguments.cgroupCPUWeight, 10_000)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidCgroupCPUOverrides() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cpu-max",
+			"0:100000",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.resources.cpu.quota")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cpu-max",
+			"50000:0",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.resources.cpu.period")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cpu-weight",
+			"0",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.resources.cpu.shares")
 		)
 	}
 }
@@ -8654,6 +8736,8 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--group-add=", .missingOptionValue("--group-add")),
 		("--cgroups-path=", .missingOptionValue("--cgroups-path")),
 		("--pids-limit=", .missingOptionValue("--pids-limit")),
+		("--cpu-max=", .missingOptionValue("--cpu-max")),
+		("--cpu-weight=", .missingOptionValue("--cpu-weight")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
@@ -10030,6 +10114,10 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"registry-run",
 			"--pids-limit",
 			"64",
+			"--cpu-max",
+			"50000:100000",
+			"--cpu-weight",
+			"39",
 			"--cap-set",
 			"bounding=CAP_CHOWN,CAP_SETUID",
 			"--cap-set",
@@ -10099,6 +10187,14 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultSupplementaryGroups, [44, 45])
 	XCTAssertEqual(descriptor.cgroupsPath, "/orlix/registry-run")
 	XCTAssertEqual(descriptor.cgroupPidsLimit, 64)
+	XCTAssertEqual(
+		descriptor.cgroupCPUMax,
+		OrlixEnvironmentCgroupCPUMax(
+			quotaMicros: 50_000,
+			periodMicros: 100_000
+		)
+	)
+	XCTAssertEqual(descriptor.cgroupCPUWeight, 39)
 	XCTAssertEqual(
 		descriptor.defaultCapabilities,
 		OrlixEnvironmentCapabilities(
