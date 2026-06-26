@@ -957,21 +957,7 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
             cacheRoot: fixture.cacheRoot,
             scratchRoot: fixture.scratchRoot
         )
-        try registry.save(descriptor)
-
         let terminal = OrlixTerminalSession()
-        let sessionDescriptor = OrlixOCIRuntimeSessionDescriptor(
-            id: descriptor.id,
-            lifecycleState: .created,
-            terminal: false,
-            consoleSize: nil,
-            environment: descriptor
-        )
-        let session = try OrlixLinuxSession(
-            ociRuntimeSession: sessionDescriptor,
-            registry: registry,
-            terminal: terminal
-        )
         let output = terminal.attachOutput { [recorder] data in
             recorder.append(data)
         }
@@ -979,34 +965,55 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
             output.cancel()
         }
 
-        let bootStatus = OrlixRuntimeProofBootStatus()
-        let completion = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .userInitiated).async {
-            let status = session.boot()
-            bootStatus.set(status)
-            completion.signal()
-        }
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: descriptor.id,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        try Self.writeOCIRuntimeConfig(
+            terminal: false,
+            rootPath: "imported-root",
+            to: fixture.root
+        )
+        let runtime = OrlixOCIRuntime(registry: registry)
+        let lifecycle = try OrlixOCIRuntimeBundle
+            .load(from: fixture.root)
+            .lifecycleController(id: descriptor.id)
+            .create()
+        let processHandle = try OrlixOCIRuntimeProcessHandle(
+            lifecycle: lifecycle,
+            rootMount: .defaultOverlay,
+            rootImageIdentifier: descriptor.rootImageIdentifier
+        )
+        try registry.save(processHandle.sessionDescriptor.environment)
+        try runtime.lifecycleStore.save(lifecycle)
 
-        let deadline = Date().addingTimeInterval(Self.timeout)
-        while completion.wait(timeout: .now() + .seconds(1)) != .success {
-            let text = recorder.text
-            if Self.hasAllRequiredMarkers(in: text) {
-                break
-            }
-            if Date() >= deadline {
-                throw OrlixOCIDerivedStdioRuntimeProofError.timeout(
-                    Self.timeout,
-                    Self.normalized(text)
-                )
-            }
-        }
+        let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+        let run = try installer.run(
+            id: descriptor.id,
+            terminal: terminal,
+            observationTimeout: Self.timeout
+        )
+        let finalState = try installer.state(id: descriptor.id)
+        let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+            forID: descriptor.id
+        )
+        let environmentDirectoryURL = layout.rootDirectory
+        let deletedEnvironment = try installer.delete(id: descriptor.id)
 
-        if let status = bootStatus.value, status != .ok {
-            throw OrlixOCIDerivedStdioRuntimeProofError.bootFailed(status)
-        }
-
-        let text = Self.normalized(recorder.text)
+        var text = Self.normalized(recorder.text)
         try Self.validate(text)
+        try Self.validateLifecycle(
+            run: run,
+            finalState: finalState,
+            deletedEnvironment: deletedEnvironment,
+            lifecycleRecordURL: lifecycleRecordURL,
+            environmentDirectoryURL: environmentDirectoryURL
+        )
+        text += "\nORLIX_OCI_LIFECYCLE_RUNNING_OK\n"
+        text += "ORLIX_OCI_LIFECYCLE_STOPPED_OK\n"
+        text += "ORLIX_OCI_LIFECYCLE_DELETE_OK\n"
         return text
     }
 
@@ -1033,6 +1040,87 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
         for marker in requiredMarkers where !text.contains(marker) {
             throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
         }
+    }
+
+    private static func validateLifecycle(
+        run: OrlixOCIEnvironmentRunResult,
+        finalState: OrlixOCIRuntimeStateReport,
+        deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+        lifecycleRecordURL: URL,
+        environmentDirectoryURL: URL
+    ) throws {
+        guard run.startedStateReport.status == .running else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected started lifecycle state running"
+            )
+        }
+        guard run.startedStateReport.pid != nil else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected running lifecycle pid"
+            )
+        }
+        guard run.completedStateReport.status == .stopped,
+              run.completedStateReport.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected completed lifecycle state stopped exit 0"
+            )
+        }
+        guard finalState.status == .stopped,
+              finalState.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected final lifecycle state stopped exit 0"
+            )
+        }
+        guard deletedEnvironment.lifecycleState == .deleted else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected deleted lifecycle state"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected lifecycle record cleanup"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected environment directory cleanup"
+            )
+        }
+    }
+
+    private static func writeOCIRuntimeConfig(
+        terminal: Bool,
+        rootPath: String,
+        to bundleRoot: URL
+    ) throws {
+        let process: [String: Any] = [
+            "terminal": terminal,
+            "args": ["/bin/sh", "-c", stdioExecutionScript],
+            "env": [
+                "HOME=/root",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM=xterm-256color",
+            ],
+            "cwd": "/",
+            "user": [
+                "uid": 0,
+                "gid": 0,
+            ],
+        ]
+        let document: [String: Any] = [
+            "ociVersion": "1.1.0",
+            "process": process,
+            "root": [
+                "path": rootPath,
+            ],
+            "hostname": "oci-host",
+            "domainname": "oci.example",
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: document,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: bundleRoot.appendingPathComponent("config.json"))
     }
 
     private static func normalized(_ text: String) -> String {
@@ -1076,44 +1164,22 @@ private final class OrlixRuntimeProofOutputRecorder: @unchecked Sendable {
     }
 }
 
-private final class OrlixRuntimeProofBootStatus: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: OrlixBootStatus?
-
-    var value: OrlixBootStatus? {
-        lock.lock()
-        defer {
-            lock.unlock()
-        }
-        return storage
-    }
-
-    func set(_ status: OrlixBootStatus) {
-        lock.lock()
-        storage = status
-        lock.unlock()
-    }
-}
-
 private enum OrlixOCIDerivedStdioRuntimeProofError: Error, CustomStringConvertible {
     case missingFixture(String)
-    case bootFailed(OrlixBootStatus)
-    case timeout(TimeInterval, String)
     case missingMarker(String, String)
     case unexpectedPTY(String)
+    case lifecycle(String)
 
     var description: String {
         switch self {
         case let .missingFixture(path):
             return "missing OCI runtime fixture marker: \(path)"
-        case let .bootFailed(status):
-            return "OCI runtime stdio proof boot failed: \(status.message)"
-        case let .timeout(timeout, output):
-            return "OCI runtime stdio proof timed out after \(timeout)s\n\(output)"
         case let .missingMarker(marker, output):
             return "OCI runtime stdio proof missing marker \(marker)\n\(output)"
         case let .unexpectedPTY(output):
             return "OCI runtime stdio proof unexpectedly used a PTY\n\(output)"
+        case let .lifecycle(message):
+            return "OCI runtime lifecycle proof failed: \(message)"
         }
     }
 }

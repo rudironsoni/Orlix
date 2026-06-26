@@ -24190,3 +24190,22 @@ Evidence:
 Boundary:
 - This proves the app-hosted Orlix Linux virtio-fs mount probe on the single iPhone 17 simulator, including writable create/write/readback, missing xattr `ENODATA`, read-only `EROFS`, and final kselftest completion.
 - It does not claim full OCI runtime readiness, package runtime readiness, upstream Coreutils success, or broad product runtime readiness beyond this kernel-interface proof.
+
+## 2026-06-26 - App-hosted OCI terminal=false lifecycle proof
+Changes:
+- Extended the direct `OrlixTestRunner` `ociStdio` launch proof to use OrlixOS OCI runtime lifecycle machinery instead of a manual `OrlixLinuxSession.boot()` path.
+- The proof now creates the OCI runtime lifecycle record, runs the prepared OCI environment through `OrlixOCIEnvironmentInstaller.run`, observes running and stopped lifecycle reports, verifies exit 0, calls delete, and checks lifecycle/environment cleanup.
+- Kept the behavior in OrlixOS app-facing session/lifecycle ownership and the existing Linux init stdio path. No generated upstream edits, OrlixMLibC patches, HostAdapter Linux semantics, package/proof/stamp ladders, or feature-report-only work were added.
+Evidence:
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 and used `/Volumes/1TB/Xcode/DerivedData` plus `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` into the single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociStdio` produced artifact `/Users/rudironsoni/Library/Developer/CoreSimulator/Devices/E65F0D05-980C-4368-8CDC-2D2BF3E05757/data/Containers/Data/Application/52A18213-E134-47B8-95DC-13E5B19EF6DC/tmp/orlix-runtime-test-output.txt`.
+- Artifact assertion found required markers `ORLIX_ENV_STDIO_BEGIN`, `ORLIX_ENV_STDIO_STDOUT_OK`, `ORLIX_ENV_STDIO_STDERR_OK`, `ORLIX_ENV_STDIO_NOT_PTY_OK`, `ORLIX_ENV_STDIO_DONE`, `ORLIX_OCI_LIFECYCLE_RUNNING_OK`, `ORLIX_OCI_LIFECYCLE_STOPPED_OK`, `ORLIX_OCI_LIFECYCLE_DELETE_OK`.
+- Artifact assertion found no `ORLIX-APP-RUNTIME-RUNNER-ERROR` and no `ORLIX_ENV_STDIO_PROOF_FAILED_PTY`.
+- `rtk swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk git diff --check` exited 0.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- Recent `OrlixTestRunner` crash/IPS report scan found no entries.
+Boundary:
+- proves app-hosted OCI-derived `terminal=false` configured command path uses inherited stdio, does not allocate a Linux PTY, and traverses OrlixOS OCI lifecycle create/run/state/delete with observed running/stopped exit-0 state and cleanup.
+- does not claim full OCI Runtime Spec compliance, registry runtime readiness, graceful long-running lifecycle shutdown, networking, devices, cgroups, namespaces, package readiness, Coreutils success, or broad product runtime readiness.
