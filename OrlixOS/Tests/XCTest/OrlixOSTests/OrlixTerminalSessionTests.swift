@@ -1292,15 +1292,19 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 	XCTAssertTrue(initSource.contains("snprintf(source, sizeof(source), \"orlix-host%d\", index);"))
 	XCTAssertTrue(initSource.contains("mount_if_needed(source, target, \"virtiofs\""))
         XCTAssertTrue(initSource.contains("\"virtiofs\""))
-        let runtimeMountRange = try XCTUnwrap(
-            initSource.range(of: "mount_runtime_filesystems();")
-        )
-        let hostMountRange = try XCTUnwrap(
-            initSource.range(of: "mount_configured_host_directories();")
-        )
-        let ptyRange = try XCTUnwrap(initSource.range(of: "if (run_pty_shell("))
-        XCTAssertLessThan(runtimeMountRange.lowerBound, hostMountRange.lowerBound)
-        XCTAssertLessThan(hostMountRange.lowerBound, ptyRange.lowerBound)
+		let runtimeMountRange = try XCTUnwrap(
+			initSource.range(of: "mount_runtime_filesystems();")
+		)
+		let hostMountRange = try XCTUnwrap(
+			initSource.range(of: "mount_configured_host_directories();")
+		)
+		let terminalFlagRange = try XCTUnwrap(
+			initSource.range(of: "read_cmdline_decoded(\"orlix.terminal=\",")
+		)
+		let ptyRange = try XCTUnwrap(initSource.range(of: "if (run_pty_shell("))
+		XCTAssertLessThan(runtimeMountRange.lowerBound, hostMountRange.lowerBound)
+		XCTAssertLessThan(hostMountRange.lowerBound, ptyRange.lowerBound)
+		XCTAssertLessThan(terminalFlagRange.lowerBound, ptyRange.lowerBound)
         XCTAssertTrue(initSource.contains("SYS_capset"))
         XCTAssertTrue(initSource.contains("SYS_capget"))
         XCTAssertTrue(initSource.contains("PR_CAPBSET_DROP"))
@@ -6635,17 +6639,12 @@ report.feature(named: "ociBlockIOControls")?.proof,
 			XCTAssertEqual(features[name]?.proof, expectedProof, name)
 			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
 		}
-		for name in [
-			"process.terminal",
-		] {
-			XCTAssertEqual(features[name]?.status, .recognized, name)
-			XCTAssertEqual(
-				features[name]?.proof,
-				"orlix:runtime_session_descriptor_unit_tests",
-				name
-			)
-			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
-		}
+		XCTAssertEqual(features["process.terminal"]?.status, .implemented)
+		XCTAssertEqual(
+			features["process.terminal"]?.proof,
+			"orlix:runtime_session_descriptor_unit_tests"
+		)
+		XCTAssertFalse(features["process.terminal"]?.reason.isEmpty ?? true)
 		XCTAssertEqual(features["process.consoleSize"]?.status, .implemented)
 		XCTAssertEqual(
 			features["process.consoleSize"]?.proof,
@@ -12429,6 +12428,7 @@ func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 		XCTAssertEqual(materializedRootImage.baseImageURL, layout.baseImageURL)
 		XCTAssertEqual(materializedRootImage.stateImageURL, layout.stateImageURL)
 		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+		XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=1 "))
 		XCTAssertTrue(commandLine.contains("console=hvc0"))
 		XCTAssertTrue(commandLine.contains("orlix.exec=/usr/bin/env"))
 		XCTAssertTrue(commandLine.contains("orlix.argv0=/usr/bin/env"))

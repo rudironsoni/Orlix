@@ -2043,9 +2043,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.terminal",
-			status: .recognized,
+			status: .implemented,
 			proof: "orlix:runtime_session_descriptor_unit_tests",
-			reason: "OCI process terminal requests carry into Orlix runtime session descriptors, but terminal allocation semantics are not claimed until Linux PTY lifecycle proof covers OCI starts."
+			reason: "OCI process terminal requests carry into OrlixOS session descriptors, emit explicit terminal boot tokens, and select the Linux PTY init path for terminal sessions."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.consoleSize",

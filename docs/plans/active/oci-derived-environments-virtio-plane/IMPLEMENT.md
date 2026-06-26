@@ -22872,3 +22872,41 @@ Boundary:
   environments inside one already-running OrlixKernel.
 
 Current-status: checkpoint committed locally as `58e3fcc feat(oci): apply console size to pty`; push pending after hook-required IMPLEMENT.md refresh.
+
+### 2026-06-26 OCI terminal boot token
+
+Implemented explicit OCI `process.terminal` delivery into the OrlixOS boot
+contract:
+
+- OCI runtime sessions now emit `orlix.terminal=1` when `process.terminal` is
+  true and `orlix.terminal=0` when false, instead of relying on absence of the
+  token for the terminal-enabled case.
+- `init.c` already reads `orlix.terminal=` and selects the Linux PTY branch
+  unless the value is `0` or `false`; tests now pin that source contract and the
+  ordering before `run_pty_shell`.
+- The OCI feature report now marks `process.terminal` implemented only for
+  initial terminal-path selection through the Linux PTY init path. This does not
+  claim live terminal resize, full terminal lifecycle semantics, or full OCI
+  Runtime Spec terminal behavior.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0. It still printed sandboxed `xcrun_db` cache permission messages and the existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only
+  stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`,
+  `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`,
+  `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+- Focused Xcode XCTest was not run in this turn because unsandboxed
+  CoreSimulator/external DerivedData execution was rejected by the execution
+  policy before `xcode-storage-doctor` could run.
+
+Boundary:
+- This advances OCI `process.terminal` initial boot-path selection. It does not
+  prove full OCI terminal lifecycle, terminal resize after process start, full
+  OCI Runtime Spec lifecycle support, registry execution inside Linux,
+  arbitrary imported-image compatibility, networking, devices, or multiple live
+  environments inside one already-running OrlixKernel.
+
+Current-status: OCI terminal token checkpoint verified by static/type checks; focused simulator XCTest unavailable due execution-policy rejection of unsandboxed CoreSimulator access.

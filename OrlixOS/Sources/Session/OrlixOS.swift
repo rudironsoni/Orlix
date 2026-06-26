@@ -851,13 +851,11 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 			descriptor: session.environment,
 			kernelCommandLine: kernelCommandLine
 		)
-		guard !session.terminal else {
-			return base
-		}
+		let terminalToken = session.terminal ? "orlix.terminal=1" : "orlix.terminal=0"
 		guard let base, !base.isEmpty else {
-			return "orlix.terminal=0"
+			return terminalToken
 		}
-		return "orlix.terminal=0 " + base
+		return "\(terminalToken) \(base)"
 	}
 
 	public convenience init(
