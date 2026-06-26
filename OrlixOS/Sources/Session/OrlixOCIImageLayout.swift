@@ -82,14 +82,14 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 			else {
 				throw OrlixOCIRegistryReferenceError.missingRegistry(reference)
 			}
-			scheme = parsedScheme.lowercased()
+			scheme = Self.normalizedScheme(parsedScheme)
 			let port = components.port.map { ":\($0)" } ?? ""
 			registryAndPath = host + port + components.path
 			if components.query != nil || components.fragment != nil {
 				throw OrlixOCIRegistryReferenceError.invalidEndpoint(reference)
 			}
 		} else {
-			scheme = defaultScheme.lowercased()
+			scheme = Self.normalizedScheme(defaultScheme)
 			registryAndPath = Self.defaultRegistryReference(reference)
 		}
 		guard let firstSlash = registryAndPath.firstIndex(of: "/") else {
@@ -179,6 +179,10 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 			return "library/\(repository)"
 		}
 		return repository
+	}
+
+	private static func normalizedScheme(_ scheme: String) -> String {
+		scheme.lowercased() == "docker" ? "https" : scheme.lowercased()
 	}
 
 	private static func validate(scheme: String) throws {

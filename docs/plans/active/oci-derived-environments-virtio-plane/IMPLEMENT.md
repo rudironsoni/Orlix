@@ -23717,3 +23717,21 @@ Evidence:
 - `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
 - `GOAL.md` size check reported `OK 3997`.
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+## 2026-06-26 - `docker://` registry reference input
+
+Implemented `docker://` registry-reference input compatibility for OCI-derived environments.
+
+- `OrlixOCIRegistryImageReference` now normalizes explicit `docker://` references to the existing HTTPS distribution API path.
+- `defaultScheme: "docker"` also normalizes to HTTPS, so callers can accept Docker-style registry input without adding Docker daemon behavior.
+- Docker Hub canonicalization remains unchanged: `docker.io` still resolves distribution requests through `registry-1.docker.io`.
+- This is OrlixOS registry input parsing only. It does not add Docker daemon, Docker runtime, package management, HostAdapter policy, Linux ABI, upstream patches, or generated-tree edits.
+- Added tests for explicit `docker://docker.io/library/alpine:3.20` and `defaultScheme: "docker"` image references.
+
+Evidence:
+
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
