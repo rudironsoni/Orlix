@@ -8254,6 +8254,131 @@ func testOCIEnvironmentStateArgumentsRejectsInvalidInput() throws {
 	}
 }
 
+func testOCIEnvironmentLifecycleArgumentsAcceptIDForms() throws {
+	let positional = try OrlixOCIEnvironmentLifecycleArguments(
+		["orlix", "start", "oci-demo"],
+		command: "start"
+	)
+	XCTAssertEqual(positional.id, "oci-demo")
+
+	let idOption = try OrlixOCIEnvironmentLifecycleArguments(
+		["wait", "--id", "oci-wait"],
+		command: "wait"
+	)
+	XCTAssertEqual(idOption.id, "oci-wait")
+
+	let nameOption = try OrlixOCIEnvironmentLifecycleArguments(
+		["delete", "--name=oci-delete"],
+		command: "delete"
+	)
+	XCTAssertEqual(nameOption.id, "oci-delete")
+}
+
+func testOCIEnvironmentLifecycleArgumentsRejectInvalidInput() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentLifecycleArguments(["state", "oci-demo"], command: "start")
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentLifecycleArgumentsError,
+			.missingCommand("start")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentLifecycleArguments(["start"], command: "start")
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentLifecycleArgumentsError,
+			.missingID
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentLifecycleArguments(["start", "--id"], command: "start")
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentLifecycleArgumentsError,
+			.missingOptionValue("--id")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentLifecycleArguments(
+			["start", "--unknown", "oci-demo"],
+			command: "start"
+		)
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentLifecycleArgumentsError,
+			.unknownOption("--unknown")
+		)
+	}
+}
+
+func testOCIEnvironmentKillArgumentsAcceptSignalForms() throws {
+	let defaultSignal = try OrlixOCIEnvironmentKillArguments([
+		"orlix", "kill", "oci-demo",
+	])
+	XCTAssertEqual(defaultSignal.id, "oci-demo")
+	XCTAssertEqual(defaultSignal.signal, 15)
+
+	let positionalSignal = try OrlixOCIEnvironmentKillArguments([
+		"kill", "oci-positional", "9",
+	])
+	XCTAssertEqual(positionalSignal.id, "oci-positional")
+	XCTAssertEqual(positionalSignal.signal, 9)
+
+	let optionSignal = try OrlixOCIEnvironmentKillArguments([
+		"kill", "--id", "oci-option", "--signal=2",
+	])
+	XCTAssertEqual(optionSignal.id, "oci-option")
+	XCTAssertEqual(optionSignal.signal, 2)
+
+	let shortSignal = try OrlixOCIEnvironmentKillArguments([
+		"kill", "--name=oci-short", "-s", "15",
+	])
+	XCTAssertEqual(shortSignal.id, "oci-short")
+	XCTAssertEqual(shortSignal.signal, 15)
+}
+
+func testOCIEnvironmentKillArgumentsRejectInvalidInput() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentKillArguments(["state", "oci-demo"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentKillArgumentsError,
+			.missingKillCommand
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentKillArguments(["kill"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentKillArgumentsError,
+			.missingID
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentKillArguments(["kill", "oci-demo", "0"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentKillArgumentsError,
+			.invalidSignal("0")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentKillArguments(["kill", "oci-demo", "9", "2"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentKillArgumentsError,
+			.unexpectedArgument("2")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsAnnotationOverrides() throws {
 	let arguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -12645,6 +12770,117 @@ func testOCIEnvironmentInstallerStateArgumentsReturnLifecycleReport() throws {
 		"oci://registry.example.org/library/demo@sha256:abc"
 	)
 	XCTAssertEqual(report.annotations["com.example.state"], "ready")
+}
+
+func testOCIEnvironmentInstallerLifecycleArgumentsDriveRuntimeActions() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+		"orlix-oci-lifecycle-arguments-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	try fileManager.createDirectory(
+		at: scratch,
+		withIntermediateDirectories: true
+	)
+	defer { try? fileManager.removeItem(at: scratch) }
+
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+		cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+		scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+	)
+	let runtime = OrlixOCIRuntime(registry: registry)
+	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+
+	let waitBundleURL = scratch.appendingPathComponent("wait-bundle", isDirectory: true)
+	try fileManager.createDirectory(
+		at: waitBundleURL.appendingPathComponent("rootfs", isDirectory: true),
+		withIntermediateDirectories: true
+	)
+	try nonRootOCIRuntimeConfig().write(
+		to: waitBundleURL.appendingPathComponent("config.json")
+	)
+	let createdForWait = try runtime.create(
+		bundleURL: waitBundleURL,
+		id: "oci-lifecycle-wait"
+	)
+	try Data("base".utf8).write(to: createdForWait.importPlan.storageLayout.baseImageURL)
+	try Data("state".utf8).write(to: createdForWait.importPlan.storageLayout.stateImageURL)
+	let waitDriver = try RecordingOCIRuntimeProcessObservationDriver(
+		startPID: 66,
+		completion: .exited(
+			OrlixOCIRuntimeProcessExitObservation(pid: 66, exitStatus: 3)
+		)
+	)
+
+	let started = try installer.start(
+		arguments: ["orlix", "start", "oci-lifecycle-wait"],
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: waitDriver,
+		fileManager: fileManager
+	)
+	let completed = try installer.wait(
+		arguments: ["wait", "--id=oci-lifecycle-wait"],
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: waitDriver,
+		fileManager: fileManager
+	)
+	let deleted = try installer.delete(
+		arguments: ["delete", "--name", "oci-lifecycle-wait"],
+		fileManager: fileManager
+	)
+
+	XCTAssertEqual(started.stateReport.status, .running)
+	XCTAssertEqual(started.stateReport.pid, 66)
+	XCTAssertEqual(completed.stateReport.status, .stopped)
+	XCTAssertEqual(completed.stateReport.exitStatus, 3)
+	XCTAssertEqual(deleted.lifecycleState, .deleted)
+	XCTAssertEqual(waitDriver.events, [
+		"start:created:nil",
+		"wait:running:66",
+	])
+
+	let killBundleURL = scratch.appendingPathComponent("kill-bundle", isDirectory: true)
+	try fileManager.createDirectory(
+		at: killBundleURL.appendingPathComponent("rootfs", isDirectory: true),
+		withIntermediateDirectories: true
+	)
+	try nonRootOCIRuntimeConfig().write(
+		to: killBundleURL.appendingPathComponent("config.json")
+	)
+	let createdForKill = try runtime.create(
+		bundleURL: killBundleURL,
+		id: "oci-lifecycle-kill"
+	)
+	try Data("base".utf8).write(to: createdForKill.importPlan.storageLayout.baseImageURL)
+	try Data("state".utf8).write(to: createdForKill.importPlan.storageLayout.stateImageURL)
+	let killDriver = try RecordingOCIRuntimeProcessObservationDriver(
+		startPID: 67,
+		completion: .signaled(
+			OrlixOCIRuntimeProcessSignalObservation(pid: 67, signal: 2)
+		)
+	)
+
+	_ = try installer.start(
+		arguments: ["start", "--id", "oci-lifecycle-kill"],
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: killDriver,
+		fileManager: fileManager
+	)
+	let signaled = try installer.kill(
+		arguments: ["orlix", "kill", "oci-lifecycle-kill", "--signal", "2"],
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: killDriver,
+		fileManager: fileManager
+	)
+
+	XCTAssertEqual(signaled.signal, 2)
+	XCTAssertEqual(signaled.stateReport.status, .running)
+	XCTAssertEqual(signaled.stateReport.pid, 67)
+	XCTAssertEqual(killDriver.events, [
+		"start:created:nil",
+		"signal:running:67:2",
+	])
 }
 
 func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {

@@ -1406,6 +1406,179 @@ public struct OrlixOCIEnvironmentStateArguments: Equatable, Sendable {
 	}
 }
 
+public enum OrlixOCIEnvironmentLifecycleArgumentsError: Error, Equatable, Sendable {
+	case missingCommand(String)
+	case missingID
+	case missingOptionValue(String)
+	case unknownOption(String)
+	case unexpectedArgument(String)
+}
+
+public struct OrlixOCIEnvironmentLifecycleArguments: Equatable, Sendable {
+	public let id: String
+
+	public init(_ arguments: [String], command: String) throws {
+		var values = arguments
+		if values.first == "orlix" {
+			values.removeFirst()
+		}
+		guard values.first == command else {
+			throw OrlixOCIEnvironmentLifecycleArgumentsError
+				.missingCommand(command)
+		}
+		values.removeFirst()
+
+		var parsedID: String?
+		while !values.isEmpty {
+			let value = values.removeFirst()
+			if value == "--id" || value == "--name" {
+				guard let id = values.first else {
+					throw OrlixOCIEnvironmentLifecycleArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedID = try Self.acceptID(id, current: parsedID)
+				values.removeFirst()
+				continue
+			}
+			if value.hasPrefix("--id=") || value.hasPrefix("--name=") {
+				let separator = value.firstIndex(of: "=")!
+				let option = String(value[..<separator])
+				let id = String(value[value.index(after: separator)...])
+				guard !id.isEmpty else {
+					throw OrlixOCIEnvironmentLifecycleArgumentsError
+						.missingOptionValue(option)
+				}
+				parsedID = try Self.acceptID(id, current: parsedID)
+				continue
+			}
+			if value.hasPrefix("-") {
+				throw OrlixOCIEnvironmentLifecycleArgumentsError.unknownOption(value)
+			}
+			parsedID = try Self.acceptID(value, current: parsedID)
+		}
+
+		guard let id = parsedID else {
+			throw OrlixOCIEnvironmentLifecycleArgumentsError.missingID
+		}
+		try OrlixEnvironmentStorageLayout.validateEnvironmentID(id)
+		self.id = id
+	}
+
+	private static func acceptID(_ id: String, current: String?) throws -> String {
+		guard current == nil else {
+			throw OrlixOCIEnvironmentLifecycleArgumentsError
+				.unexpectedArgument(id)
+		}
+		return id
+	}
+}
+
+public enum OrlixOCIEnvironmentKillArgumentsError: Error, Equatable, Sendable {
+	case missingKillCommand
+	case missingID
+	case missingOptionValue(String)
+	case unknownOption(String)
+	case unexpectedArgument(String)
+	case invalidSignal(String)
+}
+
+public struct OrlixOCIEnvironmentKillArguments: Equatable, Sendable {
+	public let id: String
+	public let signal: Int32
+
+	public init(_ arguments: [String]) throws {
+		var values = arguments
+		if values.first == "orlix" {
+			values.removeFirst()
+		}
+		guard values.first == "kill" else {
+			throw OrlixOCIEnvironmentKillArgumentsError.missingKillCommand
+		}
+		values.removeFirst()
+
+		var parsedID: String?
+		var parsedSignal: Int32 = 15
+		var parsedSignalPresent = false
+		while !values.isEmpty {
+			let value = values.removeFirst()
+			if value == "--id" || value == "--name" {
+				guard let id = values.first else {
+					throw OrlixOCIEnvironmentKillArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedID = try Self.acceptID(id, current: parsedID)
+				values.removeFirst()
+				continue
+			}
+			if value.hasPrefix("--id=") || value.hasPrefix("--name=") {
+				let separator = value.firstIndex(of: "=")!
+				let option = String(value[..<separator])
+				let id = String(value[value.index(after: separator)...])
+				guard !id.isEmpty else {
+					throw OrlixOCIEnvironmentKillArgumentsError
+						.missingOptionValue(option)
+				}
+				parsedID = try Self.acceptID(id, current: parsedID)
+				continue
+			}
+			if value == "--signal" || value == "-s" {
+				guard let signal = values.first else {
+					throw OrlixOCIEnvironmentKillArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedSignal = try Self.parseSignal(signal)
+				parsedSignalPresent = true
+				values.removeFirst()
+				continue
+			}
+			if value.hasPrefix("--signal=") {
+				let separator = value.firstIndex(of: "=")!
+				let signal = String(value[value.index(after: separator)...])
+				guard !signal.isEmpty else {
+					throw OrlixOCIEnvironmentKillArgumentsError
+						.missingOptionValue("--signal")
+				}
+				parsedSignal = try Self.parseSignal(signal)
+				parsedSignalPresent = true
+				continue
+			}
+			if value.hasPrefix("-") {
+				throw OrlixOCIEnvironmentKillArgumentsError.unknownOption(value)
+			}
+			if parsedID == nil {
+				parsedID = value
+			} else if !parsedSignalPresent {
+				parsedSignal = try Self.parseSignal(value)
+				parsedSignalPresent = true
+			} else {
+				throw OrlixOCIEnvironmentKillArgumentsError
+					.unexpectedArgument(value)
+			}
+		}
+
+		guard let id = parsedID else {
+			throw OrlixOCIEnvironmentKillArgumentsError.missingID
+		}
+		try OrlixEnvironmentStorageLayout.validateEnvironmentID(id)
+		self.id = id
+		self.signal = parsedSignal
+	}
+
+	private static func acceptID(_ id: String, current: String?) throws -> String {
+		guard current == nil else {
+			throw OrlixOCIEnvironmentKillArgumentsError.unexpectedArgument(id)
+		}
+		return id
+	}
+
+	private static func parseSignal(_ value: String) throws -> Int32 {
+		guard let signal = Int32(value), (1...127).contains(signal) else {
+			throw OrlixOCIEnvironmentKillArgumentsError.invalidSignal(value)
+		}
+		return signal
+	}
+}
+
 public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
 	case missingRunCommand
 	case missingImage
@@ -5419,6 +5592,24 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		)
 	}
 
+	public func start(
+		arguments: [String],
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentStartResult {
+		let request = try OrlixOCIEnvironmentLifecycleArguments(
+			arguments,
+			command: "start"
+		)
+		return try start(
+			id: request.id,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
+		)
+	}
+
 	@_spi(OrlixPrivateTesting)
 	public func start(
 		id: String,
@@ -5438,9 +5629,28 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		)
 	}
 
-    public func wait(
-        id: String,
-        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+	@_spi(OrlixPrivateTesting)
+	public func start(
+		arguments: [String],
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentStartResult {
+		let request = try OrlixOCIEnvironmentLifecycleArguments(
+			arguments,
+			command: "start"
+		)
+		return try start(
+			id: request.id,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+	}
+
+	public func wait(
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
         observationTimeout: TimeInterval = 600,
         fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentWaitResult {
@@ -5453,6 +5663,24 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		return OrlixOCIEnvironmentWaitResult(
 			id: id,
 			stateReport: completed.stateReport
+		)
+	}
+
+	public func wait(
+		arguments: [String],
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentWaitResult {
+		let request = try OrlixOCIEnvironmentLifecycleArguments(
+			arguments,
+			command: "wait"
+		)
+		return try wait(
+			id: request.id,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
 		)
 	}
 
@@ -5471,13 +5699,32 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		)
 		return OrlixOCIEnvironmentWaitResult(
 			id: id,
-            stateReport: completed.stateReport
-        )
-    }
+			stateReport: completed.stateReport
+		)
+	}
 
-    public func kill(
-        id: String,
-        signal: Int32,
+	@_spi(OrlixPrivateTesting)
+	public func wait(
+		arguments: [String],
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentWaitResult {
+		let request = try OrlixOCIEnvironmentLifecycleArguments(
+			arguments,
+			command: "wait"
+		)
+		return try wait(
+			id: request.id,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+	}
+
+	public func kill(
+		id: String,
+		signal: Int32,
         terminal: OrlixTerminalSession = OrlixTerminalSession(),
         observationTimeout: TimeInterval = 600,
         fileManager: FileManager = .default
@@ -5494,13 +5741,29 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
         return OrlixOCIEnvironmentSignalResult(
             id: id,
             signal: signaled.signal,
-            stateReport: signaled.stateReport
-        )
-    }
+			stateReport: signaled.stateReport
+		)
+	}
 
-    @_spi(OrlixPrivateTesting)
-    public func kill(
-        id: String,
+	public func kill(
+		arguments: [String],
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentSignalResult {
+		let request = try OrlixOCIEnvironmentKillArguments(arguments)
+		return try kill(
+			id: request.id,
+			signal: request.signal,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public func kill(
+		id: String,
         signal: Int32,
         terminal: OrlixTerminalSession = OrlixTerminalSession(),
         using driver: OrlixOCIRuntimeProcessObservationDriver,
@@ -5516,9 +5779,26 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
         return OrlixOCIEnvironmentSignalResult(
             id: id,
             signal: signaled.signal,
-            stateReport: signaled.stateReport
-        )
-    }
+			stateReport: signaled.stateReport
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public func kill(
+		arguments: [String],
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentSignalResult {
+		let request = try OrlixOCIEnvironmentKillArguments(arguments)
+		return try kill(
+			id: request.id,
+			signal: request.signal,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+	}
 
     public func run(
         id: String,
@@ -5583,6 +5863,18 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 			id: deletedEnvironment.id,
 			lifecycleState: deletedEnvironment.deletedRecord.state
 		)
+	}
+
+	@discardableResult
+	public func delete(
+		arguments: [String],
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentDeleteResult {
+		let request = try OrlixOCIEnvironmentLifecycleArguments(
+			arguments,
+			command: "delete"
+		)
+		return try delete(id: request.id, fileManager: fileManager)
 	}
 
 	private func registryLifecycleConfig(

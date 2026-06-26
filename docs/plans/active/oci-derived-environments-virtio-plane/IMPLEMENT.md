@@ -23680,3 +23680,22 @@ Evidence:
 - `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
 - `GOAL.md` size check reported `OK 3997`.
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+## 2026-06-26 - OCI lifecycle command arguments
+
+Implemented command-shaped OrlixOS lifecycle argument surfaces for prepared OCI environments.
+
+- Added `OrlixOCIEnvironmentLifecycleArguments` for `orlix start <id>`, `wait --id <id>`, and `delete --name=<id>` style commands.
+- Added `OrlixOCIEnvironmentKillArguments` for `orlix kill <id>`, positional signal, `--signal`, and `-s`, defaulting to signal 15.
+- Added `start(arguments:)`, `wait(arguments:)`, `kill(arguments:)`, and `delete(arguments:)` wrappers over the existing OrlixOS lifecycle APIs. Test SPI overloads accept the existing observation driver.
+- Kept all behavior in OrlixOS lifecycle/session ownership. No Linux ABI, HostAdapter policy, upstream patch, generated tree, package manager, or proof metadata changes.
+- Added parser tests for lifecycle ID forms, invalid lifecycle inputs, kill signal forms, invalid kill inputs.
+- Added runtime-backed wrapper test proving start, wait, kill, and delete argument paths drive persisted lifecycle records through the existing recording observation driver.
+
+Evidence:
+
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
