@@ -7935,6 +7935,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 			"run",
 			"--name",
 			"named-alpine",
+			"--rm",
 			"--platform=linux/arm64/v8",
 			"alpine:3.20",
 			"/bin/echo",
@@ -7945,6 +7946,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 		XCTAssertEqual(nameArguments.id, "named-alpine")
 		XCTAssertEqual(nameArguments.platform, "linux/arm64/v8")
 		XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
+		XCTAssertTrue(nameArguments.removeAfterRun)
 
 		let equalsArguments = try OrlixOCIEnvironmentRunArguments([
 			"run",
@@ -7956,6 +7958,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 		XCTAssertEqual(equalsArguments.id, "equals-alpine")
 		XCTAssertEqual(equalsArguments.platform, "linux/arm64")
 		XCTAssertNil(equalsArguments.command)
+		XCTAssertFalse(equalsArguments.removeAfterRun)
 	}
 
 	func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
@@ -7991,6 +7994,35 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTAssertEqual(arguments.id, "oci-docker-io-library-alpine-3-20")
 	XCTAssertEqual(arguments.platform, "linux/arm64")
 	XCTAssertNil(arguments.command)
+}
+
+func testOCIEnvironmentInstallerRejectsRemoveAfterRunForTerminalSession() throws {
+	let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+		"orlix-run-rm-terminal-\(UUID().uuidString)",
+		isDirectory: true
+	)
+	defer { try? FileManager.default.removeItem(at: root) }
+	let installer = OrlixOCIEnvironmentInstaller(
+		registry: OrlixEnvironmentRegistry(
+			linuxStateRoot: root.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: root.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: root.appendingPathComponent("scratch", isDirectory: true)
+		)
+	)
+
+	XCTAssertThrowsError(
+		try installer.terminalSession(arguments: [
+			"orlix",
+			"run",
+			"--rm",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentRunArgumentsError,
+			.removeAfterRunRequiresObservedRun
+		)
+	}
 }
 
 func testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex() async throws {
@@ -8905,12 +8937,13 @@ func testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath() 
 
 	XCTAssertEqual(result.installResult.image, image)
 	XCTAssertEqual(result.runResult.startedStateReport.status, .running)
-	XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
-	XCTAssertEqual(result.runResult.completedStateReport.pid, 42)
-	XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
-	XCTAssertEqual(
-		try registry.load(environmentID: "orlix-run-arguments").defaultCommand,
-		["/bin/sh", "-lc", "echo default"]
+		XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
+		XCTAssertEqual(result.runResult.completedStateReport.pid, 42)
+		XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
+		XCTAssertNil(result.deleteResult)
+		XCTAssertEqual(
+			try registry.load(environmentID: "orlix-run-arguments").defaultCommand,
+			["/bin/sh", "-lc", "echo default"]
 	)
 	XCTAssertEqual(driver.events, [
 		"start:created:nil",
@@ -8925,15 +8958,125 @@ func testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath() 
 		"orlix-debugfs",
 	])
 	let requests = await registryFetch.requests
-	XCTAssertEqual(requests.map(\.url.absoluteString), [
-		try image.manifestURL().absoluteString,
-		try image.blobURL(digest: configDigest).absoluteString,
-	])
-}
+		XCTAssertEqual(requests.map(\.url.absoluteString), [
+			try image.manifestURL().absoluteString,
+			try image.blobURL(digest: configDigest).absoluteString,
+		])
+	}
 
-func testOCIEnvironmentInstallerPreparesTerminalSessionFromOrlixRunArguments() async throws {
-	let fileManager = FileManager.default
-	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+	func testOCIEnvironmentInstallerRunArgumentsRemoveEnvironmentAfterRun() async throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+			"orlix-oci-registry-installer-run-rm-\(UUID().uuidString)",
+			isDirectory: true
+		)
+		try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+		defer { try? fileManager.removeItem(at: scratch) }
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+			cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+			scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+		)
+		let image = try OrlixOCIRegistryImageReference("alpine:3.20")
+		let configData = Data(
+			"""
+			{
+			  "config": {
+			    "Entrypoint": ["/bin/sh"],
+			    "Cmd": ["-lc", "echo ephemeral"],
+			    "WorkingDir": "/",
+			    "User": "0"
+			  },
+			  "rootfs": {
+			    "type": "layers",
+			    "diff_ids": []
+			  }
+			}
+			""".utf8
+		)
+		let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+		let manifestData = Data(
+			"""
+			{
+			  "schemaVersion": 2,
+			  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+			  "config": {
+			    "mediaType": "application/vnd.oci.image.config.v1+json",
+			    "digest": "\(configDigest)",
+			    "size": \(configData.count)
+			  },
+			  "layers": []
+			}
+			""".utf8
+		)
+		let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+		let registryFetch = RecordingOCIRegistryFetch(responses: [
+			try image.manifestURL().absoluteString: OrlixOCIRegistryFetchResponse(
+				statusCode: 200,
+				headers: [
+					"Content-Type": "application/vnd.oci.image.manifest.v1+json",
+					"Docker-Content-Digest": manifestDigest,
+				],
+				body: manifestData
+			),
+			try image.blobURL(digest: configDigest).absoluteString:
+				OrlixOCIRegistryFetchResponse(
+					statusCode: 200,
+					headers: ["Docker-Content-Digest": configDigest],
+					body: configData
+				),
+		])
+		let tools = OrlixOCIEnvironmentMaterializationTools(
+			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
+			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		)
+		let recorder = RecordingPublicOCIInstallerCommandRunner()
+		let driver = try RecordingOCIRuntimeProcessObservationDriver(
+			startPID: 43,
+			completion: .exited(
+				OrlixOCIRuntimeProcessExitObservation(pid: 43, exitStatus: 0)
+			)
+		)
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+
+		let result = try await installer.run(
+			arguments: [
+				"orlix",
+				"run",
+				"--rm",
+				"--id",
+				"orlix-run-rm",
+				"alpine:3.20",
+			],
+			tools: tools,
+			puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
+			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+			using: driver,
+			fileManager: fileManager
+		) { executable, arguments in
+			try recorder.run(executable: executable, arguments: arguments)
+		}
+
+		XCTAssertEqual(result.installResult.id, "orlix-run-rm")
+		XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
+		XCTAssertEqual(result.deleteResult?.id, "orlix-run-rm")
+		XCTAssertEqual(result.deleteResult?.lifecycleState, .deleted)
+		XCTAssertThrowsError(
+			try installer.state(id: "orlix-run-rm", fileManager: fileManager)
+		) { error in
+			XCTAssertEqual(
+				error as? OrlixOCIRuntimeLifecycleStoreError,
+				.missingRecord("orlix-run-rm")
+			)
+		}
+		XCTAssertThrowsError(try registry.load(environmentID: "orlix-run-rm"))
+	}
+
+	func testOCIEnvironmentInstallerPreparesTerminalSessionFromOrlixRunArguments() async throws {
+		let fileManager = FileManager.default
+		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 		"orlix-oci-run-terminal-session-\(UUID().uuidString)",
 		isDirectory: true
 	)
@@ -9187,6 +9330,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		XCTAssertEqual(result.runResult.startedStateReport.status, .running)
 		XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
 		XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
+		XCTAssertNil(result.deleteResult)
 		XCTAssertEqual(
 			try installer.state(id: "registry-installed-run"),
 			result.runResult.completedStateReport
@@ -12238,30 +12382,10 @@ func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached()
 		}
 	}
 
-	func testOCIRuntimeConfigParserTranslatesSupportedDocumentsBindMount() throws {
-		let config = Data(
-			"""
-			{
-		  "ociVersion": "1.1.0",
-		  "process": { "args": ["/bin/sh"], "cwd": "/" },
-		  "root": { "path": "rootfs" },
-		  "mounts": [
-		    {
-		      "destination": "/home/root/Documents",
-		      "type": "bind",
-		      "source": "orlix:documents",
-		      "options": ["rbind", "ro", "nosuid", "nodev", "noexec"]
-		    },
-					{
-						"destination": "/mnt/shared",
-						"type": "bind",
-						"source": "orlix:documents",
-						"options": ["bind", "rw"]
-					}
-				]
-			}
-			""".utf8
-		)
+func testOCIRuntimeConfigParserTranslatesSupportedDocumentsBindMount() throws {
+	let config = Data(
+		#"{"ociVersion":"1.1.0","process":{"args":["/bin/sh"],"cwd":"/"},"root":{"path":"rootfs"},"mounts":[{"destination":"/home/root/Documents","type":"bind","source":"orlix:documents","options":["rbind","ro","nosuid","nodev","noexec"]},{"destination":"/mnt/shared","type":"bind","source":"orlix:documents","options":["bind","rw"]}]}"#.utf8
+	)
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
         XCTAssertEqual(descriptor.mounts.count, 2)
         XCTAssertEqual(descriptor.mounts[0].destination, "/home/root/Documents")
@@ -12286,24 +12410,10 @@ func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached()
 	XCTAssertFalse(environment.mounts[1].noExec)
 }
 
-	func testOCIRuntimeConfigParserTranslatesExternalBookmarkBindMount() throws {
-		let config = Data(
-			"""
-			{
-		  "ociVersion": "1.1.0",
-		  "process": { "args": ["/bin/sh"], "cwd": "/" },
-		  "root": { "path": "rootfs" },
-		  "mounts": [
-					{
-						"destination": "/mnt/project",
-						"type": "bind",
-						"source": "orlix:external:selected-project",
-						"options": ["rbind", "ro"]
-					}
-				]
-			}
-			""".utf8
-		)
+func testOCIRuntimeConfigParserTranslatesExternalBookmarkBindMount() throws {
+	let config = Data(
+		#"{"ociVersion":"1.1.0","process":{"args":["/bin/sh"],"cwd":"/"},"root":{"path":"rootfs"},"mounts":[{"destination":"/mnt/project","type":"bind","source":"orlix:external:selected-project","options":["rbind","ro"]}]}"#.utf8
+	)
 		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
 		XCTAssertEqual(descriptor.mounts.count, 1)
 		XCTAssertEqual(descriptor.mounts[0].destination, "/mnt/project")

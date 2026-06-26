@@ -1313,6 +1313,7 @@ public struct OrlixOCIEnvironmentInstallRunResult: Sendable {
 public struct OrlixOCIRegistryEnvironmentInstallRunResult: Sendable {
 	public let installResult: OrlixOCIRegistryEnvironmentInstallResult
 	public let runResult: OrlixOCIEnvironmentRunResult
+	public let deleteResult: OrlixOCIEnvironmentDeleteResult?
 }
 
 public struct OrlixOCIRegistryEnvironmentTerminalSessionResult: Sendable {
@@ -1345,6 +1346,7 @@ public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
 	case missingImage
 	case missingOptionValue(String)
 	case unknownOption(String)
+	case removeAfterRunRequiresObservedRun
 }
 
 public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
@@ -1352,6 +1354,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let id: String
 	public let platform: String
 	public let command: [String]?
+	public let removeAfterRun: Bool
 
 	public init(_ arguments: [String]) throws {
 		var values = arguments
@@ -1367,6 +1370,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedPlatform = "linux/arm64"
 		var parsedImage: String?
 		var parsedCommand: [String] = []
+		var parsedRemoveAfterRun = false
 
 		while !values.isEmpty {
 			let value = values.removeFirst()
@@ -1374,6 +1378,10 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				parsedCommand = values
 				values.removeAll()
 				break
+			}
+			if parsedImage == nil, value == "--rm" {
+				parsedRemoveAfterRun = true
+				continue
 			}
 			if parsedImage == nil, value == "--id" || value == "--name" {
 				guard let id = values.first else {
@@ -1434,6 +1442,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.id = id
 		self.platform = parsedPlatform
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
+		self.removeAfterRun = parsedRemoveAfterRun
 	}
 
 	private static func defaultEnvironmentID(
@@ -1641,7 +1650,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
 		let request = try OrlixOCIEnvironmentRunArguments(arguments)
-		return try await run(
+		let result = try await run(
 			image: request.image,
 			id: request.id,
 			tools: tools,
@@ -1652,6 +1661,15 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
 			runCommand: runCommand
+		)
+		guard request.removeAfterRun else {
+			return result
+		}
+		let deleteResult = try delete(id: request.id, fileManager: fileManager)
+		return OrlixOCIRegistryEnvironmentInstallRunResult(
+			installResult: result.installResult,
+			runResult: result.runResult,
+			deleteResult: deleteResult
 		)
 	}
 
@@ -1665,6 +1683,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentTerminalSessionResult {
 		let request = try OrlixOCIEnvironmentRunArguments(arguments)
+		if request.removeAfterRun {
+			throw OrlixOCIEnvironmentRunArgumentsError
+				.removeAfterRunRequiresObservedRun
+		}
 		return try await prepareTerminalSession(
 			image: try OrlixOCIRegistryImageReference(request.image),
 			id: request.id,
@@ -1684,6 +1706,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentTerminalSessionResult {
 		let request = try OrlixOCIEnvironmentRunArguments(arguments)
+		if request.removeAfterRun {
+			throw OrlixOCIEnvironmentRunArgumentsError
+				.removeAfterRunRequiresObservedRun
+		}
 		let image = try OrlixOCIRegistryImageReference(request.image)
 		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
 			id: request.id,
@@ -1815,7 +1841,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		return OrlixOCIRegistryEnvironmentInstallRunResult(
 			installResult: installResult,
-			runResult: runResult
+			runResult: runResult,
+			deleteResult: nil
 		)
 	}
 
@@ -1831,7 +1858,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallRunResult {
 		let request = try OrlixOCIEnvironmentRunArguments(arguments)
-		return try await run(
+		let result = try await run(
 			image: OrlixOCIRegistryImageReference(request.image),
 			id: request.id,
 			tools: tools,
@@ -1842,6 +1869,15 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			using: driver,
 			fileManager: fileManager,
 			runCommand: runCommand
+		)
+		guard request.removeAfterRun else {
+			return result
+		}
+		let deleteResult = try delete(id: request.id, fileManager: fileManager)
+		return OrlixOCIRegistryEnvironmentInstallRunResult(
+			installResult: result.installResult,
+			runResult: result.runResult,
+			deleteResult: deleteResult
 		)
 	}
 
@@ -1877,7 +1913,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		return OrlixOCIRegistryEnvironmentInstallRunResult(
 			installResult: installResult,
-			runResult: runResult
+			runResult: runResult,
+			deleteResult: nil
 		)
 	}
 
