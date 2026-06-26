@@ -690,14 +690,12 @@ public struct OrlixEnvironmentCPUAffinity: Codable, Equatable, Sendable {
     }
 }
 
-@_spi(OrlixPrivateTesting)
 public enum OrlixEnvironmentMountSource: Codable, Equatable, Sendable {
 	case documents
 	case securityScopedExternal(bookmarkID: String)
 	case hostPath(String)
 }
 
-@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
 	public let source: OrlixEnvironmentMountSource
 	public let targetPath: String

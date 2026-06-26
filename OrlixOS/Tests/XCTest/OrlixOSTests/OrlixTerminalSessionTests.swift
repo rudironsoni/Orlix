@@ -7964,6 +7964,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.cgroupIOWeight)
 	XCTTrue(arguments.cgroupUnified.isEmpty)
 	XCTTrue(arguments.tmpfsMounts.isEmpty)
+	XCTTrue(arguments.mounts.isEmpty)
 	XCTTrue(arguments.deviceNodes.isEmpty)
 	XCTTrue(arguments.namespaces.isEmpty)
 	XCTTrue(arguments.namespacePaths.isEmpty)
@@ -8499,6 +8500,62 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidTmpfsMountOverride() throws {
 			"--tmpfs",
 			"/run/cache:nosuid",
 			"--tmpfs=/run/cache:nodev",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("mounts.destination")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsBindMountOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--mount",
+		"type=bind,source=orlix:documents,target=/mnt/documents,readonly,noexec",
+		"--mount=type=bind,src=/private/tmp/orlix-host,dst=/mnt/host,ro",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.mounts,
+		[
+			try OrlixEnvironmentMount.documents(
+				targetPath: "/mnt/documents",
+				readOnly: true,
+				noExec: true
+			),
+			try OrlixEnvironmentMount.hostPath(
+				"/private/tmp/orlix-host",
+				targetPath: "/mnt/host",
+				readOnly: true
+			),
+		]
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidBindMountOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--mount",
+			"type=tmpfs,target=/mnt/cache",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("mounts.type.tmpfs")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--mount",
+			"type=bind,source=orlix:documents,target=/proc/host",
 			"alpine:3.20",
 		])
 	) { error in
@@ -10829,11 +10886,13 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--cgroup-unified",
 			"cpu.weight=39",
 			"--cgroup-unified=memory.max=268435456",
-		"--tmpfs",
-		"/run/cache:nosuid,nodev,noexec,size=64m,mode=0755",
-		"--tmpfs=/var/tmp:ro",
-		"--device-node",
-		"/dev/orlix-zero:c:1:5:0660:1000:100",
+			"--tmpfs",
+			"/run/cache:nosuid,nodev,noexec,size=64m,mode=0755",
+			"--tmpfs=/var/tmp:ro",
+			"--mount",
+			"type=bind,source=orlix:documents,target=/mnt/documents,readonly,noexec",
+			"--device-node",
+			"/dev/orlix-zero:c:1:5:0660:1000:100",
 		"--device-node=/dev/orlix-pipe:p:0644",
 		"--namespace",
 		"pid",
@@ -10964,6 +11023,16 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			try OrlixEnvironmentTmpfsMount(
 				targetPath: "/var/tmp",
 				readOnly: true
+			),
+		]
+	)
+	XCTAssertEqual(
+		descriptor.mounts,
+		[
+			try OrlixEnvironmentMount.documents(
+				targetPath: "/mnt/documents",
+				readOnly: true,
+				noExec: true
 			),
 		]
 	)

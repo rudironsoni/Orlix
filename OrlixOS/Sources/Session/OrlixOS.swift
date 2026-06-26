@@ -1387,6 +1387,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let cgroupIOWeight: UInt64?
     public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
     public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
+    public let mounts: [OrlixEnvironmentMount]
     public let deviceNodes: [OrlixEnvironmentDeviceNode]
     public let namespaces: [String]
     public let namespacePaths: [String: String]
@@ -1450,6 +1451,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         var parsedCgroupIOWeight: UInt64?
         var parsedCgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry] = []
         var parsedTmpfsMounts: [OrlixEnvironmentTmpfsMount] = []
+        var parsedMounts: [OrlixEnvironmentMount] = []
         var parsedDeviceNodes: [OrlixEnvironmentDeviceNode] = []
         var parsedNamespaces: [String] = []
         var parsedNamespacePaths: [String: String] = [:]
@@ -1688,19 +1690,38 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                 values.removeFirst()
                 continue
             }
-        if parsedImage == nil, value.hasPrefix("--tmpfs=") {
-            let separator = value.firstIndex(of: "=")!
-            let tmpfs = String(value[value.index(after: separator)...])
+            if parsedImage == nil, value.hasPrefix("--tmpfs=") {
+                let separator = value.firstIndex(of: "=")!
+                let tmpfs = String(value[value.index(after: separator)...])
             guard !tmpfs.isEmpty else {
                 throw OrlixOCIEnvironmentRunArgumentsError
                         .missingOptionValue("--tmpfs")
                 }
-            try Self.addTmpfsMount(tmpfs, to: &parsedTmpfsMounts)
-            continue
-        }
-        if parsedImage == nil, value == "--device-node" {
-            guard let deviceNode = values.first else {
-                throw OrlixOCIEnvironmentRunArgumentsError
+                try Self.addTmpfsMount(tmpfs, to: &parsedTmpfsMounts)
+                continue
+            }
+            if parsedImage == nil, value == "--mount" {
+                guard let mount = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue(value)
+                }
+                try Self.addMount(mount, to: &parsedMounts)
+                values.removeFirst()
+                continue
+            }
+            if parsedImage == nil, value.hasPrefix("--mount=") {
+                let separator = value.firstIndex(of: "=")!
+                let mount = String(value[value.index(after: separator)...])
+                guard !mount.isEmpty else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue("--mount")
+                }
+                try Self.addMount(mount, to: &parsedMounts)
+                continue
+            }
+            if parsedImage == nil, value == "--device-node" {
+                guard let deviceNode = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
                     .missingOptionValue(value)
             }
             try Self.addDeviceNode(deviceNode, to: &parsedDeviceNodes)
@@ -2342,6 +2363,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.cgroupIOWeight = parsedCgroupIOWeight
         self.cgroupUnified = parsedCgroupUnified
         self.tmpfsMounts = parsedTmpfsMounts
+        self.mounts = parsedMounts
         self.deviceNodes = parsedDeviceNodes
         self.namespaces = parsedNamespaces
         self.namespacePaths = parsedNamespacePaths
@@ -2957,6 +2979,102 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         }
     }
 
+    private static func addMount(
+        _ value: String,
+        to mounts: inout [OrlixEnvironmentMount]
+    ) throws {
+        let mount = try parseMount(value)
+        guard !mounts.contains(where: { $0.targetPath == mount.targetPath })
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "mounts.destination"
+            )
+        }
+        mounts.append(mount)
+    }
+
+    private static func parseMount(_ value: String) throws
+        -> OrlixEnvironmentMount
+    {
+        var type: String?
+        var source: String?
+        var destination: String?
+        var options: [String] = []
+        var seenKeys = Set<String>()
+        let parts = value.split(separator: ",", omittingEmptySubsequences: false)
+        guard !parts.isEmpty else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts")
+        }
+        for rawPart in parts {
+            let part = String(rawPart)
+            guard !part.isEmpty else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "mounts.options"
+                )
+            }
+            if let separator = part.firstIndex(of: "=") {
+                let key = String(part[..<separator])
+                let fieldValue = String(part[part.index(after: separator)...])
+                guard !key.isEmpty,
+                      !fieldValue.isEmpty,
+                      !seenKeys.contains(key)
+                else {
+                    throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                        "mounts.options"
+                    )
+                }
+                seenKeys.insert(key)
+                switch key {
+                case "type":
+                    type = fieldValue
+                case "source", "src":
+                    source = fieldValue
+                case "target", "destination", "dst":
+                    destination = fieldValue
+                case "readonly":
+                    guard fieldValue == "true" || fieldValue == "1" else {
+                        throw OrlixOCIRuntimeConfigError
+                            .unsupportedLinuxFeature("mounts.options")
+                    }
+                    options.append("ro")
+                default:
+                    throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                        "mounts.options"
+                    )
+                }
+            } else {
+                switch part {
+                case "readonly":
+                    options.append("ro")
+                default:
+                    options.append(part)
+                }
+            }
+        }
+        guard let mountType = type, mountType == "bind" else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "mounts.type.\(type ?? "")"
+            )
+        }
+        guard let destination else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "mounts.destination"
+            )
+        }
+        let runtimeMount = OrlixOCIRuntimeMount(
+            destination: destination,
+            type: mountType,
+            source: source,
+            options: options
+        )
+        guard let mount = try runtimeMount.environmentMount() else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "mounts.type.\(mountType)"
+            )
+        }
+        return mount
+    }
+
     private static func validatedTmpfsDataOption(
         _ option: String
     ) throws -> Bool {
@@ -3433,6 +3551,18 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         return (retained + overrides).sorted { $0.targetPath < $1.targetPath }
     }
 
+    private static func mergedMounts(
+        _ existing: [OrlixEnvironmentMount],
+        overrides: [OrlixEnvironmentMount]
+    ) -> [OrlixEnvironmentMount] {
+        guard !overrides.isEmpty else { return existing }
+        let overrideTargets = Set(overrides.map(\.targetPath))
+        let retained = existing.filter {
+            !overrideTargets.contains($0.targetPath)
+        }
+        return (retained + overrides).sorted { $0.targetPath < $1.targetPath }
+    }
+
     private static func mergedDeviceNodes(
         _ existing: [OrlixEnvironmentDeviceNode],
         overrides: [OrlixEnvironmentDeviceNode]
@@ -3524,10 +3654,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         replacingCgroupCPUMaxWith cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?,
         replacingCgroupCPUWeightWith cgroupCPUWeight: UInt64?,
         replacingCgroupMemoryMaxWith cgroupMemoryMax: Int64?,
-        replacingCgroupIOWeightWith cgroupIOWeight: UInt64?,
-        mergingCgroupUnifiedWith cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry],
-        mergingTmpfsMountsWith tmpfsMounts: [OrlixEnvironmentTmpfsMount],
-        mergingDeviceNodesWith deviceNodes: [OrlixEnvironmentDeviceNode],
+	replacingCgroupIOWeightWith cgroupIOWeight: UInt64?,
+	mergingCgroupUnifiedWith cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry],
+	mergingTmpfsMountsWith tmpfsMounts: [OrlixEnvironmentTmpfsMount],
+	mergingMountsWith mounts: [OrlixEnvironmentMount],
+	mergingDeviceNodesWith deviceNodes: [OrlixEnvironmentDeviceNode],
         mergingNamespacesWith namespaces: [String],
         mergingNamespacePathsWith namespacePaths: [String: String],
         mergingTimeOffsetsWith timeOffsets: [OrlixEnvironmentTimeOffset],
@@ -3565,10 +3696,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             || cgroupCPUMax != nil
             || cgroupCPUWeight != nil
             || cgroupMemoryMax != nil
-            || cgroupIOWeight != nil
-            || !cgroupUnified.isEmpty
-            || !tmpfsMounts.isEmpty
-            || !deviceNodes.isEmpty
+	|| cgroupIOWeight != nil
+	|| !cgroupUnified.isEmpty
+	|| !tmpfsMounts.isEmpty
+	|| !mounts.isEmpty
+	|| !deviceNodes.isEmpty
             || !namespaces.isEmpty
             || !namespacePaths.isEmpty
             || !timeOffsets.isEmpty
@@ -3699,13 +3831,17 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             descriptor.cgroupUnified,
             overrides: cgroupUnified
         )
-        let effectiveTmpfsMounts = Self.mergedTmpfsMounts(
-            descriptor.tmpfsMounts,
-            overrides: tmpfsMounts
-        )
-        let effectiveDeviceNodes = Self.mergedDeviceNodes(
-            descriptor.deviceNodes,
-            overrides: deviceNodes
+	let effectiveTmpfsMounts = Self.mergedTmpfsMounts(
+		descriptor.tmpfsMounts,
+		overrides: tmpfsMounts
+	)
+	let effectiveMounts = Self.mergedMounts(
+		descriptor.mounts,
+		overrides: mounts
+	)
+	let effectiveDeviceNodes = Self.mergedDeviceNodes(
+		descriptor.deviceNodes,
+		overrides: deviceNodes
         )
         let effectiveNamespaces = Self.mergedNamespaces(
             descriptor.namespaces,
@@ -3804,11 +3940,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             timeOffsets: effectiveTimeOffsets,
             uidMappings: effectiveUIDMappings,
             gidMappings: effectiveGIDMappings,
-            namespaces: effectiveNamespaces,
-            namespacePaths: effectiveNamespacePaths,
-            tmpfsMounts: effectiveTmpfsMounts,
-            mounts: descriptor.mounts
-        )
+	namespaces: effectiveNamespaces,
+	namespacePaths: effectiveNamespacePaths,
+	tmpfsMounts: effectiveTmpfsMounts,
+	mounts: effectiveMounts
+	)
     }
 
     public func listPreparedEnvironments(
@@ -3883,10 +4019,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
-		cgroupIOWeightOverride: UInt64? = nil,
-cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+	cgroupIOWeightOverride: UInt64? = nil,
+	cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+	tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+	mountOverrides: [OrlixEnvironmentMount] = [],
+	deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
 timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
@@ -3932,10 +4069,11 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
-			cgroupIOWeightOverride: cgroupIOWeightOverride,
-cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-tmpfsMountOverrides: tmpfsMountOverrides,
-deviceNodeOverrides: deviceNodeOverrides,
+	cgroupIOWeightOverride: cgroupIOWeightOverride,
+	cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+	tmpfsMountOverrides: tmpfsMountOverrides,
+	mountOverrides: mountOverrides,
+	deviceNodeOverrides: deviceNodeOverrides,
 namespaceOverrides: namespaceOverrides,
 namespacePathOverrides: namespacePathOverrides,
 timeOffsetOverrides: timeOffsetOverrides,
@@ -3984,10 +4122,11 @@ gidMappingOverrides: gidMappingOverrides,
 		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
-		cgroupIOWeightOverride: UInt64? = nil,
-        cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-        tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-        deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+	cgroupIOWeightOverride: UInt64? = nil,
+	cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+	tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+	mountOverrides: [OrlixEnvironmentMount] = [],
+	deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
         namespaceOverrides: [String] = [],
         namespacePathOverrides: [String: String] = [:],
         timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
@@ -4062,10 +4201,11 @@ gidMappingOverrides: gidMappingOverrides,
 				replacingCgroupCPUMaxWith: cgroupCPUMaxOverride,
 				replacingCgroupCPUWeightWith: cgroupCPUWeightOverride,
 				replacingCgroupMemoryMaxWith: cgroupMemoryMaxOverride,
-				replacingCgroupIOWeightWith: cgroupIOWeightOverride,
-            mergingCgroupUnifiedWith: cgroupUnifiedOverrides,
-            mergingTmpfsMountsWith: tmpfsMountOverrides,
-            mergingDeviceNodesWith: deviceNodeOverrides,
+	replacingCgroupIOWeightWith: cgroupIOWeightOverride,
+	mergingCgroupUnifiedWith: cgroupUnifiedOverrides,
+	mergingTmpfsMountsWith: tmpfsMountOverrides,
+	mergingMountsWith: mountOverrides,
+	mergingDeviceNodesWith: deviceNodeOverrides,
             mergingNamespacesWith: namespaceOverrides,
             mergingNamespacePathsWith: namespacePathOverrides,
             mergingTimeOffsetsWith: timeOffsetOverrides,
@@ -4187,10 +4327,11 @@ gidMappingOverrides: gidMappingOverrides,
 			cgroupCPUMaxOverride: request.cgroupCPUMax,
 			cgroupCPUWeightOverride: request.cgroupCPUWeight,
 			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
-			cgroupIOWeightOverride: request.cgroupIOWeight,
-            cgroupUnifiedOverrides: request.cgroupUnified,
-            tmpfsMountOverrides: request.tmpfsMounts,
-            deviceNodeOverrides: request.deviceNodes,
+	cgroupIOWeightOverride: request.cgroupIOWeight,
+	cgroupUnifiedOverrides: request.cgroupUnified,
+	tmpfsMountOverrides: request.tmpfsMounts,
+	mountOverrides: request.mounts,
+	deviceNodeOverrides: request.deviceNodes,
             namespaceOverrides: request.namespaces,
             namespacePathOverrides: request.namespacePaths,
             timeOffsetOverrides: request.timeOffsets,
@@ -4265,10 +4406,11 @@ gidMappingOverrides: gidMappingOverrides,
 			cgroupCPUMaxOverride: request.cgroupCPUMax,
 			cgroupCPUWeightOverride: request.cgroupCPUWeight,
 			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
-            cgroupIOWeightOverride: request.cgroupIOWeight,
-            cgroupUnifiedOverrides: request.cgroupUnified,
-            tmpfsMountOverrides: request.tmpfsMounts,
-            deviceNodeOverrides: request.deviceNodes,
+	cgroupIOWeightOverride: request.cgroupIOWeight,
+	cgroupUnifiedOverrides: request.cgroupUnified,
+	tmpfsMountOverrides: request.tmpfsMounts,
+	mountOverrides: request.mounts,
+	deviceNodeOverrides: request.deviceNodes,
             namespaceOverrides: request.namespaces,
             namespacePathOverrides: request.namespacePaths,
             timeOffsetOverrides: request.timeOffsets,
@@ -4345,9 +4487,10 @@ gidMappingOverrides: gidMappingOverrides,
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
-        cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-        tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-        deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+	cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+	tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+	mountOverrides: [OrlixEnvironmentMount] = [],
+	deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
         namespaceOverrides: [String] = [],
         namespacePathOverrides: [String: String] = [:],
         timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
@@ -4396,9 +4539,10 @@ gidMappingOverrides: gidMappingOverrides,
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
-            cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-            tmpfsMountOverrides: tmpfsMountOverrides,
-            deviceNodeOverrides: deviceNodeOverrides,
+	cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+	tmpfsMountOverrides: tmpfsMountOverrides,
+	mountOverrides: mountOverrides,
+	deviceNodeOverrides: deviceNodeOverrides,
             namespaceOverrides: namespaceOverrides,
             namespacePathOverrides: namespacePathOverrides,
             timeOffsetOverrides: timeOffsetOverrides,
@@ -4450,9 +4594,10 @@ gidMappingOverrides: gidMappingOverrides,
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
-cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+	cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+	tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+	mountOverrides: [OrlixEnvironmentMount] = [],
+	deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
 timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
@@ -4500,9 +4645,10 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
-cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-tmpfsMountOverrides: tmpfsMountOverrides,
-deviceNodeOverrides: deviceNodeOverrides,
+	cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+	tmpfsMountOverrides: tmpfsMountOverrides,
+	mountOverrides: mountOverrides,
+	deviceNodeOverrides: deviceNodeOverrides,
 namespaceOverrides: namespaceOverrides,
 namespacePathOverrides: namespacePathOverrides,
 timeOffsetOverrides: timeOffsetOverrides,
@@ -4563,9 +4709,10 @@ fileManager: fileManager,
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
-cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+	cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+	tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+	mountOverrides: [OrlixEnvironmentMount] = [],
+	deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
 timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
@@ -4615,8 +4762,9 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
-            cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-            tmpfsMountOverrides: tmpfsMountOverrides,
+	cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+	tmpfsMountOverrides: tmpfsMountOverrides,
+	mountOverrides: mountOverrides,
             deviceNodeOverrides: deviceNodeOverrides,
             namespaceOverrides: namespaceOverrides,
             namespacePathOverrides: namespacePathOverrides,
@@ -4670,9 +4818,10 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
         cgroupIOWeightOverride: UInt64? = nil,
-        cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-        tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-        deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+	cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+	tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+	mountOverrides: [OrlixEnvironmentMount] = [],
+	deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
         namespaceOverrides: [String] = [],
         namespacePathOverrides: [String: String] = [:],
         timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
@@ -4721,9 +4870,10 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
             cgroupIOWeightOverride: cgroupIOWeightOverride,
-            cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-            tmpfsMountOverrides: tmpfsMountOverrides,
-deviceNodeOverrides: deviceNodeOverrides,
+	cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+	tmpfsMountOverrides: tmpfsMountOverrides,
+	mountOverrides: mountOverrides,
+	deviceNodeOverrides: deviceNodeOverrides,
 namespaceOverrides: namespaceOverrides,
 namespacePathOverrides: namespacePathOverrides,
 timeOffsetOverrides: timeOffsetOverrides,
@@ -4797,9 +4947,10 @@ fileManager: fileManager,
 			cgroupCPUWeightOverride: request.cgroupCPUWeight,
 			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			cgroupIOWeightOverride: request.cgroupIOWeight,
-cgroupUnifiedOverrides: request.cgroupUnified,
-tmpfsMountOverrides: request.tmpfsMounts,
-deviceNodeOverrides: request.deviceNodes,
+	cgroupUnifiedOverrides: request.cgroupUnified,
+	tmpfsMountOverrides: request.tmpfsMounts,
+	mountOverrides: request.mounts,
+	deviceNodeOverrides: request.deviceNodes,
 namespaceOverrides: request.namespaces,
 namespacePathOverrides: request.namespacePaths,
 timeOffsetOverrides: request.timeOffsets,
@@ -4862,9 +5013,10 @@ gidMappingOverrides: request.gidMappings,
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
         cgroupIOWeightOverride: UInt64? = nil,
-cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+	cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+	tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+	mountOverrides: [OrlixEnvironmentMount] = [],
+	deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
 timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
@@ -4913,9 +5065,10 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
             cgroupCPUWeightOverride: cgroupCPUWeightOverride,
             cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
             cgroupIOWeightOverride: cgroupIOWeightOverride,
-            cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-            tmpfsMountOverrides: tmpfsMountOverrides,
-            deviceNodeOverrides: deviceNodeOverrides,
+	cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+	tmpfsMountOverrides: tmpfsMountOverrides,
+	mountOverrides: mountOverrides,
+	deviceNodeOverrides: deviceNodeOverrides,
             namespaceOverrides: namespaceOverrides,
             namespacePathOverrides: namespacePathOverrides,
             timeOffsetOverrides: timeOffsetOverrides,
