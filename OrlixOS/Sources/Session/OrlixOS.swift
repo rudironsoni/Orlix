@@ -1375,12 +1375,24 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				values.removeAll()
 				break
 			}
-			if parsedImage == nil, value == "--id" {
+			if parsedImage == nil, value == "--id" || value == "--name" {
 				guard let id = values.first else {
 					throw OrlixOCIEnvironmentRunArgumentsError.missingOptionValue(value)
 				}
 				parsedID = id
 				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil,
+			   value.hasPrefix("--id=") || value.hasPrefix("--name=")
+			{
+				let separator = value.firstIndex(of: "=")!
+				let option = String(value[..<separator])
+				let id = String(value[value.index(after: separator)...])
+				guard !id.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError.missingOptionValue(option)
+				}
+				parsedID = id
 				continue
 			}
 			if parsedImage == nil, value == "--platform" {
@@ -1389,6 +1401,16 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				}
 				parsedPlatform = platform
 				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--platform=") {
+				let separator = value.firstIndex(of: "=")!
+				let platform = String(value[value.index(after: separator)...])
+				guard !platform.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--platform")
+				}
+				parsedPlatform = platform
 				continue
 			}
 			if parsedImage == nil, value.hasPrefix("-") {
