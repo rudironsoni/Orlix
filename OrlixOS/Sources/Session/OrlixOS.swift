@@ -1284,15 +1284,21 @@ public struct OrlixOCIRegistryEnvironmentInstallResult: Sendable {
 }
 
 public struct OrlixOCIEnvironmentRunResult: Sendable {
-	public let id: String
-	public let startedStateReport: OrlixOCIRuntimeStateReport
-	public let completedStateReport: OrlixOCIRuntimeStateReport
+    public let id: String
+    public let startedStateReport: OrlixOCIRuntimeStateReport
+    public let completedStateReport: OrlixOCIRuntimeStateReport
+}
+
+public struct OrlixOCIEnvironmentExecResult: Sendable {
+    public let id: String
+    public let command: [String]
+    public let runResult: OrlixOCIEnvironmentRunResult
 }
 
 public struct OrlixOCIEnvironmentHealthcheckResult: Sendable {
-	public let id: String
-	public let command: [String]
-	public let runResult: OrlixOCIEnvironmentRunResult
+    public let id: String
+    public let command: [String]
+    public let runResult: OrlixOCIEnvironmentRunResult
 }
 
 public struct OrlixOCIEnvironmentStartResult: Sendable {
@@ -1503,10 +1509,10 @@ public enum OrlixOCIEnvironmentLifecycleArgumentsError: Error, Equatable, Sendab
 }
 
 public struct OrlixOCIEnvironmentLifecycleArguments: Equatable, Sendable {
-	public let id: String
+    public let id: String
 
-	public init(_ arguments: [String], command: String) throws {
-		var values = arguments
+    public init(_ arguments: [String], command: String) throws {
+        var values = arguments
 		if values.first == "orlix" {
 			values.removeFirst()
 		}
@@ -1558,13 +1564,98 @@ public struct OrlixOCIEnvironmentLifecycleArguments: Equatable, Sendable {
 				.unexpectedArgument(id)
 		}
 		return id
-	}
+    }
+}
+
+public enum OrlixOCIEnvironmentExecArgumentsError: Error, Equatable, Sendable {
+    case missingExecCommand
+    case missingID
+    case missingCommand
+    case missingOptionValue(String)
+    case unknownOption(String)
+    case unexpectedArgument(String)
+}
+
+public struct OrlixOCIEnvironmentExecArguments: Equatable, Sendable {
+    public let id: String
+    public let command: [String]
+
+    public init(_ arguments: [String]) throws {
+        var values = arguments
+        if values.first == "orlix" {
+            values.removeFirst()
+        }
+        guard values.first == "exec" else {
+            throw OrlixOCIEnvironmentExecArgumentsError.missingExecCommand
+        }
+        values.removeFirst()
+
+        var parsedID: String?
+        var parsedCommand: [String] = []
+        while !values.isEmpty {
+            let value = values.removeFirst()
+            if value == "--" {
+                parsedCommand = values
+                values.removeAll()
+                break
+            }
+            if parsedID == nil, value == "--id" || value == "--name" {
+                guard let id = values.first else {
+                    throw OrlixOCIEnvironmentExecArgumentsError
+                        .missingOptionValue(value)
+                }
+                parsedID = try Self.acceptID(id, current: parsedID)
+                values.removeFirst()
+                continue
+            }
+            if parsedID == nil,
+                value.hasPrefix("--id=") || value.hasPrefix("--name=")
+            {
+                let separator = value.firstIndex(of: "=")!
+                let option = String(value[..<separator])
+                let id = String(value[value.index(after: separator)...])
+                guard !id.isEmpty else {
+                    throw OrlixOCIEnvironmentExecArgumentsError
+                        .missingOptionValue(option)
+                }
+                parsedID = try Self.acceptID(id, current: parsedID)
+                continue
+            }
+            if parsedID == nil {
+                if value.hasPrefix("-") {
+                    throw OrlixOCIEnvironmentExecArgumentsError
+                        .unknownOption(value)
+                }
+                parsedID = value
+                continue
+            }
+            parsedCommand = [value] + values
+            values.removeAll()
+        }
+
+        guard let id = parsedID else {
+            throw OrlixOCIEnvironmentExecArgumentsError.missingID
+        }
+        guard !parsedCommand.isEmpty else {
+            throw OrlixOCIEnvironmentExecArgumentsError.missingCommand
+        }
+        try OrlixEnvironmentStorageLayout.validateEnvironmentID(id)
+        self.id = id
+        self.command = parsedCommand
+    }
+
+    private static func acceptID(_ id: String, current: String?) throws -> String {
+        guard current == nil else {
+            throw OrlixOCIEnvironmentExecArgumentsError.unexpectedArgument(id)
+        }
+        return id
+    }
 }
 
 public enum OrlixOCIEnvironmentKillArgumentsError: Error, Equatable, Sendable {
-	case missingKillCommand
-	case missingID
-	case missingOptionValue(String)
+    case missingKillCommand
+    case missingID
+    case missingOptionValue(String)
 	case unknownOption(String)
 	case unexpectedArgument(String)
 	case invalidSignal(String)
@@ -6175,15 +6266,52 @@ deviceNodeOverrides: deviceNodeOverrides,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager
-		)
-		return Self.runResult(id: id, runtimeResult: runtimeResult)
-	}
+        )
+        return Self.runResult(id: id, runtimeResult: runtimeResult)
+    }
 
-	@_spi(OrlixPrivateTesting)
-	public func run(
-		id: String,
-		command: [String]? = nil,
-		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+    public func exec(
+        id: String,
+        command: [String],
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentExecResult {
+        let runResult = try run(
+            id: id,
+            command: command,
+            terminal: terminal,
+            observationTimeout: observationTimeout,
+            fileManager: fileManager
+        )
+        return OrlixOCIEnvironmentExecResult(
+            id: id,
+            command: command,
+            runResult: runResult
+        )
+    }
+
+    public func exec(
+        arguments: [String],
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentExecResult {
+        let request = try OrlixOCIEnvironmentExecArguments(arguments)
+        return try exec(
+            id: request.id,
+            command: request.command,
+            terminal: terminal,
+            observationTimeout: observationTimeout,
+            fileManager: fileManager
+        )
+    }
+
+    @_spi(OrlixPrivateTesting)
+    public func run(
+        id: String,
+        command: [String]? = nil,
+        rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
@@ -6197,14 +6325,63 @@ deviceNodeOverrides: deviceNodeOverrides,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager
-	)
-	return Self.runResult(id: id, runtimeResult: runtimeResult)
-}
+        )
+        return Self.runResult(id: id, runtimeResult: runtimeResult)
+    }
 
-public func healthcheck(
-id: String,
-terminal: OrlixTerminalSession = OrlixTerminalSession(),
-observationTimeout: TimeInterval = 600,
+    @_spi(OrlixPrivateTesting)
+    public func exec(
+        id: String,
+        command: [String],
+        rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+        kernelCommandLine: String? = OrlixEnvironmentRootImage
+            .defaultKernelCommandLine,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        using driver: OrlixOCIRuntimeProcessObservationDriver,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentExecResult {
+        let runResult = try run(
+            id: id,
+            command: command,
+            rootMount: rootMount,
+            kernelCommandLine: kernelCommandLine,
+            terminal: terminal,
+            using: driver,
+            fileManager: fileManager
+        )
+        return OrlixOCIEnvironmentExecResult(
+            id: id,
+            command: command,
+            runResult: runResult
+        )
+    }
+
+    @_spi(OrlixPrivateTesting)
+    public func exec(
+        arguments: [String],
+        rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+        kernelCommandLine: String? = OrlixEnvironmentRootImage
+            .defaultKernelCommandLine,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        using driver: OrlixOCIRuntimeProcessObservationDriver,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentExecResult {
+        let request = try OrlixOCIEnvironmentExecArguments(arguments)
+        return try exec(
+            id: request.id,
+            command: request.command,
+            rootMount: rootMount,
+            kernelCommandLine: kernelCommandLine,
+            terminal: terminal,
+            using: driver,
+            fileManager: fileManager
+        )
+    }
+
+    public func healthcheck(
+        id: String,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
 fileManager: FileManager = .default
 ) throws -> OrlixOCIEnvironmentHealthcheckResult {
 let command = try healthcheckCommand(

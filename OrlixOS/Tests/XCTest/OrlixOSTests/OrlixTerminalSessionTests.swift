@@ -8818,12 +8818,141 @@ func testOCIEnvironmentInstallerInspectReturnsDescriptorAndLifecycleState()
     XCTAssertEqual(inspected.id, "oci-inspect")
     XCTAssertEqual(inspected.platform, "linux/arm64")
     XCTAssertEqual(inspected.defaultCommand, ["/usr/bin/id"])
-    XCTAssertEqual(inspected.defaultWorkingDirectory, "/srv")
+    XCTAssertEqual(inspected.defaultWorkingDirectory, "/work")
     XCTAssertEqual(inspected.defaultUserID, 1000)
     XCTAssertEqual(inspected.defaultGroupID, 1000)
     XCTAssertEqual(inspected.lifecycleState, .created)
     XCTAssertEqual(inspected.stateReport.id, "oci-inspect")
     XCTAssertEqual(inspected.stateReport.status, .created)
+}
+
+func testOCIEnvironmentExecArgumentsAcceptsIDAndCommandForms() throws {
+    let positional = try OrlixOCIEnvironmentExecArguments([
+        "orlix",
+        "exec",
+        "oci-demo",
+        "/bin/echo",
+        "hello",
+    ])
+    XCTAssertEqual(positional.id, "oci-demo")
+    XCTAssertEqual(positional.command, ["/bin/echo", "hello"])
+
+    let idOption = try OrlixOCIEnvironmentExecArguments([
+        "exec",
+        "--id",
+        "oci-by-id",
+        "--",
+        "/bin/sh",
+        "-lc",
+        "echo ok",
+    ])
+    XCTAssertEqual(idOption.id, "oci-by-id")
+    XCTAssertEqual(idOption.command, ["/bin/sh", "-lc", "echo ok"])
+
+    let nameOption = try OrlixOCIEnvironmentExecArguments([
+        "exec",
+        "--name=oci-by-name",
+        "/usr/bin/env",
+        "true",
+    ])
+    XCTAssertEqual(nameOption.id, "oci-by-name")
+    XCTAssertEqual(nameOption.command, ["/usr/bin/env", "true"])
+}
+
+func testOCIEnvironmentExecArgumentsRejectsInvalidInput() throws {
+    XCTAssertThrowsError(
+        try OrlixOCIEnvironmentExecArguments(["run", "oci-demo", "/bin/true"])
+    ) { error in
+        XCTAssertEqual(
+            error as? OrlixOCIEnvironmentExecArgumentsError,
+            .missingExecCommand
+        )
+    }
+    XCTAssertThrowsError(try OrlixOCIEnvironmentExecArguments(["exec"])) {
+        error in
+        XCTAssertEqual(
+            error as? OrlixOCIEnvironmentExecArgumentsError,
+            .missingID
+        )
+    }
+    XCTAssertThrowsError(
+        try OrlixOCIEnvironmentExecArguments(["exec", "oci-demo"])
+    ) { error in
+        XCTAssertEqual(
+            error as? OrlixOCIEnvironmentExecArgumentsError,
+            .missingCommand
+        )
+    }
+    XCTAssertThrowsError(
+        try OrlixOCIEnvironmentExecArguments(["exec", "--id"])
+    ) { error in
+        XCTAssertEqual(
+            error as? OrlixOCIEnvironmentExecArgumentsError,
+            .missingOptionValue("--id")
+        )
+    }
+}
+
+func testOCIEnvironmentInstallerExecRunsCommandInPreparedEnvironment()
+    throws
+{
+    let fileManager = FileManager.default
+    let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+        "orlix-oci-exec-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+    defer { try? fileManager.removeItem(at: scratch) }
+
+    let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+    let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+    try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+    try nonRootOCIRuntimeConfig().write(
+        to: bundleURL.appendingPathComponent("config.json")
+    )
+
+    let registry = OrlixEnvironmentRegistry(
+        linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+        cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+        scratchRoot: scratch.appendingPathComponent(
+            "runtime-scratch",
+            isDirectory: true
+        )
+    )
+    let created = try OrlixOCIRuntime(registry: registry).create(
+        bundleURL: bundleURL,
+        id: "oci-exec"
+    )
+    try Data("base".utf8).write(to: created.importPlan.storageLayout.baseImageURL)
+    try Data("state".utf8).write(to: created.importPlan.storageLayout.stateImageURL)
+
+    let driver = try RecordingOCIRuntimeProcessObservationDriver(
+        startPID: 84,
+        completion: .exited(
+            OrlixOCIRuntimeProcessExitObservation(pid: 84, exitStatus: 0)
+        )
+    )
+    let result = try OrlixOCIEnvironmentInstaller(registry: registry).exec(
+        arguments: [
+            "orlix",
+            "exec",
+            "oci-exec",
+            "--",
+            "/bin/echo",
+            "hello",
+        ],
+        terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+        using: driver,
+        fileManager: fileManager
+    )
+
+    XCTAssertEqual(result.id, "oci-exec")
+    XCTAssertEqual(result.command, ["/bin/echo", "hello"])
+    XCTAssertEqual(result.runResult.startedStateReport.status, .running)
+    XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
+    XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
+    XCTAssertEqual(driver.startCommands, [["/bin/echo", "hello"]])
+    XCTAssertEqual(driver.events, ["start:created:nil", "wait:running:84"])
 }
 
 func testOCIEnvironmentStateArgumentsRejectsInvalidInput() throws {
