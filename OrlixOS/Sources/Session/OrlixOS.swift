@@ -1387,6 +1387,9 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let deviceNodes: [OrlixEnvironmentDeviceNode]
     public let namespaces: [String]
     public let namespacePaths: [String: String]
+    public let timeOffsets: [OrlixEnvironmentTimeOffset]
+    public let uidMappings: [OrlixEnvironmentIDMapping]
+    public let gidMappings: [OrlixEnvironmentIDMapping]
     public let command: [String]?
     public let removeAfterRun: Bool
 
@@ -1444,6 +1447,9 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         var parsedDeviceNodes: [OrlixEnvironmentDeviceNode] = []
         var parsedNamespaces: [String] = []
         var parsedNamespacePaths: [String: String] = [:]
+        var parsedTimeOffsets: [OrlixEnvironmentTimeOffset] = []
+        var parsedUIDMappings: [OrlixEnvironmentIDMapping] = []
+        var parsedGIDMappings: [OrlixEnvironmentIDMapping] = []
         var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1712,6 +1718,79 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                 namespacePath,
                 to: &parsedNamespacePaths,
                 namespaces: parsedNamespaces
+            )
+            continue
+        }
+        if parsedImage == nil, value == "--time-offset" {
+            guard let offset = values.first else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue(value)
+            }
+            try Self.addTimeOffset(offset, to: &parsedTimeOffsets)
+            values.removeFirst()
+            continue
+        }
+        if parsedImage == nil, value.hasPrefix("--time-offset=") {
+            let separator = value.firstIndex(of: "=")!
+            let offset = String(value[value.index(after: separator)...])
+            guard !offset.isEmpty else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue("--time-offset")
+            }
+            try Self.addTimeOffset(offset, to: &parsedTimeOffsets)
+            continue
+        }
+        if parsedImage == nil, value == "--uid-map" {
+            guard let mapping = values.first else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue(value)
+            }
+            try Self.addIDMapping(
+                mapping,
+                to: &parsedUIDMappings,
+                feature: "linux.uidMappings"
+            )
+            values.removeFirst()
+            continue
+        }
+        if parsedImage == nil, value.hasPrefix("--uid-map=") {
+            let separator = value.firstIndex(of: "=")!
+            let mapping = String(value[value.index(after: separator)...])
+            guard !mapping.isEmpty else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue("--uid-map")
+            }
+            try Self.addIDMapping(
+                mapping,
+                to: &parsedUIDMappings,
+                feature: "linux.uidMappings"
+            )
+            continue
+        }
+        if parsedImage == nil, value == "--gid-map" {
+            guard let mapping = values.first else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue(value)
+            }
+            try Self.addIDMapping(
+                mapping,
+                to: &parsedGIDMappings,
+                feature: "linux.gidMappings"
+            )
+            values.removeFirst()
+            continue
+        }
+        if parsedImage == nil, value.hasPrefix("--gid-map=") {
+            let separator = value.firstIndex(of: "=")!
+            let mapping = String(value[value.index(after: separator)...])
+            guard !mapping.isEmpty else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue("--gid-map")
+            }
+            try Self.addIDMapping(
+                mapping,
+                to: &parsedGIDMappings,
+                feature: "linux.gidMappings"
             )
             continue
         }
@@ -2213,6 +2292,9 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.deviceNodes = parsedDeviceNodes
         self.namespaces = parsedNamespaces
         self.namespacePaths = parsedNamespacePaths
+        self.timeOffsets = parsedTimeOffsets
+        self.uidMappings = parsedUIDMappings
+        self.gidMappings = parsedGIDMappings
         self.command = parsedCommand.isEmpty ? nil : parsedCommand
         self.removeAfterRun = parsedRemoveAfterRun
     }
@@ -2962,6 +3044,81 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         return value
     }
 
+    private static func addTimeOffset(
+        _ value: String,
+        to offsets: inout [OrlixEnvironmentTimeOffset]
+    ) throws {
+        let offset = try parseTimeOffset(value)
+        guard !offsets.contains(where: { $0.clock == offset.clock }) else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.timeOffsets"
+            )
+        }
+        offsets.append(offset)
+    }
+
+    private static func parseTimeOffset(
+        _ value: String
+    ) throws -> OrlixEnvironmentTimeOffset {
+        let components = value.split(separator: ":", omittingEmptySubsequences: false)
+            .map(String.init)
+        guard components.count == 3 else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.timeOffsets"
+            )
+        }
+        let clock = components[0]
+        guard Set(["monotonic", "boottime"]).contains(clock) else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.timeOffsets"
+            )
+        }
+        guard let secs = Int64(components[1]),
+            let nanosecs = Int64(components[2]),
+            nanosecs >= 0,
+            nanosecs < 1_000_000_000
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.timeOffsets"
+            )
+        }
+        return OrlixEnvironmentTimeOffset(
+            clock: clock,
+            secs: secs,
+            nanosecs: nanosecs
+        )
+    }
+
+    private static func addIDMapping(
+        _ value: String,
+        to mappings: inout [OrlixEnvironmentIDMapping],
+        feature: String
+    ) throws {
+        let mapping = try parseIDMapping(value, feature: feature)
+        mappings.append(mapping)
+    }
+
+    private static func parseIDMapping(
+        _ value: String,
+        feature: String
+    ) throws -> OrlixEnvironmentIDMapping {
+        let components = value.split(separator: ":", omittingEmptySubsequences: false)
+            .map(String.init)
+        guard components.count == 3,
+            let containerID = UInt32(components[0]),
+            let hostID = UInt32(components[1]),
+            let size = UInt32(components[2]),
+            size > 0
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(feature)
+        }
+        return OrlixEnvironmentIDMapping(
+            containerID: containerID,
+            hostID: hostID,
+            size: size
+        )
+    }
+
     private static func parseDeviceNode(
         _ value: String
     ) throws -> OrlixEnvironmentDeviceNode {
@@ -3222,6 +3379,16 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         return existing.merging(overrides) { _, override in override }
     }
 
+    private static func mergedTimeOffsets(
+        _ existing: [OrlixEnvironmentTimeOffset],
+        overrides: [OrlixEnvironmentTimeOffset]
+    ) -> [OrlixEnvironmentTimeOffset] {
+        guard !overrides.isEmpty else { return existing }
+        let overrideClocks = Set(overrides.map(\.clock))
+        let retained = existing.filter { !overrideClocks.contains($0.clock) }
+        return (retained + overrides).sorted { $0.clock < $1.clock }
+    }
+
     private static func mergedRuntimePaths(
         _ existing: [String],
         overrides: [String]
@@ -3278,7 +3445,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         mergingTmpfsMountsWith tmpfsMounts: [OrlixEnvironmentTmpfsMount],
         mergingDeviceNodesWith deviceNodes: [OrlixEnvironmentDeviceNode],
         mergingNamespacesWith namespaces: [String],
-        mergingNamespacePathsWith namespacePaths: [String: String]
+        mergingNamespacePathsWith namespacePaths: [String: String],
+        mergingTimeOffsetsWith timeOffsets: [OrlixEnvironmentTimeOffset],
+        appendingUIDMappings uidMappings: [OrlixEnvironmentIDMapping],
+        appendingGIDMappings gidMappings: [OrlixEnvironmentIDMapping]
     ) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -3314,6 +3484,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             || !deviceNodes.isEmpty
             || !namespaces.isEmpty
             || !namespacePaths.isEmpty
+            || !timeOffsets.isEmpty
+            || !uidMappings.isEmpty
+            || !gidMappings.isEmpty
         else {
             return descriptor
         }
@@ -3455,11 +3628,29 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             descriptor.namespacePaths,
             overrides: namespacePaths
         )
+        let effectiveTimeOffsets = Self.mergedTimeOffsets(
+            descriptor.timeOffsets,
+            overrides: timeOffsets
+        )
+        let effectiveUIDMappings = descriptor.uidMappings + uidMappings
+        let effectiveGIDMappings = descriptor.gidMappings + gidMappings
         guard Set(effectiveNamespaces)
             .isDisjoint(with: Set(effectiveNamespacePaths.keys))
         else {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
                 "linux.namespaces"
+            )
+        }
+        if !effectiveTimeOffsets.isEmpty && !effectiveNamespaces.contains("time") {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.timeOffsets"
+            )
+        }
+        if (!effectiveUIDMappings.isEmpty || !effectiveGIDMappings.isEmpty)
+            && !effectiveNamespaces.contains("user")
+        {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.uidMappings"
             )
         }
 		let effectiveCgroupsPath = try cgroupsPath
@@ -3522,9 +3713,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				?? descriptor.cgroupIOWeight,
 			cgroupUnified: effectiveCgroupUnified,
             deviceNodes: effectiveDeviceNodes,
-            timeOffsets: descriptor.timeOffsets,
-            uidMappings: descriptor.uidMappings,
-            gidMappings: descriptor.gidMappings,
+            timeOffsets: effectiveTimeOffsets,
+            uidMappings: effectiveUIDMappings,
+            gidMappings: effectiveGIDMappings,
             namespaces: effectiveNamespaces,
             namespacePaths: effectiveNamespacePaths,
             tmpfsMounts: effectiveTmpfsMounts,
@@ -3607,6 +3798,9 @@ tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
+timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
+uidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
+gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -3650,6 +3844,9 @@ tmpfsMountOverrides: tmpfsMountOverrides,
 deviceNodeOverrides: deviceNodeOverrides,
 namespaceOverrides: namespaceOverrides,
 namespacePathOverrides: namespacePathOverrides,
+timeOffsetOverrides: timeOffsetOverrides,
+uidMappingOverrides: uidMappingOverrides,
+gidMappingOverrides: gidMappingOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3696,6 +3893,9 @@ namespacePathOverrides: namespacePathOverrides,
         deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
         namespaceOverrides: [String] = [],
         namespacePathOverrides: [String: String] = [:],
+        timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
+        uidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
+        gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -3767,7 +3967,10 @@ namespacePathOverrides: namespacePathOverrides,
             mergingTmpfsMountsWith: tmpfsMountOverrides,
             mergingDeviceNodesWith: deviceNodeOverrides,
             mergingNamespacesWith: namespaceOverrides,
-            mergingNamespacePathsWith: namespacePathOverrides
+            mergingNamespacePathsWith: namespacePathOverrides,
+            mergingTimeOffsetsWith: timeOffsetOverrides,
+            appendingUIDMappings: uidMappingOverrides,
+            appendingGIDMappings: gidMappingOverrides
 		)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -3887,6 +4090,9 @@ namespacePathOverrides: namespacePathOverrides,
             deviceNodeOverrides: request.deviceNodes,
             namespaceOverrides: request.namespaces,
             namespacePathOverrides: request.namespacePaths,
+            timeOffsetOverrides: request.timeOffsets,
+            uidMappingOverrides: request.uidMappings,
+            gidMappingOverrides: request.gidMappings,
             terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3959,6 +4165,9 @@ namespacePathOverrides: namespacePathOverrides,
             deviceNodeOverrides: request.deviceNodes,
             namespaceOverrides: request.namespaces,
             namespacePathOverrides: request.namespacePaths,
+            timeOffsetOverrides: request.timeOffsets,
+            uidMappingOverrides: request.uidMappings,
+            gidMappingOverrides: request.gidMappings,
             terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -4032,6 +4241,9 @@ namespacePathOverrides: namespacePathOverrides,
         deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
         namespaceOverrides: [String] = [],
         namespacePathOverrides: [String: String] = [:],
+        timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
+        uidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
+        gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
         terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -4077,6 +4289,9 @@ namespacePathOverrides: namespacePathOverrides,
             deviceNodeOverrides: deviceNodeOverrides,
             namespaceOverrides: namespaceOverrides,
             namespacePathOverrides: namespacePathOverrides,
+            timeOffsetOverrides: timeOffsetOverrides,
+            uidMappingOverrides: uidMappingOverrides,
+            gidMappingOverrides: gidMappingOverrides,
             terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -4125,6 +4340,9 @@ tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
+timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
+uidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
+gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -4169,7 +4387,10 @@ tmpfsMountOverrides: tmpfsMountOverrides,
 deviceNodeOverrides: deviceNodeOverrides,
 namespaceOverrides: namespaceOverrides,
 namespacePathOverrides: namespacePathOverrides,
-			fileManager: fileManager,
+timeOffsetOverrides: timeOffsetOverrides,
+uidMappingOverrides: uidMappingOverrides,
+gidMappingOverrides: gidMappingOverrides,
+fileManager: fileManager,
 			runCommand: runCommand
 		)
 		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
@@ -4226,6 +4447,9 @@ tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
+timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
+uidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
+gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -4272,6 +4496,9 @@ namespacePathOverrides: [String: String] = [:],
             deviceNodeOverrides: deviceNodeOverrides,
             namespaceOverrides: namespaceOverrides,
             namespacePathOverrides: namespacePathOverrides,
+            timeOffsetOverrides: timeOffsetOverrides,
+            uidMappingOverrides: uidMappingOverrides,
+            gidMappingOverrides: gidMappingOverrides,
             terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -4321,6 +4548,9 @@ namespacePathOverrides: [String: String] = [:],
         deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
         namespaceOverrides: [String] = [],
         namespacePathOverrides: [String: String] = [:],
+        timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
+        uidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
+        gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
         terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -4363,10 +4593,13 @@ namespacePathOverrides: [String: String] = [:],
             cgroupIOWeightOverride: cgroupIOWeightOverride,
             cgroupUnifiedOverrides: cgroupUnifiedOverrides,
             tmpfsMountOverrides: tmpfsMountOverrides,
-            deviceNodeOverrides: deviceNodeOverrides,
-            namespaceOverrides: namespaceOverrides,
-            namespacePathOverrides: namespacePathOverrides,
-            fileManager: fileManager,
+deviceNodeOverrides: deviceNodeOverrides,
+namespaceOverrides: namespaceOverrides,
+namespacePathOverrides: namespacePathOverrides,
+timeOffsetOverrides: timeOffsetOverrides,
+uidMappingOverrides: uidMappingOverrides,
+gidMappingOverrides: gidMappingOverrides,
+fileManager: fileManager,
 			runCommand: runCommand
 		)
 		let runResult = try run(
@@ -4437,6 +4670,9 @@ tmpfsMountOverrides: request.tmpfsMounts,
 deviceNodeOverrides: request.deviceNodes,
 namespaceOverrides: request.namespaces,
 namespacePathOverrides: request.namespacePaths,
+timeOffsetOverrides: request.timeOffsets,
+uidMappingOverrides: request.uidMappings,
+gidMappingOverrides: request.gidMappings,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -4496,6 +4732,9 @@ tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
 namespaceOverrides: [String] = [],
 namespacePathOverrides: [String: String] = [:],
+timeOffsetOverrides: [OrlixEnvironmentTimeOffset] = [],
+uidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
+gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
@@ -4541,6 +4780,9 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
             deviceNodeOverrides: deviceNodeOverrides,
             namespaceOverrides: namespaceOverrides,
             namespacePathOverrides: namespacePathOverrides,
+            timeOffsetOverrides: timeOffsetOverrides,
+            uidMappingOverrides: uidMappingOverrides,
+            gidMappingOverrides: gidMappingOverrides,
             fileManager: fileManager,
             runCommand: runCommand
         )

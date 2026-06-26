@@ -10,6 +10,26 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run time offset and ID mapping overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--time-offset CLOCK:SECS:NANOSECONDS`, `--time-offset=...`, `--uid-map CONTAINER:HOST:SIZE`, `--uid-map=...`, `--gid-map CONTAINER:HOST:SIZE`, and `--gid-map=...` before image.
+- Time-offset clocks are limited to the existing descriptor/init-supported Linux time namespace clocks `monotonic` and `boottime`; duplicate CLI clocks and invalid nanosecond ranges reject before install.
+- ID mapping entries parse Linux user-namespace mapping triples and reject malformed or zero-size mappings before install.
+- Registry-backed install/run and terminal-session preparation persist parsed values into `OrlixEnvironmentDescriptor.timeOffsets`, `uidMappings`, and `gidMappings`.
+- Descriptor merging replaces time offsets by clock and appends ID mappings. Effective descriptors reject time offsets without an effective `time` namespace and ID mappings without an effective `user` namespace, matching existing root image validation.
+- Focused tests cover default empty parser state, split/equals parsing, invalid time offset and ID mapping rejection, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing time namespace and user namespace configuration through existing OrlixOS descriptors and Linux-visible first-stage init `/proc/self/timens_offsets`, `/proc/self/uid_map`, `/proc/self/gid_map`, and `/proc/self/setgroups` paths. Does not claim live simulator proof, namespace behavior proof, ID remapping behavior proof, time namespace behavior proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, or package/proof/stamp systems.
+
+Current status:
+- Time offset and ID mapping override checkpoint is locally verified by Swift parse/typecheck and guard checks after generated hook-cache cleanup, pending commit and push.
+
 ### 2026-06-26 OCI run namespace overrides
 
 Changes:

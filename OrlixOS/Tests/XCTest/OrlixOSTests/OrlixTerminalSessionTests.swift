@@ -7964,6 +7964,9 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTTrue(arguments.deviceNodes.isEmpty)
 	XCTTrue(arguments.namespaces.isEmpty)
 	XCTTrue(arguments.namespacePaths.isEmpty)
+	XCTTrue(arguments.timeOffsets.isEmpty)
+	XCTTrue(arguments.uidMappings.isEmpty)
+	XCTTrue(arguments.gidMappings.isEmpty)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -8634,6 +8637,106 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidNamespaceOverride() throws {
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("linux.namespaces")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsTimeOffsetAndIDMappingOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--namespace",
+		"time",
+		"--time-offset",
+		"monotonic:12:34",
+		"--time-offset=boottime:-5:900000000",
+		"--namespace",
+		"user",
+		"--uid-map",
+		"0:501:1",
+		"--gid-map=0:20:1",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(arguments.namespaces, ["time", "user"])
+	XCTAssertEqual(
+		arguments.timeOffsets,
+		[
+			OrlixEnvironmentTimeOffset(
+				clock: "monotonic",
+				secs: 12,
+				nanosecs: 34
+			),
+			OrlixEnvironmentTimeOffset(
+				clock: "boottime",
+				secs: -5,
+				nanosecs: 900_000_000
+			),
+		]
+	)
+	XCTAssertEqual(
+		arguments.uidMappings,
+		[OrlixEnvironmentIDMapping(containerID: 0, hostID: 501, size: 1)]
+	)
+	XCTAssertEqual(
+		arguments.gidMappings,
+		[OrlixEnvironmentIDMapping(containerID: 0, hostID: 20, size: 1)]
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidTimeOffsetAndIDMappingOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--time-offset",
+			"realtime:1:0",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.timeOffsets")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--time-offset",
+			"monotonic:1:1000000000",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.timeOffsets")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--uid-map",
+			"0:501:0",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.uidMappings")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--gid-map",
+			"0:group:1",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.gidMappings")
 		)
 	}
 }
@@ -10645,7 +10748,16 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		"--device-node=/dev/orlix-pipe:p:0644",
 		"--namespace",
 		"pid",
-		"--namespace-path=time=/proc/1/ns/time",
+		"--namespace",
+		"time",
+		"--namespace",
+		"user",
+		"--namespace-path=network=/proc/1/ns/net2",
+		"--time-offset",
+		"monotonic:12:34",
+		"--uid-map",
+		"0:501:1",
+		"--gid-map=0:20:1",
 		"--sysctl",
 		"net.ipv4.ip_forward=1",
 		"--sysctl=kernel.hostname=registry-run-host",
@@ -10795,13 +10907,33 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			),
 		]
 	)
-	XCTAssertEqual(descriptor.namespaces, ["cgroup", "ipc", "mount", "pid", "uts"])
+	XCTAssertEqual(
+		descriptor.namespaces,
+		["cgroup", "ipc", "mount", "pid", "time", "user", "uts"]
+	)
 	XCTAssertEqual(
 		descriptor.namespacePaths,
 		[
-			"network": "/proc/1/ns/net",
-			"time": "/proc/1/ns/time",
+			"network": "/proc/1/ns/net2",
 		]
+	)
+	XCTAssertEqual(
+		descriptor.timeOffsets,
+		[
+			OrlixEnvironmentTimeOffset(
+				clock: "monotonic",
+				secs: 12,
+				nanosecs: 34
+			),
+		]
+	)
+	XCTAssertEqual(
+		descriptor.uidMappings,
+		[OrlixEnvironmentIDMapping(containerID: 0, hostID: 501, size: 1)]
+	)
+	XCTAssertEqual(
+		descriptor.gidMappings,
+		[OrlixEnvironmentIDMapping(containerID: 0, hostID: 20, size: 1)]
 	)
 	XCTAssertEqual(
 		descriptor.sysctls,
