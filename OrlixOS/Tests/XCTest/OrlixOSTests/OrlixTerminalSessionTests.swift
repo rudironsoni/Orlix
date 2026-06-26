@@ -7961,6 +7961,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.cgroupIOWeight)
 	XCTTrue(arguments.cgroupUnified.isEmpty)
 	XCTTrue(arguments.tmpfsMounts.isEmpty)
+	XCTTrue(arguments.deviceNodes.isEmpty)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -8496,6 +8497,81 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidTmpfsMountOverride() throws {
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("mounts.destination")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsDeviceNodeOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--device-node",
+		"/dev/orlix-zero:c:1:5:0660:1000:100",
+		"--device-node=/dev/orlix-pipe:p:0644",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.deviceNodes,
+		[
+			OrlixEnvironmentDeviceNode(
+				path: "/dev/orlix-zero",
+				type: "c",
+				major: 1,
+				minor: 5,
+				fileMode: 0o660,
+				uid: 1000,
+				gid: 100
+			),
+			OrlixEnvironmentDeviceNode(
+				path: "/dev/orlix-pipe",
+				type: "p",
+				fileMode: 0o644,
+				uid: 0,
+				gid: 0
+			),
+		]
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidDeviceNodeOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--device-node",
+			"dev/null:c:1:3",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.devices.path")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--device-node",
+			"/dev/null:x:1:3",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.devices.type")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--device-node=/dev/null:c:one:3",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.devices.major")
 		)
 	}
 }
@@ -10499,12 +10575,15 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--cgroup-unified",
 			"cpu.weight=39",
 			"--cgroup-unified=memory.max=268435456",
-			"--tmpfs",
-			"/run/cache:nosuid,nodev,noexec,size=64m,mode=0755",
-			"--tmpfs=/var/tmp:ro",
-			"--sysctl",
-			"net.ipv4.ip_forward=1",
-			"--sysctl=kernel.hostname=registry-run-host",
+		"--tmpfs",
+		"/run/cache:nosuid,nodev,noexec,size=64m,mode=0755",
+		"--tmpfs=/var/tmp:ro",
+		"--device-node",
+		"/dev/orlix-zero:c:1:5:0660:1000:100",
+		"--device-node=/dev/orlix-pipe:p:0644",
+		"--sysctl",
+		"net.ipv4.ip_forward=1",
+		"--sysctl=kernel.hostname=registry-run-host",
 			"--mask",
 			"/proc/kcore",
 			"--mask=/sys/firmware",
@@ -10618,6 +10697,36 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			try OrlixEnvironmentTmpfsMount(
 				targetPath: "/var/tmp",
 				readOnly: true
+			),
+		]
+	)
+	XCTAssertEqual(
+		descriptor.deviceNodes,
+		[
+			OrlixEnvironmentDeviceNode(
+				path: "/dev/orlix-null",
+				type: "c",
+				major: 1,
+				minor: 3,
+				fileMode: 0o666,
+				uid: 0,
+				gid: 0
+			),
+			OrlixEnvironmentDeviceNode(
+				path: "/dev/orlix-pipe",
+				type: "p",
+				fileMode: 0o644,
+				uid: 0,
+				gid: 0
+			),
+			OrlixEnvironmentDeviceNode(
+				path: "/dev/orlix-zero",
+				type: "c",
+				major: 1,
+				minor: 5,
+				fileMode: 0o660,
+				uid: 1000,
+				gid: 100
 			),
 		]
 	)

@@ -10,6 +10,23 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run device-node overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--device-node PATH:TYPE:MAJOR:MINOR[:MODE[:UID[:GID]]]` and `--device-node=...` before image.
+- FIFO device entries use the Linux/OCI type `p` shape `PATH:p[:MODE[:UID[:GID]]]`, matching existing descriptor/init support for `mkfifo`.
+- Registry-backed install/run and terminal-session preparation now persist parsed device-node overrides into `OrlixEnvironmentDescriptor.deviceNodes`; overrides replace existing descriptor entries with the same device path and preserve other OCI-derived devices.
+- Fixed the private-testing observed registry run overload so the existing cgroup/tmpfs override parameters it already accepted are actually forwarded to install, and added device-node forwarding there too.
+- Focused tests cover default empty parser state, character/FIFO device parsing, invalid path/type/major rejection, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+
+Boundary:
+- Advances product-facing device-node configuration through existing OrlixOS descriptors and Linux-visible first-stage init `mknod`/`mkfifo` paths. Does not claim live simulator proof, device permission/runtime behavior proof, broad device subsystem readiness, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, or package/proof/stamp systems.
+
 ### 2026-06-26 OCI run root readonly overrides
 
 Changes:
