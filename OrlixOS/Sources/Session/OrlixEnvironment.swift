@@ -9,10 +9,58 @@ public enum OrlixEnvironmentSource: Codable, Equatable, Sendable {
 }
 
 public enum OrlixEnvironmentRootPropagation: String, Codable, Equatable, Sendable {
-    case `private`
-    case shared
-    case slave
-    case unbindable
+	case `private`
+	case shared
+	case slave
+	case unbindable
+}
+
+public enum OrlixLinuxSignal {
+	public static func number(_ value: String) -> Int32? {
+		if let signal = Int32(value), (1...127).contains(signal) {
+			return signal
+		}
+		let normalized = value.uppercased()
+		let signalName =
+			normalized.hasPrefix("SIG")
+			? String(normalized.dropFirst(3))
+			: normalized
+		return namedSignals[signalName]
+	}
+
+	private static let namedSignals: [String: Int32] = [
+		"HUP": 1,
+		"INT": 2,
+		"QUIT": 3,
+		"ILL": 4,
+		"TRAP": 5,
+		"ABRT": 6,
+		"BUS": 7,
+		"FPE": 8,
+		"KILL": 9,
+		"USR1": 10,
+		"SEGV": 11,
+		"USR2": 12,
+		"PIPE": 13,
+		"ALRM": 14,
+		"TERM": 15,
+		"STKFLT": 16,
+		"CHLD": 17,
+		"CONT": 18,
+		"STOP": 19,
+		"TSTP": 20,
+		"TTIN": 21,
+		"TTOU": 22,
+		"URG": 23,
+		"XCPU": 24,
+		"XFSZ": 25,
+		"VTALRM": 26,
+		"PROF": 27,
+		"WINCH": 28,
+		"IO": 29,
+		"PWR": 30,
+		"SYS": 31
+	]
 }
 
 @_spi(OrlixPrivateTesting)
@@ -32,6 +80,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 	public let defaultCapabilities: OrlixEnvironmentCapabilities?
 	public let defaultNoNewPrivileges: Bool
 	public let defaultCloseAdditionalFds: Bool
+	public let defaultStopSignal: Int32?
 	public let defaultTerminal: Bool?
 	public let defaultTerminalRows: UInt32?
 	public let defaultTerminalColumns: UInt32?
@@ -108,6 +157,7 @@ public let cgroupPidsLimit: Int64?
 		defaultCapabilities: OrlixEnvironmentCapabilities? = nil,
 		defaultNoNewPrivileges: Bool = false,
 		defaultCloseAdditionalFds: Bool = false,
+		defaultStopSignal: Int32? = nil,
 		defaultTerminal: Bool? = nil,
 		defaultTerminalRows: UInt32? = nil,
 		defaultTerminalColumns: UInt32? = nil,
@@ -156,6 +206,7 @@ cgroupPidsLimit: Int64? = nil,
 		self.defaultCapabilities = defaultCapabilities
 		self.defaultNoNewPrivileges = defaultNoNewPrivileges
 		self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
+		self.defaultStopSignal = defaultStopSignal
 		self.defaultTerminal = defaultTerminal
 		self.defaultTerminalRows = defaultTerminalRows
 		self.defaultTerminalColumns = defaultTerminalColumns
@@ -206,6 +257,7 @@ self.cgroupPidsLimit = cgroupPidsLimit
 		case defaultCapabilities
 		case defaultNoNewPrivileges
 		case defaultCloseAdditionalFds
+		case defaultStopSignal
 		case defaultTerminal
 		case defaultTerminalRows
 		case defaultTerminalColumns
@@ -290,6 +342,10 @@ case cgroupCPUMax
 			Bool.self,
 			forKey: .defaultCloseAdditionalFds
 		) ?? false
+		self.defaultStopSignal = try container.decodeIfPresent(
+			Int32.self,
+			forKey: .defaultStopSignal
+		)
 		self.defaultTerminal = try container.decodeIfPresent(
 			Bool.self,
 			forKey: .defaultTerminal
@@ -449,6 +505,7 @@ forKey: .cgroupCPUWeight
 		if defaultCloseAdditionalFds {
 			try container.encode(defaultCloseAdditionalFds, forKey: .defaultCloseAdditionalFds)
 		}
+		try container.encodeIfPresent(defaultStopSignal, forKey: .defaultStopSignal)
 		try container.encodeIfPresent(defaultTerminal, forKey: .defaultTerminal)
 		try container.encodeIfPresent(defaultTerminalRows, forKey: .defaultTerminalRows)
 		try container.encodeIfPresent(defaultTerminalColumns, forKey: .defaultTerminalColumns)
