@@ -10,6 +10,47 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run bind mount overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--mount SPEC` and
+  `--mount=SPEC` before image for OCI/Docker-style bind mount specs.
+- Supported run mount specs use `type=bind` with `source`/`src`,
+  `target`/`destination`/`dst`, plus options already supported by the existing
+  OrlixOS mount model: `readonly`/`ro`, `rw`, `nosuid`, `nodev`, `noexec`,
+  `bind`, and `rbind`.
+- Sources reuse the existing OCI mount source model:
+  `orlix:documents`, `orlix:external:<bookmark-id>`, or an absolute host path.
+- Registry-backed install/run and terminal-session preparation persist parsed
+  bind mounts into `OrlixEnvironmentDescriptor.mounts`; overrides replace
+  inherited mounts with the same target path.
+- `OrlixEnvironmentMount` and `OrlixEnvironmentMountSource` are now public
+  OrlixOS session configuration types, while HostAdapter host-directory
+  registration remains private.
+- Focused tests cover default empty parser state, split and equals parsing,
+  invalid bind mount rejection, and observed registry-backed descriptor
+  persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+
+Boundary:
+- Advances product-facing bind mount configuration through existing OrlixOS
+  descriptors and the Linux-visible init `virtiofs` mount path. Does not claim
+  live simulator proof, runtime virtio-fs behavior proof, arbitrary OCI mount
+  option support, full OCI lifecycle readiness, HostAdapter/Linux policy,
+  kernel semantics, mlibc patches, generated upstream edits, custom ABI, or
+  package/proof/stamp systems.
+
+Current status:
+- Bind mount override checkpoint is locally verified by Swift parse/typecheck
+  and guard checks, pending commit and push.
+
 ### 2026-06-26 OCI run root propagation override
 
 Changes:
