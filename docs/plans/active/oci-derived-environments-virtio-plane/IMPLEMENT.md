@@ -10,6 +10,24 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run terminal-size overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--terminal-size ROWSxCOLUMNS` and `--terminal-size=ROWSxCOLUMNS` before image.
+- CLI validation rejects malformed, zero-row, and zero-column sizes using the existing `process.consoleSize` feature name.
+- Registry-backed install/run and terminal-session preparation persist parsed size into `OrlixEnvironmentDescriptor.defaultTerminalRows` and `defaultTerminalColumns`.
+- Focused tests cover default nil parser state, split and equals parsing, invalid terminal-size rejection, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing initial PTY window-size configuration through existing OrlixOS descriptors and Linux-visible first-stage init `TIOCSWINSZ` path. Does not claim live simulator proof, terminal resize behavior, full OCI terminal lifecycle readiness, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, or package/proof/stamp systems.
+
+Current status:
+- Terminal-size override checkpoint is locally verified by Swift parse/typecheck and guard checks after generated hook-cache cleanup, pending commit and push.
+
 ### 2026-06-26 OCI run time offset and ID mapping overrides
 
 Changes:
