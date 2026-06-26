@@ -788,6 +788,7 @@ public struct OrlixOCIImageLayoutImport: Equatable, Sendable {
 	public let stopSignal: Int32?
 	public let exposedPorts: [OrlixEnvironmentExposedPort]
 	public let imageVolumes: [String]
+	public let healthcheck: OrlixEnvironmentHealthcheck?
 }
 
 @_spi(OrlixPrivateTesting)
@@ -894,12 +895,13 @@ public struct OrlixOCIImageLayoutReader: Sendable {
             ),
             labels: try labelDictionary(imageConfig.config?.labels ?? [:]),
             stopSignal: try stopSignal(imageConfig.config?.stopSignal),
-            exposedPorts: try exposedPorts(
-                imageConfig.config?.exposedPorts ?? [:]
-            ),
-            imageVolumes: try imageVolumes(imageConfig.config?.volumes ?? [:])
-        )
-    }
+			exposedPorts: try exposedPorts(
+				imageConfig.config?.exposedPorts ?? [:]
+			),
+			imageVolumes: try imageVolumes(imageConfig.config?.volumes ?? [:]),
+			healthcheck: try healthcheck(imageConfig.config?.healthcheck)
+		)
+	}
 
     private func validatedRootfsDiffIDs(
         _ rootfs: OCIRootfs?,
@@ -1011,7 +1013,7 @@ public struct OrlixOCIImageLayoutReader: Sendable {
 	}
 
 	private func imageVolumes(_ values: [String: [String: String]]) throws
-		-> [String]
+	-> [String]
 	{
 		try values.keys.sorted().map { key in
 			try validatedVolumePath(key)
@@ -1034,6 +1036,39 @@ public struct OrlixOCIImageLayoutReader: Sendable {
 			}
 		}
 		return "/" + components.joined(separator: "/")
+	}
+
+	private func healthcheck(_ value: OCIHealthcheckConfig?) throws
+	-> OrlixEnvironmentHealthcheck?
+	{
+		guard let value else { return nil }
+		let test = try commandVector(value.test ?? [])
+		return OrlixEnvironmentHealthcheck(
+			test: test,
+			intervalNanoseconds: try duration(value.interval),
+			timeoutNanoseconds: try duration(value.timeout),
+			startPeriodNanoseconds: try duration(value.startPeriod),
+			startIntervalNanoseconds: try duration(value.startInterval),
+			retries: try retries(value.retries)
+		)
+	}
+
+	private func duration(_ value: Int64?) throws -> UInt64? {
+		guard let value else { return nil }
+		guard value >= 0 else {
+			throw OrlixOCIImageLayoutError.invalidHealthcheckDuration(value)
+		}
+		guard value > 0 else { return nil }
+		return UInt64(value)
+	}
+
+	private func retries(_ value: Int?) throws -> Int? {
+		guard let value else { return nil }
+		guard value >= 0 else {
+			throw OrlixOCIImageLayoutError.invalidHealthcheckRetries(value)
+		}
+		guard value > 0 else { return nil }
+		return value
 	}
 }
 
@@ -1340,12 +1375,13 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
         defaultEnvironment: image.processDefaults.environment,
         defaultWorkingDirectory: workingDirectory,
         defaultUserID: user.uid,
-        defaultGroupID: user.gid,
-        defaultStopSignal: image.stopSignal,
-        exposedPorts: image.exposedPorts,
-        imageVolumes: image.imageVolumes,
-        annotations: image.labels
-    )
+		defaultGroupID: user.gid,
+		defaultStopSignal: image.stopSignal,
+		exposedPorts: image.exposedPorts,
+		imageVolumes: image.imageVolumes,
+		healthcheck: image.healthcheck,
+		annotations: image.labels
+	)
 }
 
     private func validatedWorkingDirectory(_ value: String?) throws -> String {
@@ -1533,6 +1569,8 @@ public enum OrlixOCIImageLayoutError:
 	case invalidStopSignal(String)
 	case invalidExposedPort(String)
 	case invalidImageVolume(String)
+	case invalidHealthcheckDuration(Int64)
+	case invalidHealthcheckRetries(Int)
 	case invalidWhiteout(String)
     case decompressionFailed(String)
     case decompressedLayerTooLarge(Int)
@@ -1975,9 +2013,10 @@ private struct OCIProcessConfig: Codable {
 	let stopSignal: String?
 	let exposedPorts: [String: [String: String]]?
 	let volumes: [String: [String: String]]?
+	let healthcheck: OCIHealthcheckConfig?
 
-    enum CodingKeys: String, CodingKey {
-        case env = "Env"
+	enum CodingKeys: String, CodingKey {
+		case env = "Env"
         case entrypoint = "Entrypoint"
         case cmd = "Cmd"
 		case workingDir = "WorkingDir"
@@ -1986,6 +2025,25 @@ private struct OCIProcessConfig: Codable {
 		case stopSignal = "StopSignal"
 		case exposedPorts = "ExposedPorts"
 		case volumes = "Volumes"
+		case healthcheck = "Healthcheck"
+	}
+}
+
+private struct OCIHealthcheckConfig: Codable {
+	let test: [String]?
+	let interval: Int64?
+	let timeout: Int64?
+	let startPeriod: Int64?
+	let startInterval: Int64?
+	let retries: Int?
+
+	enum CodingKeys: String, CodingKey {
+		case test = "Test"
+		case interval = "Interval"
+		case timeout = "Timeout"
+		case startPeriod = "StartPeriod"
+		case startInterval = "StartInterval"
+		case retries = "Retries"
 	}
 }
 
@@ -3143,9 +3201,9 @@ cgroupsPath: config.linux?.cgroupsPath
 		return value
 	}
 
-    private static func validatedRootPropagation(
-        _ value: String?
-    ) throws -> OrlixEnvironmentRootPropagation {
+private static func validatedRootPropagation(
+_ value: String?
+) throws -> OrlixEnvironmentRootPropagation {
 		guard let value, !value.isEmpty else {
 			return .private
 		}
