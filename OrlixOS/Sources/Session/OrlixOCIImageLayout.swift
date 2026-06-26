@@ -2273,13 +2273,13 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociNamespaces",
 			status: .recognized,
 			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux namespaces are parsed. Mount, IPC, UTS, network, and cgroup namespace creation and path joins are implemented; PID, user, time, and duplicate namespace declarations remain rejected."
+				reason: "OCI Linux namespaces are parsed. Mount, IPC, UTS, network, cgroup, PID, user, and time namespace creation is implemented; duplicate namespace declarations remain rejected."
 		),
 		OrlixOCIRuntimeFeature(
-			name: "ociMountIpcUtsNetworkCgroupNamespaces",
+				name: "ociMountIpcUtsNetworkCgroupPidNamespaces",
 			status: .implemented,
-			proof: "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe",
-			reason: "OCI mount, IPC, UTS, network, and cgroup namespace requests carry into OrlixOS descriptors and init creates them with Linux unshare before exec."
+				proof: "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe,orlix:namespace_probe",
+				reason: "OCI mount, IPC, UTS, network, cgroup, and PID namespace requests carry into OrlixOS descriptors and init creates them with Linux unshare before exec."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociNamespacePathJoins",
@@ -3539,7 +3539,7 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
     private static func validatedNamespaces(_ namespaces: [OCIRuntimeNamespace]) throws -> [String] {
         var seen = Set<String>()
         var result: [String] = []
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time", "user"])
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "pid", "time", "user"])
 
         for namespace in namespaces {
             guard !seen.contains(namespace.type) else {
