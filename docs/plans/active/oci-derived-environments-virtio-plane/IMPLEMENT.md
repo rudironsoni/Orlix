@@ -24303,3 +24303,27 @@ Boundary:
 
 Current status:
 - `orlix run` now has simulator evidence for both deterministic registry input and live public registry pull through `registry.k8s.io/pause:3.10`, with Linux process execution and `--rm` cleanup. Continue toward arbitrary image compatibility, live auth/error coverage, networking, namespace/cgroup/device behavior, and broader OCI Runtime Spec coverage.
+
+## 2026-06-27 OCI network namespace runtime proof
+
+Implemented app-hosted OCI network runtime proof without moving Linux semantics into OrlixOS:
+
+- `OrlixOS/Makefile` now includes the Linux-owned `network_namespace_probe` kselftest binary in the OCI imported runtime fixture under `/orlix/network_namespace_probe` and stamps fixture freshness with the probe SHA-256.
+- `OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` adds `--orlix-runtime-test-spec ociNetwork`, creates an OCI-derived environment from the existing imported fixture, runs `/orlix/network_namespace_probe` as root through the OrlixOS OCI lifecycle path, waits for all Linux TAP markers, validates lifecycle start/stop/delete, and cleans up the environment directory and lifecycle record.
+- The proof validates Linux-owned runtime behavior only: `/proc/net`, rtnetlink sockets/link/address/route visibility, loopback address configuration, new network namespace checks, incomplete-route Linux error behavior, and TCP/UDP loopback. It does not claim packet sockets, virtio-net userspace receive, NAT, DNS, external networking, or full OCI networking support.
+
+Verification:
+
+- `rtk proxy swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 through the Xcode wrapper using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on the single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process --console E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociNetwork` exited 0. Artifact validation found `1..12`, all 12 `ok` TAP lines, `orlix-init: process exited pid=32 status=0`, `ORLIX_OCI_NETWORK_RUNTIME_STARTED_OK`, `ORLIX_OCI_NETWORK_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_NETWORK_RUNTIME_DELETE_OK`; no `not ok` or `ORLIX-APP-RUNTIME-RUNNER-ERROR` was present.
+- Focused regression launches `ociRun`, `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 on the same installed app and simulator, with their expected runtime/lifecycle markers and no app runner error.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- OrlixTestRunner crash scan found no host crash reports; the simulator DiagnosticReports directory was absent.
+
+Current status:
+
+- OCI-derived environments now have app-hosted simulator evidence for Linux-owned network namespace and loopback behavior through the OrlixOS OCI lifecycle path. Continue toward virtio-net userspace receive, DNS/NAT/external networking, device behavior, broader namespace/cgroup coverage, arbitrary image compatibility, and OCI Runtime Spec lifecycle breadth.

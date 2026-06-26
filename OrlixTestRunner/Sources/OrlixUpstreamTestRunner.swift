@@ -836,6 +836,8 @@ enum OrlixAppLaunchRuntimeRunner {
                 output = try OrlixOCIDerivedRunCommandRuntimeProof(
                     registryMode: .live
                 ).run()
+            case "ociNetwork":
+                output = try OrlixOCIDerivedNetworkRuntimeProof().run()
             default:
                 throw OrlixAppLaunchRuntimeRunnerError.unknownSpec(specName)
             }
@@ -1139,7 +1141,7 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
         }
     }
 
-    private static func writeOCIRuntimeConfig(
+    fileprivate static func writeOCIRuntimeConfig(
         terminal: Bool,
         script: String,
         rootPath: String,
@@ -1500,6 +1502,210 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
             throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
                 "expected orlix run environment directory cleanup"
+            )
+        }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+    }
+}
+
+private final class OrlixOCIDerivedNetworkRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 120
+    private static let environmentID = "oci-imported-runtime-test-fixture"
+    private static let rootImageIdentifier =
+        "orlix.test.environment.oci-runtime-test-fixture"
+    private static let requiredMarkers = [
+        "1..12",
+        "ok 1 - procfs exposes network state",
+        "ok 2 - rtnetlink sockets open in the current network namespace",
+        "ok 3 - RTM_GETLINK reports loopback interface",
+        "ok 4 - loopback interface accepts Linux address configuration",
+        "ok 5 - RTM_GETADDR reports loopback IPv4 address",
+        "ok 6 - RTM_GETROUTE reports loopback IPv4 route",
+        "ok 7 - network namespace child enters isolated net namespace",
+        "ok 8 - new network namespace keeps procfs network state readable",
+        "ok 9 - new network namespace keeps rtnetlink socket local",
+        "ok 10 - new network namespace rejects incomplete route with Linux error",
+        "ok 11 - loopback TCP accepts local connections",
+        "ok 12 - loopback UDP exchanges local datagrams",
+    ]
+
+    private let fileManager = FileManager.default
+    private let recorder = OrlixRuntimeProofOutputRecorder()
+
+    func run() throws -> String {
+        let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+        let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+        guard fileManager.fileExists(atPath: ready.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+        }
+
+        let copiedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-oci-network-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+        defer {
+            try? fileManager.removeItem(at: copiedRoot)
+        }
+
+        let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+        let descriptor = OrlixEnvironmentDescriptor(
+            id: Self.environmentID,
+            source: .ociLayout,
+            platform: "linux/arm64",
+            rootImageIdentifier: Self.rootImageIdentifier,
+            defaultCommand: ["/orlix/network_namespace_probe"],
+            defaultEnvironment: [
+                "HOME": "/root",
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM": "xterm-256color",
+            ],
+            defaultWorkingDirectory: "/",
+            defaultUserID: 0,
+            defaultGroupID: 0,
+            hostname: "oci-network-host",
+            domainname: "oci.example",
+            rootMount: .defaultOverlay
+        )
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        let terminal = OrlixTerminalSession()
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer {
+            output.cancel()
+        }
+
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: descriptor.id,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        try OrlixOCIDerivedStdioRuntimeProof.writeOCIRuntimeConfig(
+            terminal: false,
+            script: "/orlix/network_namespace_probe",
+            rootPath: "imported-root",
+            to: fixture.root
+        )
+        let runtime = OrlixOCIRuntime(registry: registry)
+        let lifecycle = try OrlixOCIRuntimeBundle
+            .load(from: fixture.root)
+            .lifecycleController(id: descriptor.id)
+            .create()
+        let processHandle = try OrlixOCIRuntimeProcessHandle(
+            lifecycle: lifecycle,
+            rootMount: .defaultOverlay,
+            rootImageIdentifier: descriptor.rootImageIdentifier
+        )
+        try registry.save(processHandle.sessionDescriptor.environment)
+        try runtime.lifecycleStore.save(lifecycle)
+
+        let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+        let run = try installer.run(
+            id: descriptor.id,
+            terminal: terminal,
+            observationTimeout: Self.timeout
+        )
+        try waitForRequiredMarkers()
+        let finalState = try installer.state(id: descriptor.id)
+        let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+            forID: descriptor.id
+        )
+        let environmentDirectoryURL = layout.rootDirectory
+        let deletedEnvironment = try installer.delete(id: descriptor.id)
+
+        var text = Self.normalized(recorder.text)
+        try Self.validateText(text)
+        try Self.validateLifecycle(
+            run: run,
+            finalState: finalState,
+            deletedEnvironment: deletedEnvironment,
+            lifecycleRecordURL: lifecycleRecordURL,
+            environmentDirectoryURL: environmentDirectoryURL
+        )
+        text += "\nORLIX_OCI_NETWORK_RUNTIME_STARTED_OK\n"
+        text += "ORLIX_OCI_NETWORK_RUNTIME_STOPPED_OK\n"
+        text += "ORLIX_OCI_NETWORK_RUNTIME_DELETE_OK\n"
+        return text
+    }
+
+    private static func validateText(_ text: String) throws {
+        for marker in requiredMarkers where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+        }
+        if text.contains("\nnot ok ") || text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR") {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+        }
+    }
+
+    private func waitForRequiredMarkers() throws {
+        let deadline = Date().addingTimeInterval(Self.timeout)
+        while Date() < deadline {
+            let text = Self.normalized(recorder.text)
+            if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        let text = Self.normalized(recorder.text)
+        if let missingMarker = Self.requiredMarkers.first(where: { !text.contains($0) }) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                missingMarker,
+                text
+            )
+        }
+        throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+            "OCI network runtime markers",
+            text
+        )
+    }
+
+    private static func validateLifecycle(
+        run: OrlixOCIEnvironmentRunResult,
+        finalState: OrlixOCIRuntimeStateReport,
+        deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+        lifecycleRecordURL: URL,
+        environmentDirectoryURL: URL
+    ) throws {
+        guard run.startedStateReport.status == .running,
+              run.startedStateReport.pid != nil else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI network proof started lifecycle state running"
+            )
+        }
+        guard run.completedStateReport.status == .stopped,
+              run.completedStateReport.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI network proof stopped exit 0"
+            )
+        }
+        guard finalState.status == .stopped,
+              finalState.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI network final lifecycle state stopped exit 0"
+            )
+        }
+        guard deletedEnvironment.id == Self.environmentID,
+              deletedEnvironment.lifecycleState == .deleted else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI network proof delete cleanup"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI network lifecycle record cleanup"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI network environment directory cleanup"
             )
         }
     }
