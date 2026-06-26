@@ -1374,6 +1374,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let closeAdditionalFds: Bool?
 	public let cgroupsPath: String?
 	public let cgroupPidsLimit: Int64?
+	public let cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
+	public let cgroupCPUWeight: UInt64?
 	public let command: [String]?
 	public let removeAfterRun: Bool
 
@@ -1418,6 +1420,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedCloseAdditionalFds: Bool?
 		var parsedCgroupsPath: String?
 		var parsedCgroupPidsLimit: Int64?
+		var parsedCgroupCPUMax: OrlixEnvironmentCgroupCPUMax?
+		var parsedCgroupCPUWeight: UInt64?
 		var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1486,6 +1490,44 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 						.missingOptionValue("--pids-limit")
 				}
 				parsedCgroupPidsLimit = try Self.parseCgroupPidsLimit(pidsLimit)
+				continue
+			}
+			if parsedImage == nil, value == "--cpu-max" {
+				guard let cpuMax = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedCgroupCPUMax = try Self.parseCgroupCPUMax(cpuMax)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--cpu-max=") {
+				let separator = value.firstIndex(of: "=")!
+				let cpuMax = String(value[value.index(after: separator)...])
+				guard !cpuMax.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--cpu-max")
+				}
+				parsedCgroupCPUMax = try Self.parseCgroupCPUMax(cpuMax)
+				continue
+			}
+			if parsedImage == nil, value == "--cpu-weight" {
+				guard let cpuWeight = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedCgroupCPUWeight = try Self.parseCgroupCPUWeight(cpuWeight)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--cpu-weight=") {
+				let separator = value.firstIndex(of: "=")!
+				let cpuWeight = String(value[value.index(after: separator)...])
+				guard !cpuWeight.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--cpu-weight")
+				}
+				parsedCgroupCPUWeight = try Self.parseCgroupCPUWeight(cpuWeight)
 				continue
 			}
 			if parsedImage == nil, value == "--ulimit" {
@@ -1900,6 +1942,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.closeAdditionalFds = parsedCloseAdditionalFds
 		self.cgroupsPath = parsedCgroupsPath
 		self.cgroupPidsLimit = parsedCgroupPidsLimit
+		self.cgroupCPUMax = parsedCgroupCPUMax
+		self.cgroupCPUWeight = parsedCgroupCPUWeight
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
 		self.removeAfterRun = parsedRemoveAfterRun
 	}
@@ -2296,6 +2340,52 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		return limit
 	}
 
+	private static func parseCgroupCPUMax(
+		_ value: String
+	) throws -> OrlixEnvironmentCgroupCPUMax {
+		let parts = value.split(separator: ":", omittingEmptySubsequences: false)
+		guard parts.count == 1 || parts.count == 2 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"linux.resources.cpu.quota"
+			)
+		}
+		let quota: Int64
+		if parts[0] == "max" {
+			quota = -1
+		} else {
+			guard let parsedQuota = Int64(parts[0]), parsedQuota > 0 else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"linux.resources.cpu.quota"
+				)
+			}
+			quota = parsedQuota
+		}
+		let period: UInt64
+		if parts.count == 2 {
+			guard let parsedPeriod = UInt64(parts[1]), parsedPeriod > 0 else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"linux.resources.cpu.period"
+				)
+			}
+			period = parsedPeriod
+		} else {
+			period = OrlixEnvironmentCgroupCPUMax.defaultPeriodMicros
+		}
+		return OrlixEnvironmentCgroupCPUMax(
+			quotaMicros: quota,
+			periodMicros: period
+		)
+	}
+
+	private static func parseCgroupCPUWeight(_ value: String) throws -> UInt64 {
+		guard let weight = UInt64(value), (1...10_000).contains(weight) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"linux.resources.cpu.shares"
+			)
+		}
+		return weight
+	}
+
 	private static func parseID(
 		_ value: String,
 		feature: String
@@ -2436,7 +2526,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultNoNewPrivilegesWith noNewPrivileges: Bool?,
 		replacingDefaultCloseAdditionalFdsWith closeAdditionalFds: Bool?,
 		replacingCgroupsPathWith cgroupsPath: String?,
-		replacingCgroupPidsLimitWith cgroupPidsLimit: Int64?
+		replacingCgroupPidsLimitWith cgroupPidsLimit: Int64?,
+		replacingCgroupCPUMaxWith cgroupCPUMax: OrlixEnvironmentCgroupCPUMax?,
+		replacingCgroupCPUWeightWith cgroupCPUWeight: UInt64?
 	) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -2459,6 +2551,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| closeAdditionalFds != nil
 			|| cgroupsPath != nil
 			|| cgroupPidsLimit != nil
+			|| cgroupCPUMax != nil
+			|| cgroupCPUWeight != nil
 		else {
 			return descriptor
 		}
@@ -2523,6 +2617,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			?? defaultCgroupsPath(
 				environmentID: descriptor.id,
 				required: cgroupPidsLimit != nil
+				|| cgroupCPUMax != nil
+				|| cgroupCPUWeight != nil
 			)
 		return OrlixEnvironmentDescriptor(
 			id: descriptor.id,
@@ -2564,8 +2660,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupsPath: effectiveCgroupsPath,
 			cgroupPidsLimit: cgroupPidsLimit
 			?? descriptor.cgroupPidsLimit,
-            cgroupCPUMax: descriptor.cgroupCPUMax,
-            cgroupCPUWeight: descriptor.cgroupCPUWeight,
+			cgroupCPUMax: cgroupCPUMax ?? descriptor.cgroupCPUMax,
+			cgroupCPUWeight: cgroupCPUWeight
+			?? descriptor.cgroupCPUWeight,
             cgroupMemoryMax: descriptor.cgroupMemoryMax,
             cgroupIOWeight: descriptor.cgroupIOWeight,
             cgroupUnified: descriptor.cgroupUnified,
@@ -2642,6 +2739,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		closeAdditionalFdsOverride: Bool? = nil,
 		cgroupsPathOverride: String? = nil,
 		cgroupPidsLimitOverride: Int64? = nil,
+		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupCPUWeightOverride: UInt64? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2672,6 +2771,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			cgroupsPathOverride: cgroupsPathOverride,
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
+			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
+			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2705,6 +2806,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		closeAdditionalFdsOverride: Bool? = nil,
 		cgroupsPathOverride: String? = nil,
 		cgroupPidsLimitOverride: Int64? = nil,
+		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupCPUWeightOverride: UInt64? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2763,7 +2866,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDefaultCloseAdditionalFdsWith:
 					closeAdditionalFdsOverride,
 				replacingCgroupsPathWith: cgroupsPathOverride,
-				replacingCgroupPidsLimitWith: cgroupPidsLimitOverride
+				replacingCgroupPidsLimitWith: cgroupPidsLimitOverride,
+				replacingCgroupCPUMaxWith: cgroupCPUMaxOverride,
+				replacingCgroupCPUWeightWith: cgroupCPUWeightOverride
 			)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -2870,6 +2975,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
 			cgroupsPathOverride: request.cgroupsPath,
 			cgroupPidsLimitOverride: request.cgroupPidsLimit,
+			cgroupCPUMaxOverride: request.cgroupCPUMax,
+			cgroupCPUWeightOverride: request.cgroupCPUWeight,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2929,6 +3036,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
 			cgroupsPathOverride: request.cgroupsPath,
 			cgroupPidsLimitOverride: request.cgroupPidsLimit,
+			cgroupCPUMaxOverride: request.cgroupCPUMax,
+			cgroupCPUWeightOverride: request.cgroupCPUWeight,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2989,6 +3098,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		closeAdditionalFdsOverride: Bool? = nil,
 		cgroupsPathOverride: String? = nil,
 		cgroupPidsLimitOverride: Int64? = nil,
+		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupCPUWeightOverride: UInt64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3021,6 +3132,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			cgroupsPathOverride: cgroupsPathOverride,
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
+			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
+			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -3056,6 +3169,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		closeAdditionalFdsOverride: Bool? = nil,
 		cgroupsPathOverride: String? = nil,
 		cgroupPidsLimitOverride: Int64? = nil,
+		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupCPUWeightOverride: UInt64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3087,6 +3202,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			cgroupsPathOverride: cgroupsPathOverride,
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
+			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
+			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3131,6 +3248,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		closeAdditionalFdsOverride: Bool? = nil,
 		cgroupsPathOverride: String? = nil,
 		cgroupPidsLimitOverride: Int64? = nil,
+		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupCPUWeightOverride: UInt64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3164,6 +3283,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			cgroupsPathOverride: cgroupsPathOverride,
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
+			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
+			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3200,6 +3321,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		closeAdditionalFdsOverride: Bool? = nil,
 		cgroupsPathOverride: String? = nil,
 		cgroupPidsLimitOverride: Int64? = nil,
+		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupCPUWeightOverride: UInt64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3232,6 +3355,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			cgroupsPathOverride: cgroupsPathOverride,
 			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
+			cgroupCPUMaxOverride: cgroupCPUMaxOverride,
+			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3290,6 +3415,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
 			cgroupsPathOverride: request.cgroupsPath,
 			cgroupPidsLimitOverride: request.cgroupPidsLimit,
+			cgroupCPUMaxOverride: request.cgroupCPUMax,
+			cgroupCPUWeightOverride: request.cgroupCPUWeight,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -3336,6 +3463,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		closeAdditionalFdsOverride: Bool? = nil,
 		cgroupsPathOverride: String? = nil,
 		cgroupPidsLimitOverride: Int64? = nil,
+		cgroupCPUMaxOverride: OrlixEnvironmentCgroupCPUMax? = nil,
+		cgroupCPUWeightOverride: UInt64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,

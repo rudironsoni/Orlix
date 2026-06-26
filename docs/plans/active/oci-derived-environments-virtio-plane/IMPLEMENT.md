@@ -10,6 +10,22 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run cgroup CPU overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--cpu-max QUOTA[:PERIOD]`, `--cpu-max=QUOTA[:PERIOD]`, `--cpu-weight WEIGHT`, and `--cpu-weight=WEIGHT` before image.
+- `--cpu-max max` maps to cgroup v2 unlimited quota; omitted period uses existing `OrlixEnvironmentCgroupCPUMax.defaultPeriodMicros`. Invalid quota/period use existing OCI `linux.resources.cpu.quota` and `linux.resources.cpu.period` unsupported-feature naming.
+- `--cpu-weight` accepts direct cgroup v2 weight range `1...10000` and invalid values use existing `linux.resources.cpu.shares` unsupported-feature naming.
+- Registry-backed install/run terminal-session preparation persists parsed values into descriptor `cgroupCPUMax` and `cgroupCPUWeight`; CPU-only overrides derive `/orlix/oci/<environment-id>` like OCI resource parsing.
+- Focused tests cover split and equals parsing, `max` input, invalid quota/period/weight rejection, empty equals-form rejection, default nil parser state, and observed registry-backed descriptor persistence. Existing descriptor/init tests cover `orlix.cgroups.cpu.max`, `orlix.cgroups.cpu.weight`, and init writing Linux cgroup v2 `cpu.max`/`cpu.weight`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- This advances product-facing cgroup CPU configuration through existing OrlixOS descriptors and Linux-visible init cgroup v2 metadata paths. It does not claim broad cgroup controller enforcement, scheduling guarantees, delegation, systemd readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI lifecycle, or live simulator proof.
+
 ### 2026-06-26 OCI run cgroup pids limit overrides
 
 Changes:
