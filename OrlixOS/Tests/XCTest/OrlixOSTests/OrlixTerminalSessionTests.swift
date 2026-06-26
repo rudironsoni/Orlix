@@ -7923,13 +7923,14 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 		"echo hello",
 	])
 
-	XCTAssertEqual(arguments.image, "alpine:3.20")
-	XCTAssertEqual(arguments.id, "demo-alpine")
-		XCTAssertEqual(arguments.platform, "linux/arm64/v8")
-		XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
-	}
+    XCTAssertEqual(arguments.image, "alpine:3.20")
+    XCTAssertEqual(arguments.id, "demo-alpine")
+    XCTAssertEqual(arguments.platform, "linux/arm64/v8")
+    XCTAssertNil(arguments.entrypoint)
+    XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
+}
 
-	func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
+func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 		let nameArguments = try OrlixOCIEnvironmentRunArguments([
 			"orlix",
 			"run",
@@ -7942,11 +7943,12 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 			"hello",
 		])
 
-		XCTAssertEqual(nameArguments.image, "alpine:3.20")
-		XCTAssertEqual(nameArguments.id, "named-alpine")
-		XCTAssertEqual(nameArguments.platform, "linux/arm64/v8")
-		XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
-		XCTAssertTrue(nameArguments.removeAfterRun)
+    XCTAssertEqual(nameArguments.image, "alpine:3.20")
+    XCTAssertEqual(nameArguments.id, "named-alpine")
+    XCTAssertEqual(nameArguments.platform, "linux/arm64/v8")
+    XCTAssertNil(nameArguments.entrypoint)
+    XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
+    XCTAssertTrue(nameArguments.removeAfterRun)
 
 		let equalsArguments = try OrlixOCIEnvironmentRunArguments([
 			"run",
@@ -7954,19 +7956,48 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 			"alpine:3.20",
 		])
 
-		XCTAssertEqual(equalsArguments.image, "alpine:3.20")
-		XCTAssertEqual(equalsArguments.id, "equals-alpine")
-		XCTAssertEqual(equalsArguments.platform, "linux/arm64")
-		XCTAssertNil(equalsArguments.command)
-		XCTAssertFalse(equalsArguments.removeAfterRun)
-	}
+    XCTAssertEqual(equalsArguments.image, "alpine:3.20")
+    XCTAssertEqual(equalsArguments.id, "equals-alpine")
+    XCTAssertEqual(equalsArguments.platform, "linux/arm64")
+    XCTAssertNil(equalsArguments.entrypoint)
+    XCTAssertNil(equalsArguments.command)
+    XCTAssertFalse(equalsArguments.removeAfterRun)
+}
 
-	func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
-		let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
-			("--id=", .missingOptionValue("--id")),
-			("--name=", .missingOptionValue("--name")),
-			("--platform=", .missingOptionValue("--platform")),
-		]
+func testOCIEnvironmentRunArgumentsAcceptsEntrypointOverride() throws {
+    let splitArguments = try OrlixOCIEnvironmentRunArguments([
+        "orlix",
+        "run",
+        "--entrypoint",
+        "/usr/bin/env",
+        "alpine:3.20",
+        "sh",
+        "-lc",
+        "echo entrypoint",
+    ])
+
+    XCTAssertEqual(splitArguments.image, "alpine:3.20")
+    XCTAssertEqual(splitArguments.entrypoint, ["/usr/bin/env"])
+    XCTAssertEqual(splitArguments.command, ["sh", "-lc", "echo entrypoint"])
+
+    let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+        "run",
+        "--entrypoint=/bin/busybox",
+        "alpine:3.20",
+    ])
+
+    XCTAssertEqual(equalsArguments.image, "alpine:3.20")
+    XCTAssertEqual(equalsArguments.entrypoint, ["/bin/busybox"])
+    XCTAssertNil(equalsArguments.command)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
+    let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
+        ("--id=", .missingOptionValue("--id")),
+        ("--name=", .missingOptionValue("--name")),
+        ("--platform=", .missingOptionValue("--platform")),
+        ("--entrypoint=", .missingOptionValue("--entrypoint")),
+    ]
 
 		for (option, expectedError) in invalidOptions {
 			XCTAssertThrowsError(
@@ -9307,15 +9338,24 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			)
 		)
 
-		let result = try await installer.run(
-			image: image,
-			id: "registry-installed-run",
-			tools: tools,
-			puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
-			command: ["/bin/echo", "override"],
-			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
-			using: driver,
-			fileManager: fileManager
+    let result = try await installer.run(
+        arguments: [
+            "orlix",
+            "run",
+            "--id",
+            "registry-installed-run",
+            "--entrypoint",
+            "/usr/bin/env",
+            "registry.example.org/library/orlix-registry:latest",
+            "sh",
+            "-lc",
+            "echo registry",
+        ],
+        tools: tools,
+        puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
+        terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+        using: driver,
+        fileManager: fileManager
 		) { executable, arguments in
 			try recorder.run(executable: executable, arguments: arguments)
 		}
@@ -9335,8 +9375,14 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			try installer.state(id: "registry-installed-run"),
 			result.runResult.completedStateReport
 		)
-		XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo registry"])
-		XCTAssertEqual(driver.startCommands, [["/bin/echo", "override"]])
+    XCTAssertEqual(
+        descriptor.defaultCommand,
+        ["/usr/bin/env", "sh", "-lc", "echo registry"]
+    )
+    XCTAssertEqual(
+        driver.startCommands,
+        [["/usr/bin/env", "sh", "-lc", "echo registry"]]
+    )
 		XCTAssertEqual(recorder.executables.first, tools.truncate)
 		XCTAssertEqual(recorder.executables.filter { $0 == tools.mke2fs }.count, 2)
 		XCTAssertEqual(recorder.executables.filter { $0 == tools.debugfs }.count, 2)
