@@ -30,6 +30,7 @@ ORLIXOS_ENVIRONMENT_IMAGE_WORK_DIR ?= $(ORLIXOS_BUILD_ROOT)/environment-images/$
 ORLIXOS_ENVIRONMENT_BASE_IMAGE_SIZE ?= $(ORLIX_OS_BASE_ROOT_IMAGE_SIZE)
 ORLIXOS_ENVIRONMENT_STATE_IMAGE_SIZE ?= $(ORLIX_OS_STATE_ROOT_IMAGE_SIZE)
 ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP := $(ORLIXOS_BUILD_ROOT)/environment-runtime-test-fixtures/.fixtures-ready
+ORLIXOS_NETWORK_NAMESPACE_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/network_namespace_probe
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 
@@ -149,12 +150,14 @@ environment-runtime-test-fixtures:
 			fixtures_ready=0; \
 		fi; \
 	done; \
-	if [ "$$fixtures_ready" -eq 1 ] && [ -s "$$stamp" ] && [ -s "$(ORLIXOS_INIT_BINARY)" ] && [ -s "$(ORLIXOS_ROOTFS_STAMP)" ]; then \
+	if [ "$$fixtures_ready" -eq 1 ] && [ -s "$$stamp" ] && [ -s "$(ORLIXOS_INIT_BINARY)" ] && [ -s "$(ORLIXOS_ROOTFS_STAMP)" ] && [ -s "$(ORLIXOS_NETWORK_NAMESPACE_PROBE)" ]; then \
 		init_sha256="$$(shasum -a 256 "$(ORLIXOS_INIT_BINARY)" | awk '{print $$1}')"; \
 		rootfs_stamp_sha256="$$(shasum -a 256 "$(ORLIXOS_ROOTFS_STAMP)" | awk '{print $$1}')"; \
+		network_probe_sha256="$$(shasum -a 256 "$(ORLIXOS_NETWORK_NAMESPACE_PROBE)" | awk '{print $$1}')"; \
 		if grep -F -q "profile=$(PROFILE)" "$$stamp" && \
 			grep -F -q "init_sha256=$$init_sha256" "$$stamp" && \
 			grep -F -q "rootfs_stamp_sha256=$$rootfs_stamp_sha256" "$$stamp" && \
+			grep -F -q "network_probe_sha256=$$network_probe_sha256" "$$stamp" && \
 			[ ! "$(ORLIXOS_INIT_SOURCE)" -nt "$$stamp" ] && \
 			[ ! "$(ORLIXOS_MANIFEST)" -nt "$$stamp" ] && \
 			[ ! "$(PROJECT_DIR)/Makefile" -nt "$$stamp" ] && \
@@ -166,10 +169,14 @@ environment-runtime-test-fixtures:
 	rm -f "$$stamp"; \
 	$(MAKE) -f "$(PROJECT_DIR)/Makefile" "$(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP)" PROFILE="$(PROFILE)"
 
-$(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP): $(ORLIXOS_ROOTFS_STAMP) $(ORLIXOS_INIT_BINARY) $(PROJECT_DIR)/Makefile $(PROJECT_DIR)/Sources/make/rootfs.mk
+$(ORLIXOS_NETWORK_NAMESPACE_PROBE):
+	$(KERNEL_MAKE) kselftest PROFILE="$(PROFILE)" libc=orlixmlibc
+
+$(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP): $(ORLIXOS_ROOTFS_STAMP) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_NETWORK_NAMESPACE_PROBE) $(PROJECT_DIR)/Makefile $(PROJECT_DIR)/Sources/make/rootfs.mk
 	@set -euo pipefail; \
 	init_sha256="$$(shasum -a 256 "$(ORLIXOS_INIT_BINARY)" | awk '{print $$1}')"; \
 	rootfs_stamp_sha256="$$(shasum -a 256 "$(ORLIXOS_ROOTFS_STAMP)" | awk '{print $$1}')"; \
+	network_probe_sha256="$$(shasum -a 256 "$(ORLIXOS_NETWORK_NAMESPACE_PROBE)" | awk '{print $$1}')"; \
 	proof_root="$(ORLIXOS_BUILD_ROOT)/environment-runtime-test-fixtures"; \
 	for fixture in tar-imported oci-imported; do \
 		case "$$fixture" in \
@@ -199,6 +206,8 @@ $(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP): $(ORLIXOS_ROOTFS_STAMP) $(ORL
 		mkdir -p "$$imported_root" "$$state_root" "$$work_root"; \
 		(cd "$(ORLIXOS_BASE_ROOT_TREE)" && tar -cf - .) | (cd "$$imported_root" && tar -xf -); \
 		printf '%s\n' "NAME=$$name" "ID=$$id" "PRETTY_NAME=$$name" > "$$imported_root/etc/os-release"; \
+		mkdir -p "$$imported_root/orlix"; \
+		cp "$(ORLIXOS_NETWORK_NAMESPACE_PROBE)" "$$imported_root/orlix/network_namespace_probe"; \
 		find "$$imported_root" -type d -exec chmod 0755 {} +; \
 		find "$$imported_root" -type f -perm -0100 -exec chmod 0755 {} +; \
 		find "$$imported_root" -type f ! -perm -0100 -exec chmod 0644 {} +; \
@@ -251,6 +260,6 @@ $(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP): $(ORLIXOS_ROOTFS_STAMP) $(ORL
 			ORLIXOS_ENVIRONMENT_STATE_DEBUGFS_COMMANDS="$$state_metadata_commands"; \
 		printf 'profile=%s\nfixture=%s\nenvironment=%s\ninit_sha256=%s\n' "$(PROFILE)" "$$fixture" "$$env_id" "$$init_sha256" > "$$fixture_root/.ready"; \
 	done; \
-	printf 'profile=%s\ninit_sha256=%s\nrootfs_stamp_sha256=%s\n' "$(PROFILE)" "$$init_sha256" "$$rootfs_stamp_sha256" > "$@"
+	printf 'profile=%s\ninit_sha256=%s\nrootfs_stamp_sha256=%s\nnetwork_probe_sha256=%s\n' "$(PROFILE)" "$$init_sha256" "$$rootfs_stamp_sha256" "$$network_probe_sha256" > "$@"
 
 include $(PROJECT_DIR)/Sources/make/rules.mk
