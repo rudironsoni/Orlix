@@ -22697,3 +22697,21 @@ Boundary:
 
 Current status:
 Latest coherent checkpoint supports opening an already-prepared OCI-derived environment as a terminal session directly from `orlix run` arguments, preserving command override semantics without requiring image materialization at terminal launch time. Next work remains wiring this into the visible product terminal command flow, a real Linux-visible `orlix run` command/control path, non-terminal Linux signal delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+
+### 2026-06-26 terminal app prepared run selection
+
+Changes:
+- Extended `OrlixTerminalLaunchConfiguration` with prepared `orlix run` arguments from `--orlix-run ...` or `UserDefaults` key `OrlixTerminal.runArguments`.
+- `OrlixTerminal` now prefers prepared run arguments over a selected environment ID and opens them through `OrlixOCIEnvironmentInstaller().terminalSession(arguments:)`.
+- Existing `--orlix-environment-id` and default bundled-root launch behavior remain intact.
+- This intentionally does not pull, import, or materialize registry images from the terminal app. It opens already-prepared OCI-derived environments through the OrlixOS session API.
+
+Evidence:
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `OrlixTerminal` app build passed on `iPhone 17 Pro`.
+- Focused prepared-session XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-01-49-+0200.xcresult` reported `Passed`, 2 passed, 0 failed, 0 skipped.
+- Broader deterministic OCI registry/runtime XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-02-58-+0200.xcresult` reported `Passed`, 14 passed, 0 failed, 0 skipped.
+
+Boundary:
+- This is product terminal launch selection only. It does not claim Linux userspace `/usr/bin/orlix run`, registry pull from inside Linux, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, full OCI Runtime Spec lifecycle, or broad namespace/cgroup/device/filesystem/network readiness.
