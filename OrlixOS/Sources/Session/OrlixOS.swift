@@ -1364,6 +1364,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let rlimits: [OrlixEnvironmentRlimit]
 	public let umask: UInt32?
 	public let oomScoreAdjustment: Int32?
+	public let scheduler: OrlixEnvironmentScheduler?
 	public let cpuAffinity: OrlixEnvironmentCPUAffinity?
 	public let noNewPrivileges: Bool?
 	public let closeAdditionalFds: Bool?
@@ -1400,6 +1401,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedRlimits: [OrlixEnvironmentRlimit] = []
 		var parsedUmask: UInt32?
 		var parsedOOMScoreAdjustment: Int32?
+		var parsedScheduler: OrlixEnvironmentScheduler?
 		var parsedCPUAffinity: OrlixEnvironmentCPUAffinity?
 		var parsedNoNewPrivileges: Bool?
 		var parsedCloseAdditionalFds: Bool?
@@ -1494,6 +1496,25 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				parsedOOMScoreAdjustment = try Self.parseOOMScoreAdjustment(
 					oomScoreAdjustment
 				)
+				continue
+			}
+			if parsedImage == nil, value == "--scheduler" {
+				guard let scheduler = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedScheduler = try Self.parseScheduler(scheduler)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--scheduler=") {
+				let separator = value.firstIndex(of: "=")!
+				let scheduler = String(value[value.index(after: separator)...])
+				guard !scheduler.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--scheduler")
+				}
+				parsedScheduler = try Self.parseScheduler(scheduler)
 				continue
 			}
 			if parsedImage == nil, value == "--cpu-affinity" {
@@ -1728,6 +1749,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.rlimits = parsedRlimits
 		self.umask = parsedUmask
 		self.oomScoreAdjustment = parsedOOMScoreAdjustment
+		self.scheduler = parsedScheduler
 		self.cpuAffinity = parsedCPUAffinity
 		self.noNewPrivileges = parsedNoNewPrivileges
 		self.closeAdditionalFds = parsedCloseAdditionalFds
@@ -1863,6 +1885,45 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 			)
 		}
 		return parsed
+	}
+
+	private static func parseScheduler(
+		_ value: String
+	) throws -> OrlixEnvironmentScheduler {
+		let parts = value.split(separator: ":", omittingEmptySubsequences: false)
+		guard parts.count == 1 || parts.count == 2 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.scheduler"
+			)
+		}
+		let policy = String(parts[0])
+		let supportedPolicies: Set<String> = [
+			"SCHED_OTHER",
+			"SCHED_BATCH",
+			"SCHED_IDLE",
+			"SCHED_FIFO",
+			"SCHED_RR",
+		]
+		guard supportedPolicies.contains(policy) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.scheduler.policy"
+			)
+		}
+		let priority: Int32
+		if parts.count == 2 {
+			guard
+				let parsedPriority = Int32(parts[1]),
+				parsedPriority >= 0
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"process.scheduler.priority"
+				)
+			}
+			priority = parsedPriority
+		} else {
+			priority = 0
+		}
+		return OrlixEnvironmentScheduler(policy: policy, priority: priority)
 	}
 
 	private static func parseCPUAffinity(
@@ -2024,6 +2085,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
 		replacingDefaultUmaskWith umask: UInt32?,
 		replacingDefaultOOMScoreAdjustmentWith oomScoreAdjustment: Int32?,
+		replacingDefaultSchedulerWith scheduler: OrlixEnvironmentScheduler?,
 		replacingDefaultCPUAffinityWith cpuAffinity: OrlixEnvironmentCPUAffinity?,
 		replacingDefaultNoNewPrivilegesWith noNewPrivileges: Bool?,
 		replacingDefaultCloseAdditionalFdsWith closeAdditionalFds: Bool?
@@ -2039,6 +2101,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| !rlimits.isEmpty
 			|| umask != nil
 			|| oomScoreAdjustment != nil
+			|| scheduler != nil
 			|| cpuAffinity != nil
 			|| noNewPrivileges != nil
 			|| closeAdditionalFds != nil
@@ -2119,7 +2182,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultTerminalColumns: descriptor.defaultTerminalColumns,
 			defaultOOMScoreAdjustment: oomScoreAdjustment
 				?? descriptor.defaultOOMScoreAdjustment,
-			defaultScheduler: descriptor.defaultScheduler,
+			defaultScheduler: scheduler ?? descriptor.defaultScheduler,
 			defaultIOPriority: descriptor.defaultIOPriority,
 			defaultCPUAffinity: cpuAffinity ?? descriptor.defaultCPUAffinity,
 			defaultUmask: umask ?? descriptor.defaultUmask,
@@ -2203,6 +2266,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
+		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
@@ -2226,6 +2290,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
+			defaultSchedulerOverride: defaultSchedulerOverride,
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
@@ -2252,6 +2317,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
+		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
@@ -2301,6 +2367,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDefaultUmaskWith: defaultUmaskOverride,
 				replacingDefaultOOMScoreAdjustmentWith:
 					defaultOOMScoreAdjustmentOverride,
+				replacingDefaultSchedulerWith: defaultSchedulerOverride,
 				replacingDefaultCPUAffinityWith: defaultCPUAffinityOverride,
 				replacingDefaultNoNewPrivilegesWith: noNewPrivilegesOverride,
 				replacingDefaultCloseAdditionalFdsWith: closeAdditionalFdsOverride
@@ -2399,6 +2466,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
+			defaultSchedulerOverride: request.scheduler,
 			defaultCPUAffinityOverride: request.cpuAffinity,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
@@ -2450,6 +2518,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
+			defaultSchedulerOverride: request.scheduler,
 			defaultCPUAffinityOverride: request.cpuAffinity,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
@@ -2503,6 +2572,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
+		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
@@ -2528,6 +2598,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
+			defaultSchedulerOverride: defaultSchedulerOverride,
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
@@ -2556,6 +2627,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
+		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
@@ -2580,6 +2652,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
+			defaultSchedulerOverride: defaultSchedulerOverride,
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
@@ -2617,6 +2690,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
+		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
@@ -2643,6 +2717,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
+			defaultSchedulerOverride: defaultSchedulerOverride,
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
@@ -2672,6 +2747,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
+		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
@@ -2697,6 +2773,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
+			defaultSchedulerOverride: defaultSchedulerOverride,
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
@@ -2747,6 +2824,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
+			defaultSchedulerOverride: request.scheduler,
 			defaultCPUAffinityOverride: request.cpuAffinity,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
@@ -2786,6 +2864,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
+		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
@@ -2811,6 +2890,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
+			defaultSchedulerOverride: defaultSchedulerOverride,
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
