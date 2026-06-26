@@ -22781,3 +22781,30 @@ Boundary:
 - This advances OCI `linux.sysctl` from descriptor/command-line carry into OrlixOS root-init application through Linux procfs. It does not claim full OCI Runtime Spec lifecycle, broad namespace/cgroup/device/filesystem/network readiness, Linux userspace `/usr/bin/orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
 
 Current status: Latest coherent checkpoint applies OCI sysctl values in OrlixOS first-stage init before configured process execution. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.
+
+### 2026-06-26 OCI default cgroup path derivation
+
+Changes:
+- OCI runtime configs with supported cgroup resource controls now no longer require explicit `linux.cgroupsPath`.
+- `OrlixOCIRuntimeConfigDescriptor.environmentDescriptor(...)` derives `/orlix/oci/<environment-id>` when cgroup controls are present and the OCI config omitted `linux.cgroupsPath`.
+- Explicit absolute `linux.cgroupsPath` and relative-path normalization remain unchanged.
+- The existing OrlixOS environment storage-safe ID helper is module-internal so cgroup default placement uses the same environment ID validation/sanitization as persisted environment storage.
+- Parser rejection tests removed only the former missing-`cgroupsPath` rows for implemented resource controls. Unsupported resource shapes still reject.
+- No HostAdapter, mlibc, generated upstream, OrlixKernel patch, init, or `GOAL.md` changes.
+
+Evidence:
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- Focused OrlixOS XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_04-19-15-+0200.xcresult` reported `Passed`, 3 passed, 0 failed, 0 skipped on `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)`.
+- Broader selected OrlixOS OCI/runtime XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_04-22-47-+0200.xcresult` reported `Passed`, 15 passed, 0 failed, 0 skipped on the same simulator.
+- Earlier focused attempts caught and fixed invalid OCI test fixtures missing `root.path`, and corrected command-line token expectations to match the kernel command-line encoder.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Host crash-report check found no `*Orlix*` reports modified in the last day. Simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This advances OCI cgroup resource usability when an OCI config leaves cgroup placement to the runtime. It does not add new Linux cgroup semantics, duplicate kernel cgroups in OrlixOS, or claim full OCI Runtime Spec lifecycle, broad namespace/cgroup/device/filesystem/network readiness, Linux userspace `/usr/bin/orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
+
+Current status: Latest coherent checkpoint derives deterministic OrlixOS-owned default cgroup paths for OCI resource controls when `linux.cgroupsPath` is omitted, then carries those paths through the existing Linux cgroupfs init application path. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.

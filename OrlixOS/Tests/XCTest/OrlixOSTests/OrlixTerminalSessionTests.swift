@@ -6863,6 +6863,7 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 		{
 		  "ociVersion": "1.1.0",
 		  "process": { "args": ["/bin/sh"], "cwd": "/" },
+		  "root": { "path": "rootfs" },
 		  "linux": {
 		    "cgroupsPath": "demo.slice/orlix",
 		    "resources": { "pids": { "limit": 12 } }
@@ -6889,13 +6890,98 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
 			"orlix.cgroups.path=/orlix/demo.slice/orlix"
 		)
 	)
-        XCTAssertTrue(
-            try XCTUnwrap(commandLine).contains("orlix.cgroups.pids.max=12")
-        )
-    }
+	XCTAssertTrue(
+		try XCTUnwrap(commandLine).contains("orlix.cgroups.pids.max=12")
+	)
+}
 
-    func testOCIRuntimeConfigParserCarriesLinuxPersonality() throws {
-        let config = Data(
+func testOCIRuntimeConfigParserDerivesDefaultCgroupsPathForResources() throws {
+	let config = Data(
+		"""
+		{
+		  "ociVersion": "1.1.0",
+		  "process": { "args": ["/bin/sh"], "cwd": "/" },
+		  "root": { "path": "rootfs" },
+		  "linux": {
+		    "resources": {
+		      "pids": { "limit": 64 },
+		      "memory": { "limit": 268435456 },
+		      "cpu": { "quota": 50000, "period": 100000, "shares": 1024 },
+		      "blockIO": {
+		        "weight": 100,
+		        "weightDevice": [{ "major": 8, "minor": 0, "weight": 200 }],
+		        "throttleReadBpsDevice": [
+		          { "major": 8, "minor": 0, "rate": 1048576 }
+		        ]
+		      },
+		      "unified": {
+		        "cpu.weight": "39"
+		      }
+		    }
+		  }
+		}
+		""".utf8
+	)
+
+	let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+	XCTAssertNil(descriptor.cgroupsPath)
+	XCTAssertEqual(descriptor.cgroupPidsLimit, 64)
+	XCTAssertEqual(descriptor.cgroupMemoryMax, 268_435_456)
+	XCTAssertEqual(
+		descriptor.cgroupCPUMax,
+		OrlixEnvironmentCgroupCPUMax(quotaMicros: 50_000, periodMicros: 100_000)
+	)
+	XCTAssertEqual(descriptor.cgroupCPUWeight, 39)
+	XCTAssertEqual(descriptor.cgroupIOWeight, 100)
+	XCTAssertEqual(
+		descriptor.cgroupUnified,
+		[
+			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
+			OrlixEnvironmentCgroupUnifiedEntry(file: "io.weight", value: "8:0 200"),
+			OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "8:0 rbps=1048576"),
+		]
+	)
+
+	let environment = try descriptor.environmentDescriptor(
+		id: "oci-default-cgroup-path",
+		rootMount: .defaultOverlay
+	)
+	XCTAssertEqual(environment.cgroupsPath, "/orlix/oci/oci-default-cgroup-path")
+	XCTAssertEqual(environment.cgroupPidsLimit, descriptor.cgroupPidsLimit)
+	XCTAssertEqual(environment.cgroupMemoryMax, descriptor.cgroupMemoryMax)
+	XCTAssertEqual(environment.cgroupCPUMax, descriptor.cgroupCPUMax)
+	XCTAssertEqual(environment.cgroupCPUWeight, descriptor.cgroupCPUWeight)
+	XCTAssertEqual(environment.cgroupIOWeight, descriptor.cgroupIOWeight)
+	XCTAssertEqual(environment.cgroupUnified, descriptor.cgroupUnified)
+
+	let commandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+		descriptor: environment,
+		kernelCommandLine: OrlixEnvironmentRootImage.defaultKernelCommandLine
+	)
+	let unwrappedCommandLine = try XCTUnwrap(commandLine)
+	XCTAssertTrue(
+		unwrappedCommandLine.contains(
+			"orlix.cgroups.path=/orlix/oci/oci-default-cgroup-path"
+		)
+	)
+	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.pids.max=64"))
+	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.memory.max=268435456"))
+	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
+	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.cpu.weight=39"))
+	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.io.weight=100"))
+	XCTAssertTrue(
+		unwrappedCommandLine.contains("orlix.cgroups.unified0=cpu.weight=39")
+	)
+	XCTAssertTrue(
+		unwrappedCommandLine.contains("orlix.cgroups.unified1=io.weight=8:0%20200")
+	)
+	XCTAssertTrue(
+		unwrappedCommandLine.contains("orlix.cgroups.unified2=io.max=8:0%20rbps=1048576")
+	)
+}
+
+func testOCIRuntimeConfigParserCarriesLinuxPersonality() throws {
+	let config = Data(
             """
             {
               "ociVersion": "1.1.0",
@@ -7145,7 +7231,6 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
             ("devices.type", #""devices": [{ "path": "/dev/orlix-null", "type": "x", "major": 1, "minor": 3 }]"#),
             ("devices.major", #""devices": [{ "path": "/dev/orlix-null", "type": "c", "minor": 3 }]"#),
             ("devices.fileMode", #""devices": [{ "path": "/dev/orlix-null", "type": "c", "major": 1, "minor": 3, "fileMode": 32768 }]"#),
-("resources.memory.cgroupsPath", #""resources": { "memory": { "limit": 268435456 } }"#),
 ("resources.memory.limit", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "limit": -2 } }"#),
 ("resources.memory.reservation", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "reservation": 134217728 } }"#),
 ("resources.memory.swap", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "swap": 536870912 } }"#),
@@ -7154,23 +7239,16 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
 ("resources.memory.swappiness", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "swappiness": 60 } }"#),
 ("resources.memory.disableOOMKiller", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "disableOOMKiller": true } }"#),
 ("resources.memory.useHierarchy", #""cgroupsPath": "/orlix/demo", "resources": { "memory": { "useHierarchy": true } }"#),
-("resources.cpu.cgroupsPath", #""resources": { "cpu": { "quota": 50000, "period": 100000 } }"#),
-("resources.cpu.shares.cgroupsPath", #""resources": { "cpu": { "shares": 1024 } }"#),
 ("resources.cpu.quota", #""cgroupsPath": "/orlix/demo", "resources": { "cpu": { "quota": 0, "period": 100000 } }"#),
 			("resources.cpu.period", #""cgroupsPath": "/orlix/demo", "resources": { "cpu": { "quota": 50000, "period": 0 } }"#),
 			("resources.cpu.shares", #""cgroupsPath": "/orlix/demo", "resources": { "cpu": { "shares": 1 } }"#),
 			("resources.cpu.cpus", #""cgroupsPath": "/orlix/demo", "resources": { "cpu": { "cpus": "0" } }"#),
-		("resources.blockIO.weight.cgroupsPath", #""resources": { "blockIO": { "weight": 100 } }"#),
 		("resources.blockIO.weight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weight": 0 } }"#),
 		("resources.blockIO.leafWeight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "leafWeight": 100 } }"#),
-		("resources.blockIO.weightDevice.cgroupsPath", #""resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "weight": 100 }] } }"#),
 		("resources.blockIO.weightDevice.weight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "weight": 0 }] } }"#),
 		("resources.blockIO.weightDevice.leafWeight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "leafWeight": 100 }] } }"#),
-		("resources.blockIO.throttleReadBpsDevice.cgroupsPath", #""resources": { "blockIO": { "throttleReadBpsDevice": [{ "major": 1, "minor": 0, "rate": 1048576 }] } }"#),
 		("resources.blockIO.throttleReadBpsDevice.rate", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "throttleReadBpsDevice": [{ "major": 1, "minor": 0, "rate": 1 }] } }"#),
-		("resources.unified.cgroupsPath", #""resources": { "unified": { "cpu.weight": "39" } }"#),
 		("resources.unified.cpu.pressure", #""cgroupsPath": "/orlix/demo", "resources": { "unified": { "cpu.pressure": "some 100000 100000" } }"#),
-		("resources.pids.cgroupsPath", #""resources": { "pids": { "limit": 64 } }"#),
             ("resources.pids.limit", #""cgroupsPath": "/orlix/demo", "resources": { "pids": { "limit": -2 } }"#),
             ("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
             ("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
@@ -12100,6 +12178,7 @@ func testOCIRuntimeConfigParserTranslatesStandardHostPathBindMount() throws {
 		{
 		  "ociVersion": "1.1.0",
 		  "process": { "args": ["/bin/sh"], "cwd": "/" },
+		  "root": { "path": "rootfs" },
 		  "mounts": [
 		    {
 		      "destination": "/mnt/oci-host",

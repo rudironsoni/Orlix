@@ -2213,7 +2213,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
             name: "ociCgroupPath",
             status: .implemented,
             proof: "orlix:init_cgroup_path_join",
-            reason: "OCI absolute cgroupsPath carries through unchanged; relative cgroupsPath normalizes under /orlix before init creates the requested cgroup v2 path and writes the child PID to cgroup.procs."
+            reason: "OCI absolute cgroupsPath carries through unchanged; relative cgroupsPath normalizes under /orlix; resource controls without cgroupsPath derive /orlix/oci/<environment-id> before init creates the requested cgroup v2 path and writes the child PID to cgroup.procs."
         ),
 		OrlixOCIRuntimeFeature(
 			name: "ociHugepageLimits",
@@ -2393,9 +2393,18 @@ public let cgroupIOWeight: UInt64?
     public let defaultRlimits: [OrlixEnvironmentRlimit]
     public let defaultPersonalityDomain: String?
     public let terminal: Bool
-    public let consoleSize: OrlixOCIRuntimeConsoleSize?
-    public let namespaces: [String]
-    public let namespacePaths: [String: String]
+	public let consoleSize: OrlixOCIRuntimeConsoleSize?
+	public let namespaces: [String]
+	public let namespacePaths: [String: String]
+
+	private var needsCgroupsPath: Bool {
+		cgroupPidsLimit != nil
+			|| cgroupCPUMax != nil
+			|| cgroupCPUWeight != nil
+			|| cgroupMemoryMax != nil
+			|| cgroupIOWeight != nil
+			|| !cgroupUnified.isEmpty
+	}
 
 	@_spi(OrlixPrivateTesting)
 	public func environmentDescriptor(id: String,
@@ -2405,6 +2414,8 @@ public let cgroupIOWeight: UInt64?
 		throws -> OrlixEnvironmentDescriptor
 	{
 		let ociMounts = try self.mounts.compactMap { try $0.environmentMount() }
+		let effectiveCgroupsPath = try cgroupsPath
+			?? defaultCgroupsPath(environmentID: id, required: needsCgroupsPath)
 
 		return OrlixEnvironmentDescriptor(
 			id: id,
@@ -2435,7 +2446,7 @@ public let cgroupIOWeight: UInt64?
             sysctls: sysctls,
             maskedPaths: maskedPaths,
             readonlyPaths: readonlyPaths,
-            cgroupsPath: cgroupsPath,
+			cgroupsPath: effectiveCgroupsPath,
             cgroupPidsLimit: cgroupPidsLimit,
             cgroupCPUMax: cgroupCPUMax,
 			cgroupCPUWeight: cgroupCPUWeight,
@@ -2450,6 +2461,14 @@ public let cgroupIOWeight: UInt64?
             namespacePaths: namespacePaths,
             mounts: mounts + ociMounts
 		)
+	}
+
+	private func defaultCgroupsPath(environmentID: String,
+									required: Bool) throws -> String?
+	{
+		guard required else { return nil }
+		let storageID = try OrlixEnvironmentStorageLayout.storageSafeID(environmentID)
+		return "/orlix/oci/\(storageID)"
 	}
 
 	@_spi(OrlixPrivateTesting)
@@ -2908,9 +2927,6 @@ private static func validatedCgroupPidsLimit(
 guard let limit = resources.pids?.limit else {
             return nil
         }
-        guard cgroupsPath != nil else {
-            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.pids.cgroupsPath")
-        }
         guard limit >= -1 else {
             throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.pids.limit")
 		}
@@ -2948,10 +2964,7 @@ throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.memory
 guard let limit = memory.limit else {
 return nil
 }
-guard cgroupsPath != nil else {
-throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.memory.cgroupsPath")
-}
-guard limit >= -1 else {
+        guard limit >= -1 else {
 throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.memory.limit")
 }
 return limit
@@ -2979,9 +2992,6 @@ cgroupsPath: String?
 		guard cpu.quota != nil || cpu.period != nil else {
 			return nil
 		}
-		guard cgroupsPath != nil else {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.cgroupsPath")
-		}
 		let quota = cpu.quota ?? -1
 		let period = cpu.period ?? OrlixEnvironmentCgroupCPUMax.defaultPeriodMicros
 		guard quota == -1 || quota > 0 else {
@@ -3000,10 +3010,7 @@ private static func validatedCgroupCPUWeight(
 guard let shares = resources?.cpu?.shares else {
 return nil
 }
-guard cgroupsPath != nil else {
-throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.shares.cgroupsPath")
-}
-guard shares >= 2 && shares <= 262_144 else {
+        guard shares >= 2 && shares <= 262_144 else {
 throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.cpu.shares")
 	}
 	return 1 + ((shares - 2) * 9_999) / 262_142
@@ -3021,9 +3028,6 @@ private static func validatedCgroupIOWeight(
 	}
 	guard let weight = blockIO.weight else {
 		return nil
-	}
-	guard cgroupsPath != nil else {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weight.cgroupsPath")
 	}
 	guard (1...10_000).contains(weight) else {
 		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weight")
@@ -3043,9 +3047,6 @@ private static func validatedCgroupBlockIOUnifiedEntries(
 	}
 	var entries: [OrlixEnvironmentCgroupUnifiedEntry] = []
 	if let weightDevice = blockIO.weightDevice, !weightDevice.isEmpty {
-		guard cgroupsPath != nil else {
-			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weightDevice.cgroupsPath")
-		}
 		for device in weightDevice {
 			if device.leafWeight != nil {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.blockIO.weightDevice.leafWeight")
@@ -3109,10 +3110,7 @@ private static func appendBlockIOThrottleEntries(
 	guard let devices, !devices.isEmpty else {
 		return
 	}
-	guard cgroupsPath != nil else {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("\(feature).cgroupsPath")
-	}
-	for device in devices {
+        for device in devices {
 		let prefix = try Self.validatedBlockIODevicePrefix(
 			major: device.major,
 			minor: device.minor,
@@ -3148,10 +3146,7 @@ private static func validatedCgroupUnified(
 	guard let unified = resources?.unified, !unified.isEmpty else {
 		return []
 	}
-	guard cgroupsPath != nil else {
-		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.resources.unified.cgroupsPath")
-	}
-	let supportedFiles = Set([
+    let supportedFiles = Set([
 		"pids.max",
 		"cpu.max",
 		"cpu.weight",
