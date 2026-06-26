@@ -826,6 +826,8 @@ enum OrlixAppLaunchRuntimeRunner {
             switch specName {
             case "ociStdio":
                 output = try OrlixOCIDerivedStdioRuntimeProof().run()
+            case "ociTerminal":
+                output = try OrlixOCIDerivedStdioRuntimeProof(terminal: true).run()
             default:
                 throw OrlixAppLaunchRuntimeRunnerError.unknownSpec(specName)
             }
@@ -907,17 +909,29 @@ private enum OrlixAppLaunchRuntimeRunnerError: Error, CustomStringConvertible {
 }
 
 private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
-    private static let timeout: TimeInterval = 300
-    private static let requiredMarkers = [
+    private static let timeout: TimeInterval = 120
+    private static let stdioRequiredMarkers = [
         "ORLIX_ENV_STDIO_BEGIN",
         "ORLIX_ENV_STDIO_STDOUT_OK",
         "ORLIX_ENV_STDIO_STDERR_OK",
         "ORLIX_ENV_STDIO_NOT_PTY_OK",
         "ORLIX_ENV_STDIO_DONE",
     ]
+    private static let terminalRequiredMarkers = [
+        "ORLIX_ENV_TERMINAL_BEGIN",
+        "ORLIX_ENV_TERMINAL_STDOUT_OK",
+        "ORLIX_ENV_TERMINAL_STDERR_OK",
+        "ORLIX_ENV_TERMINAL_PTY_OK",
+        "ORLIX_ENV_TERMINAL_DONE",
+    ]
 
     private let fileManager = FileManager.default
     private let recorder = OrlixRuntimeProofOutputRecorder()
+    private let terminalMode: Bool
+
+    init(terminal: Bool = false) {
+        self.terminalMode = terminal
+    }
 
     func run() throws -> String {
         let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
@@ -927,7 +941,7 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
         }
 
         let copiedRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent("orlix-oci-stdio-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("orlix-oci-\(terminalMode ? "terminal" : "stdio")-\(UUID().uuidString)", isDirectory: true)
         try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
         defer {
             try? fileManager.removeItem(at: copiedRoot)
@@ -939,7 +953,7 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
             source: .ociLayout,
             platform: "linux/arm64",
             rootImageIdentifier: "orlix.test.environment.oci-runtime-test-fixture",
-            defaultCommand: ["/bin/sh", "-c", Self.stdioExecutionScript],
+            defaultCommand: ["/bin/sh", "-c", Self.executionScript(terminal: terminalMode)],
             defaultEnvironment: [
                 "HOME": "/root",
                 "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -972,7 +986,8 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
             scratchRoot: fixture.scratchRoot
         )
         try Self.writeOCIRuntimeConfig(
-            terminal: false,
+            terminal: terminalMode,
+            script: Self.executionScript(terminal: terminalMode),
             rootPath: "imported-root",
             to: fixture.root
         )
@@ -990,11 +1005,19 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
         try runtime.lifecycleStore.save(lifecycle)
 
         let installer = OrlixOCIEnvironmentInstaller(registry: registry)
-        let run = try installer.run(
-            id: descriptor.id,
-            terminal: terminal,
-            observationTimeout: Self.timeout
-        )
+        let run: OrlixOCIEnvironmentRunResult
+        do {
+            run = try installer.run(
+                id: descriptor.id,
+                terminal: terminal,
+                observationTimeout: Self.timeout
+            )
+        } catch {
+            let text = Self.normalized(recorder.text)
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "run failed: \(error)\n\(text)"
+            )
+        }
         let finalState = try installer.state(id: descriptor.id)
         let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
             forID: descriptor.id
@@ -1003,7 +1026,7 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
         let deletedEnvironment = try installer.delete(id: descriptor.id)
 
         var text = Self.normalized(recorder.text)
-        try Self.validate(text)
+        try Self.validate(text, terminal: terminalMode)
         try Self.validateLifecycle(
             run: run,
             finalState: finalState,
@@ -1029,14 +1052,34 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
         ].joined(separator: "\n")
     }
 
-    private static func hasAllRequiredMarkers(in text: String) -> Bool {
-        requiredMarkers.allSatisfy { text.contains($0) }
+    private static var terminalExecutionScript: String {
+        [
+            "printf '%s%s\\n' ORLIX_ENV_ TERMINAL_BEGIN",
+            "printf '%s%s\\n' ORLIX_ENV_TERMINAL_ STDOUT_OK",
+            "printf '%s%s\\n' ORLIX_ENV_TERMINAL_ STDERR_OK >&2",
+            "if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s%s\\n' ORLIX_ENV_TERMINAL_ TTY_FDS_OK; else printf '%s%s\\n' ORLIX_ENV_TERMINAL_PROOF_ FAILED_TTY_FDS; fi",
+            "if command -v tty >/dev/null 2>&1; then tty_path=$(tty); elif /bin/test -x /bin/tty; then tty_path=$(/bin/tty); elif /bin/test -x /usr/bin/tty; then tty_path=$(/usr/bin/tty); else tty_path=missing-tty-command; fi",
+            "printf 'terminal_tty=%s\\n' \"$tty_path\"",
+            "case \"$tty_path\" in /dev/pts/*) printf '%s%s\\n' ORLIX_ENV_TERMINAL_ PTY_OK;; *) printf '%s%s\\n' ORLIX_ENV_TERMINAL_PROOF_ FAILED_NOT_PTY;; esac",
+            "printf '%s%s\\n' ORLIX_ENV_TERMINAL_ DONE",
+        ].joined(separator: "\n")
     }
 
-    private static func validate(_ text: String) throws {
-        if text.contains("ORLIX_ENV_STDIO_PROOF_FAILED_PTY") {
+    private static func executionScript(terminal: Bool) -> String {
+        terminal ? terminalExecutionScript : stdioExecutionScript
+    }
+
+    private static func hasAllRequiredMarkers(in text: String) -> Bool {
+        stdioRequiredMarkers.allSatisfy { text.contains($0) }
+    }
+
+    private static func validate(_ text: String, terminal: Bool) throws {
+        if text.contains("ORLIX_ENV_STDIO_PROOF_FAILED_PTY") ||
+            text.contains("ORLIX_ENV_TERMINAL_PROOF_FAILED_TTY_FDS") ||
+            text.contains("ORLIX_ENV_TERMINAL_PROOF_FAILED_NOT_PTY") {
             throw OrlixOCIDerivedStdioRuntimeProofError.unexpectedPTY(text)
         }
+        let requiredMarkers = terminal ? terminalRequiredMarkers : stdioRequiredMarkers
         for marker in requiredMarkers where !text.contains(marker) {
             throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
         }
@@ -1090,12 +1133,13 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
 
     private static func writeOCIRuntimeConfig(
         terminal: Bool,
+        script: String,
         rootPath: String,
         to bundleRoot: URL
     ) throws {
         let process: [String: Any] = [
             "terminal": terminal,
-            "args": ["/bin/sh", "-c", stdioExecutionScript],
+            "args": ["/bin/sh", "-c", script],
             "env": [
                 "HOME=/root",
                 "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
