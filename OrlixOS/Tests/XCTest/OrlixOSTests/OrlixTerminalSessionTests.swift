@@ -7940,6 +7940,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.hostname)
 	XCTNil(arguments.domainname)
 	XCTNil(arguments.terminal)
+	XCTNil(arguments.rootReadonly)
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTTrue(arguments.sysctls.isEmpty)
 	XCTTrue(arguments.maskedPaths.isEmpty)
@@ -8578,6 +8579,22 @@ func testOCIEnvironmentRunArgumentsAcceptsMaskedAndReadonlyPathOverrides()
 
 	XCTAssertEqual(arguments.maskedPaths, ["/proc/kcore", "/sys/firmware"])
 	XCTAssertEqual(arguments.readonlyPaths, ["/proc/sys", "/sys"])
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsRootReadonlyOverride() throws {
+	let readOnlyArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--read-only",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(readOnlyArguments.rootReadonly, true)
+
+	let readWriteArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--read-write",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(readWriteArguments.rootReadonly, false)
 }
 
 func testOCIEnvironmentRunArgumentsRejectsInvalidMaskedAndReadonlyPathOverride()
@@ -10454,6 +10471,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--no-tty",
 			"--no-new-privileges",
 			"--close-fds",
+			"--read-only",
 			"--entrypoint",
 			"/usr/bin/env",
 			"--env",
@@ -10557,6 +10575,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultEnvironment["TERM"], "orlix-256color")
 	XCTAssertEqual(descriptor.defaultEnvironment["ORLIX_RUN"], "1")
 	XCTAssertEqual(descriptor.defaultWorkingDirectory, "/workspace")
+	XCTTrue(descriptor.rootReadonly)
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.defaultSupplementaryGroups, [44, 45])

@@ -1363,6 +1363,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let hostname: String?
     public let domainname: String?
     public let terminal: Bool?
+    public let rootReadonly: Bool?
     public let rlimits: [OrlixEnvironmentRlimit]
     public let sysctls: [String: String]
     public let maskedPaths: [String]
@@ -1416,6 +1417,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedHostname: String?
         var parsedDomainname: String?
         var parsedTerminal: Bool?
+        var parsedRootReadonly: Bool?
         var parsedRlimits: [OrlixEnvironmentRlimit] = []
         var parsedSysctls: [String: String] = [:]
         var parsedMaskedPaths: [String] = []
@@ -1455,14 +1457,22 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				parsedTerminal = true
 				continue
 			}
-			if parsedImage == nil,
-				value == "--no-tty" || value == "--no-terminal" {
-				parsedTerminal = false
-				continue
-			}
-			if parsedImage == nil, value == "--no-new-privileges" {
-				parsedNoNewPrivileges = true
-				continue
+            if parsedImage == nil,
+               value == "--no-tty" || value == "--no-terminal" {
+                parsedTerminal = false
+                continue
+            }
+            if parsedImage == nil, value == "--read-only" {
+                parsedRootReadonly = true
+                continue
+            }
+            if parsedImage == nil, value == "--read-write" {
+                parsedRootReadonly = false
+                continue
+            }
+            if parsedImage == nil, value == "--no-new-privileges" {
+                parsedNoNewPrivileges = true
+                continue
 			}
 			if parsedImage == nil, value == "--close-fds" {
 				parsedCloseAdditionalFds = true
@@ -2100,6 +2110,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.hostname = parsedHostname
         self.domainname = parsedDomainname
         self.terminal = parsedTerminal
+        self.rootReadonly = parsedRootReadonly
         self.rlimits = parsedRlimits
         self.sysctls = parsedSysctls
         self.maskedPaths = parsedMaskedPaths
@@ -2962,9 +2973,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultGroupIDWith groupID: UInt32?,
 		mergingDefaultSupplementaryGroupsWith supplementaryGroups: [UInt32],
 		replacingDefaultCapabilitiesWith capabilities: OrlixEnvironmentCapabilities?,
-		replacingHostnameWith hostname: String?,
-		replacingDomainnameWith domainname: String?,
+        replacingHostnameWith hostname: String?,
+        replacingDomainnameWith domainname: String?,
         replacingDefaultTerminalWith terminal: Bool?,
+        replacingRootReadonlyWith rootReadonly: Bool?,
         mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
         mergingSysctlsWith sysctls: [String: String],
         mergingMaskedPathsWith maskedPaths: [String],
@@ -2993,9 +3005,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| groupID != nil
 			|| !supplementaryGroups.isEmpty
 			|| capabilities != nil
-			|| hostname != nil
-			|| domainname != nil
+            || hostname != nil
+            || domainname != nil
             || terminal != nil
+            || rootReadonly != nil
             || !rlimits.isEmpty
             || !sysctls.isEmpty
             || !maskedPaths.isEmpty
@@ -3188,7 +3201,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostname: hostname ?? descriptor.hostname,
 			domainname: domainname ?? descriptor.domainname,
             rootMount: descriptor.rootMount,
-            rootReadonly: descriptor.rootReadonly,
+            rootReadonly: rootReadonly ?? descriptor.rootReadonly,
             rootPropagation: descriptor.rootPropagation,
             sysctls: effectiveSysctls,
             maskedPaths: effectiveMaskedPaths,
@@ -3266,6 +3279,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3305,6 +3319,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -3347,6 +3362,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3412,6 +3428,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingHostnameWith: hostnameOverride,
 				replacingDomainnameWith: domainnameOverride,
 				replacingDefaultTerminalWith: terminalOverride,
+			replacingRootReadonlyWith: rootReadonlyOverride,
 				mergingDefaultRlimitsWith: defaultRlimitOverrides,
 			mergingSysctlsWith: sysctlOverrides,
 			mergingMaskedPathsWith: maskedPathOverrides,
@@ -3530,6 +3547,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			rootReadonlyOverride: request.rootReadonly,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
 			maskedPathOverrides: request.maskedPaths,
@@ -3598,6 +3616,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			rootReadonlyOverride: request.rootReadonly,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
 			maskedPathOverrides: request.maskedPaths,
@@ -3667,6 +3686,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3708,6 +3728,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -3752,6 +3773,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3792,6 +3814,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -3845,6 +3868,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3887,6 +3911,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -3932,6 +3957,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3973,6 +3999,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -4040,6 +4067,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			rootReadonlyOverride: request.rootReadonly,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
 			maskedPathOverrides: request.maskedPaths,
@@ -4095,6 +4123,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -4136,6 +4165,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,

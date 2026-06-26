@@ -10,6 +10,20 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run root readonly overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--read-only` and `--read-write` before image.
+- Registry-backed install/run terminal-session preparation persists parsed root readonly overrides into `OrlixEnvironmentDescriptor.rootReadonly`; `--read-write` can override an OCI image/default readonly root back to writable.
+- Focused tests cover parser true/false overrides, default nil parser state, and observed registry-backed descriptor persistence. Existing descriptor/rootinit paths encode `orlix.root.readonly=1` and mount the environment root read-only.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing root readonly configuration through existing OrlixOS descriptors and rootinit Linux-visible mount paths. Does not claim live simulator proof, EROFS behavior proof for this run path, mount namespace isolation, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, or custom ABI.
+
 ### 2026-06-26 OCI run masked and readonly path overrides
 
 Changes:
