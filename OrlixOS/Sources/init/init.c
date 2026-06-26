@@ -2449,14 +2449,21 @@ static void apply_personality(unsigned long personality)
 
 static void exec_or_fork_configured_command(struct orlix_command_config *config)
 {
-	if ((config->namespace_flags & CLONE_NEWTIME) == 0) {
+	unsigned long fork_required = CLONE_NEWTIME;
+	for (size_t i = 0; i < config->namespace_join_count; i++) {
+		if ((config->namespace_join_flags[i] & CLONE_NEWPID) != 0)
+			fork_required |= CLONE_NEWPID;
+	}
+
+	if ((config->namespace_flags & fork_required) == 0 &&
+	    (fork_required & CLONE_NEWPID) == 0) {
 		exec_configured_command(config);
 		return;
 	}
 
 	pid_t child = fork();
 	if (child < 0)
-		die("fork time namespace child");
+		die("fork namespace child");
 	if (child == 0) {
 		exec_configured_command(config);
 		write_errno_message(STDERR_FILENO,

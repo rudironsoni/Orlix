@@ -1289,6 +1289,9 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
             )
         )
 		XCTAssertTrue(initSource.contains("sched_setaffinity("))
+		XCTAssertTrue(initSource.contains("CLONE_NEWPID"))
+		XCTAssertTrue(initSource.contains("fork_required |= CLONE_NEWPID;"))
+		XCTAssertTrue(initSource.contains("die(\"fork namespace child\");"))
 		XCTAssertTrue(
 			initSource.contains(
 				"snprintf(key, sizeof(key), \"orlix.mount.tmpfs%d.target=\", index);"
@@ -7541,9 +7544,9 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
 
 	func testOCIRuntimeConfigParserRejectsOutOfRangeProcessUserUmask() throws {
 		let config = Data("""
-		{
-		  "ociVersion": "1.1.0",
-		  "process": {
+			{
+			  "ociVersion": "1.1.0",
+			  "process": {
 		    "args": ["/bin/sh"],
 		    "cwd": "/",
 		    "user": {
@@ -7562,6 +7565,44 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
 				.unsupportedLinuxFeature("process.user.umask")
 			)
 		}
+	}
+
+	func testOCIRuntimeConfigParserTranslatesPIDAndUserNamespacePathJoins() throws {
+		let config = Data("""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": {
+			    "args": ["/bin/sh"],
+			    "cwd": "/",
+			    "env": ["PATH=/usr/bin:/bin"]
+			  },
+			  "root": { "path": "rootfs" },
+			  "linux": {
+			    "namespaces": [
+			      { "type": "pid", "path": "/proc/1/ns/pid" },
+			      { "type": "user", "path": "/proc/1/ns/user" }
+			    ]
+			  }
+			}
+			""".utf8)
+
+		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+
+		XCTAssertEqual(descriptor.namespaces, [])
+		XCTAssertEqual(
+			descriptor.namespacePaths,
+			[
+				"pid": "/proc/1/ns/pid",
+				"user": "/proc/1/ns/user",
+			]
+		)
+
+		let environment = try descriptor.environmentDescriptor(
+			id: "oci-namespace-paths",
+			rootMount: .defaultOverlay
+		)
+		XCTAssertEqual(environment.namespaces, [])
+		XCTAssertEqual(environment.namespacePaths, descriptor.namespacePaths)
 	}
 
 	func testOCIRuntimeConfigParserRejectsUnsupportedHooks() throws {
