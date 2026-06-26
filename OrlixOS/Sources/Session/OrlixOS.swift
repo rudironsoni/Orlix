@@ -1322,6 +1322,13 @@ public struct OrlixOCIRegistryEnvironmentTerminalSessionResult: Sendable {
 	public let linuxSession: OrlixLinuxSession
 }
 
+public struct OrlixOCIEnvironmentTerminalSessionResult: Sendable {
+	public let id: String
+	public let image: OrlixOCIRegistryImageReference
+	public let command: [String]?
+	public let linuxSession: OrlixLinuxSession
+}
+
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
 	public let id: String
 	public let lifecycleState: OrlixOCIRuntimeLifecycleState
@@ -1633,6 +1640,27 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
+		)
+	}
+
+	public func terminalSession(
+		arguments: [String],
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentTerminalSessionResult {
+		let request = try OrlixOCIEnvironmentRunArguments(arguments)
+		let image = try OrlixOCIRegistryImageReference(request.image)
+		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
+			id: request.id,
+			command: request.command,
+			terminal: terminal,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentTerminalSessionResult(
+			id: request.id,
+			image: image,
+			command: request.command,
+			linuxSession: linuxSession
 		)
 	}
 
