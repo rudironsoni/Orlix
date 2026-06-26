@@ -782,9 +782,10 @@ public struct OrlixOCIImageLayoutImport: Equatable, Sendable {
     public let configDigest: String
     public let platform: String
     public let layers: [OrlixOCIImageLayer]
-    public let rootfsDiffIDs: [String]
-    public let processDefaults: OrlixOCIProcessDefaults
-    public let labels: [String: String]
+	public let rootfsDiffIDs: [String]
+	public let processDefaults: OrlixOCIProcessDefaults
+	public let labels: [String: String]
+	public let stopSignal: Int32?
 }
 
 @_spi(OrlixPrivateTesting)
@@ -889,7 +890,8 @@ public struct OrlixOCIImageLayoutReader: Sendable {
                 workingDirectory: imageConfig.config?.workingDir,
                 user: imageConfig.config?.user
             ),
-            labels: try labelDictionary(imageConfig.config?.labels ?? [:])
+            labels: try labelDictionary(imageConfig.config?.labels ?? [:]),
+            stopSignal: try stopSignal(imageConfig.config?.stopSignal)
         )
     }
 
@@ -972,6 +974,16 @@ public struct OrlixOCIImageLayoutReader: Sendable {
         }
         return values
     }
+
+	private func stopSignal(_ value: String?) throws -> Int32? {
+		guard let value, !value.isEmpty else {
+			return nil
+		}
+		guard let signal = OrlixLinuxSignal.number(value) else {
+			throw OrlixOCIImageLayoutError.invalidStopSignal(value)
+		}
+		return signal
+	}
 }
 
 @_spi(OrlixPrivateTesting)
@@ -1187,6 +1199,7 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
         defaultWorkingDirectory: workingDirectory,
         defaultUserID: user.uid,
         defaultGroupID: user.gid,
+        defaultStopSignal: image.stopSignal,
         annotations: image.labels
     )
 }
@@ -1370,10 +1383,11 @@ public enum OrlixOCIImageLayoutError:
     case unsupportedRootfsType(String)
     case unsupportedUser(String)
     case invalidWorkingDirectory(String)
-    case invalidEnvironmentEntry(String)
-    case invalidCommandEntry(String)
-    case invalidLabelEntry(String)
-    case invalidWhiteout(String)
+	case invalidEnvironmentEntry(String)
+	case invalidCommandEntry(String)
+	case invalidLabelEntry(String)
+	case invalidStopSignal(String)
+	case invalidWhiteout(String)
     case decompressionFailed(String)
     case decompressedLayerTooLarge(Int)
     case destinationExists(String)
@@ -1809,18 +1823,20 @@ private struct OCIProcessConfig: Codable {
     let env: [String]?
     let entrypoint: [String]?
     let cmd: [String]?
-    let workingDir: String?
-    let user: String?
-    let labels: [String: String]?
+	let workingDir: String?
+	let user: String?
+	let labels: [String: String]?
+	let stopSignal: String?
 
     enum CodingKeys: String, CodingKey {
         case env = "Env"
         case entrypoint = "Entrypoint"
         case cmd = "Cmd"
-        case workingDir = "WorkingDir"
-        case user = "User"
-        case labels = "Labels"
-    }
+		case workingDir = "WorkingDir"
+		case user = "User"
+		case labels = "Labels"
+		case stopSignal = "StopSignal"
+	}
 }
 
 private enum OrlixSHA256 {

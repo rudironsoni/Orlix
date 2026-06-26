@@ -3581,6 +3581,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         XCTAssertEqual(imported.processDefaults.workingDirectory, "/")
 XCTAssertEqual(imported.processDefaults.user, "0")
 XCTAssertEqual(imported.labels, [:])
+XCTAssertNil(imported.stopSignal)
 XCTAssertEqual(imported.rootfsDiffIDs, [])
     }
 
@@ -3610,6 +3611,24 @@ try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
 XCTAssertEqual(
 error as? OrlixOCIImageLayoutError,
 .invalidLabelEntry("org.opencontainers.image.title")
+)
+}
+}
+
+func testOCIImageLayoutReaderPreservesImageStopSignal() throws {
+let layout = try writeOCILayout(stopSignal: "SIGUSR1")
+let imported = try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+XCTAssertEqual(imported.stopSignal, 10)
+}
+
+func testOCIImageLayoutReaderRejectsInvalidImageStopSignal() throws {
+let layout = try writeOCILayout(stopSignal: "SIGDOESNOTEXIST")
+XCTAssertThrowsError(
+try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIImageLayoutError,
+.invalidStopSignal("SIGDOESNOTEXIST")
 )
 }
 }
@@ -4224,6 +4243,36 @@ XCTAssertEqual(
 loaded.annotations["org.opencontainers.image.revision"],
 "sha256:demo"
 )
+}
+
+func testOCIImageLayoutImporterPreservesImageStopSignalAsDescriptorDefault()
+throws
+{
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layout = try writeOCILayout(stopSignal: "SIGUSR2")
+
+let result = try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-stop-signal",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-stop-signal"
+)
+let loaded = try registry.load(environmentID: "alpine-stop-signal")
+
+XCTAssertEqual(result.image.stopSignal, 12)
+XCTAssertEqual(result.descriptor.defaultStopSignal, 12)
+XCTAssertEqual(loaded.defaultStopSignal, 12)
 }
 
 func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
@@ -6254,10 +6303,11 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         platformVariant: String? = nil,
         user: String = "0",
     workingDirectory: String = "/",
-    envEntries: [String] = ["PATH=/usr/bin:/bin", "EMPTY="],
-    entrypoint: [String] = ["/bin/sh"],
-    command: [String] = ["-c", "echo hello"],
-    labels: [String: String] = [:]
+	envEntries: [String] = ["PATH=/usr/bin:/bin", "EMPTY="],
+	entrypoint: [String] = ["/bin/sh"],
+	command: [String] = ["-c", "echo hello"],
+	labels: [String: String] = [:],
+	stopSignal: String? = nil
 ) throws -> OCILayoutFixture {
         let root = temporaryRegistryRoot()
         let blobs = root.appendingPathComponent("blobs/sha256", isDirectory: true)
@@ -6296,6 +6346,11 @@ var configObject: [String: Any] = [
 "Labels": labels
 ]
 ]
+if let stopSignal {
+var config = configObject["config"] as! [String: Any]
+config["StopSignal"] = stopSignal
+configObject["config"] = config
+}
 if rootfsType != nil || rootfsDiffIDs != nil {
 let diffIDs = rootfsDiffIDs
 ?? layerData.map { "sha256:\(OrlixOCIDigest.sha256Hex($0))" }
@@ -8470,42 +8525,49 @@ func testOCIEnvironmentKillArgumentsAcceptSignalForms() throws {
 	])
 	XCTAssertEqual(defaultSignal.id, "oci-demo")
 	XCTAssertEqual(defaultSignal.signal, 15)
+	XCTAssertFalse(defaultSignal.signalSpecified)
 
 	let positionalSignal = try OrlixOCIEnvironmentKillArguments([
 		"kill", "oci-positional", "9",
 	])
 	XCTAssertEqual(positionalSignal.id, "oci-positional")
 	XCTAssertEqual(positionalSignal.signal, 9)
+	XCTAssertTrue(positionalSignal.signalSpecified)
 
 	let optionSignal = try OrlixOCIEnvironmentKillArguments([
 		"kill", "--id", "oci-option", "--signal=2",
 	])
 	XCTAssertEqual(optionSignal.id, "oci-option")
 	XCTAssertEqual(optionSignal.signal, 2)
+	XCTAssertTrue(optionSignal.signalSpecified)
 
 	let shortSignal = try OrlixOCIEnvironmentKillArguments([
 		"kill", "--name=oci-short", "-s", "15",
 	])
 	XCTAssertEqual(shortSignal.id, "oci-short")
 	XCTAssertEqual(shortSignal.signal, 15)
+	XCTAssertTrue(shortSignal.signalSpecified)
 
 	let namedOptionSignal = try OrlixOCIEnvironmentKillArguments([
 		"kill", "--id", "oci-named", "--signal=SIGKILL",
 	])
 	XCTAssertEqual(namedOptionSignal.id, "oci-named")
 	XCTAssertEqual(namedOptionSignal.signal, 9)
+	XCTAssertTrue(namedOptionSignal.signalSpecified)
 
 	let namedShortSignal = try OrlixOCIEnvironmentKillArguments([
 		"kill", "--name=oci-term", "-s", "TERM",
 	])
 	XCTAssertEqual(namedShortSignal.id, "oci-term")
 	XCTAssertEqual(namedShortSignal.signal, 15)
+	XCTAssertTrue(namedShortSignal.signalSpecified)
 
 	let namedPositionalSignal = try OrlixOCIEnvironmentKillArguments([
 		"kill", "oci-lower", "sigusr1",
 	])
 	XCTAssertEqual(namedPositionalSignal.id, "oci-lower")
 	XCTAssertEqual(namedPositionalSignal.signal, 10)
+	XCTAssertTrue(namedPositionalSignal.signalSpecified)
 }
 
 func testOCIEnvironmentKillArgumentsRejectInvalidInput() throws {
@@ -10075,8 +10137,8 @@ func testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex() async throws {
 		  "config": {
 		    "Env": ["PATH=/usr/bin:/bin"],
 		    "Entrypoint": ["/bin/sh"],
-		    "WorkingDir": "/",
-		    "User": "0"
+			"WorkingDir": "/",
+			"User": "0"
 		  },
 		  "rootfs": {
 		    "type": "layers",
@@ -10531,8 +10593,9 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 		    "Env": ["PATH=/usr/bin:/bin", "TERM=xterm-256color"],
 		    "Entrypoint": ["/bin/sh"],
 		    "Cmd": ["-lc", "echo registry"],
-		    "WorkingDir": "/",
-		    "User": "0"
+			"WorkingDir": "/",
+			"User": "0",
+			"StopSignal": "SIGUSR2"
 		  },
 		  "rootfs": {
 		    "type": "layers",
@@ -10711,7 +10774,7 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
     let driver = try RecordingOCIRuntimeProcessObservationDriver(
         startPID: 42,
         completion: .signaled(
-            OrlixOCIRuntimeProcessSignalObservation(pid: 42, signal: 15)
+			OrlixOCIRuntimeProcessSignalObservation(pid: 42, signal: 12)
         )
     )
 
@@ -10722,13 +10785,12 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
 		fileManager: fileManager
 	)
     let runningReport = try installer.state(id: installed.id, fileManager: fileManager)
-    let signaled = try installer.kill(
-        id: installed.id,
-        signal: 15,
-        terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
-        using: driver,
-        fileManager: fileManager
-    )
+let signaled = try installer.kill(
+arguments: ["kill", installed.id],
+terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+using: driver,
+fileManager: fileManager
+)
     let signaledReport = try installer.state(id: installed.id, fileManager: fileManager)
     let completed = try installer.wait(
         id: installed.id,
@@ -10744,7 +10806,7 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
     XCTAssertEqual(runningReport.status, .running)
     XCTAssertEqual(runningReport.pid, 42)
     XCTAssertEqual(signaled.id, installed.id)
-    XCTAssertEqual(signaled.signal, 15)
+XCTAssertEqual(signaled.signal, 12)
     XCTAssertEqual(signaled.stateReport.status, .running)
     XCTAssertEqual(signaled.stateReport.pid, 42)
     XCTAssertEqual(signaledReport.status, .running)
@@ -10752,12 +10814,12 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
     XCTAssertEqual(completed.id, installed.id)
     XCTAssertEqual(completed.stateReport.status, .stopped)
     XCTAssertEqual(completed.stateReport.pid, 42)
-    XCTAssertEqual(completed.stateReport.exitStatus, 143)
+XCTAssertEqual(completed.stateReport.exitStatus, 140)
     XCTAssertEqual(stoppedReport.status, .stopped)
-    XCTAssertEqual(stoppedReport.exitStatus, 143)
+XCTAssertEqual(stoppedReport.exitStatus, 140)
     XCTAssertEqual(driver.events, [
         "start:created:nil",
-        "signal:running:42:15",
+"signal:running:42:12",
         "wait:running:42",
     ])
 }

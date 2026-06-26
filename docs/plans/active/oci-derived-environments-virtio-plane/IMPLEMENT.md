@@ -10,6 +10,31 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI image stop signal defaults
+
+Changes:
+- Added shared `OrlixLinuxSignal` parsing for numeric Linux signals and standard signal names with optional `SIG` prefix.
+- `OrlixOCIImageLayoutReader` now decodes Docker/OCI image config `StopSignal`, validates it, and exposes the numeric Linux signal on `OrlixOCIImageLayoutImport`.
+- `OrlixEnvironmentDescriptor` now persists optional `defaultStopSignal` with backward-compatible optional decode/encode.
+- `OrlixOCIImageLayoutImporter` stores image stop signals as descriptor defaults.
+- `OrlixOCIEnvironmentKillArguments` now records whether a signal was explicit; `kill(arguments:)` uses the descriptor default only when the user omitted a signal.
+- Focused tests cover stop-signal decode, invalid stop signal rejection, descriptor persistence, explicit signal tracking, and registry-backed lifecycle kill using an image default signal.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This advances OrlixOS-owned OCI image metadata, descriptors, and lifecycle command behavior over the existing Linux signal path. It does not claim live simulator proof, kernel signal delivery proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, Docker daemon support, package/proof/stamp systems, or runtime package execution readiness.
+
+Current status:
+- Stop-signal checkpoint verified by static Swift parse/typecheck and guard checks above. Generated hook cache from plan checks was removed before this log entry.
+- Final pre-commit GOAL/ownership guards stayed green. Generated hook cache from that guard pass was removed before commit.
+
 ### 2026-06-26 OCI image label preservation
 
 Changes:

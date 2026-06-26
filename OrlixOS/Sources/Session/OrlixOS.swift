@@ -1551,6 +1551,7 @@ public enum OrlixOCIEnvironmentKillArgumentsError: Error, Equatable, Sendable {
 public struct OrlixOCIEnvironmentKillArguments: Equatable, Sendable {
 	public let id: String
 	public let signal: Int32
+	public let signalSpecified: Bool
 
 	public init(_ arguments: [String]) throws {
 		var values = arguments
@@ -1628,6 +1629,7 @@ public struct OrlixOCIEnvironmentKillArguments: Equatable, Sendable {
 		try OrlixEnvironmentStorageLayout.validateEnvironmentID(id)
 		self.id = id
 		self.signal = parsedSignal
+		self.signalSpecified = parsedSignalPresent
 	}
 
 	private static func acceptID(_ id: String, current: String?) throws -> String {
@@ -1638,53 +1640,11 @@ public struct OrlixOCIEnvironmentKillArguments: Equatable, Sendable {
 	}
 
 	private static func parseSignal(_ value: String) throws -> Int32 {
-		if let signal = Int32(value), (1...127).contains(signal) {
-			return signal
-		}
-		let normalized = value.uppercased()
-		let signalName =
-			normalized.hasPrefix("SIG")
-			? String(normalized.dropFirst(3))
-			: normalized
-		if let signal = namedSignals[signalName] {
+		if let signal = OrlixLinuxSignal.number(value) {
 			return signal
 		}
 		throw OrlixOCIEnvironmentKillArgumentsError.invalidSignal(value)
 	}
-
-	private static let namedSignals: [String: Int32] = [
-		"HUP": 1,
-		"INT": 2,
-		"QUIT": 3,
-		"ILL": 4,
-		"TRAP": 5,
-		"ABRT": 6,
-		"BUS": 7,
-		"FPE": 8,
-		"KILL": 9,
-		"USR1": 10,
-		"SEGV": 11,
-		"USR2": 12,
-		"PIPE": 13,
-		"ALRM": 14,
-		"TERM": 15,
-		"STKFLT": 16,
-		"CHLD": 17,
-		"CONT": 18,
-		"STOP": 19,
-		"TSTP": 20,
-		"TTIN": 21,
-		"TTOU": 22,
-		"URG": 23,
-		"XCPU": 24,
-		"XFSZ": 25,
-		"VTALRM": 26,
-		"PROF": 27,
-		"WINCH": 28,
-		"IO": 29,
-		"PWR": 30,
-		"SYS": 31
-	]
 }
 
 public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
@@ -5882,9 +5842,13 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentSignalResult {
 		let request = try OrlixOCIEnvironmentKillArguments(arguments)
+		let signal = try effectiveKillSignal(
+			for: request,
+			fileManager: fileManager
+		)
 		return try kill(
 			id: request.id,
-			signal: request.signal,
+			signal: signal,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager
@@ -5921,13 +5885,30 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentSignalResult {
 		let request = try OrlixOCIEnvironmentKillArguments(arguments)
+		let signal = try effectiveKillSignal(
+			for: request,
+			fileManager: fileManager
+		)
 		return try kill(
 			id: request.id,
-			signal: request.signal,
+			signal: signal,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager
 		)
+	}
+
+	private func effectiveKillSignal(
+		for request: OrlixOCIEnvironmentKillArguments,
+		fileManager: FileManager
+	) throws -> Int32 {
+		guard !request.signalSpecified else {
+			return request.signal
+		}
+		return try registry.load(
+			environmentID: request.id,
+			fileManager: fileManager
+		).defaultStopSignal ?? request.signal
 	}
 
     public func run(
