@@ -7944,6 +7944,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.scheduler)
 	XCTNil(arguments.ioPriority)
 	XCTNil(arguments.cpuAffinity)
+	XCTNil(arguments.personalityDomain)
 	XCTNil(arguments.noNewPrivileges)
 	XCTNil(arguments.closeAdditionalFds)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
@@ -7979,6 +7980,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.scheduler)
 	XCTNil(nameArguments.ioPriority)
 	XCTNil(nameArguments.cpuAffinity)
+	XCTNil(nameArguments.personalityDomain)
 	XCTNil(nameArguments.noNewPrivileges)
 	XCTNil(nameArguments.closeAdditionalFds)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
@@ -8007,6 +8009,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.scheduler)
 	XCTNil(equalsArguments.ioPriority)
 	XCTNil(equalsArguments.cpuAffinity)
+	XCTNil(equalsArguments.personalityDomain)
 	XCTNil(equalsArguments.noNewPrivileges)
 	XCTNil(equalsArguments.closeAdditionalFds)
 	XCTAssertNil(equalsArguments.command)
@@ -8430,6 +8433,42 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidIOPriorityOverride() throws {
 	}
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsPersonalityOverride() throws {
+	let splitArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--personality",
+		"LINUX32",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(splitArguments.personalityDomain, "LINUX32")
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--personality=LINUX",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(equalsArguments.personalityDomain, "LINUX")
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidPersonalityOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--personality",
+			"BSD",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.personality.domain")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsCPUAffinityOverride() throws {
 	let splitArguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -8482,6 +8521,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--oom-score-adj=", .missingOptionValue("--oom-score-adj")),
 		("--scheduler=", .missingOptionValue("--scheduler")),
 		("--io-priority=", .missingOptionValue("--io-priority")),
+		("--personality=", .missingOptionValue("--personality")),
 		("--cpu-affinity=", .missingOptionValue("--cpu-affinity")),
 	]
 
@@ -9853,6 +9893,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"SCHED_FIFO:2",
 			"--io-priority",
 			"IOPRIO_CLASS_BE:5",
+			"--personality",
+			"LINUX32",
 			"--cpu-affinity",
 			"0,2-3",
 			"--hostname",
@@ -9911,6 +9953,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		descriptor.defaultIOPriority,
 		OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 5)
 	)
+	XCTAssertEqual(descriptor.defaultPersonalityDomain, "LINUX32")
 	XCTAssertEqual(
 		descriptor.defaultCPUAffinity,
 		OrlixEnvironmentCPUAffinity(mask: "0,2-3")
