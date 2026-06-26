@@ -951,10 +951,12 @@ func testDocumentsMountRejectsReservedLinuxRuntimeTargets() throws {
                 inheritable: ["CAP_SETUID"],
                 effective: ["CAP_CHOWN"],
                 ambient: ["CAP_SETUID"]
-            ),
-            defaultNoNewPrivileges: true,
-            defaultCloseAdditionalFds: true,
-        defaultOOMScoreAdjustment: -500,
+			),
+			defaultNoNewPrivileges: true,
+			defaultCloseAdditionalFds: true,
+			defaultTerminalRows: 33,
+			defaultTerminalColumns: 120,
+			defaultOOMScoreAdjustment: -500,
         defaultScheduler: OrlixEnvironmentScheduler(policy: "SCHED_FIFO", priority: 1),
         defaultIOPriority: OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 4),
         defaultCPUAffinity: OrlixEnvironmentCPUAffinity(mask: "0-1"),
@@ -1034,9 +1036,11 @@ cgroupPidsLimit: 64,
         XCTAssertTrue(commandLine.contains("orlix.cap.inheritable=CAP_SETUID"))
         XCTAssertTrue(commandLine.contains("orlix.cap.effective=CAP_CHOWN"))
         XCTAssertTrue(commandLine.contains("orlix.cap.ambient=CAP_SETUID"))
-        XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
-        XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
-        XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=-500"))
+		XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
+		XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
+		XCTAssertTrue(commandLine.contains("orlix.terminal.rows=33"))
+		XCTAssertTrue(commandLine.contains("orlix.terminal.cols=120"))
+		XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=-500"))
         XCTAssertTrue(commandLine.contains("orlix.scheduler.policy=SCHED_FIFO"))
         XCTAssertTrue(commandLine.contains("orlix.scheduler.priority=1"))
         XCTAssertTrue(commandLine.contains("orlix.ioprio.class=IOPRIO_CLASS_BE"))
@@ -1220,12 +1224,24 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
             initSource.contains(
                 "read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultCloseAdditionalFdsCommandLineKey)=\","
             )
-        )
-        XCTAssertTrue(initSource.contains("close_additional_fds();"))
-        XCTAssertTrue(initSource.contains("for (int fd = 3;"))
-        XCTAssertTrue(
-            initSource.contains(
-                "read_cmdline_signed(\"\(OrlixEnvironmentRootImage.defaultOOMScoreAdjustmentCommandLineKey)=\","
+		)
+		XCTAssertTrue(initSource.contains("close_additional_fds();"))
+		XCTAssertTrue(initSource.contains("for (int fd = 3;"))
+		XCTAssertTrue(
+			initSource.contains(
+				"read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultTerminalRowsCommandLineKey)=\","
+			)
+		)
+		XCTAssertTrue(
+			initSource.contains(
+				"read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultTerminalColumnsCommandLineKey)=\","
+			)
+		)
+		XCTAssertTrue(initSource.contains("struct winsize"))
+		XCTAssertTrue(initSource.contains("TIOCSWINSZ"))
+		XCTAssertTrue(
+			initSource.contains(
+				"read_cmdline_signed(\"\(OrlixEnvironmentRootImage.defaultOOMScoreAdjustmentCommandLineKey)=\","
             )
         )
         XCTAssertTrue(initSource.contains("\"/proc/self/oom_score_adj\""))
@@ -6621,7 +6637,6 @@ report.feature(named: "ociBlockIOControls")?.proof,
 		}
 		for name in [
 			"process.terminal",
-			"process.consoleSize",
 		] {
 			XCTAssertEqual(features[name]?.status, .recognized, name)
 			XCTAssertEqual(
@@ -6631,6 +6646,12 @@ report.feature(named: "ociBlockIOControls")?.proof,
 			)
 			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
 		}
+		XCTAssertEqual(features["process.consoleSize"]?.status, .implemented)
+		XCTAssertEqual(
+			features["process.consoleSize"]?.proof,
+			"orlix:runtime_session_descriptor_unit_tests"
+		)
+		XCTAssertFalse(features["process.consoleSize"]?.reason.isEmpty ?? true)
 		XCTAssertEqual(features["seccomp"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["seccomp"]?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(features["intelRdt"]?.status, .deterministicallyRejected)
@@ -6831,6 +6852,8 @@ XCTAssertEqual(descriptor.sysctls["kernel.hostname"], "orlix-demo")
 		XCTAssertEqual(environment.defaultGroupID, descriptor.defaultGroupID)
 		XCTAssertEqual(environment.defaultNoNewPrivileges, descriptor.defaultNoNewPrivileges)
 		XCTAssertEqual(environment.defaultCloseAdditionalFds, descriptor.defaultCloseAdditionalFds)
+		XCTAssertEqual(environment.defaultTerminalRows, descriptor.consoleSize?.height)
+		XCTAssertEqual(environment.defaultTerminalColumns, descriptor.consoleSize?.width)
 		XCTAssertEqual(environment.defaultOOMScoreAdjustment, descriptor.defaultOOMScoreAdjustment)
 		XCTAssertEqual(environment.defaultScheduler, descriptor.defaultScheduler)
 		XCTAssertEqual(environment.defaultIOPriority, descriptor.defaultIOPriority)

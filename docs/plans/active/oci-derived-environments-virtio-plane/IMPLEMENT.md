@@ -22832,3 +22832,43 @@ Boundary:
 - This advances OCI bind mount option fidelity for host-directory backed virtio-fs mounts. It does not claim arbitrary OCI mount option support, mount propagation support, full OCI Runtime Spec lifecycle, product-visible Linux userspace `orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
 
 Current status: Latest coherent checkpoint carries OCI bind mount `noexec` through OrlixOS descriptors and init into Linux `MS_NOEXEC`, while accepting `nosuid` and `nodev` because they are already enforced for host-directory virtio-fs mounts. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.
+### 2026-06-26 OCI console size initial PTY winsize
+
+Implemented initial OCI `process.consoleSize` delivery through the real OrlixOS
+session and Linux userspace init path:
+
+- `OrlixEnvironmentDescriptor` now carries optional default terminal rows and
+  columns, preserves them through Codable and copied environment descriptors,
+  and emits `orlix.terminal.rows` / `orlix.terminal.cols` boot tokens only when
+  both values are present and nonzero.
+- `OrlixOCIRuntimeConfigDescriptor.environmentDescriptor(...)` maps OCI
+  `process.consoleSize` into those descriptor defaults when `process.terminal`
+  is true.
+- `OrlixOS/Sources/init/init.c` reads the terminal-size tokens, validates them,
+  builds `struct winsize`, and applies `TIOCSWINSZ` to the PTY before starting
+  the configured command.
+- The OCI feature report now claims `process.consoleSize` implemented only for
+  the initial PTY window size path. It does not claim live resize semantics or
+  complete OCI terminal lifecycle coverage.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0. It still printed sandboxed `xcrun_db` cache permission messages and the existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`,
+  `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`,
+  `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+- Focused Xcode XCTest was not run in this turn because unsandboxed
+  CoreSimulator/external DerivedData execution was rejected by the execution
+  policy before `xcode-storage-doctor` could run.
+
+Boundary:
+- This advances OCI `process.consoleSize` initial PTY behavior. It does not
+  prove live terminal resizing after process start, full OCI terminal lifecycle,
+  full OCI Runtime Spec lifecycle support, registry execution inside Linux,
+  arbitrary imported-image compatibility, networking, devices, or multiple live
+  environments inside one already-running OrlixKernel.
+
+Current-status: checkpoint committed locally as `58e3fcc feat(oci): apply console size to pty`; push pending after hook-required IMPLEMENT.md refresh.

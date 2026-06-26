@@ -969,6 +969,28 @@ static int open_pty_slave(int master)
 	return open(path, O_RDWR | O_NOCTTY);
 }
 
+static void apply_initial_pty_winsize(int master, int slave)
+{
+	unsigned long rows = 0;
+	unsigned long columns = 0;
+	struct winsize size;
+
+	if (read_cmdline_unsigned("orlix.terminal.rows=", &rows) != 0 ||
+	    read_cmdline_unsigned("orlix.terminal.cols=", &columns) != 0)
+		return;
+	if (rows == 0 || rows > USHRT_MAX ||
+	    columns == 0 || columns > USHRT_MAX)
+		return;
+
+	memset(&size, 0, sizeof(size));
+	size.ws_row = (unsigned short)rows;
+	size.ws_col = (unsigned short)columns;
+	if (ioctl(slave, TIOCSWINSZ, &size) != 0 &&
+	    ioctl(master, TIOCSWINSZ, &size) != 0)
+		write_literal(STDERR_FILENO,
+			      "orlix-init: set PTY window size failed\n");
+}
+
 static void install_stdio(int fd)
 {
 	for (int target = STDIN_FILENO; target <= STDERR_FILENO; target++) {
@@ -2541,6 +2563,7 @@ static int run_pty_shell(int console_fd)
 		return 1;
 	}
 
+	apply_initial_pty_winsize(master, slave);
 	shell = start_command_on_pty(master, slave);
 	if (shell < 0) {
 		write_literal(STDERR_FILENO, "orlix-init: fork shell failed\n");

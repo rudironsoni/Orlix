@@ -29,10 +29,12 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public let defaultUserID: UInt32
     public let defaultGroupID: UInt32
     public let defaultSupplementaryGroups: [UInt32]
-    public let defaultCapabilities: OrlixEnvironmentCapabilities?
-    public let defaultNoNewPrivileges: Bool
-    public let defaultCloseAdditionalFds: Bool
-    public let defaultOOMScoreAdjustment: Int32?
+	public let defaultCapabilities: OrlixEnvironmentCapabilities?
+	public let defaultNoNewPrivileges: Bool
+	public let defaultCloseAdditionalFds: Bool
+	public let defaultTerminalRows: UInt32?
+	public let defaultTerminalColumns: UInt32?
+	public let defaultOOMScoreAdjustment: Int32?
     public let defaultScheduler: OrlixEnvironmentScheduler?
     public let defaultIOPriority: OrlixEnvironmentIOPriority?
     public let defaultCPUAffinity: OrlixEnvironmentCPUAffinity?
@@ -100,10 +102,12 @@ public let cgroupPidsLimit: Int64?
         defaultUserID: UInt32,
         defaultGroupID: UInt32,
         defaultSupplementaryGroups: [UInt32] = [],
-        defaultCapabilities: OrlixEnvironmentCapabilities? = nil,
-        defaultNoNewPrivileges: Bool = false,
-        defaultCloseAdditionalFds: Bool = false,
-        defaultOOMScoreAdjustment: Int32? = nil,
+		defaultCapabilities: OrlixEnvironmentCapabilities? = nil,
+		defaultNoNewPrivileges: Bool = false,
+		defaultCloseAdditionalFds: Bool = false,
+		defaultTerminalRows: UInt32? = nil,
+		defaultTerminalColumns: UInt32? = nil,
+		defaultOOMScoreAdjustment: Int32? = nil,
         defaultScheduler: OrlixEnvironmentScheduler? = nil,
         defaultIOPriority: OrlixEnvironmentIOPriority? = nil,
         defaultCPUAffinity: OrlixEnvironmentCPUAffinity? = nil,
@@ -143,10 +147,12 @@ cgroupPidsLimit: Int64? = nil,
         self.defaultUserID = defaultUserID
         self.defaultGroupID = defaultGroupID
         self.defaultSupplementaryGroups = defaultSupplementaryGroups
-        self.defaultCapabilities = defaultCapabilities
-        self.defaultNoNewPrivileges = defaultNoNewPrivileges
-        self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
-        self.defaultOOMScoreAdjustment = defaultOOMScoreAdjustment
+		self.defaultCapabilities = defaultCapabilities
+		self.defaultNoNewPrivileges = defaultNoNewPrivileges
+		self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
+		self.defaultTerminalRows = defaultTerminalRows
+		self.defaultTerminalColumns = defaultTerminalColumns
+		self.defaultOOMScoreAdjustment = defaultOOMScoreAdjustment
         self.defaultScheduler = defaultScheduler
         self.defaultIOPriority = defaultIOPriority
         self.defaultCPUAffinity = defaultCPUAffinity
@@ -189,9 +195,11 @@ self.cgroupPidsLimit = cgroupPidsLimit
         case defaultGroupID
         case defaultSupplementaryGroups
         case defaultCapabilities
-        case defaultNoNewPrivileges
-        case defaultCloseAdditionalFds
-        case defaultOOMScoreAdjustment
+		case defaultNoNewPrivileges
+		case defaultCloseAdditionalFds
+		case defaultTerminalRows
+		case defaultTerminalColumns
+		case defaultOOMScoreAdjustment
         case defaultScheduler
         case defaultIOPriority
         case defaultCPUAffinity
@@ -266,13 +274,21 @@ case cgroupCPUMax
             Bool.self,
             forKey: .defaultNoNewPrivileges
         ) ?? false
-        self.defaultCloseAdditionalFds = try container.decodeIfPresent(
-            Bool.self,
-            forKey: .defaultCloseAdditionalFds
-        ) ?? false
-        self.defaultOOMScoreAdjustment = try container.decodeIfPresent(
-            Int32.self,
-            forKey: .defaultOOMScoreAdjustment
+		self.defaultCloseAdditionalFds = try container.decodeIfPresent(
+			Bool.self,
+			forKey: .defaultCloseAdditionalFds
+		) ?? false
+		self.defaultTerminalRows = try container.decodeIfPresent(
+			UInt32.self,
+			forKey: .defaultTerminalRows
+		)
+		self.defaultTerminalColumns = try container.decodeIfPresent(
+			UInt32.self,
+			forKey: .defaultTerminalColumns
+		)
+		self.defaultOOMScoreAdjustment = try container.decodeIfPresent(
+			Int32.self,
+			forKey: .defaultOOMScoreAdjustment
         )
         self.defaultScheduler = try container.decodeIfPresent(
             OrlixEnvironmentScheduler.self,
@@ -406,12 +422,14 @@ forKey: .cgroupCPUWeight
         if defaultNoNewPrivileges {
             try container.encode(defaultNoNewPrivileges, forKey: .defaultNoNewPrivileges)
         }
-        if defaultCloseAdditionalFds {
-            try container.encode(defaultCloseAdditionalFds, forKey: .defaultCloseAdditionalFds)
-        }
-        try container.encodeIfPresent(
-            defaultOOMScoreAdjustment,
-            forKey: .defaultOOMScoreAdjustment
+		if defaultCloseAdditionalFds {
+			try container.encode(defaultCloseAdditionalFds, forKey: .defaultCloseAdditionalFds)
+		}
+		try container.encodeIfPresent(defaultTerminalRows, forKey: .defaultTerminalRows)
+		try container.encodeIfPresent(defaultTerminalColumns, forKey: .defaultTerminalColumns)
+		try container.encodeIfPresent(
+			defaultOOMScoreAdjustment,
+			forKey: .defaultOOMScoreAdjustment
         )
         try container.encodeIfPresent(defaultScheduler, forKey: .defaultScheduler)
         try container.encodeIfPresent(defaultIOPriority, forKey: .defaultIOPriority)
@@ -987,9 +1005,11 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultCapabilitiesInheritableCommandLineKey = "orlix.cap.inheritable"
     public static let defaultCapabilitiesEffectiveCommandLineKey = "orlix.cap.effective"
     public static let defaultCapabilitiesAmbientCommandLineKey = "orlix.cap.ambient"
-    public static let defaultNoNewPrivilegesCommandLineKey = "orlix.nonewprivs"
-    public static let defaultCloseAdditionalFdsCommandLineKey = "orlix.closefds"
-    public static let defaultOOMScoreAdjustmentCommandLineKey = "orlix.oomscoreadj"
+	public static let defaultNoNewPrivilegesCommandLineKey = "orlix.nonewprivs"
+	public static let defaultCloseAdditionalFdsCommandLineKey = "orlix.closefds"
+	public static let defaultTerminalRowsCommandLineKey = "orlix.terminal.rows"
+	public static let defaultTerminalColumnsCommandLineKey = "orlix.terminal.cols"
+	public static let defaultOOMScoreAdjustmentCommandLineKey = "orlix.oomscoreadj"
     public static let defaultSchedulerPolicyCommandLineKey = "orlix.scheduler.policy"
     public static let defaultSchedulerPriorityCommandLineKey = "orlix.scheduler.priority"
     public static let defaultIOPriorityClassCommandLineKey = "orlix.ioprio.class"
@@ -1452,12 +1472,19 @@ return node
         if descriptor.defaultNoNewPrivileges {
             tokens.append("\(defaultNoNewPrivilegesCommandLineKey)=1")
         }
-        if descriptor.defaultCloseAdditionalFds {
-            tokens.append("\(defaultCloseAdditionalFdsCommandLineKey)=1")
-        }
-        if let defaultOOMScoreAdjustment = descriptor.defaultOOMScoreAdjustment {
-            tokens.append("\(defaultOOMScoreAdjustmentCommandLineKey)=\(defaultOOMScoreAdjustment)")
-        }
+		if descriptor.defaultCloseAdditionalFds {
+			tokens.append("\(defaultCloseAdditionalFdsCommandLineKey)=1")
+		}
+		if let rows = descriptor.defaultTerminalRows,
+		   let columns = descriptor.defaultTerminalColumns,
+		   rows > 0,
+		   columns > 0 {
+			tokens.append("\(defaultTerminalRowsCommandLineKey)=\(rows)")
+			tokens.append("\(defaultTerminalColumnsCommandLineKey)=\(columns)")
+		}
+		if let defaultOOMScoreAdjustment = descriptor.defaultOOMScoreAdjustment {
+			tokens.append("\(defaultOOMScoreAdjustmentCommandLineKey)=\(defaultOOMScoreAdjustment)")
+		}
         if let defaultScheduler = descriptor.defaultScheduler {
             tokens.append("\(defaultSchedulerPolicyCommandLineKey)=\(defaultScheduler.policy)")
             tokens.append("\(defaultSchedulerPriorityCommandLineKey)=\(defaultScheduler.priority)")
@@ -1914,10 +1941,12 @@ public struct OrlixEnvironmentRegistry: Sendable {
                 defaultUserID: parent.defaultUserID,
                 defaultGroupID: parent.defaultGroupID,
                 defaultSupplementaryGroups: parent.defaultSupplementaryGroups,
-                defaultCapabilities: parent.defaultCapabilities,
-                defaultNoNewPrivileges: parent.defaultNoNewPrivileges,
-                defaultCloseAdditionalFds: parent.defaultCloseAdditionalFds,
-                defaultOOMScoreAdjustment: parent.defaultOOMScoreAdjustment,
+					defaultCapabilities: parent.defaultCapabilities,
+					defaultNoNewPrivileges: parent.defaultNoNewPrivileges,
+					defaultCloseAdditionalFds: parent.defaultCloseAdditionalFds,
+					defaultTerminalRows: parent.defaultTerminalRows,
+					defaultTerminalColumns: parent.defaultTerminalColumns,
+					defaultOOMScoreAdjustment: parent.defaultOOMScoreAdjustment,
                 defaultScheduler: parent.defaultScheduler,
                 defaultIOPriority: parent.defaultIOPriority,
                 defaultCPUAffinity: parent.defaultCPUAffinity,

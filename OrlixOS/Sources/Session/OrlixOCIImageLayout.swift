@@ -2049,9 +2049,9 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		),
 		OrlixOCIRuntimeFeature(
 			name: "process.consoleSize",
-			status: .recognized,
+			status: .implemented,
 			proof: "orlix:runtime_session_descriptor_unit_tests",
-			reason: "OCI process consoleSize is validated and carried with terminal session metadata, but runtime terminal resizing is not claimed until Linux PTY lifecycle proof covers OCI starts."
+			reason: "OCI process consoleSize is validated, carried into OrlixOS descriptors, emitted as init tokens, and applied as the initial Linux PTY window size with TIOCSWINSZ before exec."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "loopbackNetworking",
@@ -2431,6 +2431,8 @@ public let cgroupIOWeight: UInt64?
 			defaultCapabilities: defaultCapabilities,
 			defaultNoNewPrivileges: defaultNoNewPrivileges,
 			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
+			defaultTerminalRows: terminal ? consoleSize?.height : nil,
+			defaultTerminalColumns: terminal ? consoleSize?.width : nil,
 			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
 			defaultScheduler: defaultScheduler,
 			defaultIOPriority: defaultIOPriority,
