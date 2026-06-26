@@ -4205,6 +4205,77 @@ func testOCIImageLayoutReaderSelectsRequestedPlatformVariant() throws {
         XCTAssertEqual(result.descriptor.defaultWorkingDirectory, "/work/project")
     }
 
+func testOCIImageLayoutImporterCreatesMissingWorkingDirectory() throws {
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layout = try writeOCILayout(workingDirectory: "/work/project")
+
+let result = try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-created-working-dir",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-created-working-dir"
+)
+
+XCTAssertEqual(result.descriptor.defaultWorkingDirectory, "/work/project")
+XCTAssertTrue(
+FileManager.default.fileExists(
+atPath: result.stagingRootDirectory
+.appendingPathComponent("work/project", isDirectory: true).path
+)
+)
+XCTAssertTrue(result.manifest.map(\.path).contains("work"))
+XCTAssertTrue(result.manifest.map(\.path).contains("work/project"))
+}
+
+func testOCIImageLayoutImporterRejectsWorkingDirectoryBlockedByFile()
+throws
+{
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layer = tarArchive(entries: [
+TarFixtureEntry(path: "work", payload: Data("not-a-dir\n".utf8))
+])
+let layout = try writeOCILayout(
+layerData: [layer],
+workingDirectory: "/work/project"
+)
+
+XCTAssertThrowsError(
+try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-blocked-working-dir",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-blocked-working-dir"
+)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIImageLayoutError,
+.invalidWorkingDirectory("/work/project")
+)
+}
+}
+
 func testOCIImageLayoutImporterPreservesImageLabelsAsDescriptorAnnotations()
 throws
 {

@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI image WorkingDir materialization
+
+Changes:
+- `OrlixOCIImageLayoutImporter` now materializes missing absolute image `WorkingDir` directory components inside the imported rootfs before descriptor save and image materialization.
+- Created working-directory components are added to the rootfs manifest as Linux directories, so metadata/materialization sees the same in-root tree that was staged.
+- Working directory paths that would traverse through `.`/`..` or collide with an existing non-directory now fail as `invalidWorkingDirectory`.
+- Focused tests cover missing working-directory creation in the staging root and manifest, plus rejection when a file blocks the declared working directory.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This advances OrlixOS-owned OCI rootfs import/materialization for image-declared process defaults. It does not claim live simulator proof, Linux `chdir` runtime proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, Docker daemon support, package/proof/stamp systems, or runtime package execution readiness.
+
+Current status:
+- WorkingDir materialization checkpoint verified by static Swift parse/typecheck and guard checks above. Generated hook cache from plan checks was removed before this log entry.
+- Post-log harness check stayed warning-only. Generated hook cache from that pass was removed before commit.
+
 ### 2026-06-26 OCI image stop signal defaults
 
 Changes:

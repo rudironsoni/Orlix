@@ -1038,11 +1038,11 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
             var manifest: [OrlixRootfsTarManifestEntry] = []
             let applicator = OrlixOCIImageLayerApplicator(fileManager: fileManager)
             let decoder = OrlixOCILayerDecoder()
-            for (index, layer) in image.layers.enumerated() {
-                let data = try OrlixOCIImageLayoutBlobStore.verifiedBlob(
-                    layer.digest,
-                    expectedSize: layer.size,
-                    under: layoutURL
+		for (index, layer) in image.layers.enumerated() {
+			let data = try OrlixOCIImageLayoutBlobStore.verifiedBlob(
+				layer.digest,
+				expectedSize: layer.size,
+				under: layoutURL
                 )
                 let tarData = try decoder.decode(
                     layerData: data,
@@ -1053,16 +1053,22 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
                     layerIndex: index,
                     decodedLayerData: tarData
                 )
-                let application = try applicator.apply(
-                    tarData,
-                    to: temporaryRootDirectory
-                )
-                applyManifestChanges(application, to: &manifest)
-            }
-            let descriptor = try environmentDescriptor(
-                environmentID: environmentID,
-                rootImageIdentifier: rootImageIdentifier,
-                image: image,
+			let application = try applicator.apply(
+				tarData,
+				to: temporaryRootDirectory
+			)
+			applyManifestChanges(application, to: &manifest)
+		}
+		try materializeWorkingDirectory(
+			try validatedWorkingDirectory(image.processDefaults.workingDirectory),
+			under: temporaryRootDirectory,
+			manifest: &manifest,
+			fileManager: fileManager
+		)
+		let descriptor = try environmentDescriptor(
+			environmentID: environmentID,
+			rootImageIdentifier: rootImageIdentifier,
+			image: image,
                 rootDirectory: temporaryRootDirectory
             )
             if fileManager.fileExists(atPath: stagingRootDirectory.path) {
@@ -1158,9 +1164,9 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
         manifest.append(entry)
     }
 
-    private func opaqueDirectoryManifestEntry(
-        _ path: String
-    ) -> OrlixRootfsTarManifestEntry {
+	private func opaqueDirectoryManifestEntry(
+		_ path: String
+	) -> OrlixRootfsTarManifestEntry {
         OrlixRootfsTarManifestEntry(
             path: path,
             size: 0,
@@ -1169,10 +1175,69 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
             gid: 0,
             type: .directory,
             linkName: nil
-        )
-    }
+		)
+	}
 
-    private func environmentDescriptor(
+	private func materializeWorkingDirectory(
+		_ workingDirectory: String,
+		under rootDirectory: URL,
+		manifest: inout [OrlixRootfsTarManifestEntry],
+		fileManager: FileManager
+	) throws {
+		guard workingDirectory != "/" else {
+			return
+		}
+		let components = try workingDirectoryComponents(workingDirectory)
+		var relativePath = ""
+		var directoryURL = rootDirectory
+		for component in components {
+			relativePath =
+				relativePath.isEmpty
+				? component
+				: "\(relativePath)/\(component)"
+			directoryURL = directoryURL.appendingPathComponent(
+				component,
+				isDirectory: true
+			)
+			var isDirectory: ObjCBool = false
+			if fileManager.fileExists(
+				atPath: directoryURL.path,
+				isDirectory: &isDirectory
+			) {
+				guard isDirectory.boolValue else {
+					throw OrlixOCIImageLayoutError.invalidWorkingDirectory(
+						workingDirectory
+					)
+				}
+				continue
+			}
+			try fileManager.createDirectory(
+				at: directoryURL,
+				withIntermediateDirectories: false
+			)
+			applyEntry(
+				opaqueDirectoryManifestEntry(relativePath),
+				to: &manifest
+			)
+		}
+	}
+
+	private func workingDirectoryComponents(_ value: String) throws -> [String] {
+		let components = value
+			.split(separator: "/", omittingEmptySubsequences: true)
+			.map(String.init)
+		guard !components.isEmpty else {
+			return []
+		}
+		for component in components {
+			guard component != ".", component != ".." else {
+				throw OrlixOCIImageLayoutError.invalidWorkingDirectory(value)
+			}
+		}
+		return components
+	}
+
+	private func environmentDescriptor(
         environmentID: String,
         rootImageIdentifier: String,
         image: OrlixOCIImageLayoutImport,
