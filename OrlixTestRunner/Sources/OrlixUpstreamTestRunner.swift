@@ -832,6 +832,10 @@ enum OrlixAppLaunchRuntimeRunner {
                 output = try OrlixOCIDerivedSignalRuntimeProof().run()
             case "ociRun":
                 output = try OrlixOCIDerivedRunCommandRuntimeProof().run()
+            case "ociRunLiveRegistry":
+                output = try OrlixOCIDerivedRunCommandRuntimeProof(
+                    registryMode: .live
+                ).run()
             default:
                 throw OrlixAppLaunchRuntimeRunnerError.unknownSpec(specName)
             }
@@ -1178,11 +1182,17 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
 }
 
 private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
+    enum RegistryMode: Sendable {
+        case deterministic
+        case live
+    }
+
     private static let timeout: TimeInterval = 120
     private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
     private static let runEnvironmentID = "oci-run-runtime-test-fixture"
-    private static let imageReference =
+    private static let deterministicImageReference =
         "registry.example.org/library/orlix-fixture:latest"
+    private static let liveImageReference = "registry.k8s.io/pause:3.10"
     private static let requiredMarkers = [
         "ORLIX_ENV_ORLIX_RUN_BEGIN",
         "ORLIX_ENV_ORLIX_RUN_STDOUT_OK",
@@ -1192,6 +1202,11 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
 
     private let fileManager = FileManager.default
     private let recorder = OrlixRuntimeProofOutputRecorder()
+    private let registryMode: RegistryMode
+
+    init(registryMode: RegistryMode = .deterministic) {
+        self.registryMode = registryMode
+    }
 
     func run() throws -> String {
         let resultBox = OrlixAsyncRuntimeProofResultBox<String>()
@@ -1222,6 +1237,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
     }
 
     private func runAsync() async throws -> String {
+        let imageReference = Self.imageReference(for: registryMode)
         let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
         let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
         guard fileManager.fileExists(atPath: ready.path) else {
@@ -1273,7 +1289,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
                 "--id",
                 Self.runEnvironmentID,
                 "--rm",
-                Self.imageReference,
+                imageReference,
                 "--",
                 "/bin/sh",
                 "-c",
@@ -1284,7 +1300,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
                 truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
                 debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
             ),
-            puller: try Self.registryPuller(),
+            puller: try Self.registryPuller(for: registryMode),
             terminal: terminal,
             using: driver,
             fileManager: fileManager
@@ -1308,7 +1324,19 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         text += "\nORLIX_OCI_RUN_COMMAND_STARTED_OK\n"
         text += "ORLIX_OCI_RUN_COMMAND_STOPPED_OK\n"
         text += "ORLIX_OCI_RUN_COMMAND_DELETE_OK\n"
+        if registryMode == .live {
+            text += "ORLIX_OCI_RUN_LIVE_REGISTRY_PULL_OK\n"
+        }
         return text
+    }
+
+    private static func imageReference(for mode: RegistryMode) -> String {
+        switch mode {
+        case .deterministic:
+            return deterministicImageReference
+        case .live:
+            return liveImageReference
+        }
     }
 
     private static var executionScript: String {
@@ -1320,8 +1348,17 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         ].joined(separator: "\n")
     }
 
-    private static func registryPuller() throws -> OrlixOCIRegistryPuller {
-        let image = try OrlixOCIRegistryImageReference(Self.imageReference)
+    private static func registryPuller(for mode: RegistryMode) throws -> OrlixOCIRegistryPuller {
+        switch mode {
+        case .deterministic:
+            return try deterministicRegistryPuller()
+        case .live:
+            return OrlixOCIRegistryPuller()
+        }
+    }
+
+    private static func deterministicRegistryPuller() throws -> OrlixOCIRegistryPuller {
+        let image = try OrlixOCIRegistryImageReference(deterministicImageReference)
         let configData = Data(
             """
             {
