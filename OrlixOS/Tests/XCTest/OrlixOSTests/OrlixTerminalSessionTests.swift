@@ -6494,15 +6494,15 @@ report.feature(named: "ociBlockIOControls")?.proof,
 			report.feature(named: "ociMaskedPaths")?.proof,
 			"orlix:rootinit_masked_paths"
 		)
-		XCTAssertEqual(report.feature(named: "ociNamespaces")?.status, .recognized)
-		XCTAssertEqual(
-			report.feature(named: "ociMountIpcUtsNetworkCgroupNamespaces")?.status,
-			.implemented
+        XCTAssertEqual(report.feature(named: "ociNamespaces")?.status, .recognized)
+        XCTAssertEqual(
+            report.feature(named: "ociMountIpcUtsNetworkCgroupPidNamespaces")?.status,
+            .implemented
         )
-		XCTAssertEqual(
-			report.feature(named: "ociMountIpcUtsNetworkCgroupNamespaces")?.proof,
-			"orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe"
-		)
+        XCTAssertEqual(
+            report.feature(named: "ociMountIpcUtsNetworkCgroupPidNamespaces")?.proof,
+            "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe,orlix:namespace_probe"
+        )
 		XCTAssertEqual(report.feature(named: "ociNamespacePathJoins")?.status, .implemented)
 		XCTAssertEqual(
 			report.feature(named: "ociNamespacePathJoins")?.proof,
@@ -6650,10 +6650,10 @@ XCTAssertEqual(features["ociBlockIOControls"]?.status, .implemented)
 XCTAssertEqual(features["ociBlockIOControls"]?.proof, "orlix:cgroup_io_probe")
 		XCTAssertEqual(features["ociNamespaces"]?.status, .recognized)
         XCTAssertEqual(features["ociNamespaces"]?.proof, "orlix:runtime_config_parser")
-        XCTAssertEqual(features["ociMountIpcUtsNetworkCgroupNamespaces"]?.status, .implemented)
+        XCTAssertEqual(features["ociMountIpcUtsNetworkCgroupPidNamespaces"]?.status, .implemented)
         XCTAssertEqual(
-            features["ociMountIpcUtsNetworkCgroupNamespaces"]?.proof,
-            "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe"
+            features["ociMountIpcUtsNetworkCgroupPidNamespaces"]?.proof,
+            "orlix:mount_namespace_probe,orlix:ipc_namespace_probe,orlix:network_namespace_probe,orlix:cgroup_namespace_probe,orlix:namespace_probe"
         )
 XCTAssertEqual(features["ociReadonlyPaths"]?.status, .implemented)
 XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:rootinit_readonly_paths")
@@ -6956,9 +6956,9 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
         }
     }
 
-    func testOCIRuntimeConfigParserCarriesTimeNamespaceOffsets() throws {
-        let config = Data(
-            """
+func testOCIRuntimeConfigParserCarriesTimeNamespaceOffsets() throws {
+    let config = Data(
+        """
             {
               "ociVersion": "1.1.0",
               "process": { "args": ["/bin/sh"], "cwd": "/" },
@@ -6994,12 +6994,40 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
         )
         XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.namespace0=time"))
         XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.timeoffset0=boottime:-3:250"))
-        XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.timeoffset1=monotonic:12:500000000"))
-    }
+    XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.timeoffset1=monotonic:12:500000000"))
+}
 
-    func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
-        let config = Data(
-            """
+func testOCIRuntimeConfigParserCarriesPIDNamespace() throws {
+    let config = Data(
+        """
+        {
+          "ociVersion": "1.1.0",
+          "process": { "args": ["/bin/sh"], "cwd": "/" },
+          "root": { "path": "rootfs" },
+          "linux": {
+            "namespaces": [{ "type": "pid" }]
+          }
+        }
+        """.utf8
+    )
+
+    let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+    XCTAssertEqual(descriptor.namespaces, ["pid"])
+
+    let environment = try descriptor.environmentDescriptor(
+        id: "oci-pid-namespace",
+        rootMount: .defaultOverlay
+    )
+    let commandLine = try OrlixEnvironmentRootImage.materializedKernelCommandLine(
+        descriptor: environment,
+        kernelCommandLine: OrlixEnvironmentRootImage.defaultKernelCommandLine
+    )
+    XCTAssertTrue(try XCTUnwrap(commandLine).contains("orlix.namespace0=pid"))
+}
+
+func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
+    let config = Data(
+        """
             {
                 "ociVersion": "1.1.0",
                 "process": { "args": ["/bin/sh"], "cwd": "/" },
@@ -7139,7 +7167,6 @@ func testOCIRuntimeConfigParserNormalizesRelativeCgroupsPath() throws {
             ("resources.pids.limit", #""cgroupsPath": "/orlix/demo", "resources": { "pids": { "limit": -2 } }"#),
             ("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
             ("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
-            ("namespaces.pid", #""namespaces": [{ "type": "pid" }]"#),
             ("namespaces.user.path", #""namespaces": [{ "type": "user", "path": "/proc/1/ns/user" }]"#),
             ("namespaces.mount.duplicate", #""namespaces": [{ "type": "mount" }, { "type": "mount" }]"#),
             ("netDevices", #""netDevices": [{ "name": "eth0" }]"#)

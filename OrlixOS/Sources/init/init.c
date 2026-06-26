@@ -791,6 +791,8 @@ if (strcmp(name, "mount") == 0)
 		return CLONE_NEWNET;
 	if (strcmp(name, "cgroup") == 0)
 		return CLONE_NEWCGROUP;
+	if (strcmp(name, "pid") == 0)
+		return CLONE_NEWPID;
 	if (strcmp(name, "time") == 0)
 		return CLONE_NEWTIME;
 	if (strcmp(name, "user") == 0)

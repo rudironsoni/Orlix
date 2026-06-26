@@ -1304,7 +1304,7 @@ return node
 }
 
     private static func validateNamespace(_ namespace: String) throws -> String {
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time", "user"])
+        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "pid", "time", "user"])
         guard supportedNamespaces.contains(namespace) else {
             throw OrlixEnvironmentRootImageError.invalidNamespace(namespace)
         }

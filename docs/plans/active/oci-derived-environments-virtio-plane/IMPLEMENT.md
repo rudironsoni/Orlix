@@ -22732,3 +22732,28 @@ Evidence:
 
 Boundary:
 - This advances the OrlixOS lifecycle/control surface required by product `orlix run` selection. It does not add a Linux userspace `/usr/bin/orlix` command, registry pull from inside Linux, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, full OCI Runtime Spec lifecycle, or broad namespace/cgroup/device/filesystem/network readiness.
+### 2026-06-26 OCI PID namespace surface
+
+Changes:
+- OCI runtime config parsing now accepts `linux.namespaces` entry `{ "type": "pid" }`.
+- Orlix environment descriptor validation carries `pid` alongside the already supported namespace names.
+- First-stage init maps OCI `pid` namespace requests to Linux `CLONE_NEWPID` through the existing namespace setup path.
+- OCI feature reporting now names the implemented mount, IPC, UTS, network, cgroup, and PID namespace surface and cites the existing Linux-owned namespace probe.
+- Parser rejection tests no longer classify PID namespaces as unsupported.
+
+Evidence:
+- Focused OrlixOS XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-28-46-+0200.xcresult` reported `Passed`, 2 passed, 0 failed, 0 skipped on `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)`.
+- Broader deterministic OCI registry/runtime XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-30-05-+0200.xcresult` reported `Passed`, 17 passed, 0 failed, 0 skipped on the same simulator.
+- Linux-owned namespace kselftest path result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixKernelUpstreamTests-2026.06.26_03-31-43-+0200.xcresult` reported `Passed`, 1 passed, 0 failed, 0 skipped for `testNamespaceProbeCompletesThroughOrlixOSTerminalSession`.
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only stale-status warning.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch paths listed only the expected `OrlixOS/Sources/init/init.c` change.
+- Host crash-report check found no `*Orlix*` reports modified in the last day. Simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This advances OCI PID namespace request carry-through into the existing Linux namespace setup path. It does not claim full OCI Runtime Spec lifecycle, broad namespace/cgroup/device/filesystem/network readiness, Linux userspace `/usr/bin/orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
+
+Current status: Latest coherent checkpoint carries OCI PID namespace requests from OCI config parsing through OrlixOS environment descriptors into first-stage init `CLONE_NEWPID`, with OrlixOS XCTest and Linux-owned namespace kselftest evidence. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.
