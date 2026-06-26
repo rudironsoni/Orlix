@@ -2675,10 +2675,14 @@ static int run_pty_shell(int console_fd)
 int main(void)
 {
 	int tty;
+	int terminal;
 
 	write_literal(STDERR_FILENO, "orlix-init: main entered\n");
 	mount_device_filesystem();
 	write_literal(STDERR_FILENO, "orlix-init: device filesystem mounted\n");
+	terminal = terminal_enabled();
+	if (!terminal)
+		goto runtime_setup;
 	tty = open_controlling_tty();
 	if (tty < 0) {
 		write_literal(STDERR_FILENO,
@@ -2688,11 +2692,12 @@ int main(void)
 
 	install_stdio(tty);
 	write_literal(STDERR_FILENO, "orlix-init: stdio installed\n");
+runtime_setup:
 	mount_runtime_filesystems();
 	write_literal(STDERR_FILENO, "orlix-init: runtime filesystems mounted\n");
 	mount_configured_tmpfs_mounts();
 	mount_configured_host_directories();
-	if (terminal_enabled()) {
+	if (terminal) {
 		if (run_pty_shell(STDIN_FILENO) != 0)
 			write_literal(STDERR_FILENO,
 				      "orlix-init: PTY shell session ended\n");

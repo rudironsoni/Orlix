@@ -3,6 +3,7 @@ import UIKit
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     override init() {
+        OrlixAppLaunchRuntimeRunner.runIfRequested()
         OrlixAppLaunchUpstreamRunner.runIfRequested()
         super.init()
     }

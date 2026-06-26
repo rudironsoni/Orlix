@@ -267,9 +267,14 @@ targets:
           }
           extension="${ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION:?}"
           rebuild_kselftest_if_stale
-          copy_if_present "$ORLIX_OS_KSELFTEST_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"
-          copy_if_present "$ORLIX_OS_MLIBC_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension"
-          copy_if_present "$ORLIX_OS_COREUTILS_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension"
+            copy_if_present "$ORLIX_OS_KSELFTEST_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"
+            copy_if_present "$ORLIX_OS_MLIBC_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension"
+            copy_if_present "$ORLIX_OS_COREUTILS_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension"
+            runtime_fixture_root="$SRCROOT/Build/OrlixOS/environment-runtime-test-fixtures"
+            if [ ! -f "$runtime_fixture_root/.fixtures-ready" ]; then
+              "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-test-fixtures PROFILE="$profile"
+            fi
+            copy_if_present "Build/OrlixOS/environment-runtime-test-fixtures" "EnvironmentRuntimeTestFixtures"
     settings:
       base:
         DEFINES_MODULE: YES

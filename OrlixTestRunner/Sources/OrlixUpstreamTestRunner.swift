@@ -811,3 +811,309 @@ private final class TerminalOutputRecorder: @unchecked Sendable {
         lock.unlock()
     }
 }
+
+enum OrlixAppLaunchRuntimeRunner {
+    private static let environmentKey = "ORLIX_RUNTIME_TEST_SPEC"
+    private static let fixtureRootKey = "ORLIX_RUNTIME_FIXTURE_ROOT"
+
+    static func runIfRequested() {
+        guard let specName = requestedSpecName() else {
+            return
+        }
+
+        do {
+            let output: String
+            switch specName {
+            case "ociStdio":
+                output = try OrlixOCIDerivedStdioRuntimeProof().run()
+            default:
+                throw OrlixAppLaunchRuntimeRunnerError.unknownSpec(specName)
+            }
+            try writeOutputArtifact(output)
+            writeText(output, to: .standardOutput)
+            exit(EXIT_SUCCESS)
+        } catch {
+            let message = "ORLIX-APP-RUNTIME-RUNNER-ERROR \(error)\n"
+            try? writeOutputArtifact(message)
+            NSLog("%@", message)
+            writeText(message, to: .standardError)
+            exit(EXIT_FAILURE)
+        }
+    }
+
+    private static func requestedSpecName() -> String? {
+        if let specName = ProcessInfo.processInfo.environment[environmentKey] {
+            NSLog("ORLIX-APP-RUNTIME-RUNNER requested runtime spec %@", specName)
+            return specName
+        }
+
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let optionIndex = arguments.firstIndex(of: "--orlix-runtime-test-spec") else {
+            return nil
+        }
+        let valueIndex = arguments.index(after: optionIndex)
+        guard valueIndex < arguments.endIndex else {
+            return nil
+        }
+        return arguments[valueIndex]
+    }
+
+    fileprivate static func fixtureRoot() -> URL {
+        if let override = ProcessInfo.processInfo.environment[fixtureRootKey],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+
+        if let resourceRoot = Bundle.main.resourceURL?
+            .appendingPathComponent("EnvironmentRuntimeTestFixtures", isDirectory: true)
+            .appendingPathComponent("oci-imported", isDirectory: true),
+            FileManager.default.fileExists(
+                atPath: resourceRoot.appendingPathComponent(".ready").path
+            ) {
+            return resourceRoot
+        }
+
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return repoRoot
+            .appendingPathComponent("Build", isDirectory: true)
+            .appendingPathComponent("OrlixOS", isDirectory: true)
+            .appendingPathComponent("environment-runtime-test-fixtures", isDirectory: true)
+            .appendingPathComponent("oci-imported", isDirectory: true)
+    }
+
+    private static func writeOutputArtifact(_ text: String) throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-runtime-test-output.txt")
+        try Data(text.utf8).write(to: url, options: [.atomic])
+    }
+
+    private static func writeText(_ text: String, to handle: FileHandle) {
+        handle.write(Data(text.utf8))
+    }
+}
+
+private enum OrlixAppLaunchRuntimeRunnerError: Error, CustomStringConvertible {
+    case unknownSpec(String)
+
+    var description: String {
+        switch self {
+        case let .unknownSpec(name):
+            return "unknown runtime test spec '\(name)'"
+        }
+    }
+}
+
+private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 300
+    private static let requiredMarkers = [
+        "ORLIX_ENV_STDIO_BEGIN",
+        "ORLIX_ENV_STDIO_STDOUT_OK",
+        "ORLIX_ENV_STDIO_STDERR_OK",
+        "ORLIX_ENV_STDIO_NOT_PTY_OK",
+        "ORLIX_ENV_STDIO_DONE",
+    ]
+
+    private let fileManager = FileManager.default
+    private let recorder = OrlixRuntimeProofOutputRecorder()
+
+    func run() throws -> String {
+        let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+        let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+        guard fileManager.fileExists(atPath: ready.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+        }
+
+        let copiedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-oci-stdio-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+        defer {
+            try? fileManager.removeItem(at: copiedRoot)
+        }
+
+        let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+        let descriptor = OrlixEnvironmentDescriptor(
+            id: "oci-imported-runtime-test-fixture",
+            source: .ociLayout,
+            platform: "linux/arm64",
+            rootImageIdentifier: "orlix.test.environment.oci-runtime-test-fixture",
+            defaultCommand: ["/bin/sh", "-c", Self.stdioExecutionScript],
+            defaultEnvironment: [
+                "HOME": "/root",
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM": "xterm-256color",
+            ],
+            defaultWorkingDirectory: "/",
+            defaultUserID: 0,
+            defaultGroupID: 0,
+            hostname: "oci-host",
+            domainname: "oci.example",
+            rootMount: .defaultOverlay
+        )
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        try registry.save(descriptor)
+
+        let terminal = OrlixTerminalSession()
+        let sessionDescriptor = OrlixOCIRuntimeSessionDescriptor(
+            id: descriptor.id,
+            lifecycleState: .created,
+            terminal: false,
+            consoleSize: nil,
+            environment: descriptor
+        )
+        let session = try OrlixLinuxSession(
+            ociRuntimeSession: sessionDescriptor,
+            registry: registry,
+            terminal: terminal
+        )
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer {
+            output.cancel()
+        }
+
+        let bootStatus = OrlixRuntimeProofBootStatus()
+        let completion = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let status = session.boot()
+            bootStatus.set(status)
+            completion.signal()
+        }
+
+        let deadline = Date().addingTimeInterval(Self.timeout)
+        while completion.wait(timeout: .now() + .seconds(1)) != .success {
+            let text = recorder.text
+            if Self.hasAllRequiredMarkers(in: text) {
+                break
+            }
+            if Date() >= deadline {
+                throw OrlixOCIDerivedStdioRuntimeProofError.timeout(
+                    Self.timeout,
+                    Self.normalized(text)
+                )
+            }
+        }
+
+        if let status = bootStatus.value, status != .ok {
+            throw OrlixOCIDerivedStdioRuntimeProofError.bootFailed(status)
+        }
+
+        let text = Self.normalized(recorder.text)
+        try Self.validate(text)
+        return text
+    }
+
+    private static var stdioExecutionScript: String {
+        [
+            "printf '%s%s\\n' ORLIX_ENV_ STDIO_BEGIN",
+            "printf '%s%s\\n' ORLIX_ENV_STDIO_ STDOUT_OK",
+            "printf '%s%s\\n' ORLIX_ENV_STDIO_ STDERR_OK >&2",
+            "if command -v tty >/dev/null 2>&1; then tty_path=$(tty); elif /bin/test -x /bin/tty; then tty_path=$(/bin/tty); elif /bin/test -x /usr/bin/tty; then tty_path=$(/usr/bin/tty); else tty_path=missing-tty-command; fi",
+            "printf 'stdio_tty=%s\\n' \"$tty_path\"",
+            "case \"$tty_path\" in /dev/pts/*) printf '%s%s\\n' ORLIX_ENV_STDIO_PROOF_ FAILED_PTY;; *) printf '%s%s\\n' ORLIX_ENV_STDIO_ NOT_PTY_OK;; esac",
+            "printf '%s%s\\n' ORLIX_ENV_STDIO_ DONE",
+        ].joined(separator: "\n")
+    }
+
+    private static func hasAllRequiredMarkers(in text: String) -> Bool {
+        requiredMarkers.allSatisfy { text.contains($0) }
+    }
+
+    private static func validate(_ text: String) throws {
+        if text.contains("ORLIX_ENV_STDIO_PROOF_FAILED_PTY") {
+            throw OrlixOCIDerivedStdioRuntimeProofError.unexpectedPTY(text)
+        }
+        for marker in requiredMarkers where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+        }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+    }
+}
+
+private struct OrlixRuntimeEnvironmentFixture {
+    let root: URL
+
+    var linuxStateRoot: URL {
+        root.appendingPathComponent("state", isDirectory: true)
+    }
+
+    var cacheRoot: URL {
+        root.appendingPathComponent("cache", isDirectory: true)
+    }
+
+    var scratchRoot: URL {
+        root.appendingPathComponent("scratch", isDirectory: true)
+    }
+}
+
+private final class OrlixRuntimeProofOutputRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = Data()
+
+    var text: String {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        return String(decoding: storage, as: UTF8.self)
+    }
+
+    func append(_ data: Data) {
+        lock.lock()
+        storage.append(data)
+        lock.unlock()
+    }
+}
+
+private final class OrlixRuntimeProofBootStatus: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: OrlixBootStatus?
+
+    var value: OrlixBootStatus? {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        return storage
+    }
+
+    func set(_ status: OrlixBootStatus) {
+        lock.lock()
+        storage = status
+        lock.unlock()
+    }
+}
+
+private enum OrlixOCIDerivedStdioRuntimeProofError: Error, CustomStringConvertible {
+    case missingFixture(String)
+    case bootFailed(OrlixBootStatus)
+    case timeout(TimeInterval, String)
+    case missingMarker(String, String)
+    case unexpectedPTY(String)
+
+    var description: String {
+        switch self {
+        case let .missingFixture(path):
+            return "missing OCI runtime fixture marker: \(path)"
+        case let .bootFailed(status):
+            return "OCI runtime stdio proof boot failed: \(status.message)"
+        case let .timeout(timeout, output):
+            return "OCI runtime stdio proof timed out after \(timeout)s\n\(output)"
+        case let .missingMarker(marker, output):
+            return "OCI runtime stdio proof missing marker \(marker)\n\(output)"
+        case let .unexpectedPTY(output):
+            return "OCI runtime stdio proof unexpectedly used a PTY\n\(output)"
+        }
+    }
+}
