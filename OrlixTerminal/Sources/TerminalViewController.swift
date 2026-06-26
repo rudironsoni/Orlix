@@ -275,8 +275,11 @@ final class TerminalViewController: UIViewController {
 struct OrlixTerminalLaunchConfiguration {
     static let environmentIDArgument = "--orlix-environment-id"
     static let environmentIDDefaultsKey = "OrlixTerminal.environmentID"
+    static let runArgumentsArgument = "--orlix-run"
+    static let runArgumentsDefaultsKey = "OrlixTerminal.runArguments"
 
     let environmentID: String?
+    let runArguments: [String]?
 
     static func current(
         arguments: [String] = ProcessInfo.processInfo.arguments,
@@ -284,12 +287,19 @@ struct OrlixTerminalLaunchConfiguration {
     ) -> OrlixTerminalLaunchConfiguration {
         OrlixTerminalLaunchConfiguration(
             environmentID: environmentID(from: arguments)
-                ?? defaults.string(forKey: environmentIDDefaultsKey)
+                ?? defaults.string(forKey: environmentIDDefaultsKey),
+            runArguments: runArguments(from: arguments)
+                ?? defaults.stringArray(forKey: runArgumentsDefaultsKey)
         )
     }
 
     func makeLinuxSession() -> Result<OrlixLinuxSession, Error> {
         Result {
+            if let runArguments, !runArguments.isEmpty {
+                return try OrlixOCIEnvironmentInstaller()
+                    .terminalSession(arguments: runArguments)
+                    .linuxSession
+            }
             if let environmentID, !environmentID.isEmpty {
                 return try OrlixLinuxSession(environmentID: environmentID)
             }
@@ -300,6 +310,9 @@ struct OrlixTerminalLaunchConfiguration {
     }
 
     func startMessage(for session: OrlixLinuxSession) -> String {
+        if let runArguments, !runArguments.isEmpty {
+            return "Starting Orlix run environment \(runArguments.joined(separator: " "))."
+        }
         if let environmentID, !environmentID.isEmpty {
             return "Starting Orlix environment \(environmentID)."
         }
@@ -307,6 +320,9 @@ struct OrlixTerminalLaunchConfiguration {
     }
 
     var failureMessage: String {
+        if let runArguments, !runArguments.isEmpty {
+            return "Unable to start Orlix run environment."
+        }
         if let environmentID, !environmentID.isEmpty {
             return "Unable to start Orlix environment \(environmentID)."
         }
@@ -325,6 +341,25 @@ struct OrlixTerminalLaunchConfiguration {
             let prefix = environmentIDArgument + "="
             if argument.hasPrefix(prefix) {
                 return String(argument.dropFirst(prefix.count))
+            }
+            index = arguments.index(after: index)
+        }
+        return nil
+    }
+
+    private static func runArguments(from arguments: [String]) -> [String]? {
+        var index = arguments.startIndex
+        while index < arguments.endIndex {
+            let argument = arguments[index]
+            if argument == runArgumentsArgument {
+                let valueIndex = arguments.index(after: index)
+                guard valueIndex < arguments.endIndex else { return nil }
+                return Array(arguments[valueIndex...])
+            }
+            let prefix = runArgumentsArgument + "="
+            if argument.hasPrefix(prefix) {
+                let value = String(argument.dropFirst(prefix.count))
+                return value.isEmpty ? nil : value.split(separator: " ").map(String.init)
             }
             index = arguments.index(after: index)
         }
