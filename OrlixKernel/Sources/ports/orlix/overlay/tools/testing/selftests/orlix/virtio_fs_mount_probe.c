@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <dirent.h>
+#include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -97,10 +98,10 @@ static bool ensure_mountpoint(void)
 	return false;
 }
 
-static bool mount_host_virtiofs(void)
+static bool mount_host_virtiofs(unsigned long flags)
 {
 	return mount(ORLIX_VIRTIOFS_TAG, ORLIX_VIRTIOFS_MOUNTPOINT, "virtiofs",
-		     0, NULL) == 0;
+		     flags, NULL) == 0;
 }
 
 static bool mounted_root_is_directory(void)
@@ -169,6 +170,44 @@ static bool mounted_root_rejects_create_with_erofs(void)
 	}
 
 	return errno == EROFS;
+}
+
+static bool mounted_root_supports_create_write_readback(void)
+{
+	const char *payload = "orlix writable virtiofs\n";
+	char buffer[64];
+	int fd;
+	ssize_t count;
+	size_t payload_len = orlix_strlen(payload);
+
+	unlink(ORLIX_VIRTIOFS_MOUNTPOINT "/orlix-write-probe");
+	fd = open(ORLIX_VIRTIOFS_MOUNTPOINT "/orlix-write-probe",
+		  O_RDWR | O_CREAT | O_EXCL, 0644);
+	if (fd < 0) {
+		orlix_test_comment_uint("create errno ", (unsigned int)errno);
+		return false;
+	}
+
+	count = write(fd, payload, payload_len);
+	if (count != (ssize_t)payload_len) {
+		orlix_test_comment_uint("write errno ", (unsigned int)errno);
+		close(fd);
+		return false;
+	}
+
+	if (lseek(fd, 0, SEEK_SET) != 0) {
+		orlix_test_comment_uint("lseek errno ", (unsigned int)errno);
+		close(fd);
+		return false;
+	}
+
+	memset(buffer, 0, sizeof(buffer));
+	count = read(fd, buffer, sizeof(buffer));
+	close(fd);
+	if (count != (ssize_t)payload_len)
+		return false;
+
+	return orlix_memcmp(buffer, payload, payload_len) == 0;
 }
 
 static bool mounted_root_supports_statx(void)
@@ -345,7 +384,7 @@ int main(void)
 {
 	bool mounted = false;
 
-	orlix_test_plan(12);
+	orlix_test_plan(14);
 
 	orlix_test_comment("probe step ", "virtiofs_tag_is_registered",
 			   sizeof("virtiofs_tag_is_registered") - 1);
@@ -359,7 +398,7 @@ int main(void)
 
 	orlix_test_comment("probe step ", "mount_host_virtiofs",
 			   sizeof("mount_host_virtiofs") - 1);
-	mounted = mount_host_virtiofs();
+	mounted = mount_host_virtiofs(0);
 	orlix_test_result(mounted,
 			  "Linux mounts the Orlix host folder through virtio-fs");
 
@@ -376,11 +415,14 @@ int main(void)
 				   sizeof("mounted_root_can_readdir") - 1);
 		orlix_test_result(mounted_root_can_readdir(),
 				  "mounted virtio-fs root supports readdir");
-		orlix_test_comment("probe step ",
-				   "mounted_root_rejects_create_with_erofs",
-				   sizeof("mounted_root_rejects_create_with_erofs") - 1);
-		orlix_test_result(mounted_root_rejects_create_with_erofs(),
-				  "mounted virtio-fs root rejects create with EROFS");
+		orlix_test_comment(
+			"probe step ",
+			"mounted_root_supports_create_write_readback",
+			sizeof("mounted_root_supports_create_write_readback") -
+				1);
+		orlix_test_result(
+			mounted_root_supports_create_write_readback(),
+			"mounted writable virtio-fs root supports create, write, and readback");
 		orlix_test_comment("probe step ", "mounted_root_supports_statx",
 				   sizeof("mounted_root_supports_statx") - 1);
 		orlix_test_result(mounted_root_supports_statx(),
@@ -407,6 +449,26 @@ int main(void)
 			mounted_nested_directory_supports_readdir_statx(),
 			"mounted virtio-fs nested paths support readdir, access, and statx when present");
 		umount(ORLIX_VIRTIOFS_MOUNTPOINT);
+		orlix_test_comment("probe step ", "mount_host_virtiofs_ro",
+				   sizeof("mount_host_virtiofs_ro") - 1);
+		mounted = mount_host_virtiofs(MS_RDONLY);
+		orlix_test_result(mounted,
+				  "Linux mounts Orlix host folder read-only through virtio-fs");
+		if (mounted) {
+			orlix_test_comment(
+				"probe step ",
+				"mounted_root_rejects_create_with_erofs",
+				sizeof("mounted_root_rejects_create_with_erofs") -
+					1);
+			orlix_test_result(
+				mounted_root_rejects_create_with_erofs(),
+				"mounted read-only virtio-fs root rejects create with EROFS");
+			umount(ORLIX_VIRTIOFS_MOUNTPOINT);
+		} else {
+			orlix_test_result(
+				false,
+				"mounted read-only virtio-fs root rejects create with EROFS");
+		}
 	} else {
 		orlix_test_result(false,
 				  "mounted virtio-fs root is a directory");
@@ -415,7 +477,7 @@ int main(void)
 		orlix_test_result(false,
 				  "mounted virtio-fs root supports readdir");
 		orlix_test_result(false,
-				  "mounted virtio-fs root rejects create with EROFS");
+				  "mounted writable virtio-fs root supports create, write, and readback");
 		orlix_test_result(false,
 				  "mounted virtio-fs root supports statx");
 		orlix_test_result(false,
@@ -427,6 +489,11 @@ int main(void)
 		orlix_test_result(
 			false,
 			"mounted virtio-fs nested paths support readdir, access, and statx when present");
+		orlix_test_result(false,
+				  "Linux mounts Orlix host folder read-only through virtio-fs");
+		orlix_test_result(
+			false,
+			"mounted read-only virtio-fs root rejects create with EROFS");
 	}
 
 	orlix_test_exit();

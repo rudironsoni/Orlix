@@ -84,6 +84,9 @@ __attribute__((visibility("hidden"))) int OrlixHostCopyHostDirectoryPath(
     char *path,
     unsigned long path_size,
     unsigned int *read_only);
+__attribute__((visibility("hidden"))) int orlix_host_directory_is_read_only(
+    unsigned int directory,
+    unsigned int *read_only);
 
 __attribute__((visibility("hidden"))) int orlix_host_directory_read_entry(
     unsigned int directory,
@@ -122,6 +125,16 @@ __attribute__((visibility("hidden"))) long orlix_host_directory_read_file_at_pat
     const char *relative_path,
     uint64_t offset,
     void *buffer,
+    uint32_t length);
+__attribute__((visibility("hidden"))) int orlix_host_directory_create_file_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    uint32_t mode);
+__attribute__((visibility("hidden"))) long orlix_host_directory_write_file_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    uint64_t offset,
+    const void *buffer,
     uint32_t length);
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_link(
     unsigned int directory,

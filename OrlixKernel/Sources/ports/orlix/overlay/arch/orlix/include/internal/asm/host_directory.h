@@ -33,6 +33,8 @@ int orlix_host_directory_read_entry_at_path(
 	unsigned int directory,
 	const char *relative_path,
 	struct orlix_host_directory_entry *entry);
+int orlix_host_directory_is_read_only(unsigned int directory,
+				      unsigned int *read_only);
 int orlix_host_directory_read_directory_entry_at_path(
 	unsigned int directory,
 	const char *relative_path,
@@ -53,6 +55,14 @@ long orlix_host_directory_read_file_at_path(unsigned int directory,
 					    const char *relative_path,
 					    u64 offset,
 					    void *buffer,
+					    u32 length);
+int orlix_host_directory_create_file_at_path(unsigned int directory,
+					    const char *relative_path,
+					    u32 mode);
+long orlix_host_directory_write_file_at_path(unsigned int directory,
+					    const char *relative_path,
+					    u64 offset,
+					    const void *buffer,
 					    u32 length);
 long orlix_host_directory_read_link(unsigned int directory,
 				    unsigned int entry_index,

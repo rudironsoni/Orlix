@@ -460,8 +460,64 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
                    -1);
 
     XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
-    XCTAssertEqual(orlix_host_directory_list_xattr(0, "bin/tool", NULL, 0), -1);
-    [fileManager removeItemAtURL:root error:nil];
+	XCTAssertEqual(orlix_host_directory_list_xattr(0, "bin/tool", NULL, 0), -1);
+	[fileManager removeItemAtURL:root error:nil];
+}
+
+- (void)testHostDirectoryWritableRegistrationCreatesAndWritesFiles {
+	NSFileManager *fileManager = [NSFileManager defaultManager];
+	NSURL *root = [[NSURL fileURLWithPath:NSTemporaryDirectory()]
+		URLByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
+	const char payload[] = "host directory write";
+	uint8_t buffer[64] = {0};
+	unsigned int readOnly = 1;
+
+	XCTAssertTrue([fileManager createDirectoryAtURL:root
+					   withIntermediateDirectories:YES
+									attributes:nil
+										 error:nil]);
+	XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+	XCTAssertEqual(orlix_host_resources_register_host_directory(
+			   "oci-root", root.path.UTF8String, 0),
+		       0);
+	XCTAssertEqual(orlix_host_directory_is_read_only(0, &readOnly), 0);
+	XCTAssertEqual(readOnly, 0U);
+	XCTAssertEqual(orlix_host_directory_create_file_at_path(
+			   0, "created.txt", 0644),
+		       0);
+	XCTAssertEqual(orlix_host_directory_write_file_at_path(
+			   0,
+			   "created.txt",
+			   0,
+			   payload,
+			   (uint32_t)(sizeof(payload) - 1)),
+		       (long)(sizeof(payload) - 1));
+	XCTAssertEqual(orlix_host_directory_read_file_at_path(
+			   0,
+			   "created.txt",
+			   0,
+			   buffer,
+			   sizeof(buffer)),
+		       (long)(sizeof(payload) - 1));
+	XCTAssertEqual(memcmp(buffer, payload, sizeof(payload) - 1), 0);
+
+	XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
+	XCTAssertEqual(orlix_host_resources_register_host_directory(
+			   "oci-root", root.path.UTF8String, 1),
+		       0);
+	XCTAssertEqual(orlix_host_directory_create_file_at_path(
+			   0, "readonly.txt", 0644),
+		       -2);
+	XCTAssertEqual(orlix_host_directory_write_file_at_path(
+			   0,
+			   "created.txt",
+			   0,
+			   payload,
+			   (uint32_t)(sizeof(payload) - 1)),
+		       -2);
+
+	[fileManager removeItemAtURL:root error:nil];
+	XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
 }
 
 - (void)testHostDirectoryResourcesRejectUnsafePathsAndIdentifiers {
