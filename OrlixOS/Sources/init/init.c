@@ -35,6 +35,7 @@
 #define ORLIX_INIT_MAX_HOST_DIRECTORIES 16
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
+#define ORLIX_INIT_MAX_SYSCTLS 16
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
@@ -63,6 +64,11 @@ struct orlix_device_node_config {
 	unsigned long mode;
 	unsigned long uid;
 	unsigned long gid;
+};
+
+struct orlix_sysctl_config {
+	char key[ORLIX_INIT_VALUE_SIZE];
+	char value[ORLIX_INIT_VALUE_SIZE];
 };
 
 struct orlix_time_offset_config {
@@ -404,6 +410,70 @@ static int ensure_parent_directory(const char *path)
 		return 0;
 	*slash = '\0';
 	return ensure_dir_recursive(parent, 0755);
+}
+
+static int parse_sysctl_assignment(char *assignment,
+				   struct orlix_sysctl_config *sysctl)
+{
+	char *separator = strchr(assignment, '=');
+	size_t key_length;
+	size_t value_length;
+
+	if (separator == NULL || separator == assignment)
+		return -1;
+	*separator++ = '\0';
+
+	key_length = strlen(assignment);
+	value_length = strlen(separator);
+	if (key_length >= sizeof(sysctl->key) ||
+	    value_length >= sizeof(sysctl->value))
+		return -1;
+	if (assignment[0] == '.' || assignment[key_length - 1] == '.')
+		return -1;
+	if (strstr(assignment, "..") != NULL)
+		return -1;
+	for (size_t index = 0; index < key_length; index++) {
+		char value = assignment[index];
+
+		if (!((value >= 'a' && value <= 'z') ||
+		      (value >= 'A' && value <= 'Z') ||
+		      (value >= '0' && value <= '9') || value == '_' ||
+		      value == '-' || value == '.'))
+			return -1;
+	}
+
+	memcpy(sysctl->key, assignment, key_length + 1);
+	memcpy(sysctl->value, separator, value_length + 1);
+	return 0;
+}
+
+static void sysctl_proc_path(const char *key, char *path, size_t path_size)
+{
+	int length = snprintf(path, path_size, "/proc/sys/%s", key);
+
+	if (length < 0 || (size_t)length >= path_size)
+		die("sysctl path too long");
+	for (char *cursor = path + strlen("/proc/sys/"); *cursor != '\0';
+	     cursor++) {
+		if (*cursor == '.')
+			*cursor = '/';
+	}
+}
+
+static void apply_sysctl(const struct orlix_sysctl_config *sysctl)
+{
+	char path[ORLIX_INIT_VALUE_SIZE];
+	int fd;
+
+	sysctl_proc_path(sysctl->key, path, sizeof(path));
+	fd = open(path, O_WRONLY | O_CLOEXEC);
+	if (fd < 0)
+		die("open sysctl");
+	if (write_all(fd, sysctl->value, strlen(sysctl->value)) != 0) {
+		close(fd);
+		die("write sysctl");
+	}
+	close(fd);
 }
 
 static void apply_device_node(const struct orlix_device_node_config *node)
@@ -1496,6 +1566,7 @@ struct orlix_command_config {
 	char hostname[ORLIX_INIT_VALUE_SIZE];
 	char domainname[ORLIX_INIT_VALUE_SIZE];
 	struct orlix_rlimit_config rlimits[ORLIX_INIT_MAX_RLIMITS];
+	struct orlix_sysctl_config sysctls[ORLIX_INIT_MAX_SYSCTLS];
 	char *argv[ORLIX_INIT_MAX_ARGS + 2];
 	char *envp[ORLIX_INIT_MAX_ENV + 1];
 	int argc;
@@ -1503,6 +1574,7 @@ struct orlix_command_config {
 	int has_hostname;
 	int has_domainname;
 	int rlimitc;
+	size_t sysctl_count;
 	unsigned long uid;
 	unsigned long gid;
 	unsigned long supplementary_groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
@@ -1708,6 +1780,18 @@ static void selected_command_config(struct orlix_command_config *config)
 		config->has_personality = 1;
 	if (read_cmdline_unsigned("orlix.umask=", &config->umask_value) == 0)
 		config->has_umask = 1;
+	for (int i = 0; i < ORLIX_INIT_MAX_SYSCTLS; i++) {
+		char key[32];
+		char assignment[ORLIX_INIT_VALUE_SIZE * 2];
+
+		snprintf(key, sizeof(key), "orlix.sysctl%d=", i);
+		if (read_cmdline_decoded(key, assignment, sizeof(assignment)) != 0)
+			break;
+		if (parse_sysctl_assignment(
+			    assignment, &config->sysctls[config->sysctl_count]) != 0)
+			die("invalid sysctl");
+		config->sysctl_count++;
+	}
 	if (read_cmdline_decoded("orlix.cgroups.path=", config->cgroups_path,
 				 sizeof(config->cgroups_path)) == 0 &&
 	    config->cgroups_path[0] != '\0')
@@ -2306,6 +2390,8 @@ static void run_configured_command_child(void)
 		write_literal(STDERR_FILENO, "orlix-init: chdir failed\n");
 	if (config->has_umask)
 		(void)umask((mode_t)config->umask_value);
+	for (size_t i = 0; i < config->sysctl_count; i++)
+		apply_sysctl(&config->sysctls[i]);
 	for (size_t i = 0; i < config->device_node_count; i++)
 		apply_device_node(&config->device_nodes[i]);
 	if (config->has_cgroup_pids_max) {

@@ -22757,3 +22757,27 @@ Boundary:
 - This advances OCI PID namespace request carry-through into the existing Linux namespace setup path. It does not claim full OCI Runtime Spec lifecycle, broad namespace/cgroup/device/filesystem/network readiness, Linux userspace `/usr/bin/orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
 
 Current status: Latest coherent checkpoint carries OCI PID namespace requests from OCI config parsing through OrlixOS environment descriptors into first-stage init `CLONE_NEWPID`, with OrlixOS XCTest and Linux-owned namespace kselftest evidence. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.
+### 2026-06-26 OCI sysctl application through root init
+
+Changes:
+- First-stage init now parses bounded `orlix.sysctlN=` command-line entries already emitted from OCI `linux.sysctl`.
+- Init validates dotted Linux sysctl keys, maps them to `/proc/sys/...`, and writes configured values before executing the configured process.
+- The init parser contract test now checks that `orlix.sysctl%d` is parsed, converted into a procfs path, and applied by the command setup path.
+- No HostAdapter, mlibc, generated upstream, OrlixKernel patch, or `GOAL.md` changes.
+
+Evidence:
+- Focused OrlixOS XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-43-19-+0200.xcresult` reported `Passed`, 3 passed, 0 failed, 0 skipped on `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)`.
+- Broader deterministic OrlixOS OCI/runtime XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-55-52-+0200.xcresult` reported `Passed`, 20 passed, 0 failed, 0 skipped on the same simulator.
+- The focused and broader OrlixOS runs rebuilt the OrlixOS first-stage init successfully.
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Host crash-report check found no `*Orlix*` reports modified in the last day. Simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+
+Boundary:
+- This advances OCI `linux.sysctl` from descriptor/command-line carry into OrlixOS root-init application through Linux procfs. It does not claim full OCI Runtime Spec lifecycle, broad namespace/cgroup/device/filesystem/network readiness, Linux userspace `/usr/bin/orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
+
+Current status: Latest coherent checkpoint applies OCI sysctl values in OrlixOS first-stage init before configured process execution. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.
