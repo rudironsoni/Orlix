@@ -23646,3 +23646,19 @@ Boundary:
   already-running OrlixKernel.
 
 Current-status: OCI tmpfs mount option checkpoint verified by Swift/C static checks; focused simulator XCTest unavailable due execution-policy rejection of unsandboxed CoreSimulator access.
+## 2026-06-26 - `orlix run` annotation overrides
+
+Implemented OCI runtime annotation overrides for registry-backed `orlix run` flows.
+
+- Added `--annotation KEY=VALUE` and `--annotation=KEY=VALUE` parsing to `OrlixOCIEnvironmentRunArguments`.
+- Validated annotation overrides with the OCI runtime config annotation rule: key must be nonempty and key/value must not contain NUL bytes.
+- Persisted annotation overrides on `OrlixEnvironmentDescriptor` with backward-compatible default-empty decoding.
+- Merged descriptor annotations into reconstructed OCI runtime config so lifecycle state reports expose the annotations.
+- Threaded annotation overrides through install, prepared terminal session, observed run, and test SPI run overloads without introducing Linux ABI, HostAdapter policy, upstream patches, or generated-tree edits.
+- Added parser tests for accepted, overridden, empty-value, and invalid annotation forms.
+- Extended the registry-backed terminal-session run-arguments test to assert both descriptor persistence and created state-report annotations.
+
+Evidence:
+
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.

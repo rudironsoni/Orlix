@@ -65,6 +65,7 @@ public let cgroupPidsLimit: Int64?
 	public let namespacePaths: [String: String]
 	public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
 	public let mounts: [OrlixEnvironmentMount]
+	public let annotations: [String: String]
 
     public static func defaultEnvironment(
         rootImageIdentifier: String =
@@ -139,7 +140,8 @@ cgroupPidsLimit: Int64? = nil,
 		namespaces: [String] = [],
 		namespacePaths: [String: String] = [:],
 		tmpfsMounts: [OrlixEnvironmentTmpfsMount] = [],
-		mounts: [OrlixEnvironmentMount] = []
+		mounts: [OrlixEnvironmentMount] = [],
+		annotations: [String: String] = [:]
 	) {
         self.id = id
         self.source = source
@@ -187,6 +189,7 @@ self.cgroupPidsLimit = cgroupPidsLimit
 		self.namespacePaths = namespacePaths
 		self.tmpfsMounts = tmpfsMounts
 		self.mounts = mounts
+		self.annotations = annotations
 	}
 
     private enum CodingKeys: String, CodingKey {
@@ -236,6 +239,7 @@ case cgroupCPUMax
 		case namespacePaths
 		case tmpfsMounts
 		case mounts
+		case annotations
 	}
 
     public init(from decoder: Decoder) throws {
@@ -417,8 +421,12 @@ forKey: .cgroupCPUWeight
 		self.mounts = try container.decodeIfPresent(
 			[OrlixEnvironmentMount].self,
 			forKey: .mounts
-        ) ?? []
-    }
+		) ?? []
+		self.annotations = try container.decodeIfPresent(
+			[String: String].self,
+			forKey: .annotations
+		) ?? [:]
+	}
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -504,6 +512,9 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 			try container.encode(tmpfsMounts, forKey: .tmpfsMounts)
 		}
 		try container.encode(mounts, forKey: .mounts)
+		if !annotations.isEmpty {
+			try container.encode(annotations, forKey: .annotations)
+		}
 	}
 }
 

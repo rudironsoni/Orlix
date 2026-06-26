@@ -8185,6 +8185,56 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidSupplementaryGroupOverride() th
 	}
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsAnnotationOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--annotation",
+		"org.opencontainers.image.ref.name=orlix-demo",
+		"--annotation=com.example.empty=",
+		"--annotation=com.example.override=old",
+		"--annotation=com.example.override=new",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.annotations["org.opencontainers.image.ref.name"],
+		"orlix-demo"
+	)
+	XCTAssertEqual(arguments.annotations["com.example.empty"], "")
+	XCTAssertEqual(arguments.annotations["com.example.override"], "new")
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidAnnotationOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--annotation",
+			"=value",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.invalidAnnotationEntry("=value")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--annotation",
+			"missing-separator",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.invalidAnnotationEntry("missing-separator")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsCgroupPidsOverrides() throws {
 	let arguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -10757,10 +10807,11 @@ func testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath() 
 	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
 
 	let result = try await installer.prepareTerminalSession(
-		arguments: [
-			"orlix", "run", "--id", "orlix-run-terminal-session",
-			"alpine:3.20", "--", "/bin/sh", "-lc", "echo terminal",
-		],
+			arguments: [
+				"orlix", "run", "--id", "orlix-run-terminal-session",
+				"--annotation", "com.example.session=terminal",
+				"alpine:3.20", "--", "/bin/sh", "-lc", "echo terminal",
+			],
 		tools: tools,
 		puller: OrlixOCIRegistryPuller(fetch: registryFetch.fetch),
 		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
@@ -10771,17 +10822,26 @@ func testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath() 
 
 	let rootImage = try XCTUnwrap(result.linuxSession.materializedRootImageForTesting)
 	let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
-	XCTAssertEqual(result.installResult.id, "orlix-run-terminal-session")
-	XCTAssertEqual(result.installResult.image, image)
-	XCTAssertEqual(result.installResult.stateReport.status, .created)
-	XCTAssertTrue(commandLine.contains("orlix.exec=/bin/sh"))
+		XCTAssertEqual(result.installResult.id, "orlix-run-terminal-session")
+		XCTAssertEqual(result.installResult.image, image)
+		XCTAssertEqual(result.installResult.stateReport.status, .created)
+		XCTAssertEqual(
+			result.installResult.stateReport.annotations["com.example.session"],
+			"terminal"
+		)
+		XCTAssertTrue(commandLine.contains("orlix.exec=/bin/sh"))
 	XCTAssertTrue(commandLine.contains("orlix.argv1=-lc"))
 	XCTAssertTrue(commandLine.contains("orlix.argv2=echo%20terminal"))
-	XCTAssertEqual(
-		try registry.load(environmentID: "orlix-run-terminal-session").defaultCommand,
-		["/bin/sh", "-lc", "echo default"]
-	)
-	XCTAssertEqual(recorder.executables.map(\.lastPathComponent), [
+		XCTAssertEqual(
+			try registry.load(environmentID: "orlix-run-terminal-session").defaultCommand,
+			["/bin/sh", "-lc", "echo default"]
+		)
+		XCTAssertEqual(
+			try registry.load(environmentID: "orlix-run-terminal-session")
+				.annotations["com.example.session"],
+			"terminal"
+		)
+		XCTAssertEqual(recorder.executables.map(\.lastPathComponent), [
 		"orlix-truncate",
 		"orlix-mke2fs",
 		"orlix-debugfs",
