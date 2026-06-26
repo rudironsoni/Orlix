@@ -1262,13 +1262,19 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                 "snprintf(key, sizeof(key), \"orlix.mount.host%d.target=\", index);"
             )
         )
-        XCTAssertTrue(
-            initSource.contains(
-                "snprintf(key, sizeof(key), \"orlix.mount.host%d.readonly=\", index);"
-            )
-        )
-        XCTAssertTrue(initSource.contains("snprintf(source, sizeof(source), \"orlix-host%d\", index);"))
-        XCTAssertTrue(initSource.contains("mount_if_needed(source, target, \"virtiofs\""))
+	XCTAssertTrue(
+		initSource.contains(
+			"snprintf(key, sizeof(key), \"orlix.mount.host%d.readonly=\", index);"
+		)
+	)
+	XCTAssertTrue(
+		initSource.contains(
+			"snprintf(key, sizeof(key), \"orlix.mount.host%d.noexec=\", index);"
+		)
+	)
+	XCTAssertTrue(initSource.contains("flags |= MS_NOEXEC;"))
+	XCTAssertTrue(initSource.contains("snprintf(source, sizeof(source), \"orlix-host%d\", index);"))
+	XCTAssertTrue(initSource.contains("mount_if_needed(source, target, \"virtiofs\""))
         XCTAssertTrue(initSource.contains("\"virtiofs\""))
         let runtimeMountRange = try XCTUnwrap(
             initSource.range(of: "mount_runtime_filesystems();")
@@ -12089,15 +12095,16 @@ func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached()
 		let config = Data(
 			"""
 			{
-				"ociVersion": "1.1.0",
-				"process": { "args": ["/bin/sh"], "cwd": "/" },
-				"mounts": [
-					{
-						"destination": "/home/root/Documents",
-						"type": "bind",
-						"source": "orlix:documents",
-						"options": ["rbind", "ro"]
-					},
+		  "ociVersion": "1.1.0",
+		  "process": { "args": ["/bin/sh"], "cwd": "/" },
+		  "root": { "path": "rootfs" },
+		  "mounts": [
+		    {
+		      "destination": "/home/root/Documents",
+		      "type": "bind",
+		      "source": "orlix:documents",
+		      "options": ["rbind", "ro", "nosuid", "nodev", "noexec"]
+		    },
 					{
 						"destination": "/mnt/shared",
 						"type": "bind",
@@ -12122,21 +12129,24 @@ func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached()
 			rootMount: .defaultOverlay
 		)
         XCTAssertEqual(environment.mounts.count, 2)
-        XCTAssertEqual(environment.mounts[0].source, .documents)
-        XCTAssertEqual(environment.mounts[0].targetPath, "/home/root/Documents")
-        XCTAssertTrue(environment.mounts[0].readOnly)
-        XCTAssertEqual(environment.mounts[1].source, .documents)
-	    XCTAssertEqual(environment.mounts[1].targetPath, "/mnt/shared")
-	    XCTAssertFalse(environment.mounts[1].readOnly)
-	}
+	XCTAssertEqual(environment.mounts[0].source, .documents)
+	XCTAssertEqual(environment.mounts[0].targetPath, "/home/root/Documents")
+	XCTAssertTrue(environment.mounts[0].readOnly)
+	XCTAssertTrue(environment.mounts[0].noExec)
+	XCTAssertEqual(environment.mounts[1].source, .documents)
+	XCTAssertEqual(environment.mounts[1].targetPath, "/mnt/shared")
+	XCTAssertFalse(environment.mounts[1].readOnly)
+	XCTAssertFalse(environment.mounts[1].noExec)
+}
 
 	func testOCIRuntimeConfigParserTranslatesExternalBookmarkBindMount() throws {
 		let config = Data(
 			"""
 			{
-				"ociVersion": "1.1.0",
-				"process": { "args": ["/bin/sh"], "cwd": "/" },
-				"mounts": [
+		  "ociVersion": "1.1.0",
+		  "process": { "args": ["/bin/sh"], "cwd": "/" },
+		  "root": { "path": "rootfs" },
+		  "mounts": [
 					{
 						"destination": "/mnt/project",
 						"type": "bind",
@@ -12184,7 +12194,7 @@ func testOCIRuntimeConfigParserTranslatesStandardHostPathBindMount() throws {
 		      "destination": "/mnt/oci-host",
 		      "type": "bind",
 		      "source": "\(hostDirectory.path)",
-		      "options": ["rbind", "ro"]
+		      "options": ["rbind", "ro", "noexec"]
 		    }
 		  ]
 		}
@@ -12204,6 +12214,7 @@ func testOCIRuntimeConfigParserTranslatesStandardHostPathBindMount() throws {
 	XCTAssertEqual(environment.mounts[0].source, .hostPath(hostDirectory.path))
 	XCTAssertEqual(environment.mounts[0].targetPath, "/mnt/oci-host")
 	XCTAssertTrue(environment.mounts[0].readOnly)
+	XCTAssertTrue(environment.mounts[0].noExec)
 
 	let registry = OrlixEnvironmentRegistry(
 		linuxStateRoot: root.appendingPathComponent("Application Support/Orlix"),
@@ -12233,6 +12244,7 @@ func testOCIRuntimeConfigParserTranslatesStandardHostPathBindMount() throws {
 	let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
 	XCTAssertTrue(commandLine.contains("orlix.mount.host0.target=/mnt/oci-host"))
 	XCTAssertTrue(commandLine.contains("orlix.mount.host0.readonly=1"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.host0.noexec=1"))
 	XCTAssertFalse(commandLine.contains(hostDirectory.path))
 }
 
