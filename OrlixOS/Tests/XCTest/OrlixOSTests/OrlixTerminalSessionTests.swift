@@ -7942,6 +7942,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.umask)
 	XCTNil(arguments.oomScoreAdjustment)
 	XCTNil(arguments.scheduler)
+	XCTNil(arguments.ioPriority)
 	XCTNil(arguments.cpuAffinity)
 	XCTNil(arguments.noNewPrivileges)
 	XCTNil(arguments.closeAdditionalFds)
@@ -7976,6 +7977,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.umask)
 	XCTNil(nameArguments.oomScoreAdjustment)
 	XCTNil(nameArguments.scheduler)
+	XCTNil(nameArguments.ioPriority)
 	XCTNil(nameArguments.cpuAffinity)
 	XCTNil(nameArguments.noNewPrivileges)
 	XCTNil(nameArguments.closeAdditionalFds)
@@ -8003,6 +8005,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.umask)
 	XCTNil(equalsArguments.oomScoreAdjustment)
 	XCTNil(equalsArguments.scheduler)
+	XCTNil(equalsArguments.ioPriority)
 	XCTNil(equalsArguments.cpuAffinity)
 	XCTNil(equalsArguments.noNewPrivileges)
 	XCTNil(equalsArguments.closeAdditionalFds)
@@ -8371,6 +8374,62 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidSchedulerOverride() throws {
 	}
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsIOPriorityOverride() throws {
+	let splitArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--io-priority",
+		"IOPRIO_CLASS_BE:4",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		splitArguments.ioPriority,
+		OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 4)
+	)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--io-priority=IOPRIO_CLASS_IDLE",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		equalsArguments.ioPriority,
+		OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_IDLE", priority: 0)
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidIOPriorityOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--io-priority",
+			"IOPRIO_CLASS_UNKNOWN:1",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.ioPriority.class")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--io-priority",
+			"IOPRIO_CLASS_BE:8",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.ioPriority.priority")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsCPUAffinityOverride() throws {
 	let splitArguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -8422,6 +8481,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--umask=", .missingOptionValue("--umask")),
 		("--oom-score-adj=", .missingOptionValue("--oom-score-adj")),
 		("--scheduler=", .missingOptionValue("--scheduler")),
+		("--io-priority=", .missingOptionValue("--io-priority")),
 		("--cpu-affinity=", .missingOptionValue("--cpu-affinity")),
 	]
 
@@ -9791,6 +9851,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"-250",
 			"--scheduler",
 			"SCHED_FIFO:2",
+			"--io-priority",
+			"IOPRIO_CLASS_BE:5",
 			"--cpu-affinity",
 			"0,2-3",
 			"--hostname",
@@ -9844,6 +9906,10 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(
 		descriptor.defaultScheduler,
 		OrlixEnvironmentScheduler(policy: "SCHED_FIFO", priority: 2)
+	)
+	XCTAssertEqual(
+		descriptor.defaultIOPriority,
+		OrlixEnvironmentIOPriority(class: "IOPRIO_CLASS_BE", priority: 5)
 	)
 	XCTAssertEqual(
 		descriptor.defaultCPUAffinity,
