@@ -8391,14 +8391,30 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
 		using: driver,
 		fileManager: fileManager
 	)
-	let report = try installer.state(id: installed.id, fileManager: fileManager)
+	let runningReport = try installer.state(id: installed.id, fileManager: fileManager)
+	let completed = try installer.wait(
+		id: installed.id,
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		using: driver,
+		fileManager: fileManager
+	)
+	let stoppedReport = try installer.state(id: installed.id, fileManager: fileManager)
 
 	XCTAssertEqual(started.id, installed.id)
 	XCTAssertEqual(started.stateReport.status, .running)
 	XCTAssertEqual(started.stateReport.pid, 42)
-	XCTAssertEqual(report.status, .running)
-	XCTAssertEqual(report.pid, 42)
-	XCTAssertEqual(driver.events, ["start:created:nil"])
+	XCTAssertEqual(runningReport.status, .running)
+	XCTAssertEqual(runningReport.pid, 42)
+	XCTAssertEqual(completed.id, installed.id)
+	XCTAssertEqual(completed.stateReport.status, .stopped)
+	XCTAssertEqual(completed.stateReport.pid, 42)
+	XCTAssertEqual(completed.stateReport.exitStatus, 0)
+	XCTAssertEqual(stoppedReport.status, .stopped)
+	XCTAssertEqual(stoppedReport.exitStatus, 0)
+	XCTAssertEqual(driver.events, [
+		"start:created:nil",
+		"wait:running:42",
+	])
 }
 
 func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession() async throws {

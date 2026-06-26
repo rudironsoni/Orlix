@@ -1277,6 +1277,11 @@ public struct OrlixOCIEnvironmentStartResult: Sendable {
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIEnvironmentWaitResult: Sendable {
+	public let id: String
+	public let stateReport: OrlixOCIRuntimeStateReport
+}
+
 public struct OrlixOCIEnvironmentInstallRunResult: Sendable {
 	public let installResult: OrlixOCIEnvironmentInstallResult
 	public let runResult: OrlixOCIEnvironmentRunResult
@@ -1808,6 +1813,43 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		return OrlixOCIEnvironmentStartResult(
 			id: id,
 			stateReport: started.stateReport
+		)
+	}
+
+	public func wait(
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		observationTimeout: TimeInterval = 600,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentWaitResult {
+		let completed = try OrlixOCIRuntime(registry: registry).wait(
+			id: id,
+			terminal: terminal,
+			observationTimeout: observationTimeout,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentWaitResult(
+			id: id,
+			stateReport: completed.stateReport
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
+	public func wait(
+		id: String,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		using driver: OrlixOCIRuntimeProcessObservationDriver,
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIEnvironmentWaitResult {
+		let completed = try OrlixOCIRuntime(registry: registry).wait(
+			id: id,
+			terminal: terminal,
+			using: driver,
+			fileManager: fileManager
+		)
+		return OrlixOCIEnvironmentWaitResult(
+			id: id,
+			stateReport: completed.stateReport
 		)
 	}
 
