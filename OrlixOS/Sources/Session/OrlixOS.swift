@@ -1363,6 +1363,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let terminal: Bool?
 	public let rlimits: [OrlixEnvironmentRlimit]
 	public let umask: UInt32?
+	public let oomScoreAdjustment: Int32?
 	public let noNewPrivileges: Bool?
 	public let closeAdditionalFds: Bool?
 	public let command: [String]?
@@ -1397,6 +1398,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedTerminal: Bool?
 		var parsedRlimits: [OrlixEnvironmentRlimit] = []
 		var parsedUmask: UInt32?
+		var parsedOOMScoreAdjustment: Int32?
 		var parsedNoNewPrivileges: Bool?
 		var parsedCloseAdditionalFds: Bool?
 		var parsedImage: String?
@@ -1469,9 +1471,32 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				parsedUmask = try Self.parseUmask(umask)
 				continue
 			}
+			if parsedImage == nil, value == "--oom-score-adj" {
+				guard let oomScoreAdjustment = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedOOMScoreAdjustment = try Self.parseOOMScoreAdjustment(
+					oomScoreAdjustment
+				)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--oom-score-adj=") {
+				let separator = value.firstIndex(of: "=")!
+				let oomScoreAdjustment = String(value[value.index(after: separator)...])
+				guard !oomScoreAdjustment.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--oom-score-adj")
+				}
+				parsedOOMScoreAdjustment = try Self.parseOOMScoreAdjustment(
+					oomScoreAdjustment
+				)
+				continue
+			}
 			if parsedImage == nil, value == "--entrypoint" {
-                guard let entrypoint = values.first else {
-                    throw OrlixOCIEnvironmentRunArgumentsError
+				guard let entrypoint = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
                         .missingOptionValue(value)
                 }
                 parsedEntrypoint = [entrypoint]
@@ -1681,6 +1706,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.terminal = parsedTerminal
 		self.rlimits = parsedRlimits
 		self.umask = parsedUmask
+		self.oomScoreAdjustment = parsedOOMScoreAdjustment
 		self.noNewPrivileges = parsedNoNewPrivileges
 		self.closeAdditionalFds = parsedCloseAdditionalFds
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
@@ -1806,6 +1832,15 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 			throw OrlixOCIRuntimeConfigError.invalidWorkingDirectory(value)
 		}
 		return value
+	}
+
+	private static func parseOOMScoreAdjustment(_ value: String) throws -> Int32 {
+		guard let parsed = Int32(value), parsed >= -1000, parsed <= 1000 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.oomScoreAdj"
+			)
+		}
+		return parsed
 	}
 
 	private static func parseUser(
@@ -1934,6 +1969,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultTerminalWith terminal: Bool?,
 		mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
 		replacingDefaultUmaskWith umask: UInt32?,
+		replacingDefaultOOMScoreAdjustmentWith oomScoreAdjustment: Int32?,
 		replacingDefaultNoNewPrivilegesWith noNewPrivileges: Bool?,
 		replacingDefaultCloseAdditionalFdsWith closeAdditionalFds: Bool?
 	) throws -> OrlixEnvironmentDescriptor {
@@ -1947,6 +1983,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| terminal != nil
 			|| !rlimits.isEmpty
 			|| umask != nil
+			|| oomScoreAdjustment != nil
 			|| noNewPrivileges != nil
 			|| closeAdditionalFds != nil
 		else {
@@ -2024,7 +2061,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultTerminal: terminal ?? descriptor.defaultTerminal,
 			defaultTerminalRows: descriptor.defaultTerminalRows,
 			defaultTerminalColumns: descriptor.defaultTerminalColumns,
-            defaultOOMScoreAdjustment: descriptor.defaultOOMScoreAdjustment,
+			defaultOOMScoreAdjustment: oomScoreAdjustment
+				?? descriptor.defaultOOMScoreAdjustment,
 			defaultScheduler: descriptor.defaultScheduler,
 			defaultIOPriority: descriptor.defaultIOPriority,
 			defaultCPUAffinity: descriptor.defaultCPUAffinity,
@@ -2108,6 +2146,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
 		fileManager: FileManager = .default,
@@ -2129,6 +2168,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			fileManager: fileManager,
@@ -2153,6 +2193,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
 		fileManager: FileManager = .default,
@@ -2199,6 +2240,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDefaultTerminalWith: terminalOverride,
 				mergingDefaultRlimitsWith: defaultRlimitOverrides,
 				replacingDefaultUmaskWith: defaultUmaskOverride,
+				replacingDefaultOOMScoreAdjustmentWith:
+					defaultOOMScoreAdjustmentOverride,
 				replacingDefaultNoNewPrivilegesWith: noNewPrivilegesOverride,
 				replacingDefaultCloseAdditionalFdsWith: closeAdditionalFdsOverride
 			)
@@ -2295,6 +2338,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
+			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
 			terminal: terminal,
@@ -2344,6 +2388,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
+			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
 			terminal: terminal,
@@ -2395,6 +2440,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -2418,6 +2464,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			terminal: terminal,
@@ -2444,6 +2491,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -2466,6 +2514,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			fileManager: fileManager,
@@ -2501,6 +2550,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -2525,6 +2575,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			terminal: terminal,
@@ -2552,6 +2603,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -2575,6 +2627,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			fileManager: fileManager,
@@ -2623,6 +2676,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
+			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
 			terminal: terminal,
@@ -2660,6 +2714,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -2683,6 +2738,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
 			fileManager: fileManager,
