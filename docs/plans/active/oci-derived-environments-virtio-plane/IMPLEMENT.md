@@ -22570,3 +22570,27 @@ Boundary:
 Current status:
 
 Latest coherent checkpoint exposes public installer-level start for created OCI environments, so the app-facing lifecycle now has install/create, start, state, run, and delete surfaces all delegated to existing OrlixOS runtime machinery. Next work remains wiring the `orlix run` control surface into the product terminal experience, real Linux-owned signal/kill delivery, broader Linux surface coverage namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+### 2026-06-26 installer wait lifecycle facade
+
+Changes:
+- Added public `OrlixOCIEnvironmentWaitResult`.
+- Added public `OrlixOCIEnvironmentInstaller.wait(id:terminal:observationTimeout:fileManager:)`.
+- Added SPI `OrlixOCIEnvironmentInstaller.wait(id:terminal:using:fileManager:)` for deterministic lifecycle tests.
+- Extended the installer lifecycle XCTest so a created registry environment starts through the installer facade, reports running state, waits through the installer facade, and persists stopped state with exit status `0`.
+
+Evidence:
+- Focused XCTest passed: `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment test`.
+- Broader deterministic OCI registry/runtime XCTest set passed: `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceParsesDistributionEndpoints -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryImageReferenceRejectsInvalidInput -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentRunArgumentsParsesOrlixRunCommand -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentRunArgumentsDerivesStorageSafeID -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerWritesVerifiedImageLayoutFromIndex -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRegistryPullerSelectsArm64VariantForDefaultPlatform -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting test`.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_02-12-03-+0200.xcresult` reported `Passed`, 11 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, `OrlixOS/Sources/init/init.c`, and `GOAL.md` was empty.
+- Host crash-report check found no `*Orlix*` reports modified in the last day. Simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This exposes wait/completion through the OrlixOS installer facade and proves stopped lifecycle state persists.
+- This does not prove full OCI Runtime Spec lifecycle support, real Linux userspace `/usr/bin/orlix run`, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, real signal/kill delivery, or broad namespace/cgroup/device/filesystem/network readiness.
+Current status:
+Latest coherent checkpoint exposes installer-level wait/completion for created OCI environments through OrlixOS, delegated to the existing runtime lifecycle store. App-facing lifecycle now covers install/create, start, wait, state, run, and delete surfaces at the OrlixOS API layer. Next work remains wiring the control surface into the real product terminal command path, Linux-owned signal/kill delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
