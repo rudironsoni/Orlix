@@ -7940,6 +7940,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.terminal)
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTNil(arguments.umask)
+	XCTNil(arguments.noNewPrivileges)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7969,6 +7970,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.terminal)
 	XCTTrue(nameArguments.rlimits.isEmpty)
 	XCTNil(nameArguments.umask)
+	XCTNil(nameArguments.noNewPrivileges)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -7991,6 +7993,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.terminal)
 	XCTTrue(equalsArguments.rlimits.isEmpty)
 	XCTNil(equalsArguments.umask)
+	XCTNil(equalsArguments.noNewPrivileges)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8175,6 +8178,17 @@ func testOCIEnvironmentRunArgumentsAcceptsTerminalOverrides() throws {
 	])
 
 	XCTAssertEqual(noTerminalArguments.terminal, false)
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsNoNewPrivilegesOverride() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--no-new-privileges",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(arguments.noNewPrivileges, true)
 }
 
 func testOCIEnvironmentRunArgumentsAcceptsRlimitOverrides() throws {
@@ -9598,11 +9612,12 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 
     let result = try await installer.run(
         arguments: [
-            "orlix",
-            "run",
+			"orlix",
+			"run",
 			"--id",
 			"registry-installed-run",
 			"--no-tty",
+			"--no-new-privileges",
 			"--entrypoint",
 			"/usr/bin/env",
 			"--env",
@@ -9661,6 +9676,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.defaultTerminal, false)
+	XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 	XCTAssertEqual(descriptor.defaultUmask, 0o022)
 	XCTAssertEqual(
 		descriptor.defaultRlimits,
