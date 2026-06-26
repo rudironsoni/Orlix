@@ -8378,12 +8378,12 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
 	) { executable, arguments in
 		try recorder.run(executable: executable, arguments: arguments)
 	}
-	let driver = try RecordingOCIRuntimeProcessObservationDriver(
-		startPID: 42,
-		completion: .exited(
-			OrlixOCIRuntimeProcessExitObservation(pid: 42, exitStatus: 0)
-		)
-	)
+    let driver = try RecordingOCIRuntimeProcessObservationDriver(
+        startPID: 42,
+        completion: .signaled(
+            OrlixOCIRuntimeProcessSignalObservation(pid: 42, signal: 15)
+        )
+    )
 
 	let started = try installer.start(
 		id: installed.id,
@@ -8391,10 +8391,18 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
 		using: driver,
 		fileManager: fileManager
 	)
-	let runningReport = try installer.state(id: installed.id, fileManager: fileManager)
-	let completed = try installer.wait(
-		id: installed.id,
-		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+    let runningReport = try installer.state(id: installed.id, fileManager: fileManager)
+    let signaled = try installer.kill(
+        id: installed.id,
+        signal: 15,
+        terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+        using: driver,
+        fileManager: fileManager
+    )
+    let signaledReport = try installer.state(id: installed.id, fileManager: fileManager)
+    let completed = try installer.wait(
+        id: installed.id,
+        terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
 		using: driver,
 		fileManager: fileManager
 	)
@@ -8402,19 +8410,26 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
 
 	XCTAssertEqual(started.id, installed.id)
 	XCTAssertEqual(started.stateReport.status, .running)
-	XCTAssertEqual(started.stateReport.pid, 42)
-	XCTAssertEqual(runningReport.status, .running)
-	XCTAssertEqual(runningReport.pid, 42)
-	XCTAssertEqual(completed.id, installed.id)
-	XCTAssertEqual(completed.stateReport.status, .stopped)
-	XCTAssertEqual(completed.stateReport.pid, 42)
-	XCTAssertEqual(completed.stateReport.exitStatus, 0)
-	XCTAssertEqual(stoppedReport.status, .stopped)
-	XCTAssertEqual(stoppedReport.exitStatus, 0)
-	XCTAssertEqual(driver.events, [
-		"start:created:nil",
-		"wait:running:42",
-	])
+    XCTAssertEqual(started.stateReport.pid, 42)
+    XCTAssertEqual(runningReport.status, .running)
+    XCTAssertEqual(runningReport.pid, 42)
+    XCTAssertEqual(signaled.id, installed.id)
+    XCTAssertEqual(signaled.signal, 15)
+    XCTAssertEqual(signaled.stateReport.status, .running)
+    XCTAssertEqual(signaled.stateReport.pid, 42)
+    XCTAssertEqual(signaledReport.status, .running)
+    XCTAssertEqual(signaledReport.pid, 42)
+    XCTAssertEqual(completed.id, installed.id)
+    XCTAssertEqual(completed.stateReport.status, .stopped)
+    XCTAssertEqual(completed.stateReport.pid, 42)
+    XCTAssertEqual(completed.stateReport.exitStatus, 143)
+    XCTAssertEqual(stoppedReport.status, .stopped)
+    XCTAssertEqual(stoppedReport.exitStatus, 143)
+    XCTAssertEqual(driver.events, [
+        "start:created:nil",
+        "signal:running:42:15",
+        "wait:running:42",
+    ])
 }
 
 func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSession() async throws {
@@ -11227,9 +11242,9 @@ func testOCIRuntimeLinuxSessionObservationDriverRunsFromInitOutput() throws {
 }
 
 func testOCIRuntimeLinuxSessionObservationDriverRejectsUnsupportedSignal() throws {
-	let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
-		scratchName: "orlix-oci-linux-session-driver-signal"
-	)
+    let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+        scratchName: "orlix-oci-linux-session-driver-signal"
+    )
 	defer { try? FileManager.default.removeItem(at: fixture.scratch) }
 	let runningSession = try fixture.session.start(observedPID: 42)
 	let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 1)
@@ -11240,14 +11255,29 @@ func testOCIRuntimeLinuxSessionObservationDriverRejectsUnsupportedSignal() throw
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeLinuxSessionObservationError,
 			.signalUnsupported
-		)
-	}
+        )
+    }
+}
+
+func testOCIRuntimeLinuxSessionObservationDriverSendsTerminalInterruptSignal() throws {
+    let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+        scratchName: "orlix-oci-linux-session-driver-terminal-signal"
+    )
+    defer { try? FileManager.default.removeItem(at: fixture.scratch) }
+    let runningSession = try fixture.session.start(observedPID: 42)
+    let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 1)
+
+    let signaledSession = try runningSession.kill(signal: 2, using: driver)
+
+    XCTAssertEqual(fixture.terminal.sentInput, [Data([0x03])])
+    XCTAssertEqual(signaledSession.processHandle.lifecycle.record.state, .running)
+    XCTAssertEqual(signaledSession.processHandle.lifecycle.record.pid, 42)
 }
 
 func testOCIRuntimeProcessSessionValidatesLifecycleBeforeDriverSideEffects() throws {
-	let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
-		scratchName: "orlix-oci-process-driver-validation"
-	)
+    let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
+        scratchName: "orlix-oci-process-driver-validation"
+    )
 		defer { try? FileManager.default.removeItem(at: fixture.scratch) }
 
 		let createdSession = fixture.session

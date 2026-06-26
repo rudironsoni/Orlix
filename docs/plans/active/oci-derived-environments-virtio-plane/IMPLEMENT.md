@@ -22594,3 +22594,29 @@ Boundary:
 - This does not prove full OCI Runtime Spec lifecycle support, real Linux userspace `/usr/bin/orlix run`, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, real signal/kill delivery, or broad namespace/cgroup/device/filesystem/network readiness.
 Current status:
 Latest coherent checkpoint exposes installer-level wait/completion for created OCI environments through OrlixOS, delegated to the existing runtime lifecycle store. App-facing lifecycle now covers install/create, start, wait, state, run, and delete surfaces at the OrlixOS API layer. Next work remains wiring the control surface into the real product terminal command path, Linux-owned signal/kill delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+### 2026-06-26 installer kill facade and PTY signal delivery
+
+Changes:
+- Added public `OrlixOCIEnvironmentSignalResult`.
+- Added public `OrlixOCIEnvironmentInstaller.kill(id:signal:terminal:observationTimeout:fileManager:)`.
+- Added SPI `OrlixOCIEnvironmentInstaller.kill(id:signal:terminal:using:fileManager:)` for deterministic lifecycle tests.
+- Updated `OrlixOCIRuntimeLinuxSessionObservationDriver.signal` so terminal-backed sessions can deliver Linux job-control signals through the existing PTY input path: `SIGINT` 2 to `^C`, `SIGQUIT` 3 to `^\`, and `SIGTSTP` 20 to `^Z`.
+- Left unsupported arbitrary signal delivery unclaimed when there is no terminal PTY mapping.
+
+Evidence:
+- Focused XCTest passed: `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLinuxSessionObservationDriverRejectsUnsupportedSignal -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIRuntimeLinuxSessionObservationDriverSendsTerminalInterruptSignal test`.
+- Broader deterministic OCI registry/runtime XCTest set passed with 13 tests: `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' ... test`.
+- Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_02-23-46-+0200.xcresult` reported `Passed`, 13 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only stale-status warning.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, `OrlixOS/Sources/init/init.c`, and `GOAL.md` was empty.
+- Host crash-report check found no `*Orlix*` reports modified in the last day. Simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This proves installer-level kill delegates the existing runtime lifecycle and terminal `SIGINT` can travel through the existing PTY input path.
+- This does not prove arbitrary Linux signal delivery, non-terminal process signaling, full OCI Runtime Spec lifecycle support, real Linux userspace `/usr/bin/orlix run`, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, or broad namespace/cgroup/device/filesystem/network readiness.
+
+Current status:
+Latest coherent checkpoint exposes installer-level kill/signaling and PTY-backed terminal signal delivery for Linux job-control signal values while preserving unsupported arbitrary signal delivery until a Linux-owned control path exists. App-facing lifecycle now covers install/create, start, kill, wait, state, run, and delete at the OrlixOS API layer. Next work remains wiring the control surface into the product terminal command path, non-terminal Linux signal delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.

@@ -1005,12 +1005,31 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 		return try waitForStartObservation()
 	}
 
-	public func signal(
-		processSession: OrlixOCIRuntimeProcessSession,
-		signal: Int32
-	) throws {
-		throw OrlixOCIRuntimeLinuxSessionObservationError.signalUnsupported
-	}
+    public func signal(
+        processSession: OrlixOCIRuntimeProcessSession,
+        signal: Int32
+    ) throws {
+        guard processSession.processHandle.sessionDescriptor.terminal,
+              let controlCharacter = Self.terminalControlCharacter(forLinuxSignal: signal)
+        else {
+            throw OrlixOCIRuntimeLinuxSessionObservationError.signalUnsupported
+        }
+
+        processSession.linuxSession.terminal.send(Data([controlCharacter]))
+    }
+
+    private static func terminalControlCharacter(forLinuxSignal signal: Int32) -> UInt8? {
+        switch signal {
+        case 2:
+            return 0x03
+        case 3:
+            return 0x1c
+        case 20:
+            return 0x1a
+        default:
+            return nil
+        }
+    }
 
 	public func wait(
 		processSession: OrlixOCIRuntimeProcessSession
@@ -1278,13 +1297,19 @@ public struct OrlixOCIEnvironmentStartResult: Sendable {
 }
 
 public struct OrlixOCIEnvironmentWaitResult: Sendable {
-	public let id: String
-	public let stateReport: OrlixOCIRuntimeStateReport
+    public let id: String
+    public let stateReport: OrlixOCIRuntimeStateReport
+}
+
+public struct OrlixOCIEnvironmentSignalResult: Sendable {
+    public let id: String
+    public let signal: Int32
+    public let stateReport: OrlixOCIRuntimeStateReport
 }
 
 public struct OrlixOCIEnvironmentInstallRunResult: Sendable {
-	public let installResult: OrlixOCIEnvironmentInstallResult
-	public let runResult: OrlixOCIEnvironmentRunResult
+    public let installResult: OrlixOCIEnvironmentInstallResult
+    public let runResult: OrlixOCIEnvironmentRunResult
 }
 
 public struct OrlixOCIRegistryEnvironmentInstallRunResult: Sendable {
@@ -1816,11 +1841,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 	}
 
-	public func wait(
-		id: String,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		observationTimeout: TimeInterval = 600,
-		fileManager: FileManager = .default
+    public func wait(
+        id: String,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
+        fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentWaitResult {
 		let completed = try OrlixOCIRuntime(registry: registry).wait(
 			id: id,
@@ -1849,15 +1874,60 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 		return OrlixOCIEnvironmentWaitResult(
 			id: id,
-			stateReport: completed.stateReport
-		)
-	}
+            stateReport: completed.stateReport
+        )
+    }
 
-	public func run(
-		id: String,
-		command: [String]? = nil,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		observationTimeout: TimeInterval = 600,
+    public func kill(
+        id: String,
+        signal: Int32,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentSignalResult {
+        let signaled = try OrlixOCIRuntime(registry: registry).kill(
+            id: id,
+            signal: signal,
+            terminal: terminal,
+            using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+                timeout: observationTimeout
+            ),
+            fileManager: fileManager
+        )
+        return OrlixOCIEnvironmentSignalResult(
+            id: id,
+            signal: signaled.signal,
+            stateReport: signaled.stateReport
+        )
+    }
+
+    @_spi(OrlixPrivateTesting)
+    public func kill(
+        id: String,
+        signal: Int32,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        using driver: OrlixOCIRuntimeProcessObservationDriver,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentSignalResult {
+        let signaled = try OrlixOCIRuntime(registry: registry).kill(
+            id: id,
+            signal: signal,
+            terminal: terminal,
+            using: driver,
+            fileManager: fileManager
+        )
+        return OrlixOCIEnvironmentSignalResult(
+            id: id,
+            signal: signaled.signal,
+            stateReport: signaled.stateReport
+        )
+    }
+
+    public func run(
+        id: String,
+        command: [String]? = nil,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentRunResult {
 		let runtimeResult = try OrlixOCIRuntime(registry: registry).run(
