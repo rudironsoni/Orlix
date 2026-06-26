@@ -7941,6 +7941,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.domainname)
 	XCTNil(arguments.terminal)
 	XCTTrue(arguments.rlimits.isEmpty)
+	XCTTrue(arguments.sysctls.isEmpty)
 	XCTNil(arguments.umask)
 	XCTNil(arguments.oomScoreAdjustment)
 	XCTNil(arguments.scheduler)
@@ -8496,6 +8497,69 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidTmpfsMountOverride() throws {
 	}
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsSysctlOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--sysctl",
+		"net.ipv4.ip_forward=1",
+		"--sysctl=kernel.hostname=orlix-run",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.sysctls,
+		[
+			"kernel.hostname": "orlix-run",
+			"net.ipv4.ip_forward": "1",
+		]
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidSysctlOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--sysctl",
+			"net/ipv4/ip_forward=1",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.sysctl")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--sysctl",
+			"net.ipv4.ip_forward",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.sysctl")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--sysctl",
+			"net.ipv4.ip_forward=1",
+			"--sysctl=net.ipv4.ip_forward=0",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.sysctl")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsHostnameOverride() throws {
 	let hostnameArguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -8960,6 +9024,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--io-weight=", .missingOptionValue("--io-weight")),
 		("--cgroup-unified=", .missingOptionValue("--cgroup-unified")),
 		("--tmpfs=", .missingOptionValue("--tmpfs")),
+		("--sysctl=", .missingOptionValue("--sysctl")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
@@ -10350,6 +10415,9 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--tmpfs",
 			"/run/cache:nosuid,nodev,noexec,size=64m,mode=0755",
 			"--tmpfs=/var/tmp:ro",
+			"--sysctl",
+			"net.ipv4.ip_forward=1",
+			"--sysctl=kernel.hostname=registry-run-host",
 			"--cap-set",
 			"bounding=CAP_CHOWN,CAP_SETUID",
 			"--cap-set",
@@ -10457,6 +10525,13 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 				targetPath: "/var/tmp",
 				readOnly: true
 			),
+		]
+	)
+	XCTAssertEqual(
+		descriptor.sysctls,
+		[
+			"kernel.hostname": "registry-run-host",
+			"net.ipv4.ip_forward": "1",
 		]
 	)
 	XCTAssertEqual(

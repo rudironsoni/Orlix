@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run sysctl overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--sysctl KEY=VALUE` and `--sysctl=KEY=VALUE` before image.
+- CLI validation reuses the current OCI sysctl key/value shape: nonempty alphanumeric, dot, underscore, hyphen keys with no leading/trailing dot or doubled dots; values may be empty but not contain NUL or newlines. Malformed entries, duplicate CLI keys, and empty equals form fail before install.
+- Registry-backed install/run terminal-session preparation persists parsed sysctls into `OrlixEnvironmentDescriptor.sysctls`; descriptor merge lets run overrides replace image/default sysctl keys. Existing init code applies descriptor sysctls through Linux `/proc/sys`.
+- Focused tests cover split and equals parsing, malformed/duplicate rejection, empty equals-form rejection, default empty parser state, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing sysctl configuration through existing OrlixOS descriptors and Linux-visible init `/proc/sys` write paths. Does not claim live simulator proof, namespace-scoped sysctl behavior, broad OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, or custom ABI.
+
 ### 2026-06-26 OCI run tmpfs mount overrides
 
 Changes:
