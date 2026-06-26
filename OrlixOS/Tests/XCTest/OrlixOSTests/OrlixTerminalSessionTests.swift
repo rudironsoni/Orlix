@@ -8775,6 +8775,31 @@ func testOCIEnvironmentInstallerPreparesTerminalSessionFromOrlixRunArguments() a
 		try image.manifestURL().absoluteString,
 		try image.blobURL(digest: configDigest).absoluteString,
 	])
+
+	let opened = try installer.terminalSession(
+		arguments: [
+			"run", "--id", "orlix-run-terminal-session",
+			"alpine:3.20", "--", "/bin/sh", "-lc", "echo reopened",
+		],
+		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+		fileManager: fileManager
+	)
+	let reopenedRootImage = try XCTUnwrap(opened.linuxSession.materializedRootImageForTesting)
+	let reopenedCommandLine = try XCTUnwrap(reopenedRootImage.bootConfig.kernelCommandLine)
+	XCTAssertEqual(opened.id, "orlix-run-terminal-session")
+	XCTAssertEqual(opened.image, image)
+	XCTAssertEqual(opened.command, ["/bin/sh", "-lc", "echo reopened"])
+	XCTAssertTrue(reopenedCommandLine.contains("orlix.exec=/bin/sh"))
+	XCTAssertTrue(reopenedCommandLine.contains("orlix.argv1=-lc"))
+	XCTAssertTrue(reopenedCommandLine.contains("orlix.argv2=echo%20reopened"))
+	XCTAssertEqual(recorder.executables.map(\.lastPathComponent), [
+		"orlix-truncate",
+		"orlix-mke2fs",
+		"orlix-debugfs",
+		"orlix-truncate",
+		"orlix-mke2fs",
+		"orlix-debugfs",
+	])
 }
 
 func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() async throws {
