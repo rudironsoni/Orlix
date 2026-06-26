@@ -24279,3 +24279,27 @@ Boundary:
 
 Current status:
 - `orlix run` command-shaped app-hosted runtime path is verified for deterministic registry input and `--rm` lifecycle cleanup on the single iPhone 17 simulator. Continue toward live registry pull, namespace/cgroup/device/network behavior, and broader OCI Runtime Spec coverage.
+### 2026-06-27 app-hosted live-registry `orlix run` proof
+Changes:
+- Added direct `OrlixTestRunner` app-launch runtime proof `--orlix-runtime-test-spec ociRunLiveRegistry`.
+- The proof reuses the app-hosted `orlix run --rm` path and switches registry input from deterministic injected responses to the real `OrlixOCIRegistryPuller`.
+- The live proof pulls `registry.k8s.io/pause:3.10` on the iOS simulator, then uses the existing fixture ext4 images as the materialized boot artifacts so the executed process still runs under real OrlixKernel/OrlixOS Linux on the simulator.
+- Kept fixture image substitution test-local. No generated upstream edits, OrlixMLibC patches, HostAdapter Linux policy, package/proof/stamp ladders, or feature-report-only work were added.
+
+Evidence:
+- `rtk proxy curl -fsSL -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.index.v1+json' https://registry.k8s.io/v2/pause/manifests/3.10` returned a Docker manifest list.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 and used `/Volumes/1TB/Xcode/DerivedData` plus `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on the single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process --console E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociRunLiveRegistry` exited 0. Artifact markers found: `orlix-init: process started pid=32`, `ORLIX_ENV_ORLIX_RUN_BEGIN`, `ORLIX_ENV_ORLIX_RUN_STDOUT_OK`, `ORLIX_ENV_ORLIX_RUN_STDERR_OK`, `ORLIX_ENV_ORLIX_RUN_DONE`, `orlix-init: process exited pid=32 status=0`, `ORLIX_OCI_RUN_COMMAND_STARTED_OK`, `ORLIX_OCI_RUN_COMMAND_STOPPED_OK`, `ORLIX_OCI_RUN_COMMAND_DELETE_OK`, `ORLIX_OCI_RUN_LIVE_REGISTRY_PULL_OK`. Kernel command line also showed OCI config-derived `orlix.uid=65535` and `orlix.gid=65535` from the live pause image config.
+- Regression app launches `ociRun`, `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 and validated their lifecycle markers with no app runner error or lifecycle timeout markers.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- OrlixTestRunner crash scan found no crash reports in existing DiagnosticReports directories; the simulator DiagnosticReports directory was absent.
+
+Boundary:
+- This proves the app-hosted OrlixOS `orlix run` path can consume live public OCI registry input on the iOS simulator, create an OCI-derived environment, boot Linux, execute a process, observe lifecycle completion, and remove it with `--rm`. It does not claim registry authentication coverage beyond this public pull, arbitrary OCI image binary compatibility, networking inside the guest, namespace/cgroup/device completeness, or full product readiness.
+
+Current status:
+- `orlix run` now has simulator evidence for both deterministic registry input and live public registry pull through `registry.k8s.io/pause:3.10`, with Linux process execution and `--rm` cleanup. Continue toward arbitrary image compatibility, live auth/error coverage, networking, namespace/cgroup/device behavior, and broader OCI Runtime Spec coverage.
