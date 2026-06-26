@@ -10,6 +10,28 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI prepared environment exec command
+
+Changes:
+- Added `OrlixOCIEnvironmentExecArguments` for `orlix exec <id> <command...>` and `orlix exec --id <id> -- <command...>` command-shaped parsing.
+- Added `OrlixOCIEnvironmentExecResult` plus public and testing-SPI `OrlixOCIEnvironmentInstaller.exec(...)` entrypoints.
+- Routed exec through the existing `run(id:command:)` OCI runtime/session path, so command execution still uses the prepared environment's Linux session and lifecycle machinery instead of HostAdapter simulation or a custom ABI.
+- Added parser tests for positional, `--id`, `--name`, `--`, missing command, missing ID, missing value, and wrong command cases.
+- Added a recording-driver test proving `orlix exec` launches the requested command in a prepared OCI environment and persists running/stopped lifecycle reports.
+- Corrected the previous inspect test expectation for the shared OCI fixture working directory from `/srv` to `/work`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+- Hook-generated `.codex/hooks/__pycache__/orlix_hook_common.cpython-314.pyc` was removed before commit.
+
+Boundary:
+- This advances product command coverage for prepared OCI environments by reusing the existing OrlixOS runtime/session path. It does not claim live simulator runtime behavior, arbitrary imported-image compatibility, full OCI Runtime Spec exec semantics, Linux namespace/cgroup/device/network enforcement, HostAdapter Linux policy, upstream Linux edits, generated-tree edits, or mlibc patches.
+
 ### 2026-06-26 OCI prepared environment inspect command
 
 Changes:
