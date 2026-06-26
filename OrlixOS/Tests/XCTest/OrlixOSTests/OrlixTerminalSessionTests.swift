@@ -3579,11 +3579,42 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         XCTAssertEqual(imported.processDefaults.entrypoint, ["/bin/sh"])
         XCTAssertEqual(imported.processDefaults.command, ["-c", "echo hello"])
         XCTAssertEqual(imported.processDefaults.workingDirectory, "/")
-        XCTAssertEqual(imported.processDefaults.user, "0")
-        XCTAssertEqual(imported.rootfsDiffIDs, [])
+XCTAssertEqual(imported.processDefaults.user, "0")
+XCTAssertEqual(imported.labels, [:])
+XCTAssertEqual(imported.rootfsDiffIDs, [])
     }
 
-    func testOCIImageLayoutReaderSelectsRequestedPlatformVariant() throws {
+func testOCIImageLayoutReaderPreservesImageConfigLabels() throws {
+let layout = try writeOCILayout(labels: [
+"org.opencontainers.image.title": "Alpine",
+"org.opencontainers.image.version": "3.20"
+])
+let imported = try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+XCTAssertEqual(
+imported.labels["org.opencontainers.image.title"],
+"Alpine"
+)
+XCTAssertEqual(
+imported.labels["org.opencontainers.image.version"],
+"3.20"
+)
+}
+
+func testOCIImageLayoutReaderRejectsInvalidImageConfigLabel() throws {
+let layout = try writeOCILayout(labels: [
+"org.opencontainers.image.title": "Alpine\u{0}"
+])
+XCTAssertThrowsError(
+try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIImageLayoutError,
+.invalidLabelEntry("org.opencontainers.image.title")
+)
+}
+}
+
+func testOCIImageLayoutReaderSelectsRequestedPlatformVariant() throws {
         let layout = try writeOCILayout(platformVariant: "v8")
 
         let imported = try OrlixOCIImageLayoutReader().readLayout(
@@ -4155,7 +4186,47 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         XCTAssertEqual(result.descriptor.defaultWorkingDirectory, "/work/project")
     }
 
-    func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
+func testOCIImageLayoutImporterPreservesImageLabelsAsDescriptorAnnotations()
+throws
+{
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layout = try writeOCILayout(labels: [
+"org.opencontainers.image.ref.name": "docker.io/library/alpine:3.20",
+"org.opencontainers.image.revision": "sha256:demo"
+])
+
+let result = try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-labels",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-labels"
+)
+let loaded = try registry.load(environmentID: "alpine-labels")
+
+XCTAssertEqual(result.image.labels, loaded.annotations)
+XCTAssertEqual(result.descriptor.annotations, loaded.annotations)
+XCTAssertEqual(
+loaded.annotations["org.opencontainers.image.ref.name"],
+"docker.io/library/alpine:3.20"
+)
+XCTAssertEqual(
+loaded.annotations["org.opencontainers.image.revision"],
+"sha256:demo"
+)
+}
+
+func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         let root = temporaryRegistryRoot()
         let registry = OrlixEnvironmentRegistry(
             linuxStateRoot: root.appendingPathComponent(
@@ -6182,11 +6253,12 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         configMediaType: String = "application/vnd.oci.image.config.v1+json",
         platformVariant: String? = nil,
         user: String = "0",
-        workingDirectory: String = "/",
-        envEntries: [String] = ["PATH=/usr/bin:/bin", "EMPTY="],
-        entrypoint: [String] = ["/bin/sh"],
-        command: [String] = ["-c", "echo hello"]
-    ) throws -> OCILayoutFixture {
+    workingDirectory: String = "/",
+    envEntries: [String] = ["PATH=/usr/bin:/bin", "EMPTY="],
+    entrypoint: [String] = ["/bin/sh"],
+    command: [String] = ["-c", "echo hello"],
+    labels: [String: String] = [:]
+) throws -> OCILayoutFixture {
         let root = temporaryRegistryRoot()
         let blobs = root.appendingPathComponent("blobs/sha256", isDirectory: true)
         try FileManager.default.createDirectory(
@@ -6214,30 +6286,28 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         } else {
             rootfsBlock = ""
         }
-        let encodedEnvEntries = String(
-            data: try JSONEncoder().encode(envEntries),
-            encoding: .utf8
-        )!
-        let encodedEntrypoint = String(
-            data: try JSONEncoder().encode(entrypoint),
-            encoding: .utf8
-        )!
-        let encodedCommand = String(
-            data: try JSONEncoder().encode(command),
-            encoding: .utf8
-        )!
-        let configData = #"""
-        {
-          "config": {
-            "Env": \#(encodedEnvEntries),
-            "Entrypoint": \#(encodedEntrypoint),
-            "Cmd": \#(encodedCommand),
-            "WorkingDir": "\#(workingDirectory)",
-            "User": "\#(user)"
-          }
-        \#(rootfsBlock)
-        }
-        """#.data(using: .utf8)!
+var configObject: [String: Any] = [
+"config": [
+"Env": envEntries,
+"Entrypoint": entrypoint,
+"Cmd": command,
+"WorkingDir": workingDirectory,
+"User": user,
+"Labels": labels
+]
+]
+if rootfsType != nil || rootfsDiffIDs != nil {
+let diffIDs = rootfsDiffIDs
+?? layerData.map { "sha256:\(OrlixOCIDigest.sha256Hex($0))" }
+configObject["rootfs"] = [
+"type": rootfsType ?? "layers",
+"diff_ids": diffIDs
+]
+}
+let configData = try JSONSerialization.data(
+withJSONObject: configObject,
+options: [.sortedKeys]
+)
         let configDigest = try writeOCIBlob(configData, under: blobs)
         let layerDigests = try layerData.map { try writeOCIBlob($0, under: blobs) }
         let mediaTypes = layerMediaTypes ?? Array(
