@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OrlixOS cgroup ownership correction
+
+Changes:
+- Removed OrlixOS Swift allowlists for OCI unified cgroup v2 file names in CLI parsing and OCI image-layout parsing.
+- OrlixOS now validates only descriptor-safe shape for unified cgroup entries and carries the requested file/value metadata into the Linux session descriptor.
+- Updated feature-report language to stop describing OrlixOS allowlisted Linux cgroup behavior.
+- Added positive test coverage for arbitrary cgroup v2 files such as `cpu.pressure` and `kernel.memory` carrying through OrlixOS descriptors/kernel-command-line materialization.
+- Fixed existing XCTest shorthand typos (`XCTTrue`, `XCTNil`) surfaced by simulator compilation.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- Kept a single booted simulator: iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; shut down extra iPhone 17 Pro `5E2E003E-F434-4B1F-8E5C-BED59BBC177D`.
+- `OrlixOSTests` simulator run on iPhone 17 built OrlixOS and upstream Coreutils package inputs, then initially failed test compilation on pre-existing invalid XCTest shorthands; fixed those shorthands.
+- Focused `OrlixOSTests` simulator run for the changed cgroup tests built and launched `OrlixTestRunner`, but hung after XCTest injection with no test-case progress. Result bundle `Test-OrlixOSTests-2026.06.26_16-03-33-+0200.xcresult` was incomplete after terminating the hang.
+- Baseline `OrlixTestRunnerTests` simulator smoke reached `Testing started`, proving simulator attach, then also went silent after launch and was terminated to avoid leaving a stuck runner.
+
+Boundary:
+- This does not claim kernel-enforced cgroup behavior, only that OrlixOS no longer rejects Linux cgroup controller file names by duplicated Swift policy and carries the request to the Linux-owned layer.
+- Live simulator XCTest completion remains blocked by an app/test-runner hang after launch/injection; no crash report was found for `OrlixTestRunner`.
+
 ### 2026-06-26 OCI prepared environment exec command
 
 Changes:
