@@ -1366,6 +1366,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let terminalRows: UInt32?
     public let terminalColumns: UInt32?
     public let rootReadonly: Bool?
+    public let rootPropagation: OrlixEnvironmentRootPropagation?
     public let rlimits: [OrlixEnvironmentRlimit]
     public let sysctls: [String: String]
     public let maskedPaths: [String]
@@ -1428,6 +1429,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         var parsedTerminalRows: UInt32?
         var parsedTerminalColumns: UInt32?
         var parsedRootReadonly: Bool?
+        var parsedRootPropagation: OrlixEnvironmentRootPropagation?
         var parsedRlimits: [OrlixEnvironmentRlimit] = []
         var parsedSysctls: [String: String] = [:]
         var parsedMaskedPaths: [String] = []
@@ -1505,6 +1507,29 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
             }
             if parsedImage == nil, value == "--read-write" {
                 parsedRootReadonly = false
+                continue
+            }
+            if parsedImage == nil, value == "--root-propagation" {
+                guard let rootPropagation = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue(value)
+                }
+                parsedRootPropagation = try Self.parseRootPropagation(
+                    rootPropagation
+                )
+                values.removeFirst()
+                continue
+            }
+            if parsedImage == nil, value.hasPrefix("--root-propagation=") {
+                let separator = value.firstIndex(of: "=")!
+                let rootPropagation = String(value[value.index(after: separator)...])
+                guard !rootPropagation.isEmpty else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue("--root-propagation")
+                }
+                parsedRootPropagation = try Self.parseRootPropagation(
+                    rootPropagation
+                )
                 continue
             }
             if parsedImage == nil, value == "--no-new-privileges" {
@@ -2296,6 +2321,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.terminalRows = parsedTerminalRows
         self.terminalColumns = parsedTerminalColumns
         self.rootReadonly = parsedRootReadonly
+        self.rootPropagation = parsedRootPropagation
         self.rlimits = parsedRlimits
         self.sysctls = parsedSysctls
         self.maskedPaths = parsedMaskedPaths
@@ -2344,6 +2370,18 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		}
 		environment[key] = variableValue
 	}
+
+    private static func parseRootPropagation(
+        _ value: String
+    ) throws -> OrlixEnvironmentRootPropagation {
+        guard let propagation = OrlixEnvironmentRootPropagation(rawValue: value)
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.rootfsPropagation"
+            )
+        }
+        return propagation
+    }
 
 	private static func addRlimit(
 		_ value: String,
@@ -3467,6 +3505,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         replacingDefaultTerminalRowsWith terminalRows: UInt32?,
         replacingDefaultTerminalColumnsWith terminalColumns: UInt32?,
         replacingRootReadonlyWith rootReadonly: Bool?,
+        replacingRootPropagationWith rootPropagation:
+            OrlixEnvironmentRootPropagation?,
         mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
         mergingSysctlsWith sysctls: [String: String],
         mergingMaskedPathsWith maskedPaths: [String],
@@ -3507,6 +3547,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             || terminalRows != nil
             || terminalColumns != nil
             || rootReadonly != nil
+            || rootPropagation != nil
             || !rlimits.isEmpty
             || !sysctls.isEmpty
             || !maskedPaths.isEmpty
@@ -3744,7 +3785,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainname: domainname ?? descriptor.domainname,
             rootMount: descriptor.rootMount,
             rootReadonly: rootReadonly ?? descriptor.rootReadonly,
-            rootPropagation: descriptor.rootPropagation,
+            rootPropagation: rootPropagation ?? descriptor.rootPropagation,
             sysctls: effectiveSysctls,
             maskedPaths: effectiveMaskedPaths,
             readonlyPaths: effectiveReadonlyPaths,
@@ -3824,6 +3865,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalRowsOverride: UInt32? = nil,
 		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
+		rootPropagationOverride: OrlixEnvironmentRootPropagation? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3872,6 +3914,7 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			terminalRowsOverride: terminalRowsOverride,
 			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
+			rootPropagationOverride: rootPropagationOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -3923,6 +3966,7 @@ gidMappingOverrides: gidMappingOverrides,
 		terminalRowsOverride: UInt32? = nil,
 		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
+		rootPropagationOverride: OrlixEnvironmentRootPropagation? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -3997,6 +4041,7 @@ gidMappingOverrides: gidMappingOverrides,
 			replacingDefaultTerminalRowsWith: terminalRowsOverride,
 			replacingDefaultTerminalColumnsWith: terminalColumnsOverride,
 			replacingRootReadonlyWith: rootReadonlyOverride,
+			replacingRootPropagationWith: rootPropagationOverride,
 				mergingDefaultRlimitsWith: defaultRlimitOverrides,
 			mergingSysctlsWith: sysctlOverrides,
 			mergingMaskedPathsWith: maskedPathOverrides,
@@ -4124,6 +4169,7 @@ gidMappingOverrides: gidMappingOverrides,
 			terminalRowsOverride: request.terminalRows,
 			terminalColumnsOverride: request.terminalColumns,
 			rootReadonlyOverride: request.rootReadonly,
+			rootPropagationOverride: request.rootPropagation,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
 			maskedPathOverrides: request.maskedPaths,
@@ -4201,6 +4247,7 @@ gidMappingOverrides: gidMappingOverrides,
 			terminalRowsOverride: request.terminalRows,
 			terminalColumnsOverride: request.terminalColumns,
 			rootReadonlyOverride: request.rootReadonly,
+			rootPropagationOverride: request.rootPropagation,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
 			maskedPathOverrides: request.maskedPaths,
@@ -4279,6 +4326,7 @@ gidMappingOverrides: gidMappingOverrides,
 		terminalRowsOverride: UInt32? = nil,
 		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
+		rootPropagationOverride: OrlixEnvironmentRootPropagation? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -4329,6 +4377,7 @@ gidMappingOverrides: gidMappingOverrides,
 			terminalRowsOverride: terminalRowsOverride,
 			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
+			rootPropagationOverride: rootPropagationOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -4382,6 +4431,7 @@ gidMappingOverrides: gidMappingOverrides,
 		terminalRowsOverride: UInt32? = nil,
 		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
+		rootPropagationOverride: OrlixEnvironmentRootPropagation? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -4431,6 +4481,7 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			terminalRowsOverride: terminalRowsOverride,
 			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
+			rootPropagationOverride: rootPropagationOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -4493,6 +4544,7 @@ fileManager: fileManager,
 		terminalRowsOverride: UInt32? = nil,
 		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
+		rootPropagationOverride: OrlixEnvironmentRootPropagation? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -4544,6 +4596,7 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			terminalRowsOverride: terminalRowsOverride,
 			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
+			rootPropagationOverride: rootPropagationOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -4598,6 +4651,7 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 		terminalRowsOverride: UInt32? = nil,
 		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
+		rootPropagationOverride: OrlixEnvironmentRootPropagation? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -4648,6 +4702,7 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			terminalRowsOverride: terminalRowsOverride,
 			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
+			rootPropagationOverride: rootPropagationOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,
@@ -4788,6 +4843,7 @@ gidMappingOverrides: request.gidMappings,
 		terminalRowsOverride: UInt32? = nil,
 		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
+		rootPropagationOverride: OrlixEnvironmentRootPropagation? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
 		maskedPathOverrides: [String] = [],
@@ -4838,6 +4894,7 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 			terminalRowsOverride: terminalRowsOverride,
 			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
+			rootPropagationOverride: rootPropagationOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
 			maskedPathOverrides: maskedPathOverrides,

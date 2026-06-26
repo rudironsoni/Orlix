@@ -10,6 +10,38 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run root propagation override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--root-propagation VALUE` and
+  `--root-propagation=VALUE` before image.
+- CLI validation uses the existing `OrlixEnvironmentRootPropagation` descriptor
+  values: `private`, `shared`, `slave`, and `unbindable`.
+- Registry-backed install/run and terminal-session preparation persist parsed
+  root propagation into `OrlixEnvironmentDescriptor.rootPropagation`.
+- Focused tests cover default nil parser state, split and equals parsing,
+  invalid value rejection, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+
+Boundary:
+- Advances product-facing root propagation configuration through existing
+  OrlixOS descriptors and the Linux-visible `rootinit.c` mount propagation
+  path. Does not claim live simulator proof, runtime mount propagation behavior
+  proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel
+  semantics, mlibc patches, generated upstream edits, custom ABI, or
+  package/proof/stamp systems.
+
+Current status:
+- Root propagation override checkpoint is locally verified by Swift
+  parse/typecheck and guard checks, pending commit and push.
+
 ### 2026-06-26 OCI run terminal-size overrides
 
 Changes:
