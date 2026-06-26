@@ -10,6 +10,27 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run hostname override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--hostname VALUE`, `-h VALUE`, and `--hostname=VALUE` before the image.
+- Parsed hostnames validate with the existing OCI UTS-name shape: nonempty, no NUL byte, and at most 64 UTF-8 bytes.
+- Registry-backed install/run and terminal-session preparation persist parsed hostname overrides into the existing OrlixOS environment descriptor hostname field.
+- Focused tests cover split, short, and equals-form hostname parsing plus observed registry-backed `orlix run` descriptor hostname persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings.
+- `rtk git diff --check` exited 0.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused simulator XCTest was not run: unsandboxed `xcode-storage-doctor` was rejected by execution policy, so CoreSimulator/Xcode access could not be validated without a forbidden workaround.
+
+Boundary:
+- This advances product-facing `orlix run --hostname` through existing OrlixOS descriptors and the existing Linux init `sethostname` path. It does not implement hostname semantics in HostAdapter or Swift, does not touch HostAdapter/mlibc/generated/upstream trees, and does not claim Linux userspace `/usr/bin/orlix`, live app-hosted registry execution proof, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle, or broader namespace/cgroup/device/filesystem/network readiness.
+
+Current-status: Latest coherent checkpoint implements parsed `orlix run --hostname` descriptor persistence for registry-backed install/run. Focused simulator XCTest remains blocked by execution policy denying unsandboxed CoreSimulator/Xcode access.
+
 ### 2026-06-26 OCI run numeric user override
 
 Changes:
