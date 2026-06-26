@@ -10,6 +10,22 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run terminal mode override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--tty`, `-t`, `--no-tty`, and `--no-terminal` before image.
+- `OrlixEnvironmentDescriptor` now carries optional `defaultTerminal`; omitted preserves existing default PTY behavior and old descriptor decode compatibility.
+- Materialized environment boot command lines emit `orlix.terminal=1` or `orlix.terminal=0` only when the descriptor explicitly requests terminal mode, reusing the existing OrlixOS init Linux-visible terminal selection path.
+- Registry-backed install/run and terminal-session preparation persist parsed terminal overrides into the descriptor.
+- Focused tests cover parser spellings, descriptor persistence for `orlix run --no-tty`, copied environment preservation, and boot-token emission.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 known sandbox `xcrun_db` cache messages existing Sendable warnings.
+
+Boundary:
+- This advances `orlix run` PTY versus inherited-stdio selection through OrlixOS descriptors and existing `orlix.terminal=` init behavior. It does not add HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI Runtime Spec lifecycle support, or live simulator proof.
+
 ### 2026-06-26 OCI run domainname override
 
 Changes:

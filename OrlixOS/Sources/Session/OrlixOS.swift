@@ -1360,6 +1360,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let groupID: UInt32?
 	public let hostname: String?
 	public let domainname: String?
+	public let terminal: Bool?
 	public let command: [String]?
 	public let removeAfterRun: Bool
 
@@ -1389,6 +1390,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedGroupID: UInt32?
 		var parsedHostname: String?
 		var parsedDomainname: String?
+		var parsedTerminal: Bool?
 		var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1400,11 +1402,20 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				values.removeAll()
 				break
 			}
-            if parsedImage == nil, value == "--rm" {
-                parsedRemoveAfterRun = true
-                continue
-            }
-            if parsedImage == nil, value == "--entrypoint" {
+			if parsedImage == nil, value == "--rm" {
+				parsedRemoveAfterRun = true
+				continue
+			}
+			if parsedImage == nil, value == "--tty" || value == "-t" {
+				parsedTerminal = true
+				continue
+			}
+			if parsedImage == nil,
+				value == "--no-tty" || value == "--no-terminal" {
+				parsedTerminal = false
+				continue
+			}
+			if parsedImage == nil, value == "--entrypoint" {
                 guard let entrypoint = values.first else {
                     throw OrlixOCIEnvironmentRunArgumentsError
                         .missingOptionValue(value)
@@ -1613,6 +1624,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.groupID = parsedGroupID
 		self.hostname = parsedHostname
 		self.domainname = parsedDomainname
+		self.terminal = parsedTerminal
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
 		self.removeAfterRun = parsedRemoveAfterRun
 	}
@@ -1746,7 +1758,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultUserIDWith userID: UInt32?,
 		replacingDefaultGroupIDWith groupID: UInt32?,
 		replacingHostnameWith hostname: String?,
-		replacingDomainnameWith domainname: String?
+		replacingDomainnameWith domainname: String?,
+		replacingDefaultTerminalWith terminal: Bool?
 	) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -1755,6 +1768,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| groupID != nil
 			|| hostname != nil
 			|| domainname != nil
+			|| terminal != nil
 		else {
 			return descriptor
 		}
@@ -1818,11 +1832,12 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultUserID: userID ?? descriptor.defaultUserID,
 			defaultGroupID: groupID ?? descriptor.defaultGroupID,
             defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
-            defaultCapabilities: descriptor.defaultCapabilities,
-            defaultNoNewPrivileges: descriptor.defaultNoNewPrivileges,
-            defaultCloseAdditionalFds: descriptor.defaultCloseAdditionalFds,
-            defaultTerminalRows: descriptor.defaultTerminalRows,
-            defaultTerminalColumns: descriptor.defaultTerminalColumns,
+			defaultCapabilities: descriptor.defaultCapabilities,
+			defaultNoNewPrivileges: descriptor.defaultNoNewPrivileges,
+			defaultCloseAdditionalFds: descriptor.defaultCloseAdditionalFds,
+			defaultTerminal: terminal ?? descriptor.defaultTerminal,
+			defaultTerminalRows: descriptor.defaultTerminalRows,
+			defaultTerminalColumns: descriptor.defaultTerminalColumns,
             defaultOOMScoreAdjustment: descriptor.defaultOOMScoreAdjustment,
             defaultScheduler: descriptor.defaultScheduler,
             defaultIOPriority: descriptor.defaultIOPriority,
@@ -1904,6 +1919,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultGroupIDOverride: UInt32? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
+		terminalOverride: Bool? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -1920,6 +1936,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: defaultGroupIDOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
+			terminalOverride: terminalOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -1939,6 +1956,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultGroupIDOverride: UInt32? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
+		terminalOverride: Bool? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -1979,7 +1997,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDefaultUserIDWith: defaultUserIDOverride,
 				replacingDefaultGroupIDWith: defaultGroupIDOverride,
 				replacingHostnameWith: hostnameOverride,
-				replacingDomainnameWith: domainnameOverride
+				replacingDomainnameWith: domainnameOverride,
+				replacingDefaultTerminalWith: terminalOverride
 			)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -2071,6 +2090,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: request.groupID,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
+			terminalOverride: request.terminal,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2115,6 +2135,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: request.groupID,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
+			terminalOverride: request.terminal,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2161,6 +2182,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultGroupIDOverride: UInt32? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
+		terminalOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2179,6 +2201,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: defaultGroupIDOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
+			terminalOverride: terminalOverride,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2200,6 +2223,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultGroupIDOverride: UInt32? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
+		terminalOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2217,6 +2241,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: defaultGroupIDOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
+			terminalOverride: terminalOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2247,6 +2272,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultGroupIDOverride: UInt32? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
+		terminalOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -2266,6 +2292,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: defaultGroupIDOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
+			terminalOverride: terminalOverride,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2288,6 +2315,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultGroupIDOverride: UInt32? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
+		terminalOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -2306,6 +2334,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: defaultGroupIDOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
+			terminalOverride: terminalOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2349,6 +2378,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: request.groupID,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
+			terminalOverride: request.terminal,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -2381,6 +2411,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultGroupIDOverride: UInt32? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
+		terminalOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
@@ -2399,6 +2430,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultGroupIDOverride: defaultGroupIDOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
+			terminalOverride: terminalOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
