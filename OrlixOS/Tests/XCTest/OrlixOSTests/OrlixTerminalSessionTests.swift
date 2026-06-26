@@ -7821,6 +7821,30 @@ func testOCIRegistryImageReferenceParsesDistributionEndpoints() throws {
 		"https://ghcr.io/v2/rudironsoni/orlix/manifests/\(digest)"
 	)
 
+	let dockerScheme = try OrlixOCIRegistryImageReference(
+		"docker://docker.io/library/alpine:3.20"
+	)
+	XCTAssertEqual(dockerScheme.scheme, "https")
+	XCTAssertEqual(dockerScheme.registry, "docker.io")
+	XCTAssertEqual(dockerScheme.repository, "library/alpine")
+	XCTAssertEqual(dockerScheme.tag, "3.20")
+	XCTAssertEqual(
+		try dockerScheme.manifestURL().absoluteString,
+		"https://registry-1.docker.io/v2/library/alpine/manifests/3.20"
+	)
+
+	let dockerDefaultScheme = try OrlixOCIRegistryImageReference(
+		"alpine:3.20",
+		defaultScheme: "docker"
+	)
+	XCTAssertEqual(dockerDefaultScheme.scheme, "https")
+	XCTAssertEqual(dockerDefaultScheme.registry, "docker.io")
+	XCTAssertEqual(dockerDefaultScheme.repository, "library/alpine")
+	XCTAssertEqual(
+		try dockerDefaultScheme.manifestURL().absoluteString,
+		"https://registry-1.docker.io/v2/library/alpine/manifests/3.20"
+	)
+
 	let implicitLatest = try OrlixOCIRegistryImageReference("localhost:5000/orlix/rootfs")
 	XCTAssertNil(implicitLatest.tag)
 	XCTAssertEqual(implicitLatest.manifestReference, "latest")
