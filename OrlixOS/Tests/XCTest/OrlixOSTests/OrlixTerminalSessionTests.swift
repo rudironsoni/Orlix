@@ -8758,10 +8758,10 @@ func testOCIEnvironmentListArgumentsRejectsInvalidInput() throws {
 }
 
 func testOCIEnvironmentStateArgumentsAcceptsIDForms() throws {
-	let positional = try OrlixOCIEnvironmentStateArguments([
-		"orlix",
-		"state",
-		"oci-demo",
+    let positional = try OrlixOCIEnvironmentStateArguments([
+        "orlix",
+        "state",
+        "oci-demo",
 	])
 	XCTAssertEqual(positional.id, "oci-demo")
 
@@ -8775,14 +8775,61 @@ func testOCIEnvironmentStateArgumentsAcceptsIDForms() throws {
 	let nameOption = try OrlixOCIEnvironmentStateArguments([
 		"state",
 		"--name=oci-by-name",
-	])
-	XCTAssertEqual(nameOption.id, "oci-by-name")
+    ])
+    XCTAssertEqual(nameOption.id, "oci-by-name")
+}
+
+func testOCIEnvironmentInstallerInspectReturnsDescriptorAndLifecycleState()
+    throws
+{
+    let fileManager = FileManager.default
+    let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+        "orlix-oci-inspect-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+    defer { try? fileManager.removeItem(at: scratch) }
+
+    let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+    let rootfsURL = bundleURL.appendingPathComponent("rootfs", isDirectory: true)
+    try fileManager.createDirectory(at: rootfsURL, withIntermediateDirectories: true)
+    try nonRootOCIRuntimeConfig().write(
+        to: bundleURL.appendingPathComponent("config.json")
+    )
+
+    let registry = OrlixEnvironmentRegistry(
+        linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+        cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+        scratchRoot: scratch.appendingPathComponent(
+            "runtime-scratch",
+            isDirectory: true
+        )
+    )
+    _ = try OrlixOCIRuntime(registry: registry).create(
+        bundleURL: bundleURL,
+        id: "oci-inspect"
+    )
+
+    let inspected = try OrlixOCIEnvironmentInstaller(registry: registry).inspect(
+        arguments: ["orlix", "inspect", "--id", "oci-inspect"],
+        fileManager: fileManager
+    )
+
+    XCTAssertEqual(inspected.id, "oci-inspect")
+    XCTAssertEqual(inspected.platform, "linux/arm64")
+    XCTAssertEqual(inspected.defaultCommand, ["/usr/bin/id"])
+    XCTAssertEqual(inspected.defaultWorkingDirectory, "/srv")
+    XCTAssertEqual(inspected.defaultUserID, 1000)
+    XCTAssertEqual(inspected.defaultGroupID, 1000)
+    XCTAssertEqual(inspected.lifecycleState, .created)
+    XCTAssertEqual(inspected.stateReport.id, "oci-inspect")
+    XCTAssertEqual(inspected.stateReport.status, .created)
 }
 
 func testOCIEnvironmentStateArgumentsRejectsInvalidInput() throws {
-	XCTAssertThrowsError(
-		try OrlixOCIEnvironmentStateArguments(["run", "oci-demo"])
-	) { error in
+    XCTAssertThrowsError(
+        try OrlixOCIEnvironmentStateArguments(["run", "oci-demo"])
+    ) { error in
 		XCTAssertEqual(
 			error as? OrlixOCIEnvironmentStateArgumentsError,
 			.missingStateCommand

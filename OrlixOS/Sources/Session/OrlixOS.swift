@@ -1335,16 +1335,32 @@ public struct OrlixOCIEnvironmentTerminalSessionResult: Sendable {
 }
 
 public struct OrlixOCIEnvironmentPreparedState: Sendable {
-	public let id: String
-	public let platform: String
-	public let defaultCommand: [String]
-	public let lifecycleState: OrlixOCIRuntimeLifecycleState
-	public let stateReport: OrlixOCIRuntimeStateReport?
+    public let id: String
+    public let platform: String
+    public let defaultCommand: [String]
+    public let lifecycleState: OrlixOCIRuntimeLifecycleState
+    public let stateReport: OrlixOCIRuntimeStateReport?
+}
+
+public struct OrlixOCIEnvironmentInspectResult: Sendable {
+    public let id: String
+    public let platform: String
+    public let rootImageIdentifier: String
+    public let defaultCommand: [String]
+    public let defaultEnvironment: [String: String]
+    public let defaultWorkingDirectory: String
+    public let defaultUserID: UInt32
+    public let defaultGroupID: UInt32
+    public let hostname: String?
+    public let domainname: String?
+    public let annotations: [String: String]
+    public let lifecycleState: OrlixOCIRuntimeLifecycleState
+    public let stateReport: OrlixOCIRuntimeStateReport
 }
 
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
-	public let id: String
-	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+    public let id: String
+    public let lifecycleState: OrlixOCIRuntimeLifecycleState
 }
 
 public enum OrlixOCIEnvironmentListArgumentsError: Error, Equatable, Sendable {
@@ -5870,19 +5886,40 @@ deviceNodeOverrides: deviceNodeOverrides,
 		)
 	}
 
-	public func state(
-		arguments: [String],
-		fileManager: FileManager = .default
-	) throws -> OrlixOCIRuntimeStateReport {
-		let request = try OrlixOCIEnvironmentStateArguments(arguments)
-		return try state(id: request.id, fileManager: fileManager)
-	}
+    public func state(
+        arguments: [String],
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIRuntimeStateReport {
+        let request = try OrlixOCIEnvironmentStateArguments(arguments)
+        return try state(id: request.id, fileManager: fileManager)
+    }
 
-	public func start(
-		id: String,
-		terminal: OrlixTerminalSession = OrlixTerminalSession(),
-		observationTimeout: TimeInterval = 600,
-		fileManager: FileManager = .default
+    public func inspect(
+        id: String,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentInspectResult {
+        try OrlixOCIRuntime(registry: registry).inspect(
+            id: id,
+            fileManager: fileManager
+        )
+    }
+
+    public func inspect(
+        arguments: [String],
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentInspectResult {
+        let request = try OrlixOCIEnvironmentLifecycleArguments(
+            arguments,
+            command: "inspect"
+        )
+        return try inspect(id: request.id, fileManager: fileManager)
+    }
+
+    public func start(
+        id: String,
+        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+        observationTimeout: TimeInterval = 600,
+        fileManager: FileManager = .default
 	) throws -> OrlixOCIEnvironmentStartResult {
 		let started = try OrlixOCIRuntime(registry: registry).start(
 			id: id,
@@ -6766,6 +6803,32 @@ public struct OrlixOCIRuntime: Sendable {
         fileManager: FileManager = .default
     ) throws -> OrlixOCIRuntimeStateReport {
         try lifecycleStore.stateReport(id: id, fileManager: fileManager)
+    }
+
+    public func inspect(
+        id: String,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIEnvironmentInspectResult {
+        let descriptor = try registry.load(
+            environmentID: id,
+            fileManager: fileManager
+        )
+        let snapshot = try lifecycleStore.load(id: id, fileManager: fileManager)
+        return OrlixOCIEnvironmentInspectResult(
+            id: descriptor.id,
+            platform: descriptor.platform,
+            rootImageIdentifier: descriptor.rootImageIdentifier,
+            defaultCommand: descriptor.defaultCommand,
+            defaultEnvironment: descriptor.defaultEnvironment,
+            defaultWorkingDirectory: descriptor.defaultWorkingDirectory,
+            defaultUserID: descriptor.defaultUserID,
+            defaultGroupID: descriptor.defaultGroupID,
+            hostname: descriptor.hostname,
+            domainname: descriptor.domainname,
+            annotations: descriptor.annotations,
+            lifecycleState: snapshot.record.state,
+            stateReport: try snapshot.stateReport()
+        )
     }
 
     public func listPreparedEnvironments(
