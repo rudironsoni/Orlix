@@ -24056,3 +24056,36 @@ Evidence:
 
 Current status:
 - Latest coherent checkpoint is OCI registry descriptor Linux bridge. Static Swift parse/typecheck, init compile, and guard checks passed; no live Linux runtime or simulator runtime claim is made.
+
+## 2026-06-26 - OrlixOS Linux ownership report correction
+
+Corrected OrlixOS OCI feature reporting so parser acceptance, descriptor
+transport, init boot tokens, and OrlixOS lifecycle bookkeeping are not reported
+as implemented Linux runtime behavior.
+
+- Kept OCI metadata transport in OrlixOS for fields such as process defaults,
+  personality, lifecycle state, and time offsets. Those are valid Kit/session
+  inputs.
+- Demoted parser/unit-test-only process entries from `implemented` to
+  `recognized`: `process.user`, `process.noNewPrivileges`,
+  `process.closeAdditionalFds`, `process.oomScoreAdj`, `process.scheduler`,
+  `process.ioPriority`, `process.execCPUAffinity`, `process.terminal`, and
+  `process.consoleSize`.
+- Demoted `ociLifecycleStateModel`, `ociPersonality`, and `ociTimeOffsets` from
+  implemented claims to recognized metadata/setup inputs until backed by Linux
+  runtime proof.
+- Left Linux probe-backed entries intact, including cgroup, device, pseudo-fs,
+  virtio-net, virtio-fs, and capability probes.
+- Updated feature-report tests so `runtime_config_parser`,
+  `runtime_session_descriptor_unit_tests`, and `runtime_lifecycle_unit_tests`
+  cannot serve as implementation proof for Linux-owned behavior.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk grep -n "runtime_session_descriptor_unit_tests|runtime_lifecycle_unit_tests|process\\.terminal\\\"\\)\\?\\.status, \\.implemented|ociLifecycleStateModel\\\"\\)\\?\\.status, \\.implemented|ociPersonality\\\"\\)\\?\\.status, \\.implemented|ociTimeOffsets\\\"\\)\\?\\.status, \\.implemented" OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` found no matches.
+
+Boundary:
+- This is an ownership/claim correction. It does not remove OCI descriptor
+  transport, add HostAdapter Linux policy, edit upstream/generated trees, patch
+  mlibc, claim live simulator proof, or claim OCI runtime readiness.

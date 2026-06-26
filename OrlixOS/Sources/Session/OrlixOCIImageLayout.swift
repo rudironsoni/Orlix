@@ -2241,66 +2241,57 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:fd_alias_probe",
 			reason: "Linux /dev/fd, /dev/stdin, /dev/stdout, and /dev/stderr alias behavior is covered by Orlix kselftest."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "process.user",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI process uid, gid, supplementary groups, umask, and supported rlimits carry into OrlixOS descriptors and init command-line defaults."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.capabilities",
-			status: .implemented,
-			proof: "orlix:process_capability_probe",
+			OrlixOCIRuntimeFeature(
+				name: "process.user",
+				status: .recognized,
+				reason: "OCI process uid, gid, supplementary groups, umask, and rlimits are recognized and transported as Linux setup inputs; runtime enforcement is not claimed from OrlixOS descriptor plumbing."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.capabilities",
+				status: .implemented,
+				proof: "orlix:process_capability_probe",
 			reason: "OCI process capability sets carry into OrlixOS descriptors and init applies Linux capability UAPI through capset and prctl."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "process.noNewPrivileges",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI process noNewPrivileges carries into OrlixOS descriptors and init applies PR_SET_NO_NEW_PRIVS."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.closeAdditionalFds",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI process closeAdditionalFds carries into OrlixOS descriptors and init closes inherited descriptors above stderr."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.oomScoreAdj",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI process oomScoreAdj values in Linux's -1000...1000 range carry into OrlixOS descriptors and init writes /proc/self/oom_score_adj."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.scheduler",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI process scheduler policy plus priority carries into OrlixOS descriptors for supported Linux SCHED_* policies and init calls sched_setscheduler."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.ioPriority",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI process ioPriority class plus priority carries into OrlixOS descriptors for supported Linux IOPRIO classes and init calls ioprio_set."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.execCPUAffinity",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI process execCPUAffinity CPU lists carry into OrlixOS descriptors and init calls sched_setaffinity."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.terminal",
-			status: .implemented,
-			proof: "orlix:runtime_session_descriptor_unit_tests",
-			reason: "OCI process terminal requests carry into OrlixOS session descriptors, emit explicit terminal boot tokens, and select the Linux PTY init path for terminal sessions."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "process.consoleSize",
-			status: .implemented,
-			proof: "orlix:runtime_session_descriptor_unit_tests",
-			reason: "OCI process consoleSize is validated, carried into OrlixOS descriptors, emitted as init tokens, and applied as the initial Linux PTY window size with TIOCSWINSZ before exec."
-		),
+			OrlixOCIRuntimeFeature(
+				name: "process.noNewPrivileges",
+				status: .recognized,
+				reason: "OCI process noNewPrivileges is recognized and transported as a Linux prctl setup input; runtime behavior is not claimed from parser coverage."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.closeAdditionalFds",
+				status: .recognized,
+				reason: "OCI process closeAdditionalFds is recognized as process setup metadata; fd-table behavior remains Linux-owned and needs runtime proof."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.oomScoreAdj",
+				status: .recognized,
+				reason: "OCI process oomScoreAdj is recognized and transported as a /proc setup input; OOM scoring behavior is not claimed from OrlixOS parser coverage."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.scheduler",
+				status: .recognized,
+				reason: "OCI process scheduler metadata is recognized and transported for Linux setup; scheduler semantics remain Linux-owned and need runtime proof."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.ioPriority",
+				status: .recognized,
+				reason: "OCI process ioPriority metadata is recognized and transported for Linux setup; I/O priority behavior is not claimed from parser coverage."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.execCPUAffinity",
+				status: .recognized,
+				reason: "OCI process execCPUAffinity is recognized and transported for Linux setup; CPU affinity behavior remains Linux-owned and needs runtime proof."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.terminal",
+				status: .recognized,
+				reason: "OCI process terminal requests are recognized and routed to the Linux PTY setup path; full terminal behavior is not claimed from descriptor unit tests."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "process.consoleSize",
+				status: .recognized,
+				reason: "OCI process consoleSize is recognized and transported as an initial PTY setup input; live terminal behavior needs runtime proof."
+			),
 		OrlixOCIRuntimeFeature(
 			name: "loopbackNetworking",
 			status: .implemented,
@@ -2313,18 +2304,16 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:runtime_config_parser",
 			reason: "OCI netDevices policy remains rejected until Orlix has OCI device selection, external networking, DNS, and NAT proof beyond the internal virtio-net device-plane probe."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "ociLifecycleStateModel",
-			status: .implemented,
-			proof: "orlix:runtime_lifecycle_unit_tests",
-			reason: "OrlixOS models create, start, signal, wait/exit, state, and delete transitions with invalid-transition guards before observation-driver side effects."
-		),
-		OrlixOCIRuntimeFeature(
-			name: "ociPersonality",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI linux.personality domain values LINUX and LINUX32 carry into OrlixOS descriptors and first-stage init applies Linux personality(2) before exec."
-		),
+			OrlixOCIRuntimeFeature(
+				name: "ociLifecycleStateModel",
+				status: .recognized,
+				reason: "OCI lifecycle state transitions are recognized in OrlixOS bookkeeping; runtime lifecycle claims require Linux process execution proof."
+			),
+			OrlixOCIRuntimeFeature(
+				name: "ociPersonality",
+				status: .recognized,
+				reason: "OCI linux.personality is recognized and transported as a Linux setup input; personality behavior is not claimed from parser coverage."
+			),
 		OrlixOCIRuntimeFeature(
 			name: "ociRuntimeSpecLifecycle",
 			status: .recognized,
@@ -2336,12 +2325,11 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			proof: "orlix:time_namespace_probe",
 			reason: "OCI time namespace creation carries into first-stage init CLONE_NEWTIME handling, with Orlix kselftest coverage for Linux time namespace proc entries and child namespace entry."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "ociTimeOffsets",
-			status: .implemented,
-			proof: "orlix:runtime_config_parser",
-			reason: "OCI linux.timeOffsets for monotonic and boottime clocks carry into OrlixOS descriptors and first-stage init writes Linux /proc/self/timens_offsets before forking the configured command into the child time namespace."
-		),
+			OrlixOCIRuntimeFeature(
+				name: "ociTimeOffsets",
+				status: .recognized,
+				reason: "OCI linux.timeOffsets are recognized and transported as Linux time-namespace setup inputs; runtime offset behavior requires Linux proof."
+			),
 		OrlixOCIRuntimeFeature(
 			name: "procfs",
 			status: .implemented,
