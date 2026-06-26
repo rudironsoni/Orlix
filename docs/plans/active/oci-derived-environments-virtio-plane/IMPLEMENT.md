@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run umask override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--umask VALUE` and `--umask=VALUE` before image.
+- Run umasks accept octal-looking values such as `022` and decimal values such as `18`; both persist as descriptor numeric `defaultUmask`.
+- Registry-backed install/run and terminal-session preparation persist parsed umask overrides into descriptor `defaultUmask`.
+- Focused tests cover split and equals-form parsing, malformed empty equals-form rejection, and observed registry-backed descriptor umask persistence. Existing command-line tests cover `orlix.umask=` boot-token emission and init already applies it with Linux `umask()`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 known sandbox `xcrun_db` cache messages existing Sendable warnings.
+
+Boundary:
+- This advances `orlix run --umask` through existing OrlixOS descriptors and existing OrlixOS init `orlix.umask=` Linux-visible `umask()` behavior. It does not add HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI Runtime Spec lifecycle support, filesystem-mode runtime proof, or live simulator proof.
+
 ### 2026-06-26 OCI run rlimit override
 
 Changes:
