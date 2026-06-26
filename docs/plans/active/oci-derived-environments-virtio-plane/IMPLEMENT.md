@@ -10,6 +10,22 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run tmpfs mount overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--tmpfs TARGET[:OPTION,...]` and `--tmpfs=TARGET[:OPTION,...]` before image.
+- CLI validation reuses the current OCI tmpfs mount shape: Linux target path plus `ro`, `rw`, `nosuid`, `nodev`, `noexec`, and tmpfs data options `size=`, `mode=`, `uid=`, `gid=`. Invalid targets, unsupported options, malformed data, empty equals form, and duplicate targets fail before install.
+- Registry-backed install/run terminal-session preparation persists parsed tmpfs mounts into `OrlixEnvironmentDescriptor.tmpfsMounts`; descriptor merge replaces existing tmpfs entries with the same target and sorts by target for deterministic output.
+- `OrlixEnvironmentTmpfsMount` is now public because the product-facing run parser and installer overloads expose it. Existing init code already mounts configured tmpfs entries through Linux `mount("tmpfs", ...)`.
+- Focused tests cover split and equals parsing, invalid target/option/duplicate rejection, empty equals-form rejection, default empty parser state, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing tmpfs mount configuration through existing OrlixOS descriptors and Linux-visible init mount paths. Does not claim live simulator proof, mount namespace isolation, host-folder mounts, virtio-fs, systemd readiness, broad OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, or custom ABI.
+
 ### 2026-06-26 OCI run cgroup unified overrides
 
 Changes:
