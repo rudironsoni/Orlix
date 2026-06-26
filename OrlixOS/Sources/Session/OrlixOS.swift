@@ -1361,6 +1361,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let hostname: String?
 	public let domainname: String?
 	public let terminal: Bool?
+	public let rlimits: [OrlixEnvironmentRlimit]
 	public let command: [String]?
 	public let removeAfterRun: Bool
 
@@ -1391,6 +1392,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedHostname: String?
 		var parsedDomainname: String?
 		var parsedTerminal: Bool?
+		var parsedRlimits: [OrlixEnvironmentRlimit] = []
 		var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1413,6 +1415,25 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 			if parsedImage == nil,
 				value == "--no-tty" || value == "--no-terminal" {
 				parsedTerminal = false
+				continue
+			}
+			if parsedImage == nil, value == "--ulimit" {
+				guard let rlimit = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				try Self.addRlimit(rlimit, to: &parsedRlimits)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--ulimit=") {
+				let separator = value.firstIndex(of: "=")!
+				let rlimit = String(value[value.index(after: separator)...])
+				guard !rlimit.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--ulimit")
+				}
+				try Self.addRlimit(rlimit, to: &parsedRlimits)
 				continue
 			}
 			if parsedImage == nil, value == "--entrypoint" {
@@ -1625,6 +1646,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.hostname = parsedHostname
 		self.domainname = parsedDomainname
 		self.terminal = parsedTerminal
+		self.rlimits = parsedRlimits
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
 		self.removeAfterRun = parsedRemoveAfterRun
 	}
@@ -1646,6 +1668,77 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 			throw OrlixOCIRuntimeConfigError.invalidEnvironmentEntry(value)
 		}
 		environment[key] = variableValue
+	}
+
+	private static func addRlimit(
+		_ value: String,
+		to rlimits: inout [OrlixEnvironmentRlimit]
+	) throws {
+		let rlimit = try parseRlimit(value)
+		guard !rlimits.contains(where: { $0.type == rlimit.type }) else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.rlimits"
+			)
+		}
+		rlimits.append(rlimit)
+	}
+
+	private static func parseRlimit(_ value: String)
+		throws -> OrlixEnvironmentRlimit
+	{
+		guard let separator = value.firstIndex(of: "=") else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.rlimits"
+			)
+		}
+		let rawType = String(value[..<separator])
+		let limits = String(value[value.index(after: separator)...])
+		let type = try normalizedRlimitType(rawType)
+		let pieces = limits.split(separator: ":", omittingEmptySubsequences: false)
+		guard pieces.count == 1 || pieces.count == 2,
+			let soft = UInt64(pieces[0])
+		else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.rlimits"
+			)
+		}
+		let hard: UInt64
+		if pieces.count == 2 {
+			guard let parsedHard = UInt64(pieces[1]) else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"process.rlimits"
+				)
+			}
+			hard = parsedHard
+		} else {
+			hard = soft
+		}
+		guard soft <= hard else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.rlimits"
+			)
+		}
+		return OrlixEnvironmentRlimit(type: type, soft: soft, hard: hard)
+	}
+
+	private static func normalizedRlimitType(_ value: String) throws -> String {
+		guard !value.isEmpty,
+			!value.contains("\u{0}"),
+			!value.contains(":")
+		else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.rlimits"
+			)
+		}
+		let upper = value.uppercased()
+		let type = upper.hasPrefix("RLIMIT_") ? upper : "RLIMIT_\(upper)"
+		guard OrlixOCIRuntimeConfigParser.supportedRlimitTypes.contains(type)
+		else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.rlimits"
+			)
+		}
+		return type
 	}
 
 	private static func validatedWorkingDirectory(
@@ -1750,6 +1843,30 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         self.registry = registry
     }
 
+	private static func mergedRlimits(
+		_ existing: [OrlixEnvironmentRlimit],
+		overrides: [OrlixEnvironmentRlimit]
+	) throws -> [OrlixEnvironmentRlimit] {
+		guard !overrides.isEmpty else {
+			return existing
+		}
+		var result = existing.filter { existingLimit in
+			!overrides.contains { $0.type == existingLimit.type }
+		}
+		for override in overrides {
+			guard OrlixOCIRuntimeConfigParser.supportedRlimitTypes
+				.contains(override.type),
+				override.soft <= override.hard
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"process.rlimits"
+				)
+			}
+			result.append(override)
+		}
+		return result.sorted { $0.type < $1.type }
+	}
+
 	private static func descriptor(
 		_ descriptor: OrlixEnvironmentDescriptor,
 		replacingDefaultCommandWith command: [String]?,
@@ -1759,7 +1876,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultGroupIDWith groupID: UInt32?,
 		replacingHostnameWith hostname: String?,
 		replacingDomainnameWith domainname: String?,
-		replacingDefaultTerminalWith terminal: Bool?
+		replacingDefaultTerminalWith terminal: Bool?,
+		mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit]
 	) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -1769,6 +1887,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| hostname != nil
 			|| domainname != nil
 			|| terminal != nil
+			|| !rlimits.isEmpty
 		else {
 			return descriptor
 		}
@@ -1820,6 +1939,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		let defaultEnvironment = descriptor.defaultEnvironment.merging(
 			environment
 		) { _, override in override }
+		let defaultRlimits = try mergedRlimits(
+			descriptor.defaultRlimits,
+			overrides: rlimits
+		)
 		return OrlixEnvironmentDescriptor(
 			id: descriptor.id,
 			source: descriptor.source,
@@ -1841,9 +1964,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             defaultOOMScoreAdjustment: descriptor.defaultOOMScoreAdjustment,
             defaultScheduler: descriptor.defaultScheduler,
             defaultIOPriority: descriptor.defaultIOPriority,
-            defaultCPUAffinity: descriptor.defaultCPUAffinity,
-            defaultUmask: descriptor.defaultUmask,
-            defaultRlimits: descriptor.defaultRlimits,
+			defaultCPUAffinity: descriptor.defaultCPUAffinity,
+			defaultUmask: descriptor.defaultUmask,
+			defaultRlimits: defaultRlimits,
 			defaultPersonalityDomain: descriptor.defaultPersonalityDomain,
 			hostname: hostname ?? descriptor.hostname,
 			domainname: domainname ?? descriptor.domainname,
@@ -1920,6 +2043,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -1937,6 +2061,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			defaultRlimitOverrides: defaultRlimitOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -1957,6 +2082,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -1998,7 +2124,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDefaultGroupIDWith: defaultGroupIDOverride,
 				replacingHostnameWith: hostnameOverride,
 				replacingDomainnameWith: domainnameOverride,
-				replacingDefaultTerminalWith: terminalOverride
+				replacingDefaultTerminalWith: terminalOverride,
+				mergingDefaultRlimitsWith: defaultRlimitOverrides
 			)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -2091,6 +2218,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			defaultRlimitOverrides: request.rlimits,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2136,6 +2264,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			defaultRlimitOverrides: request.rlimits,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2183,6 +2312,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2202,6 +2332,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			defaultRlimitOverrides: defaultRlimitOverrides,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2224,6 +2355,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2242,6 +2374,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			defaultRlimitOverrides: defaultRlimitOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2273,6 +2406,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -2293,6 +2427,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			defaultRlimitOverrides: defaultRlimitOverrides,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2316,6 +2451,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -2335,6 +2471,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			defaultRlimitOverrides: defaultRlimitOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2379,6 +2516,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			defaultRlimitOverrides: request.rlimits,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -2412,6 +2550,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
@@ -2431,6 +2570,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			defaultRlimitOverrides: defaultRlimitOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
