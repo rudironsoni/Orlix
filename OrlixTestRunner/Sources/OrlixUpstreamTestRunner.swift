@@ -828,6 +828,8 @@ enum OrlixAppLaunchRuntimeRunner {
                 output = try OrlixOCIDerivedStdioRuntimeProof().run()
             case "ociTerminal":
                 output = try OrlixOCIDerivedStdioRuntimeProof(terminal: true).run()
+            case "ociSignal":
+                output = try OrlixOCIDerivedSignalRuntimeProof().run()
             default:
                 throw OrlixAppLaunchRuntimeRunnerError.unknownSpec(specName)
             }
@@ -1158,6 +1160,238 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
                 "path": rootPath,
             ],
             "hostname": "oci-host",
+            "domainname": "oci.example",
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: document,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: bundleRoot.appendingPathComponent("config.json"))
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+    }
+}
+
+private final class OrlixOCIDerivedSignalRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 120
+    private static let requiredMarkers = [
+        "ORLIX_ENV_SIGNAL_BEGIN",
+        "ORLIX_ENV_SIGNAL_READY",
+        "ORLIX_ENV_SIGNAL_SIGINT_TRAP",
+    ]
+
+    private let fileManager = FileManager.default
+    private let recorder = OrlixRuntimeProofOutputRecorder()
+
+    func run() throws -> String {
+        let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+        let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+        guard fileManager.fileExists(atPath: ready.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+        }
+
+        let copiedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-oci-signal-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+        defer {
+            try? fileManager.removeItem(at: copiedRoot)
+        }
+
+        let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+        let descriptor = OrlixEnvironmentDescriptor(
+            id: "oci-imported-runtime-test-fixture",
+            source: .ociLayout,
+            platform: "linux/arm64",
+            rootImageIdentifier: "orlix.test.environment.oci-runtime-test-fixture",
+            defaultCommand: ["/bin/sh", "-c", Self.signalExecutionScript],
+            defaultEnvironment: [
+                "HOME": "/root",
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM": "xterm-256color",
+            ],
+            defaultWorkingDirectory: "/",
+            defaultUserID: 0,
+            defaultGroupID: 0,
+            hostname: "oci-signal-host",
+            domainname: "oci.example",
+            rootMount: .defaultOverlay
+        )
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        let terminal = OrlixTerminalSession()
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer {
+            output.cancel()
+        }
+
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: descriptor.id,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        try Self.writeOCIRuntimeConfig(
+            script: Self.signalExecutionScript,
+            rootPath: "imported-root",
+            to: fixture.root
+        )
+        let runtime = OrlixOCIRuntime(registry: registry)
+        let lifecycle = try OrlixOCIRuntimeBundle
+            .load(from: fixture.root)
+            .lifecycleController(id: descriptor.id)
+            .create()
+        let processHandle = try OrlixOCIRuntimeProcessHandle(
+            lifecycle: lifecycle,
+            rootMount: .defaultOverlay,
+            rootImageIdentifier: descriptor.rootImageIdentifier
+        )
+        try registry.save(processHandle.sessionDescriptor.environment)
+        try runtime.lifecycleStore.save(lifecycle)
+
+        let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: Self.timeout)
+        let processSession = try OrlixOCIRuntimeProcessSession(
+            lifecycle: lifecycle,
+            rootMount: .defaultOverlay,
+            registry: registry,
+            terminal: terminal,
+            lifecycleStore: runtime.lifecycleStore
+        )
+        let runningSession = try processSession.start(using: driver)
+        try waitForMarker("ORLIX_ENV_SIGNAL_READY")
+        let runningState = try runtime.lifecycleStore.stateReport(id: descriptor.id)
+        let signaledSession = try runningSession.kill(signal: 2, using: driver)
+        let signaledState = try runtime.lifecycleStore.stateReport(id: descriptor.id)
+        _ = try signaledSession.wait(using: driver)
+        let stoppedState = try runtime.lifecycleStore.stateReport(id: descriptor.id)
+        let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(forID: descriptor.id)
+        let environmentDirectoryURL = layout.rootDirectory
+        let deletedEnvironment = try OrlixOCIEnvironmentInstaller(registry: registry)
+            .delete(id: descriptor.id)
+
+        var text = Self.normalized(recorder.text)
+        try Self.validateText(text)
+        try Self.validateLifecycle(
+            runningState: runningState,
+            signaledState: signaledState,
+            stoppedState: stoppedState,
+            deletedEnvironment: deletedEnvironment,
+            lifecycleRecordURL: lifecycleRecordURL,
+            environmentDirectoryURL: environmentDirectoryURL
+        )
+        text += "\nORLIX_OCI_LIFECYCLE_SIGNAL_RUNNING_OK\n"
+        text += "ORLIX_OCI_LIFECYCLE_SIGNAL_SENT_OK\n"
+        text += "ORLIX_OCI_LIFECYCLE_SIGNAL_STOPPED_OK\n"
+        text += "ORLIX_OCI_LIFECYCLE_SIGNAL_DELETE_OK\n"
+        return text
+    }
+
+    private static var signalExecutionScript: String {
+        [
+            "trap 'printf \"%s%s\\n\" ORLIX_ENV_SIGNAL_ SIGINT_TRAP; exit 130' INT",
+            "printf '%s%s\\n' ORLIX_ENV_ SIGNAL_BEGIN",
+            "printf '%s%s\\n' ORLIX_ENV_SIGNAL_ READY",
+            "while :; do sleep 1; done",
+        ].joined(separator: "\n")
+    }
+
+    private func waitForMarker(_ marker: String) throws {
+        let deadline = Date().addingTimeInterval(Self.timeout)
+        while Date() < deadline {
+            let text = Self.normalized(recorder.text)
+            if text.contains(marker) {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+            marker,
+            Self.normalized(recorder.text)
+        )
+    }
+
+    private static func validateText(_ text: String) throws {
+        for marker in requiredMarkers where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+        }
+        if text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR") {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+        }
+    }
+
+    private static func validateLifecycle(
+        runningState: OrlixOCIRuntimeStateReport,
+        signaledState: OrlixOCIRuntimeStateReport,
+        stoppedState: OrlixOCIRuntimeStateReport,
+        deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+        lifecycleRecordURL: URL,
+        environmentDirectoryURL: URL
+    ) throws {
+        guard runningState.status == .running, runningState.pid != nil else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected running lifecycle state before signal"
+            )
+        }
+        guard signaledState.status == .running, signaledState.pid == runningState.pid else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected lifecycle state to remain running until wait observes signal completion"
+            )
+        }
+        guard stoppedState.status == .stopped, stoppedState.exitStatus == 130 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected stopped lifecycle state exit 130 after SIGINT"
+            )
+        }
+        guard deletedEnvironment.id == "oci-imported-runtime-test-fixture" else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected delete to remove stopped signaled lifecycle record"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected lifecycle record cleanup"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected environment directory cleanup"
+            )
+        }
+    }
+
+    private static func writeOCIRuntimeConfig(
+        script: String,
+        rootPath: String,
+        to bundleRoot: URL
+    ) throws {
+        let process: [String: Any] = [
+            "terminal": true,
+            "args": ["/bin/sh", "-c", script],
+            "env": [
+                "HOME=/root",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM=xterm-256color",
+            ],
+            "cwd": "/",
+            "user": [
+                "uid": 0,
+                "gid": 0,
+            ],
+        ]
+        let document: [String: Any] = [
+            "ociVersion": "1.1.0",
+            "process": process,
+            "root": [
+                "path": rootPath,
+            ],
+            "hostname": "oci-signal-host",
             "domainname": "oci.example",
         ]
         let data = try JSONSerialization.data(

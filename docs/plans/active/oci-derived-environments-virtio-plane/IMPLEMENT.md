@@ -24237,3 +24237,22 @@ Boundary:
 
 Current status:
 - Latest current checkpoint: app-hosted OCI terminal PTY and inherited-stdio lifecycle proofs pass on the single iPhone 17 simulator; continue toward broader OCI runtime delivery, not completion.
+### 2026-06-27 OCI signal lifecycle app proof
+Changes:
+- Added direct `OrlixTestRunner` app-launch runtime proof `--orlix-runtime-test-spec ociSignal`.
+- The proof runs the existing imported OCI environment fixture through the OrlixOS OCI lifecycle path, starts a terminal-backed Linux shell, observes it running, sends SIGINT through the existing Linux session observation driver, waits for exit status 130, deletes the lifecycle/environment, and checks cleanup.
+- Reused the existing imported fixture id and root image. No generated upstream edits, OrlixMLibC patches, HostAdapter Linux policy, package/proof/stamp ladders, or feature-report-only work were added.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 and used `/Volumes/1TB/Xcode/DerivedData` plus `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on the single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociSignal` passed artifact validation. Required markers found: `orlix-init: process started pid=32`, `ORLIX_ENV_SIGNAL_BEGIN`, `ORLIX_ENV_SIGNAL_READY`, `^CORLIX_ENV_SIGNAL_SIGINT_TRAP`, `orlix-init: process exited pid=32 status=130`, `ORLIX_OCI_LIFECYCLE_SIGNAL_RUNNING_OK`, `ORLIX_OCI_LIFECYCLE_SIGNAL_SENT_OK`, `ORLIX_OCI_LIFECYCLE_SIGNAL_STOPPED_OK`, `ORLIX_OCI_LIFECYCLE_SIGNAL_DELETE_OK`.
+- Regression app launches `ociTerminal` and `ociStdio` exited 0 and validated their terminal/inherited-stdio lifecycle markers with no app runner error or lifecycle timeout markers.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- OrlixTestRunner crash scan found no crash reports; both DiagnosticReports directories were absent.
+
+Boundary:
+- This proves Linux-visible terminal SIGINT lifecycle behavior for an OCI-derived environment through the app-hosted OrlixOS runtime path. It does not claim full OCI Runtime Spec completion, registry pull completion, cgroup/device/namespace completeness, network behavior, `orlix run` product completion, or full product readiness.
