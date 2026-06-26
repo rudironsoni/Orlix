@@ -24146,3 +24146,25 @@ Runtime proof gap:
   then stayed silent until interrupted. The resulting xcresult bundles are
   incomplete because xcodebuild was interrupted. No `OrlixTestRunner` crash
   report was found. This is not counted as virtio-fs runtime proof.
+## 2026-06-26 - App-hosted virtio-fs writable root proof
+
+Changes:
+- Kept the fix in `OrlixKernel` virtio-mmio/FUSE handling, not OrlixOS, HostAdapter Linux policy, generated trees, or mlibc.
+- Made FUSE request parsing tolerate legal split virtqueue input descriptors for create, write, read, getxattr, and listxattr paths.
+- Made FUSE response writing tolerate split output descriptors for entry/create, write, read, and xattr payload replies.
+- Added missing upstream Linux objects required by enabled cgroup/memcg/block-cgroup configs to the OrlixKernel product archive source list.
+- Added direct app-launch upstream-test plumbing in `OrlixTestRunner` so simulator launches can execute `kernelVirtioFSMount` and write a durable output artifact.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile build PROFILE=release` exited 0, built `Build/OrlixKernel/release/iphonesimulator/OrlixKernel.a`, and packaged/verified simulator `OrlixKernel.xcframework`.
+- `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 and used `/Volumes/1TB/Xcode/DerivedData` plus `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on the single known-good iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- App-hosted launch with `ORLIX_UPSTREAM_TEST_SPEC=kernelVirtioFSMount` exited 0 and saved `/Users/rudironsoni/Library/Developer/CoreSimulator/Devices/E65F0D05-980C-4368-8CDC-2D2BF3E05757/data/Containers/Data/Application/F4DE2F0C-F42D-4D41-B826-948D050EF1A0/tmp/orlix-upstream-test-output.txt`.
+- Artifact grep found `mounted_root_supports_create_write_readback`, `mounted_root_reports_missing_xattr`, `mount_host_virtiofs_ro`, `mounted_root_rejects_create_with_erofs`, and `ORLIX-KSELFTEST-END`; the same check found no `not ok` and no `ORLIX-APP-RUNNER-ERROR`.
+- Simulator log check over the last five minutes for `OrlixTestRunner` crash, exception, or termination messages returned no entries.
+
+Boundary:
+- This proves the app-hosted Orlix Linux virtio-fs mount probe on the single iPhone 17 simulator, including writable create/write/readback, missing xattr `ENODATA`, read-only `EROFS`, and final kselftest completion.
+- It does not claim full OCI runtime readiness, package runtime readiness, upstream Coreutils success, or broad product runtime readiness beyond this kernel-interface proof.
