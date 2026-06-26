@@ -2312,11 +2312,11 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason: "Linux /tmp tmpfs visibility is covered by Orlix kselftest."
 		),
 		OrlixOCIRuntimeFeature(
-			name: "ociBindMounts",
-			status: .implemented,
-			proof: "orlix:virtio_fs_mount_probe",
-			reason: "OCI bind mount source paths translate to opaque Orlix host-directory registrations and Linux-visible virtiofs mounts; Documents and security-scoped external folders remain app-managed source conveniences."
-		),
+				name: "ociBindMounts",
+				status: .implemented,
+				proof: "orlix:virtio_fs_mount_probe",
+				reason: "OCI bind mount source paths translate to opaque Orlix host-directory registrations and Linux-visible virtiofs mounts; ro and noexec carry into Linux mount flags while nosuid and nodev are always enforced for host-directory mounts."
+			),
 		OrlixOCIRuntimeFeature(
 			name: "ociCgroupMounts",
 			status: .implemented,
@@ -2538,7 +2538,15 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 
 	private static let documentsSource = "orlix:documents"
 	private static let externalSourcePrefix = "orlix:external:"
-	private static let supportedBindOptions = Set(["bind", "rbind", "ro", "rw"])
+	private static let supportedBindOptions = Set([
+		"bind",
+		"rbind",
+		"ro",
+		"rw",
+		"nosuid",
+		"nodev",
+		"noexec",
+	])
 
 	func environmentMount() throws -> OrlixEnvironmentMount? {
 		guard type == "bind" else {
@@ -2553,23 +2561,30 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
 		}
 		let readOnly = optionSet.contains("ro")
+		let noExec = optionSet.contains("noexec")
 		do {
 			if source == Self.documentsSource {
-				return try .documents(targetPath: destination, readOnly: readOnly)
+				return try .documents(
+					targetPath: destination,
+					readOnly: readOnly,
+					noExec: noExec
+				)
 			}
 			if source.hasPrefix(Self.externalSourcePrefix) {
 				let bookmarkID = String(source.dropFirst(Self.externalSourcePrefix.count))
 				return try .securityScopedExternal(
 					bookmarkID: bookmarkID,
 					targetPath: destination,
-					readOnly: readOnly
+					readOnly: readOnly,
+					noExec: noExec
 				)
 			}
 			if source.hasPrefix("/") {
 				return try .hostPath(
 					source,
 					targetPath: destination,
-					readOnly: readOnly
+					readOnly: readOnly,
+					noExec: noExec
 				)
 			}
 		} catch OrlixEnvironmentMountError.invalidTargetPath(_),

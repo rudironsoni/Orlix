@@ -876,6 +876,7 @@ static int mount_configured_host_directory(int index)
 	char source[32];
 	char target[ORLIX_INIT_HOST_MOUNT_TARGET_SIZE];
 	unsigned long read_only = 0;
+	unsigned long no_exec = 0;
 	unsigned long flags = MS_NOSUID | MS_NODEV;
 
 	snprintf(key, sizeof(key), "orlix.mount.host%d.target=", index);
@@ -888,6 +889,11 @@ static int mount_configured_host_directory(int index)
 	if (read_cmdline_unsigned(key, &read_only) == 0 &&
 	    read_only != 0)
 		flags |= MS_RDONLY;
+
+	snprintf(key, sizeof(key), "orlix.mount.host%d.noexec=", index);
+	if (read_cmdline_unsigned(key, &no_exec) == 0 &&
+	    no_exec != 0)
+		flags |= MS_NOEXEC;
 
 	if (ensure_dir_recursive(target, 0755) != 0)
 		die("create host mount target");

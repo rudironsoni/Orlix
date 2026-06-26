@@ -617,99 +617,117 @@ public enum OrlixEnvironmentMountSource: Codable, Equatable, Sendable {
 
 @_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
-    public let source: OrlixEnvironmentMountSource
-    public let targetPath: String
-    public let readOnly: Bool
+	public let source: OrlixEnvironmentMountSource
+	public let targetPath: String
+	public let readOnly: Bool
+	public let noExec: Bool
 
-    public static func documents(
-        targetPath: String,
-        readOnly: Bool = false
-    ) throws -> OrlixEnvironmentMount {
-        try validateLinuxMountTarget(targetPath)
-        return OrlixEnvironmentMount(
-            source: .documents,
-            targetPath: targetPath,
-            readOnly: readOnly
-        )
-    }
+	public static func documents(
+		targetPath: String,
+		readOnly: Bool = false,
+		noExec: Bool = false
+	) throws -> OrlixEnvironmentMount {
+		try validateLinuxMountTarget(targetPath)
+		return OrlixEnvironmentMount(
+			source: .documents,
+			targetPath: targetPath,
+			readOnly: readOnly,
+			noExec: noExec
+		)
+	}
 
 	public static func securityScopedExternal(
 		bookmarkID: String,
 		targetPath: String,
-		readOnly: Bool = false
-    ) throws -> OrlixEnvironmentMount {
-        try validateSecurityScopedBookmarkID(bookmarkID)
-        try validateLinuxMountTarget(targetPath)
-        return OrlixEnvironmentMount(
-            source: .securityScopedExternal(bookmarkID: bookmarkID),
-            targetPath: targetPath,
-			readOnly: readOnly
+		readOnly: Bool = false,
+		noExec: Bool = false
+	) throws -> OrlixEnvironmentMount {
+		try validateSecurityScopedBookmarkID(bookmarkID)
+		try validateLinuxMountTarget(targetPath)
+		return OrlixEnvironmentMount(
+			source: .securityScopedExternal(bookmarkID: bookmarkID),
+			targetPath: targetPath,
+			readOnly: readOnly,
+			noExec: noExec
 		)
 	}
 
 	public static func hostPath(
 		_ hostPath: String,
 		targetPath: String,
-		readOnly: Bool = false
+		readOnly: Bool = false,
+		noExec: Bool = false
 	) throws -> OrlixEnvironmentMount {
 		try validateHostMountPath(hostPath)
 		try validateLinuxMountTarget(targetPath)
 		return OrlixEnvironmentMount(
 			source: .hostPath(hostPath),
 			targetPath: targetPath,
-			readOnly: readOnly
+			readOnly: readOnly,
+			noExec: noExec
 		)
 	}
 
-    private init(
-        source: OrlixEnvironmentMountSource,
-        targetPath: String,
-        readOnly: Bool
-    ) {
-        self.source = source
-        self.targetPath = targetPath
-        self.readOnly = readOnly
-    }
+	private init(
+		source: OrlixEnvironmentMountSource,
+		targetPath: String,
+		readOnly: Bool,
+		noExec: Bool
+	) {
+		self.source = source
+		self.targetPath = targetPath
+		self.readOnly = readOnly
+		self.noExec = noExec
+	}
 
-    private enum CodingKeys: String, CodingKey {
-        case source
-        case targetPath
-        case readOnly
-    }
+	private enum CodingKeys: String, CodingKey {
+		case source
+		case targetPath
+		case readOnly
+		case noExec
+	}
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let source = try container.decode(
             OrlixEnvironmentMountSource.self,
             forKey: .source
-        )
-        let targetPath = try container.decode(String.self, forKey: .targetPath)
-        let readOnly = try container.decode(Bool.self, forKey: .readOnly)
+		)
+		let targetPath = try container.decode(String.self, forKey: .targetPath)
+		let readOnly = try container.decode(Bool.self, forKey: .readOnly)
+		let noExec = try container.decodeIfPresent(Bool.self, forKey: .noExec) ?? false
 
-        switch source {
-        case .documents:
-            self = try .documents(targetPath: targetPath, readOnly: readOnly)
+		switch source {
+		case .documents:
+			self = try .documents(
+				targetPath: targetPath,
+				readOnly: readOnly,
+				noExec: noExec
+			)
 		case let .securityScopedExternal(bookmarkID):
 			self = try .securityScopedExternal(
 				bookmarkID: bookmarkID,
 				targetPath: targetPath,
-				readOnly: readOnly
+				readOnly: readOnly,
+				noExec: noExec
 			)
 		case let .hostPath(hostPath):
 			self = try .hostPath(
 				hostPath,
 				targetPath: targetPath,
-				readOnly: readOnly
+				readOnly: readOnly,
+				noExec: noExec
 			)
 		}
 	}
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(source, forKey: .source)
-        try container.encode(targetPath, forKey: .targetPath)
-        try container.encode(readOnly, forKey: .readOnly)
-    }
+		try container.encode(source, forKey: .source)
+		try container.encode(targetPath, forKey: .targetPath)
+		try container.encode(readOnly, forKey: .readOnly)
+		try container.encode(noExec, forKey: .noExec)
+	}
 }
 
 @_spi(OrlixPrivateTesting)
@@ -980,9 +998,10 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultPersonalityCommandLineKey = "orlix.personality"
     public static let defaultUmaskCommandLineKey = "orlix.umask"
 public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
-public static let defaultHostMountTargetCommandLineKey = "orlix.mount.host0.target"
-public static let defaultHostMountReadOnlyCommandLineKey = "orlix.mount.host0.readonly"
-public static let hostMountCommandLineKeyPrefix = "orlix.mount.host"
+	public static let defaultHostMountTargetCommandLineKey = "orlix.mount.host0.target"
+	public static let defaultHostMountReadOnlyCommandLineKey = "orlix.mount.host0.readonly"
+	public static let defaultHostMountNoExecCommandLineKey = "orlix.mount.host0.noexec"
+	public static let hostMountCommandLineKeyPrefix = "orlix.mount.host"
 public static let hostnameCommandLineKey = "orlix.hostname"
     public static let domainnameCommandLineKey = "orlix.domainname"
     public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
@@ -1603,11 +1622,14 @@ for (index, mount) in descriptor.mounts.enumerated() {
 tokens.append(
 "\(hostMountCommandLineKeyPrefix)\(index).target=\(percentEncoded(mount.targetPath))"
 )
-if mount.readOnly {
-tokens.append("\(hostMountCommandLineKeyPrefix)\(index).readonly=1")
-}
-}
-return tokens
+		if mount.readOnly {
+			tokens.append("\(hostMountCommandLineKeyPrefix)\(index).readonly=1")
+		}
+		if mount.noExec {
+			tokens.append("\(hostMountCommandLineKeyPrefix)\(index).noexec=1")
+		}
+	}
+	return tokens
 }
 
     private static func percentEncoded(_ value: String) -> String {

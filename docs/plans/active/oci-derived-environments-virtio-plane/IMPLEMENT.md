@@ -22808,3 +22808,27 @@ Boundary:
 - This advances OCI cgroup resource usability when an OCI config leaves cgroup placement to the runtime. It does not add new Linux cgroup semantics, duplicate kernel cgroups in OrlixOS, or claim full OCI Runtime Spec lifecycle, broad namespace/cgroup/device/filesystem/network readiness, Linux userspace `/usr/bin/orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
 
 Current status: Latest coherent checkpoint derives deterministic OrlixOS-owned default cgroup paths for OCI resource controls when `linux.cgroupsPath` is omitted, then carries those paths through the existing Linux cgroupfs init application path. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.
+
+### 2026-06-26 OCI bind mount noexec option carry-through
+
+Changes:
+- OCI bind mount options now accept `nosuid`, `nodev`, and `noexec` for Orlix host-directory backed mounts.
+- `noexec` carries from OCI mount options into `OrlixEnvironmentMount.noExec`, then into `orlix.mount.hostN.noexec=1`, then OrlixOS init applies Linux `MS_NOEXEC` to the virtio-fs mount.
+- `nosuid` and `nodev` are accepted only because OrlixOS init already always applies `MS_NOSUID | MS_NODEV` to configured host-directory virtio-fs mounts.
+- Existing read-only behavior remains unchanged.
+- Tests cover documents bind mount option parsing, host-path bind mount command-line emission, and init-source contract for `MS_NOEXEC`.
+- No HostAdapter, mlibc, generated upstream, OrlixKernel patch, or `GOAL.md` changes.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `swiftc -typecheck -parse-as-library ... OrlixOS/Sources/Session/*.swift` exited 0 with pre-existing xcrun cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixOS/Sources/init/init.c` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused Xcode XCTest could not run in this turn: unsandboxed simulator execution was rejected by the execution policy, and sandboxed `xcodebuild` failed before compilation because CoreSimulatorService and external DerivedData access were blocked.
+
+Boundary:
+- This advances OCI bind mount option fidelity for host-directory backed virtio-fs mounts. It does not claim arbitrary OCI mount option support, mount propagation support, full OCI Runtime Spec lifecycle, product-visible Linux userspace `orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, or multiple live environments inside one already-running OrlixKernel.
+
+Current status: Latest coherent checkpoint carries OCI bind mount `noexec` through OrlixOS descriptors and init into Linux `MS_NOEXEC`, while accepting `nosuid` and `nodev` because they are already enforced for host-directory virtio-fs mounts. Next work remains product-visible `orlix run`, OCI lifecycle breadth, and broader Linux namespace/cgroup/device/filesystem/network runtime support.
