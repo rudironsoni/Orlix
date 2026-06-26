@@ -10,6 +10,25 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI image label preservation
+
+Changes:
+- `OrlixOCIImageLayoutReader` now decodes Docker/OCI image config `Labels` into `OrlixOCIImageLayoutImport.labels`.
+- Label validation matches existing annotation safety rules: label keys must be nonempty and keys/values must not contain NUL bytes.
+- `OrlixOCIImageLayoutImporter` persists imported image labels as `OrlixEnvironmentDescriptor.annotations`, so environment registry reloads and existing OCI lifecycle/state reconstruction can surface imported image metadata.
+- Focused tests cover default-empty labels, valid Open Containers labels, invalid label rejection, and descriptor save/load persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This advances OrlixOS-owned OCI import, descriptors, and payload metadata. It does not claim live simulator proof, Linux runtime behavior proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, Docker daemon support, package/proof/stamp systems, or runtime package execution readiness.
+
 ### 2026-06-26 OCI run volume mount shorthand
 
 Changes:

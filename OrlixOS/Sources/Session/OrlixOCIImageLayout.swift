@@ -784,6 +784,7 @@ public struct OrlixOCIImageLayoutImport: Equatable, Sendable {
     public let layers: [OrlixOCIImageLayer]
     public let rootfsDiffIDs: [String]
     public let processDefaults: OrlixOCIProcessDefaults
+    public let labels: [String: String]
 }
 
 @_spi(OrlixPrivateTesting)
@@ -887,7 +888,8 @@ public struct OrlixOCIImageLayoutReader: Sendable {
                 command: try commandVector(imageConfig.config?.cmd ?? []),
                 workingDirectory: imageConfig.config?.workingDir,
                 user: imageConfig.config?.user
-            )
+            ),
+            labels: try labelDictionary(imageConfig.config?.labels ?? [:])
         )
     }
 
@@ -952,6 +954,20 @@ public struct OrlixOCIImageLayoutReader: Sendable {
         for value in values {
             guard !value.contains("\u{0}") else {
                 throw OrlixOCIImageLayoutError.invalidCommandEntry(value)
+            }
+        }
+        return values
+    }
+
+    private func labelDictionary(_ values: [String: String]) throws
+        -> [String: String]
+    {
+        for (key, value) in values {
+            guard !key.isEmpty,
+                !key.contains("\u{0}"),
+                !value.contains("\u{0}")
+            else {
+                throw OrlixOCIImageLayoutError.invalidLabelEntry(key)
             }
         }
         return values
@@ -1167,12 +1183,13 @@ public struct OrlixOCIImageLayoutImporter: Sendable {
             platform: image.platform,
             rootImageIdentifier: rootImageIdentifier,
             defaultCommand: command,
-            defaultEnvironment: image.processDefaults.environment,
-            defaultWorkingDirectory: workingDirectory,
-            defaultUserID: user.uid,
-            defaultGroupID: user.gid
-        )
-    }
+        defaultEnvironment: image.processDefaults.environment,
+        defaultWorkingDirectory: workingDirectory,
+        defaultUserID: user.uid,
+        defaultGroupID: user.gid,
+        annotations: image.labels
+    )
+}
 
     private func validatedWorkingDirectory(_ value: String?) throws -> String {
         guard let value, !value.isEmpty else {
@@ -1355,6 +1372,7 @@ public enum OrlixOCIImageLayoutError:
     case invalidWorkingDirectory(String)
     case invalidEnvironmentEntry(String)
     case invalidCommandEntry(String)
+    case invalidLabelEntry(String)
     case invalidWhiteout(String)
     case decompressionFailed(String)
     case decompressedLayerTooLarge(Int)
@@ -1793,6 +1811,7 @@ private struct OCIProcessConfig: Codable {
     let cmd: [String]?
     let workingDir: String?
     let user: String?
+    let labels: [String: String]?
 
     enum CodingKeys: String, CodingKey {
         case env = "Env"
@@ -1800,6 +1819,7 @@ private struct OCIProcessConfig: Codable {
         case cmd = "Cmd"
         case workingDir = "WorkingDir"
         case user = "User"
+        case labels = "Labels"
     }
 }
 
