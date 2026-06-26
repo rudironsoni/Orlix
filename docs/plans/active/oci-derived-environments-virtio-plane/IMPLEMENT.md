@@ -10,6 +10,43 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run volume mount shorthand
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--volume SOURCE:TARGET[:OPTIONS]`,
+  `--volume=SOURCE:TARGET[:OPTIONS]`, and `-v SOURCE:TARGET[:OPTIONS]` before
+  image.
+- Volume shorthand normalizes into the existing bind mount descriptor path used
+  by `--mount`: absolute host paths remain host-path mounts, and the `documents`
+  source aliases the existing `orlix:documents` mount source.
+- Supported shorthand options are delegated to the existing bind mount option
+  validator; `readonly` is normalized to `ro`.
+- Registry-backed install/run and terminal-session preparation persist parsed
+  volume mounts into `OrlixEnvironmentDescriptor.mounts`, sharing duplicate
+  target rejection and descriptor merge behavior with `--mount`.
+- Focused tests cover split, equals, and `-v` parsing, invalid volume rejection,
+  and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+
+Boundary:
+- Advances product-facing bind mount ergonomics through existing OrlixOS
+  descriptors and the Linux-visible init `virtiofs` mount path. Does not claim
+  live simulator proof, runtime virtio-fs behavior proof, named-volume support,
+  arbitrary OCI mount option support, full OCI lifecycle readiness,
+  HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream
+  edits, custom ABI, or package/proof/stamp systems.
+
+Current status:
+- Volume shorthand checkpoint is locally verified by Swift parse/typecheck and
+  guard checks, pending commit and push.
+
 ### 2026-06-26 OCI run bind mount overrides
 
 Changes:

@@ -8536,6 +8536,78 @@ func testOCIEnvironmentRunArgumentsAcceptsBindMountOverrides() throws {
 	)
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsVolumeMountOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--volume",
+		"documents:/mnt/documents:ro,noexec",
+		"-v",
+		"/private/tmp/orlix-host:/mnt/host:readonly",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.mounts,
+		[
+			try OrlixEnvironmentMount.documents(
+				targetPath: "/mnt/documents",
+				readOnly: true,
+				noExec: true
+			),
+			try OrlixEnvironmentMount.hostPath(
+				"/private/tmp/orlix-host",
+				targetPath: "/mnt/host",
+				readOnly: true
+			),
+		]
+	)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--volume=/private/tmp/orlix-cache:/mnt/cache:rw",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(
+		equalsArguments.mounts,
+		[
+			try OrlixEnvironmentMount.hostPath(
+				"/private/tmp/orlix-cache",
+				targetPath: "/mnt/cache"
+			),
+		]
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidVolumeMountOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--volume",
+			"documents",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("mounts")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"-v",
+			"documents:/proc/host:ro",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("mounts.destination")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsRejectsInvalidBindMountOverride() throws {
 	XCTAssertThrowsError(
 		try OrlixOCIEnvironmentRunArguments([
@@ -10891,6 +10963,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--tmpfs=/var/tmp:ro",
 			"--mount",
 			"type=bind,source=orlix:documents,target=/mnt/documents,readonly,noexec",
+			"--volume",
+			"documents:/mnt/volume-docs:ro",
 			"--device-node",
 			"/dev/orlix-zero:c:1:5:0660:1000:100",
 		"--device-node=/dev/orlix-pipe:p:0644",
@@ -11033,6 +11107,10 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 				targetPath: "/mnt/documents",
 				readOnly: true,
 				noExec: true
+			),
+			try OrlixEnvironmentMount.documents(
+				targetPath: "/mnt/volume-docs",
+				readOnly: true
 			),
 		]
 	)

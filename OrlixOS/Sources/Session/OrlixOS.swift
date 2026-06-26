@@ -1716,11 +1716,30 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                     throw OrlixOCIEnvironmentRunArgumentsError
                         .missingOptionValue("--mount")
                 }
-                try Self.addMount(mount, to: &parsedMounts)
-                continue
-            }
-            if parsedImage == nil, value == "--device-node" {
-                guard let deviceNode = values.first else {
+		try Self.addMount(mount, to: &parsedMounts)
+		continue
+	}
+	if parsedImage == nil, value == "--volume" || value == "-v" {
+		guard let volume = values.first else {
+			throw OrlixOCIEnvironmentRunArgumentsError
+				.missingOptionValue(value)
+		}
+		try Self.addVolume(volume, to: &parsedMounts)
+		values.removeFirst()
+		continue
+	}
+	if parsedImage == nil, value.hasPrefix("--volume=") {
+		let separator = value.firstIndex(of: "=")!
+		let volume = String(value[value.index(after: separator)...])
+		guard !volume.isEmpty else {
+			throw OrlixOCIEnvironmentRunArgumentsError
+				.missingOptionValue("--volume")
+		}
+		try Self.addVolume(volume, to: &parsedMounts)
+		continue
+	}
+	if parsedImage == nil, value == "--device-node" {
+		guard let deviceNode = values.first else {
                     throw OrlixOCIEnvironmentRunArgumentsError
                     .missingOptionValue(value)
             }
@@ -2990,12 +3009,87 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                 "mounts.destination"
             )
         }
-        mounts.append(mount)
-    }
+	mounts.append(mount)
+	}
 
-    private static func parseMount(_ value: String) throws
-        -> OrlixEnvironmentMount
-    {
+	private static func addVolume(
+		_ value: String,
+		to mounts: inout [OrlixEnvironmentMount]
+	) throws {
+		let mount = try parseVolume(value)
+		guard !mounts.contains(where: { $0.targetPath == mount.targetPath })
+		else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"mounts.destination"
+			)
+		}
+		mounts.append(mount)
+	}
+
+	private static func parseVolume(_ value: String) throws
+		-> OrlixEnvironmentMount
+	{
+		let parts = value.split(
+			separator: ":",
+			maxSplits: 2,
+			omittingEmptySubsequences: false
+		)
+		guard parts.count == 2 || parts.count == 3 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts")
+		}
+		let rawSource = String(parts[0])
+		let target = String(parts[1])
+		guard !rawSource.isEmpty, !target.isEmpty else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts")
+		}
+
+		let source: String
+		switch rawSource {
+		case "documents":
+			source = "orlix:documents"
+		default:
+			source = rawSource
+		}
+
+		var options = ["bind"]
+		if parts.count == 3 {
+			let optionsText = String(parts[2])
+			guard !optionsText.isEmpty else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"mounts.options"
+				)
+			}
+			for rawOption in optionsText.split(
+				separator: ",",
+				omittingEmptySubsequences: false
+			) {
+				let option = String(rawOption)
+				guard !option.isEmpty else {
+					throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+						"mounts.options"
+					)
+				}
+				options.append(option == "readonly" ? "ro" : option)
+			}
+		}
+
+		let runtimeMount = OrlixOCIRuntimeMount(
+			destination: target,
+			type: "bind",
+			source: source,
+			options: options
+		)
+		guard let mount = try runtimeMount.environmentMount() else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"mounts.type.bind"
+			)
+		}
+		return mount
+	}
+
+	private static func parseMount(_ value: String) throws
+	-> OrlixEnvironmentMount
+	{
         var type: String?
         var source: String?
         var destination: String?
