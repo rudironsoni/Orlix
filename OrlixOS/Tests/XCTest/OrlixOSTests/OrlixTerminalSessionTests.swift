@@ -7941,6 +7941,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTNil(arguments.umask)
 	XCTNil(arguments.oomScoreAdjustment)
+	XCTNil(arguments.cpuAffinity)
 	XCTNil(arguments.noNewPrivileges)
 	XCTNil(arguments.closeAdditionalFds)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
@@ -7973,6 +7974,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTTrue(nameArguments.rlimits.isEmpty)
 	XCTNil(nameArguments.umask)
 	XCTNil(nameArguments.oomScoreAdjustment)
+	XCTNil(nameArguments.cpuAffinity)
 	XCTNil(nameArguments.noNewPrivileges)
 	XCTNil(nameArguments.closeAdditionalFds)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
@@ -7998,6 +8000,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTTrue(equalsArguments.rlimits.isEmpty)
 	XCTNil(equalsArguments.umask)
 	XCTNil(equalsArguments.oomScoreAdjustment)
+	XCTNil(equalsArguments.cpuAffinity)
 	XCTNil(equalsArguments.noNewPrivileges)
 	XCTNil(equalsArguments.closeAdditionalFds)
 	XCTAssertNil(equalsArguments.command)
@@ -8309,6 +8312,42 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidOOMScoreAdjustment() throws {
 	}
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsCPUAffinityOverride() throws {
+	let splitArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--cpu-affinity",
+		"0,2-3",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(splitArguments.cpuAffinity, OrlixEnvironmentCPUAffinity(mask: "0,2-3"))
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--cpu-affinity=1",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(equalsArguments.cpuAffinity, OrlixEnvironmentCPUAffinity(mask: "1"))
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidCPUAffinityOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cpu-affinity",
+			"3-1",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.execCPUAffinity")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 	let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
 		("--id=", .missingOptionValue("--id")),
@@ -8323,6 +8362,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--ulimit=", .missingOptionValue("--ulimit")),
 		("--umask=", .missingOptionValue("--umask")),
 		("--oom-score-adj=", .missingOptionValue("--oom-score-adj")),
+		("--cpu-affinity=", .missingOptionValue("--cpu-affinity")),
 	]
 
 		for (option, expectedError) in invalidOptions {
@@ -9689,6 +9729,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"022",
 			"--oom-score-adj",
 			"-250",
+			"--cpu-affinity",
+			"0,2-3",
 			"--hostname",
 			"registry-run-host",
 			"--domainname",
@@ -9737,6 +9779,10 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertTrue(descriptor.defaultCloseAdditionalFds)
 	XCTAssertEqual(descriptor.defaultUmask, 0o022)
 	XCTAssertEqual(descriptor.defaultOOMScoreAdjustment, -250)
+	XCTAssertEqual(
+		descriptor.defaultCPUAffinity,
+		OrlixEnvironmentCPUAffinity(mask: "0,2-3")
+	)
 	XCTAssertEqual(
 		descriptor.defaultRlimits,
 		[
