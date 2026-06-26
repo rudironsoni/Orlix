@@ -1289,6 +1289,12 @@ public struct OrlixOCIEnvironmentRunResult: Sendable {
 	public let completedStateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIEnvironmentHealthcheckResult: Sendable {
+	public let id: String
+	public let command: [String]
+	public let runResult: OrlixOCIEnvironmentRunResult
+}
+
 public struct OrlixOCIEnvironmentStartResult: Sendable {
 	public let id: String
 	public let stateReport: OrlixOCIRuntimeStateReport
@@ -1653,6 +1659,12 @@ public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
 	case missingOptionValue(String)
 	case unknownOption(String)
 	case removeAfterRunRequiresObservedRun
+}
+
+public enum OrlixOCIEnvironmentHealthcheckError: Error, Equatable, Sendable {
+	case missingHealthcheck(String)
+	case disabledHealthcheck(String)
+	case invalidHealthcheckTest(String, [String])
 }
 
 public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
@@ -6148,13 +6160,160 @@ deviceNodeOverrides: deviceNodeOverrides,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager
-		)
-		return Self.runResult(id: id, runtimeResult: runtimeResult)
-	}
+	)
+	return Self.runResult(id: id, runtimeResult: runtimeResult)
+}
 
-	private static func runResult(
-		id: String,
-		runtimeResult: OrlixOCIRuntimeRunResult
+public func healthcheck(
+id: String,
+terminal: OrlixTerminalSession = OrlixTerminalSession(),
+observationTimeout: TimeInterval = 600,
+fileManager: FileManager = .default
+) throws -> OrlixOCIEnvironmentHealthcheckResult {
+let command = try healthcheckCommand(
+environmentID: id,
+fileManager: fileManager
+)
+let runResult = try run(
+id: id,
+command: command,
+terminal: terminal,
+observationTimeout: observationTimeout,
+fileManager: fileManager
+)
+return OrlixOCIEnvironmentHealthcheckResult(
+id: id,
+command: command,
+runResult: runResult
+)
+}
+
+public func healthcheck(
+arguments: [String],
+terminal: OrlixTerminalSession = OrlixTerminalSession(),
+observationTimeout: TimeInterval = 600,
+fileManager: FileManager = .default
+) throws -> OrlixOCIEnvironmentHealthcheckResult {
+let request = try OrlixOCIEnvironmentLifecycleArguments(
+arguments,
+command: "healthcheck"
+)
+return try healthcheck(
+id: request.id,
+terminal: terminal,
+observationTimeout: observationTimeout,
+fileManager: fileManager
+)
+}
+
+@_spi(OrlixPrivateTesting)
+public func healthcheck(
+id: String,
+rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+terminal: OrlixTerminalSession = OrlixTerminalSession(),
+using driver: OrlixOCIRuntimeProcessObservationDriver,
+fileManager: FileManager = .default
+) throws -> OrlixOCIEnvironmentHealthcheckResult {
+let command = try healthcheckCommand(
+environmentID: id,
+fileManager: fileManager
+)
+let runResult = try run(
+id: id,
+command: command,
+rootMount: rootMount,
+kernelCommandLine: kernelCommandLine,
+terminal: terminal,
+using: driver,
+fileManager: fileManager
+)
+return OrlixOCIEnvironmentHealthcheckResult(
+id: id,
+command: command,
+runResult: runResult
+)
+}
+
+@_spi(OrlixPrivateTesting)
+public func healthcheck(
+arguments: [String],
+terminal: OrlixTerminalSession = OrlixTerminalSession(),
+using driver: OrlixOCIRuntimeProcessObservationDriver,
+fileManager: FileManager = .default
+) throws -> OrlixOCIEnvironmentHealthcheckResult {
+let request = try OrlixOCIEnvironmentLifecycleArguments(
+arguments,
+command: "healthcheck"
+)
+return try healthcheck(
+id: request.id,
+terminal: terminal,
+using: driver,
+fileManager: fileManager
+)
+}
+
+private func healthcheckCommand(
+environmentID: String,
+fileManager: FileManager
+) throws -> [String] {
+let descriptor = try registry.load(
+environmentID: environmentID,
+fileManager: fileManager
+)
+guard let healthcheck = descriptor.healthcheck else {
+throw OrlixOCIEnvironmentHealthcheckError.missingHealthcheck(environmentID)
+}
+return try Self.healthcheckCommand(
+healthcheck.test,
+environmentID: environmentID
+)
+}
+
+private static func healthcheckCommand(
+_ test: [String],
+environmentID: String
+) throws -> [String] {
+guard let kind = test.first else {
+throw OrlixOCIEnvironmentHealthcheckError.invalidHealthcheckTest(
+environmentID,
+test
+)
+}
+switch kind {
+case "NONE":
+throw OrlixOCIEnvironmentHealthcheckError.disabledHealthcheck(environmentID)
+case "CMD":
+let command = Array(test.dropFirst())
+guard !command.isEmpty else {
+throw OrlixOCIEnvironmentHealthcheckError.invalidHealthcheckTest(
+environmentID,
+test
+)
+}
+return command
+case "CMD-SHELL":
+guard test.count == 2,
+let script = test.dropFirst().first,
+!script.isEmpty else {
+throw OrlixOCIEnvironmentHealthcheckError.invalidHealthcheckTest(
+environmentID,
+test
+)
+}
+return ["/bin/sh", "-c", script]
+default:
+throw OrlixOCIEnvironmentHealthcheckError.invalidHealthcheckTest(
+environmentID,
+test
+)
+}
+}
+
+private static func runResult(
+	id: String,
+	runtimeResult: OrlixOCIRuntimeRunResult
 	) -> OrlixOCIEnvironmentRunResult {
 		OrlixOCIEnvironmentRunResult(
 			id: id,

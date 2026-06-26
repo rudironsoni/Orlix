@@ -13573,6 +13573,205 @@ func testOCIEnvironmentInstallerLifecycleArgumentsDriveRuntimeActions() throws {
 	])
 }
 
+func testOCIEnvironmentInstallerHealthcheckRunsImageCommand() throws {
+let fileManager = FileManager.default
+let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+"orlix-oci-healthcheck-run-\(UUID().uuidString)",
+isDirectory: true
+)
+try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+defer { try? fileManager.removeItem(at: scratch) }
+
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+)
+let runtime = OrlixOCIRuntime(registry: registry)
+let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+try fileManager.createDirectory(
+at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+withIntermediateDirectories: true
+)
+try nonRootOCIRuntimeConfig().write(
+to: bundleURL.appendingPathComponent("config.json")
+)
+let created = try runtime.create(bundleURL: bundleURL, id: "oci-healthcheck-run")
+try Data("base".utf8).write(to: created.importPlan.storageLayout.baseImageURL)
+try Data("state".utf8).write(to: created.importPlan.storageLayout.stateImageURL)
+let saved = try registry.load(environmentID: "oci-healthcheck-run")
+try registry.save(
+descriptor(
+saved,
+healthcheck: OrlixEnvironmentHealthcheck(
+test: ["CMD", "/usr/bin/curl", "-f", "http://127.0.0.1/health"]
+)
+),
+fileManager: fileManager
+)
+let driver = try RecordingOCIRuntimeProcessObservationDriver(
+startPID: 71,
+completion: .exited(
+OrlixOCIRuntimeProcessExitObservation(pid: 71, exitStatus: 0)
+)
+)
+
+let result = try installer.healthcheck(
+arguments: ["orlix", "healthcheck", "--id", "oci-healthcheck-run"],
+terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+using: driver,
+fileManager: fileManager
+)
+
+XCTAssertEqual(result.id, "oci-healthcheck-run")
+XCTAssertEqual(
+result.command,
+["/usr/bin/curl", "-f", "http://127.0.0.1/health"]
+)
+XCTAssertEqual(driver.startCommands, [
+["/usr/bin/curl", "-f", "http://127.0.0.1/health"]
+])
+XCTAssertEqual(driver.events, [
+"start:created:nil",
+"wait:running:71",
+])
+XCTAssertEqual(result.runResult.completedStateReport.status, .stopped)
+XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
+}
+
+func testOCIEnvironmentInstallerHealthcheckRunsShellCommand() throws {
+let fileManager = FileManager.default
+let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+"orlix-oci-healthcheck-shell-\(UUID().uuidString)",
+isDirectory: true
+)
+try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+defer { try? fileManager.removeItem(at: scratch) }
+
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+)
+let runtime = OrlixOCIRuntime(registry: registry)
+let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+let bundleURL = scratch.appendingPathComponent("bundle", isDirectory: true)
+try fileManager.createDirectory(
+at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+withIntermediateDirectories: true
+)
+try nonRootOCIRuntimeConfig().write(
+to: bundleURL.appendingPathComponent("config.json")
+)
+let created = try runtime.create(bundleURL: bundleURL, id: "oci-healthcheck-shell")
+try Data("base".utf8).write(to: created.importPlan.storageLayout.baseImageURL)
+try Data("state".utf8).write(to: created.importPlan.storageLayout.stateImageURL)
+let saved = try registry.load(environmentID: "oci-healthcheck-shell")
+try registry.save(
+descriptor(
+saved,
+healthcheck: OrlixEnvironmentHealthcheck(
+test: ["CMD-SHELL", "test -f /tmp/healthy"]
+)
+),
+fileManager: fileManager
+)
+let driver = try RecordingOCIRuntimeProcessObservationDriver(
+startPID: 72,
+completion: .exited(
+OrlixOCIRuntimeProcessExitObservation(pid: 72, exitStatus: 0)
+)
+)
+
+let result = try installer.healthcheck(
+id: "oci-healthcheck-shell",
+terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+using: driver,
+fileManager: fileManager
+)
+
+XCTAssertEqual(result.command, ["/bin/sh", "-c", "test -f /tmp/healthy"])
+XCTAssertEqual(driver.startCommands, [
+["/bin/sh", "-c", "test -f /tmp/healthy"]
+])
+}
+
+func testOCIEnvironmentInstallerHealthcheckRejectsUnavailableChecks() throws {
+let fileManager = FileManager.default
+let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+"orlix-oci-healthcheck-invalid-\(UUID().uuidString)",
+isDirectory: true
+)
+try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+defer { try? fileManager.removeItem(at: scratch) }
+
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+)
+let runtime = OrlixOCIRuntime(registry: registry)
+let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+
+func createEnvironment(
+_ id: String,
+healthcheck: OrlixEnvironmentHealthcheck?
+) throws {
+let bundleURL = scratch.appendingPathComponent(id, isDirectory: true)
+try fileManager.createDirectory(
+at: bundleURL.appendingPathComponent("rootfs", isDirectory: true),
+withIntermediateDirectories: true
+)
+try nonRootOCIRuntimeConfig().write(
+to: bundleURL.appendingPathComponent("config.json")
+)
+let created = try runtime.create(bundleURL: bundleURL, id: id)
+try Data("base".utf8).write(to: created.importPlan.storageLayout.baseImageURL)
+try Data("state".utf8).write(to: created.importPlan.storageLayout.stateImageURL)
+let saved = try registry.load(environmentID: id)
+try registry.save(
+descriptor(saved, healthcheck: healthcheck),
+fileManager: fileManager
+)
+}
+
+try createEnvironment("oci-healthcheck-missing", healthcheck: nil)
+try createEnvironment(
+"oci-healthcheck-disabled",
+healthcheck: OrlixEnvironmentHealthcheck(test: ["NONE"])
+)
+try createEnvironment(
+"oci-healthcheck-invalid",
+healthcheck: OrlixEnvironmentHealthcheck(test: ["CMD"])
+)
+
+XCTAssertThrowsError(
+try installer.healthcheck(id: "oci-healthcheck-missing", fileManager: fileManager)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIEnvironmentHealthcheckError,
+.missingHealthcheck("oci-healthcheck-missing")
+)
+}
+XCTAssertThrowsError(
+try installer.healthcheck(id: "oci-healthcheck-disabled", fileManager: fileManager)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIEnvironmentHealthcheckError,
+.disabledHealthcheck("oci-healthcheck-disabled")
+)
+}
+XCTAssertThrowsError(
+try installer.healthcheck(id: "oci-healthcheck-invalid", fileManager: fileManager)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIEnvironmentHealthcheckError,
+.invalidHealthcheckTest("oci-healthcheck-invalid", ["CMD"])
+)
+}
+}
+
 func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {
 	let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
@@ -15933,6 +16132,66 @@ private func makeCreatedOCIRuntimeProcessSessionFixture(
 		scratch,
 		terminal
 	)
+}
+
+private func descriptor(
+_ descriptor: OrlixEnvironmentDescriptor,
+healthcheck: OrlixEnvironmentHealthcheck?
+) -> OrlixEnvironmentDescriptor {
+OrlixEnvironmentDescriptor(
+id: descriptor.id,
+source: descriptor.source,
+platform: descriptor.platform,
+rootImageIdentifier: descriptor.rootImageIdentifier,
+defaultCommand: descriptor.defaultCommand,
+defaultEnvironment: descriptor.defaultEnvironment,
+defaultWorkingDirectory: descriptor.defaultWorkingDirectory,
+defaultUserID: descriptor.defaultUserID,
+defaultGroupID: descriptor.defaultGroupID,
+defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
+defaultCapabilities: descriptor.defaultCapabilities,
+defaultNoNewPrivileges: descriptor.defaultNoNewPrivileges,
+defaultCloseAdditionalFds: descriptor.defaultCloseAdditionalFds,
+defaultStopSignal: descriptor.defaultStopSignal,
+defaultTerminal: descriptor.defaultTerminal,
+defaultTerminalRows: descriptor.defaultTerminalRows,
+defaultTerminalColumns: descriptor.defaultTerminalColumns,
+defaultOOMScoreAdjustment: descriptor.defaultOOMScoreAdjustment,
+defaultScheduler: descriptor.defaultScheduler,
+defaultIOPriority: descriptor.defaultIOPriority,
+defaultCPUAffinity: descriptor.defaultCPUAffinity,
+defaultUmask: descriptor.defaultUmask,
+defaultRlimits: descriptor.defaultRlimits,
+defaultPersonalityDomain: descriptor.defaultPersonalityDomain,
+hostname: descriptor.hostname,
+domainname: descriptor.domainname,
+rootMount: descriptor.rootMount,
+rootReadonly: descriptor.rootReadonly,
+rootPropagation: descriptor.rootPropagation,
+sysctls: descriptor.sysctls,
+maskedPaths: descriptor.maskedPaths,
+readonlyPaths: descriptor.readonlyPaths,
+cgroupsPath: descriptor.cgroupsPath,
+cgroupPidsLimit: descriptor.cgroupPidsLimit,
+cgroupCPUMax: descriptor.cgroupCPUMax,
+cgroupCPUWeight: descriptor.cgroupCPUWeight,
+cgroupMemoryMax: descriptor.cgroupMemoryMax,
+cgroupIOWeight: descriptor.cgroupIOWeight,
+cgroupUnified: descriptor.cgroupUnified,
+deviceNodes: descriptor.deviceNodes,
+timeOffsets: descriptor.timeOffsets,
+uidMappings: descriptor.uidMappings,
+gidMappings: descriptor.gidMappings,
+namespaces: descriptor.namespaces,
+namespacePaths: descriptor.namespacePaths,
+tmpfsMounts: descriptor.tmpfsMounts,
+mounts: descriptor.mounts,
+exposedPorts: descriptor.exposedPorts,
+publishedPorts: descriptor.publishedPorts,
+imageVolumes: descriptor.imageVolumes,
+healthcheck: healthcheck,
+annotations: descriptor.annotations
+)
 }
 
 private enum RecordingOCIRuntimeProcessObservationDriverError: Error, Equatable {

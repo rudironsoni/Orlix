@@ -10,6 +10,32 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI one-shot healthcheck execution
+
+Changes:
+- Added `OrlixOCIEnvironmentHealthcheckResult` and `OrlixOCIEnvironmentHealthcheckError` to the OrlixOS session surface.
+- Added `OrlixOCIEnvironmentInstaller.healthcheck(id:)` and `healthcheck(arguments:)` entrypoints.
+- Healthcheck execution resolves descriptor `Healthcheck.Test` metadata into Linux command vectors:
+  - `["CMD", ...]` runs the remaining argv directly.
+  - `["CMD-SHELL", script]` runs `/bin/sh -c <script>`.
+  - `["NONE"]`, missing healthchecks, empty `CMD`, malformed `CMD-SHELL`, and unknown forms fail loudly.
+- The one-shot healthcheck command is routed through existing `OrlixOCIRuntime.run` and `OrlixOCIRuntimeProcessObservationDriver`; no Swift-side process simulation or HostAdapter Linux policy was added.
+- Focused tests prove `orlix healthcheck --id <env>` resolves and starts `CMD`, `CMD-SHELL`, missing, disabled, and invalid healthcheck cases through existing OrlixOS lifecycle fixtures.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This proves one-shot healthcheck command resolution and routing through the existing OrlixOS runtime observation driver. It does not claim a periodic healthcheck scheduler, Docker-compatible health status state machine, live simulator runtime behavior, Linux networking behavior, full OCI lifecycle readiness, product runtime readiness, HostAdapter policy, Linux ABI, upstream Linux edits, generated-tree edits, or mlibc patches.
+
+Current status:
+- One-shot healthcheck execution checkpoint verified by static Swift parse/typecheck and guard checks above.
+
 ### 2026-06-26 OCI image healthcheck metadata
 
 Changes:
@@ -53,7 +79,7 @@ Evidence:
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
 
 Current status:
-- Latest coherent checkpoint is OCI image healthcheck metadata. Static Swift parse/typecheck and guard checks passed; no healthcheck execution, live Linux runtime, or simulator runtime claim is made.
+- Latest coherent checkpoint is OCI one-shot healthcheck execution. Static Swift parse/typecheck and guard checks passed; no periodic health scheduler, live Linux runtime, or simulator runtime claim is made.
 - Hook-generated `.codex/hooks/__pycache__/orlix_hook_common.cpython-314.pyc` was removed before commit.
 
 Boundary:
