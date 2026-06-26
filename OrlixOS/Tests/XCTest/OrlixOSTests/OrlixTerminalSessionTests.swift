@@ -13797,21 +13797,89 @@ rootImageIdentifier: id,
 defaultCommand: ["/bin/sh", "-lc", "echo bridge"],
 defaultEnvironment: ["PATH": "/usr/bin:/bin"],
 defaultWorkingDirectory: "/work",
-defaultUserID: 1000,
-defaultGroupID: 100,
-defaultSupplementaryGroups: [44, 45],
-defaultNoNewPrivileges: true,
-defaultCloseAdditionalFds: true,
-defaultTerminal: true,
-defaultTerminalRows: 33,
-defaultTerminalColumns: 120,
-defaultUmask: 0o022,
-defaultRlimits: [
-OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 128),
-],
-hostname: "orlix-demo",
-domainname: "example.test"
-)
+		defaultUserID: 1000,
+		defaultGroupID: 100,
+		defaultSupplementaryGroups: [44, 45],
+		defaultCapabilities: OrlixEnvironmentCapabilities(
+			bounding: ["CAP_CHOWN"],
+			permitted: ["CAP_CHOWN"],
+			effective: ["CAP_CHOWN"]
+		),
+		defaultNoNewPrivileges: true,
+		defaultCloseAdditionalFds: true,
+		defaultTerminal: true,
+		defaultTerminalRows: 33,
+		defaultTerminalColumns: 120,
+		defaultOOMScoreAdjustment: 12,
+		defaultScheduler: OrlixEnvironmentScheduler(
+			policy: "SCHED_FIFO",
+			priority: 1
+		),
+		defaultIOPriority: OrlixEnvironmentIOPriority(
+			class: "IOPRIO_CLASS_BE",
+			priority: 4
+		),
+		defaultCPUAffinity: OrlixEnvironmentCPUAffinity(mask: "0-1"),
+		defaultUmask: 0o022,
+		defaultRlimits: [
+			OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 128),
+		],
+		defaultPersonalityDomain: "LINUX",
+		hostname: "orlix-demo",
+		domainname: "example.test",
+		rootReadonly: true,
+		rootPropagation: .shared,
+		sysctls: ["kernel.hostname": "orlix-demo"],
+		maskedPaths: ["/proc/kcore"],
+		readonlyPaths: ["/proc/sys"],
+		cgroupsPath: "/orlix/oci/bridge",
+		cgroupPidsLimit: 32,
+		cgroupCPUMax: OrlixEnvironmentCgroupCPUMax(
+			quotaMicros: 50_000,
+			periodMicros: 100_000
+		),
+		cgroupCPUWeight: 100,
+		cgroupMemoryMax: 1_048_576,
+		cgroupIOWeight: 100,
+		cgroupUnified: [
+			OrlixEnvironmentCgroupUnifiedEntry(
+				file: "io.max",
+				value: "8:0 rbps=1024"
+			),
+		],
+		deviceNodes: [
+			OrlixEnvironmentDeviceNode(
+				path: "/dev/fuse",
+				type: "c",
+				major: 10,
+				minor: 229
+			),
+		],
+		timeOffsets: [
+			OrlixEnvironmentTimeOffset(
+				clock: "monotonic",
+				secs: 1,
+				nanosecs: 2
+			),
+		],
+		uidMappings: [
+			OrlixEnvironmentIDMapping(containerID: 0, hostID: 1000, size: 1),
+		],
+		gidMappings: [
+			OrlixEnvironmentIDMapping(containerID: 0, hostID: 1000, size: 1),
+		],
+		namespaces: ["time", "user", "uts"],
+		namespacePaths: ["network": "/proc/1/ns/net"],
+		tmpfsMounts: [
+			try OrlixEnvironmentTmpfsMount(
+				targetPath: "/run/oci-cache",
+				noSuid: true,
+				noDev: true,
+				noExec: true,
+				data: "size=64m,mode=0755"
+			),
+		]
+	)
 try registry.save(descriptor, fileManager: fileManager)
 let layout = try registry.layout(forEnvironmentID: id)
 try Data("base".utf8).write(to: layout.baseImageURL)
@@ -13852,11 +13920,49 @@ XCTAssertTrue(commandLine.contains("orlix.terminal.cols=120"))
 XCTAssertTrue(commandLine.contains("orlix.uid=1000"))
 XCTAssertTrue(commandLine.contains("orlix.gid=100"))
 XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
-XCTAssertTrue(commandLine.contains("orlix.suppgid1=45"))
-XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
-XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
-XCTAssertTrue(commandLine.contains("orlix.umask=18"))
-XCTAssertTrue(commandLine.contains("orlix.rlimit0=RLIMIT_NOFILE:64:128"))
+	XCTAssertTrue(commandLine.contains("orlix.suppgid1=45"))
+	XCTAssertTrue(commandLine.contains("orlix.cap.bounding=CAP_CHOWN"))
+	XCTAssertTrue(commandLine.contains("orlix.cap.permitted=CAP_CHOWN"))
+	XCTAssertTrue(commandLine.contains("orlix.cap.effective=CAP_CHOWN"))
+	XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
+	XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
+	XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=12"))
+	XCTAssertTrue(commandLine.contains("orlix.scheduler.policy=SCHED_FIFO"))
+	XCTAssertTrue(commandLine.contains("orlix.scheduler.priority=1"))
+	XCTAssertTrue(commandLine.contains("orlix.ioprio.class=IOPRIO_CLASS_BE"))
+	XCTAssertTrue(commandLine.contains("orlix.ioprio.priority=4"))
+	XCTAssertTrue(commandLine.contains("orlix.cpuaffinity=0-1"))
+	XCTAssertTrue(commandLine.contains("orlix.umask=18"))
+	XCTAssertTrue(commandLine.contains("orlix.rlimit0=RLIMIT_NOFILE:64:128"))
+	XCTAssertTrue(commandLine.contains("orlix.personality=LINUX"))
+	XCTAssertTrue(commandLine.contains("orlix.root.readonly=1"))
+	XCTAssertTrue(commandLine.contains("orlix.root.propagation=shared"))
+	XCTAssertTrue(commandLine.contains("orlix.sysctl0=kernel.hostname=orlix-demo"))
+	XCTAssertTrue(commandLine.contains("orlix.maskedpath0=/proc/kcore"))
+	XCTAssertTrue(commandLine.contains("orlix.readonlypath0=/proc/sys"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.path=/orlix/oci/bridge"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.pids.max=32"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000:100000"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.weight=100"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.memory.max=1048576"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.io.weight=100"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.unified0=io.max:8:0%20rbps=1024"))
+	XCTAssertTrue(commandLine.contains("orlix.device.path0=/dev/fuse"))
+	XCTAssertTrue(commandLine.contains("orlix.device.type0=c"))
+	XCTAssertTrue(commandLine.contains("orlix.device.major0=10"))
+	XCTAssertTrue(commandLine.contains("orlix.device.minor0=229"))
+	XCTAssertTrue(commandLine.contains("orlix.timeoffset0=monotonic:1:2"))
+	XCTAssertTrue(commandLine.contains("orlix.uidmap0=0:1000:1"))
+	XCTAssertTrue(commandLine.contains("orlix.gidmap0=0:1000:1"))
+	XCTAssertTrue(commandLine.contains("orlix.namespace0=time"))
+	XCTAssertTrue(commandLine.contains("orlix.namespace1=user"))
+	XCTAssertTrue(commandLine.contains("orlix.namespace2=uts"))
+	XCTAssertTrue(commandLine.contains("orlix.namespacepath0=network=/proc/1/ns/net"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.target=/run/oci-cache"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nosuid=1"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nodev=1"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.noexec=1"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.data=size=64m%2Cmode=0755"))
 }
 
 func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {
