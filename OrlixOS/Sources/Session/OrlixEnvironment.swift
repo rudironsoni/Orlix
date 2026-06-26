@@ -911,7 +911,7 @@ public struct OrlixEnvironmentStorageLayout: Equatable, Sendable {
 		_ = try storageSafeID(environmentID)
 	}
 
-	private static func storageSafeID(_ id: String) throws -> String {
+    static func storageSafeID(_ id: String) throws -> String {
 		guard !id.isEmpty,
               !id.contains("/"),
               !id.contains("\\"),
