@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run cgroup IO overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--io-weight WEIGHT` and `--io-weight=WEIGHT` before image.
+- `--io-weight` accepts direct cgroup v2 default I/O weight range `1...10000`; invalid values use existing `linux.resources.blockIO.weight` unsupported-feature naming.
+- Registry-backed install/run terminal-session preparation persists parsed values into descriptor `cgroupIOWeight`; IO-only overrides derive `/orlix/oci/<environment-id>` like OCI resource parsing.
+- Focused tests cover split and equals parsing, invalid weight rejection, empty equals-form rejection, default nil parser state, and observed registry-backed descriptor persistence. Existing descriptor/init tests cover `orlix.cgroups.io.weight` and init writing Linux cgroup v2 `io.weight`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- This advances product-facing cgroup IO weight configuration through existing OrlixOS descriptors and Linux-visible init cgroup v2 metadata paths. It does not claim I/O enforcement proof, device-specific throttling, delegation, systemd readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI lifecycle, or live simulator proof.
+
 ### 2026-06-26 OCI run cgroup memory overrides
 
 Changes:
