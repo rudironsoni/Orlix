@@ -1363,6 +1363,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let hostname: String?
     public let domainname: String?
     public let terminal: Bool?
+    public let terminalRows: UInt32?
+    public let terminalColumns: UInt32?
     public let rootReadonly: Bool?
     public let rlimits: [OrlixEnvironmentRlimit]
     public let sysctls: [String: String]
@@ -1420,9 +1422,11 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedSupplementaryGroupIDs: [UInt32] = []
 		var parsedCapabilities = OrlixEnvironmentCapabilities()
 		var parsedCapabilitiesPresent = false
-		var parsedHostname: String?
+        var parsedHostname: String?
         var parsedDomainname: String?
         var parsedTerminal: Bool?
+        var parsedTerminalRows: UInt32?
+        var parsedTerminalColumns: UInt32?
         var parsedRootReadonly: Bool?
         var parsedRlimits: [OrlixEnvironmentRlimit] = []
         var parsedSysctls: [String: String] = [:]
@@ -1471,12 +1475,33 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 			}
             if parsedImage == nil,
                value == "--no-tty" || value == "--no-terminal" {
-                parsedTerminal = false
-                continue
+            parsedTerminal = false
+            continue
+        }
+        if parsedImage == nil, value == "--terminal-size" {
+            guard let terminalSize = values.first else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue(value)
             }
-            if parsedImage == nil, value == "--read-only" {
-                parsedRootReadonly = true
-                continue
+            (parsedTerminalRows, parsedTerminalColumns) =
+                try Self.parseTerminalSize(terminalSize)
+            values.removeFirst()
+            continue
+        }
+        if parsedImage == nil, value.hasPrefix("--terminal-size=") {
+            let separator = value.firstIndex(of: "=")!
+            let terminalSize = String(value[value.index(after: separator)...])
+            guard !terminalSize.isEmpty else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue("--terminal-size")
+            }
+            (parsedTerminalRows, parsedTerminalColumns) =
+                try Self.parseTerminalSize(terminalSize)
+            continue
+        }
+        if parsedImage == nil, value == "--read-only" {
+            parsedRootReadonly = true
+            continue
             }
             if parsedImage == nil, value == "--read-write" {
                 parsedRootReadonly = false
@@ -2268,6 +2293,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.hostname = parsedHostname
         self.domainname = parsedDomainname
         self.terminal = parsedTerminal
+        self.terminalRows = parsedTerminalRows
+        self.terminalColumns = parsedTerminalColumns
         self.rootReadonly = parsedRootReadonly
         self.rlimits = parsedRlimits
         self.sysctls = parsedSysctls
@@ -2670,7 +2697,22 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		}
 	}
 
-	private static func parseCgroupsPath(_ value: String) throws -> String {
+    private static func parseTerminalSize(_ value: String) throws -> (UInt32, UInt32) {
+        let parts = value.split(separator: "x", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+            let rows = UInt32(parts[0]),
+            let columns = UInt32(parts[1]),
+            rows > 0,
+            columns > 0
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "process.consoleSize"
+            )
+        }
+        return (rows, columns)
+    }
+
+    private static func parseCgroupsPath(_ value: String) throws -> String {
 		guard !value.isEmpty, !value.contains("\u{0}") else {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
 				"linux.cgroupsPath"
@@ -3422,6 +3464,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         replacingHostnameWith hostname: String?,
         replacingDomainnameWith domainname: String?,
         replacingDefaultTerminalWith terminal: Bool?,
+        replacingDefaultTerminalRowsWith terminalRows: UInt32?,
+        replacingDefaultTerminalColumnsWith terminalColumns: UInt32?,
         replacingRootReadonlyWith rootReadonly: Bool?,
         mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
         mergingSysctlsWith sysctls: [String: String],
@@ -3460,6 +3504,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             || hostname != nil
             || domainname != nil
             || terminal != nil
+            || terminalRows != nil
+            || terminalColumns != nil
             || rootReadonly != nil
             || !rlimits.isEmpty
             || !sysctls.isEmpty
@@ -3679,11 +3725,12 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCapabilities: capabilities ?? descriptor.defaultCapabilities,
 			defaultNoNewPrivileges: noNewPrivileges
 			?? descriptor.defaultNoNewPrivileges,
-			defaultCloseAdditionalFds: closeAdditionalFds
-			?? descriptor.defaultCloseAdditionalFds,
-			defaultTerminal: terminal ?? descriptor.defaultTerminal,
-			defaultTerminalRows: descriptor.defaultTerminalRows,
-			defaultTerminalColumns: descriptor.defaultTerminalColumns,
+            defaultCloseAdditionalFds: closeAdditionalFds
+                ?? descriptor.defaultCloseAdditionalFds,
+            defaultTerminal: terminal ?? descriptor.defaultTerminal,
+            defaultTerminalRows: terminalRows ?? descriptor.defaultTerminalRows,
+            defaultTerminalColumns: terminalColumns
+                ?? descriptor.defaultTerminalColumns,
 			defaultOOMScoreAdjustment: oomScoreAdjustment
 				?? descriptor.defaultOOMScoreAdjustment,
 			defaultScheduler: scheduler ?? descriptor.defaultScheduler,
@@ -3774,6 +3821,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		terminalRowsOverride: UInt32? = nil,
+		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
@@ -3820,6 +3869,8 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			terminalRowsOverride: terminalRowsOverride,
+			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
@@ -3869,6 +3920,8 @@ gidMappingOverrides: gidMappingOverrides,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		terminalRowsOverride: UInt32? = nil,
+		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
@@ -3938,9 +3991,11 @@ gidMappingOverrides: gidMappingOverrides,
 				mergingDefaultSupplementaryGroupsWith:
 					defaultSupplementaryGroupOverrides,
 				replacingDefaultCapabilitiesWith: defaultCapabilitiesOverride,
-				replacingHostnameWith: hostnameOverride,
-				replacingDomainnameWith: domainnameOverride,
-				replacingDefaultTerminalWith: terminalOverride,
+			replacingHostnameWith: hostnameOverride,
+			replacingDomainnameWith: domainnameOverride,
+			replacingDefaultTerminalWith: terminalOverride,
+			replacingDefaultTerminalRowsWith: terminalRowsOverride,
+			replacingDefaultTerminalColumnsWith: terminalColumnsOverride,
 			replacingRootReadonlyWith: rootReadonlyOverride,
 				mergingDefaultRlimitsWith: defaultRlimitOverrides,
 			mergingSysctlsWith: sysctlOverrides,
@@ -4066,6 +4121,8 @@ gidMappingOverrides: gidMappingOverrides,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			terminalRowsOverride: request.terminalRows,
+			terminalColumnsOverride: request.terminalColumns,
 			rootReadonlyOverride: request.rootReadonly,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
@@ -4141,6 +4198,8 @@ gidMappingOverrides: gidMappingOverrides,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			terminalRowsOverride: request.terminalRows,
+			terminalColumnsOverride: request.terminalColumns,
 			rootReadonlyOverride: request.rootReadonly,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
@@ -4217,6 +4276,8 @@ gidMappingOverrides: gidMappingOverrides,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		terminalRowsOverride: UInt32? = nil,
+		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
@@ -4265,6 +4326,8 @@ gidMappingOverrides: gidMappingOverrides,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			terminalRowsOverride: terminalRowsOverride,
+			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
@@ -4316,6 +4379,8 @@ gidMappingOverrides: gidMappingOverrides,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		terminalRowsOverride: UInt32? = nil,
+		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
@@ -4363,6 +4428,8 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			terminalRowsOverride: terminalRowsOverride,
+			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
@@ -4423,6 +4490,8 @@ fileManager: fileManager,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		terminalRowsOverride: UInt32? = nil,
+		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
@@ -4472,6 +4541,8 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			terminalRowsOverride: terminalRowsOverride,
+			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
@@ -4524,6 +4595,8 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		terminalRowsOverride: UInt32? = nil,
+		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
@@ -4572,6 +4645,8 @@ gidMappingOverrides: [OrlixEnvironmentIDMapping] = [],
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			terminalRowsOverride: terminalRowsOverride,
+			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
@@ -4646,6 +4721,8 @@ fileManager: fileManager,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
+			terminalRowsOverride: request.terminalRows,
+			terminalColumnsOverride: request.terminalColumns,
 			rootReadonlyOverride: request.rootReadonly,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
@@ -4708,6 +4785,8 @@ gidMappingOverrides: request.gidMappings,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
+		terminalRowsOverride: UInt32? = nil,
+		terminalColumnsOverride: UInt32? = nil,
 		rootReadonlyOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
@@ -4756,6 +4835,8 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
+			terminalRowsOverride: terminalRowsOverride,
+			terminalColumnsOverride: terminalColumnsOverride,
 			rootReadonlyOverride: rootReadonlyOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,

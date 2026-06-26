@@ -7940,6 +7940,8 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.hostname)
 	XCTNil(arguments.domainname)
 	XCTNil(arguments.terminal)
+	XCTNil(arguments.terminalRows)
+	XCTNil(arguments.terminalColumns)
 	XCTNil(arguments.rootReadonly)
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTTrue(arguments.sysctls.isEmpty)
@@ -8967,6 +8969,54 @@ func testOCIEnvironmentRunArgumentsAcceptsTerminalOverrides() throws {
 	])
 
 	XCTAssertEqual(noTerminalArguments.terminal, false)
+
+	let sizeArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--terminal-size",
+		"33x120",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(sizeArguments.terminalRows, 33)
+	XCTAssertEqual(sizeArguments.terminalColumns, 120)
+
+	let equalsSizeArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--terminal-size=24x80",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(equalsSizeArguments.terminalRows, 24)
+	XCTAssertEqual(equalsSizeArguments.terminalColumns, 80)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidTerminalSizeOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--terminal-size",
+			"0x80",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.consoleSize")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--terminal-size=24:80",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.consoleSize")
+		)
+	}
 }
 
 func testOCIEnvironmentRunArgumentsAcceptsNoNewPrivilegesOverride() throws {
@@ -10707,10 +10757,11 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
         arguments: [
 			"orlix",
 			"run",
-			"--id",
-			"registry-installed-run",
-			"--no-tty",
-			"--no-new-privileges",
+		"--id",
+		"registry-installed-run",
+		"--no-tty",
+		"--terminal-size=33x120",
+		"--no-new-privileges",
 			"--close-fds",
 			"--read-only",
 			"--entrypoint",
@@ -10954,6 +11005,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		)
 	)
 	XCTAssertEqual(descriptor.defaultTerminal, false)
+	XCTAssertEqual(descriptor.defaultTerminalRows, 33)
+	XCTAssertEqual(descriptor.defaultTerminalColumns, 120)
 	XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 	XCTAssertTrue(descriptor.defaultCloseAdditionalFds)
 	XCTAssertEqual(descriptor.defaultUmask, 0o022)
