@@ -423,6 +423,10 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	mm/util.c \
 	mm/mmzone.c \
 	mm/vmstat.c \
+	mm/page_counter.c \
+	mm/memcontrol.c \
+	mm/vmpressure.c \
+	mm/swap_cgroup.c \
 	mm/backing-dev.c \
 	mm/mm_init.c \
 	mm/percpu.c \
@@ -480,6 +484,10 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	block/blk-mq.c \
 	block/blk-mq-tag.c \
 	block/blk-stat.c \
+	block/blk-cgroup.c \
+	block/blk-cgroup-rwstat.c \
+	block/blk-throttle.c \
+	block/blk-iocost.c \
 	block/blk-mq-sysfs.c \
 	block/blk-mq-cpumap.c \
 	block/blk-mq-sched.c \
