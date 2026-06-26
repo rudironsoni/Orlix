@@ -10,6 +10,35 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run published port descriptors
+
+Changes:
+- Added `OrlixEnvironmentPublishedPort` descriptor metadata for requested container port, protocol, optional host port, and optional host address.
+- Parsed Docker-shaped publish forms before the image name: `CONTAINER[/PROTO]`, `HOST:CONTAINER[/PROTO]`, `ADDRESS:HOST:CONTAINER[/PROTO]`, `--publish=...`, `--publish ...`, and `-p ...`.
+- Accepted `tcp`, `udp`, and `sctp`, defaulting to `tcp`.
+- Threaded parsed publish requests through registry-backed install, prepare terminal session, and run descriptor override paths beside existing mount/tmpfs/device override metadata.
+- Merged descriptor publish overrides deterministically without creating HostAdapter policy, Linux ABI, port-forwarding code, package management, proof packages, generated-tree edits, upstream Linux edits, or mlibc patches.
+- Added parser tests for accepted forms, empty values, invalid ports, invalid protocols, and invalid host address syntax.
+- Extended the registry-backed `orlix run` arguments test to assert requested publish metadata persists into the loaded environment descriptor.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages before this current-status entry.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Current status:
+- Latest coherent checkpoint is OCI run published port descriptors. Static Swift parse/typecheck and guard checks passed; no live Linux networking or simulator runtime claim is made.
+- Hook-generated `.codex/hooks/__pycache__/orlix_hook_common.cpython-314.pyc` was removed before commit.
+
+Boundary:
+- This proves descriptor parsing and persistence for requested publish metadata only. It does not claim live simulator runtime behavior, Linux networking, socket binding, host port forwarding, full OCI lifecycle readiness, kernel namespace/cgroup/network semantics, package runtime readiness, or product runtime readiness.
+
+Current status:
+- Published port descriptor checkpoint verified by static Swift parse/typecheck and guard checks above.
+
 ### 2026-06-26 OCI image volume materialization
 
 Changes:
@@ -23872,3 +23901,6 @@ Evidence:
 - `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
 - `GOAL.md` size check reported `OK 3997`.
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Current status:
+- Latest coherent checkpoint is OCI run published port descriptors. Static Swift parse/typecheck and guard checks passed; no live Linux networking or simulator runtime claim is made.

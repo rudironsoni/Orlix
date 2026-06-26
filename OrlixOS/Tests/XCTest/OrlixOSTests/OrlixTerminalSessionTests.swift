@@ -10275,8 +10275,8 @@ func testOCIEnvironmentRunArgumentsAcceptsCPUAffinityOverride() throws {
 }
 
 func testOCIEnvironmentRunArgumentsRejectsInvalidCPUAffinityOverride() throws {
-	XCTAssertThrowsError(
-		try OrlixOCIEnvironmentRunArguments([
+XCTAssertThrowsError(
+try OrlixOCIEnvironmentRunArguments([
 			"run",
 			"--cpu-affinity",
 			"3-1",
@@ -10286,12 +10286,85 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidCPUAffinityOverride() throws {
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("process.execCPUAffinity")
-		)
-	}
+)
+}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsPublishedPorts() throws {
+let arguments = try OrlixOCIEnvironmentRunArguments([
+"orlix",
+"run",
+"--publish",
+"80",
+"--publish=8080:80",
+"-p",
+"127.0.0.1:5353:53/udp",
+"-p",
+"8443:443/sctp",
+"alpine:3.20",
+])
+
+XCTAssertEqual(arguments.publishedPorts, [
+OrlixEnvironmentPublishedPort(containerPort: 80, proto: "tcp"),
+OrlixEnvironmentPublishedPort(
+containerPort: 80,
+proto: "tcp",
+hostPort: 8080
+),
+OrlixEnvironmentPublishedPort(
+containerPort: 53,
+proto: "udp",
+hostPort: 5353,
+hostAddress: "127.0.0.1"
+),
+OrlixEnvironmentPublishedPort(
+containerPort: 443,
+proto: "sctp",
+hostPort: 8443
+),
+])
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidPublishedPorts() throws {
+let invalidPorts: [(String, OrlixOCIRuntimeConfigError)] = [
+("0", .unsupportedLinuxFeature("linux.ports.container")),
+("70000", .unsupportedLinuxFeature("linux.ports.container")),
+("8080:0", .unsupportedLinuxFeature("linux.ports.host")),
+("8080:80/icmp", .unsupportedLinuxFeature("linux.ports.protocol")),
+("127.0.0.1::80", .unsupportedLinuxFeature("linux.ports.host")),
+("127.0.0.1/24:8080:80", .unsupportedLinuxFeature("linux.ports.hostIP")),
+]
+
+for (port, expectedError) in invalidPorts {
+XCTAssertThrowsError(
+try OrlixOCIEnvironmentRunArguments([
+"orlix",
+"run",
+"--publish",
+port,
+"alpine:3.20",
+])
+) { error in
+XCTAssertEqual(error as? OrlixOCIRuntimeConfigError, expectedError)
+}
+}
+
+XCTAssertThrowsError(
+try OrlixOCIEnvironmentRunArguments([
+"orlix",
+"run",
+"--publish",
+])
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIEnvironmentRunArgumentsError,
+.missingOptionValue("--publish")
+)
+}
 }
 
 func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
-	let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
+let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
 		("--id=", .missingOptionValue("--id")),
 		("--name=", .missingOptionValue("--name")),
 		("--platform=", .missingOptionValue("--platform")),
@@ -10305,10 +10378,11 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--cpu-max=", .missingOptionValue("--cpu-max")),
 		("--cpu-weight=", .missingOptionValue("--cpu-weight")),
 		("--memory-max=", .missingOptionValue("--memory-max")),
-		("--io-weight=", .missingOptionValue("--io-weight")),
-		("--cgroup-unified=", .missingOptionValue("--cgroup-unified")),
-		("--tmpfs=", .missingOptionValue("--tmpfs")),
-		("--sysctl=", .missingOptionValue("--sysctl")),
+("--io-weight=", .missingOptionValue("--io-weight")),
+("--cgroup-unified=", .missingOptionValue("--cgroup-unified")),
+("--tmpfs=", .missingOptionValue("--tmpfs")),
+("--publish=", .missingOptionValue("--publish")),
+("--sysctl=", .missingOptionValue("--sysctl")),
 		("--mask=", .missingOptionValue("--mask")),
 		("--readonly=", .missingOptionValue("--readonly")),
 		("--hostname=", .missingOptionValue("--hostname")),
@@ -11273,12 +11347,14 @@ func testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath() 
 	let result = try await installer.run(
 		arguments: [
 			"orlix",
-			"run",
-			"--id",
-			"orlix-run-arguments",
-			imageString,
-			"--",
-			"/usr/bin/env",
+"run",
+"--id",
+"orlix-run-arguments",
+"--publish",
+"127.0.0.1:8080:80",
+imageString,
+"--",
+"/usr/bin/env",
 			"true",
 		],
 		tools: tools,
@@ -11296,11 +11372,17 @@ func testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath() 
 		XCTAssertEqual(result.runResult.completedStateReport.pid, 42)
 		XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
 		XCTAssertNil(result.deleteResult)
-		XCTAssertEqual(
-			try registry.load(environmentID: "orlix-run-arguments").defaultCommand,
-			["/bin/sh", "-lc", "echo default"]
-	)
-	XCTAssertEqual(driver.events, [
+let descriptor = try registry.load(environmentID: "orlix-run-arguments")
+XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo default"])
+XCTAssertEqual(descriptor.publishedPorts, [
+OrlixEnvironmentPublishedPort(
+containerPort: 80,
+proto: "tcp",
+hostPort: 8080,
+hostAddress: "127.0.0.1"
+),
+])
+XCTAssertEqual(driver.events, [
 		"start:created:nil",
 		"wait:running:42",
 	])

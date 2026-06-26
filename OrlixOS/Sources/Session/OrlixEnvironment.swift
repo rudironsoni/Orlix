@@ -73,6 +73,25 @@ public struct OrlixEnvironmentExposedPort: Codable, Equatable, Sendable {
 	}
 }
 
+public struct OrlixEnvironmentPublishedPort: Codable, Equatable, Sendable {
+	public let containerPort: UInt16
+	public let proto: String
+	public let hostPort: UInt16?
+	public let hostAddress: String?
+
+	public init(
+		containerPort: UInt16,
+		proto: String,
+		hostPort: UInt16? = nil,
+		hostAddress: String? = nil
+	) {
+		self.containerPort = containerPort
+		self.proto = proto
+		self.hostPort = hostPort
+		self.hostAddress = hostAddress
+	}
+}
+
 @_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public static let defaultEnvironmentID = "default"
@@ -125,6 +144,7 @@ public let cgroupPidsLimit: Int64?
 	public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
 	public let mounts: [OrlixEnvironmentMount]
 	public let exposedPorts: [OrlixEnvironmentExposedPort]
+	public let publishedPorts: [OrlixEnvironmentPublishedPort]
 	public let imageVolumes: [String]
 	public let annotations: [String: String]
 
@@ -204,6 +224,7 @@ cgroupPidsLimit: Int64? = nil,
 	tmpfsMounts: [OrlixEnvironmentTmpfsMount] = [],
 	mounts: [OrlixEnvironmentMount] = [],
 	exposedPorts: [OrlixEnvironmentExposedPort] = [],
+	publishedPorts: [OrlixEnvironmentPublishedPort] = [],
 	imageVolumes: [String] = [],
 	annotations: [String: String] = [:]
 ) {
@@ -255,6 +276,7 @@ self.cgroupPidsLimit = cgroupPidsLimit
 	self.tmpfsMounts = tmpfsMounts
 	self.mounts = mounts
 	self.exposedPorts = exposedPorts
+	self.publishedPorts = publishedPorts
 	self.imageVolumes = imageVolumes
 	self.annotations = annotations
 	}
@@ -308,6 +330,7 @@ case cgroupCPUMax
 	case tmpfsMounts
 	case mounts
 	case exposedPorts
+	case publishedPorts
 	case imageVolumes
 	case annotations
 	}
@@ -500,6 +523,10 @@ forKey: .cgroupCPUWeight
 			[OrlixEnvironmentExposedPort].self,
 			forKey: .exposedPorts
 		) ?? []
+		self.publishedPorts = try container.decodeIfPresent(
+			[OrlixEnvironmentPublishedPort].self,
+			forKey: .publishedPorts
+		) ?? []
 		self.imageVolumes = try container.decodeIfPresent(
 			[String].self,
 			forKey: .imageVolumes
@@ -597,6 +624,9 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 		try container.encode(mounts, forKey: .mounts)
 		if !exposedPorts.isEmpty {
 			try container.encode(exposedPorts, forKey: .exposedPorts)
+		}
+		if !publishedPorts.isEmpty {
+			try container.encode(publishedPorts, forKey: .publishedPorts)
 		}
 		if !imageVolumes.isEmpty {
 			try container.encode(imageVolumes, forKey: .imageVolumes)
