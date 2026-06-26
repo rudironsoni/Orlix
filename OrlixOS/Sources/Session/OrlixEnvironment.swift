@@ -92,6 +92,31 @@ public struct OrlixEnvironmentPublishedPort: Codable, Equatable, Sendable {
 	}
 }
 
+public struct OrlixEnvironmentHealthcheck: Codable, Equatable, Sendable {
+	public let test: [String]
+	public let intervalNanoseconds: UInt64?
+	public let timeoutNanoseconds: UInt64?
+	public let startPeriodNanoseconds: UInt64?
+	public let startIntervalNanoseconds: UInt64?
+	public let retries: Int?
+
+	public init(
+		test: [String],
+		intervalNanoseconds: UInt64? = nil,
+		timeoutNanoseconds: UInt64? = nil,
+		startPeriodNanoseconds: UInt64? = nil,
+		startIntervalNanoseconds: UInt64? = nil,
+		retries: Int? = nil
+	) {
+		self.test = test
+		self.intervalNanoseconds = intervalNanoseconds
+		self.timeoutNanoseconds = timeoutNanoseconds
+		self.startPeriodNanoseconds = startPeriodNanoseconds
+		self.startIntervalNanoseconds = startIntervalNanoseconds
+		self.retries = retries
+	}
+}
+
 @_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public static let defaultEnvironmentID = "default"
@@ -146,6 +171,7 @@ public let cgroupPidsLimit: Int64?
 	public let exposedPorts: [OrlixEnvironmentExposedPort]
 	public let publishedPorts: [OrlixEnvironmentPublishedPort]
 	public let imageVolumes: [String]
+	public let healthcheck: OrlixEnvironmentHealthcheck?
 	public let annotations: [String: String]
 
     public static func defaultEnvironment(
@@ -226,6 +252,7 @@ cgroupPidsLimit: Int64? = nil,
 	exposedPorts: [OrlixEnvironmentExposedPort] = [],
 	publishedPorts: [OrlixEnvironmentPublishedPort] = [],
 	imageVolumes: [String] = [],
+	healthcheck: OrlixEnvironmentHealthcheck? = nil,
 	annotations: [String: String] = [:]
 ) {
         self.id = id
@@ -278,6 +305,7 @@ self.cgroupPidsLimit = cgroupPidsLimit
 	self.exposedPorts = exposedPorts
 	self.publishedPorts = publishedPorts
 	self.imageVolumes = imageVolumes
+	self.healthcheck = healthcheck
 	self.annotations = annotations
 	}
 
@@ -332,6 +360,7 @@ case cgroupCPUMax
 	case exposedPorts
 	case publishedPorts
 	case imageVolumes
+	case healthcheck
 	case annotations
 	}
 
@@ -531,6 +560,10 @@ forKey: .cgroupCPUWeight
 			[String].self,
 			forKey: .imageVolumes
 		) ?? []
+		self.healthcheck = try container.decodeIfPresent(
+			OrlixEnvironmentHealthcheck.self,
+			forKey: .healthcheck
+		)
 		self.annotations = try container.decodeIfPresent(
 			[String: String].self,
 			forKey: .annotations
@@ -631,6 +664,7 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 		if !imageVolumes.isEmpty {
 			try container.encode(imageVolumes, forKey: .imageVolumes)
 		}
+		try container.encodeIfPresent(healthcheck, forKey: .healthcheck)
 		if !annotations.isEmpty {
 			try container.encode(annotations, forKey: .annotations)
 		}

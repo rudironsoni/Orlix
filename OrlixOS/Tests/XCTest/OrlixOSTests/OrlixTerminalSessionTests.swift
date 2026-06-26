@@ -3687,8 +3687,69 @@ error as? OrlixOCIImageLayoutError,
 }
 }
 
+func testOCIImageLayoutReaderPreservesImageHealthcheck() throws {
+let layout = try writeOCILayout(healthcheck: [
+"Test": ["CMD-SHELL", "curl -f http://127.0.0.1/health || exit 1"],
+"Interval": 30_000_000_000,
+"Timeout": 5_000_000_000,
+"StartPeriod": 10_000_000_000,
+"StartInterval": 1_000_000_000,
+"Retries": 3,
+])
+let imported = try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+
+XCTAssertEqual(
+imported.healthcheck,
+OrlixEnvironmentHealthcheck(
+test: ["CMD-SHELL", "curl -f http://127.0.0.1/health || exit 1"],
+intervalNanoseconds: 30_000_000_000,
+timeoutNanoseconds: 5_000_000_000,
+startPeriodNanoseconds: 10_000_000_000,
+startIntervalNanoseconds: 1_000_000_000,
+retries: 3
+)
+)
+}
+
+func testOCIImageLayoutReaderPreservesDisabledImageHealthcheck() throws {
+let layout = try writeOCILayout(healthcheck: [
+"Test": ["NONE"],
+])
+let imported = try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+
+XCTAssertEqual(
+imported.healthcheck,
+OrlixEnvironmentHealthcheck(test: ["NONE"])
+)
+}
+
+func testOCIImageLayoutReaderRejectsInvalidImageHealthcheck() throws {
+let invalidLayouts: [(OCILayoutFixture, OrlixOCIImageLayoutError)] = [
+(
+try writeOCILayout(healthcheck: ["Interval": -1]),
+.invalidHealthcheckDuration(-1)
+),
+(
+try writeOCILayout(healthcheck: ["Retries": -1]),
+.invalidHealthcheckRetries(-1)
+),
+(
+try writeOCILayout(healthcheck: ["Test": ["CMD", "bad\u{0}arg"]]),
+.invalidCommandEntry("bad\u{0}arg")
+),
+]
+
+for (layout, expectedError) in invalidLayouts {
+XCTAssertThrowsError(
+try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+) { error in
+XCTAssertEqual(error as? OrlixOCIImageLayoutError, expectedError)
+}
+}
+}
+
 func testOCIImageLayoutReaderSelectsRequestedPlatformVariant() throws {
-        let layout = try writeOCILayout(platformVariant: "v8")
+let layout = try writeOCILayout(platformVariant: "v8")
 
         let imported = try OrlixOCIImageLayoutReader().readLayout(
             at: layout.root,
@@ -4405,6 +4466,47 @@ OrlixEnvironmentExposedPort(port: 8080, proto: "tcp")
 XCTAssertEqual(result.image.exposedPorts, expected)
 XCTAssertEqual(result.descriptor.exposedPorts, expected)
 XCTAssertEqual(loaded.exposedPorts, expected)
+}
+
+func testOCIImageLayoutImporterPreservesImageHealthcheckAsDescriptorMetadata()
+throws
+{
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layout = try writeOCILayout(healthcheck: [
+"Test": ["CMD", "/bin/check-health"],
+"Interval": 15_000_000_000,
+"Timeout": 2_000_000_000,
+"Retries": 5,
+])
+
+let result = try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-healthcheck",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-healthcheck"
+)
+let loaded = try registry.load(environmentID: "alpine-healthcheck")
+let expected = OrlixEnvironmentHealthcheck(
+test: ["CMD", "/bin/check-health"],
+intervalNanoseconds: 15_000_000_000,
+timeoutNanoseconds: 2_000_000_000,
+retries: 5
+)
+
+XCTAssertEqual(result.image.healthcheck, expected)
+XCTAssertEqual(result.descriptor.healthcheck, expected)
+XCTAssertEqual(loaded.healthcheck, expected)
 }
 
 func testOCIImageLayoutImporterMaterializesImageVolumes()
@@ -6557,7 +6659,8 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 	labels: [String: String] = [:],
 	stopSignal: String? = nil,
 	exposedPorts: [String: [String: String]] = [:],
-	volumes: [String: [String: String]] = [:]
+	volumes: [String: [String: String]] = [:],
+	healthcheck: [String: Any]? = nil
 ) throws -> OCILayoutFixture {
         let root = temporaryRegistryRoot()
         let blobs = root.appendingPathComponent("blobs/sha256", isDirectory: true)
@@ -6606,12 +6709,17 @@ var config = configObject["config"] as! [String: Any]
 config["ExposedPorts"] = exposedPorts
 configObject["config"] = config
 }
-if !volumes.isEmpty {
-var config = configObject["config"] as! [String: Any]
-config["Volumes"] = volumes
-configObject["config"] = config
-}
-if rootfsType != nil || rootfsDiffIDs != nil {
+	if !volumes.isEmpty {
+		var config = configObject["config"] as! [String: Any]
+		config["Volumes"] = volumes
+		configObject["config"] = config
+	}
+	if let healthcheck {
+		var config = configObject["config"] as! [String: Any]
+		config["Healthcheck"] = healthcheck
+		configObject["config"] = config
+	}
+	if rootfsType != nil || rootfsDiffIDs != nil {
 let diffIDs = rootfsDiffIDs
 ?? layerData.map { "sha256:\(OrlixOCIDigest.sha256Hex($0))" }
 configObject["rootfs"] = [

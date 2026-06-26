@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI image healthcheck metadata
+
+Changes:
+- Added `OrlixEnvironmentHealthcheck` descriptor metadata for Docker image healthcheck test vectors, nanosecond timing fields, and retry count.
+- `OrlixOCIImageLayoutReader` now decodes Docker image config `Healthcheck` fields: `Test`, `Interval`, `Timeout`, `StartPeriod`, `StartInterval`, and `Retries`.
+- Healthcheck command entries are validated through the existing image command-vector validation; negative durations and negative retries fail loudly.
+- `OrlixOCIImageLayoutImporter` now persists imported healthcheck metadata into the environment descriptor saved by OrlixOS.
+- Focused tests cover preserving active healthchecks, preserving `Test: ["NONE"]`, rejecting invalid healthchecks, and saving healthcheck metadata through the importer.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This proves image healthcheck metadata import and descriptor persistence only. It does not claim healthcheck scheduling/execution, live simulator runtime behavior, Linux process health status integration, full OCI lifecycle readiness, product runtime readiness, HostAdapter policy, Linux ABI, upstream Linux edits, generated-tree edits, or mlibc patches.
+
+Current status:
+- Healthcheck metadata checkpoint verified by static Swift parse/typecheck and guard checks above.
+
 ### 2026-06-26 OCI run published port descriptors
 
 Changes:
@@ -30,7 +53,7 @@ Evidence:
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
 
 Current status:
-- Latest coherent checkpoint is OCI run published port descriptors. Static Swift parse/typecheck and guard checks passed; no live Linux networking or simulator runtime claim is made.
+- Latest coherent checkpoint is OCI image healthcheck metadata. Static Swift parse/typecheck and guard checks passed; no healthcheck execution, live Linux runtime, or simulator runtime claim is made.
 - Hook-generated `.codex/hooks/__pycache__/orlix_hook_common.cpython-314.pyc` was removed before commit.
 
 Boundary:
