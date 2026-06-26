@@ -2467,7 +2467,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociLinuxResources",
 			status: .recognized,
 			proof: "orlix:runtime_config_parser",
-			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, memory limits, block IO weights/throttles, and allowlisted unified cgroup v2 writes are implemented; unproven device, network, RDMA, and hugepage resources remain rejected."
+			reason: "OCI Linux resources object is parsed. Pids, CPU quota, CPU shares, memory limits, block IO weights/throttles, and unified cgroup v2 writes are carried into Linux-owned cgroup handling; unproven device, network, RDMA, and hugepage resources remain rejected."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociCPUQuota",
@@ -2533,7 +2533,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociUnifiedCgroupResources",
 			status: .implemented,
 			proof: "orlix:cgroup_unified_probe",
-			reason: "OCI unified cgroup resources carry allowlisted cgroup v2 files into OrlixOS descriptors and init writes them through the Linux cgroup filesystem before joining the process cgroup."
+			reason: "OCI unified cgroup resources carry cgroup v2 file writes into OrlixOS descriptors and init applies them through the Linux cgroup filesystem before joining the process cgroup."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "selinux",
@@ -3565,20 +3565,12 @@ private static func validatedCgroupUnified(
 	guard let unified = resources?.unified, !unified.isEmpty else {
 		return []
 	}
-    let supportedFiles = Set([
-		"pids.max",
-		"cpu.max",
-		"cpu.weight",
-		"memory.max",
-		"io.weight",
-		"io.max"
-	])
 	return try unified
 		.sorted(by: { $0.key < $1.key })
 		.map { entry in
 			let file = entry.key
 			let value = entry.value
-			guard supportedFiles.contains(file),
+			guard !file.isEmpty,
 			      !file.contains("\u{0}"),
 			      !file.contains("/"),
 			      !value.isEmpty,

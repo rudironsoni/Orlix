@@ -7455,9 +7455,10 @@ func testOCIRuntimeConfigParserDerivesDefaultCgroupsPathForResources() throws {
 		          { "major": 8, "minor": 0, "rate": 1048576 }
 		        ]
 		      },
-		      "unified": {
-		        "cpu.weight": "39"
-		      }
+				"unified": {
+					"cpu.pressure": "some 100000 100000",
+					"cpu.weight": "39"
+				}
 		    }
 		  }
 		}
@@ -7477,6 +7478,7 @@ func testOCIRuntimeConfigParserDerivesDefaultCgroupsPathForResources() throws {
 	XCTAssertEqual(
 		descriptor.cgroupUnified,
 		[
+			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.pressure", value: "some 100000 100000"),
 			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
 			OrlixEnvironmentCgroupUnifiedEntry(file: "io.weight", value: "8:0 200"),
 			OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "8:0 rbps=1048576"),
@@ -7511,13 +7513,16 @@ func testOCIRuntimeConfigParserDerivesDefaultCgroupsPathForResources() throws {
 	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.cpu.weight=39"))
 	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.io.weight=100"))
 	XCTAssertTrue(
-		unwrappedCommandLine.contains("orlix.cgroups.unified0=cpu.weight=39")
+		unwrappedCommandLine.contains("orlix.cgroups.unified0=cpu.pressure=some%20100000%20100000")
 	)
 	XCTAssertTrue(
-		unwrappedCommandLine.contains("orlix.cgroups.unified1=io.weight=8:0%20200")
+		unwrappedCommandLine.contains("orlix.cgroups.unified1=cpu.weight=39")
 	)
 	XCTAssertTrue(
-		unwrappedCommandLine.contains("orlix.cgroups.unified2=io.max=8:0%20rbps=1048576")
+		unwrappedCommandLine.contains("orlix.cgroups.unified2=io.weight=8:0%20200")
+	)
+	XCTAssertTrue(
+		unwrappedCommandLine.contains("orlix.cgroups.unified3=io.max=8:0%20rbps=1048576")
 	)
 }
 
@@ -7789,7 +7794,6 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
 		("resources.blockIO.weightDevice.weight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "weight": 0 }] } }"#),
 		("resources.blockIO.weightDevice.leafWeight", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "weightDevice": [{ "major": 1, "minor": 0, "leafWeight": 100 }] } }"#),
 		("resources.blockIO.throttleReadBpsDevice.rate", #""cgroupsPath": "/orlix/demo", "resources": { "blockIO": { "throttleReadBpsDevice": [{ "major": 1, "minor": 0, "rate": 1 }] } }"#),
-		("resources.unified.cpu.pressure", #""cgroupsPath": "/orlix/demo", "resources": { "unified": { "cpu.pressure": "some 100000 100000" } }"#),
             ("resources.pids.limit", #""cgroupsPath": "/orlix/demo", "resources": { "pids": { "limit": -2 } }"#),
             ("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
             ("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
@@ -8429,46 +8433,46 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTAssertEqual(arguments.id, "demo-alpine")
 	XCTAssertEqual(arguments.platform, "linux/arm64/v8")
 	XCTAssertNil(arguments.entrypoint)
-	XCTTrue(arguments.environment.isEmpty)
-	XCTNil(arguments.workingDirectory)
-	XCTNil(arguments.userID)
-	XCTNil(arguments.groupID)
-	XCTTrue(arguments.supplementaryGroupIDs.isEmpty)
-	XCTNil(arguments.capabilities)
-	XCTNil(arguments.hostname)
-	XCTNil(arguments.domainname)
-	XCTNil(arguments.terminal)
-	XCTNil(arguments.terminalRows)
-	XCTNil(arguments.terminalColumns)
-	XCTNil(arguments.rootReadonly)
-	XCTNil(arguments.rootPropagation)
-	XCTTrue(arguments.rlimits.isEmpty)
-	XCTTrue(arguments.sysctls.isEmpty)
-	XCTTrue(arguments.maskedPaths.isEmpty)
-	XCTTrue(arguments.readonlyPaths.isEmpty)
-	XCTNil(arguments.umask)
-	XCTNil(arguments.oomScoreAdjustment)
-	XCTNil(arguments.scheduler)
-	XCTNil(arguments.ioPriority)
-	XCTNil(arguments.cpuAffinity)
-	XCTNil(arguments.personalityDomain)
-	XCTNil(arguments.noNewPrivileges)
-	XCTNil(arguments.closeAdditionalFds)
-	XCTNil(arguments.cgroupsPath)
-	XCTNil(arguments.cgroupPidsLimit)
-	XCTNil(arguments.cgroupCPUMax)
-	XCTNil(arguments.cgroupCPUWeight)
-	XCTNil(arguments.cgroupMemoryMax)
-	XCTNil(arguments.cgroupIOWeight)
-	XCTTrue(arguments.cgroupUnified.isEmpty)
-	XCTTrue(arguments.tmpfsMounts.isEmpty)
-	XCTTrue(arguments.mounts.isEmpty)
-	XCTTrue(arguments.deviceNodes.isEmpty)
-	XCTTrue(arguments.namespaces.isEmpty)
-	XCTTrue(arguments.namespacePaths.isEmpty)
-	XCTTrue(arguments.timeOffsets.isEmpty)
-	XCTTrue(arguments.uidMappings.isEmpty)
-	XCTTrue(arguments.gidMappings.isEmpty)
+	XCTAssertTrue(arguments.environment.isEmpty)
+	XCTAssertNil(arguments.workingDirectory)
+	XCTAssertNil(arguments.userID)
+	XCTAssertNil(arguments.groupID)
+	XCTAssertTrue(arguments.supplementaryGroupIDs.isEmpty)
+	XCTAssertNil(arguments.capabilities)
+	XCTAssertNil(arguments.hostname)
+	XCTAssertNil(arguments.domainname)
+	XCTAssertNil(arguments.terminal)
+	XCTAssertNil(arguments.terminalRows)
+	XCTAssertNil(arguments.terminalColumns)
+	XCTAssertNil(arguments.rootReadonly)
+	XCTAssertNil(arguments.rootPropagation)
+	XCTAssertTrue(arguments.rlimits.isEmpty)
+	XCTAssertTrue(arguments.sysctls.isEmpty)
+	XCTAssertTrue(arguments.maskedPaths.isEmpty)
+	XCTAssertTrue(arguments.readonlyPaths.isEmpty)
+	XCTAssertNil(arguments.umask)
+	XCTAssertNil(arguments.oomScoreAdjustment)
+	XCTAssertNil(arguments.scheduler)
+	XCTAssertNil(arguments.ioPriority)
+	XCTAssertNil(arguments.cpuAffinity)
+	XCTAssertNil(arguments.personalityDomain)
+	XCTAssertNil(arguments.noNewPrivileges)
+	XCTAssertNil(arguments.closeAdditionalFds)
+	XCTAssertNil(arguments.cgroupsPath)
+	XCTAssertNil(arguments.cgroupPidsLimit)
+	XCTAssertNil(arguments.cgroupCPUMax)
+	XCTAssertNil(arguments.cgroupCPUWeight)
+	XCTAssertNil(arguments.cgroupMemoryMax)
+	XCTAssertNil(arguments.cgroupIOWeight)
+	XCTAssertTrue(arguments.cgroupUnified.isEmpty)
+	XCTAssertTrue(arguments.tmpfsMounts.isEmpty)
+	XCTAssertTrue(arguments.mounts.isEmpty)
+	XCTAssertTrue(arguments.deviceNodes.isEmpty)
+	XCTAssertTrue(arguments.namespaces.isEmpty)
+	XCTAssertTrue(arguments.namespacePaths.isEmpty)
+	XCTAssertTrue(arguments.timeOffsets.isEmpty)
+	XCTAssertTrue(arguments.uidMappings.isEmpty)
+	XCTAssertTrue(arguments.gidMappings.isEmpty)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -8489,30 +8493,30 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTAssertEqual(nameArguments.id, "named-alpine")
 	XCTAssertEqual(nameArguments.platform, "linux/arm64/v8")
 	XCTAssertNil(nameArguments.entrypoint)
-	XCTTrue(nameArguments.environment.isEmpty)
-	XCTNil(nameArguments.workingDirectory)
-	XCTNil(nameArguments.userID)
-	XCTNil(nameArguments.groupID)
-	XCTTrue(nameArguments.supplementaryGroupIDs.isEmpty)
-	XCTNil(nameArguments.capabilities)
-	XCTNil(nameArguments.hostname)
-	XCTNil(nameArguments.domainname)
-	XCTNil(nameArguments.terminal)
-	XCTTrue(nameArguments.rlimits.isEmpty)
-	XCTNil(nameArguments.umask)
-	XCTNil(nameArguments.oomScoreAdjustment)
-	XCTNil(nameArguments.scheduler)
-	XCTNil(nameArguments.ioPriority)
-	XCTNil(nameArguments.cpuAffinity)
-	XCTNil(nameArguments.personalityDomain)
-	XCTNil(nameArguments.noNewPrivileges)
-	XCTNil(nameArguments.closeAdditionalFds)
-	XCTNil(nameArguments.cgroupsPath)
-	XCTNil(nameArguments.cgroupPidsLimit)
-	XCTNil(nameArguments.cgroupCPUMax)
-	XCTNil(nameArguments.cgroupCPUWeight)
-	XCTNil(nameArguments.cgroupMemoryMax)
-	XCTNil(nameArguments.cgroupIOWeight)
+	XCTAssertTrue(nameArguments.environment.isEmpty)
+	XCTAssertNil(nameArguments.workingDirectory)
+	XCTAssertNil(nameArguments.userID)
+	XCTAssertNil(nameArguments.groupID)
+	XCTAssertTrue(nameArguments.supplementaryGroupIDs.isEmpty)
+	XCTAssertNil(nameArguments.capabilities)
+	XCTAssertNil(nameArguments.hostname)
+	XCTAssertNil(nameArguments.domainname)
+	XCTAssertNil(nameArguments.terminal)
+	XCTAssertTrue(nameArguments.rlimits.isEmpty)
+	XCTAssertNil(nameArguments.umask)
+	XCTAssertNil(nameArguments.oomScoreAdjustment)
+	XCTAssertNil(nameArguments.scheduler)
+	XCTAssertNil(nameArguments.ioPriority)
+	XCTAssertNil(nameArguments.cpuAffinity)
+	XCTAssertNil(nameArguments.personalityDomain)
+	XCTAssertNil(nameArguments.noNewPrivileges)
+	XCTAssertNil(nameArguments.closeAdditionalFds)
+	XCTAssertNil(nameArguments.cgroupsPath)
+	XCTAssertNil(nameArguments.cgroupPidsLimit)
+	XCTAssertNil(nameArguments.cgroupCPUMax)
+	XCTAssertNil(nameArguments.cgroupCPUWeight)
+	XCTAssertNil(nameArguments.cgroupMemoryMax)
+	XCTAssertNil(nameArguments.cgroupIOWeight)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -8526,30 +8530,30 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTAssertEqual(equalsArguments.id, "equals-alpine")
 	XCTAssertEqual(equalsArguments.platform, "linux/arm64")
 	XCTAssertNil(equalsArguments.entrypoint)
-	XCTTrue(equalsArguments.environment.isEmpty)
-	XCTNil(equalsArguments.workingDirectory)
-	XCTNil(equalsArguments.userID)
-	XCTNil(equalsArguments.groupID)
-	XCTTrue(equalsArguments.supplementaryGroupIDs.isEmpty)
-	XCTNil(equalsArguments.capabilities)
-	XCTNil(equalsArguments.hostname)
-	XCTNil(equalsArguments.domainname)
-	XCTNil(equalsArguments.terminal)
-	XCTTrue(equalsArguments.rlimits.isEmpty)
-	XCTNil(equalsArguments.umask)
-	XCTNil(equalsArguments.oomScoreAdjustment)
-	XCTNil(equalsArguments.scheduler)
-	XCTNil(equalsArguments.ioPriority)
-	XCTNil(equalsArguments.cpuAffinity)
-	XCTNil(equalsArguments.personalityDomain)
-	XCTNil(equalsArguments.noNewPrivileges)
-	XCTNil(equalsArguments.closeAdditionalFds)
-	XCTNil(equalsArguments.cgroupsPath)
-	XCTNil(equalsArguments.cgroupPidsLimit)
-	XCTNil(equalsArguments.cgroupCPUMax)
-	XCTNil(equalsArguments.cgroupCPUWeight)
-	XCTNil(equalsArguments.cgroupMemoryMax)
-	XCTNil(equalsArguments.cgroupIOWeight)
+	XCTAssertTrue(equalsArguments.environment.isEmpty)
+	XCTAssertNil(equalsArguments.workingDirectory)
+	XCTAssertNil(equalsArguments.userID)
+	XCTAssertNil(equalsArguments.groupID)
+	XCTAssertTrue(equalsArguments.supplementaryGroupIDs.isEmpty)
+	XCTAssertNil(equalsArguments.capabilities)
+	XCTAssertNil(equalsArguments.hostname)
+	XCTAssertNil(equalsArguments.domainname)
+	XCTAssertNil(equalsArguments.terminal)
+	XCTAssertTrue(equalsArguments.rlimits.isEmpty)
+	XCTAssertNil(equalsArguments.umask)
+	XCTAssertNil(equalsArguments.oomScoreAdjustment)
+	XCTAssertNil(equalsArguments.scheduler)
+	XCTAssertNil(equalsArguments.ioPriority)
+	XCTAssertNil(equalsArguments.cpuAffinity)
+	XCTAssertNil(equalsArguments.personalityDomain)
+	XCTAssertNil(equalsArguments.noNewPrivileges)
+	XCTAssertNil(equalsArguments.closeAdditionalFds)
+	XCTAssertNil(equalsArguments.cgroupsPath)
+	XCTAssertNil(equalsArguments.cgroupPidsLimit)
+	XCTAssertNil(equalsArguments.cgroupCPUMax)
+	XCTAssertNil(equalsArguments.cgroupCPUWeight)
+	XCTAssertNil(equalsArguments.cgroupMemoryMax)
+	XCTAssertNil(equalsArguments.cgroupIOWeight)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8640,7 +8644,7 @@ func testOCIEnvironmentRunArgumentsAcceptsNumericUserOverrides() throws {
 	])
 
 	XCTAssertEqual(shortUserArguments.userID, 42)
-	XCTNil(shortUserArguments.groupID)
+	XCTAssertNil(shortUserArguments.groupID)
 
 	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
 		"run",
@@ -9383,6 +9387,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCgroupUnifiedOverrides() throws {
 		"--cgroup-unified",
 		"cpu.weight=39",
 		"--cgroup-unified=memory.max=268435456",
+		"--cgroup-unified=kernel.memory=1",
 		"alpine:3.20",
 	])
 
@@ -9397,25 +9402,15 @@ func testOCIEnvironmentRunArgumentsAcceptsCgroupUnifiedOverrides() throws {
 				file: "memory.max",
 				value: "268435456"
 			),
+			OrlixEnvironmentCgroupUnifiedEntry(
+				file: "kernel.memory",
+				value: "1"
+			),
 		]
 	)
 }
 
 func testOCIEnvironmentRunArgumentsRejectsInvalidCgroupUnifiedOverride() throws {
-	XCTAssertThrowsError(
-		try OrlixOCIEnvironmentRunArguments([
-			"run",
-			"--cgroup-unified",
-			"kernel.memory=1",
-			"alpine:3.20",
-		])
-	) { error in
-		XCTAssertEqual(
-			error as? OrlixOCIRuntimeConfigError,
-			.unsupportedLinuxFeature("linux.resources.unified.kernel.memory")
-		)
-	}
-
 	XCTAssertThrowsError(
 		try OrlixOCIEnvironmentRunArguments([
 			"run",
@@ -12154,7 +12149,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultEnvironment["TERM"], "orlix-256color")
 	XCTAssertEqual(descriptor.defaultEnvironment["ORLIX_RUN"], "1")
 	XCTAssertEqual(descriptor.defaultWorkingDirectory, "/workspace")
-	XCTTrue(descriptor.rootReadonly)
+	XCTAssertTrue(descriptor.rootReadonly)
 	XCTAssertEqual(descriptor.rootPropagation, .shared)
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)

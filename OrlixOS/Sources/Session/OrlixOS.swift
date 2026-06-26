@@ -3374,16 +3374,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         }
         let file = String(value[..<separator])
         let unifiedValue = String(value[value.index(after: separator)...])
-        let supportedFiles: Set<String> = [
-            "pids.max",
-            "cpu.max",
-            "cpu.weight",
-            "memory.max",
-            "io.weight",
-            "io.max",
-        ]
-        guard supportedFiles.contains(file),
-              !file.contains("\u{0}"),
+		guard !file.isEmpty,
+		      !file.contains("\u{0}"),
               !file.contains("/"),
               !unifiedValue.isEmpty,
               !unifiedValue.contains("\u{0}"),
