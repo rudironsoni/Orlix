@@ -10,6 +10,25 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI prepared environment inspect command
+
+Changes:
+- Added `OrlixOCIEnvironmentInspectResult` as a public prepared-environment inspection snapshot without exposing the SPI `OrlixEnvironmentDescriptor` type.
+- Added `OrlixOCIEnvironmentInstaller.inspect(id:)` and `inspect(arguments:)` for `orlix inspect <id>` / `orlix inspect --id <id>` style command paths.
+- Added `OrlixOCIRuntime.inspect(id:)` backed by the existing registry descriptor and OCI lifecycle store snapshot. This exposes stored launch metadata and persisted lifecycle state; it does not simulate Linux runtime state or invent a separate status model.
+- Added a focused test proving `orlix inspect --id` returns persisted descriptor fields and the created lifecycle state report for a prepared OCI environment.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` was stopped after the single simulator stayed non-terminal at `Waiting on System App` beyond two minutes; focused XCTest was not run against a half-booted simulator.
+- Hook-generated `.codex/hooks/__pycache__/orlix_hook_common.cpython-314.pyc` was removed before commit.
+
+Boundary:
+- This advances product command coverage over prepared OCI environments and uses existing OrlixOS registry/lifecycle state. It does not claim live simulator runtime behavior, full OCI Runtime Spec compliance, Linux process execution, registry execution inside Linux, networking, cgroups, devices, or multiple live environments inside one already-running OrlixKernel.
+
 ### 2026-06-26 OCI registry descriptor Linux bridge
 
 Changes:
