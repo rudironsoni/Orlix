@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run masked and readonly path overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--mask PATH`, `--mask=PATH`, `--readonly PATH`, and `--readonly=PATH` before image.
+- CLI validation reuses the current OCI runtime-path shape for `linux.maskedPaths` and `linux.readonlyPaths`: absolute non-root paths, no NUL, no `.` or `..` path components, and no duplicate CLI path in the same list.
+- Registry-backed install/run terminal-session preparation persists parsed paths into `OrlixEnvironmentDescriptor.maskedPaths` and `readonlyPaths`; descriptor merge replaces matching inherited paths and sorts for deterministic output. Existing rootinit code applies these through Linux-visible masking and readonly remount paths.
+- Focused tests cover split and equals parsing, invalid/duplicate rejection, empty equals-form rejection, default empty parser state, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing masked and readonly path configuration through existing OrlixOS descriptors and rootinit Linux-visible mount paths. Does not claim live simulator proof, mount namespace isolation, per-path runtime behavior proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, or custom ABI.
+
 ### 2026-06-26 OCI run sysctl overrides
 
 Changes:

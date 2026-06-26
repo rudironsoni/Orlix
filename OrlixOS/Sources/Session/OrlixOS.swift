@@ -1365,6 +1365,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let terminal: Bool?
     public let rlimits: [OrlixEnvironmentRlimit]
     public let sysctls: [String: String]
+    public let maskedPaths: [String]
+    public let readonlyPaths: [String]
     public let umask: UInt32?
 	public let oomScoreAdjustment: Int32?
 	public let scheduler: OrlixEnvironmentScheduler?
@@ -1416,6 +1418,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         var parsedTerminal: Bool?
         var parsedRlimits: [OrlixEnvironmentRlimit] = []
         var parsedSysctls: [String: String] = [:]
+        var parsedMaskedPaths: [String] = []
+        var parsedReadonlyPaths: [String] = []
         var parsedUmask: UInt32?
 		var parsedOOMScoreAdjustment: Int32?
 		var parsedScheduler: OrlixEnvironmentScheduler?
@@ -1639,6 +1643,60 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                         .missingOptionValue("--sysctl")
                 }
                 try Self.addSysctlEntry(sysctl, to: &parsedSysctls)
+                continue
+            }
+            if parsedImage == nil, value == "--mask" {
+                guard let path = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue(value)
+                }
+                try Self.addRuntimePath(
+                    path,
+                    to: &parsedMaskedPaths,
+                    feature: "linux.maskedPaths"
+                )
+                values.removeFirst()
+                continue
+            }
+            if parsedImage == nil, value.hasPrefix("--mask=") {
+                let separator = value.firstIndex(of: "=")!
+                let path = String(value[value.index(after: separator)...])
+                guard !path.isEmpty else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue("--mask")
+                }
+                try Self.addRuntimePath(
+                    path,
+                    to: &parsedMaskedPaths,
+                    feature: "linux.maskedPaths"
+                )
+                continue
+            }
+            if parsedImage == nil, value == "--readonly" {
+                guard let path = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue(value)
+                }
+                try Self.addRuntimePath(
+                    path,
+                    to: &parsedReadonlyPaths,
+                    feature: "linux.readonlyPaths"
+                )
+                values.removeFirst()
+                continue
+            }
+            if parsedImage == nil, value.hasPrefix("--readonly=") {
+                let separator = value.firstIndex(of: "=")!
+                let path = String(value[value.index(after: separator)...])
+                guard !path.isEmpty else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue("--readonly")
+                }
+                try Self.addRuntimePath(
+                    path,
+                    to: &parsedReadonlyPaths,
+                    feature: "linux.readonlyPaths"
+                )
                 continue
             }
             if parsedImage == nil, value == "--ulimit" {
@@ -2044,6 +2102,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.terminal = parsedTerminal
         self.rlimits = parsedRlimits
         self.sysctls = parsedSysctls
+        self.maskedPaths = parsedMaskedPaths
+        self.readonlyPaths = parsedReadonlyPaths
         self.umask = parsedUmask
 		self.oomScoreAdjustment = parsedOOMScoreAdjustment
 		self.scheduler = parsedScheduler
@@ -2722,6 +2782,27 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         sysctls[key] = sysctlValue
     }
 
+    private static func addRuntimePath(
+        _ path: String,
+        to paths: inout [String],
+        feature: String
+    ) throws {
+        let components = path.split(
+            separator: "/",
+            omittingEmptySubsequences: false
+        )
+        guard path.hasPrefix("/"),
+              path != "/",
+              !path.contains("\u{0}"),
+              !components.contains(where: { $0 == ".." }),
+              !components.contains(where: { $0 == "." }),
+              !paths.contains(path)
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(feature)
+        }
+        paths.append(path)
+    }
+
     private static func parseID(
 		_ value: String,
 		feature: String
@@ -2851,6 +2932,16 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         return (retained + overrides).sorted { $0.targetPath < $1.targetPath }
     }
 
+    private static func mergedRuntimePaths(
+        _ existing: [String],
+        overrides: [String]
+    ) -> [String] {
+        guard !overrides.isEmpty else { return existing }
+        let overridePaths = Set(overrides)
+        let retained = existing.filter { !overridePaths.contains($0) }
+        return (retained + overrides).sorted()
+    }
+
     private static func defaultCgroupsPath(
 		environmentID: String,
 		required: Bool
@@ -2873,10 +2964,12 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultCapabilitiesWith capabilities: OrlixEnvironmentCapabilities?,
 		replacingHostnameWith hostname: String?,
 		replacingDomainnameWith domainname: String?,
-		replacingDefaultTerminalWith terminal: Bool?,
-		mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
-		mergingSysctlsWith sysctls: [String: String],
-		replacingDefaultUmaskWith umask: UInt32?,
+        replacingDefaultTerminalWith terminal: Bool?,
+        mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
+        mergingSysctlsWith sysctls: [String: String],
+        mergingMaskedPathsWith maskedPaths: [String],
+        mergingReadonlyPathsWith readonlyPaths: [String],
+        replacingDefaultUmaskWith umask: UInt32?,
 		replacingDefaultOOMScoreAdjustmentWith oomScoreAdjustment: Int32?,
 		replacingDefaultSchedulerWith scheduler: OrlixEnvironmentScheduler?,
 		replacingDefaultIOPriorityWith ioPriority: OrlixEnvironmentIOPriority?,
@@ -2902,10 +2995,12 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| capabilities != nil
 			|| hostname != nil
 			|| domainname != nil
-			|| terminal != nil
-			|| !rlimits.isEmpty
-			|| !sysctls.isEmpty
-			|| umask != nil
+            || terminal != nil
+            || !rlimits.isEmpty
+            || !sysctls.isEmpty
+            || !maskedPaths.isEmpty
+            || !readonlyPaths.isEmpty
+            || umask != nil
 			|| oomScoreAdjustment != nil
 			|| scheduler != nil
 			|| ioPriority != nil
@@ -2946,11 +3041,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		}
 		let allowedSysctlScalars = CharacterSet.alphanumerics
 			.union(CharacterSet(charactersIn: "._-"))
-		for (key, value) in sysctls {
-			guard !key.isEmpty,
-				key.unicodeScalars.allSatisfy({
-					allowedSysctlScalars.contains($0)
-				}),
+        for (key, value) in sysctls {
+            guard !key.isEmpty,
+                key.unicodeScalars.allSatisfy({
+                    allowedSysctlScalars.contains($0)
+                }),
 				key.first != ".",
 				key.last != ".",
 				!key.contains(".."),
@@ -2960,10 +3055,42 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			else {
 				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
 					"linux.sysctl"
-				)
-			}
-		}
-		if let workingDirectory {
+                )
+            }
+        }
+        for path in maskedPaths {
+            let components = path.split(
+                separator: "/",
+                omittingEmptySubsequences: false
+            )
+            guard path.hasPrefix("/"),
+                  path != "/",
+                  !path.contains("\u{0}"),
+                  !components.contains(where: { $0 == ".." }),
+                  !components.contains(where: { $0 == "." })
+            else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "linux.maskedPaths"
+                )
+            }
+        }
+        for path in readonlyPaths {
+            let components = path.split(
+                separator: "/",
+                omittingEmptySubsequences: false
+            )
+            guard path.hasPrefix("/"),
+                  path != "/",
+                  !path.contains("\u{0}"),
+                  !components.contains(where: { $0 == ".." }),
+                  !components.contains(where: { $0 == "." })
+            else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "linux.readonlyPaths"
+                )
+            }
+        }
+        if let workingDirectory {
 			guard workingDirectory.hasPrefix("/"),
 				!workingDirectory.contains("\u{0}")
 			else {
@@ -2991,10 +3118,18 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		let defaultEnvironment = descriptor.defaultEnvironment.merging(
 			environment
 		) { _, override in override }
-		let effectiveSysctls = descriptor.sysctls.merging(
-			sysctls
-		) { _, override in override }
-		let defaultRlimits = try mergedRlimits(
+        let effectiveSysctls = descriptor.sysctls.merging(
+            sysctls
+        ) { _, override in override }
+        let effectiveMaskedPaths = Self.mergedRuntimePaths(
+            descriptor.maskedPaths,
+            overrides: maskedPaths
+        )
+        let effectiveReadonlyPaths = Self.mergedRuntimePaths(
+            descriptor.readonlyPaths,
+            overrides: readonlyPaths
+        )
+        let defaultRlimits = try mergedRlimits(
 			descriptor.defaultRlimits,
 			overrides: rlimits
 		)
@@ -3052,13 +3187,13 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				?? descriptor.defaultPersonalityDomain,
 			hostname: hostname ?? descriptor.hostname,
 			domainname: domainname ?? descriptor.domainname,
-			rootMount: descriptor.rootMount,
+            rootMount: descriptor.rootMount,
             rootReadonly: descriptor.rootReadonly,
             rootPropagation: descriptor.rootPropagation,
-			sysctls: effectiveSysctls,
-            maskedPaths: descriptor.maskedPaths,
-            readonlyPaths: descriptor.readonlyPaths,
-			cgroupsPath: effectiveCgroupsPath,
+            sysctls: effectiveSysctls,
+            maskedPaths: effectiveMaskedPaths,
+            readonlyPaths: effectiveReadonlyPaths,
+            cgroupsPath: effectiveCgroupsPath,
 			cgroupPidsLimit: cgroupPidsLimit
 			?? descriptor.cgroupPidsLimit,
 			cgroupCPUMax: cgroupCPUMax ?? descriptor.cgroupCPUMax,
@@ -3133,6 +3268,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
+		maskedPathOverrides: [String] = [],
+		readonlyPathOverrides: [String] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3170,6 +3307,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
+			maskedPathOverrides: maskedPathOverrides,
+			readonlyPathOverrides: readonlyPathOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3210,6 +3349,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
+		maskedPathOverrides: [String] = [],
+		readonlyPathOverrides: [String] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3273,6 +3414,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDefaultTerminalWith: terminalOverride,
 				mergingDefaultRlimitsWith: defaultRlimitOverrides,
 			mergingSysctlsWith: sysctlOverrides,
+			mergingMaskedPathsWith: maskedPathOverrides,
+			mergingReadonlyPathsWith: readonlyPathOverrides,
 				replacingDefaultUmaskWith: defaultUmaskOverride,
 				replacingDefaultOOMScoreAdjustmentWith:
 					defaultOOMScoreAdjustmentOverride,
@@ -3389,6 +3532,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
+			maskedPathOverrides: request.maskedPaths,
+			readonlyPathOverrides: request.readonlyPaths,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			defaultSchedulerOverride: request.scheduler,
@@ -3455,6 +3600,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
+			maskedPathOverrides: request.maskedPaths,
+			readonlyPathOverrides: request.readonlyPaths,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			defaultSchedulerOverride: request.scheduler,
@@ -3522,6 +3669,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
+		maskedPathOverrides: [String] = [],
+		readonlyPathOverrides: [String] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3561,6 +3710,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
+			maskedPathOverrides: maskedPathOverrides,
+			readonlyPathOverrides: readonlyPathOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3603,6 +3754,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
+		maskedPathOverrides: [String] = [],
+		readonlyPathOverrides: [String] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3641,6 +3794,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
+			maskedPathOverrides: maskedPathOverrides,
+			readonlyPathOverrides: readonlyPathOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3692,6 +3847,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
+		maskedPathOverrides: [String] = [],
+		readonlyPathOverrides: [String] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3732,6 +3889,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
+			maskedPathOverrides: maskedPathOverrides,
+			readonlyPathOverrides: readonlyPathOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3775,6 +3934,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
+		maskedPathOverrides: [String] = [],
+		readonlyPathOverrides: [String] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3814,6 +3975,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
+			maskedPathOverrides: maskedPathOverrides,
+			readonlyPathOverrides: readonlyPathOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3879,6 +4042,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
+			maskedPathOverrides: request.maskedPaths,
+			readonlyPathOverrides: request.readonlyPaths,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			defaultSchedulerOverride: request.scheduler,
@@ -3932,6 +4097,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		sysctlOverrides: [String: String] = [:],
+		maskedPathOverrides: [String] = [],
+		readonlyPathOverrides: [String] = [],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3971,6 +4138,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			sysctlOverrides: sysctlOverrides,
+			maskedPathOverrides: maskedPathOverrides,
+			readonlyPathOverrides: readonlyPathOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
