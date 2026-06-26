@@ -7943,6 +7943,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.terminalRows)
 	XCTNil(arguments.terminalColumns)
 	XCTNil(arguments.rootReadonly)
+	XCTNil(arguments.rootPropagation)
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTTrue(arguments.sysctls.isEmpty)
 	XCTTrue(arguments.maskedPaths.isEmpty)
@@ -8838,6 +8839,41 @@ func testOCIEnvironmentRunArgumentsAcceptsRootReadonlyOverride() throws {
 		"alpine:3.20",
 	])
 	XCTAssertEqual(readWriteArguments.rootReadonly, false)
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsRootPropagationOverride() throws {
+	let splitArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--root-propagation",
+		"shared",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(splitArguments.rootPropagation, .shared)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--root-propagation=slave",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(equalsArguments.rootPropagation, .slave)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidRootPropagationOverride()
+throws
+{
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--root-propagation",
+			"recursive-shared",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.rootfsPropagation")
+		)
+	}
 }
 
 func testOCIEnvironmentRunArgumentsRejectsInvalidMaskedAndReadonlyPathOverride()
@@ -10764,6 +10800,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		"--no-new-privileges",
 			"--close-fds",
 			"--read-only",
+			"--root-propagation",
+			"shared",
 			"--entrypoint",
 			"/usr/bin/env",
 			"--env",
@@ -10883,6 +10921,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultEnvironment["ORLIX_RUN"], "1")
 	XCTAssertEqual(descriptor.defaultWorkingDirectory, "/workspace")
 	XCTTrue(descriptor.rootReadonly)
+	XCTAssertEqual(descriptor.rootPropagation, .shared)
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.defaultSupplementaryGroups, [44, 45])
