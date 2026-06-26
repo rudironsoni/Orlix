@@ -2308,8 +2308,8 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 		OrlixOCIRuntimeFeature(
 			name: "tmpfs",
 			status: .implemented,
-			proof: "orlix:pseudo_fs_probe",
-			reason: "Linux /tmp tmpfs visibility is covered by Orlix kselftest."
+			proof: "orlix:runtime_config_parser",
+			reason: "Linux default tmpfs mounts remain covered by Orlix kselftest; OCI tmpfs mounts with supported Linux flags and data options carry into OrlixOS descriptors and init mounts them through Linux tmpfs."
 		),
 		OrlixOCIRuntimeFeature(
 				name: "ociBindMounts",
@@ -2408,12 +2408,13 @@ public let cgroupIOWeight: UInt64?
 
 	@_spi(OrlixPrivateTesting)
 	public func environmentDescriptor(id: String,
-	                                  rootMount: OrlixEnvironmentRootMount,
-	                                  rootImageIdentifier: String? = nil,
-	                                  mounts: [OrlixEnvironmentMount] = [])
+	 rootMount: OrlixEnvironmentRootMount,
+	 rootImageIdentifier: String? = nil,
+	 mounts: [OrlixEnvironmentMount] = [])
 		throws -> OrlixEnvironmentDescriptor
 	{
 		let ociMounts = try self.mounts.compactMap { try $0.environmentMount() }
+		let ociTmpfsMounts = try self.mounts.compactMap { try $0.tmpfsMount() }
 		let effectiveCgroupsPath = try cgroupsPath
 			?? defaultCgroupsPath(environmentID: id, required: needsCgroupsPath)
 
@@ -2458,10 +2459,11 @@ public let cgroupIOWeight: UInt64?
             deviceNodes: deviceNodes,
             timeOffsets: timeOffsets,
             uidMappings: uidMappings,
-            gidMappings: gidMappings,
-            namespaces: namespaces,
-            namespacePaths: namespacePaths,
-            mounts: mounts + ociMounts
+			gidMappings: gidMappings,
+			namespaces: namespaces,
+			namespacePaths: namespacePaths,
+			tmpfsMounts: ociTmpfsMounts,
+			mounts: mounts + ociMounts
 		)
 	}
 
@@ -2549,6 +2551,13 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 		"nodev",
 		"noexec",
 	])
+	fileprivate static let supportedTmpfsFlagOptions = Set([
+		"ro",
+		"rw",
+		"nosuid",
+		"nodev",
+		"noexec",
+	])
 
 	func environmentMount() throws -> OrlixEnvironmentMount? {
 		guard type == "bind" else {
@@ -2596,6 +2605,102 @@ public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
 		}
 		throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
+	}
+}
+
+extension OrlixOCIRuntimeMount {
+	func tmpfsMount() throws -> OrlixEnvironmentTmpfsMount? {
+		guard type == "tmpfs" else {
+			return nil
+		}
+		guard source == nil || source == "tmpfs" else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.source")
+		}
+
+		var readOnly = false
+		var noSuid = false
+		var noDev = false
+		var noExec = false
+		var dataOptions: [String] = []
+
+		for option in options {
+			if Self.supportedTmpfsFlagOptions.contains(option) {
+				switch option {
+				case "ro":
+					readOnly = true
+				case "rw":
+					readOnly = false
+				case "nosuid":
+					noSuid = true
+				case "nodev":
+					noDev = true
+				case "noexec":
+					noExec = true
+				default:
+					break
+				}
+				continue
+			}
+			if try Self.validatedTmpfsDataOption(option) {
+				dataOptions.append(option)
+				continue
+			}
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
+		}
+
+		do {
+			return try OrlixEnvironmentTmpfsMount(
+				targetPath: destination,
+				readOnly: readOnly,
+				noSuid: noSuid,
+				noDev: noDev,
+				noExec: noExec,
+				data: dataOptions.isEmpty ? nil : dataOptions.joined(separator: ",")
+			)
+		} catch OrlixEnvironmentMountError.invalidTargetPath(_),
+		        OrlixEnvironmentMountError.reservedTargetPath(_) {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.destination")
+		} catch OrlixEnvironmentMountError.invalidTmpfsData(_) {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
+		}
+	}
+
+	private static func validatedTmpfsDataOption(_ option: String) throws -> Bool {
+		guard let separator = option.firstIndex(of: "=") else {
+			return false
+		}
+		let key = String(option[..<separator])
+		let value = String(option[option.index(after: separator)...])
+		switch key {
+		case "size":
+			guard !value.isEmpty,
+			      value.unicodeScalars.allSatisfy({
+				      CharacterSet.alphanumerics
+					      .union(CharacterSet(charactersIn: "%"))
+					      .contains($0)
+			      })
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
+			}
+		case "mode":
+			guard !value.isEmpty,
+			      value.count <= 4,
+			      value.unicodeScalars.allSatisfy({
+				      CharacterSet(charactersIn: "01234567").contains($0)
+			      })
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
+			}
+		case "uid", "gid":
+			guard !value.isEmpty,
+			      value.unicodeScalars.allSatisfy({ CharacterSet.decimalDigits.contains($0) })
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
+			}
+		default:
+			return false
+		}
+		return true
 	}
 }
 
@@ -3635,6 +3740,10 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
 
 	private static func validateDefaultVirtualMount(_ mount: OrlixOCIRuntimeMount) throws {
 		guard mount.type != "bind" else { return }
+		if mount.type == "tmpfs" {
+			_ = try mount.tmpfsMount()
+			return
+		}
 
 		guard mount.options.isEmpty else {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("mounts.options")
@@ -3655,9 +3764,6 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
 		case "devpts":
 			expectedSource = "devpts"
 			expectedDestination = "/dev/pts"
-		case "tmpfs":
-			expectedSource = "tmpfs"
-			expectedDestination = "/tmp"
 		case "cgroup2":
 			expectedSource = "cgroup2"
 			expectedDestination = "/sys/fs/cgroup"
@@ -3719,10 +3825,11 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
 		if let rdma = linux.rdma, !rdma.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.rdma")
 		}
-        if let netDevices = linux.netDevices, !netDevices.isEmpty {
+	if let netDevices = linux.netDevices, !netDevices.isEmpty {
 			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature("linux.netDevices")
 		}
 	}
+
 }
 
 private struct OCIRuntimeConfig: Decodable {

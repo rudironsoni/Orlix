@@ -993,10 +993,20 @@ cgroupPidsLimit: 64,
                     uid: 0,
                     gid: 0
                 )
-            ],
-            namespaces: ["mount", "ipc", "uts", "cgroup"],
-            namespacePaths: ["network": "/proc/1/ns/net"]
-        )
+			],
+			namespaces: ["mount", "ipc", "uts", "cgroup"],
+			namespacePaths: ["network": "/proc/1/ns/net"],
+			tmpfsMounts: [
+				try OrlixEnvironmentTmpfsMount(
+					targetPath: "/run/oci-cache",
+					readOnly: true,
+					noSuid: true,
+					noDev: true,
+					noExec: true,
+					data: "size=64m,mode=0755,uid=0,gid=0"
+				)
+			]
+		)
         let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: descriptor.id,
             linuxStateRoot: root.appendingPathComponent(
@@ -1074,10 +1084,16 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         XCTAssertTrue(commandLine.contains("orlix.device.gid1=0"))
         XCTAssertTrue(commandLine.contains("orlix.namespace0=cgroup"))
         XCTAssertTrue(commandLine.contains("orlix.namespace1=ipc"))
-        XCTAssertTrue(commandLine.contains("orlix.namespace2=mount"))
-        XCTAssertTrue(commandLine.contains("orlix.namespace3=uts"))
-        XCTAssertTrue(commandLine.contains("orlix.namespacepath0=network=/proc/1/ns/net"))
-        XCTAssertTrue(commandLine.contains("orlix.sysctl0=kernel.hostname=orlix%20demo"))
+		XCTAssertTrue(commandLine.contains("orlix.namespace2=mount"))
+		XCTAssertTrue(commandLine.contains("orlix.namespace3=uts"))
+		XCTAssertTrue(commandLine.contains("orlix.namespacepath0=network=/proc/1/ns/net"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.target=/run/oci-cache"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.readonly=1"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nosuid=1"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nodev=1"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.noexec=1"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.data=size=64m%2Cmode=0755%2Cuid=0%2Cgid=0"))
+		XCTAssertTrue(commandLine.contains("orlix.sysctl0=kernel.hostname=orlix%20demo"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl1=net.ipv4.ip_forward=1"))
     }
 
@@ -1272,10 +1288,17 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                 "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultCPUAffinityCommandLineKey)=\","
             )
         )
-        XCTAssertTrue(initSource.contains("sched_setaffinity("))
-        XCTAssertTrue(
-            initSource.contains(
-                "snprintf(key, sizeof(key), \"orlix.mount.host%d.target=\", index);"
+		XCTAssertTrue(initSource.contains("sched_setaffinity("))
+		XCTAssertTrue(
+			initSource.contains(
+				"snprintf(key, sizeof(key), \"orlix.mount.tmpfs%d.target=\", index);"
+			)
+		)
+		XCTAssertTrue(initSource.contains("mount_configured_tmpfs_mounts();"))
+		XCTAssertTrue(initSource.contains("mount_if_needed(\"tmpfs\", target, \"tmpfs\""))
+		XCTAssertTrue(
+			initSource.contains(
+				"snprintf(key, sizeof(key), \"orlix.mount.host%d.target=\", index);"
             )
         )
 	XCTAssertTrue(
@@ -1298,11 +1321,15 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 		let hostMountRange = try XCTUnwrap(
 			initSource.range(of: "mount_configured_host_directories();")
 		)
+		let configuredTmpfsRange = try XCTUnwrap(
+			initSource.range(of: "mount_configured_tmpfs_mounts();")
+		)
 		let terminalFlagRange = try XCTUnwrap(
 			initSource.range(of: "read_cmdline_decoded(\"orlix.terminal=\",")
 		)
 		let ptyRange = try XCTUnwrap(initSource.range(of: "if (run_pty_shell("))
 		XCTAssertLessThan(runtimeMountRange.lowerBound, hostMountRange.lowerBound)
+		XCTAssertLessThan(configuredTmpfsRange.lowerBound, hostMountRange.lowerBound)
 		XCTAssertLessThan(hostMountRange.lowerBound, ptyRange.lowerBound)
 		XCTAssertLessThan(terminalFlagRange.lowerBound, ptyRange.lowerBound)
         XCTAssertTrue(initSource.contains("SYS_capset"))
@@ -12266,11 +12293,55 @@ func testOCIRuntimeConfigParserTranslatesStandardHostPathBindMount() throws {
 	let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
 	XCTAssertTrue(commandLine.contains("orlix.mount.host0.target=/mnt/oci-host"))
 	XCTAssertTrue(commandLine.contains("orlix.mount.host0.readonly=1"))
-	XCTAssertTrue(commandLine.contains("orlix.mount.host0.noexec=1"))
-	XCTAssertFalse(commandLine.contains(hostDirectory.path))
-}
+		XCTAssertTrue(commandLine.contains("orlix.mount.host0.noexec=1"))
+		XCTAssertFalse(commandLine.contains(hostDirectory.path))
+	}
 
-func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
+	func testOCIRuntimeConfigParserTranslatesTmpfsMountOptions() throws {
+		let config = Data(
+			"""
+			{
+			  "ociVersion": "1.1.0",
+			  "process": { "args": ["/bin/sh"], "cwd": "/" },
+			  "root": { "path": "rootfs" },
+			  "mounts": [
+			    {
+			      "destination": "/run/oci-cache",
+			      "type": "tmpfs",
+			      "source": "tmpfs",
+			      "options": ["nosuid", "nodev", "noexec", "ro", "size=64m", "mode=0755", "uid=0", "gid=0"]
+			    }
+			  ]
+			}
+			""".utf8
+		)
+
+		let descriptor = try OrlixOCIRuntimeConfigParser().parse(config)
+		XCTAssertEqual(descriptor.mounts.count, 1)
+		XCTAssertEqual(descriptor.mounts[0].destination, "/run/oci-cache")
+		XCTAssertEqual(descriptor.mounts[0].type, "tmpfs")
+
+		let environment = try descriptor.environmentDescriptor(
+			id: "oci-tmpfs-mount",
+			rootMount: .defaultOverlay
+		)
+		XCTAssertTrue(environment.mounts.isEmpty)
+		XCTAssertEqual(
+			environment.tmpfsMounts,
+			[
+				try OrlixEnvironmentTmpfsMount(
+					targetPath: "/run/oci-cache",
+					readOnly: true,
+					noSuid: true,
+					noDev: true,
+					noExec: true,
+					data: "size=64m,mode=0755,uid=0,gid=0"
+				)
+			]
+		)
+	}
+
+	func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 	let unsupportedMountConfigs: [(String, OrlixOCIRuntimeConfigError)] = [
 			(
 				#"{ "destination": "/cgroup", "type": "cgroup2", "source": "cgroup2" }"#,
@@ -12289,8 +12360,16 @@ func testOCIRuntimeConfigParserRejectsUnsupportedMounts() throws {
 				.unsupportedLinuxFeature("mounts.destination")
 			),
 			(
-				#"{ "destination": "/run", "type": "tmpfs", "source": "tmpfs" }"#,
+				#"{ "destination": "/proc/oci-cache", "type": "tmpfs", "source": "tmpfs" }"#,
 				.unsupportedLinuxFeature("mounts.destination")
+			),
+			(
+				#"{ "destination": "/run", "type": "tmpfs", "source": "tmpfs", "options": ["exec"] }"#,
+				.unsupportedLinuxFeature("mounts.options")
+			),
+			(
+				#"{ "destination": "/run", "type": "tmpfs", "source": "tmpfs", "options": ["mode=999"] }"#,
+				.unsupportedLinuxFeature("mounts.options")
 			),
 			(
 				#"{ "destination": "/proc", "type": "proc", "source": "not-proc" }"#,

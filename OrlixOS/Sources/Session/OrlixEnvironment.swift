@@ -59,10 +59,11 @@ public let cgroupPidsLimit: Int64?
     public let deviceNodes: [OrlixEnvironmentDeviceNode]
     public let timeOffsets: [OrlixEnvironmentTimeOffset]
     public let uidMappings: [OrlixEnvironmentIDMapping]
-    public let gidMappings: [OrlixEnvironmentIDMapping]
-    public let namespaces: [String]
-    public let namespacePaths: [String: String]
-    public let mounts: [OrlixEnvironmentMount]
+	public let gidMappings: [OrlixEnvironmentIDMapping]
+	public let namespaces: [String]
+	public let namespacePaths: [String: String]
+	public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
+	public let mounts: [OrlixEnvironmentMount]
 
     public static func defaultEnvironment(
         rootImageIdentifier: String =
@@ -132,11 +133,12 @@ cgroupPidsLimit: Int64? = nil,
         deviceNodes: [OrlixEnvironmentDeviceNode] = [],
         timeOffsets: [OrlixEnvironmentTimeOffset] = [],
         uidMappings: [OrlixEnvironmentIDMapping] = [],
-        gidMappings: [OrlixEnvironmentIDMapping] = [],
-        namespaces: [String] = [],
-        namespacePaths: [String: String] = [:],
-        mounts: [OrlixEnvironmentMount] = []
-    ) {
+		gidMappings: [OrlixEnvironmentIDMapping] = [],
+		namespaces: [String] = [],
+		namespacePaths: [String: String] = [:],
+		tmpfsMounts: [OrlixEnvironmentTmpfsMount] = [],
+		mounts: [OrlixEnvironmentMount] = []
+	) {
         self.id = id
         self.source = source
         self.platform = platform
@@ -177,11 +179,12 @@ self.cgroupPidsLimit = cgroupPidsLimit
         self.deviceNodes = deviceNodes
         self.timeOffsets = timeOffsets
         self.uidMappings = uidMappings
-        self.gidMappings = gidMappings
-        self.namespaces = namespaces
-        self.namespacePaths = namespacePaths
-        self.mounts = mounts
-    }
+		self.gidMappings = gidMappings
+		self.namespaces = namespaces
+		self.namespacePaths = namespacePaths
+		self.tmpfsMounts = tmpfsMounts
+		self.mounts = mounts
+	}
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -225,10 +228,11 @@ case cgroupCPUMax
         case timeOffsets
         case uidMappings
         case gidMappings
-        case namespaces
-        case namespacePaths
-        case mounts
-    }
+		case namespaces
+		case namespacePaths
+		case tmpfsMounts
+		case mounts
+	}
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -394,13 +398,17 @@ forKey: .cgroupCPUWeight
             [String].self,
             forKey: .namespaces
         ) ?? []
-        self.namespacePaths = try container.decodeIfPresent(
-            [String: String].self,
-            forKey: .namespacePaths
-        ) ?? [:]
-        self.mounts = try container.decodeIfPresent(
-            [OrlixEnvironmentMount].self,
-            forKey: .mounts
+		self.namespacePaths = try container.decodeIfPresent(
+			[String: String].self,
+			forKey: .namespacePaths
+		) ?? [:]
+		self.tmpfsMounts = try container.decodeIfPresent(
+			[OrlixEnvironmentTmpfsMount].self,
+			forKey: .tmpfsMounts
+		) ?? []
+		self.mounts = try container.decodeIfPresent(
+			[OrlixEnvironmentMount].self,
+			forKey: .mounts
         ) ?? []
     }
 
@@ -480,11 +488,14 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
         if !namespaces.isEmpty {
             try container.encode(namespaces, forKey: .namespaces)
         }
-        if !namespacePaths.isEmpty {
-            try container.encode(namespacePaths, forKey: .namespacePaths)
-        }
-        try container.encode(mounts, forKey: .mounts)
-    }
+		if !namespacePaths.isEmpty {
+			try container.encode(namespacePaths, forKey: .namespacePaths)
+		}
+		if !tmpfsMounts.isEmpty {
+			try container.encode(tmpfsMounts, forKey: .tmpfsMounts)
+		}
+		try container.encode(mounts, forKey: .mounts)
+	}
 }
 
 public struct OrlixEnvironmentRlimit: Codable, Equatable, Sendable {
@@ -749,6 +760,34 @@ public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
+public struct OrlixEnvironmentTmpfsMount: Codable, Equatable, Sendable {
+	public let targetPath: String
+	public let readOnly: Bool
+	public let noSuid: Bool
+	public let noDev: Bool
+	public let noExec: Bool
+	public let data: String?
+
+	public init(
+		targetPath: String,
+		readOnly: Bool = false,
+		noSuid: Bool = false,
+		noDev: Bool = false,
+		noExec: Bool = false,
+		data: String? = nil
+	) throws {
+		try validateLinuxTmpfsTarget(targetPath)
+		try validateTmpfsMountData(data)
+		self.targetPath = targetPath
+		self.readOnly = readOnly
+		self.noSuid = noSuid
+		self.noDev = noDev
+		self.noExec = noExec
+		self.data = data
+	}
+}
+
+@_spi(OrlixPrivateTesting)
 public struct OrlixHostDirectoryRegistration: Equatable, Sendable {
     public let identifier: String
     public let hostPath: String
@@ -767,9 +806,10 @@ public struct OrlixHostDirectoryRegistration: Equatable, Sendable {
 
 @_spi(OrlixPrivateTesting)
 public enum OrlixEnvironmentMountError: Error, Equatable, Sendable {
-    case invalidSourceIdentifier(String)
-    case invalidTargetPath(String)
-    case reservedTargetPath(String)
+	case invalidSourceIdentifier(String)
+	case invalidTargetPath(String)
+	case reservedTargetPath(String)
+	case invalidTmpfsData(String)
 }
 
 private func validateSecurityScopedBookmarkID(_ bookmarkID: String) throws {
@@ -818,6 +858,37 @@ private func validateLinuxMountTarget(_ targetPath: String) throws {
         reservedTargets.contains(where: { targetPath.hasPrefix($0 + "/") }) {
         throw OrlixEnvironmentMountError.reservedTargetPath(targetPath)
     }
+}
+
+private func validateLinuxTmpfsTarget(_ targetPath: String) throws {
+	guard targetPath.hasPrefix("/"),
+	      targetPath != "/",
+	      !targetPath.contains("\u{0}"),
+	      !targetPath.contains("//"),
+	      !targetPath.split(separator: "/").contains(where: { $0 == "." || $0 == ".." })
+	else {
+		throw OrlixEnvironmentMountError.invalidTargetPath(targetPath)
+	}
+	let reserved = ["/proc", "/sys", "/dev", "/sys/fs/cgroup"]
+	for path in reserved {
+		if targetPath == path || targetPath.hasPrefix("\(path)/") {
+			throw OrlixEnvironmentMountError.reservedTargetPath(targetPath)
+		}
+	}
+}
+
+private func validateTmpfsMountData(_ data: String?) throws {
+	guard let data else {
+		return
+	}
+	guard !data.isEmpty,
+	      !data.contains("\u{0}"),
+	      !data.contains("\n"),
+	      !data.contains("\r"),
+	      data.count <= 512
+	else {
+		throw OrlixEnvironmentMountError.invalidTmpfsData(data)
+	}
 }
 
 @_spi(OrlixPrivateTesting)
@@ -1022,7 +1093,8 @@ public static let defaultRlimitCommandLineKeyPrefix = "orlix.rlimit"
 	public static let defaultHostMountReadOnlyCommandLineKey = "orlix.mount.host0.readonly"
 	public static let defaultHostMountNoExecCommandLineKey = "orlix.mount.host0.noexec"
 	public static let hostMountCommandLineKeyPrefix = "orlix.mount.host"
-public static let hostnameCommandLineKey = "orlix.hostname"
+	public static let tmpfsMountCommandLineKeyPrefix = "orlix.mount.tmpfs"
+	public static let hostnameCommandLineKey = "orlix.hostname"
     public static let domainnameCommandLineKey = "orlix.domainname"
     public static let rootReadonlyCommandLineKey = "orlix.root.readonly"
     public static let rootPropagationCommandLineKey = "orlix.root.propagation"
@@ -1641,10 +1713,32 @@ return node
             .enumerated()
         {
             let assignment = try validateNamespaceJoin(type: entry.key, path: entry.value)
-            tokens.append(
-                "\(namespacePathCommandLineKeyPrefix)\(index)=\(percentEncoded(assignment))"
-            )
-        }
+		tokens.append(
+			"\(namespacePathCommandLineKeyPrefix)\(index)=\(percentEncoded(assignment))"
+		)
+	}
+	for (index, mount) in descriptor.tmpfsMounts.enumerated() {
+		tokens.append(
+			"\(tmpfsMountCommandLineKeyPrefix)\(index).target=\(percentEncoded(mount.targetPath))"
+		)
+		if mount.readOnly {
+			tokens.append("\(tmpfsMountCommandLineKeyPrefix)\(index).readonly=1")
+		}
+		if mount.noSuid {
+			tokens.append("\(tmpfsMountCommandLineKeyPrefix)\(index).nosuid=1")
+		}
+		if mount.noDev {
+			tokens.append("\(tmpfsMountCommandLineKeyPrefix)\(index).nodev=1")
+		}
+		if mount.noExec {
+			tokens.append("\(tmpfsMountCommandLineKeyPrefix)\(index).noexec=1")
+		}
+		if let data = mount.data {
+			tokens.append(
+				"\(tmpfsMountCommandLineKeyPrefix)\(index).data=\(percentEncoded(data))"
+			)
+		}
+	}
 for (index, mount) in descriptor.mounts.enumerated() {
 tokens.append(
 "\(hostMountCommandLineKeyPrefix)\(index).target=\(percentEncoded(mount.targetPath))"
@@ -1969,11 +2063,12 @@ cgroupPidsLimit: parent.cgroupPidsLimit,
                 deviceNodes: parent.deviceNodes,
                 timeOffsets: parent.timeOffsets,
                 uidMappings: parent.uidMappings,
-                gidMappings: parent.gidMappings,
-                namespaces: parent.namespaces,
-                namespacePaths: parent.namespacePaths,
-                mounts: parent.mounts
-            )
+					gidMappings: parent.gidMappings,
+					namespaces: parent.namespaces,
+					namespacePaths: parent.namespacePaths,
+					tmpfsMounts: parent.tmpfsMounts,
+					mounts: parent.mounts
+				)
             try save(descriptor, fileManager: fileManager)
             return descriptor
         } catch {

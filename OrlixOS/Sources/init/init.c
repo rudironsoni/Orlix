@@ -32,6 +32,7 @@
 #define ORLIX_INIT_MAX_DEVICE_NODES 16
 #define ORLIX_INIT_MAX_TIME_OFFSETS 2
 #define ORLIX_INIT_MAX_ID_MAPPINGS 16
+#define ORLIX_INIT_MAX_TMPFS_MOUNTS 16
 #define ORLIX_INIT_MAX_HOST_DIRECTORIES 16
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
@@ -901,6 +902,89 @@ static int mount_configured_host_directory(int index)
 	if (mount_if_needed(source, target, "virtiofs", flags, NULL) != 0)
 		die("mount host directory");
 	return 1;
+}
+
+static int tmpfs_mount_target_is_allowed(const char *target)
+{
+	static const char *const reserved[] = {
+		"/dev",
+		"/proc",
+		"/sys",
+		"/sys/fs/cgroup",
+		NULL,
+	};
+
+	if (target[0] != '/' || target[1] == '\0')
+		return 0;
+	for (const char *cursor = target; *cursor != '\0'; cursor++) {
+		if (*cursor == '/' && cursor[1] == '/')
+			return 0;
+		if (*cursor == '.' &&
+		    (cursor == target + 1 || cursor[-1] == '/') &&
+		    (cursor[1] == '/' || cursor[1] == '\0'))
+			return 0;
+		if (*cursor == '.' &&
+		    (cursor == target + 1 || cursor[-1] == '/') &&
+		    cursor[1] == '.' &&
+		    (cursor[2] == '/' || cursor[2] == '\0'))
+			return 0;
+	}
+	for (const char *const *entry = reserved; *entry != NULL; entry++) {
+		size_t length = strlen(*entry);
+
+		if (strcmp(target, *entry) == 0 ||
+		    (strncmp(target, *entry, length) == 0 &&
+		     target[length] == '/'))
+			return 0;
+	}
+	return 1;
+}
+
+static int mount_configured_tmpfs(int index)
+{
+	char key[48];
+	char target[ORLIX_INIT_HOST_MOUNT_TARGET_SIZE];
+	char data[ORLIX_INIT_VALUE_SIZE];
+	unsigned long value = 0;
+	unsigned long flags = 0;
+	const char *mount_data = NULL;
+
+	snprintf(key, sizeof(key), "orlix.mount.tmpfs%d.target=", index);
+	if (read_cmdline_decoded(key, target, sizeof(target)) != 0)
+		return 0;
+	if (!tmpfs_mount_target_is_allowed(target))
+		die("invalid tmpfs mount target");
+
+	snprintf(key, sizeof(key), "orlix.mount.tmpfs%d.readonly=", index);
+	if (read_cmdline_unsigned(key, &value) == 0 && value != 0)
+		flags |= MS_RDONLY;
+	snprintf(key, sizeof(key), "orlix.mount.tmpfs%d.nosuid=", index);
+	if (read_cmdline_unsigned(key, &value) == 0 && value != 0)
+		flags |= MS_NOSUID;
+	snprintf(key, sizeof(key), "orlix.mount.tmpfs%d.nodev=", index);
+	if (read_cmdline_unsigned(key, &value) == 0 && value != 0)
+		flags |= MS_NODEV;
+	snprintf(key, sizeof(key), "orlix.mount.tmpfs%d.noexec=", index);
+	if (read_cmdline_unsigned(key, &value) == 0 && value != 0)
+		flags |= MS_NOEXEC;
+
+	snprintf(key, sizeof(key), "orlix.mount.tmpfs%d.data=", index);
+	if (read_cmdline_decoded(key, data, sizeof(data)) == 0)
+		mount_data = data;
+
+	if (ensure_dir_recursive(target, 0755) != 0)
+		die("create tmpfs mount target");
+	if (mount_if_needed("tmpfs", target, "tmpfs", flags, mount_data) != 0)
+		die("mount tmpfs");
+	return 1;
+}
+
+static void mount_configured_tmpfs_mounts(void)
+{
+	for (int i = 0; i < ORLIX_INIT_MAX_TMPFS_MOUNTS; i++) {
+		if (!mount_configured_tmpfs(i))
+			break;
+	}
 }
 
 static void mount_configured_host_directories(void)
@@ -2597,6 +2681,7 @@ int main(void)
 	write_literal(STDERR_FILENO, "orlix-init: stdio installed\n");
 	mount_runtime_filesystems();
 	write_literal(STDERR_FILENO, "orlix-init: runtime filesystems mounted\n");
+	mount_configured_tmpfs_mounts();
 	mount_configured_host_directories();
 	if (terminal_enabled()) {
 		if (run_pty_shell(STDIN_FILENO) != 0)
