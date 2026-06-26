@@ -1323,15 +1323,23 @@ public struct OrlixOCIRegistryEnvironmentTerminalSessionResult: Sendable {
 }
 
 public struct OrlixOCIEnvironmentTerminalSessionResult: Sendable {
-	public let id: String
-	public let image: OrlixOCIRegistryImageReference
-	public let command: [String]?
-	public let linuxSession: OrlixLinuxSession
+    public let id: String
+    public let image: OrlixOCIRegistryImageReference
+    public let command: [String]?
+    public let linuxSession: OrlixLinuxSession
+}
+
+public struct OrlixOCIEnvironmentPreparedState: Sendable {
+    public let id: String
+    public let platform: String
+    public let defaultCommand: [String]
+    public let lifecycleState: OrlixOCIRuntimeLifecycleState
+    public let stateReport: OrlixOCIRuntimeStateReport?
 }
 
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
-	public let id: String
-	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+    public let id: String
+    public let lifecycleState: OrlixOCIRuntimeLifecycleState
 }
 
 public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
@@ -1438,19 +1446,26 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 public struct OrlixOCIEnvironmentInstaller: Sendable {
 	private let registry: OrlixEnvironmentRegistry
 
-	public init() throws {
-		self.registry = try OrlixEnvironmentRegistry()
-	}
+    public init() throws {
+        self.registry = try OrlixEnvironmentRegistry()
+    }
 
-	@_spi(OrlixPrivateTesting)
+    @_spi(OrlixPrivateTesting)
 	public init(registry: OrlixEnvironmentRegistry) {
-		self.registry = registry
-	}
+        self.registry = registry
+    }
 
-	@discardableResult
-	public func install(
-		bundleURL: URL,
-		id: String,
+    public func listPreparedEnvironments(
+        fileManager: FileManager = .default
+    ) throws -> [OrlixOCIEnvironmentPreparedState] {
+        try OrlixOCIRuntime(registry: registry)
+            .listPreparedEnvironments(fileManager: fileManager)
+    }
+
+    @discardableResult
+    public func install(
+        bundleURL: URL,
+        id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2283,17 +2298,40 @@ public struct OrlixOCIRuntime: Sendable {
 		return (createdEnvironment, materializationResult)
 	}
 
-	public func state(
-		id: String,
-		fileManager: FileManager = .default
-	) throws -> OrlixOCIRuntimeStateReport {
-		try lifecycleStore.stateReport(id: id, fileManager: fileManager)
-	}
+    public func state(
+        id: String,
+        fileManager: FileManager = .default
+    ) throws -> OrlixOCIRuntimeStateReport {
+        try lifecycleStore.stateReport(id: id, fileManager: fileManager)
+    }
 
-	public func terminalSession(
-		id: String,
-		command: [String]? = nil,
-		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+    public func listPreparedEnvironments(
+        fileManager: FileManager = .default
+    ) throws -> [OrlixOCIEnvironmentPreparedState] {
+        try registry.list(fileManager: fileManager).compactMap { descriptor in
+            let recordURL = try lifecycleStore.recordURL(forID: descriptor.id)
+            guard fileManager.fileExists(atPath: recordURL.path) else {
+                return nil
+            }
+            let snapshot = try lifecycleStore.load(
+                id: descriptor.id,
+                fileManager: fileManager
+            )
+            return OrlixOCIEnvironmentPreparedState(
+                id: descriptor.id,
+                platform: descriptor.platform,
+                defaultCommand: descriptor.defaultCommand,
+                lifecycleState: snapshot.record.state,
+                stateReport: try? snapshot.stateReport()
+            )
+        }
+        .sorted { $0.id < $1.id }
+    }
+
+    public func terminalSession(
+        id: String,
+        command: [String]? = nil,
+        rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default
