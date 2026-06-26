@@ -7938,6 +7938,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.hostname)
 	XCTNil(arguments.domainname)
 	XCTNil(arguments.terminal)
+	XCTTrue(arguments.rlimits.isEmpty)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7965,6 +7966,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.hostname)
 	XCTNil(nameArguments.domainname)
 	XCTNil(nameArguments.terminal)
+	XCTTrue(nameArguments.rlimits.isEmpty)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -7985,6 +7987,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.hostname)
 	XCTNil(equalsArguments.domainname)
 	XCTNil(equalsArguments.terminal)
+	XCTTrue(equalsArguments.rlimits.isEmpty)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8171,6 +8174,51 @@ func testOCIEnvironmentRunArgumentsAcceptsTerminalOverrides() throws {
 	XCTAssertEqual(noTerminalArguments.terminal, false)
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsRlimitOverrides() throws {
+	let splitArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--ulimit",
+		"nofile=64:128",
+		"--ulimit",
+		"RLIMIT_STACK=8388608",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		splitArguments.rlimits,
+		[
+			OrlixEnvironmentRlimit(
+				type: "RLIMIT_NOFILE",
+				soft: 64,
+				hard: 128
+			),
+			OrlixEnvironmentRlimit(
+				type: "RLIMIT_STACK",
+				soft: 8_388_608,
+				hard: 8_388_608
+			),
+		]
+	)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--ulimit=nproc=4:16",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		equalsArguments.rlimits,
+		[
+			OrlixEnvironmentRlimit(
+				type: "RLIMIT_NPROC",
+				soft: 4,
+				hard: 16
+			),
+		]
+	)
+}
+
 func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 	let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
 		("--id=", .missingOptionValue("--id")),
@@ -8182,6 +8230,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--user=", .missingOptionValue("--user")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
+		("--ulimit=", .missingOptionValue("--ulimit")),
 	]
 
 		for (option, expectedError) in invalidOptions {
@@ -9539,6 +9588,9 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"/workspace",
 			"--user",
 			"1000:100",
+			"--ulimit",
+			"nofile=32:64",
+			"--ulimit=stack=8388608",
 			"--hostname",
 			"registry-run-host",
 			"--domainname",
@@ -9583,6 +9635,21 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.defaultTerminal, false)
+	XCTAssertEqual(
+		descriptor.defaultRlimits,
+		[
+			OrlixEnvironmentRlimit(
+				type: "RLIMIT_NOFILE",
+				soft: 32,
+				hard: 64
+			),
+			OrlixEnvironmentRlimit(
+				type: "RLIMIT_STACK",
+				soft: 8_388_608,
+				hard: 8_388_608
+			),
+		]
+	)
 	XCTAssertEqual(descriptor.hostname, "registry-run-host")
 	XCTAssertEqual(descriptor.domainname, "registry-run.example")
 	XCTAssertEqual(

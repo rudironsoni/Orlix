@@ -10,6 +10,22 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run rlimit override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--ulimit VALUE` and `--ulimit=VALUE` before image.
+- Run rlimits accept `name=soft:hard` and `name=value`; names normalize to existing supported `RLIMIT_*` values, for example `nofile` to `RLIMIT_NOFILE`.
+- Registry-backed install/run and terminal-session preparation merge parsed rlimits into descriptor `defaultRlimits`, replacing only matching resource names and preserving unrelated descriptor limits.
+- The run parser reuses the same supported rlimit allowlist as the OCI runtime config parser; init remains the Linux-visible owner that applies limits with `setrlimit`.
+- Focused tests cover split and equals-form parsing, short-name normalization, single-value soft=hard behavior, malformed empty equals-form rejection, and observed registry-backed descriptor rlimit persistence. Existing command-line tests cover `orlix.rlimitN=TYPE:soft:hard` boot-token emission.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 known sandbox `xcrun_db` cache messages existing Sendable warnings.
+
+Boundary:
+- This advances `orlix run --ulimit` through existing OrlixOS descriptors and existing OrlixOS init `orlix.rlimitN=` Linux-visible `setrlimit` behavior. It does not add HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI Runtime Spec lifecycle support, broad resource-isolation proof, or live simulator proof.
+
 ### 2026-06-26 OCI run terminal mode override
 
 Changes:

@@ -3595,7 +3595,7 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
 		return rlimits
 	}
 
-	private static let supportedRlimitTypes: Set<String> = [
+	static let supportedRlimitTypes: Set<String> = [
 		"RLIMIT_AS",
 		"RLIMIT_CORE",
 		"RLIMIT_CPU",
