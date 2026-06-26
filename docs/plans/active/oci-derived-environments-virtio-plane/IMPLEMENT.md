@@ -10,6 +10,28 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI registry descriptor process bridge
+
+Changes:
+- Fixed the registry/imported descriptor to runtime config bridge so launched OCI-derived Linux sessions receive stored process defaults instead of a minimal forced `terminal: false` config.
+- The bridge now emits OCI process JSON for terminal mode, console size, supplementary groups, user umask, no-new-privileges, close-additional-fds, rlimits, hostname, and domainname, then reuses the existing `OrlixOCIRuntimeConfigParser` validation path.
+- Added recording-driver visibility for launched Linux session kernel command lines and console sizes.
+- Added a registry-backed run test proving descriptor process defaults survive through lifecycle state, runtime config conversion, session descriptor creation, and Linux session boot command-line materialization.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This proves OrlixOS registry/imported descriptor process defaults are passed into the existing OCI runtime/session launch path. It does not claim live simulator runtime behavior, kernel PTY implementation, Linux privilege enforcement, rlimit enforcement, full OCI lifecycle readiness, HostAdapter policy, Linux ABI, upstream Linux edits, generated-tree edits, or mlibc patches.
+
+Current status:
+- Registry descriptor process bridge checkpoint verified by static Swift parse/typecheck and guard checks above.
+
 ### 2026-06-26 OCI one-shot healthcheck execution
 
 Changes:
@@ -23952,4 +23974,4 @@ Evidence:
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
 
 Current status:
-- Latest coherent checkpoint is OCI run published port descriptors. Static Swift parse/typecheck and guard checks passed; no live Linux networking or simulator runtime claim is made.
+- Latest coherent checkpoint is OCI registry descriptor process bridge. Static Swift parse/typecheck and guard checks passed; no live Linux runtime, simulator runtime, or kernel enforcement claim is made.
