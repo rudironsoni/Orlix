@@ -10,6 +10,25 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI masked and readonly path init mounts
+
+Changes:
+- Added init-side consumers for `orlix.maskedpathN` and `orlix.readonlypathN` boot arguments already emitted from OCI descriptors.
+- `maskedPaths` now fail loudly on invalid or missing Linux paths, bind `/dev/null` over files, and mount restrictive read-only tmpfs over directories.
+- `readonlyPaths` now fail loudly on invalid or missing Linux paths, bind-mount the path onto itself, and remount it read-only recursively.
+- Kept behavior in OrlixOS Linux userspace setup using Linux mount syscalls. No HostAdapter policy, custom ABI, upstream Linux edit, generated-tree edit, mlibc patch, proof package, or feature-report-only work was added.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This proves the existing OrlixOS descriptor boot-token path has Linux init consumers for OCI masked and readonly paths and compiles against the Linux/mlibc sysroot. It does not claim live simulator runtime behavior, full OCI Runtime Spec compliance, kernel enforcement beyond Linux mount syscall behavior, HostAdapter policy, upstream Linux edits, generated-tree edits, or mlibc patches.
+
 ### 2026-06-26 OCI registry descriptor process bridge
 
 Changes:
@@ -23974,4 +23993,4 @@ Evidence:
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
 
 Current status:
-- Latest coherent checkpoint is OCI registry descriptor process bridge. Static Swift parse/typecheck and guard checks passed; no live Linux runtime, simulator runtime, or kernel enforcement claim is made.
+- Latest coherent checkpoint is OCI masked and readonly path init mounts. Static init compile, Swift parse, and guard checks passed; no live Linux runtime or simulator runtime claim is made.

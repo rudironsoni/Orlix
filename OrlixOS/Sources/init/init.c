@@ -37,6 +37,8 @@
 #define ORLIX_INIT_MAX_NAMESPACES 8
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
 #define ORLIX_INIT_MAX_SYSCTLS 16
+#define ORLIX_INIT_MAX_MASKED_PATHS 32
+#define ORLIX_INIT_MAX_READONLY_PATHS 32
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
@@ -70,6 +72,10 @@ struct orlix_device_node_config {
 struct orlix_sysctl_config {
 	char key[ORLIX_INIT_VALUE_SIZE];
 	char value[ORLIX_INIT_VALUE_SIZE];
+};
+
+struct orlix_runtime_path_config {
+	char path[ORLIX_INIT_VALUE_SIZE];
 };
 
 struct orlix_time_offset_config {
@@ -512,6 +518,43 @@ static void apply_device_node(const struct orlix_device_node_config *node)
 		die("chmod device");
 	if (chown(node->path, (uid_t)node->uid, (gid_t)node->gid) != 0)
 		die("chown device");
+}
+
+static void apply_masked_path(const struct orlix_runtime_path_config *path)
+{
+	struct stat st;
+
+	if (!runtime_path_is_valid(path->path))
+		die("invalid masked path");
+	if (lstat(path->path, &st) != 0)
+		die("stat masked path");
+	if (S_ISDIR(st.st_mode)) {
+		if (mount("tmpfs", path->path, "tmpfs",
+			  MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+			  "mode=000") != 0)
+			die("mount masked directory");
+		return;
+	}
+	if (mount("/dev/null", path->path, NULL, MS_BIND, NULL) != 0)
+		die("bind masked path");
+	if (mount(NULL, path->path, NULL,
+		  MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) != 0)
+		die("remount masked path readonly");
+}
+
+static void apply_readonly_path(const struct orlix_runtime_path_config *path)
+{
+	struct stat st;
+
+	if (!runtime_path_is_valid(path->path))
+		die("invalid readonly path");
+	if (lstat(path->path, &st) != 0)
+		die("stat readonly path");
+	if (mount(path->path, path->path, NULL, MS_BIND | MS_REC, NULL) != 0)
+		die("bind readonly path");
+	if (mount(NULL, path->path, NULL,
+		  MS_BIND | MS_REMOUNT | MS_RDONLY | MS_REC, NULL) != 0)
+		die("remount readonly path");
 }
 
 static void write_decimal_to_buffer(char *buffer, size_t buffer_size,
@@ -1679,6 +1722,10 @@ struct orlix_command_config {
 	char domainname[ORLIX_INIT_VALUE_SIZE];
 	struct orlix_rlimit_config rlimits[ORLIX_INIT_MAX_RLIMITS];
 	struct orlix_sysctl_config sysctls[ORLIX_INIT_MAX_SYSCTLS];
+	struct orlix_runtime_path_config
+		masked_paths[ORLIX_INIT_MAX_MASKED_PATHS];
+	struct orlix_runtime_path_config
+		readonly_paths[ORLIX_INIT_MAX_READONLY_PATHS];
 	char *argv[ORLIX_INIT_MAX_ARGS + 2];
 	char *envp[ORLIX_INIT_MAX_ENV + 1];
 	int argc;
@@ -1687,6 +1734,8 @@ struct orlix_command_config {
 	int has_domainname;
 	int rlimitc;
 	size_t sysctl_count;
+	size_t masked_path_count;
+	size_t readonly_path_count;
 	unsigned long uid;
 	unsigned long gid;
 	unsigned long supplementary_groups[ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS];
@@ -1903,6 +1952,32 @@ static void selected_command_config(struct orlix_command_config *config)
 			    assignment, &config->sysctls[config->sysctl_count]) != 0)
 			die("invalid sysctl");
 		config->sysctl_count++;
+	}
+	for (int i = 0; i < ORLIX_INIT_MAX_MASKED_PATHS; i++) {
+		char key[32];
+		struct orlix_runtime_path_config *path =
+			&config->masked_paths[config->masked_path_count];
+
+		snprintf(key, sizeof(key), "orlix.maskedpath%d=", i);
+		if (read_cmdline_decoded(key, path->path, sizeof(path->path)) !=
+		    0)
+			break;
+		if (!runtime_path_is_valid(path->path))
+			die("invalid masked path");
+		config->masked_path_count++;
+	}
+	for (int i = 0; i < ORLIX_INIT_MAX_READONLY_PATHS; i++) {
+		char key[32];
+		struct orlix_runtime_path_config *path =
+			&config->readonly_paths[config->readonly_path_count];
+
+		snprintf(key, sizeof(key), "orlix.readonlypath%d=", i);
+		if (read_cmdline_decoded(key, path->path, sizeof(path->path)) !=
+		    0)
+			break;
+		if (!runtime_path_is_valid(path->path))
+			die("invalid readonly path");
+		config->readonly_path_count++;
 	}
 	if (read_cmdline_decoded("orlix.cgroups.path=", config->cgroups_path,
 				 sizeof(config->cgroups_path)) == 0 &&
@@ -2515,6 +2590,10 @@ static void run_configured_command_child(void)
 		apply_sysctl(&config->sysctls[i]);
 	for (size_t i = 0; i < config->device_node_count; i++)
 		apply_device_node(&config->device_nodes[i]);
+	for (size_t i = 0; i < config->masked_path_count; i++)
+		apply_masked_path(&config->masked_paths[i]);
+	for (size_t i = 0; i < config->readonly_path_count; i++)
+		apply_readonly_path(&config->readonly_paths[i]);
 	if (config->has_cgroup_pids_max) {
 		if (!config->has_cgroups_path)
 			die("cgroup pids limit without cgroup path");
