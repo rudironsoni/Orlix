@@ -7955,6 +7955,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.cgroupCPUWeight)
 	XCTNil(arguments.cgroupMemoryMax)
 	XCTNil(arguments.cgroupIOWeight)
+	XCTTrue(arguments.cgroupUnified.isEmpty)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -8348,6 +8349,75 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidCgroupIOOverride() throws {
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("linux.resources.blockIO.weight")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsCgroupUnifiedOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--cgroup-unified",
+		"cpu.weight=39",
+		"--cgroup-unified=memory.max=268435456",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.cgroupUnified,
+		[
+			OrlixEnvironmentCgroupUnifiedEntry(
+				file: "cpu.weight",
+				value: "39"
+			),
+			OrlixEnvironmentCgroupUnifiedEntry(
+				file: "memory.max",
+				value: "268435456"
+			),
+		]
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidCgroupUnifiedOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cgroup-unified",
+			"kernel.memory=1",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.resources.unified.kernel.memory")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cgroup-unified",
+			"cpu.weight",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.resources.unified")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cgroup-unified",
+			"cpu.weight=39",
+			"--cgroup-unified=cpu.weight=40",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.resources.unified.cpu.weight")
 		)
 	}
 }
@@ -8814,6 +8884,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--cpu-weight=", .missingOptionValue("--cpu-weight")),
 		("--memory-max=", .missingOptionValue("--memory-max")),
 		("--io-weight=", .missingOptionValue("--io-weight")),
+		("--cgroup-unified=", .missingOptionValue("--cgroup-unified")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
@@ -10198,6 +10269,9 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"268435456",
 			"--io-weight",
 			"100",
+			"--cgroup-unified",
+			"cpu.weight=39",
+			"--cgroup-unified=memory.max=268435456",
 			"--cap-set",
 			"bounding=CAP_CHOWN,CAP_SETUID",
 			"--cap-set",
@@ -10277,6 +10351,19 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.cgroupCPUWeight, 39)
 	XCTAssertEqual(descriptor.cgroupMemoryMax, 268_435_456)
 	XCTAssertEqual(descriptor.cgroupIOWeight, 100)
+	XCTAssertEqual(
+		descriptor.cgroupUnified,
+		[
+			OrlixEnvironmentCgroupUnifiedEntry(
+				file: "cpu.weight",
+				value: "39"
+			),
+			OrlixEnvironmentCgroupUnifiedEntry(
+				file: "memory.max",
+				value: "268435456"
+			),
+		]
+	)
 	XCTAssertEqual(
 		descriptor.defaultCapabilities,
 		OrlixEnvironmentCapabilities(

@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run cgroup unified overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--cgroup-unified FILE=VALUE` and `--cgroup-unified=FILE=VALUE` before image.
+- CLI validation reuses the current OCI unified cgroup file surface: `pids.max`, `cpu.max`, `cpu.weight`, `memory.max`, `io.weight`, `io.max`; malformed values, duplicate files, unsupported files, NULs, path separators, or newline-bearing values fail before install.
+- Registry-backed install/run terminal-session preparation persists parsed unified cgroup entries into `OrlixEnvironmentDescriptor.cgroupUnified`; unified-only overrides derive `/orlix/oci/<environment-id>` like other OCI resource overrides.
+- Focused tests cover split and equals parsing, unsupported/malformed/duplicate rejection, empty equals-form rejection, default empty parser state, and observed registry-backed descriptor persistence. Existing descriptor/init paths cover `orlix.cgroups.unifiedN=FILE=VALUE` writing Linux cgroup v2 files.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing cgroup v2 unified file configuration through existing OrlixOS descriptors and Linux-visible init cgroup metadata paths. Does not claim broad controller enforcement, delegation, systemd readiness, live simulator proof, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, or full OCI lifecycle readiness.
+
 ### 2026-06-26 OCI run cgroup IO overrides
 
 Changes:
