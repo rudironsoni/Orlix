@@ -10,6 +10,25 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI PID namespace fork correction
+
+Correction:
+- The previous PID/user namespace path checkpoint correctly handled joined PID namespaces but its init fork condition did not include newly created PID namespaces. Linux requires the configured command to run in a child after either `unshare(CLONE_NEWPID)` or `setns(CLONE_NEWPID)`.
+
+Changes:
+- `exec_or_fork_configured_command` now adds `CLONE_NEWPID` to the fork-required mask when `config->namespace_flags` requests PID namespace creation, and still adds it when a namespace path join targets PID.
+- The init source contract test now pins the created-PID-namespace condition.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused simulator XCTest was not run: unsandboxed `xcode-storage-doctor` was rejected by execution policy, so CoreSimulator/Xcode access could not be validated without a forbidden workaround.
+
+Current-status: Latest coherent checkpoint fixes PID namespace execution so both PID namespace creation and PID namespace joining fork before exec. Focused simulator XCTest remains blocked by execution policy denying unsandboxed CoreSimulator/Xcode access.
+
 ### 2026-06-26 OCI PID/user namespace path joins
 
 Changes:
