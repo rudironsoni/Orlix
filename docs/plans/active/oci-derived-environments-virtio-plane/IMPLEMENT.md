@@ -10,6 +10,27 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI PID/user namespace path joins
+
+Changes:
+- OCI namespace path validation now accepts `linux.namespaces` path joins for PID and user namespaces in addition to mount, IPC, UTS, network, cgroup, and time.
+- OrlixOS init now forks before executing the configured command when a PID namespace is created or joined, matching Linux `setns(CLONE_NEWPID)` behavior where the PID namespace applies to subsequently forked children.
+- Focused tests cover PID/user namespace path descriptor carry-through and init source contract for the PID namespace fork boundary.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused simulator XCTest was not run: unsandboxed `xcode-storage-doctor` was rejected by execution policy, so CoreSimulator/Xcode access could not be validated without a forbidden workaround.
+
+Boundary:
+- This advances OCI namespace path joins through the existing Linux `setns` and command execution path. It does not claim full OCI Runtime Spec lifecycle, product-visible Linux userspace `orlix run`, registry pull inside Linux, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, or broad namespace/cgroup/device/filesystem/network readiness.
+
+Current-status: Latest coherent checkpoint carries OCI PID/user namespace path joins into OrlixOS descriptors and fixes init to fork before executing processes that create or join a PID namespace. Focused simulator XCTest remains blocked by execution policy denying unsandboxed CoreSimulator/Xcode access.
+
 ### 2026-06-26 OCI registry Docker Hub official image canonicalization
 
 Checkpoint: explicit Docker Hub official-image references such as `docker.io/alpine:latest`, `registry-1.docker.io/library/alpine:latest`, and `index.docker.io/alpine:latest` now canonicalize to image registry `docker.io` and repository `library/alpine`. Distribution URLs still use `registry-1.docker.io`.

@@ -2285,7 +2285,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			name: "ociNamespacePathJoins",
 			status: .implemented,
 			proof: "orlix:runtime_config_parser",
-			reason: "OCI mount, IPC, UTS, network, and cgroup namespace path requests carry into OrlixOS descriptors and init joins them with Linux setns before exec."
+			reason: "OCI mount, IPC, UTS, network, cgroup, PID, and user namespace path requests carry into OrlixOS descriptors and init joins them with Linux setns before exec."
 		),
 		OrlixOCIRuntimeFeature(
 			name: "ociReadonlyPaths",
@@ -3682,7 +3682,16 @@ private static func validatedOOMScoreAdjustment(_ value: Int?) throws -> Int32? 
         _ namespaces: [OCIRuntimeNamespace]
     ) throws -> [String: String] {
         var result: [String: String] = [:]
-        let supportedNamespaces = Set(["mount", "ipc", "uts", "network", "cgroup", "time"])
+        let supportedNamespaces = Set([
+            "mount",
+            "ipc",
+            "uts",
+            "network",
+            "cgroup",
+            "pid",
+            "user",
+            "time",
+        ])
 
         for namespace in namespaces {
             guard let path = namespace.path else {
