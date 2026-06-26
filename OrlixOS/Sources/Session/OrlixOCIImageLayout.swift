@@ -2476,6 +2476,67 @@ public let cgroupIOWeight: UInt64?
 	}
 
 	@_spi(OrlixPrivateTesting)
+	public func mergingAnnotations(
+		_ overrides: [String: String]
+	) throws -> OrlixOCIRuntimeConfigDescriptor {
+		for (key, value) in overrides {
+			guard !key.isEmpty,
+				!key.contains("\u{0}"),
+				!value.contains("\u{0}")
+			else {
+				throw OrlixOCIRuntimeConfigError.invalidAnnotationEntry(key)
+			}
+		}
+		let mergedAnnotations = annotations.merging(overrides) { _, override in
+			override
+		}
+		return OrlixOCIRuntimeConfigDescriptor(
+			ociVersion: ociVersion,
+			annotations: mergedAnnotations,
+			hostname: hostname,
+			domainname: domainname,
+			rootPath: rootPath,
+			rootReadonly: rootReadonly,
+			rootPropagation: rootPropagation,
+			sysctls: sysctls,
+			maskedPaths: maskedPaths,
+			readonlyPaths: readonlyPaths,
+			cgroupsPath: cgroupsPath,
+			cgroupPidsLimit: cgroupPidsLimit,
+			cgroupCPUMax: cgroupCPUMax,
+			cgroupCPUWeight: cgroupCPUWeight,
+			cgroupMemoryMax: cgroupMemoryMax,
+			cgroupIOWeight: cgroupIOWeight,
+			cgroupUnified: cgroupUnified,
+			deviceNodes: deviceNodes,
+			timeOffsets: timeOffsets,
+			uidMappings: uidMappings,
+			gidMappings: gidMappings,
+			mounts: mounts,
+			defaultCommand: defaultCommand,
+			defaultEnvironment: defaultEnvironment,
+			defaultWorkingDirectory: defaultWorkingDirectory,
+			defaultUserID: defaultUserID,
+			defaultGroupID: defaultGroupID,
+			defaultSupplementaryGroups: defaultSupplementaryGroups,
+			defaultCapabilities: defaultCapabilities,
+			defaultNoNewPrivileges: defaultNoNewPrivileges,
+			defaultCloseAdditionalFds: defaultCloseAdditionalFds,
+			defaultOOMScoreAdjustment: defaultOOMScoreAdjustment,
+			defaultScheduler: defaultScheduler,
+			defaultIOPriority: defaultIOPriority,
+			defaultCPUAffinity: defaultCPUAffinity,
+			defaultUmask: defaultUmask,
+			defaultRlimits: defaultRlimits,
+			defaultPersonalityDomain: defaultPersonalityDomain,
+			terminal: terminal,
+			consoleSize: consoleSize,
+			namespaces: namespaces,
+			namespacePaths: namespacePaths
+		)
+	}
+
+	@_spi(OrlixPrivateTesting)
 	public func replacingDefaultCommand(
 		_ command: [String]
 	) throws -> OrlixOCIRuntimeConfigDescriptor {
