@@ -7935,6 +7935,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.workingDirectory)
 	XCTNil(arguments.userID)
 	XCTNil(arguments.groupID)
+	XCTNil(arguments.capabilities)
 	XCTNil(arguments.hostname)
 	XCTNil(arguments.domainname)
 	XCTNil(arguments.terminal)
@@ -7971,6 +7972,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.workingDirectory)
 	XCTNil(nameArguments.userID)
 	XCTNil(nameArguments.groupID)
+	XCTNil(nameArguments.capabilities)
 	XCTNil(nameArguments.hostname)
 	XCTNil(nameArguments.domainname)
 	XCTNil(nameArguments.terminal)
@@ -8000,6 +8002,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.workingDirectory)
 	XCTNil(equalsArguments.userID)
 	XCTNil(equalsArguments.groupID)
+	XCTNil(equalsArguments.capabilities)
 	XCTNil(equalsArguments.hostname)
 	XCTNil(equalsArguments.domainname)
 	XCTNil(equalsArguments.terminal)
@@ -8469,6 +8472,61 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidPersonalityOverride() throws {
 	}
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsCapabilitySetOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--cap-set",
+		"bounding=CAP_CHOWN,CAP_SETUID",
+		"--cap-set=permitted=CAP_CHOWN,CAP_CHOWN",
+		"--cap-set",
+		"effective=CAP_CHOWN",
+		"--cap-set",
+		"ambient=CAP_SETUID",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.capabilities,
+		OrlixEnvironmentCapabilities(
+			bounding: ["CAP_CHOWN", "CAP_SETUID"],
+			permitted: ["CAP_CHOWN"],
+			effective: ["CAP_CHOWN"],
+			ambient: ["CAP_SETUID"]
+		)
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidCapabilitySetOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cap-set",
+			"permitted=CAP_ORLIX_ONLY",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.capabilities.permitted")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--cap-set",
+			"unknown=CAP_CHOWN",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.capabilities.unknown")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsCPUAffinityOverride() throws {
 	let splitArguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -8522,6 +8580,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--scheduler=", .missingOptionValue("--scheduler")),
 		("--io-priority=", .missingOptionValue("--io-priority")),
 		("--personality=", .missingOptionValue("--personality")),
+		("--cap-set=", .missingOptionValue("--cap-set")),
 		("--cpu-affinity=", .missingOptionValue("--cpu-affinity")),
 	]
 
@@ -9882,6 +9941,14 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"/workspace",
 			"--user",
 			"1000:100",
+			"--cap-set",
+			"bounding=CAP_CHOWN,CAP_SETUID",
+			"--cap-set",
+			"permitted=CAP_CHOWN",
+			"--cap-set",
+			"effective=CAP_CHOWN",
+			"--cap-set",
+			"ambient=CAP_SETUID",
 			"--ulimit",
 			"nofile=32:64",
 			"--ulimit=stack=8388608",
@@ -9940,6 +10007,15 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultWorkingDirectory, "/workspace")
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
+	XCTAssertEqual(
+		descriptor.defaultCapabilities,
+		OrlixEnvironmentCapabilities(
+			bounding: ["CAP_CHOWN", "CAP_SETUID"],
+			permitted: ["CAP_CHOWN"],
+			effective: ["CAP_CHOWN"],
+			ambient: ["CAP_SETUID"]
+		)
+	)
 	XCTAssertEqual(descriptor.defaultTerminal, false)
 	XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 	XCTAssertTrue(descriptor.defaultCloseAdditionalFds)

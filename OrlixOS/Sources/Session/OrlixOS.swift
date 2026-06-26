@@ -1358,6 +1358,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let workingDirectory: String?
 	public let userID: UInt32?
 	public let groupID: UInt32?
+	public let capabilities: OrlixEnvironmentCapabilities?
 	public let hostname: String?
 	public let domainname: String?
 	public let terminal: Bool?
@@ -1397,6 +1398,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedWorkingDirectory: String?
 		var parsedUserID: UInt32?
 		var parsedGroupID: UInt32?
+		var parsedCapabilities = OrlixEnvironmentCapabilities()
+		var parsedCapabilitiesPresent = false
 		var parsedHostname: String?
 		var parsedDomainname: String?
 		var parsedTerminal: Bool?
@@ -1576,6 +1579,33 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 						.missingOptionValue("--personality")
 				}
 				parsedPersonalityDomain = try Self.parsePersonalityDomain(personality)
+				continue
+			}
+			if parsedImage == nil, value == "--cap-set" {
+				guard let capabilities = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				try Self.addCapabilitySet(
+					capabilities,
+					to: &parsedCapabilities
+				)
+				parsedCapabilitiesPresent = true
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--cap-set=") {
+				let separator = value.firstIndex(of: "=")!
+				let capabilities = String(value[value.index(after: separator)...])
+				guard !capabilities.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--cap-set")
+				}
+				try Self.addCapabilitySet(
+					capabilities,
+					to: &parsedCapabilities
+				)
+				parsedCapabilitiesPresent = true
 				continue
 			}
 			if parsedImage == nil, value == "--entrypoint" {
@@ -1785,6 +1815,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.workingDirectory = parsedWorkingDirectory
 		self.userID = parsedUserID
 		self.groupID = parsedGroupID
+		self.capabilities = parsedCapabilitiesPresent ? parsedCapabilities : nil
 		self.hostname = parsedHostname
 		self.domainname = parsedDomainname
 		self.terminal = parsedTerminal
@@ -2049,6 +2080,97 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		return value
 	}
 
+	private static func addCapabilitySet(
+		_ value: String,
+		to capabilities: inout OrlixEnvironmentCapabilities
+	) throws {
+		guard let separator = value.firstIndex(of: "=") else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.capabilities"
+			)
+		}
+		let field = String(value[..<separator])
+		let names = String(value[value.index(after: separator)...])
+		let parsedNames = try parseCapabilityNames(names, field: field)
+		switch field {
+		case "bounding":
+			capabilities = OrlixEnvironmentCapabilities(
+				bounding: parsedNames,
+				permitted: capabilities.permitted,
+				inheritable: capabilities.inheritable,
+				effective: capabilities.effective,
+				ambient: capabilities.ambient
+			)
+		case "permitted":
+			capabilities = OrlixEnvironmentCapabilities(
+				bounding: capabilities.bounding,
+				permitted: parsedNames,
+				inheritable: capabilities.inheritable,
+				effective: capabilities.effective,
+				ambient: capabilities.ambient
+			)
+		case "inheritable":
+			capabilities = OrlixEnvironmentCapabilities(
+				bounding: capabilities.bounding,
+				permitted: capabilities.permitted,
+				inheritable: parsedNames,
+				effective: capabilities.effective,
+				ambient: capabilities.ambient
+			)
+		case "effective":
+			capabilities = OrlixEnvironmentCapabilities(
+				bounding: capabilities.bounding,
+				permitted: capabilities.permitted,
+				inheritable: capabilities.inheritable,
+				effective: parsedNames,
+				ambient: capabilities.ambient
+			)
+		case "ambient":
+			capabilities = OrlixEnvironmentCapabilities(
+				bounding: capabilities.bounding,
+				permitted: capabilities.permitted,
+				inheritable: capabilities.inheritable,
+				effective: capabilities.effective,
+				ambient: parsedNames
+			)
+		default:
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.capabilities.\(field)"
+			)
+		}
+	}
+
+	private static func parseCapabilityNames(
+		_ value: String,
+		field: String
+	) throws -> [String] {
+		guard !field.isEmpty, !field.contains("\u{0}") else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"process.capabilities"
+			)
+		}
+		var seen = Set<String>()
+		var result: [String] = []
+		for name in value.split(separator: ",", omittingEmptySubsequences: false)
+			.map(String.init)
+		{
+			guard !name.isEmpty else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"process.capabilities.\(field)"
+				)
+			}
+			guard OrlixEnvironmentCapabilities.supportedLinuxNames.contains(name) else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"process.capabilities.\(field)"
+				)
+			}
+			if seen.insert(name).inserted {
+				result.append(name)
+			}
+		}
+		return result
+	}
+
 	private static func parseUser(
 		_ value: String
 	) throws -> (uid: UInt32, gid: UInt32?) {
@@ -2170,6 +2292,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultWorkingDirectoryWith workingDirectory: String?,
 		replacingDefaultUserIDWith userID: UInt32?,
 		replacingDefaultGroupIDWith groupID: UInt32?,
+		replacingDefaultCapabilitiesWith capabilities: OrlixEnvironmentCapabilities?,
 		replacingHostnameWith hostname: String?,
 		replacingDomainnameWith domainname: String?,
 		replacingDefaultTerminalWith terminal: Bool?,
@@ -2188,6 +2311,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| workingDirectory != nil
 			|| userID != nil
 			|| groupID != nil
+			|| capabilities != nil
 			|| hostname != nil
 			|| domainname != nil
 			|| terminal != nil
@@ -2267,7 +2391,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultUserID: userID ?? descriptor.defaultUserID,
 			defaultGroupID: groupID ?? descriptor.defaultGroupID,
 			defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
-			defaultCapabilities: descriptor.defaultCapabilities,
+			defaultCapabilities: capabilities ?? descriptor.defaultCapabilities,
 			defaultNoNewPrivileges: noNewPrivileges
 			?? descriptor.defaultNoNewPrivileges,
 			defaultCloseAdditionalFds: closeAdditionalFds
@@ -2356,6 +2480,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
@@ -2382,6 +2507,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
@@ -2411,6 +2537,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
@@ -2462,6 +2589,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 					defaultWorkingDirectoryOverride,
 				replacingDefaultUserIDWith: defaultUserIDOverride,
 				replacingDefaultGroupIDWith: defaultGroupIDOverride,
+				replacingDefaultCapabilitiesWith: defaultCapabilitiesOverride,
 				replacingHostnameWith: hostnameOverride,
 				replacingDomainnameWith: domainnameOverride,
 				replacingDefaultTerminalWith: terminalOverride,
@@ -2565,6 +2693,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: request.workingDirectory,
 			defaultUserIDOverride: request.userID,
 			defaultGroupIDOverride: request.groupID,
+			defaultCapabilitiesOverride: request.capabilities,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
@@ -2619,6 +2748,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: request.workingDirectory,
 			defaultUserIDOverride: request.userID,
 			defaultGroupIDOverride: request.groupID,
+			defaultCapabilitiesOverride: request.capabilities,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
@@ -2675,6 +2805,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
@@ -2703,6 +2834,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
@@ -2734,6 +2866,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
@@ -2761,6 +2894,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
@@ -2801,6 +2935,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
@@ -2830,6 +2965,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
@@ -2862,6 +2998,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
@@ -2890,6 +3027,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
@@ -2943,6 +3081,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: request.workingDirectory,
 			defaultUserIDOverride: request.userID,
 			defaultGroupIDOverride: request.groupID,
+			defaultCapabilitiesOverride: request.capabilities,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
@@ -2985,6 +3124,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
@@ -3013,6 +3153,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,

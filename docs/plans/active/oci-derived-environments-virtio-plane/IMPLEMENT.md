@@ -10,6 +10,22 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run capability set overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--cap-set SET=CAP,...` and `--cap-set=SET=CAP,...` before image.
+- Run parser accepts OCI/Linux capability set names `bounding`, `permitted`, `inheritable`, `effective`, and `ambient`.
+- Capability names now use the shared supported Linux capability-name set used by OCI config parsing.
+- Registry-backed install/run terminal-session preparation persists parsed sets into descriptor `defaultCapabilities`.
+- Focused tests cover valid sets, duplicate dedupe, invalid capability rejection, invalid set rejection, empty equals-form rejection, default nil parser state, and observed registry-backed descriptor persistence. Existing descriptor/init tests cover `orlix.cap.*` metadata and init applying Linux capability UAPI through `capset`/`prctl`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- This advances product-facing `orlix run --cap-set` through existing OrlixOS descriptors and Linux-visible init capability metadata paths. It does not claim broad capability runtime behavior beyond existing proof, full OCI lifecycle, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, or live simulator proof.
+
 ### 2026-06-26 OCI run personality override
 
 Changes:
