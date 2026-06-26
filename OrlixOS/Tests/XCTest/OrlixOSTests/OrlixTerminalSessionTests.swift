@@ -7956,6 +7956,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.cgroupMemoryMax)
 	XCTNil(arguments.cgroupIOWeight)
 	XCTTrue(arguments.cgroupUnified.isEmpty)
+	XCTTrue(arguments.tmpfsMounts.isEmpty)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -8418,6 +8419,79 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidCgroupUnifiedOverride() throws 
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("linux.resources.unified.cpu.weight")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsTmpfsMountOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--tmpfs",
+		"/run/cache:nosuid,nodev,noexec,size=64m,mode=0755,uid=0,gid=0",
+		"--tmpfs=/var/tmp:ro",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(
+		arguments.tmpfsMounts,
+		[
+			try OrlixEnvironmentTmpfsMount(
+				targetPath: "/run/cache",
+				readOnly: false,
+				noSuid: true,
+				noDev: true,
+				noExec: true,
+				data: "size=64m,mode=0755,uid=0,gid=0"
+			),
+			try OrlixEnvironmentTmpfsMount(
+				targetPath: "/var/tmp",
+				readOnly: true
+			),
+		]
+	)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidTmpfsMountOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--tmpfs",
+			"relative:nosuid",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("mounts.destination")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--tmpfs",
+			"/run/cache:exec",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("mounts.options")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--tmpfs",
+			"/run/cache:nosuid",
+			"--tmpfs=/run/cache:nodev",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("mounts.destination")
 		)
 	}
 }
@@ -8885,6 +8959,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--memory-max=", .missingOptionValue("--memory-max")),
 		("--io-weight=", .missingOptionValue("--io-weight")),
 		("--cgroup-unified=", .missingOptionValue("--cgroup-unified")),
+		("--tmpfs=", .missingOptionValue("--tmpfs")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
@@ -10272,6 +10347,9 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--cgroup-unified",
 			"cpu.weight=39",
 			"--cgroup-unified=memory.max=268435456",
+			"--tmpfs",
+			"/run/cache:nosuid,nodev,noexec,size=64m,mode=0755",
+			"--tmpfs=/var/tmp:ro",
 			"--cap-set",
 			"bounding=CAP_CHOWN,CAP_SETUID",
 			"--cap-set",
@@ -10361,6 +10439,23 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			OrlixEnvironmentCgroupUnifiedEntry(
 				file: "memory.max",
 				value: "268435456"
+			),
+		]
+	)
+	XCTAssertEqual(
+		descriptor.tmpfsMounts,
+		[
+			try OrlixEnvironmentTmpfsMount(
+				targetPath: "/run/cache",
+				readOnly: false,
+				noSuid: true,
+				noDev: true,
+				noExec: true,
+				data: "size=64m,mode=0755"
+			),
+			try OrlixEnvironmentTmpfsMount(
+				targetPath: "/var/tmp",
+				readOnly: true
 			),
 		]
 	)

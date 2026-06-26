@@ -1379,6 +1379,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let cgroupMemoryMax: Int64?
     public let cgroupIOWeight: UInt64?
     public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
+    public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
     public let command: [String]?
     public let removeAfterRun: Bool
 
@@ -1428,6 +1429,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         var parsedCgroupMemoryMax: Int64?
         var parsedCgroupIOWeight: UInt64?
         var parsedCgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry] = []
+        var parsedTmpfsMounts: [OrlixEnvironmentTmpfsMount] = []
         var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1597,6 +1599,25 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                     unified,
                     to: &parsedCgroupUnified
                 )
+                continue
+            }
+            if parsedImage == nil, value == "--tmpfs" {
+                guard let tmpfs = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue(value)
+                }
+                try Self.addTmpfsMount(tmpfs, to: &parsedTmpfsMounts)
+                values.removeFirst()
+                continue
+            }
+            if parsedImage == nil, value.hasPrefix("--tmpfs=") {
+                let separator = value.firstIndex(of: "=")!
+                let tmpfs = String(value[value.index(after: separator)...])
+                guard !tmpfs.isEmpty else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue("--tmpfs")
+                }
+                try Self.addTmpfsMount(tmpfs, to: &parsedTmpfsMounts)
                 continue
             }
             if parsedImage == nil, value == "--ulimit" {
@@ -2016,6 +2037,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.cgroupMemoryMax = parsedCgroupMemoryMax
         self.cgroupIOWeight = parsedCgroupIOWeight
         self.cgroupUnified = parsedCgroupUnified
+        self.tmpfsMounts = parsedTmpfsMounts
         self.command = parsedCommand.isEmpty ? nil : parsedCommand
 		self.removeAfterRun = parsedRemoveAfterRun
 	}
@@ -2516,6 +2538,136 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         )
     }
 
+    private static func addTmpfsMount(
+        _ value: String,
+        to mounts: inout [OrlixEnvironmentTmpfsMount]
+    ) throws {
+        let parts = value.split(
+            separator: ":",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        )
+        let targetPath = String(parts[0])
+        guard !targetPath.isEmpty,
+              !mounts.contains(where: { $0.targetPath == targetPath })
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "mounts.destination"
+            )
+        }
+
+        var readOnly = false
+        var noSuid = false
+        var noDev = false
+        var noExec = false
+        var dataOptions: [String] = []
+        if parts.count == 2 {
+            let optionsText = String(parts[1])
+            guard !optionsText.isEmpty else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "mounts.options"
+                )
+            }
+            for option in optionsText.split(
+                separator: ",",
+                omittingEmptySubsequences: false
+            ) {
+                let option = String(option)
+                switch option {
+                case "ro":
+                    readOnly = true
+                case "rw":
+                    readOnly = false
+                case "nosuid":
+                    noSuid = true
+                case "nodev":
+                    noDev = true
+                case "noexec":
+                    noExec = true
+                default:
+                    if try Self.validatedTmpfsDataOption(option) {
+                        dataOptions.append(option)
+                    } else {
+                        throw OrlixOCIRuntimeConfigError
+                            .unsupportedLinuxFeature("mounts.options")
+                    }
+                }
+            }
+        }
+
+        do {
+            mounts.append(
+                try OrlixEnvironmentTmpfsMount(
+                    targetPath: targetPath,
+                    readOnly: readOnly,
+                    noSuid: noSuid,
+                    noDev: noDev,
+                    noExec: noExec,
+                    data: dataOptions.isEmpty
+                        ? nil
+                        : dataOptions.joined(separator: ",")
+                )
+            )
+        } catch OrlixEnvironmentMountError.invalidTargetPath(_),
+                OrlixEnvironmentMountError.reservedTargetPath(_) {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "mounts.destination"
+            )
+        } catch OrlixEnvironmentMountError.invalidTmpfsData(_) {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "mounts.options"
+            )
+        }
+    }
+
+    private static func validatedTmpfsDataOption(
+        _ option: String
+    ) throws -> Bool {
+        guard let separator = option.firstIndex(of: "=") else {
+            return false
+        }
+        let key = String(option[..<separator])
+        let value = String(option[option.index(after: separator)...])
+        switch key {
+        case "size":
+            guard !value.isEmpty,
+                  value.unicodeScalars.allSatisfy({
+                      CharacterSet.alphanumerics
+                          .union(CharacterSet(charactersIn: "%"))
+                          .contains($0)
+                  })
+            else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "mounts.options"
+                )
+            }
+        case "mode":
+            guard !value.isEmpty,
+                  value.count <= 4,
+                  value.unicodeScalars.allSatisfy({
+                      CharacterSet(charactersIn: "01234567").contains($0)
+                  })
+            else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "mounts.options"
+                )
+            }
+        case "uid", "gid":
+            guard !value.isEmpty,
+                  value.unicodeScalars.allSatisfy({
+                      CharacterSet.decimalDigits.contains($0)
+                  })
+            else {
+                throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                    "mounts.options"
+                )
+            }
+        default:
+            return false
+        }
+        return true
+    }
+
     private static func parseID(
 		_ value: String,
 		feature: String
@@ -2633,6 +2785,18 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         return (retained + overrides).sorted { $0.file < $1.file }
     }
 
+    private static func mergedTmpfsMounts(
+        _ existing: [OrlixEnvironmentTmpfsMount],
+        overrides: [OrlixEnvironmentTmpfsMount]
+    ) -> [OrlixEnvironmentTmpfsMount] {
+        guard !overrides.isEmpty else { return existing }
+        let overrideTargets = Set(overrides.map(\.targetPath))
+        let retained = existing.filter {
+            !overrideTargets.contains($0.targetPath)
+        }
+        return (retained + overrides).sorted { $0.targetPath < $1.targetPath }
+    }
+
     private static func defaultCgroupsPath(
 		environmentID: String,
 		required: Bool
@@ -2671,8 +2835,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         replacingCgroupCPUWeightWith cgroupCPUWeight: UInt64?,
         replacingCgroupMemoryMaxWith cgroupMemoryMax: Int64?,
         replacingCgroupIOWeightWith cgroupIOWeight: UInt64?,
-        mergingCgroupUnifiedWith cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
-	) throws -> OrlixEnvironmentDescriptor {
+        mergingCgroupUnifiedWith cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry],
+        mergingTmpfsMountsWith tmpfsMounts: [OrlixEnvironmentTmpfsMount]
+    ) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
 			|| workingDirectory != nil
@@ -2699,9 +2864,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             || cgroupMemoryMax != nil
             || cgroupIOWeight != nil
             || !cgroupUnified.isEmpty
+            || !tmpfsMounts.isEmpty
         else {
-			return descriptor
-		}
+            return descriptor
+        }
 		if let command {
 			guard !command.isEmpty else {
 				throw OrlixOCIRuntimeConfigError.emptyProcessArgs
@@ -2758,10 +2924,14 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			descriptor.defaultSupplementaryGroups,
 			adding: supplementaryGroups
 		)
-		let effectiveCgroupUnified = Self.mergedCgroupUnified(
-			descriptor.cgroupUnified,
-			overrides: cgroupUnified
-		)
+        let effectiveCgroupUnified = Self.mergedCgroupUnified(
+            descriptor.cgroupUnified,
+            overrides: cgroupUnified
+        )
+        let effectiveTmpfsMounts = Self.mergedTmpfsMounts(
+            descriptor.tmpfsMounts,
+            overrides: tmpfsMounts
+        )
 		let effectiveCgroupsPath = try cgroupsPath
 			?? descriptor.cgroupsPath
 			?? defaultCgroupsPath(
@@ -2827,7 +2997,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             gidMappings: descriptor.gidMappings,
             namespaces: descriptor.namespaces,
             namespacePaths: descriptor.namespacePaths,
-            tmpfsMounts: descriptor.tmpfsMounts,
+            tmpfsMounts: effectiveTmpfsMounts,
             mounts: descriptor.mounts
         )
     }
@@ -2899,6 +3069,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
 		cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2934,6 +3105,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
 			cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+			tmpfsMountOverrides: tmpfsMountOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2972,6 +3144,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
 		cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -3035,7 +3208,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingCgroupCPUWeightWith: cgroupCPUWeightOverride,
 				replacingCgroupMemoryMaxWith: cgroupMemoryMaxOverride,
 				replacingCgroupIOWeightWith: cgroupIOWeightOverride,
-			mergingCgroupUnifiedWith: cgroupUnifiedOverrides
+			mergingCgroupUnifiedWith: cgroupUnifiedOverrides,
+			mergingTmpfsMountsWith: tmpfsMountOverrides
 			)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -3147,6 +3321,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			cgroupIOWeightOverride: request.cgroupIOWeight,
 			cgroupUnifiedOverrides: request.cgroupUnified,
+			tmpfsMountOverrides: request.tmpfsMounts,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3211,6 +3386,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			cgroupIOWeightOverride: request.cgroupIOWeight,
 			cgroupUnifiedOverrides: request.cgroupUnified,
+			tmpfsMountOverrides: request.tmpfsMounts,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -3276,6 +3452,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
 		cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3313,6 +3490,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
 			cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+			tmpfsMountOverrides: tmpfsMountOverrides,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -3353,6 +3531,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
 		cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3389,6 +3568,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
 			cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+			tmpfsMountOverrides: tmpfsMountOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3438,6 +3618,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
 		cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3476,6 +3657,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
 			cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+			tmpfsMountOverrides: tmpfsMountOverrides,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3517,6 +3699,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
 		cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3554,6 +3737,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
 			cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+			tmpfsMountOverrides: tmpfsMountOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3617,6 +3801,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			cgroupIOWeightOverride: request.cgroupIOWeight,
 			cgroupUnifiedOverrides: request.cgroupUnified,
+			tmpfsMountOverrides: request.tmpfsMounts,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -3668,6 +3853,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
 		cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+		tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,

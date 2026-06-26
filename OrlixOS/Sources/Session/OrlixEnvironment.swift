@@ -812,7 +812,6 @@ public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
 	}
 }
 
-@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentTmpfsMount: Codable, Equatable, Sendable {
 	public let targetPath: String
 	public let readOnly: Bool
