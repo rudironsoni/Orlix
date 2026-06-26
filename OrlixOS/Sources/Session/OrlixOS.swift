@@ -1358,6 +1358,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let workingDirectory: String?
 	public let userID: UInt32?
 	public let groupID: UInt32?
+	public let supplementaryGroupIDs: [UInt32]
 	public let capabilities: OrlixEnvironmentCapabilities?
 	public let hostname: String?
 	public let domainname: String?
@@ -1398,6 +1399,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedWorkingDirectory: String?
 		var parsedUserID: UInt32?
 		var parsedGroupID: UInt32?
+		var parsedSupplementaryGroupIDs: [UInt32] = []
 		var parsedCapabilities = OrlixEnvironmentCapabilities()
 		var parsedCapabilitiesPresent = false
 		var parsedHostname: String?
@@ -1702,6 +1704,31 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 				parsedGroupID = parsedUser.gid
 				continue
 			}
+			if parsedImage == nil, value == "--group-add" {
+				guard let group = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				try Self.addSupplementaryGroup(
+					group,
+					to: &parsedSupplementaryGroupIDs
+				)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--group-add=") {
+				let separator = value.firstIndex(of: "=")!
+				let group = String(value[value.index(after: separator)...])
+				guard !group.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--group-add")
+				}
+				try Self.addSupplementaryGroup(
+					group,
+					to: &parsedSupplementaryGroupIDs
+				)
+				continue
+			}
 			if parsedImage == nil, value == "--hostname" || value == "-h" {
 				guard let hostname = values.first else {
 					throw OrlixOCIEnvironmentRunArgumentsError
@@ -1815,6 +1842,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.workingDirectory = parsedWorkingDirectory
 		self.userID = parsedUserID
 		self.groupID = parsedGroupID
+		self.supplementaryGroupIDs = parsedSupplementaryGroupIDs
 		self.capabilities = parsedCapabilitiesPresent ? parsedCapabilities : nil
 		self.hostname = parsedHostname
 		self.domainname = parsedDomainname
@@ -2190,6 +2218,19 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		return (uid, gid)
 	}
 
+	private static func addSupplementaryGroup(
+		_ value: String,
+		to groups: inout [UInt32]
+	) throws {
+		let group = try parseID(
+			value,
+			feature: "process.user.additionalGids"
+		)
+		if !groups.contains(group) {
+			groups.append(group)
+		}
+	}
+
 	private static func parseID(
 		_ value: String,
 		feature: String
@@ -2285,6 +2326,18 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		return result.sorted { $0.type < $1.type }
 	}
 
+	private static func mergedSupplementaryGroups(
+		_ existing: [UInt32],
+		adding added: [UInt32]
+	) -> [UInt32] {
+		guard !added.isEmpty else { return existing }
+		var result = existing
+		for group in added where !result.contains(group) {
+			result.append(group)
+		}
+		return result
+	}
+
 	private static func descriptor(
 		_ descriptor: OrlixEnvironmentDescriptor,
 		replacingDefaultCommandWith command: [String]?,
@@ -2292,6 +2345,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultWorkingDirectoryWith workingDirectory: String?,
 		replacingDefaultUserIDWith userID: UInt32?,
 		replacingDefaultGroupIDWith groupID: UInt32?,
+		mergingDefaultSupplementaryGroupsWith supplementaryGroups: [UInt32],
 		replacingDefaultCapabilitiesWith capabilities: OrlixEnvironmentCapabilities?,
 		replacingHostnameWith hostname: String?,
 		replacingDomainnameWith domainname: String?,
@@ -2311,6 +2365,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| workingDirectory != nil
 			|| userID != nil
 			|| groupID != nil
+			|| !supplementaryGroups.isEmpty
 			|| capabilities != nil
 			|| hostname != nil
 			|| domainname != nil
@@ -2379,6 +2434,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			descriptor.defaultRlimits,
 			overrides: rlimits
 		)
+		let defaultSupplementaryGroups = mergedSupplementaryGroups(
+			descriptor.defaultSupplementaryGroups,
+			adding: supplementaryGroups
+		)
 		return OrlixEnvironmentDescriptor(
 			id: descriptor.id,
 			source: descriptor.source,
@@ -2387,10 +2446,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCommand: command ?? descriptor.defaultCommand,
 			defaultEnvironment: defaultEnvironment,
 			defaultWorkingDirectory: workingDirectory
-				?? descriptor.defaultWorkingDirectory,
+			?? descriptor.defaultWorkingDirectory,
 			defaultUserID: userID ?? descriptor.defaultUserID,
 			defaultGroupID: groupID ?? descriptor.defaultGroupID,
-			defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
+			defaultSupplementaryGroups: defaultSupplementaryGroups,
 			defaultCapabilities: capabilities ?? descriptor.defaultCapabilities,
 			defaultNoNewPrivileges: noNewPrivileges
 			?? descriptor.defaultNoNewPrivileges,
@@ -2480,6 +2539,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultSupplementaryGroupOverrides: [UInt32] = [],
 		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
@@ -2507,6 +2567,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultSupplementaryGroupOverrides: defaultSupplementaryGroupOverrides,
 			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
@@ -2537,6 +2598,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultSupplementaryGroupOverrides: [UInt32] = [],
 		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
@@ -2589,6 +2651,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 					defaultWorkingDirectoryOverride,
 				replacingDefaultUserIDWith: defaultUserIDOverride,
 				replacingDefaultGroupIDWith: defaultGroupIDOverride,
+				mergingDefaultSupplementaryGroupsWith:
+					defaultSupplementaryGroupOverrides,
 				replacingDefaultCapabilitiesWith: defaultCapabilitiesOverride,
 				replacingHostnameWith: hostnameOverride,
 				replacingDomainnameWith: domainnameOverride,
@@ -2693,6 +2757,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: request.workingDirectory,
 			defaultUserIDOverride: request.userID,
 			defaultGroupIDOverride: request.groupID,
+			defaultSupplementaryGroupOverrides:
+				request.supplementaryGroupIDs,
 			defaultCapabilitiesOverride: request.capabilities,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
@@ -2748,6 +2814,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: request.workingDirectory,
 			defaultUserIDOverride: request.userID,
 			defaultGroupIDOverride: request.groupID,
+			defaultSupplementaryGroupOverrides:
+				request.supplementaryGroupIDs,
 			defaultCapabilitiesOverride: request.capabilities,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
@@ -2805,6 +2873,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultSupplementaryGroupOverrides: [UInt32] = [],
 		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
@@ -2834,6 +2903,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultSupplementaryGroupOverrides: defaultSupplementaryGroupOverrides,
 			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
@@ -2866,6 +2936,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultSupplementaryGroupOverrides: [UInt32] = [],
 		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
@@ -2894,6 +2965,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultSupplementaryGroupOverrides: defaultSupplementaryGroupOverrides,
 			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
@@ -2935,6 +3007,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultSupplementaryGroupOverrides: [UInt32] = [],
 		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
@@ -2965,6 +3038,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultSupplementaryGroupOverrides: defaultSupplementaryGroupOverrides,
 			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
@@ -2998,6 +3072,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultSupplementaryGroupOverrides: [UInt32] = [],
 		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
@@ -3027,6 +3102,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultSupplementaryGroupOverrides: defaultSupplementaryGroupOverrides,
 			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,
@@ -3081,6 +3157,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: request.workingDirectory,
 			defaultUserIDOverride: request.userID,
 			defaultGroupIDOverride: request.groupID,
+			defaultSupplementaryGroupOverrides:
+				request.supplementaryGroupIDs,
 			defaultCapabilitiesOverride: request.capabilities,
 			hostnameOverride: request.hostname,
 			domainnameOverride: request.domainname,
@@ -3124,6 +3202,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultWorkingDirectoryOverride: String? = nil,
 		defaultUserIDOverride: UInt32? = nil,
 		defaultGroupIDOverride: UInt32? = nil,
+		defaultSupplementaryGroupOverrides: [UInt32] = [],
 		defaultCapabilitiesOverride: OrlixEnvironmentCapabilities? = nil,
 		hostnameOverride: String? = nil,
 		domainnameOverride: String? = nil,
@@ -3153,6 +3232,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultWorkingDirectoryOverride: defaultWorkingDirectoryOverride,
 			defaultUserIDOverride: defaultUserIDOverride,
 			defaultGroupIDOverride: defaultGroupIDOverride,
+			defaultSupplementaryGroupOverrides: defaultSupplementaryGroupOverrides,
 			defaultCapabilitiesOverride: defaultCapabilitiesOverride,
 			hostnameOverride: hostnameOverride,
 			domainnameOverride: domainnameOverride,

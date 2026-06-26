@@ -7935,6 +7935,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.workingDirectory)
 	XCTNil(arguments.userID)
 	XCTNil(arguments.groupID)
+	XCTTrue(arguments.supplementaryGroupIDs.isEmpty)
 	XCTNil(arguments.capabilities)
 	XCTNil(arguments.hostname)
 	XCTNil(arguments.domainname)
@@ -7972,6 +7973,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.workingDirectory)
 	XCTNil(nameArguments.userID)
 	XCTNil(nameArguments.groupID)
+	XCTTrue(nameArguments.supplementaryGroupIDs.isEmpty)
 	XCTNil(nameArguments.capabilities)
 	XCTNil(nameArguments.hostname)
 	XCTNil(nameArguments.domainname)
@@ -8002,6 +8004,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.workingDirectory)
 	XCTNil(equalsArguments.userID)
 	XCTNil(equalsArguments.groupID)
+	XCTTrue(equalsArguments.supplementaryGroupIDs.isEmpty)
 	XCTNil(equalsArguments.capabilities)
 	XCTNil(equalsArguments.hostname)
 	XCTNil(equalsArguments.domainname)
@@ -8115,6 +8118,37 @@ func testOCIEnvironmentRunArgumentsAcceptsNumericUserOverrides() throws {
 
 	XCTAssertEqual(equalsArguments.userID, 7)
 	XCTAssertEqual(equalsArguments.groupID, 8)
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsSupplementaryGroupOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--group-add",
+		"44",
+		"--group-add=45",
+		"--group-add",
+		"44",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(arguments.supplementaryGroupIDs, [44, 45])
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidSupplementaryGroupOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--group-add",
+			"wheel",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("process.user.additionalGids")
+		)
+	}
 }
 
 func testOCIEnvironmentRunArgumentsAcceptsHostnameOverride() throws {
@@ -8572,6 +8606,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--env=", .missingOptionValue("--env")),
 		("--workdir=", .missingOptionValue("--workdir")),
 		("--user=", .missingOptionValue("--user")),
+		("--group-add=", .missingOptionValue("--group-add")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
@@ -9941,6 +9976,9 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"/workspace",
 			"--user",
 			"1000:100",
+			"--group-add",
+			"44",
+			"--group-add=45",
 			"--cap-set",
 			"bounding=CAP_CHOWN,CAP_SETUID",
 			"--cap-set",
@@ -10007,6 +10045,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultWorkingDirectory, "/workspace")
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
+	XCTAssertEqual(descriptor.defaultSupplementaryGroups, [44, 45])
 	XCTAssertEqual(
 		descriptor.defaultCapabilities,
 		OrlixEnvironmentCapabilities(

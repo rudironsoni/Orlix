@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run supplementary group overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts Docker-compatible `--group-add GID` and `--group-add=GID` before image.
+- Run parser validates numeric Linux supplementary group IDs with existing OCI `process.user.additionalGids` unsupported-feature naming and dedupes repeated IDs preserving order.
+- Registry-backed install/run terminal-session preparation merges parsed supplementary groups into descriptor `defaultSupplementaryGroups`, preserving OCI image defaults.
+- Focused tests cover split and equals parsing, duplicate dedupe, invalid nonnumeric group rejection, empty equals-form rejection, default empty parser state, and observed registry-backed descriptor persistence. Existing descriptor/init tests cover `orlix.supplementary_group.*` metadata and init applying Linux `setgroups`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- This advances product-facing `orlix run --group-add` through existing OrlixOS descriptors and Linux-visible init supplementary group metadata paths. It does not add HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, broad user/group namespace runtime proof, full OCI lifecycle, or live simulator proof.
+
 ### 2026-06-26 OCI run capability set overrides
 
 Changes:
