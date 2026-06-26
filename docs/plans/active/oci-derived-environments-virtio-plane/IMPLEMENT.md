@@ -10,6 +10,27 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run numeric user override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--user VALUE`, `-u VALUE`, and `--user=VALUE` before the image.
+- The parsed run user override supports numeric `uid` and `uid:gid` forms and rejects nonnumeric/name forms rather than doing host-side or Swift-side Linux user database resolution.
+- Registry-backed install/run and terminal-session preparation persist parsed numeric uid/gid overrides into the existing OrlixOS environment descriptor default user/group fields.
+- Focused tests cover split, short, and equals-form user parsing plus observed registry-backed `orlix run` descriptor uid/gid persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings.
+- `rtk git diff --check` exited 0.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused simulator XCTest was not run: unsandboxed `xcode-storage-doctor` was rejected by execution policy, so CoreSimulator/Xcode access could not be validated without a forbidden workaround.
+
+Boundary:
+- This advances product-facing `orlix run --user` through existing OrlixOS descriptors and lifecycle paths. It does not implement Linux user-name lookup in Swift or HostAdapter, does not add Linux credential semantics outside Linux, does not touch HostAdapter/mlibc/generated/upstream trees, and does not claim Linux userspace `/usr/bin/orlix`, live app-hosted registry execution proof, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle, or broader namespace/cgroup/device/filesystem/network readiness.
+
+Current-status: Latest coherent checkpoint implements parsed numeric `orlix run --user` uid/gid overrides for registry-backed install/run descriptor persistence. Focused simulator XCTest remains blocked by execution policy denying unsandboxed CoreSimulator/Xcode access.
+
 ### 2026-06-26 OCI run env and workdir overrides
 
 Changes:
