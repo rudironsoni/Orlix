@@ -22910,3 +22910,47 @@ Boundary:
   environments inside one already-running OrlixKernel.
 
 Current-status: OCI terminal token checkpoint verified by static/type checks; focused simulator XCTest unavailable due execution-policy rejection of unsandboxed CoreSimulator access.
+
+### 2026-06-26 OCI tmpfs mount options
+
+Implemented OCI tmpfs mount option delivery through OrlixOS descriptors and the
+Linux userspace init mount path:
+
+- `OrlixEnvironmentDescriptor` now carries `tmpfsMounts` separately from
+  host-backed bind mounts and preserves them through Codable and copied
+  environment descriptors.
+- `OrlixOCIRuntimeMount` now translates OCI `tmpfs` mounts into
+  `OrlixEnvironmentTmpfsMount` entries, accepting supported Linux options:
+  `ro`, `rw`, `nosuid`, `nodev`, `noexec`, `size=`, `mode=`, `uid=`, and
+  `gid=`.
+- `OrlixEnvironmentRootImage` emits `orlix.mount.tmpfsN.*` boot tokens for
+  target, readonly, nosuid, nodev, noexec, and mount-data options.
+- `OrlixOS/Sources/init/init.c` reads those tokens, validates the target,
+  creates the mount point, and calls Linux `mount("tmpfs", target, "tmpfs",
+  flags, data)` before host-directory mounts and before process start.
+- The OCI feature report `tmpfs` entry now names configured OCI tmpfs mount
+  support rather than only the built-in `/tmp` tmpfs.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0. It still printed sandboxed `xcrun_db` cache permission messages and the existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only
+  stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`,
+  `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`,
+  `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+- Focused Xcode XCTest was not run in this turn because unsandboxed
+  CoreSimulator/external DerivedData execution was rejected by the execution
+  policy before `xcode-storage-doctor` could run.
+
+Boundary:
+- This advances configured OCI tmpfs mounts through OrlixOS and Linux
+  `mount(2)`. It does not claim arbitrary OCI mount option support, mount
+  propagation support, full filesystem readiness, full OCI Runtime Spec
+  lifecycle support, registry execution inside Linux, arbitrary imported-image
+  compatibility, networking, devices, or multiple live environments inside one
+  already-running OrlixKernel.
+
+Current-status: OCI tmpfs mount option checkpoint verified by Swift/C static checks; focused simulator XCTest unavailable due execution-policy rejection of unsandboxed CoreSimulator access.
