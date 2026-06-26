@@ -8185,6 +8185,75 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidSupplementaryGroupOverride() th
 	}
 }
 
+func testOCIEnvironmentStateArgumentsAcceptsIDForms() throws {
+	let positional = try OrlixOCIEnvironmentStateArguments([
+		"orlix",
+		"state",
+		"oci-demo",
+	])
+	XCTAssertEqual(positional.id, "oci-demo")
+
+	let idOption = try OrlixOCIEnvironmentStateArguments([
+		"state",
+		"--id",
+		"oci-by-id",
+	])
+	XCTAssertEqual(idOption.id, "oci-by-id")
+
+	let nameOption = try OrlixOCIEnvironmentStateArguments([
+		"state",
+		"--name=oci-by-name",
+	])
+	XCTAssertEqual(nameOption.id, "oci-by-name")
+}
+
+func testOCIEnvironmentStateArgumentsRejectsInvalidInput() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentStateArguments(["run", "oci-demo"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentStateArgumentsError,
+			.missingStateCommand
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentStateArguments(["state"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentStateArgumentsError,
+			.missingID
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentStateArguments(["state", "--id"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentStateArgumentsError,
+			.missingOptionValue("--id")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentStateArguments(["state", "--unknown", "oci-demo"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentStateArgumentsError,
+			.unknownOption("--unknown")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentStateArguments(["state", "one", "two"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentStateArgumentsError,
+			.unexpectedArgument("two")
+		)
+	}
+}
+
 func testOCIEnvironmentRunArgumentsAcceptsAnnotationOverrides() throws {
 	let arguments = try OrlixOCIEnvironmentRunArguments([
 		"orlix",
@@ -12537,12 +12606,50 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 			fileManager.fileExists(
 				atPath: try registry.descriptorURL(forEnvironmentID: "oci-demo").path
 			)
-		)
-	}
+	)
+}
 
-	func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {
-		let fileManager = FileManager.default
-		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+func testOCIEnvironmentInstallerStateArgumentsReturnLifecycleReport() throws {
+	let root = temporaryRegistryRoot()
+	let registry = OrlixEnvironmentRegistry(
+		linuxStateRoot: root.appendingPathComponent("state", isDirectory: true),
+		cacheRoot: root.appendingPathComponent("cache", isDirectory: true),
+		scratchRoot: root.appendingPathComponent("scratch", isDirectory: true)
+	)
+	let store = OrlixOCIRuntimeLifecycleStore(registry: registry)
+	let snapshot = OrlixOCIRuntimeLifecycleSnapshot(
+		record: OrlixOCIRuntimeLifecycleRecord(
+			id: "oci-state-args",
+			bundlePath: "oci://registry.example.org/library/demo@sha256:abc",
+			pid: 77,
+			state: .running
+		),
+		ociVersion: "1.1.0",
+		annotations: ["com.example.state": "ready"]
+	)
+	try store.save(snapshot)
+
+	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+	let report = try installer.state(arguments: [
+		"orlix",
+		"state",
+		"--id",
+		"oci-state-args",
+	])
+
+	XCTAssertEqual(report.id, "oci-state-args")
+	XCTAssertEqual(report.status, .running)
+	XCTAssertEqual(report.pid, 77)
+	XCTAssertEqual(
+		report.bundle,
+		"oci://registry.example.org/library/demo@sha256:abc"
+	)
+	XCTAssertEqual(report.annotations["com.example.state"], "ready")
+}
+
+func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {
+	let fileManager = FileManager.default
+	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 			"orlix-oci-runtime-api-\(UUID().uuidString)",
 			isDirectory: true
 		)
