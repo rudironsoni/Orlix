@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run domainname override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--domainname VALUE` and `--domainname=VALUE` before image.
+- Parsed domain names validate existing OCI UTS-name shape: nonempty, no NUL byte, most 64 UTF-8 bytes, using the existing `invalidDomainname` error surface.
+- Registry-backed install/run and terminal-session preparation persist parsed domain-name overrides into the existing OrlixOS environment descriptor `domainname` field beside hostname.
+- Focused tests cover split and equals-form domain-name parsing, malformed empty equals-form rejection, and observed registry-backed `orlix run` descriptor domain-name persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 known sandbox `xcrun_db` cache messages existing Sendable warnings.
+
+Boundary:
+- This advances product-facing `orlix run --domainname` through existing OrlixOS descriptors and the existing Linux-visible `orlix.domainname=` init path. It does not add HostAdapter/Linux policy, mlibc patches, generated upstream edits, custom ABI, full OCI Runtime Spec lifecycle support, broad namespace/cgroup/device/filesystem/network readiness, or live simulator proof.
+
 ### 2026-06-26 OCI run hostname override
 
 Changes:

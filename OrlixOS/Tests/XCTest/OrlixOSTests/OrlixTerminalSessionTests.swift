@@ -7932,6 +7932,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.userID)
 	XCTNil(arguments.groupID)
 	XCTNil(arguments.hostname)
+	XCTNil(arguments.domainname)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7957,6 +7958,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.userID)
 	XCTNil(nameArguments.groupID)
 	XCTNil(nameArguments.hostname)
+	XCTNil(nameArguments.domainname)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -7975,6 +7977,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.userID)
 	XCTNil(equalsArguments.groupID)
 	XCTNil(equalsArguments.hostname)
+	XCTNil(equalsArguments.domainname)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8106,6 +8109,26 @@ func testOCIEnvironmentRunArgumentsAcceptsHostnameOverride() throws {
 	XCTAssertEqual(equalsArguments.hostname, "equals-host")
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsDomainnameOverride() throws {
+	let domainnameArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--domainname",
+		"example.test",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(domainnameArguments.domainname, "example.test")
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--domainname=equals.example",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(equalsArguments.domainname, "equals.example")
+}
+
 func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 	let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
 		("--id=", .missingOptionValue("--id")),
@@ -8116,6 +8139,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--workdir=", .missingOptionValue("--workdir")),
 		("--user=", .missingOptionValue("--user")),
 		("--hostname=", .missingOptionValue("--hostname")),
+		("--domainname=", .missingOptionValue("--domainname")),
 	]
 
 		for (option, expectedError) in invalidOptions {
@@ -9474,6 +9498,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"1000:100",
 			"--hostname",
 			"registry-run-host",
+			"--domainname",
+			"registry-run.example",
 			"registry.example.org/library/orlix-registry:latest",
 			"sh",
 			"-lc",
@@ -9514,6 +9540,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.hostname, "registry-run-host")
+	XCTAssertEqual(descriptor.domainname, "registry-run.example")
 	XCTAssertEqual(
 		driver.startCommands,
 		[["/usr/bin/env", "sh", "-lc", "echo registry"]]
