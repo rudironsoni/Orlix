@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run scheduler override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--scheduler POLICY[:PRIORITY]` and `--scheduler=POLICY[:PRIORITY]` before image.
+- Run parser validates supported Linux scheduler policies `SCHED_OTHER`, `SCHED_BATCH`, `SCHED_IDLE`, `SCHED_FIFO`, `SCHED_RR`, and nonnegative priority using existing OCI scheduler unsupported-feature names.
+- Registry-backed install/run and terminal-session preparation persist parsed override into descriptor `defaultScheduler`.
+- Focused tests cover split and equals parsing, default priority, invalid policy rejection, invalid priority rejection, empty equals-form rejection, default nil parser state, observed registry-backed descriptor persistence. Existing descriptor/init tests cover `orlix.scheduler.policy=`, `orlix.scheduler.priority=`, and init calling Linux `sched_setscheduler`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 known sandbox `xcrun_db` cache messages existing Sendable warnings.
+
+Boundary:
+- advances product-facing `orlix run --scheduler` through existing OrlixOS descriptors and existing OrlixOS init Linux-visible `sched_setscheduler` path. does not add HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI Runtime Spec lifecycle support, broader scheduler behavior proof, cgroup resource enforcement, or live simulator proof.
+
 ### 2026-06-26 OCI run CPU affinity override
 
 Changes:
