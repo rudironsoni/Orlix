@@ -24256,3 +24256,26 @@ Evidence:
 
 Boundary:
 - This proves Linux-visible terminal SIGINT lifecycle behavior for an OCI-derived environment through the app-hosted OrlixOS runtime path. It does not claim full OCI Runtime Spec completion, registry pull completion, cgroup/device/namespace completeness, network behavior, `orlix run` product completion, or full product readiness.
+### 2026-06-27 app-hosted `orlix run` command path proof
+Changes:
+- Added direct `OrlixTestRunner` app-launch runtime proof `--orlix-runtime-test-spec ociRun`.
+- The proof enters `OrlixOCIEnvironmentInstaller.run(arguments:)` through command-shaped arguments: `orlix run --id oci-run-runtime-test-fixture --rm registry.example.org/library/orlix-fixture:latest -- /bin/sh -c <script>`.
+- Injected deterministic OCI registry responses for the image reference and used the existing fixture ext4 images as the materialized boot artifacts. This keeps fixture assembly test-local while Linux execution still boots real OrlixKernel/OrlixOS ext4 images on the simulator.
+- Verified `--rm` removes the lifecycle record and environment directory after the Linux process exits. No generated upstream edits, OrlixMLibC patches, HostAdapter Linux policy, package/proof/stamp ladders, or feature-report-only work were added.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 and used `/Volumes/1TB/Xcode/DerivedData` plus `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on the single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process --console E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociRun` exited 0. Artifact markers found: `orlix-init: process started pid=33`, `ORLIX_ENV_ORLIX_RUN_BEGIN`, `ORLIX_ENV_ORLIX_RUN_STDOUT_OK`, `ORLIX_ENV_ORLIX_RUN_STDERR_OK`, `ORLIX_ENV_ORLIX_RUN_DONE`, `orlix-init: process exited pid=33 status=0`, `ORLIX_OCI_RUN_COMMAND_STARTED_OK`, `ORLIX_OCI_RUN_COMMAND_STOPPED_OK`, `ORLIX_OCI_RUN_COMMAND_DELETE_OK`.
+- Regression app launches `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 and validated their lifecycle markers with no app runner error or lifecycle timeout markers.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- OrlixTestRunner crash scan found no crash reports; both DiagnosticReports directories were absent.
+
+Boundary:
+- This proves the app-hosted OrlixOS `orlix run` argument path can pull deterministic OCI registry input, materialize a bootable environment image, run a Linux process in the OCI-derived root, observe lifecycle completion, and remove it with `--rm`. It does not claim live internet registry pull, full registry auth, networking, namespace/cgroup/device completeness, arbitrary OCI image compatibility, or full product readiness.
+
+Current status:
+- `orlix run` command-shaped app-hosted runtime path is verified for deterministic registry input and `--rm` lifecycle cleanup on the single iPhone 17 simulator. Continue toward live registry pull, namespace/cgroup/device/network behavior, and broader OCI Runtime Spec coverage.
