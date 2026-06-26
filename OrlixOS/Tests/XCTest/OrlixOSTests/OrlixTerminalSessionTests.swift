@@ -10323,8 +10323,95 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 	XCTAssertFalse(fileManager.fileExists(atPath: importScratchDirectory.path))
 }
 
+func testOCIEnvironmentInstallerListsPreparedEnvironmentStates() throws {
+    let fileManager = FileManager.default
+    let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+        "orlix-oci-list-prepared-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+    defer { try? fileManager.removeItem(at: scratch) }
+
+    let registry = OrlixEnvironmentRegistry(
+        linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+        cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+        scratchRoot: scratch.appendingPathComponent("scratch", isDirectory: true)
+    )
+    let lifecycleStore = OrlixOCIRuntimeLifecycleStore(registry: registry)
+    let config = try OrlixOCIRuntimeConfigParser()
+        .parse(nonRootOCIRuntimeConfig())
+    let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+
+    let alphaDescriptor = OrlixEnvironmentDescriptor(
+        id: "oci-alpha",
+        source: .ociLayout,
+        platform: "linux/arm64",
+        rootImageIdentifier: "orlix.env.oci-alpha",
+        defaultCommand: ["/bin/sh"],
+        defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+        defaultWorkingDirectory: "/",
+        defaultUserID: 0,
+        defaultGroupID: 0
+    )
+    let betaDescriptor = OrlixEnvironmentDescriptor(
+        id: "oci-beta",
+        source: .ociLayout,
+        platform: "linux/arm64",
+        rootImageIdentifier: "orlix.env.oci-beta",
+        defaultCommand: ["/usr/bin/env"],
+        defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+        defaultWorkingDirectory: "/",
+        defaultUserID: 0,
+        defaultGroupID: 0
+    )
+    let nonOCIEnvironment = OrlixEnvironmentDescriptor(
+        id: "copied-root",
+        source: .copiedEnvironment(parentID: "default"),
+        platform: "linux/arm64",
+        rootImageIdentifier: "orlix.env.copied-root",
+        defaultCommand: ["/bin/sh"],
+        defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+        defaultWorkingDirectory: "/",
+        defaultUserID: 0,
+        defaultGroupID: 0
+    )
+
+    try registry.save(betaDescriptor)
+    try registry.save(nonOCIEnvironment)
+    try registry.save(alphaDescriptor)
+    try lifecycleStore.save(
+        OrlixOCIRuntimeLifecycleController(
+            config: config,
+            id: "oci-alpha",
+            bundlePath: "/bundles/oci-alpha"
+        ).create()
+    )
+    try lifecycleStore.save(
+        OrlixOCIRuntimeLifecycleController(
+            config: config,
+            id: "oci-beta",
+            bundlePath: "/bundles/oci-beta"
+        )
+        .create()
+        .start(pid: 42)
+    )
+
+    let prepared = try installer.listPreparedEnvironments()
+
+    XCTAssertEqual(prepared.map(\.id), ["oci-alpha", "oci-beta"])
+    XCTAssertEqual(prepared[0].platform, "linux/arm64")
+    XCTAssertEqual(prepared[0].defaultCommand, ["/bin/sh"])
+    XCTAssertEqual(prepared[0].lifecycleState, .created)
+    XCTAssertEqual(prepared[0].stateReport?.status, .created)
+    XCTAssertNil(prepared[0].stateReport?.pid)
+    XCTAssertEqual(prepared[1].defaultCommand, ["/usr/bin/env"])
+    XCTAssertEqual(prepared[1].lifecycleState, .running)
+    XCTAssertEqual(prepared[1].stateReport?.status, .running)
+    XCTAssertEqual(prepared[1].stateReport?.pid, 42)
+}
+
 func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
-	let fileManager = FileManager.default
+    let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 		"orlix-oci-installer-\(UUID().uuidString)",
 		isDirectory: true

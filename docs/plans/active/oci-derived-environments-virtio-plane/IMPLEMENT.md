@@ -22715,3 +22715,20 @@ Evidence:
 
 Boundary:
 - This is product terminal launch selection only. It does not claim Linux userspace `/usr/bin/orlix run`, registry pull from inside Linux, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, full OCI Runtime Spec lifecycle, or broad namespace/cgroup/device/filesystem/network readiness.
+
+### 2026-06-26 prepared OCI environment lifecycle listing
+
+Changes:
+- Added `OrlixOCIEnvironmentPreparedState`.
+- Added `OrlixOCIRuntime.listPreparedEnvironments(fileManager:)`.
+- Added `OrlixOCIEnvironmentInstaller.listPreparedEnvironments(fileManager:)`.
+- The new OrlixOS session API joins persisted environment descriptors with OCI lifecycle records so product control surfaces can discover prepared OCI-derived roots, their lifecycle state, default command, platform, and state report without guessing IDs.
+- Non-OCI copied/default descriptors without OCI lifecycle records are not reported by this API.
+
+Evidence:
+- `xcode-storage-doctor` exited 0: `OK xcode external storage doctor passed`.
+- Focused XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-13-30-+0200.xcresult` reported `Passed`, 1 passed, 0 failed, 0 skipped for `testOCIEnvironmentInstallerListsPreparedEnvironmentStates`.
+- Broader deterministic OCI registry/runtime XCTest result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_03-14-48-+0200.xcresult` reported `Passed`, 15 passed, 0 failed, 0 skipped.
+
+Boundary:
+- This advances the OrlixOS lifecycle/control surface required by product `orlix run` selection. It does not add a Linux userspace `/usr/bin/orlix` command, registry pull from inside Linux, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, full OCI Runtime Spec lifecycle, or broad namespace/cgroup/device/filesystem/network readiness.
