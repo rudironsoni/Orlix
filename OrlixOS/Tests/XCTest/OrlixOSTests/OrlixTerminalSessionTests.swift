@@ -7908,10 +7908,10 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	}
 }
 
-func testOCIEnvironmentRunArgumentsParsesOrlixRunCommand() throws {
-	let arguments = try OrlixOCIEnvironmentRunArguments([
-		"orlix",
-		"run",
+	func testOCIEnvironmentRunArgumentsParsesOrlixRunCommand() throws {
+		let arguments = try OrlixOCIEnvironmentRunArguments([
+			"orlix",
+			"run",
 		"--id",
 		"demo-alpine",
 		"--platform",
@@ -7925,14 +7925,66 @@ func testOCIEnvironmentRunArgumentsParsesOrlixRunCommand() throws {
 
 	XCTAssertEqual(arguments.image, "alpine:3.20")
 	XCTAssertEqual(arguments.id, "demo-alpine")
-	XCTAssertEqual(arguments.platform, "linux/arm64/v8")
-	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
-}
+		XCTAssertEqual(arguments.platform, "linux/arm64/v8")
+		XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
+	}
 
-func testOCIEnvironmentRunArgumentsDerivesStorageSafeID() throws {
-	let arguments = try OrlixOCIEnvironmentRunArguments([
-		"run",
-		"alpine:3.20",
+	func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
+		let nameArguments = try OrlixOCIEnvironmentRunArguments([
+			"orlix",
+			"run",
+			"--name",
+			"named-alpine",
+			"--platform=linux/arm64/v8",
+			"alpine:3.20",
+			"/bin/echo",
+			"hello",
+		])
+
+		XCTAssertEqual(nameArguments.image, "alpine:3.20")
+		XCTAssertEqual(nameArguments.id, "named-alpine")
+		XCTAssertEqual(nameArguments.platform, "linux/arm64/v8")
+		XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
+
+		let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--id=equals-alpine",
+			"alpine:3.20",
+		])
+
+		XCTAssertEqual(equalsArguments.image, "alpine:3.20")
+		XCTAssertEqual(equalsArguments.id, "equals-alpine")
+		XCTAssertEqual(equalsArguments.platform, "linux/arm64")
+		XCTAssertNil(equalsArguments.command)
+	}
+
+	func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
+		let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
+			("--id=", .missingOptionValue("--id")),
+			("--name=", .missingOptionValue("--name")),
+			("--platform=", .missingOptionValue("--platform")),
+		]
+
+		for (option, expectedError) in invalidOptions {
+			XCTAssertThrowsError(
+				try OrlixOCIEnvironmentRunArguments([
+					"run",
+					option,
+					"alpine:3.20",
+				])
+			) { error in
+				XCTAssertEqual(
+					error as? OrlixOCIEnvironmentRunArgumentsError,
+					expectedError
+				)
+			}
+		}
+	}
+
+	func testOCIEnvironmentRunArgumentsDerivesStorageSafeID() throws {
+		let arguments = try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"alpine:3.20",
 	])
 
 	XCTAssertEqual(arguments.image, "alpine:3.20")
