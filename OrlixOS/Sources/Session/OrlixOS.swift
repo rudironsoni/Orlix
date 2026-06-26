@@ -1329,16 +1329,82 @@ public struct OrlixOCIEnvironmentTerminalSessionResult: Sendable {
 }
 
 public struct OrlixOCIEnvironmentPreparedState: Sendable {
-    public let id: String
-    public let platform: String
-    public let defaultCommand: [String]
-    public let lifecycleState: OrlixOCIRuntimeLifecycleState
-    public let stateReport: OrlixOCIRuntimeStateReport?
+	public let id: String
+	public let platform: String
+	public let defaultCommand: [String]
+	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+	public let stateReport: OrlixOCIRuntimeStateReport?
 }
 
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
 	public let id: String
 	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+}
+
+public enum OrlixOCIEnvironmentListArgumentsError: Error, Equatable, Sendable {
+	case missingListCommand
+	case missingOptionValue(String)
+	case unknownOption(String)
+	case unexpectedArgument(String)
+	case invalidState(String)
+}
+
+public struct OrlixOCIEnvironmentListArguments: Equatable, Sendable {
+	public let states: [OrlixOCIRuntimeLifecycleState]
+
+	public init(_ arguments: [String]) throws {
+		var values = arguments
+		if values.first == "orlix" {
+			values.removeFirst()
+		}
+		guard values.first == "list" || values.first == "ps" else {
+			throw OrlixOCIEnvironmentListArgumentsError.missingListCommand
+		}
+		values.removeFirst()
+
+		var parsedStates: [OrlixOCIRuntimeLifecycleState] = []
+		while !values.isEmpty {
+			let value = values.removeFirst()
+			if value == "--state" || value == "--status" {
+				guard let state = values.first else {
+					throw OrlixOCIEnvironmentListArgumentsError
+						.missingOptionValue(value)
+				}
+				try Self.addState(state, to: &parsedStates)
+				values.removeFirst()
+				continue
+			}
+			if value.hasPrefix("--state=") || value.hasPrefix("--status=") {
+				let separator = value.firstIndex(of: "=")!
+				let option = String(value[..<separator])
+				let state = String(value[value.index(after: separator)...])
+				guard !state.isEmpty else {
+					throw OrlixOCIEnvironmentListArgumentsError
+						.missingOptionValue(option)
+				}
+				try Self.addState(state, to: &parsedStates)
+				continue
+			}
+			if value.hasPrefix("-") {
+				throw OrlixOCIEnvironmentListArgumentsError.unknownOption(value)
+			}
+			throw OrlixOCIEnvironmentListArgumentsError.unexpectedArgument(value)
+		}
+
+		self.states = parsedStates
+	}
+
+	private static func addState(
+		_ value: String,
+		to states: inout [OrlixOCIRuntimeLifecycleState]
+	) throws {
+		guard let state = OrlixOCIRuntimeLifecycleState(rawValue: value) else {
+			throw OrlixOCIEnvironmentListArgumentsError.invalidState(value)
+		}
+		if !states.contains(state) {
+			states.append(state)
+		}
+	}
 }
 
 public enum OrlixOCIEnvironmentStateArgumentsError: Error, Equatable, Sendable {
@@ -4333,15 +4399,37 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		)
 	}
 
-    public func listPreparedEnvironments(
-        fileManager: FileManager = .default
-    ) throws -> [OrlixOCIEnvironmentPreparedState] {
-        try OrlixOCIRuntime(registry: registry)
-            .listPreparedEnvironments(fileManager: fileManager)
-    }
+	public func listPreparedEnvironments(
+		fileManager: FileManager = .default
+	) throws -> [OrlixOCIEnvironmentPreparedState] {
+		try OrlixOCIRuntime(registry: registry)
+			.listPreparedEnvironments(fileManager: fileManager)
+	}
 
-    @discardableResult
-    public func install(
+	public func listPreparedEnvironments(
+		arguments: [String],
+		fileManager: FileManager = .default
+	) throws -> [OrlixOCIEnvironmentPreparedState] {
+		let request = try OrlixOCIEnvironmentListArguments(arguments)
+		let prepared = try listPreparedEnvironments(fileManager: fileManager)
+		guard !request.states.isEmpty else {
+			return prepared
+		}
+		return prepared.filter { request.states.contains($0.lifecycleState) }
+	}
+
+	public func list(
+		arguments: [String],
+		fileManager: FileManager = .default
+	) throws -> [OrlixOCIEnvironmentPreparedState] {
+		try listPreparedEnvironments(
+			arguments: arguments,
+			fileManager: fileManager
+		)
+	}
+
+	@discardableResult
+	public func install(
         bundleURL: URL,
         id: String,
 		tools: OrlixOCIEnvironmentMaterializationTools,

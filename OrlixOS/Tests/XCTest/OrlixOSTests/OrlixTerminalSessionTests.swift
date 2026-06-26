@@ -8185,6 +8185,61 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidSupplementaryGroupOverride() th
 	}
 }
 
+func testOCIEnvironmentListArgumentsAcceptsCommandAndStateFilters() throws {
+	let list = try OrlixOCIEnvironmentListArguments([
+		"orlix",
+		"list",
+	])
+	XCTAssertEqual(list.states, [])
+
+	let ps = try OrlixOCIEnvironmentListArguments([
+		"ps",
+		"--state",
+		"running",
+		"--status=stopped",
+		"--state=running",
+	])
+	XCTAssertEqual(ps.states, [.running, .stopped])
+}
+
+func testOCIEnvironmentListArgumentsRejectsInvalidInput() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentListArguments(["state"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentListArgumentsError,
+			.missingListCommand
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentListArguments(["ps", "--state"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentListArgumentsError,
+			.missingOptionValue("--state")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentListArguments(["ps", "--state=paused"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentListArgumentsError,
+			.invalidState("paused")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentListArguments(["ps", "oci-demo"])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentListArgumentsError,
+			.unexpectedArgument("oci-demo")
+		)
+	}
+}
+
 func testOCIEnvironmentStateArgumentsAcceptsIDForms() throws {
 	let positional = try OrlixOCIEnvironmentStateArguments([
 		"orlix",
@@ -13110,10 +13165,24 @@ func testOCIEnvironmentInstallerListsPreparedEnvironmentStates() throws {
     XCTAssertEqual(prepared[0].lifecycleState, .created)
     XCTAssertEqual(prepared[0].stateReport?.status, .created)
     XCTAssertNil(prepared[0].stateReport?.pid)
-    XCTAssertEqual(prepared[1].defaultCommand, ["/usr/bin/env"])
-    XCTAssertEqual(prepared[1].lifecycleState, .running)
-    XCTAssertEqual(prepared[1].stateReport?.status, .running)
-    XCTAssertEqual(prepared[1].stateReport?.pid, 42)
+	XCTAssertEqual(prepared[1].defaultCommand, ["/usr/bin/env"])
+	XCTAssertEqual(prepared[1].lifecycleState, .running)
+	XCTAssertEqual(prepared[1].stateReport?.status, .running)
+	XCTAssertEqual(prepared[1].stateReport?.pid, 42)
+
+	let running = try installer.list(arguments: [
+		"orlix",
+		"ps",
+		"--state",
+		"running",
+	])
+	XCTAssertEqual(running.map(\.id), ["oci-beta"])
+
+	let created = try installer.listPreparedEnvironments(arguments: [
+		"list",
+		"--status=created",
+	])
+	XCTAssertEqual(created.map(\.id), ["oci-alpha"])
 }
 
 func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
