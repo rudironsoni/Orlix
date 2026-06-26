@@ -6389,24 +6389,61 @@ private func orlixOCIRuntimeConfig(
 			.keys
 			.sorted()
 			.map { "\($0)=\(descriptor.defaultEnvironment[$0] ?? "")" }
-		let config = [
+	var user: [String: Any] = [
+		"uid": descriptor.defaultUserID,
+		"gid": descriptor.defaultGroupID,
+	]
+	if !descriptor.defaultSupplementaryGroups.isEmpty {
+		user["additionalGids"] = descriptor.defaultSupplementaryGroups
+	}
+	if let umask = descriptor.defaultUmask {
+		user["umask"] = umask
+	}
+	var process: [String: Any] = [
+		"terminal": descriptor.defaultTerminal ?? false,
+		"args": descriptor.defaultCommand,
+		"env": environment,
+		"cwd": descriptor.defaultWorkingDirectory,
+		"user": user,
+	]
+	if let rows = descriptor.defaultTerminalRows,
+		let columns = descriptor.defaultTerminalColumns
+	{
+		process["consoleSize"] = [
+			"height": rows,
+			"width": columns,
+		]
+	}
+	if descriptor.defaultNoNewPrivileges {
+		process["noNewPrivileges"] = true
+	}
+	if descriptor.defaultCloseAdditionalFds {
+		process["closeAdditionalFds"] = true
+	}
+	if !descriptor.defaultRlimits.isEmpty {
+		process["rlimits"] = descriptor.defaultRlimits.map { rlimit in
+			[
+				"type": rlimit.type,
+				"soft": rlimit.soft,
+				"hard": rlimit.hard,
+			]
+		}
+	}
+	var config = [
 			"ociVersion": "1.1.0",
 			"annotations": descriptor.annotations,
 			"root": [
 				"path": "rootfs",
 			],
-			"process": [
-				"terminal": false,
-				"args": descriptor.defaultCommand,
-				"env": environment,
-				"cwd": descriptor.defaultWorkingDirectory,
-				"user": [
-					"uid": descriptor.defaultUserID,
-					"gid": descriptor.defaultGroupID,
-				],
-			],
+	"process": process,
 		] as [String: Any]
-		let data = try JSONSerialization.data(
+	if let hostname = descriptor.hostname {
+		config["hostname"] = hostname
+	}
+	if let domainname = descriptor.domainname {
+		config["domainname"] = domainname
+	}
+	let data = try JSONSerialization.data(
 			withJSONObject: config,
 			options: [.sortedKeys]
 		)

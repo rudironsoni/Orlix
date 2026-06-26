@@ -13772,6 +13772,93 @@ error as? OrlixOCIEnvironmentHealthcheckError,
 }
 }
 
+func testOCIEnvironmentInstallerRunCarriesDescriptorProcessDefaultsIntoRuntimeConfig()
+throws
+{
+let fileManager = FileManager.default
+let scratch = fileManager.temporaryDirectory.appendingPathComponent(
+"orlix-oci-registry-process-bridge-\(UUID().uuidString)",
+isDirectory: true
+)
+try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+defer { try? fileManager.removeItem(at: scratch) }
+
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: scratch.appendingPathComponent("state", isDirectory: true),
+cacheRoot: scratch.appendingPathComponent("cache", isDirectory: true),
+scratchRoot: scratch.appendingPathComponent("runtime-scratch", isDirectory: true)
+)
+let id = "oci-registry-process-bridge"
+let descriptor = OrlixEnvironmentDescriptor(
+id: id,
+source: .ociLayout,
+platform: "linux/arm64",
+rootImageIdentifier: id,
+defaultCommand: ["/bin/sh", "-lc", "echo bridge"],
+defaultEnvironment: ["PATH": "/usr/bin:/bin"],
+defaultWorkingDirectory: "/work",
+defaultUserID: 1000,
+defaultGroupID: 100,
+defaultSupplementaryGroups: [44, 45],
+defaultNoNewPrivileges: true,
+defaultCloseAdditionalFds: true,
+defaultTerminal: true,
+defaultTerminalRows: 33,
+defaultTerminalColumns: 120,
+defaultUmask: 0o022,
+defaultRlimits: [
+OrlixEnvironmentRlimit(type: "RLIMIT_NOFILE", soft: 64, hard: 128),
+],
+hostname: "orlix-demo",
+domainname: "example.test"
+)
+try registry.save(descriptor, fileManager: fileManager)
+let layout = try registry.layout(forEnvironmentID: id)
+try Data("base".utf8).write(to: layout.baseImageURL)
+try Data("state".utf8).write(to: layout.stateImageURL)
+let lifecycle = try OrlixOCIRuntimeLifecycleController(
+config: try OrlixOCIRuntimeConfigParser().parse(minimalOCIRuntimeConfig()),
+id: id,
+bundlePath: "oci://registry.example.org/library/demo@sha256:bridge"
+).create()
+try OrlixOCIRuntimeLifecycleStore(registry: registry).save(
+lifecycle,
+fileManager: fileManager
+)
+let driver = try RecordingOCIRuntimeProcessObservationDriver(
+startPID: 73,
+completion: .exited(
+OrlixOCIRuntimeProcessExitObservation(pid: 73, exitStatus: 0)
+)
+)
+
+let result = try OrlixOCIEnvironmentInstaller(registry: registry).run(
+id: id,
+terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
+using: driver,
+fileManager: fileManager
+)
+
+XCTAssertEqual(result.completedStateReport.exitStatus, 0)
+XCTAssertEqual(driver.startCommands, [["/bin/sh", "-lc", "echo bridge"]])
+XCTAssertEqual(
+driver.startConsoleSizes,
+[OrlixOCIRuntimeConsoleSize(height: 33, width: 120)]
+)
+let commandLine = try XCTUnwrap(driver.startKernelCommandLines.first ?? nil)
+XCTAssertTrue(commandLine.contains("orlix.terminal=1"))
+XCTAssertTrue(commandLine.contains("orlix.terminal.rows=33"))
+XCTAssertTrue(commandLine.contains("orlix.terminal.cols=120"))
+XCTAssertTrue(commandLine.contains("orlix.uid=1000"))
+XCTAssertTrue(commandLine.contains("orlix.gid=100"))
+XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
+XCTAssertTrue(commandLine.contains("orlix.suppgid1=45"))
+XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
+XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
+XCTAssertTrue(commandLine.contains("orlix.umask=18"))
+XCTAssertTrue(commandLine.contains("orlix.rlimit0=RLIMIT_NOFILE:64:128"))
+}
+
 func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {
 	let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
@@ -16206,10 +16293,12 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 	private let failsOnStart: Bool
 	private let failsOnSignal: Bool
 	private let failsOnWait: Bool
-	private(set) var events: [String] = []
-	private(set) var startCommands: [[String]] = []
-	private(set) var startRootImageIdentifiers: [String] = []
-	private(set) var waitRootImageIdentifiers: [String] = []
+private(set) var events: [String] = []
+private(set) var startCommands: [[String]] = []
+private(set) var startRootImageIdentifiers: [String] = []
+private(set) var startKernelCommandLines: [String?] = []
+private(set) var startConsoleSizes: [OrlixOCIRuntimeConsoleSize?] = []
+private(set) var waitRootImageIdentifiers: [String] = []
 
 	init(startPID: Int32,
 	     completion: OrlixOCIRuntimeProcessCompletionObservation,
@@ -16230,10 +16319,14 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 		startCommands.append(
 			processSession.processHandle.sessionDescriptor.environment.defaultCommand
 		)
-		startRootImageIdentifiers.append(
-			processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier
-		)
-		events.append(
+startRootImageIdentifiers.append(
+processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier
+)
+startKernelCommandLines.append(
+processSession.linuxSession.bootConfig.kernelCommandLine
+)
+startConsoleSizes.append(processSession.processHandle.sessionDescriptor.consoleSize)
+events.append(
 			"start:\(processSession.processHandle.lifecycle.record.state):\(String(describing: processSession.processHandle.lifecycle.record.pid))"
 		)
 		if failsOnStart {
