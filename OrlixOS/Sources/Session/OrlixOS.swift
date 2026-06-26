@@ -6399,6 +6399,16 @@ private func orlixOCIRuntimeConfig(
 	if let umask = descriptor.defaultUmask {
 		user["umask"] = umask
 	}
+	var capabilities: [String: Any]?
+	if let descriptorCapabilities = descriptor.defaultCapabilities {
+		capabilities = [
+			"bounding": descriptorCapabilities.bounding,
+			"permitted": descriptorCapabilities.permitted,
+			"inheritable": descriptorCapabilities.inheritable,
+			"effective": descriptorCapabilities.effective,
+			"ambient": descriptorCapabilities.ambient,
+		]
+	}
 	var process: [String: Any] = [
 		"terminal": descriptor.defaultTerminal ?? false,
 		"args": descriptor.defaultCommand,
@@ -6406,6 +6416,29 @@ private func orlixOCIRuntimeConfig(
 		"cwd": descriptor.defaultWorkingDirectory,
 		"user": user,
 	]
+	if let capabilities {
+		process["capabilities"] = capabilities
+	}
+	if let oomScoreAdjustment = descriptor.defaultOOMScoreAdjustment {
+		process["oomScoreAdj"] = oomScoreAdjustment
+	}
+	if let scheduler = descriptor.defaultScheduler {
+		process["scheduler"] = [
+			"policy": scheduler.policy,
+			"priority": scheduler.priority,
+		]
+	}
+	if let ioPriority = descriptor.defaultIOPriority {
+		process["ioPriority"] = [
+			"class": ioPriority.class,
+			"priority": ioPriority.priority,
+		]
+	}
+	if let cpuAffinity = descriptor.defaultCPUAffinity {
+		process["execCPUAffinity"] = [
+			"final": cpuAffinity.mask,
+		]
+	}
 	if let rows = descriptor.defaultTerminalRows,
 		let columns = descriptor.defaultTerminalColumns
 	{
@@ -6429,14 +6462,174 @@ private func orlixOCIRuntimeConfig(
 			]
 		}
 	}
+	var root: [String: Any] = [
+		"path": "rootfs",
+	]
+	if descriptor.rootReadonly {
+		root["readonly"] = true
+	}
+	var mounts: [[String: Any]] = descriptor.tmpfsMounts.map { mount in
+		var options: [String] = []
+		if mount.readOnly { options.append("ro") }
+		if mount.noSuid { options.append("nosuid") }
+		if mount.noDev { options.append("nodev") }
+		if mount.noExec { options.append("noexec") }
+		if let data = mount.data {
+			options.append(contentsOf: data.split(separator: ",").map(String.init))
+		}
+		var runtimeMount: [String: Any] = [
+			"destination": mount.targetPath,
+			"type": "tmpfs",
+			"source": "tmpfs",
+		]
+		if !options.isEmpty {
+			runtimeMount["options"] = options
+		}
+		return runtimeMount
+	}
+	mounts.append(contentsOf: descriptor.mounts.map { mount in
+		let source: String
+		switch mount.source {
+		case .documents:
+			source = "orlix:documents"
+		case let .securityScopedExternal(bookmarkID):
+			source = "orlix:external:\(bookmarkID)"
+		case let .hostPath(hostPath):
+			source = hostPath
+		}
+		var options = ["bind"]
+		options.append(mount.readOnly ? "ro" : "rw")
+		if mount.noExec {
+			options.append("noexec")
+		}
+		return [
+			"destination": mount.targetPath,
+			"type": "bind",
+			"source": source,
+			"options": options,
+		]
+	})
+	var linux: [String: Any] = [:]
+	if descriptor.rootPropagation != .private {
+		linux["rootfsPropagation"] = descriptor.rootPropagation.rawValue
+	}
+	if !descriptor.sysctls.isEmpty {
+		linux["sysctl"] = descriptor.sysctls
+	}
+	if !descriptor.maskedPaths.isEmpty {
+		linux["maskedPaths"] = descriptor.maskedPaths
+	}
+	if !descriptor.readonlyPaths.isEmpty {
+		linux["readonlyPaths"] = descriptor.readonlyPaths
+	}
+	if let cgroupsPath = descriptor.cgroupsPath {
+		linux["cgroupsPath"] = cgroupsPath
+	}
+	var resources: [String: Any] = [:]
+	if let cgroupPidsLimit = descriptor.cgroupPidsLimit {
+		resources["pids"] = ["limit": cgroupPidsLimit]
+	}
+	if descriptor.cgroupCPUMax != nil || descriptor.cgroupCPUWeight != nil {
+		var cpu: [String: Any] = [:]
+		if let cgroupCPUMax = descriptor.cgroupCPUMax {
+			cpu["quota"] = cgroupCPUMax.quotaMicros
+			cpu["period"] = cgroupCPUMax.periodMicros
+		}
+		if let cgroupCPUWeight = descriptor.cgroupCPUWeight {
+			cpu["shares"] = cgroupCPUWeight
+		}
+		resources["cpu"] = cpu
+	}
+	if let cgroupMemoryMax = descriptor.cgroupMemoryMax {
+		resources["memory"] = ["limit": cgroupMemoryMax]
+	}
+	if let cgroupIOWeight = descriptor.cgroupIOWeight {
+		resources["blockIO"] = ["weight": cgroupIOWeight]
+	}
+	if !descriptor.cgroupUnified.isEmpty {
+		resources["unified"] = Dictionary(
+			uniqueKeysWithValues: descriptor.cgroupUnified.map {
+				($0.file, $0.value)
+			}
+		)
+	}
+	if !resources.isEmpty {
+		linux["resources"] = resources
+	}
+	if !descriptor.deviceNodes.isEmpty {
+		linux["devices"] = descriptor.deviceNodes.map { device in
+			[
+				"path": device.path,
+				"type": device.type,
+				"major": device.major,
+				"minor": device.minor,
+				"fileMode": device.fileMode,
+				"uid": device.uid,
+				"gid": device.gid,
+			]
+		}
+	}
+	if !descriptor.timeOffsets.isEmpty {
+		linux["timeOffsets"] = Dictionary(
+			uniqueKeysWithValues: descriptor.timeOffsets.map { offset in
+				(
+					offset.clock,
+					[
+						"secs": offset.secs,
+						"nanosecs": offset.nanosecs,
+					]
+				)
+			}
+		)
+	}
+	if !descriptor.uidMappings.isEmpty {
+		linux["uidMappings"] = descriptor.uidMappings.map { mapping in
+			[
+				"containerID": mapping.containerID,
+				"hostID": mapping.hostID,
+				"size": mapping.size,
+			]
+		}
+	}
+	if !descriptor.gidMappings.isEmpty {
+		linux["gidMappings"] = descriptor.gidMappings.map { mapping in
+			[
+				"containerID": mapping.containerID,
+				"hostID": mapping.hostID,
+				"size": mapping.size,
+			]
+		}
+	}
+	var namespaces = descriptor.namespaces.map { namespace in
+		["type": namespace]
+	}
+	namespaces.append(contentsOf: descriptor.namespacePaths
+		.keys
+		.sorted()
+		.map { type in
+			[
+				"type": type,
+				"path": descriptor.namespacePaths[type] ?? "",
+			]
+		})
+	if !namespaces.isEmpty {
+		linux["namespaces"] = namespaces
+	}
+	if let personality = descriptor.defaultPersonalityDomain {
+		linux["personality"] = ["domain": personality]
+	}
 	var config = [
-			"ociVersion": "1.1.0",
-			"annotations": descriptor.annotations,
-			"root": [
-				"path": "rootfs",
-			],
-	"process": process,
-		] as [String: Any]
+		"ociVersion": "1.1.0",
+		"annotations": descriptor.annotations,
+		"root": root,
+		"process": process,
+	] as [String: Any]
+	if !mounts.isEmpty {
+		config["mounts"] = mounts
+	}
+	if !linux.isEmpty {
+		config["linux"] = linux
+	}
 	if let hostname = descriptor.hostname {
 		config["hostname"] = hostname
 	}

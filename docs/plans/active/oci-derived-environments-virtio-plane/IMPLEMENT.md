@@ -10,6 +10,27 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI registry descriptor Linux bridge
+
+Changes:
+- Corrected the previous masked/readonly path slice by removing duplicate `init.c` handling. Existing `rootinit.c` already applies `orlix.maskedpathN` and `orlix.readonlypathN` against `/newroot` before switch-root; keeping a second post-switch implementation would duplicate Linux setup.
+- Extended the registry/imported descriptor to OCI runtime config bridge beyond process defaults so stored Linux settings survive into launched OCI-derived sessions.
+- Bridged supported descriptor fields into the existing `OrlixOCIRuntimeConfigParser` path: root read-only/propagation, tmpfs mounts, supported bind mounts, sysctls, masked/readonly paths, cgroups path/resources/unified files, device nodes, time offsets, uid/gid mappings, namespaces and namespace joins, personality, capabilities, OOM score, scheduler, IO priority, and CPU affinity.
+- Extended the registry-backed run test to assert those stored settings reach the launched Linux session kernel command line.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixOS/Sources/init/init.c` exited 0.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+- Hook-generated `.codex/hooks/__pycache__/orlix_hook_common.cpython-314.pyc` was removed before commit.
+
+Boundary:
+- This is OrlixOS session/runtime config bridging and removal of duplicate init setup. It does not add HostAdapter Linux policy, custom ABI, upstream Linux edits, generated-tree edits, mlibc patches, proof-package/stamp systems, or a live simulator runtime claim.
+
 ### 2026-06-26 OCI masked and readonly path init mounts
 
 Changes:
@@ -23993,4 +24014,4 @@ Evidence:
 - Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
 
 Current status:
-- Latest coherent checkpoint is OCI masked and readonly path init mounts. Static init compile, Swift parse, and guard checks passed; no live Linux runtime or simulator runtime claim is made.
+- Latest coherent checkpoint is OCI registry descriptor Linux bridge. Static Swift parse/typecheck, init compile, and guard checks passed; no live Linux runtime or simulator runtime claim is made.
