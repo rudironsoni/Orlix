@@ -32,6 +32,7 @@ public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
 	public let defaultCapabilities: OrlixEnvironmentCapabilities?
 	public let defaultNoNewPrivileges: Bool
 	public let defaultCloseAdditionalFds: Bool
+	public let defaultTerminal: Bool?
 	public let defaultTerminalRows: UInt32?
 	public let defaultTerminalColumns: UInt32?
 	public let defaultOOMScoreAdjustment: Int32?
@@ -106,6 +107,7 @@ public let cgroupPidsLimit: Int64?
 		defaultCapabilities: OrlixEnvironmentCapabilities? = nil,
 		defaultNoNewPrivileges: Bool = false,
 		defaultCloseAdditionalFds: Bool = false,
+		defaultTerminal: Bool? = nil,
 		defaultTerminalRows: UInt32? = nil,
 		defaultTerminalColumns: UInt32? = nil,
 		defaultOOMScoreAdjustment: Int32? = nil,
@@ -152,6 +154,7 @@ cgroupPidsLimit: Int64? = nil,
 		self.defaultCapabilities = defaultCapabilities
 		self.defaultNoNewPrivileges = defaultNoNewPrivileges
 		self.defaultCloseAdditionalFds = defaultCloseAdditionalFds
+		self.defaultTerminal = defaultTerminal
 		self.defaultTerminalRows = defaultTerminalRows
 		self.defaultTerminalColumns = defaultTerminalColumns
 		self.defaultOOMScoreAdjustment = defaultOOMScoreAdjustment
@@ -197,9 +200,10 @@ self.cgroupPidsLimit = cgroupPidsLimit
         case defaultUserID
         case defaultGroupID
         case defaultSupplementaryGroups
-        case defaultCapabilities
+		case defaultCapabilities
 		case defaultNoNewPrivileges
 		case defaultCloseAdditionalFds
+		case defaultTerminal
 		case defaultTerminalRows
 		case defaultTerminalColumns
 		case defaultOOMScoreAdjustment
@@ -282,6 +286,10 @@ case cgroupCPUMax
 			Bool.self,
 			forKey: .defaultCloseAdditionalFds
 		) ?? false
+		self.defaultTerminal = try container.decodeIfPresent(
+			Bool.self,
+			forKey: .defaultTerminal
+		)
 		self.defaultTerminalRows = try container.decodeIfPresent(
 			UInt32.self,
 			forKey: .defaultTerminalRows
@@ -433,6 +441,7 @@ forKey: .cgroupCPUWeight
 		if defaultCloseAdditionalFds {
 			try container.encode(defaultCloseAdditionalFds, forKey: .defaultCloseAdditionalFds)
 		}
+		try container.encodeIfPresent(defaultTerminal, forKey: .defaultTerminal)
 		try container.encodeIfPresent(defaultTerminalRows, forKey: .defaultTerminalRows)
 		try container.encodeIfPresent(defaultTerminalColumns, forKey: .defaultTerminalColumns)
 		try container.encodeIfPresent(
@@ -1075,9 +1084,10 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
     public static let defaultCapabilitiesPermittedCommandLineKey = "orlix.cap.permitted"
     public static let defaultCapabilitiesInheritableCommandLineKey = "orlix.cap.inheritable"
     public static let defaultCapabilitiesEffectiveCommandLineKey = "orlix.cap.effective"
-    public static let defaultCapabilitiesAmbientCommandLineKey = "orlix.cap.ambient"
+	public static let defaultCapabilitiesAmbientCommandLineKey = "orlix.cap.ambient"
 	public static let defaultNoNewPrivilegesCommandLineKey = "orlix.nonewprivs"
 	public static let defaultCloseAdditionalFdsCommandLineKey = "orlix.closefds"
+	public static let defaultTerminalCommandLineKey = "orlix.terminal"
 	public static let defaultTerminalRowsCommandLineKey = "orlix.terminal.rows"
 	public static let defaultTerminalColumnsCommandLineKey = "orlix.terminal.cols"
 	public static let defaultOOMScoreAdjustmentCommandLineKey = "orlix.oomscoreadj"
@@ -1546,6 +1556,11 @@ return node
         }
 		if descriptor.defaultCloseAdditionalFds {
 			tokens.append("\(defaultCloseAdditionalFdsCommandLineKey)=1")
+		}
+		if let defaultTerminal = descriptor.defaultTerminal {
+			tokens.append(
+				"\(defaultTerminalCommandLineKey)=\(defaultTerminal ? 1 : 0)"
+			)
 		}
 		if let rows = descriptor.defaultTerminalRows,
 		   let columns = descriptor.defaultTerminalColumns,
@@ -2038,6 +2053,7 @@ public struct OrlixEnvironmentRegistry: Sendable {
 					defaultCapabilities: parent.defaultCapabilities,
 					defaultNoNewPrivileges: parent.defaultNoNewPrivileges,
 					defaultCloseAdditionalFds: parent.defaultCloseAdditionalFds,
+					defaultTerminal: parent.defaultTerminal,
 					defaultTerminalRows: parent.defaultTerminalRows,
 					defaultTerminalColumns: parent.defaultTerminalColumns,
 					defaultOOMScoreAdjustment: parent.defaultOOMScoreAdjustment,

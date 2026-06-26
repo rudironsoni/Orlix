@@ -486,11 +486,12 @@ func testDocumentsMountRejectsReservedLinuxRuntimeTargets() throws {
             platform: "linux/arm64",
             rootImageIdentifier: "orlix.env.default",
             defaultCommand: ["/bin/sh", "-l"],
-            defaultEnvironment: ["HOME": "/root", "PATH": "/usr/bin:/bin"],
-            defaultWorkingDirectory: "/root",
-            defaultUserID: 0,
-            defaultGroupID: 0,
-            mounts: [documentsMount]
+			defaultEnvironment: ["HOME": "/root", "PATH": "/usr/bin:/bin"],
+			defaultWorkingDirectory: "/root",
+			defaultUserID: 0,
+			defaultGroupID: 0,
+			defaultTerminal: false,
+			mounts: [documentsMount]
         )
         try registry.save(parent)
         let parentLayout = try registry.layout(forEnvironmentID: parent.id)
@@ -512,10 +513,11 @@ func testDocumentsMountRejectsReservedLinuxRuntimeTargets() throws {
         XCTAssertEqual(copied.rootImageIdentifier, "orlix.env.default-copy")
         XCTAssertEqual(copied.defaultCommand, parent.defaultCommand)
         XCTAssertEqual(copied.defaultEnvironment, parent.defaultEnvironment)
-        XCTAssertEqual(copied.defaultWorkingDirectory, parent.defaultWorkingDirectory)
-		XCTAssertEqual(copied.defaultUserID, parent.defaultUserID)
-        XCTAssertEqual(copied.defaultGroupID, parent.defaultGroupID)
-        XCTAssertEqual(copied.rootMount, parent.rootMount)
+	XCTAssertEqual(copied.defaultWorkingDirectory, parent.defaultWorkingDirectory)
+	XCTAssertEqual(copied.defaultUserID, parent.defaultUserID)
+	XCTAssertEqual(copied.defaultGroupID, parent.defaultGroupID)
+	XCTAssertEqual(copied.defaultTerminal, parent.defaultTerminal)
+	XCTAssertEqual(copied.rootMount, parent.rootMount)
         XCTAssertEqual(copied.cgroupUnified, parent.cgroupUnified)
         XCTAssertEqual(copied.deviceNodes, parent.deviceNodes)
         XCTAssertEqual(copied.mounts, parent.mounts)
@@ -954,6 +956,7 @@ func testDocumentsMountRejectsReservedLinuxRuntimeTargets() throws {
 			),
 			defaultNoNewPrivileges: true,
 			defaultCloseAdditionalFds: true,
+			defaultTerminal: false,
 			defaultTerminalRows: 33,
 			defaultTerminalColumns: 120,
 			defaultOOMScoreAdjustment: -500,
@@ -1045,10 +1048,11 @@ cgroupPidsLimit: 64,
         XCTAssertTrue(commandLine.contains("orlix.cap.permitted=CAP_CHOWN"))
         XCTAssertTrue(commandLine.contains("orlix.cap.inheritable=CAP_SETUID"))
         XCTAssertTrue(commandLine.contains("orlix.cap.effective=CAP_CHOWN"))
-        XCTAssertTrue(commandLine.contains("orlix.cap.ambient=CAP_SETUID"))
-		XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
-		XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
-		XCTAssertTrue(commandLine.contains("orlix.terminal.rows=33"))
+	XCTAssertTrue(commandLine.contains("orlix.cap.ambient=CAP_SETUID"))
+	XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
+	XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
+	XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
+	XCTAssertTrue(commandLine.contains("orlix.terminal.rows=33"))
 		XCTAssertTrue(commandLine.contains("orlix.terminal.cols=120"))
 		XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=-500"))
         XCTAssertTrue(commandLine.contains("orlix.scheduler.policy=SCHED_FIFO"))
@@ -7933,6 +7937,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.groupID)
 	XCTNil(arguments.hostname)
 	XCTNil(arguments.domainname)
+	XCTNil(arguments.terminal)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7959,6 +7964,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.groupID)
 	XCTNil(nameArguments.hostname)
 	XCTNil(nameArguments.domainname)
+	XCTNil(nameArguments.terminal)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -7978,6 +7984,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.groupID)
 	XCTNil(equalsArguments.hostname)
 	XCTNil(equalsArguments.domainname)
+	XCTNil(equalsArguments.terminal)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8127,6 +8134,41 @@ func testOCIEnvironmentRunArgumentsAcceptsDomainnameOverride() throws {
 	])
 
 	XCTAssertEqual(equalsArguments.domainname, "equals.example")
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsTerminalOverrides() throws {
+	let ttyArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--tty",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(ttyArguments.terminal, true)
+
+	let shortTTYArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"-t",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(shortTTYArguments.terminal, true)
+
+	let noTTYArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--no-tty",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(noTTYArguments.terminal, false)
+
+	let noTerminalArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--no-terminal",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(noTerminalArguments.terminal, false)
 }
 
 func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
@@ -9487,6 +9529,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
             "run",
 			"--id",
 			"registry-installed-run",
+			"--no-tty",
 			"--entrypoint",
 			"/usr/bin/env",
 			"--env",
@@ -9539,6 +9582,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultWorkingDirectory, "/workspace")
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
+	XCTAssertEqual(descriptor.defaultTerminal, false)
 	XCTAssertEqual(descriptor.hostname, "registry-run-host")
 	XCTAssertEqual(descriptor.domainname, "registry-run.example")
 	XCTAssertEqual(
