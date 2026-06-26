@@ -10,6 +10,13 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 current status after device-node checkpoint
+
+Current status:
+- Local commit `af0ab55c feat(oci): support run device nodes` is clean and ahead of `origin/main` by one.
+- Earlier push attempt was blocked by the pre-tool plan guard because a generated-cache cleanup mutation happened after the implementation log update. This entry records the current checkpoint status before retrying push.
+- No new runtime claim is added here. The device-node checkpoint remains limited to parser, descriptor threading, and static Swift checks already recorded below.
+
 ### 2026-06-26 OCI run device-node overrides
 
 Changes:
