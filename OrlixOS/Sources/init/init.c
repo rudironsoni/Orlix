@@ -2450,6 +2450,8 @@ static void apply_personality(unsigned long personality)
 static void exec_or_fork_configured_command(struct orlix_command_config *config)
 {
 	unsigned long fork_required = CLONE_NEWTIME;
+	if ((config->namespace_flags & CLONE_NEWPID) != 0)
+		fork_required |= CLONE_NEWPID;
 	for (size_t i = 0; i < config->namespace_join_count; i++) {
 		if ((config->namespace_join_flags[i] & CLONE_NEWPID) != 0)
 			fork_required |= CLONE_NEWPID;

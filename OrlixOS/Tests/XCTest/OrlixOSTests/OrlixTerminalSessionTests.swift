@@ -1287,9 +1287,14 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
             initSource.contains(
                 "read_cmdline_decoded(\"\(OrlixEnvironmentRootImage.defaultCPUAffinityCommandLineKey)=\","
             )
-        )
+		)
 		XCTAssertTrue(initSource.contains("sched_setaffinity("))
 		XCTAssertTrue(initSource.contains("CLONE_NEWPID"))
+		XCTAssertTrue(
+			initSource.contains(
+				"if ((config->namespace_flags & CLONE_NEWPID) != 0)"
+			)
+		)
 		XCTAssertTrue(initSource.contains("fork_required |= CLONE_NEWPID;"))
 		XCTAssertTrue(initSource.contains("die(\"fork namespace child\");"))
 		XCTAssertTrue(
