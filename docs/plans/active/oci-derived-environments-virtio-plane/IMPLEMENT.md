@@ -10,6 +10,28 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run env and workdir overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--env VALUE`, `-e VALUE`, `--env=VALUE`, `--workdir VALUE`, `-w VALUE`, and `--workdir=VALUE` before the image.
+- Parsed run environment entries validate as Linux-style `KEY=VALUE` values, allow empty values, reject duplicate/invalid keys, and reuse existing OCI runtime config error cases for invalid entries.
+- Parsed working directories must be absolute Linux paths and reuse existing OCI runtime config error cases for invalid paths.
+- Registry-backed install/run and terminal-session preparation persist parsed environment and working-directory overrides into the OrlixOS environment descriptor alongside command/entrypoint overrides.
+- Focused tests cover parser env/workdir forms and observed registry-backed `orlix run` persistence of default environment and working directory.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings.
+- `rtk git diff --check` exited 0.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused simulator XCTest was not run: unsandboxed `xcode-storage-doctor` was rejected by execution policy, so CoreSimulator/Xcode access could not be validated without a forbidden workaround.
+
+Boundary:
+- This advances product-facing `orlix run` configuration through existing OrlixOS descriptors and lifecycle paths. It does not add Linux semantics outside Linux, does not touch HostAdapter/mlibc/generated/upstream trees, and does not claim Linux userspace `/usr/bin/orlix`, live app-hosted registry execution proof, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle, or broader namespace/cgroup/device/filesystem/network readiness.
+
+Current-status: Latest coherent checkpoint implements parsed `orlix run` environment and working-directory overrides for registry-backed install/run descriptor persistence. Focused simulator XCTest remains blocked by execution policy denying unsandboxed CoreSimulator/Xcode access.
+
 ### 2026-06-26 OCI run entrypoint override
 
 Changes:
