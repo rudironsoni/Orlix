@@ -1360,11 +1360,12 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let groupID: UInt32?
 	public let supplementaryGroupIDs: [UInt32]
 	public let capabilities: OrlixEnvironmentCapabilities?
-	public let hostname: String?
-	public let domainname: String?
-	public let terminal: Bool?
-	public let rlimits: [OrlixEnvironmentRlimit]
-	public let umask: UInt32?
+    public let hostname: String?
+    public let domainname: String?
+    public let terminal: Bool?
+    public let rlimits: [OrlixEnvironmentRlimit]
+    public let sysctls: [String: String]
+    public let umask: UInt32?
 	public let oomScoreAdjustment: Int32?
 	public let scheduler: OrlixEnvironmentScheduler?
 	public let ioPriority: OrlixEnvironmentIOPriority?
@@ -1411,10 +1412,11 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedCapabilities = OrlixEnvironmentCapabilities()
 		var parsedCapabilitiesPresent = false
 		var parsedHostname: String?
-		var parsedDomainname: String?
-		var parsedTerminal: Bool?
-		var parsedRlimits: [OrlixEnvironmentRlimit] = []
-		var parsedUmask: UInt32?
+        var parsedDomainname: String?
+        var parsedTerminal: Bool?
+        var parsedRlimits: [OrlixEnvironmentRlimit] = []
+        var parsedSysctls: [String: String] = [:]
+        var parsedUmask: UInt32?
 		var parsedOOMScoreAdjustment: Int32?
 		var parsedScheduler: OrlixEnvironmentScheduler?
 		var parsedIOPriority: OrlixEnvironmentIOPriority?
@@ -1618,6 +1620,25 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                         .missingOptionValue("--tmpfs")
                 }
                 try Self.addTmpfsMount(tmpfs, to: &parsedTmpfsMounts)
+                continue
+            }
+            if parsedImage == nil, value == "--sysctl" {
+                guard let sysctl = values.first else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue(value)
+                }
+                try Self.addSysctlEntry(sysctl, to: &parsedSysctls)
+                values.removeFirst()
+                continue
+            }
+            if parsedImage == nil, value.hasPrefix("--sysctl=") {
+                let separator = value.firstIndex(of: "=")!
+                let sysctl = String(value[value.index(after: separator)...])
+                guard !sysctl.isEmpty else {
+                    throw OrlixOCIEnvironmentRunArgumentsError
+                        .missingOptionValue("--sysctl")
+                }
+                try Self.addSysctlEntry(sysctl, to: &parsedSysctls)
                 continue
             }
             if parsedImage == nil, value == "--ulimit" {
@@ -2018,11 +2039,12 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.groupID = parsedGroupID
 		self.supplementaryGroupIDs = parsedSupplementaryGroupIDs
 		self.capabilities = parsedCapabilitiesPresent ? parsedCapabilities : nil
-		self.hostname = parsedHostname
-		self.domainname = parsedDomainname
-		self.terminal = parsedTerminal
-		self.rlimits = parsedRlimits
-		self.umask = parsedUmask
+        self.hostname = parsedHostname
+        self.domainname = parsedDomainname
+        self.terminal = parsedTerminal
+        self.rlimits = parsedRlimits
+        self.sysctls = parsedSysctls
+        self.umask = parsedUmask
 		self.oomScoreAdjustment = parsedOOMScoreAdjustment
 		self.scheduler = parsedScheduler
 		self.ioPriority = parsedIOPriority
@@ -2668,6 +2690,38 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         return true
     }
 
+    private static func addSysctlEntry(
+        _ value: String,
+        to sysctls: inout [String: String]
+    ) throws {
+        guard let separator = value.firstIndex(of: "=") else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.sysctl"
+            )
+        }
+        let key = String(value[..<separator])
+        let sysctlValue = String(value[value.index(after: separator)...])
+        let allowedScalars = CharacterSet.alphanumerics
+            .union(CharacterSet(charactersIn: "._-"))
+        guard !key.isEmpty,
+              key.unicodeScalars.allSatisfy({
+                  allowedScalars.contains($0)
+              }),
+              key.first != ".",
+              key.last != ".",
+              !key.contains(".."),
+              !sysctlValue.contains("\u{0}"),
+              !sysctlValue.contains("\n"),
+              !sysctlValue.contains("\r"),
+              sysctls[key] == nil
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.sysctl"
+            )
+        }
+        sysctls[key] = sysctlValue
+    }
+
     private static func parseID(
 		_ value: String,
 		feature: String
@@ -2821,6 +2875,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDomainnameWith domainname: String?,
 		replacingDefaultTerminalWith terminal: Bool?,
 		mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
+		mergingSysctlsWith sysctls: [String: String],
 		replacingDefaultUmaskWith umask: UInt32?,
 		replacingDefaultOOMScoreAdjustmentWith oomScoreAdjustment: Int32?,
 		replacingDefaultSchedulerWith scheduler: OrlixEnvironmentScheduler?,
@@ -2849,6 +2904,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| domainname != nil
 			|| terminal != nil
 			|| !rlimits.isEmpty
+			|| !sysctls.isEmpty
 			|| umask != nil
 			|| oomScoreAdjustment != nil
 			|| scheduler != nil
@@ -2888,6 +2944,25 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				)
 			}
 		}
+		let allowedSysctlScalars = CharacterSet.alphanumerics
+			.union(CharacterSet(charactersIn: "._-"))
+		for (key, value) in sysctls {
+			guard !key.isEmpty,
+				key.unicodeScalars.allSatisfy({
+					allowedSysctlScalars.contains($0)
+				}),
+				key.first != ".",
+				key.last != ".",
+				!key.contains(".."),
+				!value.contains("\u{0}"),
+				!value.contains("\n"),
+				!value.contains("\r")
+			else {
+				throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+					"linux.sysctl"
+				)
+			}
+		}
 		if let workingDirectory {
 			guard workingDirectory.hasPrefix("/"),
 				!workingDirectory.contains("\u{0}")
@@ -2915,6 +2990,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		}
 		let defaultEnvironment = descriptor.defaultEnvironment.merging(
 			environment
+		) { _, override in override }
+		let effectiveSysctls = descriptor.sysctls.merging(
+			sysctls
 		) { _, override in override }
 		let defaultRlimits = try mergedRlimits(
 			descriptor.defaultRlimits,
@@ -2977,7 +3055,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			rootMount: descriptor.rootMount,
             rootReadonly: descriptor.rootReadonly,
             rootPropagation: descriptor.rootPropagation,
-            sysctls: descriptor.sysctls,
+			sysctls: effectiveSysctls,
             maskedPaths: descriptor.maskedPaths,
             readonlyPaths: descriptor.readonlyPaths,
 			cgroupsPath: effectiveCgroupsPath,
@@ -3054,6 +3132,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
+		sysctlOverrides: [String: String] = [:],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3090,6 +3169,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
+			sysctlOverrides: sysctlOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3129,6 +3209,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
+		sysctlOverrides: [String: String] = [:],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3191,6 +3272,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDomainnameWith: domainnameOverride,
 				replacingDefaultTerminalWith: terminalOverride,
 				mergingDefaultRlimitsWith: defaultRlimitOverrides,
+			mergingSysctlsWith: sysctlOverrides,
 				replacingDefaultUmaskWith: defaultUmaskOverride,
 				replacingDefaultOOMScoreAdjustmentWith:
 					defaultOOMScoreAdjustmentOverride,
@@ -3306,6 +3388,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
+			sysctlOverrides: request.sysctls,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			defaultSchedulerOverride: request.scheduler,
@@ -3371,6 +3454,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
+			sysctlOverrides: request.sysctls,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			defaultSchedulerOverride: request.scheduler,
@@ -3437,6 +3521,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
+		sysctlOverrides: [String: String] = [:],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3475,6 +3560,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
+			sysctlOverrides: sysctlOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3516,6 +3602,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
+		sysctlOverrides: [String: String] = [:],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3553,6 +3640,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
+			sysctlOverrides: sysctlOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3603,6 +3691,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
+		sysctlOverrides: [String: String] = [:],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3642,6 +3731,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
+			sysctlOverrides: sysctlOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3684,6 +3774,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
+		sysctlOverrides: [String: String] = [:],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3722,6 +3813,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
+			sysctlOverrides: sysctlOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
@@ -3786,6 +3878,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: request.domainname,
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
+			sysctlOverrides: request.sysctls,
 			defaultUmaskOverride: request.umask,
 			defaultOOMScoreAdjustmentOverride: request.oomScoreAdjustment,
 			defaultSchedulerOverride: request.scheduler,
@@ -3838,6 +3931,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		domainnameOverride: String? = nil,
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
+		sysctlOverrides: [String: String] = [:],
 		defaultUmaskOverride: UInt32? = nil,
 		defaultOOMScoreAdjustmentOverride: Int32? = nil,
 		defaultSchedulerOverride: OrlixEnvironmentScheduler? = nil,
@@ -3876,6 +3970,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			domainnameOverride: domainnameOverride,
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
+			sysctlOverrides: sysctlOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
 			defaultOOMScoreAdjustmentOverride: defaultOOMScoreAdjustmentOverride,
 			defaultSchedulerOverride: defaultSchedulerOverride,
