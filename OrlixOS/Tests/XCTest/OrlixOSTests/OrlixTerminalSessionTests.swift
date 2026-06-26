@@ -3633,6 +3633,37 @@ error as? OrlixOCIImageLayoutError,
 }
 }
 
+func testOCIImageLayoutReaderPreservesImageExposedPorts() throws {
+let layout = try writeOCILayout(exposedPorts: [
+"443/tcp": [:],
+"53/udp": [:],
+"8443/sctp": [:]
+])
+let imported = try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+XCTAssertEqual(
+imported.exposedPorts,
+[
+OrlixEnvironmentExposedPort(port: 443, proto: "tcp"),
+OrlixEnvironmentExposedPort(port: 53, proto: "udp"),
+OrlixEnvironmentExposedPort(port: 8443, proto: "sctp")
+]
+)
+}
+
+func testOCIImageLayoutReaderRejectsInvalidImageExposedPort() throws {
+let layout = try writeOCILayout(exposedPorts: [
+"0/tcp": [:]
+])
+XCTAssertThrowsError(
+try OrlixOCIImageLayoutReader().readLayout(at: layout.root)
+) { error in
+XCTAssertEqual(
+error as? OrlixOCIImageLayoutError,
+.invalidExposedPort("0/tcp")
+)
+}
+}
+
 func testOCIImageLayoutReaderSelectsRequestedPlatformVariant() throws {
         let layout = try writeOCILayout(platformVariant: "v8")
 
@@ -4314,6 +4345,43 @@ XCTAssertEqual(
 loaded.annotations["org.opencontainers.image.revision"],
 "sha256:demo"
 )
+}
+
+func testOCIImageLayoutImporterPreservesImageExposedPortsAsDescriptorMetadata()
+throws
+{
+let root = temporaryRegistryRoot()
+let registry = OrlixEnvironmentRegistry(
+linuxStateRoot: root.appendingPathComponent(
+"Application Support/Orlix",
+isDirectory: true
+),
+cacheRoot: root.appendingPathComponent(
+"Caches/Orlix",
+isDirectory: true
+),
+scratchRoot: root.appendingPathComponent("tmp/Orlix", isDirectory: true)
+)
+let layout = try writeOCILayout(exposedPorts: [
+"8080/tcp": [:],
+"5353/udp": [:]
+])
+
+let result = try OrlixOCIImageLayoutImporter().importLayout(
+at: layout.root,
+environmentID: "alpine-exposed-ports",
+registry: registry,
+rootImageIdentifier: "orlix.env.alpine-exposed-ports"
+)
+let loaded = try registry.load(environmentID: "alpine-exposed-ports")
+let expected = [
+OrlixEnvironmentExposedPort(port: 5353, proto: "udp"),
+OrlixEnvironmentExposedPort(port: 8080, proto: "tcp")
+]
+
+XCTAssertEqual(result.image.exposedPorts, expected)
+XCTAssertEqual(result.descriptor.exposedPorts, expected)
+XCTAssertEqual(loaded.exposedPorts, expected)
 }
 
 func testOCIImageLayoutImporterPreservesImageStopSignalAsDescriptorDefault()
@@ -6378,7 +6446,8 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 	entrypoint: [String] = ["/bin/sh"],
 	command: [String] = ["-c", "echo hello"],
 	labels: [String: String] = [:],
-	stopSignal: String? = nil
+	stopSignal: String? = nil,
+	exposedPorts: [String: [String: String]] = [:]
 ) throws -> OCILayoutFixture {
         let root = temporaryRegistryRoot()
         let blobs = root.appendingPathComponent("blobs/sha256", isDirectory: true)
@@ -6420,6 +6489,11 @@ var configObject: [String: Any] = [
 if let stopSignal {
 var config = configObject["config"] as! [String: Any]
 config["StopSignal"] = stopSignal
+configObject["config"] = config
+}
+if !exposedPorts.isEmpty {
+var config = configObject["config"] as! [String: Any]
+config["ExposedPorts"] = exposedPorts
 configObject["config"] = config
 }
 if rootfsType != nil || rootfsDiffIDs != nil {

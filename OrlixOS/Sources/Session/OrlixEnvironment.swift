@@ -63,6 +63,16 @@ public enum OrlixLinuxSignal {
 	]
 }
 
+public struct OrlixEnvironmentExposedPort: Codable, Equatable, Sendable {
+	public let port: UInt16
+	public let proto: String
+
+	public init(port: UInt16, proto: String) {
+		self.port = port
+		self.proto = proto
+	}
+}
+
 @_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentDescriptor: Codable, Equatable, Sendable {
     public static let defaultEnvironmentID = "default"
@@ -114,6 +124,7 @@ public let cgroupPidsLimit: Int64?
 	public let namespacePaths: [String: String]
 	public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
 	public let mounts: [OrlixEnvironmentMount]
+	public let exposedPorts: [OrlixEnvironmentExposedPort]
 	public let annotations: [String: String]
 
     public static func defaultEnvironment(
@@ -189,10 +200,11 @@ cgroupPidsLimit: Int64? = nil,
 		gidMappings: [OrlixEnvironmentIDMapping] = [],
 		namespaces: [String] = [],
 		namespacePaths: [String: String] = [:],
-		tmpfsMounts: [OrlixEnvironmentTmpfsMount] = [],
-		mounts: [OrlixEnvironmentMount] = [],
-		annotations: [String: String] = [:]
-	) {
+	tmpfsMounts: [OrlixEnvironmentTmpfsMount] = [],
+	mounts: [OrlixEnvironmentMount] = [],
+	exposedPorts: [OrlixEnvironmentExposedPort] = [],
+	annotations: [String: String] = [:]
+) {
         self.id = id
         self.source = source
         self.platform = platform
@@ -238,9 +250,10 @@ self.cgroupPidsLimit = cgroupPidsLimit
 		self.gidMappings = gidMappings
 		self.namespaces = namespaces
 		self.namespacePaths = namespacePaths
-		self.tmpfsMounts = tmpfsMounts
-		self.mounts = mounts
-		self.annotations = annotations
+	self.tmpfsMounts = tmpfsMounts
+	self.mounts = mounts
+	self.exposedPorts = exposedPorts
+	self.annotations = annotations
 	}
 
     private enum CodingKeys: String, CodingKey {
@@ -289,9 +302,10 @@ case cgroupCPUMax
         case gidMappings
 		case namespaces
 		case namespacePaths
-		case tmpfsMounts
-		case mounts
-		case annotations
+	case tmpfsMounts
+	case mounts
+	case exposedPorts
+	case annotations
 	}
 
     public init(from decoder: Decoder) throws {
@@ -478,6 +492,10 @@ forKey: .cgroupCPUWeight
 			[OrlixEnvironmentMount].self,
 			forKey: .mounts
 		) ?? []
+		self.exposedPorts = try container.decodeIfPresent(
+			[OrlixEnvironmentExposedPort].self,
+			forKey: .exposedPorts
+		) ?? []
 		self.annotations = try container.decodeIfPresent(
 			[String: String].self,
 			forKey: .annotations
@@ -569,6 +587,9 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 			try container.encode(tmpfsMounts, forKey: .tmpfsMounts)
 		}
 		try container.encode(mounts, forKey: .mounts)
+		if !exposedPorts.isEmpty {
+			try container.encode(exposedPorts, forKey: .exposedPorts)
+		}
 		if !annotations.isEmpty {
 			try container.encode(annotations, forKey: .annotations)
 		}
