@@ -1317,6 +1317,11 @@ public struct OrlixOCIRegistryEnvironmentInstallRunResult: Sendable {
 	public let runResult: OrlixOCIEnvironmentRunResult
 }
 
+public struct OrlixOCIRegistryEnvironmentTerminalSessionResult: Sendable {
+	public let installResult: OrlixOCIRegistryEnvironmentInstallResult
+	public let linuxSession: OrlixLinuxSession
+}
+
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
 	public let id: String
 	public let lifecycleState: OrlixOCIRuntimeLifecycleState
@@ -1605,6 +1610,87 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
 			runCommand: runCommand
+		)
+	}
+
+	@discardableResult
+	public func prepareTerminalSession(
+		arguments: [String],
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentTerminalSessionResult {
+		let request = try OrlixOCIEnvironmentRunArguments(arguments)
+		return try await prepareTerminalSession(
+			image: try OrlixOCIRegistryImageReference(request.image),
+			id: request.id,
+			tools: tools,
+			puller: puller,
+			platform: request.platform,
+			command: request.command,
+			terminal: terminal,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+	}
+
+	@discardableResult
+	public func prepareTerminalSession(
+		image: String,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		platform: String = "linux/arm64",
+		command: [String]? = nil,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentTerminalSessionResult {
+		try await prepareTerminalSession(
+			image: OrlixOCIRegistryImageReference(image),
+			id: id,
+			tools: tools,
+			puller: puller,
+			platform: platform,
+			command: command,
+			terminal: terminal,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+	}
+
+	@discardableResult
+	public func prepareTerminalSession(
+		image: OrlixOCIRegistryImageReference,
+		id: String,
+		tools: OrlixOCIEnvironmentMaterializationTools,
+		puller: OrlixOCIRegistryPuller = OrlixOCIRegistryPuller(),
+		platform: String = "linux/arm64",
+		command: [String]? = nil,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default,
+		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
+	) async throws -> OrlixOCIRegistryEnvironmentTerminalSessionResult {
+		let installResult = try await install(
+			image: image,
+			id: id,
+			tools: tools,
+			puller: puller,
+			platform: platform,
+			fileManager: fileManager,
+			runCommand: runCommand
+		)
+		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
+			id: id,
+			command: command,
+			terminal: terminal,
+			fileManager: fileManager
+		)
+		return OrlixOCIRegistryEnvironmentTerminalSessionResult(
+			installResult: installResult,
+			linuxSession: linuxSession
 		)
 	}
 
@@ -2174,6 +2260,24 @@ public struct OrlixOCIRuntime: Sendable {
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIRuntimeStateReport {
 		try lifecycleStore.stateReport(id: id, fileManager: fileManager)
+	}
+
+	public func terminalSession(
+		id: String,
+		command: [String]? = nil,
+		rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
+		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
+		terminal: OrlixTerminalSession = OrlixTerminalSession(),
+		fileManager: FileManager = .default
+	) throws -> OrlixLinuxSession {
+		try processSession(
+			id: id,
+			command: command,
+			rootMount: rootMount,
+			kernelCommandLine: kernelCommandLine,
+			terminal: terminal,
+			fileManager: fileManager
+		).linuxSession
 	}
 
 	public func start(

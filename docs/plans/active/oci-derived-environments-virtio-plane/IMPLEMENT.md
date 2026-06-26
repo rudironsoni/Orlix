@@ -22644,3 +22644,30 @@ Boundary:
 
 Current status:
 Latest coherent checkpoint lets the product terminal select an existing persisted OrlixOS environment by ID and boot that session through the same OrlixOS registry/session path used by imported and OCI-derived environment machinery. Next work remains a real Linux-visible `orlix run` command/control path, non-terminal Linux signal delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+### 2026-06-26 OCI run terminal-session preparation
+
+Changes:
+- Added `OrlixOCIRuntime.terminalSession(id:command:rootMount:kernelCommandLine:terminal:fileManager:)`.
+- Added `OrlixOCIRegistryEnvironmentTerminalSessionResult`.
+- Added `OrlixOCIEnvironmentInstaller.prepareTerminalSession(...)` overloads for `orlix run` arguments, image strings, and parsed registry references.
+- The new path pulls registry input, imports the OCI layout, materializes base/state images, persists lifecycle state, and returns a bootable `OrlixLinuxSession` without starting/waiting.
+- Command overrides from `orlix run IMAGE -- COMMAND...` are encoded through the existing OCI config replacement and kernel command-line path, not a separate parser or HostAdapter policy.
+
+Evidence:
+- First focused XCTest attempt failed because the expected materialization command count incorrectly assumed one image; normal install materializes both base and state images. Fixed the assertion.
+- Focused XCTest passed:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixOSTests -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath -only-testing:OrlixOSTests/OrlixTerminalSessionTests/testOCIEnvironmentInstallerPreparesTerminalSessionFromOrlixRunArguments test`.
+- Broader deterministic OCI registry/runtime XCTest set passed with 14 tests. Result bundle `/Volumes/1TB/Xcode/DerivedData/Logs/Test/Test-OrlixOSTests-2026.06.26_02-43-13-+0200.xcresult` reported `Passed`, 14 passed, 0 failed, 0 skipped on `iPhone 17 Pro`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only stale-status warning.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, `OrlixOS/Sources/init/init.c`, and `GOAL.md` was empty.
+- Host crash-report check found no `*Orlix*` reports modified in the last day. Simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This moves `orlix run` arguments from install/start/wait-only API toward a bootable terminal session for OCI-derived roots.
+- This does not prove Linux userspace `/usr/bin/orlix run`, registry pull from inside a booted Linux shell, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, or broad namespace/cgroup/device/filesystem/network readiness.
+
+Current status:
+Latest coherent checkpoint can prepare a terminal session from `orlix run` registry arguments through the same pull/import/materialize/session path used by OrlixOS environments, preserving command override semantics. Next work remains wiring this into the product terminal command flow, a real Linux-visible `orlix run` command/control path, non-terminal Linux signal delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
