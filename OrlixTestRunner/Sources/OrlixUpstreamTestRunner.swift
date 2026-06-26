@@ -830,6 +830,8 @@ enum OrlixAppLaunchRuntimeRunner {
                 output = try OrlixOCIDerivedStdioRuntimeProof(terminal: true).run()
             case "ociSignal":
                 output = try OrlixOCIDerivedSignalRuntimeProof().run()
+            case "ociRun":
+                output = try OrlixOCIDerivedRunCommandRuntimeProof().run()
             default:
                 throw OrlixAppLaunchRuntimeRunnerError.unknownSpec(specName)
             }
@@ -1175,6 +1177,302 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
     }
 }
 
+private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 120
+    private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
+    private static let runEnvironmentID = "oci-run-runtime-test-fixture"
+    private static let imageReference =
+        "registry.example.org/library/orlix-fixture:latest"
+    private static let requiredMarkers = [
+        "ORLIX_ENV_ORLIX_RUN_BEGIN",
+        "ORLIX_ENV_ORLIX_RUN_STDOUT_OK",
+        "ORLIX_ENV_ORLIX_RUN_STDERR_OK",
+        "ORLIX_ENV_ORLIX_RUN_DONE",
+    ]
+
+    private let fileManager = FileManager.default
+    private let recorder = OrlixRuntimeProofOutputRecorder()
+
+    func run() throws -> String {
+        let resultBox = OrlixAsyncRuntimeProofResultBox<String>()
+        let completion = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                resultBox.set(.success(try await self.runAsync()))
+            } catch {
+                resultBox.set(.failure(error))
+            }
+            completion.signal()
+        }
+
+        guard completion.wait(timeout: .now() + .seconds(Int(Self.timeout)))
+            == .success
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "orlix run proof timed out"
+            )
+        }
+
+        guard let result = resultBox.value else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "orlix run proof completed without result"
+            )
+        }
+        return try result.get()
+    }
+
+    private func runAsync() async throws -> String {
+        let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+        let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+        guard fileManager.fileExists(atPath: ready.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+        }
+
+        let copiedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-oci-run-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+        defer {
+            try? fileManager.removeItem(at: copiedRoot)
+        }
+
+        let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        let sourceLayout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: Self.fixtureEnvironmentID,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        let runLayout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: Self.runEnvironmentID,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+
+        let terminal = OrlixTerminalSession()
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer {
+            output.cancel()
+        }
+
+        let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+        let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+            timeout: Self.timeout
+        )
+        let result = try await installer.run(
+            arguments: [
+                "orlix",
+                "run",
+                "--id",
+                Self.runEnvironmentID,
+                "--rm",
+                Self.imageReference,
+                "--",
+                "/bin/sh",
+                "-c",
+                Self.executionScript,
+            ],
+            tools: OrlixOCIEnvironmentMaterializationTools(
+                mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
+                truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
+                debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
+            ),
+            puller: try Self.registryPuller(),
+            terminal: terminal,
+            using: driver,
+            fileManager: fileManager
+        ) { executable, arguments in
+            try Self.runFixtureMaterializationCommand(
+                executable: executable,
+                arguments: arguments,
+                sourceBaseImageURL: sourceLayout.baseImageURL,
+                sourceStateImageURL: sourceLayout.stateImageURL
+            )
+        }
+
+        var text = Self.normalized(recorder.text)
+        try Self.validateText(text)
+        try Self.validateLifecycle(
+            result: result,
+            lifecycleRecordURL: try OrlixOCIRuntime(registry: registry)
+                .lifecycleStore.recordURL(forID: Self.runEnvironmentID),
+            environmentDirectoryURL: runLayout.rootDirectory
+        )
+        text += "\nORLIX_OCI_RUN_COMMAND_STARTED_OK\n"
+        text += "ORLIX_OCI_RUN_COMMAND_STOPPED_OK\n"
+        text += "ORLIX_OCI_RUN_COMMAND_DELETE_OK\n"
+        return text
+    }
+
+    private static var executionScript: String {
+        [
+            "printf '%s%s\\n' ORLIX_ENV_ ORLIX_RUN_BEGIN",
+            "printf '%s%s\\n' ORLIX_ENV_ORLIX_RUN_ STDOUT_OK",
+            "printf '%s%s\\n' ORLIX_ENV_ORLIX_RUN_ STDERR_OK >&2",
+            "printf '%s%s\\n' ORLIX_ENV_ORLIX_RUN_ DONE",
+        ].joined(separator: "\n")
+    }
+
+    private static func registryPuller() throws -> OrlixOCIRegistryPuller {
+        let image = try OrlixOCIRegistryImageReference(Self.imageReference)
+        let configData = Data(
+            """
+            {
+              "config": {
+                "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "TERM=xterm-256color"],
+                "Entrypoint": ["/bin/sh"],
+                "Cmd": ["-c", "printf registry-default\\n"],
+                "WorkingDir": "/",
+                "User": "0"
+              },
+              "rootfs": {
+                "type": "layers",
+                "diff_ids": []
+              }
+            }
+            """.utf8
+        )
+        let configDigest = "sha256:\(OrlixOCIDigest.sha256Hex(configData))"
+        let manifestData = Data(
+            """
+            {
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.oci.image.manifest.v1+json",
+              "config": {
+                "mediaType": "application/vnd.oci.image.config.v1+json",
+                "digest": "\(configDigest)",
+                "size": \(configData.count)
+              },
+              "layers": []
+            }
+            """.utf8
+        )
+        let manifestDigest = "sha256:\(OrlixOCIDigest.sha256Hex(manifestData))"
+        let responses = [
+            try image.manifestURL().absoluteString:
+                OrlixOCIRegistryFetchResponse(
+                    statusCode: 200,
+                    headers: [
+                        "Content-Type": "application/vnd.oci.image.manifest.v1+json",
+                        "Docker-Content-Digest": manifestDigest,
+                    ],
+                    body: manifestData
+                ),
+            try image.blobURL(digest: configDigest).absoluteString:
+                OrlixOCIRegistryFetchResponse(
+                    statusCode: 200,
+                    headers: ["Docker-Content-Digest": configDigest],
+                    body: configData
+                ),
+        ]
+        return OrlixOCIRegistryPuller { request in
+            guard let response = responses[request.url.absoluteString] else {
+                throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                    "unexpected registry request \(request.url.absoluteString)"
+                )
+            }
+            return response
+        }
+    }
+
+    private static func runFixtureMaterializationCommand(
+        executable: URL,
+        arguments: [String],
+        sourceBaseImageURL: URL,
+        sourceStateImageURL: URL
+    ) throws {
+        guard let targetPath = arguments.last else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "materialization command missing target: \(executable.path)"
+            )
+        }
+        let targetURL = URL(fileURLWithPath: targetPath)
+        try FileManager.default.createDirectory(
+            at: targetURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        switch executable.lastPathComponent {
+        case "orlix-truncate":
+            FileManager.default.createFile(atPath: targetURL.path, contents: Data())
+        case "orlix-mke2fs":
+            if FileManager.default.fileExists(atPath: targetURL.path) {
+                try FileManager.default.removeItem(at: targetURL)
+            }
+            let sourceURL = targetURL.lastPathComponent == "base.ext4"
+                ? sourceBaseImageURL
+                : sourceStateImageURL
+            try FileManager.default.copyItem(at: sourceURL, to: targetURL)
+        case "orlix-debugfs":
+            break
+        default:
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "unexpected materialization executable \(executable.path)"
+            )
+        }
+    }
+
+    private static func validateText(_ text: String) throws {
+        for marker in requiredMarkers where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+        }
+        if text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR") {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+        }
+    }
+
+    private static func validateLifecycle(
+        result: OrlixOCIRegistryEnvironmentInstallRunResult,
+        lifecycleRecordURL: URL,
+        environmentDirectoryURL: URL
+    ) throws {
+        guard result.installResult.id == Self.runEnvironmentID else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected orlix run install id \(Self.runEnvironmentID)"
+            )
+        }
+        guard result.runResult.startedStateReport.status == .running,
+              result.runResult.startedStateReport.pid != nil else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected orlix run started lifecycle state running"
+            )
+        }
+        guard result.runResult.completedStateReport.status == .stopped,
+              result.runResult.completedStateReport.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected orlix run completed lifecycle state stopped exit 0"
+            )
+        }
+        guard result.deleteResult?.lifecycleState == .deleted else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected orlix run --rm delete result"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected orlix run lifecycle record cleanup"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected orlix run environment directory cleanup"
+            )
+        }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+    }
+}
+
 private final class OrlixOCIDerivedSignalRuntimeProof: @unchecked Sendable {
     private static let timeout: TimeInterval = 120
     private static let requiredMarkers = [
@@ -1438,6 +1736,25 @@ private final class OrlixRuntimeProofOutputRecorder: @unchecked Sendable {
     func append(_ data: Data) {
         lock.lock()
         storage.append(data)
+        lock.unlock()
+    }
+}
+
+private final class OrlixAsyncRuntimeProofResultBox<Success>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Result<Success, Error>?
+
+    var value: Result<Success, Error>? {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        return storage
+    }
+
+    func set(_ result: Result<Success, Error>) {
+        lock.lock()
+        storage = result
         lock.unlock()
     }
 }
