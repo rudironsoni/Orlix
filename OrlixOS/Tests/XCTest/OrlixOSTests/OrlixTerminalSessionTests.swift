@@ -7939,6 +7939,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.domainname)
 	XCTNil(arguments.terminal)
 	XCTTrue(arguments.rlimits.isEmpty)
+	XCTNil(arguments.umask)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7967,6 +7968,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.domainname)
 	XCTNil(nameArguments.terminal)
 	XCTTrue(nameArguments.rlimits.isEmpty)
+	XCTNil(nameArguments.umask)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -7988,6 +7990,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.domainname)
 	XCTNil(equalsArguments.terminal)
 	XCTTrue(equalsArguments.rlimits.isEmpty)
+	XCTNil(equalsArguments.umask)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8219,6 +8222,26 @@ func testOCIEnvironmentRunArgumentsAcceptsRlimitOverrides() throws {
 	)
 }
 
+func testOCIEnvironmentRunArgumentsAcceptsUmaskOverride() throws {
+	let splitArguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--umask",
+		"022",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(splitArguments.umask, 0o022)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--umask=18",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(equalsArguments.umask, 18)
+}
+
 func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 	let invalidOptions: [(String, OrlixOCIEnvironmentRunArgumentsError)] = [
 		("--id=", .missingOptionValue("--id")),
@@ -8231,6 +8254,7 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
+		("--umask=", .missingOptionValue("--umask")),
 	]
 
 		for (option, expectedError) in invalidOptions {
@@ -9591,6 +9615,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--ulimit",
 			"nofile=32:64",
 			"--ulimit=stack=8388608",
+			"--umask",
+			"022",
 			"--hostname",
 			"registry-run-host",
 			"--domainname",
@@ -9635,6 +9661,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.defaultTerminal, false)
+	XCTAssertEqual(descriptor.defaultUmask, 0o022)
 	XCTAssertEqual(
 		descriptor.defaultRlimits,
 		[
