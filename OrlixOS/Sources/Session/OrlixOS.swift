@@ -1363,6 +1363,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let terminal: Bool?
 	public let rlimits: [OrlixEnvironmentRlimit]
 	public let umask: UInt32?
+	public let noNewPrivileges: Bool?
 	public let command: [String]?
 	public let removeAfterRun: Bool
 
@@ -1395,6 +1396,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedTerminal: Bool?
 		var parsedRlimits: [OrlixEnvironmentRlimit] = []
 		var parsedUmask: UInt32?
+		var parsedNoNewPrivileges: Bool?
 		var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1417,6 +1419,10 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 			if parsedImage == nil,
 				value == "--no-tty" || value == "--no-terminal" {
 				parsedTerminal = false
+				continue
+			}
+			if parsedImage == nil, value == "--no-new-privileges" {
+				parsedNoNewPrivileges = true
 				continue
 			}
 			if parsedImage == nil, value == "--ulimit" {
@@ -1669,6 +1675,7 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.terminal = parsedTerminal
 		self.rlimits = parsedRlimits
 		self.umask = parsedUmask
+		self.noNewPrivileges = parsedNoNewPrivileges
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
 		self.removeAfterRun = parsedRemoveAfterRun
 	}
@@ -1919,7 +1926,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDomainnameWith domainname: String?,
 		replacingDefaultTerminalWith terminal: Bool?,
 		mergingDefaultRlimitsWith rlimits: [OrlixEnvironmentRlimit],
-		replacingDefaultUmaskWith umask: UInt32?
+		replacingDefaultUmaskWith umask: UInt32?,
+		replacingDefaultNoNewPrivilegesWith noNewPrivileges: Bool?
 	) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -1931,6 +1939,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| terminal != nil
 			|| !rlimits.isEmpty
 			|| umask != nil
+			|| noNewPrivileges != nil
 		else {
 			return descriptor
 		}
@@ -1997,9 +2006,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				?? descriptor.defaultWorkingDirectory,
 			defaultUserID: userID ?? descriptor.defaultUserID,
 			defaultGroupID: groupID ?? descriptor.defaultGroupID,
-            defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
+			defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
 			defaultCapabilities: descriptor.defaultCapabilities,
-			defaultNoNewPrivileges: descriptor.defaultNoNewPrivileges,
+			defaultNoNewPrivileges: noNewPrivileges
+			?? descriptor.defaultNoNewPrivileges,
 			defaultCloseAdditionalFds: descriptor.defaultCloseAdditionalFds,
 			defaultTerminal: terminal ?? descriptor.defaultTerminal,
 			defaultTerminalRows: descriptor.defaultTerminalRows,
@@ -2088,6 +2098,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		noNewPrivilegesOverride: Bool? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2107,6 +2118,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2129,6 +2141,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		noNewPrivilegesOverride: Bool? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2172,7 +2185,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDomainnameWith: domainnameOverride,
 				replacingDefaultTerminalWith: terminalOverride,
 				mergingDefaultRlimitsWith: defaultRlimitOverrides,
-				replacingDefaultUmaskWith: defaultUmaskOverride
+				replacingDefaultUmaskWith: defaultUmaskOverride,
+				replacingDefaultNoNewPrivilegesWith: noNewPrivilegesOverride
 			)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -2267,6 +2281,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
+			noNewPrivilegesOverride: request.noNewPrivileges,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2314,6 +2329,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
+			noNewPrivilegesOverride: request.noNewPrivileges,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2363,6 +2379,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		noNewPrivilegesOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2384,6 +2401,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2408,6 +2426,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		noNewPrivilegesOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2428,6 +2447,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2461,6 +2481,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		noNewPrivilegesOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -2483,6 +2504,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2508,6 +2530,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		noNewPrivilegesOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -2529,6 +2552,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2575,6 +2599,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: request.terminal,
 			defaultRlimitOverrides: request.rlimits,
 			defaultUmaskOverride: request.umask,
+			noNewPrivilegesOverride: request.noNewPrivileges,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -2610,6 +2635,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		terminalOverride: Bool? = nil,
 		defaultRlimitOverrides: [OrlixEnvironmentRlimit] = [],
 		defaultUmaskOverride: UInt32? = nil,
+		noNewPrivilegesOverride: Bool? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
@@ -2631,6 +2657,7 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			terminalOverride: terminalOverride,
 			defaultRlimitOverrides: defaultRlimitOverrides,
 			defaultUmaskOverride: defaultUmaskOverride,
+			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)

@@ -10,6 +10,20 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run no-new-privileges override
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--no-new-privileges` before image.
+- Registry-backed install/run and terminal-session preparation persist the parsed override into descriptor `defaultNoNewPrivileges`.
+- Focused tests cover parser acceptance, default nil parser state, and observed registry-backed descriptor persistence. Existing command-line tests cover `orlix.nonewprivs=1` boot-token emission and init already applies it with Linux `PR_SET_NO_NEW_PRIVS`.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 known sandbox `xcrun_db` cache messages existing Sendable warnings.
+
+Boundary:
+- This advances `orlix run --no-new-privileges` through existing OrlixOS descriptors and existing OrlixOS init `orlix.nonewprivs=` Linux-visible `PR_SET_NO_NEW_PRIVS` behavior. It does not add HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, full OCI Runtime Spec lifecycle support, privilege runtime proof, or live simulator proof.
+
 ### 2026-06-26 OCI run umask override
 
 Changes:
