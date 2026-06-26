@@ -1337,8 +1337,73 @@ public struct OrlixOCIEnvironmentPreparedState: Sendable {
 }
 
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
-    public let id: String
-    public let lifecycleState: OrlixOCIRuntimeLifecycleState
+	public let id: String
+	public let lifecycleState: OrlixOCIRuntimeLifecycleState
+}
+
+public enum OrlixOCIEnvironmentStateArgumentsError: Error, Equatable, Sendable {
+	case missingStateCommand
+	case missingID
+	case missingOptionValue(String)
+	case unknownOption(String)
+	case unexpectedArgument(String)
+}
+
+public struct OrlixOCIEnvironmentStateArguments: Equatable, Sendable {
+	public let id: String
+
+	public init(_ arguments: [String]) throws {
+		var values = arguments
+		if values.first == "orlix" {
+			values.removeFirst()
+		}
+		guard values.first == "state" else {
+			throw OrlixOCIEnvironmentStateArgumentsError.missingStateCommand
+		}
+		values.removeFirst()
+
+		var parsedID: String?
+		while !values.isEmpty {
+			let value = values.removeFirst()
+			if value == "--id" || value == "--name" {
+				guard let id = values.first else {
+					throw OrlixOCIEnvironmentStateArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedID = try Self.acceptID(id, current: parsedID)
+				values.removeFirst()
+				continue
+			}
+			if value.hasPrefix("--id=") || value.hasPrefix("--name=") {
+				let separator = value.firstIndex(of: "=")!
+				let option = String(value[..<separator])
+				let id = String(value[value.index(after: separator)...])
+				guard !id.isEmpty else {
+					throw OrlixOCIEnvironmentStateArgumentsError
+						.missingOptionValue(option)
+				}
+				parsedID = try Self.acceptID(id, current: parsedID)
+				continue
+			}
+			if value.hasPrefix("-") {
+				throw OrlixOCIEnvironmentStateArgumentsError.unknownOption(value)
+			}
+			parsedID = try Self.acceptID(value, current: parsedID)
+		}
+
+		guard let id = parsedID else {
+			throw OrlixOCIEnvironmentStateArgumentsError.missingID
+		}
+		try OrlixEnvironmentStorageLayout.validateEnvironmentID(id)
+		self.id = id
+	}
+
+	private static func acceptID(_ id: String, current: String?) throws -> String {
+		guard current == nil else {
+			throw OrlixOCIEnvironmentStateArgumentsError.unexpectedArgument(id)
+		}
+		return id
+	}
 }
 
 public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
@@ -5326,6 +5391,14 @@ terminal: OrlixTerminalSession = OrlixTerminalSession(),
 			id: id,
 			fileManager: fileManager
 		)
+	}
+
+	public func state(
+		arguments: [String],
+		fileManager: FileManager = .default
+	) throws -> OrlixOCIRuntimeStateReport {
+		let request = try OrlixOCIEnvironmentStateArguments(arguments)
+		return try state(id: request.id, fileManager: fileManager)
 	}
 
 	public func start(
