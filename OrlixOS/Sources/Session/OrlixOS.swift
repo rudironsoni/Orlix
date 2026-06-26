@@ -1638,11 +1638,53 @@ public struct OrlixOCIEnvironmentKillArguments: Equatable, Sendable {
 	}
 
 	private static func parseSignal(_ value: String) throws -> Int32 {
-		guard let signal = Int32(value), (1...127).contains(signal) else {
-			throw OrlixOCIEnvironmentKillArgumentsError.invalidSignal(value)
+		if let signal = Int32(value), (1...127).contains(signal) {
+			return signal
 		}
-		return signal
+		let normalized = value.uppercased()
+		let signalName =
+			normalized.hasPrefix("SIG")
+			? String(normalized.dropFirst(3))
+			: normalized
+		if let signal = namedSignals[signalName] {
+			return signal
+		}
+		throw OrlixOCIEnvironmentKillArgumentsError.invalidSignal(value)
 	}
+
+	private static let namedSignals: [String: Int32] = [
+		"HUP": 1,
+		"INT": 2,
+		"QUIT": 3,
+		"ILL": 4,
+		"TRAP": 5,
+		"ABRT": 6,
+		"BUS": 7,
+		"FPE": 8,
+		"KILL": 9,
+		"USR1": 10,
+		"SEGV": 11,
+		"USR2": 12,
+		"PIPE": 13,
+		"ALRM": 14,
+		"TERM": 15,
+		"STKFLT": 16,
+		"CHLD": 17,
+		"CONT": 18,
+		"STOP": 19,
+		"TSTP": 20,
+		"TTIN": 21,
+		"TTOU": 22,
+		"URG": 23,
+		"XCPU": 24,
+		"XFSZ": 25,
+		"VTALRM": 26,
+		"PROF": 27,
+		"WINCH": 28,
+		"IO": 29,
+		"PWR": 30,
+		"SYS": 31
+	]
 }
 
 public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {

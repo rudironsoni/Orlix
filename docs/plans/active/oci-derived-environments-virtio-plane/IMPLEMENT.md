@@ -29,6 +29,28 @@ Evidence:
 Boundary:
 - This advances OrlixOS-owned OCI import, descriptors, and payload metadata. It does not claim live simulator proof, Linux runtime behavior proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, Docker daemon support, package/proof/stamp systems, or runtime package execution readiness.
 
+### 2026-06-26 OCI lifecycle named signals
+
+Changes:
+- `OrlixOCIEnvironmentKillArguments` now accepts standard Linux signal names in addition to numeric signal values.
+- Supported forms include `--signal=SIGKILL`, `-s TERM`, and positional lowercase names such as `sigusr1`.
+- Named signals normalize optional `SIG` prefix and case before mapping to Linux signal numbers 1 through 31; invalid names still fail loudly as invalid signals.
+- Focused tests cover numeric forms remaining valid, named option/short/positional forms, and invalid signal-name rejection.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, and `GOAL.md` was empty.
+
+Boundary:
+- This advances OrlixOS-owned lifecycle command ergonomics over the existing Linux signal delivery path. It does not claim live simulator proof, Linux signal delivery proof, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, Docker daemon support, package/proof/stamp systems, or runtime package execution readiness.
+
+Current status:
+- Named signal checkpoint verified by static Swift parse/typecheck and guard checks above. Generated hook cache from plan checks was removed before commit.
+
 ### 2026-06-26 OCI run volume mount shorthand
 
 Changes:

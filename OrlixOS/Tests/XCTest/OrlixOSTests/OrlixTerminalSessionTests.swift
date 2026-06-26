@@ -8488,6 +8488,24 @@ func testOCIEnvironmentKillArgumentsAcceptSignalForms() throws {
 	])
 	XCTAssertEqual(shortSignal.id, "oci-short")
 	XCTAssertEqual(shortSignal.signal, 15)
+
+	let namedOptionSignal = try OrlixOCIEnvironmentKillArguments([
+		"kill", "--id", "oci-named", "--signal=SIGKILL",
+	])
+	XCTAssertEqual(namedOptionSignal.id, "oci-named")
+	XCTAssertEqual(namedOptionSignal.signal, 9)
+
+	let namedShortSignal = try OrlixOCIEnvironmentKillArguments([
+		"kill", "--name=oci-term", "-s", "TERM",
+	])
+	XCTAssertEqual(namedShortSignal.id, "oci-term")
+	XCTAssertEqual(namedShortSignal.signal, 15)
+
+	let namedPositionalSignal = try OrlixOCIEnvironmentKillArguments([
+		"kill", "oci-lower", "sigusr1",
+	])
+	XCTAssertEqual(namedPositionalSignal.id, "oci-lower")
+	XCTAssertEqual(namedPositionalSignal.signal, 10)
 }
 
 func testOCIEnvironmentKillArgumentsRejectInvalidInput() throws {
@@ -8515,6 +8533,17 @@ func testOCIEnvironmentKillArgumentsRejectInvalidInput() throws {
 		XCTAssertEqual(
 			error as? OrlixOCIEnvironmentKillArgumentsError,
 			.invalidSignal("0")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentKillArguments([
+			"kill", "oci-demo", "--signal=SIGDOESNOTEXIST",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIEnvironmentKillArgumentsError,
+			.invalidSignal("SIGDOESNOTEXIST")
 		)
 	}
 
