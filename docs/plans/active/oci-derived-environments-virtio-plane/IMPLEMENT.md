@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run remove-after-run cleanup
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--rm` before the image.
+- Observed registry-backed `OrlixOCIEnvironmentInstaller.run(arguments:...)` paths now delete the completed OCI-derived environment through the existing OrlixOS lifecycle delete path when `--rm` is set.
+- Registry install/run results now expose an optional `deleteResult`; persistent runs report `nil`, while `--rm` runs report the deleted lifecycle state.
+- Terminal-session preparation rejects `--rm` explicitly because there is not yet a real terminal-close cleanup hook.
+- Focused tests cover `--rm` parsing, persistent run `deleteResult == nil`, observed `--rm` cleanup, terminal-session rejection, and XCTest parser validity.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0 with known sandbox `xcrun_db` cache messages.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with known sandbox `xcrun_db` cache messages and existing Sendable warnings.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over generated/upstream/mlibc/HostAdapter/kernel-patch/GOAL paths was empty.
+- Focused simulator XCTest was not run: unsandboxed `xcode-storage-doctor` was rejected by execution policy, so CoreSimulator/Xcode access could not be validated without a forbidden workaround.
+
+Boundary:
+- This advances product-facing `orlix run --rm` for observed noninteractive OrlixOS runs through the existing lifecycle delete path. It does not claim terminal-session `--rm`, Linux userspace `/usr/bin/orlix`, live app-hosted registry execution proof, arbitrary imported-image compatibility, full OCI Runtime Spec lifecycle, or broader namespace/cgroup/device/filesystem/network readiness.
+
+Current-status: Latest coherent checkpoint implements observed `orlix run --rm` cleanup through OrlixOS lifecycle deletion. Focused simulator XCTest remains blocked by execution policy denying unsandboxed CoreSimulator/Xcode access.
+
 ### 2026-06-26 OCI run argument option spellings
 
 Changes:
