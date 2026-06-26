@@ -10,6 +10,28 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI terminal=false inherited stdio app proof
+
+Changes:
+- Added direct app-launch OCI runtime proof plumbing to `OrlixTestRunner` via `ORLIX_RUNTIME_TEST_SPEC=ociStdio` / `--orlix-runtime-test-spec ociStdio`.
+- Bundled existing environment runtime fixtures into `OrlixTestRunner.app/EnvironmentRuntimeTestFixtures` for sandbox-correct direct app launches.
+- Kept fixture embedding on the existing OrlixOS fixture target and avoided rebuilding it from the app target when `.fixtures-ready` already exists.
+- Fixed `OrlixOS/Sources/init/init.c` so `orlix.terminal=0` skips controlling-TTY stdio installation and runs the configured command on inherited init stdio; terminal sessions still use the existing controlling TTY plus PTY relay path.
+
+Evidence:
+- `rtk swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy clang -fsyntax-only -I Build/OrlixMLibC/sysroot/release/usr/include -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 OrlixOS/Sources/init/init.c` exited 0.
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodegen generate --spec project.yml` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct app launch `xcrun simctl launch --terminate-running-process E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociStdio` wrote `/Users/rudironsoni/Library/Developer/CoreSimulator/Devices/E65F0D05-980C-4368-8CDC-2D2BF3E05757/data/Containers/Data/Application/7FB42F76-D0AF-4B74-BCFE-D23E953C3D19/tmp/orlix-runtime-test-output.txt`.
+- Artifact validation found `ORLIX_ENV_STDIO_BEGIN`, `ORLIX_ENV_STDIO_STDOUT_OK`, `ORLIX_ENV_STDIO_STDERR_OK`, `ORLIX_ENV_STDIO_NOT_PTY_OK`, and `ORLIX_ENV_STDIO_DONE`, and found no `ORLIX-APP-RUNTIME-RUNNER-ERROR` or `ORLIX_ENV_STDIO_PROOF_FAILED_PTY`.
+
+Boundary:
+- This proves the app-hosted OCI-derived `terminal=false` command path no longer allocates a Linux PTY for the configured process on the single iPhone 17 simulator.
+- It does not claim full OCI runtime readiness, graceful OCI lifecycle shutdown, registry runtime readiness, broad package readiness, or clean app process shutdown. Simulator log still emitted `EXC_GUARD` entries when the direct proof app process exited while Orlix runtime threads were active.
+
 ### 2026-06-26 OrlixOS cgroup ownership correction
 
 Changes:
