@@ -2095,6 +2095,23 @@ static int copy_available(int input_fd, int output_fd)
 	return write_all(output_fd, buffer, (size_t)bytes);
 }
 
+static int copy_available_or_eof(int input_fd, int output_fd)
+{
+	unsigned char buffer[4096];
+	ssize_t bytes;
+
+	do {
+		bytes = read(input_fd, buffer, sizeof(buffer));
+	} while (bytes < 0 && errno == EINTR);
+
+	if (bytes < 0)
+		return -1;
+	if (bytes == 0)
+		return 1;
+
+	return write_all(output_fd, buffer, (size_t)bytes);
+}
+
 static int shell_exit_status(int status)
 {
 	if (WIFEXITED(status))
@@ -2105,13 +2122,13 @@ static int shell_exit_status(int status)
 	return 1;
 }
 
-static int reap_shell_if_exited(pid_t shell, int *exit_status)
+static int reap_shell_if_exited(pid_t shell, int *status)
 {
-	int status;
+	int child_status;
 	pid_t reaped;
 
 	do {
-		reaped = waitpid(shell, &status, WNOHANG);
+		reaped = waitpid(shell, &child_status, WNOHANG);
 	} while (reaped < 0 && errno == EINTR);
 
 	if (reaped == 0)
@@ -2119,7 +2136,23 @@ static int reap_shell_if_exited(pid_t shell, int *exit_status)
 	if (reaped != shell)
 		return -1;
 
-	*exit_status = shell_exit_status(status);
+	*status = child_status;
+	return 1;
+}
+
+static int wait_for_shell_exit(pid_t shell, int *status)
+{
+	int child_status;
+	pid_t reaped;
+
+	do {
+		reaped = waitpid(shell, &child_status, 0);
+	} while (reaped < 0 && errno == EINTR);
+
+	if (reaped != shell)
+		return -1;
+
+	*status = child_status;
 	return 1;
 }
 
@@ -2130,7 +2163,7 @@ static void write_shell_exit_status(int exit_status)
 	write_literal(STDERR_FILENO, "\n");
 }
 
-static int relay_pty(int console_fd, int master, pid_t shell)
+static int relay_pty(int console_fd, int master, pid_t shell, int *child_status)
 {
 	struct pollfd fds[] = {
 		{
@@ -2144,19 +2177,19 @@ static int relay_pty(int console_fd, int master, pid_t shell)
 	};
 
 	for (;;) {
-		int exit_status = 0;
-		int reaped = reap_shell_if_exited(shell, &exit_status);
+		int status = 0;
+		int reaped = reap_shell_if_exited(shell, &status);
 		int ready;
 
 		if (reaped > 0) {
-			write_shell_exit_status(exit_status);
-			return exit_status;
+			*child_status = status;
+			return shell_exit_status(status);
 		}
 		if (reaped < 0)
 			return 1;
 
 		do {
-			ready = poll(fds, 2, -1);
+			ready = poll(fds, 2, 100);
 		} while (ready < 0 && errno == EINTR);
 
 		if (ready < 0)
@@ -2165,26 +2198,47 @@ static int relay_pty(int console_fd, int master, pid_t shell)
 		short console_revents = fds[0].revents;
 		short pty_revents = fds[1].revents;
 
-		if ((console_revents & POLLIN) != 0 &&
-		    copy_available(console_fd, master) != 0) {
-			write_literal(STDERR_FILENO,
-				      "orlix-init: console relay failed\n");
-			return 1;
+		if ((console_revents & POLLIN) != 0) {
+			int copy_status = copy_available_or_eof(console_fd, master);
+			if (copy_status > 0) {
+				fds[0].fd = -1;
+				console_revents = 0;
+			} else if (copy_status < 0) {
+				write_literal(STDERR_FILENO,
+					      "orlix-init: console relay failed\n");
+				return 1;
+			}
 		}
 
-		if ((pty_revents & POLLIN) != 0 &&
-		    copy_available(master, STDOUT_FILENO) != 0) {
-			write_literal(STDERR_FILENO,
-				      "orlix-init: pty relay failed\n");
-			return 1;
+		if ((pty_revents & POLLIN) != 0) {
+			int copy_status = copy_available_or_eof(master, STDOUT_FILENO);
+			if (copy_status > 0) {
+				reaped = wait_for_shell_exit(shell, &status);
+				if (reaped > 0) {
+					*child_status = status;
+					return shell_exit_status(status);
+				}
+				return 1;
+			}
+			if (copy_status < 0) {
+				write_literal(STDERR_FILENO,
+					      "orlix-init: pty relay failed\n");
+				return 1;
+			}
 		}
 
-		if ((console_revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 ||
-		    (pty_revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
-			reaped = reap_shell_if_exited(shell, &exit_status);
+		if ((console_revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+			fds[0].fd = -1;
+			console_revents = 0;
+		}
+
+		if ((pty_revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+			reaped = reap_shell_if_exited(shell, &status);
+			if (reaped == 0)
+				reaped = wait_for_shell_exit(shell, &status);
 			if (reaped > 0) {
-				write_shell_exit_status(exit_status);
-				return exit_status;
+				*child_status = status;
+				return shell_exit_status(status);
 			}
 			return 1;
 		}
@@ -2644,6 +2698,7 @@ static int run_pty_shell(int console_fd)
 	int slave;
 	pid_t shell;
 	int status;
+	int child_status = -1;
 
 	if (master < 0) {
 		write_literal(STDERR_FILENO, "orlix-init: open PTY master failed\n");
@@ -2666,9 +2721,23 @@ static int run_pty_shell(int console_fd)
 	}
 
 	close(slave);
+	write_process_started(shell);
 	make_transport_raw(console_fd);
-	status = relay_pty(console_fd, master, shell);
+	status = relay_pty(console_fd, master, shell, &child_status);
+	if (child_status < 0) {
+		if (wait_for_shell_exit(shell, &child_status) > 0) {
+			status = shell_exit_status(child_status);
+		} else {
+			write_errno_message(STDERR_FILENO,
+					    "orlix-init: wait PTY shell failed: ",
+					    errno);
+		}
+	}
 	close(master);
+	if (child_status >= 0) {
+		write_process_completion(shell, child_status);
+		write_shell_exit_status(shell_exit_status(child_status));
+	}
 	return status;
 }
 

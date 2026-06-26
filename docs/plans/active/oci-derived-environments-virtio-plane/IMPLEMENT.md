@@ -24209,3 +24209,31 @@ Evidence:
 Boundary:
 - proves app-hosted OCI-derived `terminal=false` configured command path uses inherited stdio, does not allocate a Linux PTY, and traverses OrlixOS OCI lifecycle create/run/state/delete with observed running/stopped exit-0 state and cleanup.
 - does not claim full OCI Runtime Spec compliance, registry runtime readiness, graceful long-running lifecycle shutdown, networking, devices, cgroups, namespaces, package readiness, Coreutils success, or broad product runtime readiness.
+### 2026-06-26 OCI terminal PTY lifecycle app proof
+Changes:
+- Added direct app-launch `ociTerminal` proof beside existing `ociStdio`, using the OrlixOS OCI lifecycle runner with `terminal: true`.
+- Fixed `OrlixOS/Sources/init/init.c` PTY sessions to publish the same Linux-shaped process lifecycle markers as inherited-stdio sessions: `process started`, `process exited`, and shell exit status.
+- Made PTY relay handle console EOF/HUP and PTY EOF/HUP without dropping the child wait status.
+- Fixed the `OrlixTestRunner` fixture embed phase so it always invokes `OrlixOS/Makefile environment-runtime-test-fixtures`; the Makefile stamp/hash guard remains the freshness authority. This prevents stale `EnvironmentRuntimeTestFixtures/.../sbin/init` copies in the app bundle.
+
+Evidence:
+- `rtk proxy clang -fsyntax-only -I Build/OrlixMLibC/sysroot/release/usr/include -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodegen generate --spec project.yml` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0 and rebuilt `Build/OrlixOS/environment-runtime-test-fixtures`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 and used `/Volumes/1TB/Xcode/DerivedData` plus `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` into single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process --console E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociTerminal` exited 0. Artifact marker assertion passed: `ORLIX_ENV_TERMINAL_BEGIN`, stdout/stderr, TTY fd, `/dev/pts/*`, process started/exited, lifecycle running/stopped/delete present; failure, timeout, and PTY-negative markers absent.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process --console E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociStdio` exited 0. Artifact marker assertion passed inherited-stdio non-PTY and lifecycle running/stopped/delete markers; failure and timeout markers absent.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with warning-only stale-status/current-marker messages.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- Recent OrlixTestRunner crash-report scan over existing DiagnosticReports directories found `crash_reports_found=0`; both expected log directories were absent on this machine.
+
+Boundary:
+- Proves app-hosted OrlixOS OCI lifecycle execution for terminal PTY and inherited-stdio modes on the iOS Simulator through Linux init, PTY, waitpid, process-exit, and lifecycle-store observation.
+- Does not claim full OCI Runtime Spec support, registry pull, networking, namespace isolation, cgroup enforcement, arbitrary third-party package readiness, or full product runtime readiness.
+
+Current status:
+- Latest current checkpoint: app-hosted OCI terminal PTY and inherited-stdio lifecycle proofs pass on the single iPhone 17 simulator; continue toward broader OCI runtime delivery, not completion.
