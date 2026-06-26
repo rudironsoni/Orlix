@@ -7949,6 +7949,8 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTNil(arguments.personalityDomain)
 	XCTNil(arguments.noNewPrivileges)
 	XCTNil(arguments.closeAdditionalFds)
+	XCTNil(arguments.cgroupsPath)
+	XCTNil(arguments.cgroupPidsLimit)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7987,6 +7989,8 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(nameArguments.personalityDomain)
 	XCTNil(nameArguments.noNewPrivileges)
 	XCTNil(nameArguments.closeAdditionalFds)
+	XCTNil(nameArguments.cgroupsPath)
+	XCTNil(nameArguments.cgroupPidsLimit)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -8018,6 +8022,8 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTNil(equalsArguments.personalityDomain)
 	XCTNil(equalsArguments.noNewPrivileges)
 	XCTNil(equalsArguments.closeAdditionalFds)
+	XCTNil(equalsArguments.cgroupsPath)
+	XCTNil(equalsArguments.cgroupPidsLimit)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8147,6 +8153,45 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidSupplementaryGroupOverride() th
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("process.user.additionalGids")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsCgroupPidsOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--cgroups-path",
+		"demo",
+		"--pids-limit",
+		"64",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(arguments.cgroupsPath, "/orlix/demo")
+	XCTAssertEqual(arguments.cgroupPidsLimit, 64)
+
+	let equalsArguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--cgroups-path=/orlix/explicit",
+		"--pids-limit=-1",
+		"alpine:3.20",
+	])
+	XCTAssertEqual(equalsArguments.cgroupsPath, "/orlix/explicit")
+	XCTAssertEqual(equalsArguments.cgroupPidsLimit, -1)
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidCgroupPidsLimit() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--pids-limit",
+			"-2",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.resources.pids.limit")
 		)
 	}
 }
@@ -8607,6 +8652,8 @@ func testOCIEnvironmentRunArgumentsRejectsEmptyEqualsOptions() throws {
 		("--workdir=", .missingOptionValue("--workdir")),
 		("--user=", .missingOptionValue("--user")),
 		("--group-add=", .missingOptionValue("--group-add")),
+		("--cgroups-path=", .missingOptionValue("--cgroups-path")),
+		("--pids-limit=", .missingOptionValue("--pids-limit")),
 		("--hostname=", .missingOptionValue("--hostname")),
 		("--domainname=", .missingOptionValue("--domainname")),
 		("--ulimit=", .missingOptionValue("--ulimit")),
@@ -9979,6 +10026,10 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"--group-add",
 			"44",
 			"--group-add=45",
+			"--cgroups-path",
+			"registry-run",
+			"--pids-limit",
+			"64",
 			"--cap-set",
 			"bounding=CAP_CHOWN,CAP_SETUID",
 			"--cap-set",
@@ -10046,6 +10097,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultUserID, 1000)
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.defaultSupplementaryGroups, [44, 45])
+	XCTAssertEqual(descriptor.cgroupsPath, "/orlix/registry-run")
+	XCTAssertEqual(descriptor.cgroupPidsLimit, 64)
 	XCTAssertEqual(
 		descriptor.defaultCapabilities,
 		OrlixEnvironmentCapabilities(

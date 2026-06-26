@@ -1372,6 +1372,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 	public let personalityDomain: String?
 	public let noNewPrivileges: Bool?
 	public let closeAdditionalFds: Bool?
+	public let cgroupsPath: String?
+	public let cgroupPidsLimit: Int64?
 	public let command: [String]?
 	public let removeAfterRun: Bool
 
@@ -1414,6 +1416,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		var parsedPersonalityDomain: String?
 		var parsedNoNewPrivileges: Bool?
 		var parsedCloseAdditionalFds: Bool?
+		var parsedCgroupsPath: String?
+		var parsedCgroupPidsLimit: Int64?
 		var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1444,6 +1448,44 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 			}
 			if parsedImage == nil, value == "--close-fds" {
 				parsedCloseAdditionalFds = true
+				continue
+			}
+			if parsedImage == nil, value == "--cgroups-path" {
+				guard let cgroupsPath = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedCgroupsPath = try Self.parseCgroupsPath(cgroupsPath)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--cgroups-path=") {
+				let separator = value.firstIndex(of: "=")!
+				let cgroupsPath = String(value[value.index(after: separator)...])
+				guard !cgroupsPath.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--cgroups-path")
+				}
+				parsedCgroupsPath = try Self.parseCgroupsPath(cgroupsPath)
+				continue
+			}
+			if parsedImage == nil, value == "--pids-limit" {
+				guard let pidsLimit = values.first else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue(value)
+				}
+				parsedCgroupPidsLimit = try Self.parseCgroupPidsLimit(pidsLimit)
+				values.removeFirst()
+				continue
+			}
+			if parsedImage == nil, value.hasPrefix("--pids-limit=") {
+				let separator = value.firstIndex(of: "=")!
+				let pidsLimit = String(value[value.index(after: separator)...])
+				guard !pidsLimit.isEmpty else {
+					throw OrlixOCIEnvironmentRunArgumentsError
+						.missingOptionValue("--pids-limit")
+				}
+				parsedCgroupPidsLimit = try Self.parseCgroupPidsLimit(pidsLimit)
 				continue
 			}
 			if parsedImage == nil, value == "--ulimit" {
@@ -1856,6 +1898,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		self.personalityDomain = parsedPersonalityDomain
 		self.noNewPrivileges = parsedNoNewPrivileges
 		self.closeAdditionalFds = parsedCloseAdditionalFds
+		self.cgroupsPath = parsedCgroupsPath
+		self.cgroupPidsLimit = parsedCgroupPidsLimit
 		self.command = parsedCommand.isEmpty ? nil : parsedCommand
 		self.removeAfterRun = parsedRemoveAfterRun
 	}
@@ -2231,6 +2275,27 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
 		}
 	}
 
+	private static func parseCgroupsPath(_ value: String) throws -> String {
+		guard !value.isEmpty, !value.contains("\u{0}") else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"linux.cgroupsPath"
+			)
+		}
+		if value.hasPrefix("/") {
+			return value
+		}
+		return "/orlix/\(value)"
+	}
+
+	private static func parseCgroupPidsLimit(_ value: String) throws -> Int64 {
+		guard let limit = Int64(value), limit >= -1 else {
+			throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+				"linux.resources.pids.limit"
+			)
+		}
+		return limit
+	}
+
 	private static func parseID(
 		_ value: String,
 		feature: String
@@ -2338,6 +2403,17 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		return result
 	}
 
+	private static func defaultCgroupsPath(
+		environmentID: String,
+		required: Bool
+	) throws -> String? {
+		guard required else { return nil }
+		let storageID = try OrlixEnvironmentStorageLayout.storageSafeID(
+			environmentID
+		)
+		return "/orlix/oci/\(storageID)"
+	}
+
 	private static func descriptor(
 		_ descriptor: OrlixEnvironmentDescriptor,
 		replacingDefaultCommandWith command: [String]?,
@@ -2358,7 +2434,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		replacingDefaultCPUAffinityWith cpuAffinity: OrlixEnvironmentCPUAffinity?,
 		replacingDefaultPersonalityDomainWith personalityDomain: String?,
 		replacingDefaultNoNewPrivilegesWith noNewPrivileges: Bool?,
-		replacingDefaultCloseAdditionalFdsWith closeAdditionalFds: Bool?
+		replacingDefaultCloseAdditionalFdsWith closeAdditionalFds: Bool?,
+		replacingCgroupsPathWith cgroupsPath: String?,
+		replacingCgroupPidsLimitWith cgroupPidsLimit: Int64?
 	) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -2379,6 +2457,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			|| personalityDomain != nil
 			|| noNewPrivileges != nil
 			|| closeAdditionalFds != nil
+			|| cgroupsPath != nil
+			|| cgroupPidsLimit != nil
 		else {
 			return descriptor
 		}
@@ -2438,6 +2518,12 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			descriptor.defaultSupplementaryGroups,
 			adding: supplementaryGroups
 		)
+		let effectiveCgroupsPath = try cgroupsPath
+			?? descriptor.cgroupsPath
+			?? defaultCgroupsPath(
+				environmentID: descriptor.id,
+				required: cgroupPidsLimit != nil
+			)
 		return OrlixEnvironmentDescriptor(
 			id: descriptor.id,
 			source: descriptor.source,
@@ -2475,8 +2561,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             sysctls: descriptor.sysctls,
             maskedPaths: descriptor.maskedPaths,
             readonlyPaths: descriptor.readonlyPaths,
-            cgroupsPath: descriptor.cgroupsPath,
-            cgroupPidsLimit: descriptor.cgroupPidsLimit,
+			cgroupsPath: effectiveCgroupsPath,
+			cgroupPidsLimit: cgroupPidsLimit
+			?? descriptor.cgroupPidsLimit,
             cgroupCPUMax: descriptor.cgroupCPUMax,
             cgroupCPUWeight: descriptor.cgroupCPUWeight,
             cgroupMemoryMax: descriptor.cgroupMemoryMax,
@@ -2553,6 +2640,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
+		cgroupsPathOverride: String? = nil,
+		cgroupPidsLimitOverride: Int64? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2581,6 +2670,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
+			cgroupsPathOverride: cgroupsPathOverride,
+			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -2612,6 +2703,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
+		cgroupsPathOverride: String? = nil,
+		cgroupPidsLimitOverride: Int64? = nil,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -2667,7 +2760,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingDefaultPersonalityDomainWith:
 					defaultPersonalityDomainOverride,
 				replacingDefaultNoNewPrivilegesWith: noNewPrivilegesOverride,
-				replacingDefaultCloseAdditionalFdsWith: closeAdditionalFdsOverride
+				replacingDefaultCloseAdditionalFdsWith:
+					closeAdditionalFdsOverride,
+				replacingCgroupsPathWith: cgroupsPathOverride,
+				replacingCgroupPidsLimitWith: cgroupPidsLimitOverride
 			)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
@@ -2772,6 +2868,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: request.cpuAffinity,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
+			cgroupsPathOverride: request.cgroupsPath,
+			cgroupPidsLimitOverride: request.cgroupPidsLimit,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -2829,6 +2927,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: request.cpuAffinity,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
+			cgroupsPathOverride: request.cgroupsPath,
+			cgroupPidsLimitOverride: request.cgroupPidsLimit,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2887,6 +2987,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
+		cgroupsPathOverride: String? = nil,
+		cgroupPidsLimitOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2917,6 +3019,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
+			cgroupsPathOverride: cgroupsPathOverride,
+			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -2950,6 +3054,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
+		cgroupsPathOverride: String? = nil,
+		cgroupPidsLimitOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -2979,6 +3085,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
+			cgroupsPathOverride: cgroupsPathOverride,
+			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3021,6 +3129,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
+		cgroupsPathOverride: String? = nil,
+		cgroupPidsLimitOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3052,6 +3162,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
+			cgroupsPathOverride: cgroupsPathOverride,
+			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3086,6 +3198,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
+		cgroupsPathOverride: String? = nil,
+		cgroupPidsLimitOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -3116,6 +3230,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: defaultCPUAffinityOverride,
 			noNewPrivilegesOverride: noNewPrivilegesOverride,
 			closeAdditionalFdsOverride: closeAdditionalFdsOverride,
+			cgroupsPathOverride: cgroupsPathOverride,
+			cgroupPidsLimitOverride: cgroupPidsLimitOverride,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3172,6 +3288,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			defaultCPUAffinityOverride: request.cpuAffinity,
 			noNewPrivilegesOverride: request.noNewPrivileges,
 			closeAdditionalFdsOverride: request.closeAdditionalFds,
+			cgroupsPathOverride: request.cgroupsPath,
+			cgroupPidsLimitOverride: request.cgroupPidsLimit,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -3216,6 +3334,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		defaultCPUAffinityOverride: OrlixEnvironmentCPUAffinity? = nil,
 		noNewPrivilegesOverride: Bool? = nil,
 		closeAdditionalFdsOverride: Bool? = nil,
+		cgroupsPathOverride: String? = nil,
+		cgroupPidsLimitOverride: Int64? = nil,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
