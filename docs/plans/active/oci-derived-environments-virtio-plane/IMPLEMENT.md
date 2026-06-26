@@ -22620,3 +22620,27 @@ Boundary:
 
 Current status:
 Latest coherent checkpoint exposes installer-level kill/signaling and PTY-backed terminal signal delivery for Linux job-control signal values while preserving unsupported arbitrary signal delivery until a Linux-owned control path exists. App-facing lifecycle now covers install/create, start, kill, wait, state, run, and delete at the OrlixOS API layer. Next work remains wiring the control surface into the product terminal command path, non-terminal Linux signal delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.
+### 2026-06-26 terminal selected-environment launch path
+
+Changes:
+- Updated `OrlixTerminal` so the product terminal can boot a selected persisted OrlixOS environment instead of only the default bundled root.
+- Added `OrlixTerminalLaunchConfiguration` with environment selection from `--orlix-environment-id ID`, `--orlix-environment-id=ID`, or `UserDefaults` key `OrlixTerminal.environmentID`.
+- Kept environment execution routed through `OrlixLinuxSession(environmentID:)` and the existing OrlixOS registry/session path. No HostAdapter policy, Linux ABI, syscall, or custom package/runtime mechanism was added.
+- Kept default terminal boot behavior unchanged when no environment ID is supplied.
+
+Evidence:
+- `OrlixTerminal` build passed on the single simulator:
+  `rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTerminal -configuration Debug -destination 'platform=iOS Simulator,id=5E2E003E-F434-4B1F-8E5C-BED59BBC177D' build`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known append-only stale-status warning.
+- `GOAL.md` size check reported `OK 3997`.
+- Ownership guard diff over `Build`, `OrlixMLibC/Sources`, `OrlixMLibC/Sources/patches`, `OrlixKernel/Sources/ports/orlix/patches`, `OrlixHostAdapter/Sources`, `OrlixOS/Sources/init/init.c`, and `GOAL.md` was empty.
+- Host crash-report check found no `*Orlix*` reports modified in the last day. Simulator DiagnosticReports directory for `5E2E003E-F434-4B1F-8E5C-BED59BBC177D` did not exist.
+- `xcrun simctl list devices booted` showed only `iPhone 17 Pro (5E2E003E-F434-4B1F-8E5C-BED59BBC177D)` booted.
+
+Boundary:
+- This provides an actual product terminal launch path for already-created imported or OCI-derived environments.
+- This does not prove Linux userspace `/usr/bin/orlix run`, registry pull from inside the booted Linux environment, arbitrary imported-image compatibility, multiple live environments inside one already-running OrlixKernel, or broad namespace/cgroup/device/filesystem/network readiness.
+
+Current status:
+Latest coherent checkpoint lets the product terminal select an existing persisted OrlixOS environment by ID and boot that session through the same OrlixOS registry/session path used by imported and OCI-derived environment machinery. Next work remains a real Linux-visible `orlix run` command/control path, non-terminal Linux signal delivery, broader OCI lifecycle semantics, and Linux surface coverage for namespaces, cgroups, devices, filesystems, networking, and imported-image compatibility.

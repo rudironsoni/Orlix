@@ -9,16 +9,14 @@ final class TerminalViewController: UIViewController {
 
     private var didStartBoot = false
     private let bootQueue = DispatchQueue(label: "org.orlix.terminal.boot", qos: .userInitiated)
-    private lazy var linuxSession = OrlixLinuxSession(
-        bootConfig: OrlixBootConfig(profile: Self.defaultBootProfile())
-    )
+    private let launchConfiguration: OrlixTerminalLaunchConfiguration
+    private lazy var linuxSessionResult = launchConfiguration.makeLinuxSession()
     private var terminalOutput: OrlixTerminalOutput?
     private lazy var terminalView = TerminalView(frame: .zero)
     private lazy var terminalSession: InMemoryTerminalSession = {
-        let terminal = linuxSession.terminal
         return InMemoryTerminalSession(
-            write: { data in
-                terminal.send(data)
+            write: { [weak self] data in
+                self?.linuxSession?.terminal.send(data)
             },
             resize: { _ in }
         )
@@ -27,6 +25,16 @@ final class TerminalViewController: UIViewController {
         theme: Self.savedTerminalTheme()
     ) { builder in
         builder.withBackgroundOpacity(0)
+    }
+
+    init(launchConfiguration: OrlixTerminalLaunchConfiguration = .current()) {
+        self.launchConfiguration = launchConfiguration
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is unavailable")
     }
 
     override func viewDidLoad() {
@@ -89,15 +97,21 @@ final class TerminalViewController: UIViewController {
         didStartBoot = true
 
         terminalSession.receive("OrlixTerminal\r\n")
-        let profile = linuxSession.bootConfig.profile
-        let session = linuxSession
-        terminalSession.receive("Starting Orlix bootloader with the \(Self.profileDisplayName(profile)) profile.\r\n")
+        guard let session = linuxSession else {
+            terminalSession.receive(launchConfiguration.failureMessage + "\r\n")
+            return
+        }
+        terminalSession.receive(launchConfiguration.startMessage(for: session) + "\r\n")
         bootQueue.async { [weak self] in
             let status = session.boot()
             DispatchQueue.main.async { [weak self] in
                 self?.terminalSession.receive(status.message + "\r\n")
             }
         }
+    }
+
+    private var linuxSession: OrlixLinuxSession? {
+        try? linuxSessionResult.get()
     }
 
     private static func defaultBootProfile() -> OrlixBootProfile {
@@ -122,7 +136,7 @@ final class TerminalViewController: UIViewController {
     }
 
     private func attachTerminalOutput() {
-        terminalOutput = linuxSession.terminal.attachOutput { [weak self] data in
+        terminalOutput = linuxSession?.terminal.attachOutput { [weak self] data in
             let text = String(decoding: data, as: UTF8.self)
                 .replacingOccurrences(of: "\r\n", with: "\n")
                 .replacingOccurrences(of: "\n", with: "\r\n")
@@ -254,6 +268,79 @@ final class TerminalViewController: UIViewController {
 
         if let backgroundColor = UIColor(hexString: theme.background) {
             view.backgroundColor = backgroundColor
+        }
+    }
+}
+
+struct OrlixTerminalLaunchConfiguration {
+    static let environmentIDArgument = "--orlix-environment-id"
+    static let environmentIDDefaultsKey = "OrlixTerminal.environmentID"
+
+    let environmentID: String?
+
+    static func current(
+        arguments: [String] = ProcessInfo.processInfo.arguments,
+        defaults: UserDefaults = .standard
+    ) -> OrlixTerminalLaunchConfiguration {
+        OrlixTerminalLaunchConfiguration(
+            environmentID: environmentID(from: arguments)
+                ?? defaults.string(forKey: environmentIDDefaultsKey)
+        )
+    }
+
+    func makeLinuxSession() -> Result<OrlixLinuxSession, Error> {
+        Result {
+            if let environmentID, !environmentID.isEmpty {
+                return try OrlixLinuxSession(environmentID: environmentID)
+            }
+            return OrlixLinuxSession(
+                bootConfig: OrlixBootConfig(profile: Self.defaultBootProfile())
+            )
+        }
+    }
+
+    func startMessage(for session: OrlixLinuxSession) -> String {
+        if let environmentID, !environmentID.isEmpty {
+            return "Starting Orlix environment \(environmentID)."
+        }
+        return "Starting Orlix bootloader with the \(Self.profileDisplayName(session.bootConfig.profile)) profile."
+    }
+
+    var failureMessage: String {
+        if let environmentID, !environmentID.isEmpty {
+            return "Unable to start Orlix environment \(environmentID)."
+        }
+        return "Unable to start Orlix bootloader."
+    }
+
+    private static func environmentID(from arguments: [String]) -> String? {
+        var index = arguments.startIndex
+        while index < arguments.endIndex {
+            let argument = arguments[index]
+            if argument == environmentIDArgument {
+                let valueIndex = arguments.index(after: index)
+                guard valueIndex < arguments.endIndex else { return nil }
+                return arguments[valueIndex]
+            }
+            let prefix = environmentIDArgument + "="
+            if argument.hasPrefix(prefix) {
+                return String(argument.dropFirst(prefix.count))
+            }
+            index = arguments.index(after: index)
+        }
+        return nil
+    }
+
+    private static func defaultBootProfile() -> OrlixBootProfile {
+        OrlixOSDistribution.bundledBootProfile ?? .release
+    }
+
+    private static func profileDisplayName(_ profile: OrlixBootProfile) -> String {
+        switch profile {
+        case .release:
+            return "release"
+        case .development:
+            return "development"
         }
     }
 }
