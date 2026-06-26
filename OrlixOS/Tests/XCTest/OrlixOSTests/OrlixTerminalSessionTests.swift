@@ -7941,6 +7941,7 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTTrue(arguments.rlimits.isEmpty)
 	XCTNil(arguments.umask)
 	XCTNil(arguments.noNewPrivileges)
+	XCTNil(arguments.closeAdditionalFds)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -7971,6 +7972,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTTrue(nameArguments.rlimits.isEmpty)
 	XCTNil(nameArguments.umask)
 	XCTNil(nameArguments.noNewPrivileges)
+	XCTNil(nameArguments.closeAdditionalFds)
 	XCTAssertEqual(nameArguments.command, ["/bin/echo", "hello"])
     XCTAssertTrue(nameArguments.removeAfterRun)
 
@@ -7994,6 +7996,7 @@ func testOCIEnvironmentRunArgumentsAcceptsCommonOptionSpellings() throws {
 	XCTTrue(equalsArguments.rlimits.isEmpty)
 	XCTNil(equalsArguments.umask)
 	XCTNil(equalsArguments.noNewPrivileges)
+	XCTNil(equalsArguments.closeAdditionalFds)
 	XCTAssertNil(equalsArguments.command)
     XCTAssertFalse(equalsArguments.removeAfterRun)
 }
@@ -8189,6 +8192,17 @@ func testOCIEnvironmentRunArgumentsAcceptsNoNewPrivilegesOverride() throws {
 	])
 
 	XCTAssertEqual(arguments.noNewPrivileges, true)
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsCloseFdsOverride() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"orlix",
+		"run",
+		"--close-fds",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(arguments.closeAdditionalFds, true)
 }
 
 func testOCIEnvironmentRunArgumentsAcceptsRlimitOverrides() throws {
@@ -9618,6 +9632,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			"registry-installed-run",
 			"--no-tty",
 			"--no-new-privileges",
+			"--close-fds",
 			"--entrypoint",
 			"/usr/bin/env",
 			"--env",
@@ -9677,6 +9692,7 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 	XCTAssertEqual(descriptor.defaultGroupID, 100)
 	XCTAssertEqual(descriptor.defaultTerminal, false)
 	XCTAssertTrue(descriptor.defaultNoNewPrivileges)
+	XCTAssertTrue(descriptor.defaultCloseAdditionalFds)
 	XCTAssertEqual(descriptor.defaultUmask, 0o022)
 	XCTAssertEqual(
 		descriptor.defaultRlimits,
