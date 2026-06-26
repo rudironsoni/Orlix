@@ -1284,6 +1284,13 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         XCTAssertTrue(initSource.contains("PR_CAPBSET_DROP"))
         XCTAssertTrue(initSource.contains("PR_CAP_AMBIENT"))
         XCTAssertTrue(initSource.contains("CPU_SET("))
+        XCTAssertTrue(
+            initSource.contains("snprintf(key, sizeof(key), \"orlix.sysctl%d=\", i);")
+        )
+        XCTAssertTrue(initSource.contains("parse_sysctl_assignment("))
+        XCTAssertTrue(initSource.contains("snprintf(path, path_size, \"/proc/sys/%s\", key);"))
+        XCTAssertTrue(initSource.contains("if (*cursor == '.')"))
+        XCTAssertTrue(initSource.contains("apply_sysctl(&config->sysctls[i]);"))
     }
 
     func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
