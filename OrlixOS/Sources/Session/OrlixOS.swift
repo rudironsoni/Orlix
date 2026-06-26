@@ -1385,6 +1385,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry]
     public let tmpfsMounts: [OrlixEnvironmentTmpfsMount]
     public let deviceNodes: [OrlixEnvironmentDeviceNode]
+    public let namespaces: [String]
+    public let namespacePaths: [String: String]
     public let command: [String]?
     public let removeAfterRun: Bool
 
@@ -1440,6 +1442,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         var parsedCgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry] = []
         var parsedTmpfsMounts: [OrlixEnvironmentTmpfsMount] = []
         var parsedDeviceNodes: [OrlixEnvironmentDeviceNode] = []
+        var parsedNamespaces: [String] = []
+        var parsedNamespacePaths: [String: String] = [:]
         var parsedImage: String?
 		var parsedCommand: [String] = []
 		var parsedRemoveAfterRun = false
@@ -1655,6 +1659,60 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
                     .missingOptionValue("--device-node")
             }
             try Self.addDeviceNode(deviceNode, to: &parsedDeviceNodes)
+            continue
+        }
+        if parsedImage == nil, value == "--namespace" {
+            guard let namespace = values.first else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue(value)
+            }
+            try Self.addNamespace(
+                namespace,
+                to: &parsedNamespaces,
+                namespacePaths: parsedNamespacePaths
+            )
+            values.removeFirst()
+            continue
+        }
+        if parsedImage == nil, value.hasPrefix("--namespace=") {
+            let separator = value.firstIndex(of: "=")!
+            let namespace = String(value[value.index(after: separator)...])
+            guard !namespace.isEmpty else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue("--namespace")
+            }
+            try Self.addNamespace(
+                namespace,
+                to: &parsedNamespaces,
+                namespacePaths: parsedNamespacePaths
+            )
+            continue
+        }
+        if parsedImage == nil, value == "--namespace-path" {
+            guard let namespacePath = values.first else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue(value)
+            }
+            try Self.addNamespacePath(
+                namespacePath,
+                to: &parsedNamespacePaths,
+                namespaces: parsedNamespaces
+            )
+            values.removeFirst()
+            continue
+        }
+        if parsedImage == nil, value.hasPrefix("--namespace-path=") {
+            let separator = value.firstIndex(of: "=")!
+            let namespacePath = String(value[value.index(after: separator)...])
+            guard !namespacePath.isEmpty else {
+                throw OrlixOCIEnvironmentRunArgumentsError
+                    .missingOptionValue("--namespace-path")
+            }
+            try Self.addNamespacePath(
+                namespacePath,
+                to: &parsedNamespacePaths,
+                namespaces: parsedNamespaces
+            )
             continue
         }
         if parsedImage == nil, value == "--sysctl" {
@@ -2153,6 +2211,8 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         self.cgroupUnified = parsedCgroupUnified
         self.tmpfsMounts = parsedTmpfsMounts
         self.deviceNodes = parsedDeviceNodes
+        self.namespaces = parsedNamespaces
+        self.namespacePaths = parsedNamespacePaths
         self.command = parsedCommand.isEmpty ? nil : parsedCommand
         self.removeAfterRun = parsedRemoveAfterRun
     }
@@ -2845,6 +2905,63 @@ public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
         nodes.append(node)
     }
 
+    private static func addNamespace(
+        _ value: String,
+        to namespaces: inout [String],
+        namespacePaths: [String: String]
+    ) throws {
+        let namespace = try parseNamespace(value)
+        guard namespacePaths[namespace] == nil,
+            !namespaces.contains(namespace)
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.namespaces"
+            )
+        }
+        namespaces.append(namespace)
+    }
+
+    private static func addNamespacePath(
+        _ value: String,
+        to namespacePaths: inout [String: String],
+        namespaces: [String]
+    ) throws {
+        let separator = value.firstIndex(of: "=")
+        guard let separator else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.namespaces.path"
+            )
+        }
+        let namespace = try parseNamespace(String(value[..<separator]))
+        let path = String(value[value.index(after: separator)...])
+        guard !namespaces.contains(namespace),
+            namespacePaths[namespace] == nil
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.namespaces"
+            )
+        }
+        var pathValidation: [String] = []
+        try addRuntimePath(
+            path,
+            to: &pathValidation,
+            feature: "linux.namespaces.path"
+        )
+        namespacePaths[namespace] = path
+    }
+
+    private static func parseNamespace(_ value: String) throws -> String {
+        let supportedNamespaces = Set([
+            "mount", "ipc", "uts", "network", "cgroup", "pid", "time", "user",
+        ])
+        guard supportedNamespaces.contains(value) else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.namespaces.type"
+            )
+        }
+        return value
+    }
+
     private static func parseDeviceNode(
         _ value: String
     ) throws -> OrlixEnvironmentDeviceNode {
@@ -3089,6 +3206,22 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         return (retained + overrides).sorted { $0.path < $1.path }
     }
 
+    private static func mergedNamespaces(
+        _ existing: [String],
+        overrides: [String]
+    ) -> [String] {
+        guard !overrides.isEmpty else { return existing }
+        return Array(Set(existing).union(overrides)).sorted()
+    }
+
+    private static func mergedNamespacePaths(
+        _ existing: [String: String],
+        overrides: [String: String]
+    ) -> [String: String] {
+        guard !overrides.isEmpty else { return existing }
+        return existing.merging(overrides) { _, override in override }
+    }
+
     private static func mergedRuntimePaths(
         _ existing: [String],
         overrides: [String]
@@ -3143,7 +3276,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         replacingCgroupIOWeightWith cgroupIOWeight: UInt64?,
         mergingCgroupUnifiedWith cgroupUnified: [OrlixEnvironmentCgroupUnifiedEntry],
         mergingTmpfsMountsWith tmpfsMounts: [OrlixEnvironmentTmpfsMount],
-        mergingDeviceNodesWith deviceNodes: [OrlixEnvironmentDeviceNode]
+        mergingDeviceNodesWith deviceNodes: [OrlixEnvironmentDeviceNode],
+        mergingNamespacesWith namespaces: [String],
+        mergingNamespacePathsWith namespacePaths: [String: String]
     ) throws -> OrlixEnvironmentDescriptor {
 		guard command != nil
 			|| !environment.isEmpty
@@ -3177,6 +3312,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             || !cgroupUnified.isEmpty
             || !tmpfsMounts.isEmpty
             || !deviceNodes.isEmpty
+            || !namespaces.isEmpty
+            || !namespacePaths.isEmpty
         else {
             return descriptor
         }
@@ -3310,6 +3447,21 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             descriptor.deviceNodes,
             overrides: deviceNodes
         )
+        let effectiveNamespaces = Self.mergedNamespaces(
+            descriptor.namespaces,
+            overrides: namespaces
+        )
+        let effectiveNamespacePaths = Self.mergedNamespacePaths(
+            descriptor.namespacePaths,
+            overrides: namespacePaths
+        )
+        guard Set(effectiveNamespaces)
+            .isDisjoint(with: Set(effectiveNamespacePaths.keys))
+        else {
+            throw OrlixOCIRuntimeConfigError.unsupportedLinuxFeature(
+                "linux.namespaces"
+            )
+        }
 		let effectiveCgroupsPath = try cgroupsPath
 			?? descriptor.cgroupsPath
 			?? defaultCgroupsPath(
@@ -3373,8 +3525,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             timeOffsets: descriptor.timeOffsets,
             uidMappings: descriptor.uidMappings,
             gidMappings: descriptor.gidMappings,
-            namespaces: descriptor.namespaces,
-            namespacePaths: descriptor.namespacePaths,
+            namespaces: effectiveNamespaces,
+            namespacePaths: effectiveNamespacePaths,
             tmpfsMounts: effectiveTmpfsMounts,
             mounts: descriptor.mounts
         )
@@ -3450,9 +3602,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
-        cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-        tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-        deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+namespaceOverrides: [String] = [],
+namespacePathOverrides: [String: String] = [:],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -3491,9 +3645,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
-            cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-            tmpfsMountOverrides: tmpfsMountOverrides,
-            deviceNodeOverrides: deviceNodeOverrides,
+cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+tmpfsMountOverrides: tmpfsMountOverrides,
+deviceNodeOverrides: deviceNodeOverrides,
+namespaceOverrides: namespaceOverrides,
+namespacePathOverrides: namespacePathOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -3538,6 +3694,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
         tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
         deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+        namespaceOverrides: [String] = [],
+        namespacePathOverrides: [String: String] = [:],
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
 	) async throws -> OrlixOCIRegistryEnvironmentInstallResult {
@@ -3607,8 +3765,10 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 				replacingCgroupIOWeightWith: cgroupIOWeightOverride,
             mergingCgroupUnifiedWith: cgroupUnifiedOverrides,
             mergingTmpfsMountsWith: tmpfsMountOverrides,
-            mergingDeviceNodesWith: deviceNodeOverrides
-			)
+            mergingDeviceNodesWith: deviceNodeOverrides,
+            mergingNamespacesWith: namespaceOverrides,
+            mergingNamespacePathsWith: namespacePathOverrides
+		)
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
             }
@@ -3725,6 +3885,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             cgroupUnifiedOverrides: request.cgroupUnified,
             tmpfsMountOverrides: request.tmpfsMounts,
             deviceNodeOverrides: request.deviceNodes,
+            namespaceOverrides: request.namespaces,
+            namespacePathOverrides: request.namespacePaths,
             terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
@@ -3795,6 +3957,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             cgroupUnifiedOverrides: request.cgroupUnified,
             tmpfsMountOverrides: request.tmpfsMounts,
             deviceNodeOverrides: request.deviceNodes,
+            namespaceOverrides: request.namespaces,
+            namespacePathOverrides: request.namespacePaths,
             terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -3866,6 +4030,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
         tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
         deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+        namespaceOverrides: [String] = [],
+        namespacePathOverrides: [String: String] = [:],
         terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3909,6 +4075,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             cgroupUnifiedOverrides: cgroupUnifiedOverrides,
             tmpfsMountOverrides: tmpfsMountOverrides,
             deviceNodeOverrides: deviceNodeOverrides,
+            namespaceOverrides: namespaceOverrides,
+            namespacePathOverrides: namespacePathOverrides,
             terminal: terminal,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -3952,9 +4120,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
-        cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-        tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-        deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+namespaceOverrides: [String] = [],
+namespacePathOverrides: [String: String] = [:],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -3994,9 +4164,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupCPUWeightOverride: cgroupCPUWeightOverride,
 			cgroupMemoryMaxOverride: cgroupMemoryMaxOverride,
 			cgroupIOWeightOverride: cgroupIOWeightOverride,
-            cgroupUnifiedOverrides: cgroupUnifiedOverrides,
-            tmpfsMountOverrides: tmpfsMountOverrides,
-            deviceNodeOverrides: deviceNodeOverrides,
+cgroupUnifiedOverrides: cgroupUnifiedOverrides,
+tmpfsMountOverrides: tmpfsMountOverrides,
+deviceNodeOverrides: deviceNodeOverrides,
+namespaceOverrides: namespaceOverrides,
+namespacePathOverrides: namespacePathOverrides,
 			fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -4049,9 +4221,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
 		cgroupIOWeightOverride: UInt64? = nil,
-        cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-        tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-        deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+namespaceOverrides: [String] = [],
+namespacePathOverrides: [String: String] = [:],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -4096,7 +4270,9 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             cgroupUnifiedOverrides: cgroupUnifiedOverrides,
             tmpfsMountOverrides: tmpfsMountOverrides,
             deviceNodeOverrides: deviceNodeOverrides,
-			terminal: terminal,
+            namespaceOverrides: namespaceOverrides,
+            namespacePathOverrides: namespacePathOverrides,
+            terminal: terminal,
 			observationTimeout: observationTimeout,
 			fileManager: fileManager,
 			runCommand: runCommand
@@ -4143,6 +4319,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
         cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
         tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
         deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+        namespaceOverrides: [String] = [],
+        namespacePathOverrides: [String: String] = [:],
         terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		observationTimeout: TimeInterval = 600,
 		fileManager: FileManager = .default,
@@ -4186,6 +4364,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             cgroupUnifiedOverrides: cgroupUnifiedOverrides,
             tmpfsMountOverrides: tmpfsMountOverrides,
             deviceNodeOverrides: deviceNodeOverrides,
+            namespaceOverrides: namespaceOverrides,
+            namespacePathOverrides: namespacePathOverrides,
             fileManager: fileManager,
 			runCommand: runCommand
 		)
@@ -4252,9 +4432,11 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 			cgroupCPUWeightOverride: request.cgroupCPUWeight,
 			cgroupMemoryMaxOverride: request.cgroupMemoryMax,
 			cgroupIOWeightOverride: request.cgroupIOWeight,
-            cgroupUnifiedOverrides: request.cgroupUnified,
-            tmpfsMountOverrides: request.tmpfsMounts,
-            deviceNodeOverrides: request.deviceNodes,
+cgroupUnifiedOverrides: request.cgroupUnified,
+tmpfsMountOverrides: request.tmpfsMounts,
+deviceNodeOverrides: request.deviceNodes,
+namespaceOverrides: request.namespaces,
+namespacePathOverrides: request.namespacePaths,
 			terminal: terminal,
 			using: driver,
 			fileManager: fileManager,
@@ -4309,10 +4491,12 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
 		cgroupCPUWeightOverride: UInt64? = nil,
 		cgroupMemoryMaxOverride: Int64? = nil,
         cgroupIOWeightOverride: UInt64? = nil,
-        cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
-        tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
-        deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
-        terminal: OrlixTerminalSession = OrlixTerminalSession(),
+cgroupUnifiedOverrides: [OrlixEnvironmentCgroupUnifiedEntry] = [],
+tmpfsMountOverrides: [OrlixEnvironmentTmpfsMount] = [],
+deviceNodeOverrides: [OrlixEnvironmentDeviceNode] = [],
+namespaceOverrides: [String] = [],
+namespacePathOverrides: [String: String] = [:],
+terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		using driver: OrlixOCIRuntimeProcessObservationDriver,
 		fileManager: FileManager = .default,
 		runCommand: @escaping @Sendable (URL, [String]) throws -> Void
@@ -4355,6 +4539,8 @@ public struct OrlixOCIEnvironmentInstaller: Sendable {
             cgroupUnifiedOverrides: cgroupUnifiedOverrides,
             tmpfsMountOverrides: tmpfsMountOverrides,
             deviceNodeOverrides: deviceNodeOverrides,
+            namespaceOverrides: namespaceOverrides,
+            namespacePathOverrides: namespacePathOverrides,
             fileManager: fileManager,
             runCommand: runCommand
         )

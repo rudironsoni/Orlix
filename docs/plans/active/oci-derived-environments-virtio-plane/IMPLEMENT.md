@@ -10,6 +10,25 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-26 OCI run namespace overrides
+
+Changes:
+- `OrlixOCIEnvironmentRunArguments` now accepts `--namespace TYPE`, `--namespace=TYPE`, `--namespace-path TYPE=PATH`, and `--namespace-path=TYPE=PATH` before image.
+- CLI validation reuses the existing supported namespace set: `mount`, `ipc`, `uts`, `network`, `cgroup`, `pid`, `time`, `user`.
+- Parser rejects duplicate namespace declarations, duplicate namespace join paths, invalid namespace types, invalid namespace paths, and create/join conflicts for the same namespace type before install.
+- Registry-backed install/run and terminal-session preparation persist parsed namespace overrides into `OrlixEnvironmentDescriptor.namespaces` and `namespacePaths`. Namespace creates merge as a sorted set; namespace join paths merge by namespace type.
+- Focused tests cover default empty parser state, split and equals parsing, invalid type/path/conflict rejection, and observed registry-backed descriptor persistence.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp CLANG_MODULE_CACHE_PATH=/private/tmp/orlix-clang-module-cache swiftc -typecheck -parse-as-library -module-cache-path /private/tmp/orlix-swift-module-cache OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift` exited 0 with existing Sendable warnings in `OrlixOCIImageLayout.swift`.
+
+Boundary:
+- Advances product-facing namespace configuration through existing OrlixOS descriptors and Linux-visible first-stage init `setns(2)`/`unshare(2)` paths. Does not claim live simulator proof, namespace isolation proof, PID/user/cgroup namespace behavioral readiness, full OCI lifecycle readiness, HostAdapter/Linux policy, kernel semantics, mlibc patches, generated upstream edits, custom ABI, or package/proof/stamp systems.
+
+Current status:
+- Namespace override checkpoint is locally verified by Swift parse/typecheck and guard checks, pending commit and push.
+
 ### 2026-06-26 current status after device-node checkpoint
 
 Current status:

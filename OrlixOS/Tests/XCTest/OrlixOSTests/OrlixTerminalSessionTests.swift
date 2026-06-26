@@ -7962,6 +7962,8 @@ func testOCIRegistryImageReferenceRejectsInvalidInput() throws {
 	XCTTrue(arguments.cgroupUnified.isEmpty)
 	XCTTrue(arguments.tmpfsMounts.isEmpty)
 	XCTTrue(arguments.deviceNodes.isEmpty)
+	XCTTrue(arguments.namespaces.isEmpty)
+	XCTTrue(arguments.namespacePaths.isEmpty)
 	XCTAssertEqual(arguments.command, ["/bin/sh", "-lc", "echo hello"])
 }
 
@@ -8572,6 +8574,66 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidDeviceNodeOverride() throws {
 		XCTAssertEqual(
 			error as? OrlixOCIRuntimeConfigError,
 			.unsupportedLinuxFeature("linux.devices.major")
+		)
+	}
+}
+
+func testOCIEnvironmentRunArgumentsAcceptsNamespaceOverrides() throws {
+	let arguments = try OrlixOCIEnvironmentRunArguments([
+		"run",
+		"--namespace",
+		"pid",
+		"--namespace=uts",
+		"--namespace-path",
+		"network=/proc/1/ns/net",
+		"alpine:3.20",
+	])
+
+	XCTAssertEqual(arguments.namespaces, ["pid", "uts"])
+	XCTAssertEqual(arguments.namespacePaths, ["network": "/proc/1/ns/net"])
+}
+
+func testOCIEnvironmentRunArgumentsRejectsInvalidNamespaceOverride() throws {
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--namespace",
+			"invalid",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.namespaces.type")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--namespace-path",
+			"network=proc/1/ns/net",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.namespaces.path")
+		)
+	}
+
+	XCTAssertThrowsError(
+		try OrlixOCIEnvironmentRunArguments([
+			"run",
+			"--namespace",
+			"network",
+			"--namespace-path=network=/proc/1/ns/net",
+			"alpine:3.20",
+		])
+	) { error in
+		XCTAssertEqual(
+			error as? OrlixOCIRuntimeConfigError,
+			.unsupportedLinuxFeature("linux.namespaces")
 		)
 	}
 }
@@ -10581,6 +10643,9 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		"--device-node",
 		"/dev/orlix-zero:c:1:5:0660:1000:100",
 		"--device-node=/dev/orlix-pipe:p:0644",
+		"--namespace",
+		"pid",
+		"--namespace-path=time=/proc/1/ns/time",
 		"--sysctl",
 		"net.ipv4.ip_forward=1",
 		"--sysctl=kernel.hostname=registry-run-host",
@@ -10728,6 +10793,14 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 				uid: 1000,
 				gid: 100
 			),
+		]
+	)
+	XCTAssertEqual(descriptor.namespaces, ["cgroup", "ipc", "mount", "pid", "uts"])
+	XCTAssertEqual(
+		descriptor.namespacePaths,
+		[
+			"network": "/proc/1/ns/net",
+			"time": "/proc/1/ns/time",
 		]
 	)
 	XCTAssertEqual(
