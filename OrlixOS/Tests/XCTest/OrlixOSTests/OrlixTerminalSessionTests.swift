@@ -7029,21 +7029,15 @@ report.feature(named: "ociCPUShares")?.proof,
             report.feature(named: "ociPidsLimit")?.proof,
             "orlix:cgroup_pids_probe"
         )
-        XCTAssertEqual(report.feature(named: "ociPersonality")?.status, .implemented)
-        XCTAssertEqual(
-            report.feature(named: "ociPersonality")?.proof,
-            "orlix:runtime_config_parser"
-        )
+		XCTAssertEqual(report.feature(named: "ociPersonality")?.status, .recognized)
+		XCTAssertNil(report.feature(named: "ociPersonality")?.proof)
         XCTAssertEqual(report.feature(named: "ociTimeNamespace")?.status, .implemented)
         XCTAssertEqual(
             report.feature(named: "ociTimeNamespace")?.proof,
             "orlix:time_namespace_probe"
         )
-        XCTAssertEqual(report.feature(named: "ociTimeOffsets")?.status, .implemented)
-        XCTAssertEqual(
-            report.feature(named: "ociTimeOffsets")?.proof,
-            "orlix:runtime_config_parser"
-        )
+		XCTAssertEqual(report.feature(named: "ociTimeOffsets")?.status, .recognized)
+		XCTAssertNil(report.feature(named: "ociTimeOffsets")?.proof)
         XCTAssertEqual(report.feature(named: "ociMemoryLimit")?.status, .implemented)
 		XCTAssertEqual(
 			report.feature(named: "ociMemoryLimit")?.proof,
@@ -7132,11 +7126,8 @@ report.feature(named: "ociBlockIOControls")?.proof,
 		XCTAssertEqual(report.feature(named: "virtioNetDevicePlane")?.proof, "orlix:virtio_net_device_probe")
 		XCTAssertEqual(report.feature(named: "virtioFsHostFolderMount")?.status, .implemented)
 		XCTAssertEqual(report.feature(named: "virtioFsHostFolderMount")?.proof, "orlix:virtio_fs_mount_probe")
-		XCTAssertEqual(report.feature(named: "ociLifecycleStateModel")?.status, .implemented)
-		XCTAssertEqual(
-			report.feature(named: "ociLifecycleStateModel")?.proof,
-			"orlix:runtime_lifecycle_unit_tests"
-		)
+		XCTAssertEqual(report.feature(named: "ociLifecycleStateModel")?.status, .recognized)
+		XCTAssertNil(report.feature(named: "ociLifecycleStateModel")?.proof)
 		XCTAssertEqual(report.feature(named: "ociRuntimeSpecLifecycle")?.status, .recognized)
 		XCTAssertNil(report.feature(named: "ociRuntimeSpecLifecycle")?.proof)
 		XCTAssertEqual(report.feature(named: "idmappedMounts")?.status, .deterministicallyRejected)
@@ -7150,39 +7141,31 @@ report.feature(named: "ociBlockIOControls")?.proof,
         )
     }
 
-	func testOCIRuntimeFeatureReportIncludesImplementedProcessDefaults() throws {
+	func testOCIRuntimeFeatureReportDoesNotTreatProcessMetadataAsProof() throws {
 		let report = OrlixOCIRuntimeFeatureReport.current
 		let features = Dictionary(uniqueKeysWithValues: report.features.map { ($0.name, $0) })
 
+		XCTAssertEqual(features["process.capabilities"]?.status, .implemented)
+		XCTAssertEqual(
+			features["process.capabilities"]?.proof,
+			"orlix:process_capability_probe"
+		)
+		XCTAssertFalse(features["process.capabilities"]?.reason.isEmpty ?? true)
 		for name in [
 			"process.user",
-			"process.capabilities",
 			"process.noNewPrivileges",
 			"process.closeAdditionalFds",
 			"process.oomScoreAdj",
 			"process.scheduler",
 			"process.ioPriority",
-			"process.execCPUAffinity"
+			"process.execCPUAffinity",
+			"process.terminal",
+			"process.consoleSize"
 		] {
-			XCTAssertEqual(features[name]?.status, .implemented, name)
-			let expectedProof = name == "process.capabilities"
-				? "orlix:process_capability_probe"
-				: "orlix:runtime_config_parser"
-			XCTAssertEqual(features[name]?.proof, expectedProof, name)
+			XCTAssertEqual(features[name]?.status, .recognized, name)
+			XCTAssertNil(features[name]?.proof, name)
 			XCTAssertFalse(features[name]?.reason.isEmpty ?? true, name)
 		}
-		XCTAssertEqual(features["process.terminal"]?.status, .implemented)
-		XCTAssertEqual(
-			features["process.terminal"]?.proof,
-			"orlix:runtime_session_descriptor_unit_tests"
-		)
-		XCTAssertFalse(features["process.terminal"]?.reason.isEmpty ?? true)
-		XCTAssertEqual(features["process.consoleSize"]?.status, .implemented)
-		XCTAssertEqual(
-			features["process.consoleSize"]?.proof,
-			"orlix:runtime_session_descriptor_unit_tests"
-		)
-		XCTAssertFalse(features["process.consoleSize"]?.reason.isEmpty ?? true)
 		XCTAssertEqual(features["seccomp"]?.status, .deterministicallyRejected)
 		XCTAssertEqual(features["seccomp"]?.proof, "orlix:runtime_config_parser")
 		XCTAssertEqual(features["intelRdt"]?.status, .deterministicallyRejected)
@@ -7195,12 +7178,12 @@ report.feature(named: "ociBlockIOControls")?.proof,
         XCTAssertEqual(features["ociLinuxDevices"]?.proof, "orlix:device_node_probe")
 		XCTAssertEqual(features["ociLinuxResources"]?.status, .recognized)
 XCTAssertEqual(features["ociLinuxResources"]?.proof, "orlix:runtime_config_parser")
-        XCTAssertEqual(features["ociPersonality"]?.status, .implemented)
-        XCTAssertEqual(features["ociPersonality"]?.proof, "orlix:runtime_config_parser")
+		XCTAssertEqual(features["ociPersonality"]?.status, .recognized)
+		XCTAssertNil(features["ociPersonality"]?.proof)
         XCTAssertEqual(features["ociTimeNamespace"]?.status, .implemented)
         XCTAssertEqual(features["ociTimeNamespace"]?.proof, "orlix:time_namespace_probe")
-        XCTAssertEqual(features["ociTimeOffsets"]?.status, .implemented)
-        XCTAssertEqual(features["ociTimeOffsets"]?.proof, "orlix:runtime_config_parser")
+		XCTAssertEqual(features["ociTimeOffsets"]?.status, .recognized)
+		XCTAssertNil(features["ociTimeOffsets"]?.proof)
         XCTAssertEqual(features["userNamespaceMappings"]?.status, .implemented)
         XCTAssertEqual(features["userNamespaceMappings"]?.proof, "orlix:user_namespace_probe")
         XCTAssertEqual(features["ociCPUQuota"]?.status, .implemented)
@@ -7224,8 +7207,8 @@ XCTAssertEqual(features["ociReadonlyPaths"]?.status, .implemented)
 XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:rootinit_readonly_paths")
 		XCTAssertEqual(features["ociUnifiedCgroupResources"]?.status, .implemented)
 		XCTAssertEqual(features["ociUnifiedCgroupResources"]?.proof, "orlix:cgroup_unified_probe")
-		XCTAssertEqual(features["ociLifecycleStateModel"]?.status, .implemented)
-		XCTAssertEqual(features["ociLifecycleStateModel"]?.proof, "orlix:runtime_lifecycle_unit_tests")
+		XCTAssertEqual(features["ociLifecycleStateModel"]?.status, .recognized)
+		XCTAssertNil(features["ociLifecycleStateModel"]?.proof)
 		XCTAssertEqual(features["ociRuntimeSpecLifecycle"]?.status, .recognized)
 		XCTAssertNil(features["ociRuntimeSpecLifecycle"]?.proof)
 		XCTAssertEqual(features["root.readonly"]?.status, .implemented)
@@ -7253,10 +7236,8 @@ XCTAssertEqual(features["ociReadonlyPaths"]?.proof, "orlix:rootinit_readonly_pat
 		XCTAssertTrue(json.contains(#""proof" : "orlix:rootinit_mount_propagation""#))
 		XCTAssertTrue(json.contains(#""name" : "netDevices""#))
 		XCTAssertTrue(json.contains(#""name" : "ociLifecycleStateModel""#))
-		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_lifecycle_unit_tests""#))
 		XCTAssertTrue(json.contains(#""name" : "ociRuntimeSpecLifecycle""#))
 		XCTAssertTrue(json.contains(#""name" : "process.terminal""#))
-		XCTAssertTrue(json.contains(#""proof" : "orlix:runtime_session_descriptor_unit_tests""#))
 		XCTAssertTrue(json.contains(#""name" : "virtioNetDevicePlane""#))
 		XCTAssertTrue(json.contains(#""name" : "virtioFsHostFolderMount""#))
 		XCTAssertTrue(json.contains(#""proof" : "orlix:virtio_fs_mount_probe""#))
