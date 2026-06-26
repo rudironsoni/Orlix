@@ -763,13 +763,13 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
         return HostDirectoryFixture(
             rootDirectory: root,
             registrations: [
-                OrlixHostDirectoryRegistration(
-                    identifier: OrlixEnvironmentRootImage.defaultHostDirectoryIdentifier,
-                    hostPath: root.path,
-                    readOnly: true
-                )
-            ]
-        )
+                    OrlixHostDirectoryRegistration(
+                        identifier: OrlixEnvironmentRootImage.defaultHostDirectoryIdentifier,
+                        hostPath: root.path,
+                        readOnly: false
+                    )
+                ]
+            )
     }
 }
 

@@ -1245,6 +1245,49 @@ static const char *orlix_virtio_mmio_fs_xattr_name(
 	return name;
 }
 
+static const char *orlix_virtio_mmio_fs_payload_name(
+	const struct fuse_in_header *in,
+	u32 in_capacity,
+	u32 payload_offset,
+	u32 *name_length)
+{
+	const char *name;
+	u32 remaining;
+	u32 length;
+
+	if (in_capacity <= sizeof(*in) + payload_offset)
+		return NULL;
+
+	name = (const char *)(in + 1) + payload_offset;
+	remaining = in_capacity - sizeof(*in) - payload_offset;
+	length = strnlen(name, remaining);
+	if (length == remaining || length == 0 || length > NAME_MAX)
+		return NULL;
+
+	*name_length = length;
+	return name;
+}
+
+static const void *orlix_virtio_mmio_fs_write_data(
+	const struct fuse_in_header *in,
+	u32 in_capacity,
+	const void *in_extra,
+	u32 in_extra_capacity,
+	const struct fuse_write_in *write)
+{
+	u32 payload_offset = sizeof(*write);
+
+	if (write->size == 0)
+		return "";
+	if (write->size > 4096)
+		return NULL;
+	if (in_capacity >= sizeof(*in) + payload_offset + write->size)
+		return (const char *)(in + 1) + payload_offset;
+	if (in_extra && in_extra_capacity >= write->size)
+		return in_extra;
+	return NULL;
+}
+
 static void orlix_virtio_mmio_fs_forget_path_nodeid(u64 nodeid, u64 nlookup)
 {
 	unsigned int path_index;
@@ -1378,10 +1421,8 @@ static bool orlix_virtio_mmio_fs_readonly_opcode(u32 opcode)
 	case FUSE_RMDIR:
 	case FUSE_RENAME:
 	case FUSE_LINK:
-	case FUSE_WRITE:
 	case FUSE_SETXATTR:
 	case FUSE_REMOVEXATTR:
-	case FUSE_CREATE:
 	case FUSE_FALLOCATE:
 		return true;
 	default:
@@ -2392,9 +2433,94 @@ static void orlix_virtio_mmio_process_fs_queue(
 									&attr);
 					written = sizeof(*out) + sizeof(*statx);
 				}
-			} else if (in->opcode == FUSE_OPEN &&
-				   out_capacity >= sizeof(*out) +
-						   sizeof(struct fuse_open_out)) {
+		} else if (in->opcode == FUSE_CREATE &&
+			   in_capacity >= sizeof(*in) +
+					  sizeof(struct fuse_create_in) &&
+			   out_capacity >= sizeof(*out) +
+					   sizeof(struct fuse_entry_out) +
+					   sizeof(struct fuse_open_out)) {
+			const struct fuse_create_in *create = (void *)(in + 1);
+			struct fuse_entry_out *entry = (void *)(out + 1);
+			struct fuse_open_out *open = (void *)(entry + 1);
+			struct orlix_host_directory_entry host_entry;
+			char parent_path[PATH_MAX];
+			char child_path[PATH_MAX];
+			const char *name;
+			u32 name_length = 0;
+			u64 nodeid;
+			int create_result;
+
+			name = orlix_virtio_mmio_fs_payload_name(
+				in, in_capacity, sizeof(*create), &name_length);
+			if (!name ||
+			    !orlix_virtio_mmio_fs_node_relative_path(
+				    in->nodeid, parent_path, sizeof(parent_path)) ||
+			    !orlix_virtio_mmio_fs_make_child_path(
+				    parent_path, name, child_path,
+				    sizeof(child_path))) {
+				out->error = -EINVAL;
+			} else {
+				create_result =
+					orlix_host_directory_create_file_at_path(
+						ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+						child_path, create->mode);
+				if (create_result == -2) {
+					out->error = -EROFS;
+				} else if (create_result != 0) {
+					out->error = -EIO;
+				} else if (orlix_host_directory_read_entry_at_path(
+						   ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+						   child_path, &host_entry) != 0 ||
+					   !orlix_virtio_mmio_fs_path_nodeid_for_path(
+						   child_path, true, &nodeid)) {
+					out->error = -EIO;
+				} else {
+					orlix_virtio_mmio_fill_fs_path_entry(
+						entry, nodeid, &host_entry);
+					memset(open, 0, sizeof(*open));
+					open->fh = nodeid;
+					out->error = 0;
+					written += sizeof(*entry) + sizeof(*open);
+				}
+			}
+		} else if (in->opcode == FUSE_WRITE &&
+			   in_capacity >= sizeof(*in) +
+					  sizeof(struct fuse_write_in) &&
+			   out_capacity >= sizeof(*out) +
+					   sizeof(struct fuse_write_out)) {
+			const struct fuse_write_in *write = (void *)(in + 1);
+			struct fuse_write_out *write_out = (void *)(out + 1);
+			char node_path[PATH_MAX];
+			const void *data;
+			long write_count;
+
+			data = orlix_virtio_mmio_fs_write_data(
+				in, in_capacity, in_extra, in_extra_capacity,
+				write);
+			if (!data ||
+			    !orlix_virtio_mmio_fs_node_relative_path(
+				    in->nodeid, node_path, sizeof(node_path))) {
+				out->error = -EINVAL;
+			} else {
+				write_count =
+					orlix_host_directory_write_file_at_path(
+						ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+						node_path, write->offset, data,
+						write->size);
+				if (write_count == -2) {
+					out->error = -EROFS;
+				} else if (write_count < 0) {
+					out->error = -EIO;
+				} else {
+					memset(write_out, 0, sizeof(*write_out));
+					write_out->size = (u32)write_count;
+					out->error = 0;
+					written += sizeof(*write_out);
+				}
+			}
+		} else if (in->opcode == FUSE_OPEN &&
+			   out_capacity >= sizeof(*out) +
+					   sizeof(struct fuse_open_out)) {
 				struct fuse_open_out *open = (void *)(out + 1);
 				struct orlix_host_directory_entry host_entry;
 				char node_path[PATH_MAX];
@@ -2473,10 +2599,19 @@ static void orlix_virtio_mmio_process_fs_queue(
 				struct fuse_access_in *access = (void *)(in + 1);
 				unsigned int entry_index;
 
-				if (access->mask & ORLIX_VIRTIO_MMIO_FUSE_ACCESS_W_OK)
+			if (access->mask & ORLIX_VIRTIO_MMIO_FUSE_ACCESS_W_OK) {
+				unsigned int read_only = 1;
+
+				if (orlix_host_directory_is_read_only(
+					    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+					    &read_only) != 0)
+					out->error = -EIO;
+				else if (read_only)
 					out->error = -EACCES;
-				else if (in->nodeid == FUSE_ROOT_ID)
+				else
 					out->error = 0;
+			} else if (in->nodeid == FUSE_ROOT_ID)
+				out->error = 0;
 				else if (orlix_virtio_mmio_fs_host_index(in->nodeid,
 									 &entry_index)) {
 					struct orlix_host_directory_entry host_entry;

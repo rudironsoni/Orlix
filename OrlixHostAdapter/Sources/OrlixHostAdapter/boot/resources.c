@@ -558,6 +558,26 @@ __attribute__((visibility("hidden"))) int OrlixHostCopyHostDirectoryPath(
     return -1;
 }
 
+__attribute__((visibility("hidden"))) int orlix_host_directory_is_read_only(
+    unsigned int directory,
+    unsigned int *read_only)
+{
+    int result = -1;
+
+    if (!read_only) {
+        return -1;
+    }
+
+    os_unfair_lock_lock(&OrlixHostDirectoriesLock);
+    if (directory < OrlixHostDirectoryCount &&
+        OrlixHostDirectories[directory].identifier[0] != '\0') {
+        *read_only = OrlixHostDirectories[directory].read_only;
+        result = 0;
+    }
+    os_unfair_lock_unlock(&OrlixHostDirectoriesLock);
+    return result;
+}
+
 static int OrlixHostRegisterRootImage(struct OrlixHostRootImage *root_image)
 {
     unsigned int index;
@@ -1633,6 +1653,91 @@ __attribute__((visibility("hidden"))) long orlix_host_directory_read_file_at_pat
     }
 
     fclose(file);
+    OrlixHostLeaveHostTls(active_tls);
+    return result;
+}
+
+__attribute__((visibility("hidden"))) int orlix_host_directory_create_file_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    uint32_t mode)
+{
+    char entry_path[PATH_MAX];
+    unsigned int read_only = 1;
+    unsigned long active_tls;
+    int fd;
+    int result = -1;
+
+    if (orlix_host_directory_is_read_only(directory, &read_only) != 0) {
+        return -1;
+    }
+    if (read_only) {
+        return -2;
+    }
+    if (OrlixHostCopyDirectoryRelativeEntryPath(
+            directory, relative_path, entry_path, sizeof(entry_path)) != 0) {
+        return -1;
+    }
+
+    active_tls = OrlixHostEnterHostTls();
+    fd = open(entry_path, O_WRONLY | O_CREAT | O_EXCL, mode & 0777);
+    if (fd >= 0) {
+        result = close(fd) == 0 ? 0 : -1;
+    }
+    OrlixHostLeaveHostTls(active_tls);
+    return result;
+}
+
+__attribute__((visibility("hidden"))) long orlix_host_directory_write_file_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    uint64_t offset,
+    const void *buffer,
+    uint32_t length)
+{
+    char entry_path[PATH_MAX];
+    unsigned int read_only = 1;
+    unsigned long active_tls;
+    FILE *file;
+    size_t write_count;
+    long result = -1;
+
+    if (!buffer) {
+        return -1;
+    }
+    if (length == 0) {
+        return 0;
+    }
+    if (orlix_host_directory_is_read_only(directory, &read_only) != 0) {
+        return -1;
+    }
+    if (read_only) {
+        return -2;
+    }
+    if (offset > (uint64_t)LLONG_MAX ||
+        OrlixHostCopyDirectoryRelativeEntryPath(
+            directory, relative_path, entry_path, sizeof(entry_path)) != 0) {
+        return -1;
+    }
+
+    active_tls = OrlixHostEnterHostTls();
+    file = fopen(entry_path, "r+b");
+    if (!file) {
+        goto out;
+    }
+    if (fseeko(file, (off_t)offset, SEEK_SET) != 0) {
+        fclose(file);
+        goto out;
+    }
+    write_count = fwrite(buffer, 1, length, file);
+    if (fclose(file) != 0) {
+        goto out;
+    }
+    if (write_count == length) {
+        result = (long)write_count;
+    }
+
+out:
     OrlixHostLeaveHostTls(active_tls);
     return result;
 }

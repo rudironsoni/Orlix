@@ -2373,12 +2373,12 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 			reason:
 			"Linux sees the virtio-net device as a netdev with sysfs, rtnetlink, carrier, AF_PACKET bind, TX counter, RX queue, and procfs interface proof."
 		),
-		OrlixOCIRuntimeFeature(
-			name: "virtioFsHostFolderMount",
-			status: .implemented,
-			proof: "orlix:virtio_fs_mount_probe",
-			reason: "Linux mounts the Orlix host-folder tag orlix-host0 through upstream virtio-fs with mountinfo, readdir, EROFS, statx, xattr, lseek, and nested traversal proof."
-		),
+            OrlixOCIRuntimeFeature(
+                name: "virtioFsHostFolderMount",
+                status: .implemented,
+                proof: "orlix:virtio_fs_mount_probe",
+                reason: "Linux mounts the Orlix host-folder tag orlix-host0 through upstream virtio-fs with mountinfo, readdir, writable create/write/readback, read-only EROFS, statx, xattr, lseek, and nested traversal proof."
+            ),
 		OrlixOCIRuntimeFeature(
 			name: "rtnetlink",
 			status: .implemented,

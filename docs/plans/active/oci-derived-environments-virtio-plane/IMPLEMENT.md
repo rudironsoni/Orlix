@@ -24112,3 +24112,37 @@ Boundary:
 - This is an ownership/claim correction. It does not remove OCI descriptor
   transport, add HostAdapter Linux policy, edit upstream/generated trees, patch
   mlibc, claim live simulator proof, or claim OCI runtime readiness.
+## 2026-06-26 - Linux-owned writable virtio-fs host folder path
+
+Implemented a Linux-owned virtio-fs step instead of adding another OrlixOS
+semantic substitute.
+
+- Added private HostAdapter host-directory SPI for read-only mode lookup,
+  regular-file create, and regular-file write by safe relative path.
+- Added OrlixKernel virtio-fs `FUSE_CREATE` and `FUSE_WRITE` handling in the
+  Orlix virtio-mmio device. Read-only backends map to Linux `EROFS`; writable
+  backends can create, write, and read back files through the mounted
+  `virtiofs` filesystem.
+- Extended `virtio_fs_mount_probe` from read-only mount proof to a two-phase
+  proof: writable mount create/write/readback, then read-only mount `EROFS`.
+- Updated the app-hosted upstream-test fixture for the virtio-fs probe to
+  register `orlix-host0` writable so Linux mount flags own read-only policy.
+
+Evidence:
+- `rtk git diff --check` exited 0.
+- `rtk swiftc -parse OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift OrlixTestRunner/Tests/XCTest/OrlixKernelUpstreamTests/OrlixKernelUpstreamTests.swift` exited 0.
+- `rtk swiftc -parse OrlixOS/Sources/Session/OrlixOCIImageLayout.swift` exited 0.
+- `rtk proxy clang -fsyntax-only -IOrlixHostAdapter/Sources -IOrlixHostAdapter/Sources/include OrlixHostAdapter/Sources/OrlixHostAdapter/boot/resources.c` exited 0.
+- `rtk make -f OrlixKernel/Makefile kselftest PROFILE=development` exited 0.
+- `rtk xcode-storage-doctor` exited 0.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixHostAdapterTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' -only-testing:OrlixHostAdapterTests/OrlixHostAdapterTests/testHostDirectoryWritableRegistrationCreatesAndWritesFiles test` passed in xcresult `Test-OrlixHostAdapterTests-2026.06.26_16-40-47-+0200.xcresult` with 1 passed, 0 failed, 0 skipped.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixKernelUpstreamTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- `rtk xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixHostAdapterTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+
+Runtime proof gap:
+- The focused app-hosted
+  `OrlixKernelUpstreamTests/OrlixKernelUpstreamTests/testVirtioFSMountProbeCompletesThroughOrlixOSTerminalSession`
+  reached `Testing started`, installed and launched `org.orlix.OrlixTestRunner`,
+  then stayed silent until interrupted. The resulting xcresult bundles are
+  incomplete because xcodebuild was interrupted. No `OrlixTestRunner` crash
+  report was found. This is not counted as virtio-fs runtime proof.
