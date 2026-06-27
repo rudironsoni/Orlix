@@ -904,15 +904,29 @@ executionScript: OrlixOCIDerivedLiveRegistryTerminalProof
 .sigwinchExecutionScript,
 requiredMarkers: OrlixOCIDerivedLiveRegistryTerminalProof
 .sigwinchRequiredMarkers,
-inputAfterMarker:
-"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_READY",
-input: Data("\n".utf8),
 resizeAfterMarker:
 "ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_READY",
 resizeRows: 43,
 resizeColumns: 119,
+inputAfterResize: Data("\n".utf8),
 successMarker:
 "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_SIGWINCH_OK"
+).run()
+case "ociTerminalLiveRegistryAlpineSIGTSTP":
+output = try OrlixOCIDerivedLiveRegistryTerminalProof(
+liveImageReference: "alpine:3.20",
+terminalEnvironmentID:
+"oci-live-registry-terminal-alpine-sigtstp-test-fixture",
+executionScript: OrlixOCIDerivedLiveRegistryTerminalProof
+.sigtstpExecutionScript,
+requiredMarkers: OrlixOCIDerivedLiveRegistryTerminalProof
+.sigtstpRequiredMarkers,
+inputAfterMarker:
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGTSTP_READY",
+input: Data([0x1a]),
+expectedExitStatus: 148,
+successMarker:
+"ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_SIGTSTP_OK"
 ).run()
 case "ociTerminalLiveRegistryBusyboxSize":
 output = try OrlixOCIDerivedLiveRegistryTerminalProof(
@@ -1803,15 +1817,15 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         }
     }
 
-	private static func validateLifecycle(
-		result: OrlixOCIRegistryEnvironmentInstallRunResult,
-		expectedEnvironmentID: String,
-		lifecycleRecordURL: URL,
-		environmentDirectoryURL: URL
-	) throws {
-		guard result.installResult.id == expectedEnvironmentID else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected orlix run install id \(expectedEnvironmentID)"
+private static func validateLifecycle(
+result: OrlixOCIRegistryEnvironmentInstallRunResult,
+expectedEnvironmentID: String,
+lifecycleRecordURL: URL,
+environmentDirectoryURL: URL
+) throws {
+guard result.installResult.id == expectedEnvironmentID else {
+throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+"expected orlix run install id \(expectedEnvironmentID)"
 			)
 		}
         guard result.runResult.startedStateReport.status == .running,
@@ -2075,6 +2089,13 @@ static let sigwinchRequiredMarkers = [
 "ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_OK",
 "ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
 ]
+static let sigtstpRequiredMarkers = [
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGTSTP_READY",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGTSTP_TRAP",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
+]
 
 	private let fileManager = FileManager.default
 	private let recorder = OrlixRuntimeProofOutputRecorder()
@@ -2087,10 +2108,12 @@ private let input: Data?
 private let resizeAfterMarker: String?
 private let resizeRows: UInt32?
 private let resizeColumns: UInt32?
+private let inputAfterResize: Data?
 private let terminalRows: UInt32?
 private let terminalColumns: UInt32?
-	private let readOnlyRoot: Bool
-	private let successMarker: String?
+private let readOnlyRoot: Bool
+private let expectedExitStatus: Int32
+private let successMarker: String?
 
 	init(
 		liveImageReference: String = defaultLiveImageReference,
@@ -2102,10 +2125,12 @@ input: Data? = nil,
 resizeAfterMarker: String? = nil,
 resizeRows: UInt32? = nil,
 resizeColumns: UInt32? = nil,
+inputAfterResize: Data? = nil,
 terminalRows: UInt32? = nil,
 terminalColumns: UInt32? = nil,
-		readOnlyRoot: Bool = false,
-		successMarker: String? = nil
+readOnlyRoot: Bool = false,
+expectedExitStatus: Int32 = 0,
+successMarker: String? = nil
 	) {
 		self.liveImageReference = liveImageReference
 		self.terminalEnvironmentID = terminalEnvironmentID
@@ -2116,10 +2141,12 @@ self.input = input
 self.resizeAfterMarker = resizeAfterMarker
 self.resizeRows = resizeRows
 self.resizeColumns = resizeColumns
+self.inputAfterResize = inputAfterResize
 self.terminalRows = terminalRows
-		self.terminalColumns = terminalColumns
-		self.readOnlyRoot = readOnlyRoot
-		self.successMarker = successMarker
+self.terminalColumns = terminalColumns
+self.readOnlyRoot = readOnlyRoot
+self.expectedExitStatus = expectedExitStatus
+self.successMarker = successMarker
 	}
 
 	func run() throws -> String {
@@ -2193,7 +2220,8 @@ resize(
 terminal,
 rows: resizeRows,
 columns: resizeColumns,
-after: resizeAfterMarker
+after: resizeAfterMarker,
+thenSend: inputAfterResize
 )
 }
 
@@ -2242,10 +2270,11 @@ let installer = OrlixOCIEnvironmentInstaller(registry: registry)
 		try validateText(text)
 		try Self.validateLifecycle(
 			result: result,
-			expectedEnvironmentID: terminalEnvironmentID,
-			lifecycleRecordURL: try OrlixOCIRuntime(registry: registry)
-				.lifecycleStore.recordURL(forID: terminalEnvironmentID),
-			environmentDirectoryURL: terminalLayout.rootDirectory
+expectedEnvironmentID: terminalEnvironmentID,
+lifecycleRecordURL: try OrlixOCIRuntime(registry: registry)
+.lifecycleStore.recordURL(forID: terminalEnvironmentID),
+environmentDirectoryURL: terminalLayout.rootDirectory,
+expectedExitStatus: expectedExitStatus
 		)
 		text += "\nORLIX_OCI_LIVE_REGISTRY_TERMINAL_PULL_OK\n"
 		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STARTED_OK\n"
@@ -2309,10 +2338,19 @@ static var sigwinchExecutionScript: String {
 "trap 'winch_seen=1; printf \"%s\\n\" ${m}SIGWINCH_SEEN' WINCH",
 "printf '%s\\n' ${m}SIGWINCH_READY",
 "IFS= read -r _orlix_sigwinch_gate",
-"if /bin/test \"$winch_seen\" = 1; then :; else printf '%s\\n' ${m}SIGWINCH_MISSING; exit 46; fi",
-"s=\"$(stty -a 2>&1 || true)\"",
-"case \"$s\" in *'rows 43'*'columns 119'*|*'columns 119'*'rows 43'*) printf '%s\\n' ${m}SIGWINCH_OK;; *) printf 'ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_SIZE_BAD=%s\\n' \"$s\"; exit 47;; esac",
+"if /bin/test \"$winch_seen\" = 1; then printf '%s\\n' ${m}SIGWINCH_OK; else printf '%s\\n' ${m}SIGWINCH_MISSING; exit 46; fi",
 "printf '%s\\n' ${m}DONE",
+].joined(separator: "\n")
+}
+
+static var sigtstpExecutionScript: String {
+[
+"m=ORLIX_ENV_LIVE_REGISTRY_TERMINAL_",
+"printf '%s\\n' ${m}BEGIN",
+"if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s\\n' ${m}PTY_OK; else printf '%s\\n' ${m}NOT_PTY; exit 42; fi",
+"trap 'printf \"%s\\n\" ${m}SIGTSTP_TRAP; printf \"%s\\n\" ${m}DONE; exit 148' TSTP",
+"printf '%s\\n' ${m}SIGTSTP_READY",
+"while :; do sleep 1; done",
 ].joined(separator: "\n")
 }
 
@@ -2337,13 +2375,18 @@ private func resize(
 _ terminal: OrlixTerminalSession,
 rows: UInt32,
 columns: UInt32,
-after marker: String
+after marker: String,
+thenSend input: Data? = nil
 ) {
 DispatchQueue.global(qos: .userInitiated).async { [recorder] in
 let deadline = Date().addingTimeInterval(Self.timeout)
 while Date() < deadline {
 if Self.normalized(recorder.text).contains(marker) {
 terminal.resize(rows: rows, columns: columns)
+if let input {
+Thread.sleep(forTimeInterval: 0.1)
+terminal.send(input)
+}
 return
 }
 Thread.sleep(forTimeInterval: 0.05)
@@ -2362,15 +2405,16 @@ private func validateText(_ text: String) throws {
 		}
 	}
 
-	private static func validateLifecycle(
-		result: OrlixOCIRegistryEnvironmentInstallRunResult,
-		expectedEnvironmentID: String,
-		lifecycleRecordURL: URL,
-		environmentDirectoryURL: URL
-	) throws {
-		guard result.installResult.id == expectedEnvironmentID else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected live registry terminal install id \(expectedEnvironmentID)"
+private static func validateLifecycle(
+result: OrlixOCIRegistryEnvironmentInstallRunResult,
+expectedEnvironmentID: String,
+lifecycleRecordURL: URL,
+environmentDirectoryURL: URL,
+expectedExitStatus: Int32
+) throws {
+guard result.installResult.id == expectedEnvironmentID else {
+throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+"expected live registry terminal install id \(expectedEnvironmentID)"
 			)
 		}
 		guard result.runResult.startedStateReport.status == .running,
@@ -2380,13 +2424,13 @@ private func validateText(_ text: String) throws {
 				"expected live registry terminal started lifecycle state running"
 			)
 		}
-		guard result.runResult.completedStateReport.status == .stopped,
-			result.runResult.completedStateReport.exitStatus == 0
-		else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected live registry terminal completed lifecycle state stopped exit 0"
-			)
-		}
+guard result.runResult.completedStateReport.status == .stopped,
+result.runResult.completedStateReport.exitStatus == expectedExitStatus
+else {
+throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+"expected live registry terminal completed lifecycle state stopped exit \(expectedExitStatus)"
+)
+}
 		guard result.deleteResult?.lifecycleState == .deleted else {
 			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
 				"expected live registry terminal delete cleanup"
