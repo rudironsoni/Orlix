@@ -851,7 +851,16 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 			descriptor: session.environment,
 			kernelCommandLine: kernelCommandLine
 		)
-		let terminalToken = session.terminal ? "orlix.terminal=1" : "orlix.terminal=0"
+		var terminalTokens = [session.terminal ? "orlix.terminal=1" : "orlix.terminal=0"]
+		if let consoleSize = session.consoleSize {
+			terminalTokens.append(
+				"\(OrlixEnvironmentRootImage.defaultTerminalRowsCommandLineKey)=\(consoleSize.height)"
+			)
+			terminalTokens.append(
+				"\(OrlixEnvironmentRootImage.defaultTerminalColumnsCommandLineKey)=\(consoleSize.width)"
+			)
+		}
+		let terminalToken = terminalTokens.joined(separator: " ")
 		guard let base, !base.isEmpty else {
 			return terminalToken
 		}

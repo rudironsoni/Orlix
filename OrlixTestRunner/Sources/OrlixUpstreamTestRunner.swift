@@ -870,6 +870,19 @@ enum OrlixAppLaunchRuntimeRunner {
 				successMarker:
 					"ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_INPUT_OK"
 			).run()
+		case "ociTerminalLiveRegistryBusyboxSize":
+			output = try OrlixOCIDerivedLiveRegistryTerminalProof(
+				liveImageReference: "registry.k8s.io/e2e-test-images/busybox:1.29-4",
+				terminalEnvironmentID: "oci-live-registry-terminal-busybox-size-test-fixture",
+				executionScript: OrlixOCIDerivedLiveRegistryTerminalProof
+					.terminalSizeExecutionScript,
+				requiredMarkers: OrlixOCIDerivedLiveRegistryTerminalProof
+					.terminalSizeRequiredMarkers,
+				terminalRows: 37,
+				terminalColumns: 132,
+				readOnlyRoot: true,
+				successMarker: "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_BUSYBOX_SIZE_OK"
+			).run()
 		case "ociNetwork":
 			output = try OrlixOCIDerivedNetworkRuntimeProof().run()
 		case "ociVirtioNet":
@@ -1628,6 +1641,12 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_OK",
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
 	]
+	static let terminalSizeRequiredMarkers = [
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIZE_OK",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
+	]
 
 	private let fileManager = FileManager.default
 	private let recorder = OrlixRuntimeProofOutputRecorder()
@@ -1637,6 +1656,9 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 	private let requiredMarkers: [String]
 	private let inputAfterMarker: String?
 	private let input: Data?
+	private let terminalRows: UInt32?
+	private let terminalColumns: UInt32?
+	private let readOnlyRoot: Bool
 	private let successMarker: String?
 
 	init(
@@ -1646,6 +1668,9 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		requiredMarkers: [String] = defaultRequiredMarkers,
 		inputAfterMarker: String? = nil,
 		input: Data? = nil,
+		terminalRows: UInt32? = nil,
+		terminalColumns: UInt32? = nil,
+		readOnlyRoot: Bool = false,
 		successMarker: String? = nil
 	) {
 		self.liveImageReference = liveImageReference
@@ -1654,6 +1679,9 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		self.requiredMarkers = requiredMarkers
 		self.inputAfterMarker = inputAfterMarker
 		self.input = input
+		self.terminalRows = terminalRows
+		self.terminalColumns = terminalColumns
+		self.readOnlyRoot = readOnlyRoot
 		self.successMarker = successMarker
 	}
 
@@ -1726,16 +1754,27 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 
 		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
 		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: Self.timeout)
+		var runArguments = [
+			"orlix", "run",
+			"--id", terminalEnvironmentID,
+			"--tty",
+		]
+		if let terminalRows, let terminalColumns {
+			runArguments.append(contentsOf: [
+				"--terminal-size", "\(terminalRows)x\(terminalColumns)",
+			])
+		}
+		if readOnlyRoot {
+			runArguments.append("--read-only")
+		}
+		runArguments.append(contentsOf: [
+			"--user", "0:0",
+			"--rm",
+			liveImageReference,
+			"--", "/bin/sh", "-c", executionScript,
+		])
 		let result = try await installer.run(
-			arguments: [
-				"orlix", "run",
-				"--id", terminalEnvironmentID,
-				"--tty",
-				"--user", "0:0",
-				"--rm",
-				liveImageReference,
-				"--", "/bin/sh", "-c", executionScript,
-			],
+			arguments: runArguments,
 			tools: OrlixOCIEnvironmentMaterializationTools(
 				mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
 				truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
@@ -1789,6 +1828,17 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 			"IFS= read -r orlix_terminal_input",
 			"if /bin/test \"$orlix_terminal_input\" = orlix-interactive-alpine; then printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ INPUT_OK; else printf 'ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_BAD=%s\\n' \"$orlix_terminal_input\"; exit 43; fi",
 			"printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ DONE",
+		].joined(separator: "\n")
+	}
+
+	static var terminalSizeExecutionScript: String {
+		[
+			"m=ORLIX_ENV_LIVE_REGISTRY_TERMINAL_",
+			"printf '%s\\n' ${m}BEGIN",
+			"if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s\\n' ${m}PTY_OK; else printf '%s\\n' ${m}NOT_PTY; exit 42; fi",
+			"s=\"$(stty -a 2>&1 || true)\"",
+			"case \"$s\" in *'rows 37'*'columns 132'*|*'columns 132'*'rows 37'*) printf '%s\\n' ${m}SIZE_OK;; *) printf '%s\\n' ${m}SIZE_BAD; exit 44;; esac",
+			"printf '%s\\n' ${m}DONE",
 		].joined(separator: "\n")
 	}
 
