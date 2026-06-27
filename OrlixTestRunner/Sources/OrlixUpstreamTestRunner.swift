@@ -2211,7 +2211,7 @@ private final class OrlixOCIHostMountTargetRuntimeProof: @unchecked Sendable {
         guard run.completedStateReport.status == .stopped,
               run.completedStateReport.exitStatus == 0 else {
             throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-                "expected OCI host mount target proof stopped exit 0"
+                "expected OCI host mount target proof stopped exit 0, got status \(run.completedStateReport.status.rawValue) exit \(String(describing: run.completedStateReport.exitStatus))"
             )
         }
         guard finalState.status == .stopped,
