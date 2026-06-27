@@ -836,14 +836,16 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedLifecycleStateRuntimeProof().run()
 		case "ociRun":
 			output = try OrlixOCIDerivedRunCommandRuntimeProof().run()
-			case "ociRunLiveRegistry":
-				output = try OrlixOCIDerivedRunCommandRuntimeProof(
-					registryMode: .live
-				).run()
-			case "ociTerminalLiveRegistry":
-				output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
-			case "ociNetwork":
-				output = try OrlixOCIDerivedNetworkRuntimeProof().run()
+		case "ociRunLiveRegistry":
+			output = try OrlixOCIDerivedRunCommandRuntimeProof(
+				registryMode: .live
+			).run()
+		case "ociRunLiveRegistryBusybox":
+			output = try OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof().run()
+		case "ociTerminalLiveRegistry":
+			output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
+		case "ociNetwork":
+			output = try OrlixOCIDerivedNetworkRuntimeProof().run()
 		case "ociVirtioNet":
 			output = try OrlixOCIDerivedVirtioNetRuntimeProof().run()
 		case "ociCgroupResources":
@@ -1217,10 +1219,10 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
 
     private static let timeout: TimeInterval = 120
     private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
-    private static let runEnvironmentID = "oci-run-runtime-test-fixture"
-    private static let deterministicImageReference =
-        "registry.example.org/library/orlix-fixture:latest"
-    private static let liveImageReference = "registry.k8s.io/pause:3.10"
+	private static let defaultRunEnvironmentID = "oci-run-runtime-test-fixture"
+	private static let deterministicImageReference =
+		"registry.example.org/library/orlix-fixture:latest"
+	private static let defaultLiveImageReference = "registry.k8s.io/pause:3.10"
     private static let requiredMarkers = [
         "ORLIX_ENV_ORLIX_RUN_BEGIN",
         "ORLIX_ENV_ORLIX_RUN_STDOUT_OK",
@@ -1228,13 +1230,21 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         "ORLIX_ENV_ORLIX_RUN_DONE",
     ]
 
-    private let fileManager = FileManager.default
-    private let recorder = OrlixRuntimeProofOutputRecorder()
-    private let registryMode: RegistryMode
+	private let fileManager = FileManager.default
+	private let recorder = OrlixRuntimeProofOutputRecorder()
+	private let registryMode: RegistryMode
+	private let liveImageReference: String
+	private let runEnvironmentID: String
 
-    init(registryMode: RegistryMode = .deterministic) {
-        self.registryMode = registryMode
-    }
+	init(
+		registryMode: RegistryMode = .deterministic,
+		liveImageReference: String = defaultLiveImageReference,
+		runEnvironmentID: String = defaultRunEnvironmentID
+	) {
+		self.registryMode = registryMode
+		self.liveImageReference = liveImageReference
+		self.runEnvironmentID = runEnvironmentID
+	}
 
     func run() throws -> String {
         let resultBox = OrlixAsyncRuntimeProofResultBox<String>()
@@ -1265,7 +1275,10 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
     }
 
     private func runAsync() async throws -> String {
-        let imageReference = Self.imageReference(for: registryMode)
+		let imageReference = Self.imageReference(
+			for: registryMode,
+			liveImageReference: liveImageReference
+		)
         let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
         let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
         guard fileManager.fileExists(atPath: ready.path) else {
@@ -1292,7 +1305,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
             scratchRoot: fixture.scratchRoot
         )
         let runLayout = try OrlixEnvironmentStorageLayout.layout(
-            forEnvironmentID: Self.runEnvironmentID,
+			forEnvironmentID: runEnvironmentID,
             linuxStateRoot: fixture.linuxStateRoot,
             cacheRoot: fixture.cacheRoot,
             scratchRoot: fixture.scratchRoot
@@ -1315,7 +1328,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
                 "orlix",
                 "run",
                 "--id",
-                Self.runEnvironmentID,
+			runEnvironmentID,
                 "--rm",
                 imageReference,
                 "--",
@@ -1343,12 +1356,13 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
 
         var text = Self.normalized(recorder.text)
         try Self.validateText(text)
-        try Self.validateLifecycle(
-            result: result,
-            lifecycleRecordURL: try OrlixOCIRuntime(registry: registry)
-                .lifecycleStore.recordURL(forID: Self.runEnvironmentID),
-            environmentDirectoryURL: runLayout.rootDirectory
-        )
+		try Self.validateLifecycle(
+			result: result,
+			expectedEnvironmentID: runEnvironmentID,
+			lifecycleRecordURL: try OrlixOCIRuntime(registry: registry)
+				.lifecycleStore.recordURL(forID: runEnvironmentID),
+			environmentDirectoryURL: runLayout.rootDirectory
+		)
         text += "\nORLIX_OCI_RUN_COMMAND_STARTED_OK\n"
         text += "ORLIX_OCI_RUN_COMMAND_STOPPED_OK\n"
         text += "ORLIX_OCI_RUN_COMMAND_DELETE_OK\n"
@@ -1358,14 +1372,17 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         return text
     }
 
-    private static func imageReference(for mode: RegistryMode) -> String {
-        switch mode {
-        case .deterministic:
-            return deterministicImageReference
-        case .live:
-            return liveImageReference
-        }
-    }
+	private static func imageReference(
+		for mode: RegistryMode,
+		liveImageReference: String
+	) -> String {
+		switch mode {
+		case .deterministic:
+			return deterministicImageReference
+		case .live:
+			return liveImageReference
+		}
+	}
 
     private static var executionScript: String {
         [
@@ -1493,16 +1510,17 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         }
     }
 
-    private static func validateLifecycle(
-        result: OrlixOCIRegistryEnvironmentInstallRunResult,
-        lifecycleRecordURL: URL,
-        environmentDirectoryURL: URL
-    ) throws {
-        guard result.installResult.id == Self.runEnvironmentID else {
-            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-                "expected orlix run install id \(Self.runEnvironmentID)"
-            )
-        }
+	private static func validateLifecycle(
+		result: OrlixOCIRegistryEnvironmentInstallRunResult,
+		expectedEnvironmentID: String,
+		lifecycleRecordURL: URL,
+		environmentDirectoryURL: URL
+	) throws {
+		guard result.installResult.id == expectedEnvironmentID else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected orlix run install id \(expectedEnvironmentID)"
+			)
+		}
         guard result.runResult.startedStateReport.status == .running,
               result.runResult.startedStateReport.pid != nil else {
             throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
@@ -1538,6 +1556,19 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
     }
 }
 
+private final class OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof:
+	@unchecked Sendable
+{
+	func run() throws -> String {
+		var text = try OrlixOCIDerivedRunCommandRuntimeProof(
+			registryMode: .live,
+			liveImageReference: "registry.k8s.io/e2e-test-images/busybox:1.29-4",
+			runEnvironmentID: "oci-run-live-registry-busybox-test-fixture"
+		).run()
+		text += "ORLIX_OCI_RUN_LIVE_REGISTRY_BUSYBOX_OK\n"
+		return text
+	}
+}
 
 private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendable {
 	private static let timeout: TimeInterval = 600

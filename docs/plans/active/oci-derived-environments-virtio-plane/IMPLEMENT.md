@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 live registry BusyBox runtime checkpoint
+
+Changes:
+- Parameterized the existing `OrlixOCIDerivedRunCommandRuntimeProof` so live-registry proofs can use a distinct image reference and isolated OCI lifecycle environment ID while reusing the same `orlix run --rm` OrlixOS path.
+- Added app-hosted `--orlix-runtime-test-spec ociRunLiveRegistryBusybox`.
+- The new proof pulls `registry.k8s.io/e2e-test-images/busybox:1.29-4` through `OrlixOCIRegistryPuller`, materializes it with the existing fixture-backed materialization command path, runs `/bin/sh -c` through `orlix run`, validates Linux stdout/stderr markers, lifecycle started/stopped/delete, lifecycle-record cleanup, environment-directory cleanup, and appends `ORLIX_OCI_RUN_LIVE_REGISTRY_BUSYBOX_OK`.
+
+Evidence:
+- `rtk proxy swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported the iPhone 17 simulator already booted.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociRunLiveRegistryBusybox` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `ORLIX_ENV_ORLIX_RUN_BEGIN`, `ORLIX_ENV_ORLIX_RUN_STDOUT_OK`, `ORLIX_ENV_ORLIX_RUN_STDERR_OK`, `ORLIX_ENV_ORLIX_RUN_DONE`, `ORLIX_OCI_RUN_COMMAND_STARTED_OK`, `ORLIX_OCI_RUN_COMMAND_STOPPED_OK`, `ORLIX_OCI_RUN_COMMAND_DELETE_OK`, `ORLIX_OCI_RUN_LIVE_REGISTRY_PULL_OK`, and `ORLIX_OCI_RUN_LIVE_REGISTRY_BUSYBOX_OK`; no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, or `LIFECYCLE_TIMEOUT` was present.
+- Regression direct simulator launch `--orlix-runtime-test-spec ociRunLiveRegistry` exited 0 on the same simulator with existing pause-image markers: `ORLIX_ENV_ORLIX_RUN_BEGIN`, `ORLIX_ENV_ORLIX_RUN_STDOUT_OK`, `ORLIX_ENV_ORLIX_RUN_STDERR_OK`, `ORLIX_ENV_ORLIX_RUN_DONE`, `ORLIX_OCI_RUN_COMMAND_STARTED_OK`, `ORLIX_OCI_RUN_COMMAND_STOPPED_OK`, `ORLIX_OCI_RUN_COMMAND_DELETE_OK`, and `ORLIX_OCI_RUN_LIVE_REGISTRY_PULL_OK`.
+- Regression direct simulator launch `--orlix-runtime-test-spec ociRun` exited 0 on the same simulator.
+- Final post-cleanup `rtk proxy swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk git diff --check` exited 0.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+
+Boundary:
+- A first attempt to run a two-image matrix inside one app launch failed with `ORLIX-APP-RUNTIME-RUNNER-ERROR bootFailed(OrlixOS.OrlixBootStatus.alreadyStarted)`. The runner can boot one Orlix Linux session per app launch; separate image proofs must use separate app launches until the product has a real multi-session lifecycle model.
+- This checkpoint expands live public registry runtime coverage from the existing pause-image path to a second Kubernetes BusyBox image through `orlix run`. It does not prove arbitrary OCI image compatibility, registry authentication, large image behavior, offline cache policy, product registry UX, multi-session app-hosted execution, or beta readiness.
+
 ### 2026-06-26 OCI terminal=false inherited stdio app proof
 
 Changes:
