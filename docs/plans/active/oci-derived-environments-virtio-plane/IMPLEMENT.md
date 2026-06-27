@@ -24559,3 +24559,15 @@ Boundary: this proves the OCI-derived runtime path can execute the Linux-owned v
 - Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
 
 Boundary: this proves descriptor-driven OCI stop-signal selection for the app-hosted lifecycle path. It does not prove non-terminal signal delivery, SIGKILL, process groups, arbitrary OCI lifecycle compliance, or beta readiness.
+
+## 2026-06-27 live registry input checkpoint
+
+- Verified the existing app-hosted `ociRunLiveRegistry` path against `registry.k8s.io/pause:3.10`.
+- The proof uses `OrlixOCIRegistryPuller` through the OrlixOS install/run/delete path, then executes the configured OCI-derived command in Orlix Linux and removes the runtime environment with `--rm` cleanup.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported the iPhone 17 simulator already booted.
+- Direct simulator launch `--orlix-runtime-test-spec ociRunLiveRegistry` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`, with `ORLIX_ENV_ORLIX_RUN_BEGIN`, `ORLIX_ENV_ORLIX_RUN_STDOUT_OK`, `ORLIX_ENV_ORLIX_RUN_STDERR_OK`, `ORLIX_ENV_ORLIX_RUN_DONE`, `ORLIX_OCI_RUN_COMMAND_STARTED_OK`, `ORLIX_OCI_RUN_COMMAND_STOPPED_OK`, `ORLIX_OCI_RUN_COMMAND_DELETE_OK`, and `ORLIX_OCI_RUN_LIVE_REGISTRY_PULL_OK`.
+- Focused adjacent simulator regressions `ociRun`, `ociStdio`, and `ociNetwork` exited 0 on the same installed app and simulator.
+- Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
+
+Boundary: this proves live registry input for the current app-hosted OrlixOS install/run/delete path using one small linux/arm64 image. It does not prove arbitrary registry authentication, large image pulls, broad OCI image compatibility, product registry UX, offline cache policy, DNS/NAT as a Linux userspace feature, or beta readiness.
