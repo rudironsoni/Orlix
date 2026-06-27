@@ -834,6 +834,8 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedStopSignalRuntimeProof().run()
 		case "ociLifecycleState":
 			output = try OrlixOCIDerivedLifecycleStateRuntimeProof().run()
+		case "ociHealthcheck":
+			output = try OrlixOCIDerivedHealthcheckRuntimeProof().run()
 		case "ociRun":
 			output = try OrlixOCIDerivedRunCommandRuntimeProof().run()
 		case "ociRunLiveRegistry":
@@ -1248,6 +1250,216 @@ private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
         text.replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
     }
+}
+
+private final class OrlixOCIDerivedHealthcheckRuntimeProof: @unchecked Sendable {
+	private static let timeout: TimeInterval = 240
+	private static let environmentID = "oci-imported-runtime-test-fixture"
+	private static let requiredMarkers = [
+		"ORLIX_ENV_HEALTHCHECK_BEGIN",
+		"ORLIX_ENV_HEALTHCHECK_PROC_OK",
+		"ORLIX_ENV_HEALTHCHECK_DEV_OK",
+		"ORLIX_ENV_HEALTHCHECK_DONE",
+	]
+
+	private let fileManager = FileManager.default
+	private let recorder = OrlixRuntimeProofOutputRecorder()
+
+	func run() throws -> String {
+		let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+		let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+		guard fileManager.fileExists(atPath: ready.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+		}
+
+		let copiedRoot = FileManager.default.temporaryDirectory
+			.appendingPathComponent(
+				"orlix-oci-healthcheck-\(UUID().uuidString)",
+				isDirectory: true
+			)
+		try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+		defer { try? fileManager.removeItem(at: copiedRoot) }
+
+		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let terminal = OrlixTerminalSession()
+		let output = terminal.attachOutput { [recorder] data in
+			recorder.append(data)
+		}
+		defer { output.cancel() }
+
+		try OrlixOCIDerivedStdioRuntimeProof.writeOCIRuntimeConfig(
+			terminal: false,
+			script: "printf '%s\\n' ORLIX_ENV_BASE_COMMAND_SHOULD_NOT_RUN",
+			rootPath: "imported-root",
+			to: fixture.root
+		)
+
+		let lifecycle = try OrlixOCIRuntimeBundle
+			.load(from: fixture.root)
+			.lifecycleController(id: Self.environmentID)
+			.create()
+		let processHandle = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: lifecycle,
+			rootMount: .defaultOverlay,
+			rootImageIdentifier: "orlix.test.environment.oci-runtime-test-fixture"
+		)
+		let runtime = OrlixOCIRuntime(registry: registry)
+		let healthcheck = OrlixEnvironmentHealthcheck(
+			test: ["CMD-SHELL", Self.healthcheckScript]
+		)
+		try registry.save(
+			Self.descriptor(
+				processHandle.sessionDescriptor.environment,
+				healthcheck: healthcheck
+			)
+		)
+		try runtime.lifecycleStore.save(lifecycle)
+
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let result = try installer.healthcheck(
+			id: Self.environmentID,
+			terminal: terminal,
+			observationTimeout: Self.timeout
+		)
+		let finalState = try installer.state(id: Self.environmentID)
+		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+			forID: Self.environmentID
+		)
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: Self.environmentID,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let deletedEnvironment = try installer.delete(id: Self.environmentID)
+
+		var text = Self.normalized(recorder.text)
+		try Self.validateText(text)
+		guard result.command == ["/bin/sh", "-c", Self.healthcheckScript] else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"unexpected healthcheck command \(result.command)"
+			)
+		}
+		guard result.runResult.completedStateReport.status == .stopped,
+			result.runResult.completedStateReport.exitStatus == 0,
+			finalState.status == .stopped,
+			finalState.exitStatus == 0
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected healthcheck lifecycle stopped exit 0"
+			)
+		}
+		guard deletedEnvironment.lifecycleState == .deleted else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected deleted lifecycle state"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected lifecycle record cleanup"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: layout.rootDirectory.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected environment directory cleanup"
+			)
+		}
+		text += "\nORLIX_OCI_HEALTHCHECK_COMMAND_OK\n"
+		text += "ORLIX_OCI_HEALTHCHECK_RUNTIME_STOPPED_OK\n"
+		text += "ORLIX_OCI_HEALTHCHECK_RUNTIME_DELETE_OK\n"
+		return text
+	}
+
+	private static var healthcheckScript: String {
+		[
+			"printf '%s\\n' ORLIX_ENV_HEALTHCHECK_BEGIN",
+			"if /bin/test -r /proc/self/status; then printf '%s\\n' ORLIX_ENV_HEALTHCHECK_PROC_OK; else exit 42; fi",
+			"if /bin/test -c /dev/null; then printf '%s\\n' ORLIX_ENV_HEALTHCHECK_DEV_OK; else exit 43; fi",
+			"printf '%s\\n' ORLIX_ENV_HEALTHCHECK_DONE",
+		].joined(separator: "\n")
+	}
+
+	private static func validateText(_ text: String) throws {
+		for marker in requiredMarkers where !text.contains(marker) {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+		}
+		if text.contains("\nnot ok ")
+			|| text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR")
+			|| text.contains("ORLIX_ENV_BASE_COMMAND_SHOULD_NOT_RUN")
+		{
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+		}
+	}
+
+	private static func normalized(_ text: String) -> String {
+		text.replacingOccurrences(of: "\r\n", with: "\n")
+			.replacingOccurrences(of: "\r", with: "\n")
+	}
+
+	private static func descriptor(
+		_ descriptor: OrlixEnvironmentDescriptor,
+		healthcheck: OrlixEnvironmentHealthcheck
+	) -> OrlixEnvironmentDescriptor {
+		OrlixEnvironmentDescriptor(
+			id: descriptor.id,
+			source: descriptor.source,
+			platform: descriptor.platform,
+			rootImageIdentifier: descriptor.rootImageIdentifier,
+			defaultCommand: descriptor.defaultCommand,
+			defaultEnvironment: descriptor.defaultEnvironment,
+			defaultWorkingDirectory: descriptor.defaultWorkingDirectory,
+			defaultUserID: descriptor.defaultUserID,
+			defaultGroupID: descriptor.defaultGroupID,
+			defaultSupplementaryGroups: descriptor.defaultSupplementaryGroups,
+			defaultCapabilities: descriptor.defaultCapabilities,
+			defaultNoNewPrivileges: descriptor.defaultNoNewPrivileges,
+			defaultCloseAdditionalFds: descriptor.defaultCloseAdditionalFds,
+			defaultStopSignal: descriptor.defaultStopSignal,
+			defaultTerminal: descriptor.defaultTerminal,
+			defaultTerminalRows: descriptor.defaultTerminalRows,
+			defaultTerminalColumns: descriptor.defaultTerminalColumns,
+			defaultOOMScoreAdjustment: descriptor.defaultOOMScoreAdjustment,
+			defaultScheduler: descriptor.defaultScheduler,
+			defaultIOPriority: descriptor.defaultIOPriority,
+			defaultCPUAffinity: descriptor.defaultCPUAffinity,
+			defaultUmask: descriptor.defaultUmask,
+			defaultRlimits: descriptor.defaultRlimits,
+			defaultPersonalityDomain: descriptor.defaultPersonalityDomain,
+			hostname: descriptor.hostname,
+			domainname: descriptor.domainname,
+			rootMount: descriptor.rootMount,
+			rootReadonly: descriptor.rootReadonly,
+			rootPropagation: descriptor.rootPropagation,
+			sysctls: descriptor.sysctls,
+			maskedPaths: descriptor.maskedPaths,
+			readonlyPaths: descriptor.readonlyPaths,
+			cgroupsPath: descriptor.cgroupsPath,
+			cgroupPidsLimit: descriptor.cgroupPidsLimit,
+			cgroupCPUMax: descriptor.cgroupCPUMax,
+			cgroupCPUWeight: descriptor.cgroupCPUWeight,
+			cgroupMemoryMax: descriptor.cgroupMemoryMax,
+			cgroupIOWeight: descriptor.cgroupIOWeight,
+			cgroupUnified: descriptor.cgroupUnified,
+			deviceNodes: descriptor.deviceNodes,
+			timeOffsets: descriptor.timeOffsets,
+			uidMappings: descriptor.uidMappings,
+			gidMappings: descriptor.gidMappings,
+			namespaces: descriptor.namespaces,
+			namespacePaths: descriptor.namespacePaths,
+			tmpfsMounts: descriptor.tmpfsMounts,
+			mounts: descriptor.mounts,
+			exposedPorts: descriptor.exposedPorts,
+			publishedPorts: descriptor.publishedPorts,
+			imageVolumes: descriptor.imageVolumes,
+			healthcheck: healthcheck,
+			annotations: descriptor.annotations
+		)
+	}
 }
 
 private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {

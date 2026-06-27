@@ -10,6 +10,23 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 OCI healthcheck app-hosted runtime proof
+
+Changes:
+- Added app-hosted `--orlix-runtime-test-spec ociHealthcheck`.
+- The proof reuses the imported OCI runtime fixture, writes an OCI bundle config whose default command must not run, stores a descriptor healthcheck `CMD-SHELL`, then executes `OrlixOCIEnvironmentInstaller.healthcheck(...)` through the OrlixOS runtime path.
+- The healthcheck command runs inside Orlix Linux and validates `/proc/self/status` readability plus `/dev/null` character-device visibility before exiting.
+
+Evidence:
+- `rtk proxy swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociHealthcheck` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `Kernel command line: orlix.terminal=0`, `ORLIX_ENV_HEALTHCHECK_BEGIN`, `ORLIX_ENV_HEALTHCHECK_PROC_OK`, `ORLIX_ENV_HEALTHCHECK_DEV_OK`, `ORLIX_ENV_HEALTHCHECK_DONE`, `ORLIX_OCI_HEALTHCHECK_COMMAND_OK`, `ORLIX_OCI_HEALTHCHECK_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_HEALTHCHECK_RUNTIME_DELETE_OK`; strict guards found no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, `LIFECYCLE_TIMEOUT`, `I/O error, dev vdb`, or `ORLIX_ENV_BASE_COMMAND_SHOULD_NOT_RUN`.
+- Adjacent simulator regression launches `ociLifecycleState` and `ociRun` exited 0 sequentially on the same simulator with strict rejection of app runner errors, lifecycle timeouts, and `I/O error, dev vdb`.
+- Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known current-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; recent Orlix/OrlixTestRunner crash scan found no reports.
+
+Boundary:
+- This proves descriptor healthcheck command selection and execution through the app-hosted OrlixOS OCI runtime path for the imported fixture. It does not prove scheduled/retried healthcheck policy, Docker daemon behavior, external network healthchecks, arbitrary image healthchecks, detached lifecycle across app restarts, full OCI Runtime Spec compliance, or beta readiness.
+
 ### 2026-06-27 OCI terminal initial window size app proof
 
 Changes:
