@@ -24730,3 +24730,10 @@ Boundary: this proves one live public OCI registry input can prepare an OrlixOS 
 - Final guards: `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known current-status warning only; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
 
 Boundary: this proves one live public OCI registry input can run an OrlixOS terminal session through observed `orlix run --tty --rm` lifecycle, with Linux PTY-backed command execution and cleanup. It does not prove arbitrary image compatibility, registry auth, large image behavior, offline cache policy, product registry UX, or beta readiness.
+
+## 2026-06-27 GOAL reference-model alignment checkpoint
+
+- Updated `GOAL.md` to incorporate the session decisions that Docker, OCI, Apple `container`, and Apple `containerization` are reference models for image/lifecycle/process separation and UX concepts, while explicitly excluding their incompatible daemon, VM, `runc`, `vminitd`, vsock, Rosetta, and runtime dependency architecture.
+- Kept the ownership boundary explicit: Linux behavior stays in OrlixKernel/Linux-facing port code, OrlixMLibC stays unpatched unless libc-owned, HostAdapter remains private iOS/Darwin mechanics, and OrlixOS remains the Kit/session layer without owning Linux semantics.
+- Restated build-efficiency direction for OrlixKernel/Linux, OrlixMLibC/mlibc, and Coreutils: use Kbuild, Meson/Ninja, Autotools/Make, and optional `ccache`/`sccache`; do not invent package managers, freshness DBs, proof ladders, or stamp ladders.
+- Validation: `wc -c docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md` reported 3896 bytes, below the 4000-byte goal limit; `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
