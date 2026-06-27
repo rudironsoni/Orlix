@@ -30,6 +30,28 @@ Evidence:
 
 Boundary:
 
+## 2026-06-27 OCI cgroup resources and virtio-fs nested directory runtime proof
+
+Changes:
+
+- Added Linux-owned `oci_cgroup_resources_probe` to the Orlix kselftest overlay and included it in the OCI imported runtime fixture as `/orlix/oci_cgroup_resources_probe`.
+- Added app-hosted `--orlix-runtime-test-spec ociCgroupResources`, which creates an OCI lifecycle bundle with `linux.cgroupsPath` plus pids, CPU, memory, block I/O, and unified cgroup resource settings, then runs the Linux probe through the OrlixOS OCI lifecycle path.
+- Fixed OrlixKernel virtio-fs non-root `READDIR` and `READDIRPLUS` handling to read `struct fuse_read_in` through `orlix_virtio_mmio_fuse_request_payload(...)`, matching split descriptor requests instead of assuming the request payload is inline. This keeps the fix in the Linux-owned virtio/FUSE device path and does not patch OrlixMLibC or generated upstream trees.
+- Preserved OCI virtio-fs lifecycle failure output in the app runner so future runtime failures include guest TAP/kernel output.
+
+Verification:
+
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc` exited 0 and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile build PROFILE=release` exited 0 and packaged `Build/OrlixKernel/xcframework/OrlixKernel.xcframework` after the virtio-fs patch.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 through the Xcode wrapper using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Direct simulator launch `--orlix-runtime-test-spec ociVirtioFS` on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` exited 0 with kernel timestamp `Sat Jun 27 07:12:37 CEST 2026`; artifact validation included `ok 12 - mounted virtio-fs nested paths support readdir, access, statx when present`, `ORLIX_OCI_VIRTIOFS_HOST_WRITE_OK`, `ORLIX_OCI_VIRTIOFS_RUNTIME_STARTED_OK`, `ORLIX_OCI_VIRTIOFS_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_VIRTIOFS_RUNTIME_DELETE_OK`, with no `not ok` or `ORLIX-APP-RUNTIME-RUNNER-ERROR`.
+- Direct simulator launch `--orlix-runtime-test-spec ociCgroupResources` exited 0. Artifact validation found `1..6`, all six `ok` TAP lines for cgroupsPath, pids.max, cpu.max, cpu.weight, memory.max, and io.weight, plus `ORLIX_OCI_CGROUP_RESOURCES_RUNTIME_STARTED_OK`, `ORLIX_OCI_CGROUP_RESOURCES_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_CGROUP_RESOURCES_RUNTIME_DELETE_OK`.
+- Adjacent simulator launches `ociNetwork`, `ociHostMountTarget`, `ociHostMountTargetReadOnly`, `ociRun`, `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 on the same installed app and simulator with their expected runtime markers.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- Recent Orlix crash report scan under `$HOME/Library/Logs/DiagnosticReports` found no matching crash reports.
+
 ## 2026-06-27 OCI host mount nested virtio-fs lookup
 
 - Fixed Linux-owned Orlix virtio-fs request handling in `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`.
