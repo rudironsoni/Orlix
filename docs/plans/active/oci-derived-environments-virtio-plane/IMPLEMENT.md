@@ -24530,3 +24530,17 @@ Evidence:
 
 Boundary:
 - This proves app-hosted OCI time namespace/timeOffset propagation into Linux-visible process state for the fixture path, plus focused OCI regressions. It does not claim arbitrary image compatibility, full OCI runtime spec coverage, external networking, DNS/NAT, registry UI, or product completion.
+## 2026-06-27 virtio-net OCI runtime checkpoint
+
+- Added the Linux-owned `virtio_net_device_probe` binary to both OrlixOS environment runtime fixtures and included its SHA-256 in `.fixtures-ready`.
+- Added app-hosted `ociVirtioNet` to `OrlixTestRunner`. The proof launches `/orlix/virtio_net_device_probe` from the OCI-derived root through `OrlixOCIRuntime`, validates the 14 TAP lines, and verifies start, stopped exit 0, and delete lifecycle cleanup.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0 and materialized both tar-imported and OCI-imported root images.
+- Raw artifact inspection confirmed the runtime TAP block includes `1..14`, virtio-net device presence on the upstream virtio bus, Linux netdev/sysfs/rtnetlink/ioctl/AF_PACKET checks, carrier after interface up, TX/RX counter checks, loopback distinction, and procfs interface reporting.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociVirtioNet` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`, with `ORLIX_OCI_VIRTIO_NET_RUNTIME_STARTED_OK`, `ORLIX_OCI_VIRTIO_NET_RUNTIME_STOPPED_OK`, `ORLIX_OCI_VIRTIO_NET_RUNTIME_DELETE_OK`, and no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, or `LIFECYCLE_TIMEOUT`.
+- Focused adjacent simulator regressions `ociNetwork`, `ociVirtioFS`, `ociNamespaceIdentity`, `ociRootfsControls`, `ociCgroupResources`, `ociRun`, `ociStdio`, and `ociSignal` exited 0 sequentially on the same installed app and simulator.
+- Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
+
+Boundary: this proves the OCI-derived runtime path can execute the Linux-owned virtio-net probe through OrlixOS app-hosted lifecycle and observe Linux netdev, sysfs, rtnetlink, AF_PACKET, carrier, TX/RX, loopback distinction, and procfs behavior. It does not prove arbitrary OCI image networking, DNS, NAT, external host packet receive, registry UX, or beta readiness.
