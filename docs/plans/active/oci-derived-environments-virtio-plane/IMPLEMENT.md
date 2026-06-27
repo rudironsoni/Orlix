@@ -29,6 +29,31 @@ Evidence:
 - Artifact validation found `ORLIX_ENV_STDIO_BEGIN`, `ORLIX_ENV_STDIO_STDOUT_OK`, `ORLIX_ENV_STDIO_STDERR_OK`, `ORLIX_ENV_STDIO_NOT_PTY_OK`, and `ORLIX_ENV_STDIO_DONE`, and found no `ORLIX-APP-RUNTIME-RUNNER-ERROR` or `ORLIX_ENV_STDIO_PROOF_FAILED_PTY`.
 
 Boundary:
+
+## 2026-06-27 OCI host mount nested virtio-fs lookup
+
+- Fixed Linux-owned Orlix virtio-fs request handling in `OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix/virtio/mmio.c`.
+- Non-root `FUSE_LOOKUP` now supports split output descriptors using the existing FUSE payload writer, matching the root lookup path and allowing multi-component host-directory paths such as `nested/deeper/nested-file.txt`.
+- FUSE component names accept a single trailing NUL and reject interior NULs, matching Linux FUSE lookup payload shape without exposing a new Orlix ABI.
+- Path-node lifetime now tracks open references and release handling so looked-up path nodes are not immediately recycled while Linux still has an open file handle.
+- Path-node file reads and split-payload `FUSE_ACCESS`/`FUSE_STATX` handling stay in the Linux-facing virtio-fs device path. No OrlixOS Linux semantic duplicate, HostAdapter policy surface, generated upstream edit, or mlibc patch was added.
+- `oci_host_mount_target_probe` now proves the configured OCI host mount target as Linux behavior: mount target directory, mountpoint, root file read, nested file read, access check, writable writeback or read-only rejection.
+- `OrlixUpstreamTestRunner.swift` now reports the host-mount lifecycle status/exit on failure.
+
+Verification:
+
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile build PROFILE=release` exited 0 and packaged `Build/OrlixKernel/xcframework/OrlixKernel.xcframework`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 through the Xcode wrapper using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Direct simulator launch `--orlix-runtime-test-spec ociHostMountTarget` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`: all 6 TAP checks passed, including nested fixture file read and writable host mount writeback, with `ORLIX_OCI_HOST_MOUNT_TARGET_RW_OK`.
+- Direct simulator launch `--orlix-runtime-test-spec ociHostMountTargetReadOnly` exited 0 on the same simulator: all 6 TAP checks passed, including nested fixture file read and read-only write rejection, with `ORLIX_OCI_HOST_MOUNT_TARGET_RO_OK`.
+- Focused adjacent simulator launches `ociNetwork`, `ociRun`, `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 on the same installed app and simulator.
+- Current adjacent `ociVirtioFS` launch failed at the runner lifecycle layer with `ORLIX-APP-RUNTIME-RUNNER-ERROR OCI runtime lifecycle proof failed: expected OCI virtio-fs proof stopped exit 0`. The artifact did not preserve guest TAP output, so this remains unresolved and is not claimed green in this checkpoint.
+- Final pre-commit guards after the clean rebuild: `rtk git diff --check` exited 0, no recent Orlix crash reports were found, and only the iPhone 17 simulator was booted.
+
+Current status:
+
+- The configured OCI host mount target lane now has simulator proof for root and nested host-file lookup/read, Linux access checks, writable writeback, and read-only rejection.
+- Continue by triaging the separate `ociVirtioFS` lifecycle failure, then rerun the full adjacent OCI regression set before claiming broader virtio-fs or OCI runtime readiness.
 - This proves the app-hosted OCI-derived `terminal=false` command path no longer allocates a Linux PTY for the configured process on the single iPhone 17 simulator.
 - It does not claim full OCI runtime readiness, graceful OCI lifecycle shutdown, registry runtime readiness, broad package readiness, or clean app process shutdown. Simulator log still emitted `EXC_GUARD` entries when the direct proof app process exited while Orlix runtime threads were active.
 
