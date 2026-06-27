@@ -24372,6 +24372,31 @@ Boundary:
 Current status:
 - `orlix run` now has simulator evidence for both deterministic registry input and live public registry pull through `registry.k8s.io/pause:3.10`, with Linux process execution and `--rm` cleanup. Continue toward arbitrary image compatibility, live auth/error coverage, networking, namespace/cgroup/device behavior, and broader OCI Runtime Spec coverage.
 
+## 2026-06-27 OCI process attributes runtime proof
+
+- Added Linux-owned `oci_process_attributes_probe` under the Orlix kselftest overlay.
+- The probe verifies OCI-derived process attributes inside the guest through Linux behavior:
+  - `RLIMIT_NOFILE` is visible through `getrlimit`.
+  - `RLIMIT_NOFILE` is enforced with Linux `EMFILE` behavior.
+  - `noNewPrivileges` is visible through `prctl(PR_GET_NO_NEW_PRIVS)`.
+  - OCI `process.user.umask` affects created file mode.
+- `OrlixOS/Makefile` now includes the probe in the OCI runtime fixture, tracks it in fixture freshness, and increased only the OCI runtime test fixture base image from `96m` to `128m`. The previous `96m` image failed ext4 population with `__populate_fs: Could not allocate` after the extra runtime probe; the direct fixture materialization passes with the larger fixture image. Product root sizing is unchanged.
+- `OrlixTestRunner` adds `--orlix-runtime-test-spec ociProcessAttributes`, writes a standard OCI `config.json` using `process.rlimits`, `process.noNewPrivileges`, and `process.user.umask`, then runs the process through the OCI lifecycle path and validates start/stop/delete.
+
+Verification:
+
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/oci_process_attributes_probe.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc` exited 0 and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- First Xcode build attempt through the wrapper used `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`, then failed at fixture population with `__populate_fs: Could not allocate`.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0 after increasing the OCI runtime test fixture base image to `128m`. The stamp includes `oci_process_attributes_probe_sha256`, and both `tar-imported` and `oci-imported` base fixture images are `128M`.
+- Retried Xcode build through the wrapper and produced `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app`; the final command exit was not captured because the session closed during final app processing, but the built app was installed and used for the simulator proofs below.
+- Direct simulator launch on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` with `--orlix-runtime-test-spec ociProcessAttributes` exited 0. Artifact markers included `ORLIX-OCI-PROCESS-ATTRIBUTES-PROBE`, `1..4`, all four `ok` lines, `orlix-init: process exited pid=32 status=0`, `ORLIX_OCI_PROCESS_ATTRIBUTES_RUNTIME_STARTED_OK`, `ORLIX_OCI_PROCESS_ATTRIBUTES_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_PROCESS_ATTRIBUTES_RUNTIME_DELETE_OK`.
+- Adjacent simulator launches `ociCgroupResources`, `ociDeviceNodes`, `ociRun`, `ociStdio`, `ociSignal`, `ociNetwork`, `ociVirtioFS`, `ociHostMountTarget`, and `ociHostMountTargetReadOnly` exited 0 on the same installed app and simulator, with no `not ok` or `ORLIX-APP-RUNTIME-RUNNER-ERROR`.
+- `rtk git diff --check` exited 0.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- No recent `OrlixTestRunner` or `Orlix` crash reports were found under `~/Library/Logs/DiagnosticReports`.
+
 ## 2026-06-27 OCI network namespace runtime proof
 
 Implemented app-hosted OCI network runtime proof without moving Linux semantics into OrlixOS:
