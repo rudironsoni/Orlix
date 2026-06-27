@@ -24571,3 +24571,17 @@ Boundary: this proves descriptor-driven OCI stop-signal selection for the app-ho
 - Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
 
 Boundary: this proves live registry input for the current app-hosted OrlixOS install/run/delete path using one small linux/arm64 image. It does not prove arbitrary registry authentication, large image pulls, broad OCI image compatibility, product registry UX, offline cache policy, DNS/NAT as a Linux userspace feature, or beta readiness.
+
+## 2026-06-27 OCI lifecycle state checkpoint
+
+- Added app-hosted `ociLifecycleState` to `OrlixTestRunner`.
+- The proof creates an OCI lifecycle record without starting Linux, verifies `state` and `list` report `created`, starts the Linux session, verifies `running`, waits for Linux userspace completion, verifies `stopped` exit 0, then deletes the environment and verifies record/root cleanup.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported the iPhone 17 simulator already booted.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociLifecycleState` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`, with Linux markers `ORLIX_ENV_LIFECYCLE_STATE_BEGIN`, `ORLIX_ENV_LIFECYCLE_STATE_READY`, `ORLIX_ENV_LIFECYCLE_STATE_DONE`, plus lifecycle markers `ORLIX_OCI_LIFECYCLE_STATE_CREATED_OK`, `ORLIX_OCI_LIFECYCLE_STATE_LIST_CREATED_OK`, `ORLIX_OCI_LIFECYCLE_STATE_RUNNING_OK`, `ORLIX_OCI_LIFECYCLE_STATE_LIST_RUNNING_OK`, `ORLIX_OCI_LIFECYCLE_STATE_STOPPED_OK`, `ORLIX_OCI_LIFECYCLE_STATE_LIST_STOPPED_OK`, and `ORLIX_OCI_LIFECYCLE_STATE_DELETE_OK`.
+- Focused adjacent simulator regressions `ociRun`, `ociStopSignal`, `ociSignal`, and `ociStdio` exited 0 on the same installed app and simulator.
+- Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
+
+Boundary: this proves app-hosted OCI lifecycle create/state/list/start/wait/delete transitions for the current fixture path. It does not prove full OCI Runtime Spec compliance, exec-after-start, detached process management across app restarts, process groups, non-terminal signal delivery, or beta readiness.
