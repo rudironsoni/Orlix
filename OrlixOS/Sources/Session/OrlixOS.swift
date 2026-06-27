@@ -1289,10 +1289,17 @@ public struct OrlixOCIEnvironmentInstallResult: Sendable {
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+public struct OrlixOCIRegistryRootfsImportReport: Sendable {
+	public let stagingRootDirectory: URL
+	public let baseTreeDirectory: URL
+	public let layerDigests: [String]
+}
+
 public struct OrlixOCIRegistryEnvironmentInstallResult: Sendable {
 	public let id: String
 	public let image: OrlixOCIRegistryImageReference
 	public let pullResult: OrlixOCIRegistryPullResult
+	public let rootfsImport: OrlixOCIRegistryRootfsImportReport
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
@@ -5028,6 +5035,11 @@ mergingDeviceNodesWith: deviceNodeOverrides,
 				id: id,
 				image: image,
 				pullResult: pullResult,
+				rootfsImport: OrlixOCIRegistryRootfsImportReport(
+					stagingRootDirectory: importResult.stagingRootDirectory,
+					baseTreeDirectory: importResult.materializationPlan.baseTreeDirectory,
+					layerDigests: importResult.image.layers.map(\.digest)
+				),
 				stateReport: try lifecycleStore.stateReport(
 					id: id,
 					fileManager: fileManager
