@@ -1898,6 +1898,7 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
     private static let requiredMarkers = [
         "ORLIX_PAYLOAD_E2FSPROGS_MKE2FS_OK",
         "ORLIX_PAYLOAD_E2FSPROGS_MKFS_EXT4_OK",
+        "ORLIX_PAYLOAD_E2FSPROGS_DEBUGFS_OK",
         "ORLIX_PAYLOAD_E2FSPROGS_DONE",
     ]
 
@@ -1915,10 +1916,13 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
             "set -eu",
             "test -x /bin/mke2fs",
             "test -x /bin/mkfs.ext4",
+            "test -x /bin/debugfs",
             "/bin/mke2fs -V >/tmp/orlix-mke2fs-version.txt 2>&1",
             "/bin/mkfs.ext4 -V >/tmp/orlix-mkfs-ext4-version.txt 2>&1",
+            "/bin/debugfs -V >/tmp/orlix-debugfs-version.txt 2>&1",
             "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKE2FS",
             "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKFS_EXT4",
+            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' DEBUGFS",
             "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s\\n' DONE",
         ].joined(separator: "; ")
         let kernelCommandLine = [

@@ -153,7 +153,7 @@ $(ORLIXOS_LIBCAP_A) $(ORLIXOS_SETCAP_BINARY) $(ORLIXOS_GETCAP_BINARY): $(ORLIXOS
 	[ -x "$(ORLIXOS_SETCAP_BINARY)" ] || { echo "missing libcap setcap package input: $(ORLIXOS_SETCAP_BINARY)" >&2; exit 1; }; \
 	[ -x "$(ORLIXOS_GETCAP_BINARY)" ] || { echo "missing libcap getcap package input: $(ORLIXOS_GETCAP_BINARY)" >&2; exit 1; }
 
-$(ORLIXOS_E2FSPROGS_STAMP): $(ORLIXOS_E2FSPROGS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_E2FSPROGS_STAMP): $(ORLIXOS_E2FSPROGS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/config.mk $(PROJECT_DIR)/Sources/make/linux-feature-packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -161,7 +161,7 @@ $(ORLIXOS_E2FSPROGS_STAMP): $(ORLIXOS_E2FSPROGS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SY
 	[ -s "$$sysroot/usr/lib/libc.a" ] || { echo "missing OrlixMLibC libc archive: $$sysroot/usr/lib/libc.a" >&2; exit 1; }; \
 	[ -d "$$headers" ] || { echo "missing Orlix Linux UAPI headers: $$headers" >&2; exit 1; }; \
 	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
-	rm -rf "$(ORLIXOS_E2FSPROGS_BUILD_DIR)" "$(ORLIXOS_MKE2FS_BINARY)" "$(ORLIXOS_MKFS_EXT2_BINARY)" "$(ORLIXOS_MKFS_EXT4_BINARY)" "$(ORLIXOS_E2FSPROGS_STAMP)"; \
+	rm -rf "$(ORLIXOS_E2FSPROGS_BUILD_DIR)" "$(ORLIXOS_MKE2FS_BINARY)" "$(ORLIXOS_MKFS_EXT2_BINARY)" "$(ORLIXOS_MKFS_EXT4_BINARY)" "$(ORLIXOS_DEBUGFS_BINARY)" "$(ORLIXOS_E2FSPROGS_STAMP)"; \
 	mkdir -p "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/.orlix-toolchain" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin"; \
 	{ \
 		printf '%s\n' '#!/bin/bash'; \
@@ -187,30 +187,36 @@ $(ORLIXOS_E2FSPROGS_STAMP): $(ORLIXOS_E2FSPROGS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SY
 	export LIBS=""; \
 	export AR="$(ORLIXOS_AR)"; \
 	export RANLIB="$(ORLIXOS_RANLIB)"; \
-	"$(ORLIXOS_E2FSPROGS_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --enable-elf-shlibs=no --disable-uuidd --disable-fuse2fs --disable-backtrace --disable-debugfs --disable-imager --disable-resizer --disable-defrag --disable-nls; \
+	"$(ORLIXOS_E2FSPROGS_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --enable-elf-shlibs=no --disable-uuidd --disable-fuse2fs --disable-backtrace --disable-imager --disable-resizer --disable-defrag --disable-nls; \
 	$(MAKE) -j1 libs; \
 	$(MAKE) -C misc -j1 mke2fs; \
+	$(MAKE) -C debugfs -j1 debugfs; \
 	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/misc/mke2fs" "$(ORLIXOS_MKE2FS_BINARY)"; \
 	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/misc/mke2fs" "$(ORLIXOS_MKFS_EXT2_BINARY)"; \
 	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/misc/mke2fs" "$(ORLIXOS_MKFS_EXT4_BINARY)"; \
+	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/debugfs/debugfs" "$(ORLIXOS_DEBUGFS_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_MKE2FS_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_MKFS_EXT2_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_MKFS_EXT4_BINARY)"; \
+	"$(ORLIXOS_STRIP)" "$(ORLIXOS_DEBUGFS_BINARY)"; \
 	file "$(ORLIXOS_MKE2FS_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_MKE2FS_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT2_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_MKFS_EXT2_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT4_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_MKFS_EXT4_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_DEBUGFS_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_DEBUGFS_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKE2FS_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_MKE2FS_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT2_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_MKFS_EXT2_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT4_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_MKFS_EXT4_BINARY)" >&2; exit 1; }; \
-	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=e2fsprogs\nversion=%s\nsha256=%s\nprograms=mke2fs,mkfs.ext2,mkfs.ext4\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(E2FSPROGS_VERSION)" "$(E2FSPROGS_SHA256)" > "$(ORLIXOS_E2FSPROGS_STAMP)"; \
+	file "$(ORLIXOS_DEBUGFS_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_DEBUGFS_BINARY)" >&2; exit 1; }; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=e2fsprogs\nversion=%s\nsha256=%s\nprograms=mke2fs,mkfs.ext2,mkfs.ext4,debugfs\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(E2FSPROGS_VERSION)" "$(E2FSPROGS_SHA256)" > "$(ORLIXOS_E2FSPROGS_STAMP)"; \
 	rm -rf "$(ORLIXOS_E2FSPROGS_BUILD_DIR)"; \
-	echo "built Orlix Linux e2fsprogs package inputs: $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT2_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY)"
+	echo "built Orlix Linux e2fsprogs package inputs: $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT2_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY)"
 
-$(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT2_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY): $(ORLIXOS_E2FSPROGS_STAMP)
+$(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT2_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY): $(ORLIXOS_E2FSPROGS_STAMP)
 	@set -euo pipefail; \
 	[ -x "$(ORLIXOS_MKE2FS_BINARY)" ] || { echo "missing e2fsprogs mke2fs package input: $(ORLIXOS_MKE2FS_BINARY)" >&2; exit 1; }; \
 	[ -x "$(ORLIXOS_MKFS_EXT2_BINARY)" ] || { echo "missing e2fsprogs mkfs.ext2 package input: $(ORLIXOS_MKFS_EXT2_BINARY)" >&2; exit 1; }; \
-	[ -x "$(ORLIXOS_MKFS_EXT4_BINARY)" ] || { echo "missing e2fsprogs mkfs.ext4 package input: $(ORLIXOS_MKFS_EXT4_BINARY)" >&2; exit 1; }
+	[ -x "$(ORLIXOS_MKFS_EXT4_BINARY)" ] || { echo "missing e2fsprogs mkfs.ext4 package input: $(ORLIXOS_MKFS_EXT4_BINARY)" >&2; exit 1; }; \
+	[ -x "$(ORLIXOS_DEBUGFS_BINARY)" ] || { echo "missing e2fsprogs debugfs package input: $(ORLIXOS_DEBUGFS_BINARY)" >&2; exit 1; }
 
 $(ORLIXOS_PCRE2_STAMP): $(ORLIXOS_PCRE2_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
 	@set -euo pipefail; \
