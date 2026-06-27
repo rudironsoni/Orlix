@@ -842,10 +842,12 @@ enum OrlixAppLaunchRuntimeRunner {
             output = try OrlixOCIDerivedCgroupResourcesRuntimeProof().run()
         case "ociDeviceNodes":
             output = try OrlixOCIDerivedDeviceNodesRuntimeProof().run()
-        case "ociNamespaceIdentity":
-            output = try OrlixOCIDerivedNamespaceIdentityRuntimeProof().run()
-        case "ociProcessAttributes":
-            output = try OrlixOCIDerivedProcessAttributesRuntimeProof().run()
+            case "ociNamespaceIdentity":
+                output = try OrlixOCIDerivedNamespaceIdentityRuntimeProof().run()
+            case "ociTimeNamespace":
+                output = try OrlixOCIDerivedTimeNamespaceRuntimeProof().run()
+            case "ociProcessAttributes":
+                output = try OrlixOCIDerivedProcessAttributesRuntimeProof().run()
         case "ociRootfsControls":
             output = try OrlixOCIDerivedRootfsControlsRuntimeProof().run()
         case "ociVirtioFS":
@@ -2425,6 +2427,243 @@ private final class OrlixOCIDerivedNamespaceIdentityRuntimeProof: @unchecked Sen
         guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
             throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
                 "expected OCI namespace identity environment directory cleanup\n\(output)"
+            )
+        }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+    }
+}
+
+private final class OrlixOCIDerivedTimeNamespaceRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 120
+    private static let environmentID = "oci-imported-runtime-test-fixture"
+    private static let rootImageIdentifier =
+        "orlix.test.environment.oci-runtime-test-fixture"
+    private static let requiredMarkers = [
+        "ORLIX-OCI-TIME-NAMESPACE-PROBE",
+        "1..6",
+        "ok 1 - OCI time proof hostname visible through gethostname",
+        "ok 2 - OCI time namespace exposes Linux procfs namespace entry",
+        "ok 3 - OCI monotonic timeOffset visible through timens_offsets",
+        "ok 4 - OCI boottime timeOffset visible through timens_offsets",
+        "ok 5 - Linux CLOCK_MONOTONIC reads in OCI time namespace",
+        "ok 6 - Linux CLOCK_BOOTTIME reads in OCI time namespace",
+    ]
+
+    private let fileManager = FileManager.default
+    private let recorder = OrlixRuntimeProofOutputRecorder()
+
+    func run() throws -> String {
+        let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+        let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+        guard fileManager.fileExists(atPath: ready.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+        }
+
+        let copiedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "orlix-oci-time-namespace-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+        defer {
+            try? fileManager.removeItem(at: copiedRoot)
+        }
+
+        let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        let terminal = OrlixTerminalSession()
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer {
+            output.cancel()
+        }
+
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: Self.environmentID,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        try Self.writeOCIRuntimeConfig(rootPath: "imported-root", to: fixture.root)
+
+        let runtime = OrlixOCIRuntime(registry: registry)
+        let lifecycle = try OrlixOCIRuntimeBundle
+            .load(from: fixture.root)
+            .lifecycleController(id: Self.environmentID)
+            .create()
+        let processHandle = try OrlixOCIRuntimeProcessHandle(
+            lifecycle: lifecycle,
+            rootMount: .defaultOverlay,
+            rootImageIdentifier: Self.rootImageIdentifier
+        )
+        try registry.save(processHandle.sessionDescriptor.environment)
+        try runtime.lifecycleStore.save(lifecycle)
+
+        let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+        let run = try installer.run(
+            id: Self.environmentID,
+            terminal: terminal,
+            observationTimeout: Self.timeout
+        )
+		try waitForRequiredMarkers()
+
+        let finalState = try installer.state(id: Self.environmentID)
+        let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+            forID: Self.environmentID
+        )
+        let environmentDirectoryURL = layout.rootDirectory
+        let deletedEnvironment = try installer.delete(id: Self.environmentID)
+
+        var text = Self.normalized(recorder.text)
+        try Self.validateText(text)
+        try Self.validateLifecycle(
+            run: run,
+            finalState: finalState,
+            deletedEnvironment: deletedEnvironment,
+            lifecycleRecordURL: lifecycleRecordURL,
+            environmentDirectoryURL: environmentDirectoryURL,
+            output: text
+        )
+        text += "\nORLIX_OCI_TIME_NAMESPACE_RUNTIME_STARTED_OK\n"
+        text += "ORLIX_OCI_TIME_NAMESPACE_RUNTIME_STOPPED_OK\n"
+        text += "ORLIX_OCI_TIME_NAMESPACE_RUNTIME_DELETE_OK\n"
+        return text
+    }
+
+    private static func writeOCIRuntimeConfig(
+        rootPath: String,
+        to bundleRoot: URL
+    ) throws {
+        let document: [String: Any] = [
+            "ociVersion": "1.1.0",
+            "process": [
+                "terminal": false,
+                "args": ["/orlix/oci_time_namespace_probe"],
+                "env": [
+                    "HOME=/root",
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "TERM=xterm-256color",
+                ],
+                "cwd": "/",
+                "user": [
+                    "uid": 0,
+                    "gid": 0,
+                ],
+            ],
+            "root": [
+                "path": rootPath,
+            ],
+            "hostname": "oci-time-host",
+            "domainname": "oci.example",
+            "linux": [
+                "namespaces": [
+                    ["type": "time"],
+                    ["type": "uts"],
+                ],
+                "timeOffsets": [
+                    "monotonic": [
+                        "secs": 5,
+                        "nanosecs": 123_456_789,
+                    ],
+                    "boottime": [
+                        "secs": 7,
+                        "nanosecs": 987_654_321,
+                    ],
+                ],
+            ],
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: document,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: bundleRoot.appendingPathComponent("config.json"))
+    }
+
+    private static func validateText(_ text: String) throws {
+        for marker in requiredMarkers where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                marker,
+                text
+            )
+        }
+        if text.contains("\nnot ok ") || text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR") {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+        }
+    }
+
+    private func waitForRequiredMarkers() throws {
+        let deadline = Date().addingTimeInterval(Self.timeout)
+        while Date() < deadline {
+            let text = Self.normalized(recorder.text)
+            if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        let text = Self.normalized(recorder.text)
+        if let missingMarker = Self.requiredMarkers.first(where: { !text.contains($0) }) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                missingMarker,
+                text
+            )
+        }
+        throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+            "OCI time namespace runtime markers",
+            text
+        )
+    }
+
+    private static func validateLifecycle(
+        run: OrlixOCIEnvironmentRunResult,
+        finalState: OrlixOCIRuntimeStateReport,
+        deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+        lifecycleRecordURL: URL,
+        environmentDirectoryURL: URL,
+        output: String
+    ) throws {
+        guard run.startedStateReport.status == .running,
+              run.startedStateReport.pid != nil
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI time namespace proof started lifecycle state running\n\(output)"
+            )
+        }
+        guard run.completedStateReport.status == .stopped,
+              run.completedStateReport.exitStatus == 0
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI time namespace proof stopped exit 0\n\(output)"
+            )
+        }
+        guard finalState.status == .stopped, finalState.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI time namespace final lifecycle state stopped exit 0\n\(output)"
+            )
+        }
+        guard deletedEnvironment.id == Self.environmentID,
+              deletedEnvironment.lifecycleState == .deleted
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI time namespace proof delete cleanup\n\(output)"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI time namespace lifecycle record cleanup\n\(output)"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI time namespace environment directory cleanup\n\(output)"
             )
         }
     }
