@@ -1131,6 +1131,10 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 					.timedOutWaitingForCompletion
 			}
 		}
+		let drainDeadline = Date().addingTimeInterval(1)
+		while Date() < drainDeadline {
+			condition.wait(until: drainDeadline)
+		}
 		return completionObservation!
 	}
 }

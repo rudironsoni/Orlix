@@ -10,6 +10,26 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 live registry Alpine interactive terminal input checkpoint
+
+Changes:
+- Added app-hosted `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineInput`.
+- Extended the live-registry terminal proof so variants can provide a custom guest script, required markers, delayed terminal input, and success marker.
+- The new proof pulls `alpine:3.20`, starts `orlix run --tty --user 0:0 --rm`, waits for `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_READY`, sends `orlix-interactive-alpine\n` through `OrlixTerminalSession.send(_:)`, and validates that Linux `/bin/sh` read the line from the PTY and emitted `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_OK`.
+- Added a bounded one-second drain after `OrlixOCIRuntimeLinuxSessionObservationDriver` sees the process-completion marker before lifecycle `wait` returns. A stronger attempt to wait for full `OrlixBoot` thread completion caused `ociTerminalLiveRegistryAlpineInput` to time out, so it was replaced with the bounded drain.
+
+Evidence:
+- `rtk proxy swiftc -parse OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixRootfsImport.swift OrlixOS/Sources/Session/OrlixStoragePolicy.swift OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported the iPhone 17 simulator already booted.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineInput` with anchored failure checks exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_READY`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_OK`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_PULL_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STARTED_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STOPPED_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK`, and `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_INPUT_OK`; `io_error_count 0`, `runner_error_count 0`, `input_bad_count 0`.
+- Regression direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpine` exited 0 under anchored failure checks and strict `I/O error, dev vdb` rejection.
+- Regression direct simulator launch `--orlix-runtime-test-spec ociRunLiveRegistryAlpine` exited 0 under anchored failure checks and strict `I/O error, dev vdb` rejection.
+
+Boundary:
+- This proves one live Docker Hub Alpine terminal session can receive app-sent input through the OrlixOS PTY path and have Linux userspace consume it. It does not yet prove full interactive shell editing, line discipline edge cases, terminal resize behavior, job control, long-running interactive package workflows, networking inside Alpine, multi-session app-hosted execution, or beta readiness.
+
 ### 2026-06-27 live registry Alpine terminal checkpoint
 
 Changes:
