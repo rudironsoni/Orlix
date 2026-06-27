@@ -34,6 +34,13 @@ $(ORLIXOS_COREUTILS_SOURCE_STAMP): FORCE
 	done; \
 	export PATH="$(ORLIXOS_COREUTILS_BOOTSTRAP_PATH)"; \
 	command -v git >/dev/null 2>&1 || { echo "git is required to clone Coreutils source" >&2; exit 1; }; \
+	if [ -e "$(ORLIXOS_COREUTILS_SOURCE_STAMP)" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/.git" ] && [ -x "$(ORLIXOS_COREUTILS_SRC_DIR)/configure" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/gnulib" ] && [ -d "$(ORLIXOS_COREUTILS_UPSTREAM_DIR)/objects" ]; then \
+		actual="$$(git -C "$(ORLIXOS_COREUTILS_SRC_DIR)" rev-parse HEAD)"; \
+		if [ "$$actual" = "$(COREUTILS_GIT_COMMIT)" ]; then \
+			echo "upstream Coreutils source already ready: $(ORLIXOS_COREUTILS_SRC_DIR) ($(COREUTILS_GIT_REF) $(COREUTILS_GIT_COMMIT))"; \
+			exit 0; \
+		fi; \
+	fi; \
 	command -v autoconf >/dev/null 2>&1 || { echo "autoconf is required to bootstrap Coreutils from git" >&2; exit 1; }; \
 	command -v automake >/dev/null 2>&1 || { echo "automake is required to bootstrap Coreutils from git" >&2; exit 1; }; \
 	command -v autopoint >/dev/null 2>&1 || { echo "autopoint is required to bootstrap Coreutils from git" >&2; exit 1; }; \

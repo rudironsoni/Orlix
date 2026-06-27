@@ -24504,3 +24504,29 @@ Boundary:
 Current status:
 
 - OCI-derived environments now have simulator evidence for both Linux virtio-fs tag mounting and OCI-configured host mount target writable/read-only behavior. Continue toward pre-existing host file visibility on configured targets, broader mount option behavior, security-scoped external folder integration, virtio-net userspace receive, DNS/NAT/external networking, device behavior, broader namespace/cgroup coverage, arbitrary image compatibility, and OCI Runtime Spec lifecycle breadth.
+### 2026-06-27 OCI time namespace runtime proof
+
+Changes:
+- Added Linux-owned `oci_time_namespace_probe` to the Orlix kselftest overlay and Makefile.
+- Wired the probe into OrlixOS runtime fixtures as `/orlix/oci_time_namespace_probe`, including fixture freshness checks and copied-payload validation.
+- Added `--orlix-runtime-test-spec ociTimeNamespace` to `OrlixTestRunner`, using an OCI config with `linux.namespaces` entries for `time` and `uts` plus monotonic and boottime `timeOffsets`.
+- Fixed the Coreutils source fast path to accept the existing zero-byte `.orlix-source-ready` stamp via `-e`, avoiding repeated clone/bootstrap work after a valid prepared checkout exists.
+- Increased only the runtime-test fixture base image size from `128m` to `192m` so the expanded imported fixture payload fits. Product root image sizing was not changed.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -std=gnu17 -fsyntax-only OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/oci_time_namespace_probe.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixOS/Makefile __coreutils-source PROFILE=release` exited 0 on the fast path after the stamp predicate fix: `upstream Coreutils source already ready`.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc` exited 0.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0 and produced both tar-imported and oci-imported fixtures with `/orlix/oci_time_namespace_probe`; `.fixtures-ready` includes `oci_time_namespace_probe_sha256=e48229e30d1a614539db07456585c64770e571c3eb538c7da85f4a863ee70ef6`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0; wrapper-backed DerivedData and PackageCache stayed under `/Volumes/1TB/Xcode`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociTimeNamespace` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `ORLIX-OCI-TIME-NAMESPACE-PROBE`, `1..6`, all six `ok` lines for hostname, `/proc/self/ns/time`, monotonic and boottime `timens_offsets`, `CLOCK_MONOTONIC`, `CLOCK_BOOTTIME`, plus `ORLIX_OCI_TIME_NAMESPACE_RUNTIME_STARTED_OK`, `ORLIX_OCI_TIME_NAMESPACE_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_TIME_NAMESPACE_RUNTIME_DELETE_OK`.
+- Focused simulator regressions `ociNamespaceIdentity`, `ociRootfsControls`, `ociProcessAttributes`, `ociCgroupResources`, `ociDeviceNodes`, `ociVirtioFS`, `ociNetwork`, `ociRun`, `ociStdio`, and `ociSignal` exited 0 sequentially on the same installed app and simulator with no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, or `LIFECYCLE_TIMEOUT`.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- Recent host DiagnosticReports scan found no `Orlix*` or `OrlixTestRunner*` crash reports.
+
+Boundary:
+- This proves app-hosted OCI time namespace/timeOffset propagation into Linux-visible process state for the fixture path, plus focused OCI regressions. It does not claim arbitrary image compatibility, full OCI runtime spec coverage, external networking, DNS/NAT, registry UI, or product completion.
