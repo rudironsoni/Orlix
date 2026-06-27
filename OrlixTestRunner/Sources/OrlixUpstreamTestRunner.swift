@@ -848,6 +848,8 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof().run()
 		case "ociRunLiveRegistryAlpine":
 			output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
+		case "ociLiveRegistryAlpineRootfsImport":
+			output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof().run()
 		case "ociTerminalLiveRegistry":
 			output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
 		case "ociTerminalLiveRegistryAlpine":
@@ -1717,7 +1719,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         }
     }
 
-    private static func runFixtureMaterializationCommand(
+    fileprivate static func runFixtureMaterializationCommand(
         executable: URL,
         arguments: [String],
         sourceBaseImageURL: URL,
@@ -1834,6 +1836,165 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRuntimeProof:
 		).run()
 		text += "ORLIX_OCI_RUN_LIVE_REGISTRY_ALPINE_OK\n"
 		return text
+	}
+}
+
+private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
+	@unchecked Sendable
+{
+	private static let timeout: TimeInterval = 600
+	private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
+	private static let environmentID =
+		"oci-live-registry-alpine-rootfs-import-test-fixture"
+
+	private let fileManager = FileManager.default
+
+	func run() throws -> String {
+		let resultBox = OrlixAsyncRuntimeProofResultBox<String>()
+		let completion = DispatchSemaphore(value: 0)
+		Task {
+			do {
+				resultBox.set(.success(try await self.runAsync()))
+			} catch {
+				resultBox.set(.failure(error))
+			}
+			completion.signal()
+		}
+
+		guard completion.wait(timeout: .now() + .seconds(Int(Self.timeout))) == .success else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"live registry Alpine rootfs import proof timed out"
+			)
+		}
+		guard let result = resultBox.value else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"live registry Alpine rootfs import proof completed without result"
+			)
+		}
+		return try result.get()
+	}
+
+	private func runAsync() async throws -> String {
+		let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+		let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+		guard fileManager.fileExists(atPath: ready.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+		}
+
+		let copiedRoot = FileManager.default.temporaryDirectory
+			.appendingPathComponent(
+				"orlix-oci-alpine-import-\(UUID().uuidString)",
+				isDirectory: true
+			)
+		try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+		defer {
+			try? fileManager.removeItem(at: copiedRoot)
+		}
+
+		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let sourceLayout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: Self.fixtureEnvironmentID,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let importedLayout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: Self.environmentID,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let installResult = try await installer.install(
+			image: OrlixOCIRegistryImageReference("alpine:3.20"),
+			id: Self.environmentID,
+			tools: OrlixOCIEnvironmentMaterializationTools(
+				mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
+				truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
+				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
+			),
+			puller: OrlixOCIRegistryPuller(),
+			fileManager: fileManager
+		) { executable, arguments in
+			try OrlixOCIDerivedRunCommandRuntimeProof
+				.runFixtureMaterializationCommand(
+					executable: executable,
+					arguments: arguments,
+					sourceBaseImageURL: sourceLayout.baseImageURL,
+					sourceStateImageURL: sourceLayout.stateImageURL
+				)
+		}
+
+		try validateImportedRootfs(installResult)
+		let deletedEnvironment = try installer.delete(id: Self.environmentID)
+		guard deletedEnvironment.lifecycleState == .deleted else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected Alpine rootfs import delete cleanup"
+			)
+		}
+		guard !fileManager.fileExists(atPath: importedLayout.rootDirectory.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected Alpine rootfs import environment directory cleanup"
+			)
+		}
+
+		return [
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_PULL_OK",
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_LAYER_OK",
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_STAGING_OK",
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_APK_OK",
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_DELETE_OK",
+		].joined(separator: "\n") + "\n"
+	}
+
+	private func validateImportedRootfs(
+		_ result: OrlixOCIRegistryEnvironmentInstallResult
+	) throws {
+		guard result.id == Self.environmentID else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"unexpected Alpine import id \(result.id)"
+			)
+		}
+		guard !result.pullResult.layerDigests.isEmpty,
+		      !result.rootfsImport.layerDigests.isEmpty
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected Alpine registry pull to include rootfs layers"
+			)
+		}
+		let root = result.rootfsImport.baseTreeDirectory
+		let requiredPaths = [
+			"bin/busybox",
+			"etc/alpine-release",
+			"lib/apk/db/installed",
+			"sbin/apk",
+		]
+		for path in requiredPaths {
+			let url = root.appendingPathComponent(path)
+			guard fileManager.fileExists(atPath: url.path) else {
+				throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+					"missing Alpine staged rootfs path \(path)"
+				)
+			}
+		}
+		let installed = try String(
+			contentsOf: root.appendingPathComponent("lib/apk/db/installed"),
+			encoding: .utf8
+		)
+		guard installed.contains("P:alpine-baselayout")
+			|| installed.contains("P:busybox")
+			|| installed.contains("P:musl")
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"Alpine installed package database missing expected packages"
+			)
+		}
 	}
 }
 
