@@ -832,6 +832,8 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedSignalRuntimeProof().run()
 		case "ociStopSignal":
 			output = try OrlixOCIDerivedStopSignalRuntimeProof().run()
+		case "ociLifecycleState":
+			output = try OrlixOCIDerivedLifecycleStateRuntimeProof().run()
 		case "ociRun":
 			output = try OrlixOCIDerivedRunCommandRuntimeProof().run()
             case "ociRunLiveRegistry":
@@ -4380,6 +4382,301 @@ private final class OrlixOCIDerivedStopSignalRuntimeProof: @unchecked Sendable {
 				"path": rootPath,
 			],
 			"hostname": "oci-stop-signal-host",
+			"domainname": "oci.example",
+		]
+		let data = try JSONSerialization.data(
+			withJSONObject: document,
+			options: [.prettyPrinted, .sortedKeys]
+		)
+		try data.write(to: bundleRoot.appendingPathComponent("config.json"))
+	}
+
+	private static func normalized(_ text: String) -> String {
+		text.replacingOccurrences(of: "\r\n", with: "\n")
+			.replacingOccurrences(of: "\r", with: "\n")
+	}
+}
+
+private final class OrlixOCIDerivedLifecycleStateRuntimeProof: @unchecked Sendable {
+	private static let timeout: TimeInterval = 120
+	private static let environmentID = "oci-imported-runtime-test-fixture"
+	private static let rootImageIdentifier =
+		"orlix.test.environment.oci-runtime-test-fixture"
+	private static let requiredMarkers = [
+		"ORLIX_ENV_LIFECYCLE_STATE_BEGIN",
+		"ORLIX_ENV_LIFECYCLE_STATE_READY",
+		"ORLIX_ENV_LIFECYCLE_STATE_DONE",
+	]
+
+	private let fileManager = FileManager.default
+	private let recorder = OrlixRuntimeProofOutputRecorder()
+
+	func run() throws -> String {
+		let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+		let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+		guard fileManager.fileExists(atPath: ready.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+		}
+
+		let copiedRoot = FileManager.default.temporaryDirectory
+			.appendingPathComponent(
+				"orlix-oci-lifecycle-state-\(UUID().uuidString)",
+				isDirectory: true
+			)
+		try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+		defer {
+			try? fileManager.removeItem(at: copiedRoot)
+		}
+
+		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+		let descriptor = OrlixEnvironmentDescriptor(
+			id: Self.environmentID,
+			source: .ociLayout,
+			platform: "linux/arm64",
+			rootImageIdentifier: Self.rootImageIdentifier,
+			defaultCommand: ["/bin/sh", "-c", Self.executionScript],
+			defaultEnvironment: [
+				"HOME": "/root",
+				"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				"TERM": "xterm-256color",
+			],
+			defaultWorkingDirectory: "/",
+			defaultUserID: 0,
+			defaultGroupID: 0,
+			hostname: "oci-lifecycle-state-host",
+			domainname: "oci.example",
+			rootMount: .defaultOverlay
+		)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		try registry.save(descriptor)
+		let terminal = OrlixTerminalSession()
+		let output = terminal.attachOutput { [recorder] data in
+			recorder.append(data)
+		}
+		defer {
+			output.cancel()
+		}
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: descriptor.id,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		try Self.writeOCIRuntimeConfig(
+			script: Self.executionScript,
+			rootPath: "imported-root",
+			to: fixture.root
+		)
+		let runtime = OrlixOCIRuntime(registry: registry)
+		let lifecycle = try OrlixOCIRuntimeBundle
+			.load(from: fixture.root)
+			.lifecycleController(id: descriptor.id)
+			.create()
+		let processHandle = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: lifecycle,
+			rootMount: .defaultOverlay,
+			rootImageIdentifier: descriptor.rootImageIdentifier
+		)
+		try registry.save(processHandle.sessionDescriptor.environment)
+		try runtime.lifecycleStore.save(lifecycle)
+
+		let createdState = try runtime.lifecycleStore.stateReport(id: descriptor.id)
+		let createdList = try runtime.listPreparedEnvironments()
+		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+			timeout: Self.timeout
+		)
+		let processSession = try OrlixOCIRuntimeProcessSession(
+			lifecycle: lifecycle,
+			rootMount: .defaultOverlay,
+			registry: registry,
+			terminal: terminal,
+			lifecycleStore: runtime.lifecycleStore
+		)
+		let runningSession = try processSession.start(using: driver)
+		try waitForMarker("ORLIX_ENV_LIFECYCLE_STATE_READY")
+		let runningState = try runtime.lifecycleStore.stateReport(id: descriptor.id)
+		let runningList = try runtime.listPreparedEnvironments()
+		try waitForMarker("ORLIX_ENV_LIFECYCLE_STATE_DONE")
+		_ = try runningSession.wait(using: driver)
+		let stoppedState = try runtime.lifecycleStore.stateReport(id: descriptor.id)
+		let stoppedList = try runtime.listPreparedEnvironments()
+		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+			forID: descriptor.id
+		)
+		let deletedEnvironment = try runtime.delete(id: descriptor.id)
+
+		var text = Self.normalized(recorder.text)
+		try Self.validateText(text)
+		try Self.validateLifecycle(
+			createdState: createdState,
+			createdList: createdList,
+			runningState: runningState,
+			runningList: runningList,
+			stoppedState: stoppedState,
+			stoppedList: stoppedList,
+			deletedEnvironment: deletedEnvironment,
+			lifecycleRecordURL: lifecycleRecordURL,
+			environmentDirectoryURL: layout.rootDirectory
+		)
+		text += "\nORLIX_OCI_LIFECYCLE_STATE_CREATED_OK\n"
+		text += "ORLIX_OCI_LIFECYCLE_STATE_LIST_CREATED_OK\n"
+		text += "ORLIX_OCI_LIFECYCLE_STATE_RUNNING_OK\n"
+		text += "ORLIX_OCI_LIFECYCLE_STATE_LIST_RUNNING_OK\n"
+		text += "ORLIX_OCI_LIFECYCLE_STATE_STOPPED_OK\n"
+		text += "ORLIX_OCI_LIFECYCLE_STATE_LIST_STOPPED_OK\n"
+		text += "ORLIX_OCI_LIFECYCLE_STATE_DELETE_OK\n"
+		return text
+	}
+
+	private static var executionScript: String {
+		[
+			"printf 'ORLIX_ENV_LIFECYCLE_STATE_BEGIN\\n'",
+			"printf 'ORLIX_ENV_LIFECYCLE_STATE_READY\\n'",
+			"printf 'ORLIX_ENV_LIFECYCLE_STATE_DONE\\n'",
+		].joined(separator: "\n")
+	}
+
+	private func waitForMarker(_ marker: String) throws {
+		let deadline = Date().addingTimeInterval(Self.timeout)
+		while Date() < deadline {
+			let text = Self.normalized(recorder.text)
+			if text.contains(marker) {
+				return
+			}
+			Thread.sleep(forTimeInterval: 0.05)
+		}
+		throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+			marker,
+			Self.normalized(recorder.text)
+		)
+	}
+
+	private static func validateText(_ text: String) throws {
+		for marker in requiredMarkers where !text.contains(marker) {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+		}
+		if text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR") {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+		}
+	}
+
+	private static func validateLifecycle(
+		createdState: OrlixOCIRuntimeStateReport,
+		createdList: [OrlixOCIEnvironmentPreparedState],
+		runningState: OrlixOCIRuntimeStateReport,
+		runningList: [OrlixOCIEnvironmentPreparedState],
+		stoppedState: OrlixOCIRuntimeStateReport,
+		stoppedList: [OrlixOCIEnvironmentPreparedState],
+		deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment,
+		lifecycleRecordURL: URL,
+		environmentDirectoryURL: URL
+	) throws {
+		guard createdState.status == .created,
+			createdState.pid == nil,
+			createdState.exitStatus == nil
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle state created before start"
+			)
+		}
+		try validatePreparedList(
+			createdList,
+			expectedLifecycleState: .created,
+			expectedStateStatus: .created
+		)
+		guard runningState.status == .running, runningState.pid != nil else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle state running after start"
+			)
+		}
+		try validatePreparedList(
+			runningList,
+			expectedLifecycleState: .running,
+			expectedStateStatus: .running
+		)
+		guard stoppedState.status == .stopped,
+			stoppedState.pid == runningState.pid,
+			stoppedState.exitStatus == 0
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle state stopped exit 0 after wait"
+			)
+		}
+		try validatePreparedList(
+			stoppedList,
+			expectedLifecycleState: .stopped,
+			expectedStateStatus: .stopped
+		)
+		guard deletedEnvironment.id == Self.environmentID,
+			deletedEnvironment.deletedRecord.state == .deleted
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle delete record state deleted"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle record cleanup"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path)
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle environment directory cleanup"
+			)
+		}
+	}
+
+	private static func validatePreparedList(
+		_ prepared: [OrlixOCIEnvironmentPreparedState],
+		expectedLifecycleState: OrlixOCIRuntimeLifecycleState,
+		expectedStateStatus: OrlixOCIRuntimeStateStatus
+	) throws {
+		guard let entry = prepared.first(where: { $0.id == Self.environmentID })
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle prepared list entry"
+			)
+		}
+		guard entry.lifecycleState == expectedLifecycleState,
+			entry.stateReport?.status == expectedStateStatus
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI lifecycle prepared list state \(expectedLifecycleState.rawValue)"
+			)
+		}
+	}
+
+	private static func writeOCIRuntimeConfig(
+		script: String,
+		rootPath: String,
+		to bundleRoot: URL
+	) throws {
+		let process: [String: Any] = [
+			"terminal": false,
+			"args": ["/bin/sh", "-c", script],
+			"env": [
+				"HOME=/root",
+				"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				"TERM=xterm-256color",
+			],
+			"cwd": "/",
+			"user": [
+				"uid": 0,
+				"gid": 0,
+			],
+		]
+		let document: [String: Any] = [
+			"ociVersion": "1.1.0",
+			"process": process,
+			"root": [
+				"path": rootPath,
+			],
+			"hostname": "oci-lifecycle-state-host",
 			"domainname": "oci.example",
 		]
 		let data = try JSONSerialization.data(
