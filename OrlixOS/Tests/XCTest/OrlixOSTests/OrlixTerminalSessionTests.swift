@@ -54,6 +54,7 @@ final class OrlixTerminalSessionTests: XCTestCase {
 
         XCTAssertTrue(contents.contains("$(ORLIXOS_MKE2FS_BINARY)"))
         XCTAssertTrue(contents.contains("$(ORLIXOS_MKFS_EXT4_BINARY)"))
+        XCTAssertTrue(contents.contains("$(ORLIXOS_DEBUGFS_BINARY)"))
         XCTAssertTrue(contents.contains(
             #"install -m 0755 "$(ORLIXOS_MKE2FS_BINARY)" "$$root_tree/bin/mke2fs""#
         ))
@@ -61,9 +62,14 @@ final class OrlixTerminalSessionTests: XCTestCase {
             #"install -m 0755 "$(ORLIXOS_MKFS_EXT4_BINARY)" "$$root_tree/bin/mkfs.ext4""#
         ))
         XCTAssertTrue(contents.contains(
+            #"install -m 0755 "$(ORLIXOS_DEBUGFS_BINARY)" "$$root_tree/bin/debugfs""#
+        ))
+        XCTAssertTrue(contents.contains(
             "base_packages=bash coreutils findutils e2fsprogs"
         ))
-        XCTAssertTrue(contents.contains("e2fsprogs_programs=mke2fs mkfs.ext4"))
+        XCTAssertTrue(
+            contents.contains("e2fsprogs_programs=mke2fs mkfs.ext4 debugfs")
+        )
     }
 
     func testDocumentsMountIsExplicitEnvironmentDescriptorMetadata() throws {
