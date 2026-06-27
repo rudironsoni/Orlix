@@ -848,12 +848,20 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof().run()
             case "ociRunLiveRegistryAlpine":
                 output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
-            case "ociLiveRegistryAlpineRootfsImport":
-                output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof().run()
-            case "orlixPayloadE2fsprogs":
-                output = try OrlixPayloadE2fsprogsRuntimeProof().run()
-            case "ociTerminalLiveRegistry":
-                output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
+        case "ociLiveRegistryAlpineRootfsImport":
+            output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof().run()
+        case "orlixPayloadE2fsprogs":
+            output = try OrlixPayloadE2fsprogsRuntimeProof().run()
+        case "orlixPayloadE2fsprogsMaterialization":
+            output = try OrlixPayloadE2fsprogsRuntimeProof(
+                script: OrlixPayloadE2fsprogsRuntimeProof
+                    .materializationScript,
+                requiredMarkers: OrlixPayloadE2fsprogsRuntimeProof
+                    .materializationMarkers,
+                timeout: 180
+            ).run()
+        case "ociTerminalLiveRegistry":
+            output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
 		case "ociTerminalLiveRegistryAlpine":
 			output = try OrlixOCIDerivedLiveRegistryTerminalProof(
 				liveImageReference: "alpine:3.20",
@@ -1894,13 +1902,61 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRuntimeProof:
 }
 
 private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
-    private static let timeout: TimeInterval = 120
-    private static let requiredMarkers = [
-        "ORLIX_PAYLOAD_E2FSPROGS_MKE2FS_OK",
-        "ORLIX_PAYLOAD_E2FSPROGS_MKFS_EXT4_OK",
-        "ORLIX_PAYLOAD_E2FSPROGS_DEBUGFS_OK",
-        "ORLIX_PAYLOAD_E2FSPROGS_DONE",
-    ]
+	private static let defaultTimeout: TimeInterval = 120
+	private static let versionMarkers = [
+		"ORLIX_PAYLOAD_E2FSPROGS_MKE2FS_OK",
+		"ORLIX_PAYLOAD_E2FSPROGS_MKFS_EXT4_OK",
+		"ORLIX_PAYLOAD_E2FSPROGS_DEBUGFS_OK",
+		"ORLIX_PAYLOAD_E2FSPROGS_DONE",
+	]
+	static let materializationMarkers = [
+		"ORLIX_MKE2FS_D_BEGIN",
+		"ORLIX_MKE2FS_D_TRUNCATE_OK",
+		"ORLIX_MKE2FS_D_OK",
+		"ORLIX_MKE2FS_D_DEBUGFS_OK",
+	]
+	private static let versionScript = [
+		"set -eu",
+		"test -x /bin/mke2fs",
+		"test -x /bin/mkfs.ext4",
+		"test -x /bin/debugfs",
+		"/bin/mke2fs -V >/tmp/orlix-mke2fs-version.txt 2>&1",
+		"/bin/mkfs.ext4 -V >/tmp/orlix-mkfs-ext4-version.txt 2>&1",
+		"/bin/debugfs -V >/tmp/orlix-debugfs-version.txt 2>&1",
+		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKE2FS",
+		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKFS_EXT4",
+		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' DEBUGFS",
+		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s\\n' DONE",
+	].joined(separator: "; ")
+	static let materializationScript = [
+		"set -eu",
+		"printf 'ORLIX_%s\\n' MKE2FS_D_BEGIN",
+		"mkdir -p /tmp/s",
+		"echo x >/tmp/s/f",
+		": >/tmp/i",
+		"truncate -s 8m /tmp/i",
+		"printf 'ORLIX_%s\\n' MKE2FS_D_TRUNCATE_OK",
+		"mke2fs -q -t ext4 -F -m 0 -O ^metadata_csum -d /tmp/s /tmp/i",
+		"printf 'ORLIX_%s\\n' MKE2FS_D_OK",
+		"printf 'stats\\n' >/tmp/c",
+		"debugfs -w -f /tmp/c /tmp/i >/tmp/debugfs.out 2>&1",
+		"printf 'ORLIX_%s\\n' MKE2FS_D_DEBUGFS_OK",
+	].joined(separator: "; ")
+
+	private let script: String
+	private let requiredMarkers: [String]
+	private let timeout: TimeInterval
+
+	init(
+		script: String = OrlixPayloadE2fsprogsRuntimeProof.versionScript,
+		requiredMarkers: [String] = OrlixPayloadE2fsprogsRuntimeProof
+			.versionMarkers,
+		timeout: TimeInterval = OrlixPayloadE2fsprogsRuntimeProof.defaultTimeout
+	) {
+		self.script = script
+		self.requiredMarkers = requiredMarkers
+		self.timeout = timeout
+	}
 
     func run() throws -> String {
         guard let profile = OrlixOSDistribution.bundledBootProfile else {
@@ -1912,20 +1968,7 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
             throw OrlixUpstreamTestRunError.missingRootImageDescriptor("product")
         }
 
-        let script = [
-            "set -eu",
-            "test -x /bin/mke2fs",
-            "test -x /bin/mkfs.ext4",
-            "test -x /bin/debugfs",
-            "/bin/mke2fs -V >/tmp/orlix-mke2fs-version.txt 2>&1",
-            "/bin/mkfs.ext4 -V >/tmp/orlix-mkfs-ext4-version.txt 2>&1",
-            "/bin/debugfs -V >/tmp/orlix-debugfs-version.txt 2>&1",
-            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKE2FS",
-            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKFS_EXT4",
-            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' DEBUGFS",
-            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s\\n' DONE",
-        ].joined(separator: "; ")
-        let kernelCommandLine = [
+		let kernelCommandLine = [
             OrlixEnvironmentRootImage.defaultKernelCommandLine,
             "orlix.exec=\(Self.kernelToken("/bin/sh"))",
             "orlix.argv0=\(Self.kernelToken("/bin/sh"))",
@@ -1950,23 +1993,24 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
         let output = session.terminal.attachOutput { data in
             recorder.append(data)
             let text = recorder.text
-            if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
-                completion.signal()
-            }
-        }
+			if self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+				completion.signal()
+			}
+		}
         defer { output.cancel() }
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            bootStatus.set(session.boot())
-        }
+		DispatchQueue.global(qos: .userInitiated).async {
+			bootStatus.set(session.boot())
+			completion.signal()
+		}
 
-        guard completion.wait(timeout: .now() + Self.timeout) == .success else {
-            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-                "payload e2fsprogs proof timed out\n\(recorder.text)"
-            )
-        }
-        let text = recorder.text
-        for marker in Self.requiredMarkers where !text.contains(marker) {
+		guard completion.wait(timeout: .now() + timeout) == .success else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"payload e2fsprogs proof timed out\n\(recorder.text)"
+			)
+		}
+		let text = recorder.text
+		for marker in requiredMarkers where !text.contains(marker) {
             if let status = bootStatus.value, status != .ok {
                 throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
                     "payload e2fsprogs boot failed: \(status.message)\n\(text)"
