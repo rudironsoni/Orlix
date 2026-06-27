@@ -846,12 +846,14 @@ enum OrlixAppLaunchRuntimeRunner {
 			).run()
 		case "ociRunLiveRegistryBusybox":
 			output = try OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof().run()
-		case "ociRunLiveRegistryAlpine":
-			output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
-		case "ociLiveRegistryAlpineRootfsImport":
-			output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof().run()
-		case "ociTerminalLiveRegistry":
-			output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
+            case "ociRunLiveRegistryAlpine":
+                output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
+            case "ociLiveRegistryAlpineRootfsImport":
+                output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof().run()
+            case "orlixPayloadE2fsprogs":
+                output = try OrlixPayloadE2fsprogsRuntimeProof().run()
+            case "ociTerminalLiveRegistry":
+                output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
 		case "ociTerminalLiveRegistryAlpine":
 			output = try OrlixOCIDerivedLiveRegistryTerminalProof(
 				liveImageReference: "alpine:3.20",
@@ -1878,9 +1880,9 @@ private final class OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof:
 }
 
 private final class OrlixOCIDerivedLiveRegistryAlpineRuntimeProof:
-	@unchecked Sendable
+    @unchecked Sendable
 {
-	func run() throws -> String {
+    func run() throws -> String {
 		var text = try OrlixOCIDerivedRunCommandRuntimeProof(
 			registryMode: .live,
 			liveImageReference: "alpine:3.20",
@@ -1888,11 +1890,124 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRuntimeProof:
 		).run()
 		text += "ORLIX_OCI_RUN_LIVE_REGISTRY_ALPINE_OK\n"
 		return text
-	}
+    }
+}
+
+private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 120
+    private static let requiredMarkers = [
+        "ORLIX_PAYLOAD_E2FSPROGS_MKE2FS_OK",
+        "ORLIX_PAYLOAD_E2FSPROGS_MKFS_EXT4_OK",
+        "ORLIX_PAYLOAD_E2FSPROGS_DONE",
+    ]
+
+    func run() throws -> String {
+        guard let profile = OrlixOSDistribution.bundledBootProfile else {
+            throw OrlixUpstreamTestRunError.missingBundledBootProfile
+        }
+        guard let rootImageIdentifier = OrlixOSDistribution
+            .productRootImageIdentifier
+        else {
+            throw OrlixUpstreamTestRunError.missingRootImageDescriptor("product")
+        }
+
+        let script = [
+            "set -eu",
+            "test -x /bin/mke2fs",
+            "test -x /bin/mkfs.ext4",
+            "/bin/mke2fs -V >/tmp/orlix-mke2fs-version.txt 2>&1",
+            "/bin/mkfs.ext4 -V >/tmp/orlix-mkfs-ext4-version.txt 2>&1",
+            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKE2FS",
+            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKFS_EXT4",
+            "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s\\n' DONE",
+        ].joined(separator: "; ")
+        let kernelCommandLine = [
+            OrlixEnvironmentRootImage.defaultKernelCommandLine,
+            "orlix.exec=\(Self.kernelToken("/bin/sh"))",
+            "orlix.argv0=\(Self.kernelToken("/bin/sh"))",
+            "orlix.argv1=\(Self.kernelToken("-c"))",
+            "orlix.argv2=\(Self.kernelToken(script))",
+            "orlix.env0=\(Self.kernelToken("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))",
+            "orlix.cwd=\(Self.kernelToken("/"))",
+            "orlix.uid=0",
+            "orlix.gid=0",
+        ].joined(separator: " ")
+        let session = OrlixLinuxSession(
+            bootConfig: OrlixBootConfig(
+                profile: profile,
+                kernelCommandLine: kernelCommandLine,
+                rootImageIdentifier: rootImageIdentifier,
+                terminalIdentifier: "orlix.payload.e2fsprogs.terminal"
+            )
+        )
+        let recorder = TerminalOutputRecorder()
+        let completion = DispatchSemaphore(value: 0)
+        let bootStatus = BootStatusRecorder()
+        let output = session.terminal.attachOutput { data in
+            recorder.append(data)
+            let text = recorder.text
+            if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+                completion.signal()
+            }
+        }
+        defer { output.cancel() }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            bootStatus.set(session.boot())
+        }
+
+        guard completion.wait(timeout: .now() + Self.timeout) == .success else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "payload e2fsprogs proof timed out\n\(recorder.text)"
+            )
+        }
+        let text = recorder.text
+        for marker in Self.requiredMarkers where !text.contains(marker) {
+            if let status = bootStatus.value, status != .ok {
+                throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                    "payload e2fsprogs boot failed: \(status.message)\n\(text)"
+                )
+            }
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                marker,
+                text
+            )
+        }
+        return text
+    }
+
+    private static func kernelToken(_ value: String) -> String {
+        var encoded = ""
+        for byte in value.utf8 {
+            if isKernelCommandLineTokenByte(byte) {
+                encoded.append(Character(UnicodeScalar(byte)))
+            } else {
+                encoded += String(format: "%%%02X", byte)
+            }
+        }
+        return encoded
+    }
+
+    private static func isKernelCommandLineTokenByte(_ byte: UInt8) -> Bool {
+        switch byte {
+        case UInt8(ascii: "A")...UInt8(ascii: "Z"),
+             UInt8(ascii: "a")...UInt8(ascii: "z"),
+             UInt8(ascii: "0")...UInt8(ascii: "9"),
+             UInt8(ascii: "/"),
+             UInt8(ascii: "."),
+             UInt8(ascii: "_"),
+             UInt8(ascii: "-"),
+             UInt8(ascii: ":"),
+             UInt8(ascii: "="):
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
-	@unchecked Sendable
+    @unchecked Sendable
 {
 	private static let timeout: TimeInterval = 600
 	private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
