@@ -10,6 +10,24 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 Live OCI terminal SIGTSTP proof
+
+Changes:
+- Added app-hosted `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineSIGTSTP`.
+- The proof pulls `alpine:3.20`, runs through `orlix run --tty --rm`, installs a guest shell `TSTP` trap, waits for a ready marker, sends the standard terminal `Ctrl-Z` byte (`0x1a`) through the Orlix terminal input path, and requires the guest trap to print `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGTSTP_TRAP` before exiting `148`.
+- Extended the live-registry terminal proof harness with an explicit expected exit status so signal-driven exits are validated without weakening the default exit-0 lifecycle checks.
+- Tightened the existing SIGWINCH proof so it asserts signal delivery only. Terminal size remains covered by the separate dynamic resize proof; the SIGWINCH proof now orders resize before the guest read is released to avoid a race between the resize request and the newline.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineSIGWINCH` on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` exited 0. Marker gate found `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_SEEN`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_SIGWINCH_OK`, and delete cleanup, with no app-runner error, lifecycle timeout, `I/O error, dev vdb`, `NOT_PTY`, or `SIGWINCH_MISSING`.
+- Direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineSIGTSTP` on the same simulator exited 0. Marker gate found `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGTSTP_TRAP`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_SIGTSTP_OK`, and delete cleanup, with the same strict failure guards.
+
+Boundary:
+- This proves Linux PTY line-discipline delivery of `SIGTSTP` from standard `Ctrl-Z` terminal input for one live Docker Hub Alpine terminal session through `orlix run --tty`, plus a deterministic live SIGWINCH signal-delivery proof. It does not prove full interactive job-control commands such as `fg`/`bg`, suspended lifecycle persistence, multiple concurrent terminals, arbitrary OCI image compatibility, or beta readiness.
+
 ### 2026-06-27 Live OCI terminal SIGWINCH proof
 
 Changes:
