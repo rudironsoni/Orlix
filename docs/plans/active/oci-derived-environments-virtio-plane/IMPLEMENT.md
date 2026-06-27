@@ -24372,6 +24372,23 @@ Boundary:
 Current status:
 - `orlix run` now has simulator evidence for both deterministic registry input and live public registry pull through `registry.k8s.io/pause:3.10`, with Linux process execution and `--rm` cleanup. Continue toward arbitrary image compatibility, live auth/error coverage, networking, namespace/cgroup/device behavior, and broader OCI Runtime Spec coverage.
 
+## 2026-06-27 OCI rootfs controls runtime proof
+
+- Added Linux-owned `oci_rootfs_controls_probe` under OrlixKernel selftests and included it in the OCI runtime fixture under `/orlix/oci_rootfs_controls_probe`.
+- `OrlixTestRunner` adds `--orlix-runtime-test-spec ociRootfsControls`, writes a standard OCI runtime `config.json` with `linux.maskedPaths`, `linux.readonlyPaths`, and a tmpfs mount, then runs it through the OrlixOS OCI lifecycle path.
+- The simulator proof validates guest-visible Linux behavior: masked rootfs file is hidden, readonly rootfs path rejects writes with Linux errno, configured tmpfs target exists, mountinfo reports tmpfs, tmpfs supports Linux write/readback, and lifecycle start/stop/delete cleanup succeeds.
+- This is runtime behavior evidence for these OCI rootfs controls only. It does not claim seccomp, arbitrary mount propagation, arbitrary bind mount combinations, complete namespace coverage, or full OCI runtime spec completion.
+
+Verification:
+
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/oci_rootfs_controls_probe.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc` exited 0 and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0 and materialized the OCI imported fixture with `/orlix/oci_rootfs_controls_probe`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 through the wrapper using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Direct simulator launch on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` with `--orlix-runtime-test-spec ociRootfsControls` exited 0. Artifact showed the OCI-derived kernel command line carrying `orlix.maskedpath0=/etc/os-release`, `orlix.readonlypath0=/root`, and `orlix.mount.tmpfs0.target=/mnt/oci-tmpfs`, plus `ORLIX-OCI-ROOTFS-CONTROLS-PROBE`, `1..5`, all five `ok` TAP lines, `orlix-init: process exited pid=33 status=0`, and `ORLIX_OCI_ROOTFS_CONTROLS_RUNTIME_STARTED_OK`, `ORLIX_OCI_ROOTFS_CONTROLS_RUNTIME_STOPPED_OK`, `ORLIX_OCI_ROOTFS_CONTROLS_RUNTIME_DELETE_OK`.
+- Focused simulator regression launches `ociProcessAttributes`, `ociDeviceNodes`, `ociCgroupResources`, `ociVirtioFS`, `ociHostMountTarget`, `ociHostMountTargetReadOnly`, `ociNetwork`, `ociRun`, `ociStdio`, and `ociSignal` exited 0 on the same installed app and simulator, with no `not ok` or `ORLIX-APP-RUNTIME-RUNNER-ERROR`.
+
 ## 2026-06-27 OCI process attributes runtime proof
 
 - Added Linux-owned `oci_process_attributes_probe` under the Orlix kselftest overlay.
