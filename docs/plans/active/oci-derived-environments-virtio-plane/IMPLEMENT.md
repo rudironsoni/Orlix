@@ -10,6 +10,26 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 OCI terminal initial window size app proof
+
+Changes:
+- Fixed OCI runtime terminal session bridging so `process.consoleSize` reaches Linux init as `orlix.terminal.rows=<rows>` and `orlix.terminal.cols=<cols>` in the boot command line.
+- Added app-hosted `--orlix-runtime-test-spec ociTerminalLiveRegistryBusyboxSize`.
+- The new proof pulls `registry.k8s.io/e2e-test-images/busybox:1.29-4`, runs it through `orlix run --tty --terminal-size 37x132 --read-only --user 0:0 --rm`, validates PTY-backed stdin/stdout/stderr, reads terminal settings with Linux userspace `stty -a`, requires both `rows 37` and `columns 132`, then validates lifecycle start/stop/delete and cleanup markers.
+
+Evidence:
+- `rtk proxy swiftc -parse OrlixOS/Sources/Session/OrlixOS.swift OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryBusyboxSize` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `Kernel command line: orlix.terminal=1 orlix.terminal.rows=37 orlix.terminal.cols=132`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIZE_OK`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_PULL_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STARTED_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STOPPED_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK`, and `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_BUSYBOX_SIZE_OK`; strict guards found no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, `LIFECYCLE_TIMEOUT`, `I/O error, dev vdb`, or `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIZE_BAD`.
+- Adjacent regression launches `ociTerminalLiveRegistryAlpineInput` and `ociTerminalLiveRegistryAlpine` exited 0 sequentially on the same simulator with strict rejection of app runner errors, lifecycle timeouts, and `I/O error, dev vdb`.
+- Final guards: `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known current-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; recent Orlix/OrlixTestRunner crash scan found no reports.
+
+Boundary:
+- This proves initial OCI terminal size propagation for one live public BusyBox image through the OrlixOS `orlix run --tty --terminal-size` path on iOS Simulator. It does not prove dynamic resize after process start, terminal emulator resize event delivery, job control, full line discipline behavior, arbitrary OCI image compatibility, package workflows, DNS/NAT/external networking, or beta readiness.
+- Alpine `alpine:3.20` was not used for this size proof because this root did not expose a usable `stty`/BusyBox path for observing winsize from shell. Existing Alpine terminal and input proofs remain covered by the adjacent regressions above.
+- The size proof uses `--read-only` to avoid dirtying and deleting a writable state image for a terminal-size-only claim. Writable-state and cleanup behavior remain covered by their dedicated persistence and Alpine terminal lifecycle proofs.
+
 ### 2026-06-27 live registry Alpine interactive terminal input checkpoint
 
 Changes:
