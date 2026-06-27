@@ -842,6 +842,8 @@ enum OrlixAppLaunchRuntimeRunner {
             output = try OrlixOCIDerivedCgroupResourcesRuntimeProof().run()
         case "ociDeviceNodes":
             output = try OrlixOCIDerivedDeviceNodesRuntimeProof().run()
+        case "ociProcessAttributes":
+            output = try OrlixOCIDerivedProcessAttributesRuntimeProof().run()
         case "ociVirtioFS":
             output = try OrlixOCIDerivedVirtioFSRuntimeProof().run()
             case "ociHostMountTarget":
@@ -1978,6 +1980,213 @@ private final class OrlixOCIDerivedDeviceNodesRuntimeProof: @unchecked Sendable 
     private static func normalized(_ text: String) -> String {
         text.replacingOccurrences(of: "\r\n", with: "\n")
     }
+}
+
+private final class OrlixOCIDerivedProcessAttributesRuntimeProof: @unchecked Sendable {
+	private static let timeout: TimeInterval = 120
+	private static let environmentID = "oci-imported-runtime-test-fixture"
+	private static let rootImageIdentifier =
+		"orlix.test.environment.oci-runtime-test-fixture"
+	private static let requiredMarkers = [
+		"ORLIX-OCI-PROCESS-ATTRIBUTES-PROBE",
+		"1..4",
+		"ok 1 - OCI process rlimit is visible through getrlimit",
+		"ok 2 - OCI process rlimit is enforced by Linux",
+		"ok 3 - OCI noNewPrivileges is visible through prctl",
+		"ok 4 - OCI process user umask controls created file mode",
+	]
+
+	private let fileManager = FileManager.default
+	private let recorder = OrlixRuntimeProofOutputRecorder()
+
+	func run() throws -> String {
+		let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+		let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+		guard fileManager.fileExists(atPath: ready.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+		}
+
+		let copiedRoot = FileManager.default.temporaryDirectory
+			.appendingPathComponent(
+				"orlix-oci-process-attributes-\(UUID().uuidString)",
+				isDirectory: true
+			)
+		try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+		defer {
+			try? fileManager.removeItem(at: copiedRoot)
+		}
+
+		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let terminal = OrlixTerminalSession()
+		let output = terminal.attachOutput { [recorder] data in
+			recorder.append(data)
+		}
+		defer {
+			output.cancel()
+		}
+
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: Self.environmentID,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		try Self.writeOCIRuntimeConfig(
+			rootPath: "imported-root",
+			to: fixture.root
+		)
+		let runtime = OrlixOCIRuntime(registry: registry)
+		let lifecycle = try OrlixOCIRuntimeBundle
+			.load(from: fixture.root)
+			.lifecycleController(id: Self.environmentID)
+			.create()
+		let processHandle = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: lifecycle,
+			rootMount: .defaultOverlay,
+			rootImageIdentifier: Self.rootImageIdentifier
+		)
+		try registry.save(processHandle.sessionDescriptor.environment)
+		try runtime.lifecycleStore.save(lifecycle)
+
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let run = try installer.run(
+			id: Self.environmentID,
+			terminal: terminal,
+			observationTimeout: Self.timeout
+		)
+		let finalState = try installer.state(id: Self.environmentID)
+		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+			forID: Self.environmentID
+		)
+		let environmentDirectoryURL = layout.rootDirectory
+		let deletedEnvironment = try installer.delete(id: Self.environmentID)
+
+		var text = Self.normalized(recorder.text)
+		try Self.validateText(text)
+		try Self.validateLifecycle(
+			run: run,
+			finalState: finalState,
+			deletedEnvironment: deletedEnvironment,
+			lifecycleRecordURL: lifecycleRecordURL,
+			environmentDirectoryURL: environmentDirectoryURL,
+			output: text
+		)
+		text += "\nORLIX_OCI_PROCESS_ATTRIBUTES_RUNTIME_STARTED_OK\n"
+		text += "ORLIX_OCI_PROCESS_ATTRIBUTES_RUNTIME_STOPPED_OK\n"
+		text += "ORLIX_OCI_PROCESS_ATTRIBUTES_RUNTIME_DELETE_OK\n"
+		return text
+	}
+
+	private static func writeOCIRuntimeConfig(
+		rootPath: String,
+		to bundleRoot: URL
+	) throws {
+		let document: [String: Any] = [
+			"ociVersion": "1.1.0",
+			"process": [
+				"terminal": false,
+				"args": ["/orlix/oci_process_attributes_probe"],
+				"env": [
+					"HOME=/root",
+					"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+					"TERM=xterm-256color",
+				],
+				"cwd": "/tmp",
+				"user": [
+					"uid": 0,
+					"gid": 0,
+					"umask": 0o027,
+				],
+				"rlimits": [
+					[
+						"type": "RLIMIT_NOFILE",
+						"soft": 32,
+						"hard": 32,
+					],
+				],
+				"noNewPrivileges": true,
+			],
+			"root": [
+				"path": rootPath,
+			],
+			"hostname": "oci-process-attributes-host",
+			"domainname": "oci.example",
+		]
+		let data = try JSONSerialization.data(
+			withJSONObject: document,
+			options: [.prettyPrinted, .sortedKeys]
+		)
+		try data.write(to: bundleRoot.appendingPathComponent("config.json"))
+	}
+
+	private static func validateText(_ text: String) throws {
+		for marker in requiredMarkers where !text.contains(marker) {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+		}
+		if text.contains("\nnot ok ") ||
+			text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR")
+		{
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+		}
+	}
+
+	private static func validateLifecycle(
+		run: OrlixOCIEnvironmentRunResult,
+		finalState: OrlixOCIRuntimeStateReport,
+		deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+		lifecycleRecordURL: URL,
+		environmentDirectoryURL: URL,
+		output: String
+	) throws {
+		guard run.startedStateReport.status == .running,
+			run.startedStateReport.pid != nil
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI process attribute proof started lifecycle state running\n\(output)"
+			)
+		}
+		guard run.completedStateReport.status == .stopped,
+			run.completedStateReport.exitStatus == 0
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI process attribute proof stopped exit 0\n\(output)"
+			)
+		}
+		guard finalState.status == .stopped,
+			finalState.exitStatus == 0
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI process attribute final lifecycle state stopped exit 0\n\(output)"
+			)
+		}
+		guard deletedEnvironment.id == Self.environmentID,
+			deletedEnvironment.lifecycleState == .deleted
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI process attribute proof delete cleanup\n\(output)"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI process attribute lifecycle record cleanup\n\(output)"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI process attribute environment directory cleanup\n\(output)"
+			)
+		}
+	}
+
+	private static func normalized(_ text: String) -> String {
+		text.replacingOccurrences(of: "\r\n", with: "\n")
+			.replacingOccurrences(of: "\r", with: "\n")
+	}
 }
 
 private final class OrlixOCIDerivedCgroupResourcesRuntimeProof: @unchecked Sendable {
