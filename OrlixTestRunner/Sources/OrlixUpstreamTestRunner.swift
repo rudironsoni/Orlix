@@ -842,6 +842,8 @@ enum OrlixAppLaunchRuntimeRunner {
             output = try OrlixOCIDerivedCgroupResourcesRuntimeProof().run()
         case "ociDeviceNodes":
             output = try OrlixOCIDerivedDeviceNodesRuntimeProof().run()
+        case "ociNamespaceIdentity":
+            output = try OrlixOCIDerivedNamespaceIdentityRuntimeProof().run()
         case "ociProcessAttributes":
             output = try OrlixOCIDerivedProcessAttributesRuntimeProof().run()
         case "ociRootfsControls":
@@ -2189,6 +2191,248 @@ private final class OrlixOCIDerivedProcessAttributesRuntimeProof: @unchecked Sen
 		text.replacingOccurrences(of: "\r\n", with: "\n")
 			.replacingOccurrences(of: "\r", with: "\n")
 	}
+}
+
+private final class OrlixOCIDerivedNamespaceIdentityRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 120
+    private static let environmentID = "oci-imported-runtime-test-fixture"
+    private static let rootImageIdentifier =
+        "orlix.test.environment.oci-runtime-test-fixture"
+    private static let requiredMarkers = [
+        "ORLIX-OCI-NAMESPACE-IDENTITY-PROBE",
+        "1..6",
+        "ok 1 - OCI hostname visible through gethostname",
+        "ok 2 - OCI domainname visible through uname",
+        "ok 3 - OCI UTS namespace exposes Linux procfs namespace entry",
+        "ok 4 - OCI user namespace exposes Linux procfs namespace entry",
+        "ok 5 - OCI uidMappings visible through Linux uid_map",
+        "ok 6 - OCI gidMappings visible through Linux gid_map",
+    ]
+
+    private let fileManager = FileManager.default
+    private let recorder = OrlixRuntimeProofOutputRecorder()
+
+    func run() throws -> String {
+        let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+        let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+        guard fileManager.fileExists(atPath: ready.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+        }
+
+        let copiedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "orlix-oci-namespace-identity-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+        defer {
+            try? fileManager.removeItem(at: copiedRoot)
+        }
+
+        let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        let terminal = OrlixTerminalSession()
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer {
+            output.cancel()
+        }
+
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: Self.environmentID,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        try Self.writeOCIRuntimeConfig(rootPath: "imported-root", to: fixture.root)
+
+        let runtime = OrlixOCIRuntime(registry: registry)
+        let lifecycle = try OrlixOCIRuntimeBundle
+            .load(from: fixture.root)
+            .lifecycleController(id: Self.environmentID)
+            .create()
+        let processHandle = try OrlixOCIRuntimeProcessHandle(
+            lifecycle: lifecycle,
+            rootMount: .defaultOverlay,
+            rootImageIdentifier: Self.rootImageIdentifier
+        )
+        try registry.save(processHandle.sessionDescriptor.environment)
+        try runtime.lifecycleStore.save(lifecycle)
+
+        let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+        let run = try installer.run(
+            id: Self.environmentID,
+            terminal: terminal,
+            observationTimeout: Self.timeout
+        )
+        try waitForRequiredMarkers()
+
+        let finalState = try installer.state(id: Self.environmentID)
+        let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+            forID: Self.environmentID
+        )
+        let environmentDirectoryURL = layout.rootDirectory
+        let deletedEnvironment = try installer.delete(id: Self.environmentID)
+
+        var text = Self.normalized(recorder.text)
+        try Self.validateText(text)
+        try Self.validateLifecycle(
+            run: run,
+            finalState: finalState,
+            deletedEnvironment: deletedEnvironment,
+            lifecycleRecordURL: lifecycleRecordURL,
+            environmentDirectoryURL: environmentDirectoryURL,
+            output: text
+        )
+        text += "\nORLIX_OCI_NAMESPACE_IDENTITY_RUNTIME_STARTED_OK\n"
+        text += "ORLIX_OCI_NAMESPACE_IDENTITY_RUNTIME_STOPPED_OK\n"
+        text += "ORLIX_OCI_NAMESPACE_IDENTITY_RUNTIME_DELETE_OK\n"
+        return text
+    }
+
+    private static func writeOCIRuntimeConfig(
+        rootPath: String,
+        to bundleRoot: URL
+    ) throws {
+        let idMapping: [String: Any] = [
+            "containerID": 0,
+            "hostID": 0,
+            "size": 1,
+        ]
+        let document: [String: Any] = [
+            "ociVersion": "1.1.0",
+            "process": [
+                "terminal": false,
+                "args": ["/orlix/oci_namespace_identity_probe"],
+                "env": [
+                    "HOME=/root",
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "TERM=xterm-256color",
+                ],
+                "cwd": "/",
+                "user": [
+                    "uid": 0,
+                    "gid": 0,
+                ],
+            ],
+            "root": [
+                "path": rootPath,
+            ],
+            "hostname": "oci-namespace-host",
+            "domainname": "oci.example",
+            "linux": [
+                "namespaces": [
+                    [
+                        "type": "uts",
+                    ],
+                    [
+                        "type": "user",
+                    ],
+                ],
+                "uidMappings": [
+                    idMapping,
+                ],
+                "gidMappings": [
+                    idMapping,
+                ],
+            ],
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: document,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: bundleRoot.appendingPathComponent("config.json"))
+    }
+
+    private static func validateText(_ text: String) throws {
+        for marker in requiredMarkers where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                marker,
+                text
+            )
+        }
+        if text.contains("\nnot ok ") || text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR") {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+        }
+    }
+
+    private func waitForRequiredMarkers() throws {
+        let deadline = Date().addingTimeInterval(Self.timeout)
+        while Date() < deadline {
+            let text = Self.normalized(recorder.text)
+            if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        let text = Self.normalized(recorder.text)
+        if let missingMarker = Self.requiredMarkers.first(where: { !text.contains($0) }) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                missingMarker,
+                text
+            )
+        }
+        throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+            "OCI namespace identity runtime markers",
+            text
+        )
+    }
+
+    private static func validateLifecycle(
+        run: OrlixOCIEnvironmentRunResult,
+        finalState: OrlixOCIRuntimeStateReport,
+        deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+        lifecycleRecordURL: URL,
+        environmentDirectoryURL: URL,
+        output: String
+    ) throws {
+        guard run.startedStateReport.status == .running,
+            run.startedStateReport.pid != nil
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI namespace identity proof started lifecycle state running\n\(output)"
+            )
+        }
+        guard run.completedStateReport.status == .stopped,
+            run.completedStateReport.exitStatus == 0
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI namespace identity proof stopped exit 0\n\(output)"
+            )
+        }
+        guard finalState.status == .stopped, finalState.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI namespace identity final lifecycle state stopped exit 0\n\(output)"
+            )
+        }
+        guard deletedEnvironment.id == Self.environmentID,
+            deletedEnvironment.lifecycleState == .deleted
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI namespace identity proof delete cleanup\n\(output)"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI namespace identity lifecycle record cleanup\n\(output)"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI namespace identity environment directory cleanup\n\(output)"
+            )
+        }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+    }
 }
 
 private final class OrlixOCIDerivedRootfsControlsRuntimeProof: @unchecked Sendable {
