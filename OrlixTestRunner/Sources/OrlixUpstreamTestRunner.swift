@@ -836,10 +836,12 @@ enum OrlixAppLaunchRuntimeRunner {
                 output = try OrlixOCIDerivedRunCommandRuntimeProof(
                     registryMode: .live
                 ).run()
-            case "ociNetwork":
-                output = try OrlixOCIDerivedNetworkRuntimeProof().run()
-        case "ociCgroupResources":
-            output = try OrlixOCIDerivedCgroupResourcesRuntimeProof().run()
+		case "ociNetwork":
+			output = try OrlixOCIDerivedNetworkRuntimeProof().run()
+		case "ociVirtioNet":
+			output = try OrlixOCIDerivedVirtioNetRuntimeProof().run()
+		case "ociCgroupResources":
+			output = try OrlixOCIDerivedCgroupResourcesRuntimeProof().run()
         case "ociDeviceNodes":
             output = try OrlixOCIDerivedDeviceNodesRuntimeProof().run()
             case "ociNamespaceIdentity":
@@ -1731,7 +1733,220 @@ private final class OrlixOCIDerivedNetworkRuntimeProof: @unchecked Sendable {
     private static func normalized(_ text: String) -> String {
         text.replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
-    }
+	}
+}
+
+private final class OrlixOCIDerivedVirtioNetRuntimeProof: @unchecked Sendable {
+	private static let timeout: TimeInterval = 120
+	private static let environmentID = "oci-imported-runtime-test-fixture"
+	private static let rootImageIdentifier =
+		"orlix.test.environment.oci-runtime-test-fixture"
+	private static let requiredMarkers = [
+		"1..14",
+        "ok 1 - virtio-net device is present on the upstream virtio bus",
+        "ok 2 - virtio-net device owns a Linux netdev",
+		"ok 3 - virtio-net netdev is exposed through sysfs",
+		"ok 4 - virtio-net netdev reports Ethernet hardware type",
+		"ok 5 - virtio-net netdev reports Ethernet address length",
+        "ok 6 - virtio-net netdev reports a positive MTU through sysfs",
+        "ok 7 - rtnetlink enumerates the virtio-net Ethernet link with matching MTU and standard operstate",
+		"ok 8 - ioctl reports matching virtio-net link flags",
+        "ok 9 - AF_PACKET socket binds to the virtio-net link",
+		"ok 10 - virtio-net reports carrier after Linux interface up",
+		"ok 11 - AF_PACKET send advances virtio-net tx_packets",
+		"ok 12 - virtio-net RX queue advances rx_packets",
+        "ok 13 - virtio-net link is distinct from loopback",
+        "ok 14 - procfs reports the virtio-net interface",
+	]
+
+	private let fileManager = FileManager.default
+	private let recorder = OrlixRuntimeProofOutputRecorder()
+
+	func run() throws -> String {
+		let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+		let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+		guard fileManager.fileExists(atPath: ready.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+		}
+
+		let copiedRoot = FileManager.default.temporaryDirectory
+			.appendingPathComponent(
+				"orlix-oci-virtio-net-\(UUID().uuidString)",
+				isDirectory: true
+			)
+		try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+		defer {
+			try? fileManager.removeItem(at: copiedRoot)
+		}
+
+		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+		let descriptor = OrlixEnvironmentDescriptor(
+			id: Self.environmentID,
+			source: .ociLayout,
+			platform: "linux/arm64",
+			rootImageIdentifier: Self.rootImageIdentifier,
+			defaultCommand: ["/orlix/virtio_net_device_probe"],
+			defaultEnvironment: [
+				"HOME": "/root",
+				"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				"TERM": "xterm-256color",
+			],
+			defaultWorkingDirectory: "/",
+			defaultUserID: 0,
+			defaultGroupID: 0,
+			hostname: "oci-virtio-net-host",
+			domainname: "oci.example",
+			rootMount: .defaultOverlay
+		)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		try registry.save(descriptor)
+		let terminal = OrlixTerminalSession()
+		let output = terminal.attachOutput { [recorder] data in
+			recorder.append(data)
+		}
+		defer {
+			output.cancel()
+		}
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: descriptor.id,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		try OrlixOCIDerivedStdioRuntimeProof.writeOCIRuntimeConfig(
+			terminal: false,
+			script: "/orlix/virtio_net_device_probe",
+			rootPath: "imported-root",
+			to: fixture.root
+		)
+		let runtime = OrlixOCIRuntime(registry: registry)
+		let lifecycle = try OrlixOCIRuntimeBundle
+			.load(from: fixture.root)
+			.lifecycleController(id: descriptor.id)
+			.create()
+		let processHandle = try OrlixOCIRuntimeProcessHandle(
+			lifecycle: lifecycle,
+			rootMount: .defaultOverlay,
+			rootImageIdentifier: descriptor.rootImageIdentifier
+		)
+		try registry.save(processHandle.sessionDescriptor.environment)
+		try runtime.lifecycleStore.save(lifecycle)
+
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let run = try installer.run(
+			id: descriptor.id,
+			terminal: terminal,
+			observationTimeout: Self.timeout
+		)
+		try waitForRequiredMarkers()
+		let finalState = try installer.state(id: descriptor.id)
+		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+			forID: descriptor.id
+		)
+		let environmentDirectoryURL = layout.rootDirectory
+		let deletedEnvironment = try installer.delete(id: descriptor.id)
+		var text = Self.normalized(recorder.text)
+		try Self.validateText(text)
+		try Self.validateLifecycle(
+			run: run,
+			finalState: finalState,
+			deletedEnvironment: deletedEnvironment,
+			lifecycleRecordURL: lifecycleRecordURL,
+			environmentDirectoryURL: environmentDirectoryURL
+		)
+		text += "\nORLIX_OCI_VIRTIO_NET_RUNTIME_STARTED_OK\n"
+		text += "ORLIX_OCI_VIRTIO_NET_RUNTIME_STOPPED_OK\n"
+		text += "ORLIX_OCI_VIRTIO_NET_RUNTIME_DELETE_OK\n"
+		return text
+	}
+
+	private static func validateText(_ text: String) throws {
+		for marker in requiredMarkers where !text.contains(marker) {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+		}
+		if text.contains("\nnot ok ") ||
+			text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR")
+		{
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+		}
+	}
+
+	private func waitForRequiredMarkers() throws {
+		let deadline = Date().addingTimeInterval(Self.timeout)
+		while Date() < deadline {
+			let text = Self.normalized(recorder.text)
+			if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+				return
+			}
+			Thread.sleep(forTimeInterval: 0.05)
+		}
+		let text = Self.normalized(recorder.text)
+		if let missingMarker = Self.requiredMarkers.first(where: { !text.contains($0) }) {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+				missingMarker,
+				text
+			)
+		}
+		throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+			"OCI virtio-net runtime markers",
+			text
+		)
+	}
+
+	private static func validateLifecycle(
+		run: OrlixOCIEnvironmentRunResult,
+		finalState: OrlixOCIRuntimeStateReport,
+		deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+		lifecycleRecordURL: URL,
+		environmentDirectoryURL: URL
+	) throws {
+		guard run.startedStateReport.status == .running,
+			run.startedStateReport.pid != nil
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI virtio-net proof started lifecycle state running"
+			)
+		}
+		guard run.completedStateReport.status == .stopped,
+			run.completedStateReport.exitStatus == 0
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI virtio-net proof stopped exit 0"
+			)
+		}
+		guard finalState.status == .stopped, finalState.exitStatus == 0 else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI virtio-net final lifecycle state stopped exit 0"
+			)
+		}
+		guard deletedEnvironment.id == Self.environmentID,
+			deletedEnvironment.lifecycleState == .deleted
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI virtio-net proof delete cleanup"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI virtio-net lifecycle record cleanup"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path)
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected OCI virtio-net environment directory cleanup"
+			)
+		}
+	}
+
+	private static func normalized(_ text: String) -> String {
+		text.replacingOccurrences(of: "\r\n", with: "\n")
+			.replacingOccurrences(of: "\r", with: "\n")
+	}
 }
 
 private final class OrlixOCIDerivedDeviceNodesRuntimeProof: @unchecked Sendable {
