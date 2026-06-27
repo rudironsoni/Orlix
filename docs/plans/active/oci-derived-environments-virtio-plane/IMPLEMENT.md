@@ -24544,3 +24544,18 @@ Boundary:
 - Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
 
 Boundary: this proves the OCI-derived runtime path can execute the Linux-owned virtio-net probe through OrlixOS app-hosted lifecycle and observe Linux netdev, sysfs, rtnetlink, AF_PACKET, carrier, TX/RX, loopback distinction, and procfs behavior. It does not prove arbitrary OCI image networking, DNS, NAT, external host packet receive, registry UX, or beta readiness.
+
+## 2026-06-27 OCI stopSignal lifecycle checkpoint
+
+- Added app-hosted `ociStopSignal` to `OrlixTestRunner`.
+- The proof starts an OCI-derived terminal session whose descriptor has `defaultStopSignal` set to Linux `SIGQUIT`, then calls the lifecycle `kill` argument path without `--signal`; the shell traps `QUIT` and exits 131.
+- This verifies OrlixOS lifecycle signal selection uses the descriptor stop signal when the kill request omits an explicit signal, while Linux signal delivery remains handled through the existing Linux terminal/session path.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported the iPhone 17 simulator already booted.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociStopSignal` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`, with `ORLIX_ENV_STOP_SIGNAL_SIGQUIT_TRAP`, `ORLIX_OCI_STOP_SIGNAL_RUNTIME_STARTED_OK`, `ORLIX_OCI_STOP_SIGNAL_RUNTIME_SIGNALED_OK`, `ORLIX_OCI_STOP_SIGNAL_RUNTIME_STOPPED_OK`, `ORLIX_OCI_STOP_SIGNAL_RUNTIME_DELETE_OK`, and no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, or `LIFECYCLE_TIMEOUT`.
+- Focused adjacent simulator regressions `ociSignal`, `ociRun`, `ociStdio`, and `ociTerminal` exited 0 on the same installed app and simulator.
+- Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; crash scan found no recent Orlix or OrlixTestRunner reports.
+
+Boundary: this proves descriptor-driven OCI stop-signal selection for the app-hosted lifecycle path. It does not prove non-terminal signal delivery, SIGKILL, process groups, arbitrary OCI lifecycle compliance, or beta readiness.
