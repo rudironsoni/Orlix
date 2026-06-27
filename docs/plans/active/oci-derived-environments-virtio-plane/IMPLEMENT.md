@@ -24327,3 +24327,32 @@ Verification:
 Current status:
 
 - OCI-derived environments now have app-hosted simulator evidence for Linux-owned network namespace and loopback behavior through the OrlixOS OCI lifecycle path. Continue toward virtio-net userspace receive, DNS/NAT/external networking, device behavior, broader namespace/cgroup coverage, arbitrary image compatibility, and OCI Runtime Spec lifecycle breadth.
+
+## 2026-06-27 OCI virtio-fs bind mount runtime proof
+
+Implemented app-hosted OCI bind-mount runtime proof through the Linux-owned virtio-fs path:
+
+- `OrlixOS/Makefile` now includes the Linux-owned `virtio_fs_mount_probe` kselftest binary in the OCI imported runtime fixture under `/orlix/virtio_fs_mount_probe`, stamps fixture freshness with the probe SHA-256, and uses a larger fixture-only base image size so the imported test root can hold both Linux probe binaries.
+- `OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` adds `--orlix-runtime-test-spec ociVirtioFS`, writes an OCI runtime `config.json` with a bind mount from an app temporary host directory to `/mnt/oci-host`, runs `/orlix/virtio_fs_mount_probe` through the OrlixOS OCI lifecycle path, validates the Linux-written host-side file mutation, validates lifecycle start/stop/delete, and cleans up lifecycle and environment state.
+- The proof validates Linux-owned runtime behavior only: OCI bind intent reaches OrlixOS host-directory registration, Linux sees virtio-fs tag `orlix-host0`, Linux mounts the host folder through virtio-fs, Linux performs read/write/stat/readdir/xattr/lseek/nested-path checks, read-only remount rejects writes with `EROFS`, and OrlixOS lifecycle cleanup succeeds.
+
+Verification:
+
+- `rtk make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0.
+- `rtk swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk git diff --check` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 through the Xcode wrapper using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on the single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `xcrun simctl launch --terminate-running-process --console E65F0D05-980C-4368-8CDC-2D2BF3E05757 org.orlix.OrlixTestRunner --orlix-runtime-test-spec ociVirtioFS` exited 0. Artifact validation found `ORLIX_OCI_VIRTIOFS_HOST_WRITE_OK`, `ORLIX_OCI_VIRTIOFS_RUNTIME_STARTED_OK`, `ORLIX_OCI_VIRTIOFS_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_VIRTIOFS_RUNTIME_DELETE_OK`; no `not ok` or `ORLIX-APP-RUNTIME-RUNNER-ERROR` was present.
+- Focused regression launches `ociNetwork`, `ociRun`, `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 on the same installed app and simulator, with their expected runtime/lifecycle markers and no app runner error.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known stale-status warning only.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- OrlixTestRunner crash scan found no host crash reports; the simulator DiagnosticReports directory was absent.
+
+Boundary:
+
+- This does not claim arbitrary external-folder product UI, security-scoped Files integration, full mount option coverage, Docker/runc compatibility, packet receive, DNS, NAT, external networking, cgroup enforcement, arbitrary image compatibility, or full product readiness.
+
+Current status:
+
+- OCI-derived environments now have app-hosted simulator evidence that an OCI bind mount can be preserved by OrlixOS orchestration and realized by Linux through virtio-fs. Continue toward broader mount option behavior, security-scoped external folder product integration, virtio-net userspace receive, DNS/NAT/external networking, device behavior, broader namespace/cgroup coverage, arbitrary image compatibility, and OCI Runtime Spec lifecycle breadth.

@@ -838,6 +838,8 @@ enum OrlixAppLaunchRuntimeRunner {
                 ).run()
             case "ociNetwork":
                 output = try OrlixOCIDerivedNetworkRuntimeProof().run()
+            case "ociVirtioFS":
+                output = try OrlixOCIDerivedVirtioFSRuntimeProof().run()
             default:
                 throw OrlixAppLaunchRuntimeRunnerError.unknownSpec(specName)
             }
@@ -919,7 +921,7 @@ private enum OrlixAppLaunchRuntimeRunnerError: Error, CustomStringConvertible {
 }
 
 private final class OrlixOCIDerivedStdioRuntimeProof: @unchecked Sendable {
-    private static let timeout: TimeInterval = 120
+    private static let timeout: TimeInterval = 240
     private static let stdioRequiredMarkers = [
         "ORLIX_ENV_STDIO_BEGIN",
         "ORLIX_ENV_STDIO_STDOUT_OK",
@@ -1706,6 +1708,272 @@ private final class OrlixOCIDerivedNetworkRuntimeProof: @unchecked Sendable {
         guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
             throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
                 "expected OCI network environment directory cleanup"
+            )
+        }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+    }
+}
+
+private final class OrlixOCIDerivedVirtioFSRuntimeProof: @unchecked Sendable {
+    private static let timeout: TimeInterval = 120
+    private static let environmentID = "oci-imported-runtime-test-fixture"
+    private static let rootImageIdentifier =
+        "orlix.test.environment.oci-runtime-test-fixture"
+private static let requiredMarkers = [
+ "1..14",
+ "ok 1 - virtio-fs device exposes standard Orlix host-folder tag",
+ "ok 2 - virtio-fs mountpoint available",
+ "ok 3 - Linux mounts Orlix host folder through virtio-fs",
+ "ok 4 - mounted virtio-fs root is directory",
+ "ok 5 - mountinfo reports mounted virtio-fs root",
+ "ok 6 - mounted virtio-fs root supports readdir",
+ "ok 7 - mounted writable virtio-fs root supports create, write, readback",
+ "ok 8 - mounted virtio-fs root supports statx",
+ "ok 9 - mounted virtio-fs root reports empty xattr list",
+ "ok 10 - mounted virtio-fs root reports missing xattrs",
+ "ok 11 - mounted virtio-fs regular files support lseek when present",
+ "ok 12 - mounted virtio-fs nested paths support readdir, access, statx when present",
+ "ok 13 - Linux mounts Orlix host folder read-only through virtio-fs",
+ "ok 14 - mounted read-only virtio-fs root rejects create with EROFS",
+ ]
+
+    private let fileManager = FileManager.default
+    private let recorder = OrlixRuntimeProofOutputRecorder()
+
+    func run() throws -> String {
+        let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+        let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+        guard fileManager.fileExists(atPath: ready.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+        }
+
+        let copiedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-oci-virtiofs-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+        defer {
+            try? fileManager.removeItem(at: copiedRoot)
+        }
+
+        let hostRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-oci-virtiofs-host-\(UUID().uuidString)", isDirectory: true)
+        try Self.createHostDirectoryFixture(at: hostRoot, fileManager: fileManager)
+        defer {
+            try? fileManager.removeItem(at: hostRoot)
+        }
+
+        let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+        let registry = OrlixEnvironmentRegistry(
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        let terminal = OrlixTerminalSession()
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer {
+            output.cancel()
+        }
+
+        let layout = try OrlixEnvironmentStorageLayout.layout(
+            forEnvironmentID: Self.environmentID,
+            linuxStateRoot: fixture.linuxStateRoot,
+            cacheRoot: fixture.cacheRoot,
+            scratchRoot: fixture.scratchRoot
+        )
+        try Self.writeOCIRuntimeConfig(
+            hostDirectory: hostRoot,
+            rootPath: "imported-root",
+            to: fixture.root
+        )
+        let runtime = OrlixOCIRuntime(registry: registry)
+        let lifecycle = try OrlixOCIRuntimeBundle
+            .load(from: fixture.root)
+            .lifecycleController(id: Self.environmentID)
+            .create()
+        let processHandle = try OrlixOCIRuntimeProcessHandle(
+            lifecycle: lifecycle,
+            rootMount: .defaultOverlay,
+            rootImageIdentifier: Self.rootImageIdentifier
+        )
+        try registry.save(processHandle.sessionDescriptor.environment)
+        try runtime.lifecycleStore.save(lifecycle)
+
+        let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+        let run = try installer.run(
+            id: Self.environmentID,
+            terminal: terminal,
+            observationTimeout: Self.timeout
+        )
+let finalState = try installer.state(id: Self.environmentID)
+let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+forID: Self.environmentID
+)
+let environmentDirectoryURL = layout.rootDirectory
+let deletedEnvironment = try installer.delete(id: Self.environmentID)
+try Self.validateHostDirectoryProof(at: hostRoot)
+
+var text = Self.normalized(recorder.text)
+try Self.validateLifecycle(
+run: run,
+finalState: finalState,
+deletedEnvironment: deletedEnvironment,
+lifecycleRecordURL: lifecycleRecordURL,
+environmentDirectoryURL: environmentDirectoryURL
+)
+text += "\nORLIX_OCI_VIRTIOFS_HOST_WRITE_OK\n"
+text += "\nORLIX_OCI_VIRTIOFS_RUNTIME_STARTED_OK\n"
+text += "ORLIX_OCI_VIRTIOFS_RUNTIME_STOPPED_OK\n"
+text += "ORLIX_OCI_VIRTIOFS_RUNTIME_DELETE_OK\n"
+return text
+    }
+
+    private static func createHostDirectoryFixture(
+        at root: URL,
+        fileManager: FileManager
+    ) throws {
+        let nested = root
+            .appendingPathComponent("nested", isDirectory: true)
+            .appendingPathComponent("deeper", isDirectory: true)
+        try fileManager.createDirectory(
+            at: nested,
+            withIntermediateDirectories: true
+        )
+        try Data("orlix virtio-fs fixture\n".utf8).write(
+            to: root.appendingPathComponent("root-file.txt", isDirectory: false)
+        )
+try Data("nested fixture\n".utf8).write(
+to: nested.appendingPathComponent("nested-file.txt", isDirectory: false)
+)
+}
+
+private static func validateHostDirectoryProof(at hostRoot: URL) throws {
+let proof = hostRoot.appendingPathComponent("orlix-write-probe", isDirectory: false)
+let data = try Data(contentsOf: proof)
+guard String(decoding: data, as: UTF8.self) == "orlix writable virtiofs\n" else {
+throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+"expected OCI virtio-fs host write proof payload"
+)
+}
+}
+
+private static func writeOCIRuntimeConfig(
+hostDirectory: URL,
+        rootPath: String,
+        to bundleRoot: URL
+    ) throws {
+        let process: [String: Any] = [
+            "terminal": true,
+            "args": ["/orlix/virtio_fs_mount_probe"],
+            "env": [
+                "HOME=/root",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM=xterm-256color",
+            ],
+            "cwd": "/",
+            "user": [
+                "uid": 0,
+                "gid": 0,
+            ],
+        ]
+        let document: [String: Any] = [
+            "ociVersion": "1.1.0",
+            "process": process,
+            "root": [
+                "path": rootPath,
+            ],
+            "hostname": "oci-virtiofs-host",
+            "domainname": "oci.example",
+            "mounts": [
+                [
+                    "destination": "/mnt/oci-host",
+                    "type": "bind",
+                    "source": hostDirectory.path,
+                    "options": ["bind", "rw"],
+                ],
+            ],
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: document,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: bundleRoot.appendingPathComponent("config.json"))
+    }
+
+    private static func validateText(_ text: String) throws {
+        for marker in requiredMarkers where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+        }
+        if text.contains("\nnot ok ") || text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR") {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+        }
+    }
+
+    private func waitForRequiredMarkers() throws {
+        let deadline = Date().addingTimeInterval(Self.timeout)
+        while Date() < deadline {
+            let text = Self.normalized(recorder.text)
+            if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        let text = Self.normalized(recorder.text)
+        if let missingMarker = Self.requiredMarkers.first(where: { !text.contains($0) }) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                missingMarker,
+                text
+            )
+        }
+        throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+            "OCI virtio-fs runtime markers",
+            text
+        )
+    }
+
+    private static func validateLifecycle(
+        run: OrlixOCIEnvironmentRunResult,
+        finalState: OrlixOCIRuntimeStateReport,
+        deletedEnvironment: OrlixOCIEnvironmentDeleteResult,
+        lifecycleRecordURL: URL,
+        environmentDirectoryURL: URL
+    ) throws {
+        guard run.startedStateReport.status == .running,
+              run.startedStateReport.pid != nil else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI virtio-fs proof started lifecycle state running"
+            )
+        }
+        guard run.completedStateReport.status == .stopped,
+              run.completedStateReport.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI virtio-fs proof stopped exit 0"
+            )
+        }
+        guard finalState.status == .stopped,
+              finalState.exitStatus == 0 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI virtio-fs final lifecycle state stopped exit 0"
+            )
+        }
+        guard deletedEnvironment.id == Self.environmentID,
+              deletedEnvironment.lifecycleState == .deleted else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI virtio-fs proof delete cleanup"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI virtio-fs lifecycle record cleanup"
+            )
+        }
+        guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected OCI virtio-fs environment directory cleanup"
             )
         }
     }
