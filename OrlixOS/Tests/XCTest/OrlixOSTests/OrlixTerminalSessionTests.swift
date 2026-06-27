@@ -2297,7 +2297,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                         "-L",
                         "ORLIXROOT",
                         "-E",
-                        "root_owner=0:0",
+                        "root_owner=0:0,no_copy_xattrs",
                         "-d",
                         plan.baseTreeDirectory.path,
                         layout.baseImageURL.path
@@ -2332,7 +2332,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                         "-L",
                         "ORLIXSTATE",
                         "-E",
-                        "root_owner=0:0",
+                        "root_owner=0:0,no_copy_xattrs",
                         "-d",
                         plan.stateTreeDirectory.path,
                         layout.stateImageURL.path

@@ -1742,6 +1742,34 @@ out:
     return result;
 }
 
+__attribute__((visibility("hidden"))) int orlix_host_directory_truncate_file_at_path(
+    unsigned int directory,
+    const char *relative_path,
+    uint64_t size)
+{
+    char entry_path[PATH_MAX];
+    unsigned int read_only = 1;
+    unsigned long active_tls;
+    int result;
+
+    if (orlix_host_directory_is_read_only(directory, &read_only) != 0) {
+        return -1;
+    }
+    if (read_only) {
+        return -2;
+    }
+    if (size > (uint64_t)LLONG_MAX ||
+        OrlixHostCopyDirectoryRelativeEntryPath(
+            directory, relative_path, entry_path, sizeof(entry_path)) != 0) {
+        return -1;
+    }
+
+    active_tls = OrlixHostEnterHostTls();
+    result = truncate(entry_path, (off_t)size) == 0 ? 0 : -1;
+    OrlixHostLeaveHostTls(active_tls);
+    return result;
+}
+
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_link_at_path(
     unsigned int directory,
     const char *relative_path,

@@ -299,7 +299,7 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
                 "-L",
                 label,
                 "-E",
-                "root_owner=\(rootOwner)",
+                "root_owner=\(rootOwner),no_copy_xattrs",
                 "-d",
                 sourceTree.path,
                 imageURL.path
