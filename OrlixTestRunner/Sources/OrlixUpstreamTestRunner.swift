@@ -853,6 +853,23 @@ enum OrlixAppLaunchRuntimeRunner {
 					"oci-live-registry-terminal-alpine-test-fixture",
 				successMarker: "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_OK"
 			).run()
+		case "ociTerminalLiveRegistryAlpineInput":
+			output = try OrlixOCIDerivedLiveRegistryTerminalProof(
+				liveImageReference: "alpine:3.20",
+				terminalEnvironmentID:
+					"oci-live-registry-terminal-alpine-input-test-fixture",
+				executionScript:
+					OrlixOCIDerivedLiveRegistryTerminalProof
+					.interactiveExecutionScript,
+				requiredMarkers:
+					OrlixOCIDerivedLiveRegistryTerminalProof
+					.interactiveRequiredMarkers,
+				inputAfterMarker:
+					"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_READY",
+				input: Data("orlix-interactive-alpine\n".utf8),
+				successMarker:
+					"ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_INPUT_OK"
+			).run()
 		case "ociNetwork":
 			output = try OrlixOCIDerivedNetworkRuntimeProof().run()
 		case "ociVirtioNet":
@@ -1599,9 +1616,16 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 	private static let defaultTerminalEnvironmentID =
 		"oci-live-registry-terminal-test-fixture"
 	private static let defaultLiveImageReference = "registry.k8s.io/pause:3.10"
-	private static let requiredMarkers = [
+	private static let defaultRequiredMarkers = [
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
+	]
+	static let interactiveRequiredMarkers = [
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_READY",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_OK",
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
 	]
 
@@ -1609,15 +1633,27 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 	private let recorder = OrlixRuntimeProofOutputRecorder()
 	private let liveImageReference: String
 	private let terminalEnvironmentID: String
+	private let executionScript: String
+	private let requiredMarkers: [String]
+	private let inputAfterMarker: String?
+	private let input: Data?
 	private let successMarker: String?
 
 	init(
 		liveImageReference: String = defaultLiveImageReference,
 		terminalEnvironmentID: String = defaultTerminalEnvironmentID,
+		executionScript: String = defaultExecutionScript,
+		requiredMarkers: [String] = defaultRequiredMarkers,
+		inputAfterMarker: String? = nil,
+		input: Data? = nil,
 		successMarker: String? = nil
 	) {
 		self.liveImageReference = liveImageReference
 		self.terminalEnvironmentID = terminalEnvironmentID
+		self.executionScript = executionScript
+		self.requiredMarkers = requiredMarkers
+		self.inputAfterMarker = inputAfterMarker
+		self.input = input
 		self.successMarker = successMarker
 	}
 
@@ -1684,6 +1720,9 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 			recorder.append(data)
 		}
 		defer { output.cancel() }
+		if let inputAfterMarker, let input {
+			send(input, to: terminal, after: inputAfterMarker)
+		}
 
 		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
 		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: Self.timeout)
@@ -1695,7 +1734,7 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 				"--user", "0:0",
 				"--rm",
 				liveImageReference,
-				"--", "/bin/sh", "-c", Self.executionScript,
+				"--", "/bin/sh", "-c", executionScript,
 			],
 			tools: OrlixOCIEnvironmentMaterializationTools(
 				mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
@@ -1716,7 +1755,7 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		}
 
 		var text = Self.normalized(recorder.text)
-		try Self.validateText(text)
+		try validateText(text)
 		try Self.validateLifecycle(
 			result: result,
 			expectedEnvironmentID: terminalEnvironmentID,
@@ -1734,7 +1773,7 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		return text
 	}
 
-	private static var executionScript: String {
+	private static var defaultExecutionScript: String {
 		[
 			"printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_ TERMINAL_BEGIN",
 			"if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ PTY_OK; else printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ NOT_PTY; exit 42; fi",
@@ -1742,7 +1781,35 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		].joined(separator: "\n")
 	}
 
-	private static func validateText(_ text: String) throws {
+	static var interactiveExecutionScript: String {
+		[
+			"printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_ TERMINAL_BEGIN",
+			"if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ PTY_OK; else printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ NOT_PTY; exit 42; fi",
+			"printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ INPUT_READY",
+			"IFS= read -r orlix_terminal_input",
+			"if /bin/test \"$orlix_terminal_input\" = orlix-interactive-alpine; then printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ INPUT_OK; else printf 'ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_BAD=%s\\n' \"$orlix_terminal_input\"; exit 43; fi",
+			"printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ DONE",
+		].joined(separator: "\n")
+	}
+
+	private func send(
+		_ input: Data,
+		to terminal: OrlixTerminalSession,
+		after marker: String
+	) {
+		DispatchQueue.global(qos: .userInitiated).async { [recorder] in
+			let deadline = Date().addingTimeInterval(Self.timeout)
+			while Date() < deadline {
+				if Self.normalized(recorder.text).contains(marker) {
+					terminal.send(input)
+					return
+				}
+				Thread.sleep(forTimeInterval: 0.05)
+			}
+		}
+	}
+
+	private func validateText(_ text: String) throws {
 		for marker in requiredMarkers where !text.contains(marker) {
 			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
 		}
