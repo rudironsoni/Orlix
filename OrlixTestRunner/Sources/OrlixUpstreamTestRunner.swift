@@ -842,6 +842,8 @@ enum OrlixAppLaunchRuntimeRunner {
 			).run()
 		case "ociRunLiveRegistryBusybox":
 			output = try OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof().run()
+		case "ociRunLiveRegistryAlpine":
+			output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
 		case "ociTerminalLiveRegistry":
 			output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
 		case "ociNetwork":
@@ -1566,6 +1568,20 @@ private final class OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof:
 			runEnvironmentID: "oci-run-live-registry-busybox-test-fixture"
 		).run()
 		text += "ORLIX_OCI_RUN_LIVE_REGISTRY_BUSYBOX_OK\n"
+		return text
+	}
+}
+
+private final class OrlixOCIDerivedLiveRegistryAlpineRuntimeProof:
+	@unchecked Sendable
+{
+	func run() throws -> String {
+		var text = try OrlixOCIDerivedRunCommandRuntimeProof(
+			registryMode: .live,
+			liveImageReference: "alpine:3.20",
+			runEnvironmentID: "oci-run-live-registry-alpine-test-fixture"
+		).run()
+		text += "ORLIX_OCI_RUN_LIVE_REGISTRY_ALPINE_OK\n"
 		return text
 	}
 }

@@ -10,6 +10,24 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 live registry Alpine runtime checkpoint
+
+Changes:
+- Added app-hosted `--orlix-runtime-test-spec ociRunLiveRegistryAlpine`.
+- The proof runs `alpine:3.20` through Docker Hub reference parsing, bearer-authenticated registry pull, OCI layout import/materialization, `orlix run --rm`, Linux `/bin/sh -c` execution, lifecycle started/stopped/delete validation, lifecycle-record cleanup, environment-directory cleanup, and appends `ORLIX_OCI_RUN_LIVE_REGISTRY_ALPINE_OK`.
+
+Evidence:
+- `rtk proxy swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported the iPhone 17 simulator already booted.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociRunLiveRegistryAlpine` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `ORLIX_ENV_ORLIX_RUN_BEGIN`, `ORLIX_ENV_ORLIX_RUN_STDOUT_OK`, `ORLIX_ENV_ORLIX_RUN_STDERR_OK`, `ORLIX_ENV_ORLIX_RUN_DONE`, `ORLIX_OCI_RUN_COMMAND_STARTED_OK`, `ORLIX_OCI_RUN_COMMAND_STOPPED_OK`, `ORLIX_OCI_RUN_COMMAND_DELETE_OK`, `ORLIX_OCI_RUN_LIVE_REGISTRY_PULL_OK`, and `ORLIX_OCI_RUN_LIVE_REGISTRY_ALPINE_OK`; no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, or `LIFECYCLE_TIMEOUT` was present.
+- Regression direct simulator launch `--orlix-runtime-test-spec ociRunLiveRegistryBusybox` exited 0 on the same simulator.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+
+Boundary:
+- This proves one Docker Hub Alpine linux/arm64 image can be pulled and executed through `orlix run` on the app-hosted simulator path. It does not prove arbitrary OCI image compatibility, package manager behavior inside Alpine, DNS/NAT/external networking, registry auth with private credentials, large image behavior, offline cache policy, product registry UX, multi-session app-hosted execution, or beta readiness.
+
 ### 2026-06-27 live registry BusyBox runtime checkpoint
 
 Changes:
