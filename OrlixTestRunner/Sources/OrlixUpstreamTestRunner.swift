@@ -836,12 +836,14 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedLifecycleStateRuntimeProof().run()
 		case "ociRun":
 			output = try OrlixOCIDerivedRunCommandRuntimeProof().run()
-            case "ociRunLiveRegistry":
-                output = try OrlixOCIDerivedRunCommandRuntimeProof(
-                    registryMode: .live
-                ).run()
-		case "ociNetwork":
-			output = try OrlixOCIDerivedNetworkRuntimeProof().run()
+			case "ociRunLiveRegistry":
+				output = try OrlixOCIDerivedRunCommandRuntimeProof(
+					registryMode: .live
+				).run()
+			case "ociTerminalLiveRegistry":
+				output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
+			case "ociNetwork":
+				output = try OrlixOCIDerivedNetworkRuntimeProof().run()
 		case "ociVirtioNet":
 			output = try OrlixOCIDerivedVirtioNetRuntimeProof().run()
 		case "ociCgroupResources":
@@ -1534,6 +1536,220 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         text.replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
     }
+}
+
+
+private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendable {
+	private static let timeout: TimeInterval = 600
+	private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
+	private static let terminalEnvironmentID =
+		"oci-live-registry-terminal-test-fixture"
+	private static let liveImageReference = "registry.k8s.io/pause:3.10"
+	private static let requiredMarkers = [
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
+	]
+
+	private let fileManager = FileManager.default
+	private let recorder = OrlixRuntimeProofOutputRecorder()
+
+	func run() throws -> String {
+		let resultBox = OrlixAsyncRuntimeProofResultBox<String>()
+		let completion = DispatchSemaphore(value: 0)
+		Task {
+			do {
+				resultBox.set(.success(try await self.runAsync()))
+			} catch {
+				resultBox.set(.failure(error))
+			}
+			completion.signal()
+		}
+		guard completion.wait(timeout: .now() + .seconds(Int(Self.timeout))) == .success
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"live registry terminal proof timed out\n\(Self.normalized(recorder.text))"
+			)
+		}
+		guard let result = resultBox.value else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"live registry terminal proof completed without result"
+			)
+		}
+		return try result.get()
+	}
+
+	private func runAsync() async throws -> String {
+		let sourceRoot = OrlixAppLaunchRuntimeRunner.fixtureRoot()
+		let ready = sourceRoot.appendingPathComponent(".ready", isDirectory: false)
+		guard fileManager.fileExists(atPath: ready.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
+		}
+
+		let copiedRoot = FileManager.default.temporaryDirectory
+			.appendingPathComponent(
+				"orlix-oci-live-registry-terminal-\(UUID().uuidString)",
+				isDirectory: true
+			)
+		try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
+		defer { try? fileManager.removeItem(at: copiedRoot) }
+
+		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let sourceLayout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: Self.fixtureEnvironmentID,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let terminalLayout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: Self.terminalEnvironmentID,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let terminal = OrlixTerminalSession()
+		let output = terminal.attachOutput { [recorder] data in
+			recorder.append(data)
+		}
+		defer { output.cancel() }
+
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let prepared = try await installer.prepareTerminalSession(
+			image: Self.liveImageReference,
+			id: Self.terminalEnvironmentID,
+			tools: OrlixOCIEnvironmentMaterializationTools(
+				mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
+				truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
+				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
+			),
+			puller: OrlixOCIRegistryPuller(),
+			command: ["/bin/sh", "-c", Self.executionScript],
+			defaultCommandOverride: ["/bin/sh", "-c", Self.executionScript],
+			defaultEnvironmentOverride: [
+				"HOME": "/root",
+				"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				"TERM": "xterm-256color",
+			],
+			defaultWorkingDirectoryOverride: "/",
+			defaultUserIDOverride: 0,
+			defaultGroupIDOverride: 0,
+			hostnameOverride: "oci-live-registry-terminal-host",
+			domainnameOverride: "oci.example",
+			terminalOverride: true,
+			terminal: terminal,
+			fileManager: fileManager
+		) { executable, arguments in
+			try Self.runFixtureMaterializationCommand(
+				executable: executable,
+				arguments: arguments,
+				sourceBaseImageURL: sourceLayout.baseImageURL,
+				sourceStateImageURL: sourceLayout.stateImageURL
+			)
+		}
+		guard prepared.installResult.id == Self.terminalEnvironmentID else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal install id \(Self.terminalEnvironmentID)"
+			)
+		}
+
+		DispatchQueue.global(qos: .userInitiated).async {
+			_ = prepared.linuxSession.boot()
+		}
+		try waitForRequiredMarkers()
+		let deletedEnvironment = try installer.delete(id: Self.terminalEnvironmentID)
+		guard deletedEnvironment.lifecycleState == .deleted,
+			!fileManager.fileExists(atPath: terminalLayout.rootDirectory.path)
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal cleanup"
+			)
+		}
+
+		var text = Self.normalized(recorder.text)
+		try Self.validateText(text)
+		text += "\nORLIX_OCI_LIVE_REGISTRY_TERMINAL_PULL_OK\n"
+		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_BOOT_OUTPUT_OK\n"
+		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK\n"
+		return text
+	}
+
+	private func waitForRequiredMarkers() throws {
+		let deadline = Date().addingTimeInterval(Self.timeout)
+		while Date() < deadline {
+			let text = Self.normalized(recorder.text)
+			if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
+				return
+			}
+			Thread.sleep(forTimeInterval: 0.05)
+		}
+		let text = Self.normalized(recorder.text)
+		let missing = Self.requiredMarkers.first { !text.contains($0) }
+		throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+			missing ?? "live registry terminal markers",
+			text
+		)
+	}
+
+	private static var executionScript: String {
+		[
+			"printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_ TERMINAL_BEGIN",
+			"if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ PTY_OK; else printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ NOT_PTY; exit 42; fi",
+			"printf '%s%s\\n' ORLIX_ENV_LIVE_REGISTRY_TERMINAL_ DONE",
+		].joined(separator: "\n")
+	}
+
+	private static func validateText(_ text: String) throws {
+		for marker in requiredMarkers where !text.contains(marker) {
+			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
+		}
+		if text.contains("ORLIX_ENV_LIVE_REGISTRY_TERMINAL_NOT_PTY")
+			|| text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR")
+		{
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+		}
+	}
+
+	private static func runFixtureMaterializationCommand(
+		executable: URL,
+		arguments: [String],
+		sourceBaseImageURL: URL,
+		sourceStateImageURL: URL
+	) throws {
+		guard let targetPath = arguments.last else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"missing fixture materialization target \(executable.path)"
+			)
+		}
+		let targetURL = URL(fileURLWithPath: targetPath)
+		switch executable.lastPathComponent {
+		case "orlix-truncate":
+			FileManager.default.createFile(atPath: targetURL.path, contents: Data())
+		case "orlix-mke2fs":
+			if FileManager.default.fileExists(atPath: targetURL.path) {
+				try FileManager.default.removeItem(at: targetURL)
+			}
+			let sourceURL = targetURL.lastPathComponent == "base.ext4"
+				? sourceBaseImageURL
+				: sourceStateImageURL
+			try FileManager.default.copyItem(at: sourceURL, to: targetURL)
+		case "orlix-debugfs":
+			break
+		default:
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"unexpected fixture materialization command \(executable.path)"
+			)
+		}
+	}
+
+	private static func normalized(_ text: String) -> String {
+		text.replacingOccurrences(of: "\r\n", with: "\n")
+			.replacingOccurrences(of: "\r", with: "\n")
+	}
 }
 
 private final class OrlixOCIDerivedNetworkRuntimeProof: @unchecked Sendable {
