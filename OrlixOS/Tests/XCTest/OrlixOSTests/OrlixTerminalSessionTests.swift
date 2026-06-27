@@ -43,6 +43,29 @@ final class OrlixTerminalSessionTests: XCTestCase {
         XCTAssertTrue(descriptor.rootMount.baseReadOnly)
     }
 
+    func testOrlixOSRootfsPackagesLinuxE2fsprogsMaterializationTools() throws {
+        let rootfsMakefile = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/make/rootfs.mk")
+        let contents = try String(contentsOf: rootfsMakefile, encoding: .utf8)
+
+        XCTAssertTrue(contents.contains("$(ORLIXOS_MKE2FS_BINARY)"))
+        XCTAssertTrue(contents.contains("$(ORLIXOS_MKFS_EXT4_BINARY)"))
+        XCTAssertTrue(contents.contains(
+            #"install -m 0755 "$(ORLIXOS_MKE2FS_BINARY)" "$$root_tree/bin/mke2fs""#
+        ))
+        XCTAssertTrue(contents.contains(
+            #"install -m 0755 "$(ORLIXOS_MKFS_EXT4_BINARY)" "$$root_tree/bin/mkfs.ext4""#
+        ))
+        XCTAssertTrue(contents.contains(
+            "base_packages=bash coreutils findutils e2fsprogs"
+        ))
+        XCTAssertTrue(contents.contains("e2fsprogs_programs=mke2fs mkfs.ext4"))
+    }
+
     func testDocumentsMountIsExplicitEnvironmentDescriptorMetadata() throws {
         let documentsMount = try OrlixEnvironmentMount.documents(
             targetPath: "/home/root/Documents"
