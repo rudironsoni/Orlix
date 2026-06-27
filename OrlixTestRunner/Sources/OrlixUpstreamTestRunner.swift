@@ -1619,29 +1619,25 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		defer { output.cancel() }
 
 		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
-		let prepared = try await installer.prepareTerminalSession(
-			image: Self.liveImageReference,
-			id: Self.terminalEnvironmentID,
+		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: Self.timeout)
+		let result = try await installer.run(
+			arguments: [
+				"orlix", "run",
+				"--id", Self.terminalEnvironmentID,
+				"--tty",
+				"--user", "0:0",
+				"--rm",
+				Self.liveImageReference,
+				"--", "/bin/sh", "-c", Self.executionScript,
+			],
 			tools: OrlixOCIEnvironmentMaterializationTools(
 				mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
 				truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
 				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
 			),
 			puller: OrlixOCIRegistryPuller(),
-			command: ["/bin/sh", "-c", Self.executionScript],
-			defaultCommandOverride: ["/bin/sh", "-c", Self.executionScript],
-			defaultEnvironmentOverride: [
-				"HOME": "/root",
-				"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-				"TERM": "xterm-256color",
-			],
-			defaultWorkingDirectoryOverride: "/",
-			defaultUserIDOverride: 0,
-			defaultGroupIDOverride: 0,
-			hostnameOverride: "oci-live-registry-terminal-host",
-			domainnameOverride: "oci.example",
-			terminalOverride: true,
 			terminal: terminal,
+			using: driver,
 			fileManager: fileManager
 		) { executable, arguments in
 			try Self.runFixtureMaterializationCommand(
@@ -1651,48 +1647,20 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 				sourceStateImageURL: sourceLayout.stateImageURL
 			)
 		}
-		guard prepared.installResult.id == Self.terminalEnvironmentID else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected live registry terminal install id \(Self.terminalEnvironmentID)"
-			)
-		}
-
-		DispatchQueue.global(qos: .userInitiated).async {
-			_ = prepared.linuxSession.boot()
-		}
-		try waitForRequiredMarkers()
-		let deletedEnvironment = try installer.delete(id: Self.terminalEnvironmentID)
-		guard deletedEnvironment.lifecycleState == .deleted,
-			!fileManager.fileExists(atPath: terminalLayout.rootDirectory.path)
-		else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected live registry terminal cleanup"
-			)
-		}
 
 		var text = Self.normalized(recorder.text)
 		try Self.validateText(text)
+		try Self.validateLifecycle(
+			result: result,
+			lifecycleRecordURL: try OrlixOCIRuntime(registry: registry)
+				.lifecycleStore.recordURL(forID: Self.terminalEnvironmentID),
+			environmentDirectoryURL: terminalLayout.rootDirectory
+		)
 		text += "\nORLIX_OCI_LIVE_REGISTRY_TERMINAL_PULL_OK\n"
-		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_BOOT_OUTPUT_OK\n"
+		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STARTED_OK\n"
+		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STOPPED_OK\n"
 		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK\n"
 		return text
-	}
-
-	private func waitForRequiredMarkers() throws {
-		let deadline = Date().addingTimeInterval(Self.timeout)
-		while Date() < deadline {
-			let text = Self.normalized(recorder.text)
-			if Self.requiredMarkers.allSatisfy({ text.contains($0) }) {
-				return
-			}
-			Thread.sleep(forTimeInterval: 0.05)
-		}
-		let text = Self.normalized(recorder.text)
-		let missing = Self.requiredMarkers.first { !text.contains($0) }
-		throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
-			missing ?? "live registry terminal markers",
-			text
-		)
 	}
 
 	private static var executionScript: String {
@@ -1711,6 +1679,47 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 			|| text.contains("ORLIX-APP-RUNTIME-RUNNER-ERROR")
 		{
 			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(text)
+		}
+	}
+
+	private static func validateLifecycle(
+		result: OrlixOCIRegistryEnvironmentInstallRunResult,
+		lifecycleRecordURL: URL,
+		environmentDirectoryURL: URL
+	) throws {
+		guard result.installResult.id == Self.terminalEnvironmentID else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal install id \(Self.terminalEnvironmentID)"
+			)
+		}
+		guard result.runResult.startedStateReport.status == .running,
+			result.runResult.startedStateReport.pid != nil
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal started lifecycle state running"
+			)
+		}
+		guard result.runResult.completedStateReport.status == .stopped,
+			result.runResult.completedStateReport.exitStatus == 0
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal completed lifecycle state stopped exit 0"
+			)
+		}
+		guard result.deleteResult?.lifecycleState == .deleted else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal delete cleanup"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: lifecycleRecordURL.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal lifecycle record cleanup"
+			)
+		}
+		guard !FileManager.default.fileExists(atPath: environmentDirectoryURL.path) else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected live registry terminal environment directory cleanup"
+			)
 		}
 	}
 
