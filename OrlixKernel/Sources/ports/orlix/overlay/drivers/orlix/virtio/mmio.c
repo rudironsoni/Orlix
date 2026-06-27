@@ -3159,52 +3159,97 @@ orlix_virtio_mmio_fs_done_readlink:
 					}
 				}
 			} else if (in->opcode == FUSE_READDIR) {
-				struct fuse_read_in *read = (void *)(in + 1);
+				const struct fuse_read_in *read;
 				struct orlix_host_directory_entry parent_entry;
 				char parent_path[PATH_MAX];
 				unsigned int parent_entry_index;
 
-				if (in_capacity >= sizeof(*in) + sizeof(*read) &&
+				read = orlix_virtio_mmio_fuse_request_payload(
+					in, in_capacity, in_extra,
+					in_extra_capacity, sizeof(*read));
+				if (read &&
 				    orlix_virtio_mmio_fs_host_index(in->nodeid,
 								    &parent_entry_index) &&
 				    orlix_host_directory_read_entry(
 					    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
-					    parent_entry_index, &parent_entry) == 0 &&
-				    parent_entry.type == ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
-					unsigned int child_index = read->offset;
+			 parent_entry_index, &parent_entry) == 0 &&
+		 parent_entry.type == ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
+			unsigned int child_index = read->offset;
+			struct {
+				struct fuse_out_header header;
+				u8 payload[4096];
+			} dirents;
+			u32 payload_capacity;
+			unsigned int dirent_written = sizeof(dirents.header);
 
-					out->error = 0;
-					for (; child_index < ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
-					     child_index++) {
-						struct orlix_host_directory_entry host_entry;
+			memset(&dirents, 0, sizeof(dirents));
+			payload_capacity = min_t(u32, read->size,
+						 sizeof(dirents.payload));
+			if (out_capacity > sizeof(*out))
+				payload_capacity = min_t(
+					u32, payload_capacity,
+					out_capacity - sizeof(*out) +
+						out_extra_capacity);
+			else
+				payload_capacity = min_t(u32, payload_capacity,
+							 out_extra_capacity);
+			for (; child_index < ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
+			     child_index++) {
+				struct orlix_host_directory_entry host_entry;
 
-						if (orlix_host_directory_read_child_entry(
-							    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
-							    parent_entry_index, child_index,
-							    &host_entry) != 0)
-							break;
-						if (!orlix_virtio_mmio_append_fs_child_dirent(
-							    out, out_capacity, &written,
-							    parent_entry_index, child_index,
-							    &host_entry))
-							break;
-					}
-				} else if (in_capacity >= sizeof(*in) + sizeof(*read) &&
+				if (orlix_host_directory_read_child_entry(
+					    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
+					    parent_entry_index, child_index,
+					    &host_entry) != 0)
+					break;
+				if (!orlix_virtio_mmio_append_fs_child_dirent(
+					    &dirents.header,
+					    sizeof(dirents.header) + payload_capacity,
+					    &dirent_written,
+					    parent_entry_index, child_index,
+					    &host_entry))
+					break;
+			}
+			if (orlix_virtio_mmio_fuse_write_payload(
+				    out, out_capacity, out_extra,
+				    out_extra_capacity,
+				    (u8 *)&dirents.header + sizeof(dirents.header),
+				    dirent_written - sizeof(dirents.header))) {
+				out->error = 0;
+				written += dirent_written - sizeof(dirents.header);
+			}
+				} else if (read &&
 					   orlix_virtio_mmio_fs_path_for_nodeid(
 						   in->nodeid, parent_path,
 						   sizeof(parent_path)) &&
 					   orlix_virtio_mmio_fs_read_node_entry(
 						   in->nodeid, &parent_entry) &&
-					   parent_entry.type ==
-						   ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
-					unsigned int child_index = read->offset;
+			   parent_entry.type ==
+				   ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
+			unsigned int child_index = read->offset;
+			struct {
+				struct fuse_out_header header;
+				u8 payload[4096];
+			} dirents;
+			u32 payload_capacity;
+			unsigned int dirent_written = sizeof(dirents.header);
 
-					out->error = 0;
-					for (; child_index <
-					       ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
-					     child_index++) {
-						struct orlix_host_directory_entry host_entry;
-						char child_path[PATH_MAX];
+			memset(&dirents, 0, sizeof(dirents));
+			payload_capacity = min_t(u32, read->size,
+						 sizeof(dirents.payload));
+			if (out_capacity > sizeof(*out))
+				payload_capacity = min_t(
+					u32, payload_capacity,
+					out_capacity - sizeof(*out) +
+						out_extra_capacity);
+			else
+				payload_capacity = min_t(u32, payload_capacity,
+							 out_extra_capacity);
+			for (; child_index <
+			       ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
+			     child_index++) {
+				struct orlix_host_directory_entry host_entry;
+				char child_path[PATH_MAX];
 						u64 child_nodeid;
 
 						if (orlix_host_directory_read_directory_entry_at_path(
@@ -3216,19 +3261,28 @@ orlix_virtio_mmio_fs_done_readlink:
 							    parent_path, host_entry.name,
 							    child_path,
 							    sizeof(child_path)) ||
-						    !orlix_virtio_mmio_fs_path_nodeid_for_path(
-							    child_path,
-							    false,
-							    &child_nodeid) ||
-						    !orlix_virtio_mmio_append_fs_path_dirent(
-							    out, out_capacity,
-							    &written,
-							    child_nodeid,
-							    child_index + 1,
-							    &host_entry))
-							break;
-					}
-				}
+				    !orlix_virtio_mmio_fs_path_nodeid_for_path(
+					    child_path,
+					    false,
+					    &child_nodeid) ||
+				    !orlix_virtio_mmio_append_fs_path_dirent(
+					    &dirents.header,
+					    sizeof(dirents.header) + payload_capacity,
+					    &dirent_written,
+					    child_nodeid,
+					    child_index + 1,
+					    &host_entry))
+					break;
+			}
+			if (orlix_virtio_mmio_fuse_write_payload(
+				    out, out_capacity, out_extra,
+				    out_extra_capacity,
+				    (u8 *)&dirents.header + sizeof(dirents.header),
+				    dirent_written - sizeof(dirents.header))) {
+				out->error = 0;
+				written += dirent_written - sizeof(dirents.header);
+			}
+		}
 			} else if (in->opcode == FUSE_READDIRPLUS &&
 				   in->nodeid == FUSE_ROOT_ID) {
 				struct fuse_read_in *read = (void *)(in + 1);
@@ -3260,52 +3314,97 @@ orlix_virtio_mmio_fs_done_readlink:
 					}
 				}
 			} else if (in->opcode == FUSE_READDIRPLUS) {
-				struct fuse_read_in *read = (void *)(in + 1);
+				const struct fuse_read_in *read;
 				struct orlix_host_directory_entry parent_entry;
 				char parent_path[PATH_MAX];
 				unsigned int parent_entry_index;
 
-				if (in_capacity >= sizeof(*in) + sizeof(*read) &&
+				read = orlix_virtio_mmio_fuse_request_payload(
+					in, in_capacity, in_extra,
+					in_extra_capacity, sizeof(*read));
+				if (read &&
 				    orlix_virtio_mmio_fs_host_index(in->nodeid,
 								    &parent_entry_index) &&
 				    orlix_host_directory_read_entry(
 					    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
-					    parent_entry_index, &parent_entry) == 0 &&
-				    parent_entry.type == ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
-					unsigned int child_index = read->offset;
+			 parent_entry_index, &parent_entry) == 0 &&
+		 parent_entry.type == ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
+			unsigned int child_index = read->offset;
+			struct {
+				struct fuse_out_header header;
+				u8 payload[4096];
+			} dirents;
+			u32 payload_capacity;
+			unsigned int dirent_written = sizeof(dirents.header);
 
-					out->error = 0;
-					for (; child_index < ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
-					     child_index++) {
-						struct orlix_host_directory_entry host_entry;
+			memset(&dirents, 0, sizeof(dirents));
+			payload_capacity = min_t(u32, read->size,
+						 sizeof(dirents.payload));
+			if (out_capacity > sizeof(*out))
+				payload_capacity = min_t(
+					u32, payload_capacity,
+					out_capacity - sizeof(*out) +
+						out_extra_capacity);
+			else
+				payload_capacity = min_t(u32, payload_capacity,
+							 out_extra_capacity);
+			for (; child_index < ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
+			     child_index++) {
+				struct orlix_host_directory_entry host_entry;
 
-						if (orlix_host_directory_read_child_entry(
+				if (orlix_host_directory_read_child_entry(
 							    ORLIX_VIRTIO_MMIO_FS_HOST_DIRECTORY,
 							    parent_entry_index, child_index,
-							    &host_entry) != 0)
-							break;
-						if (!orlix_virtio_mmio_append_fs_child_direntplus(
-							    out, out_capacity, &written,
-							    parent_entry_index, child_index,
-							    &host_entry))
-							break;
-					}
-				} else if (in_capacity >= sizeof(*in) + sizeof(*read) &&
+					    &host_entry) != 0)
+					break;
+				if (!orlix_virtio_mmio_append_fs_child_direntplus(
+					    &dirents.header,
+					    sizeof(dirents.header) + payload_capacity,
+					    &dirent_written,
+					    parent_entry_index, child_index,
+					    &host_entry))
+					break;
+			}
+			if (orlix_virtio_mmio_fuse_write_payload(
+				    out, out_capacity, out_extra,
+				    out_extra_capacity,
+				    (u8 *)&dirents.header + sizeof(dirents.header),
+				    dirent_written - sizeof(dirents.header))) {
+				out->error = 0;
+				written += dirent_written - sizeof(dirents.header);
+			}
+				} else if (read &&
 					   orlix_virtio_mmio_fs_path_for_nodeid(
 						   in->nodeid, parent_path,
 						   sizeof(parent_path)) &&
 					   orlix_virtio_mmio_fs_read_node_entry(
 						   in->nodeid, &parent_entry) &&
-					   parent_entry.type ==
-						   ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
-					unsigned int child_index = read->offset;
+			   parent_entry.type ==
+				   ORLIX_HOST_DIRECTORY_ENTRY_DIRECTORY) {
+			unsigned int child_index = read->offset;
+			struct {
+				struct fuse_out_header header;
+				u8 payload[4096];
+			} dirents;
+			u32 payload_capacity;
+			unsigned int dirent_written = sizeof(dirents.header);
 
-					out->error = 0;
-					for (; child_index <
-					       ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
-					     child_index++) {
-						struct orlix_host_directory_entry host_entry;
-						char child_path[PATH_MAX];
+			memset(&dirents, 0, sizeof(dirents));
+			payload_capacity = min_t(u32, read->size,
+						 sizeof(dirents.payload));
+			if (out_capacity > sizeof(*out))
+				payload_capacity = min_t(
+					u32, payload_capacity,
+					out_capacity - sizeof(*out) +
+						out_extra_capacity);
+			else
+				payload_capacity = min_t(u32, payload_capacity,
+							 out_extra_capacity);
+			for (; child_index <
+			       ORLIX_VIRTIO_MMIO_FS_CHILD_NODE_STRIDE;
+			     child_index++) {
+				struct orlix_host_directory_entry host_entry;
+				char child_path[PATH_MAX];
 						u64 child_nodeid;
 
 						if (orlix_host_directory_read_directory_entry_at_path(
@@ -3317,19 +3416,28 @@ orlix_virtio_mmio_fs_done_readlink:
 							    parent_path, host_entry.name,
 							    child_path,
 							    sizeof(child_path)) ||
-						    !orlix_virtio_mmio_fs_path_nodeid_for_path(
-							    child_path,
-							    true,
-							    &child_nodeid) ||
-						    !orlix_virtio_mmio_append_fs_path_direntplus(
-							    out, out_capacity,
-							    &written,
-							    child_nodeid,
-							    child_index + 1,
-							    &host_entry))
-							break;
-					}
-				}
+				    !orlix_virtio_mmio_fs_path_nodeid_for_path(
+					    child_path,
+					    true,
+					    &child_nodeid) ||
+				    !orlix_virtio_mmio_append_fs_path_direntplus(
+					    &dirents.header,
+					    sizeof(dirents.header) + payload_capacity,
+					    &dirent_written,
+					    child_nodeid,
+					    child_index + 1,
+					    &host_entry))
+					break;
+			}
+			if (orlix_virtio_mmio_fuse_write_payload(
+				    out, out_capacity, out_extra,
+				    out_extra_capacity,
+				    (u8 *)&dirents.header + sizeof(dirents.header),
+				    dirent_written - sizeof(dirents.header))) {
+				out->error = 0;
+				written += dirent_written - sizeof(dirents.header);
+			}
+		}
 			} else if (in->opcode == FUSE_RELEASE) {
 				const struct fuse_release_in *release;
 
