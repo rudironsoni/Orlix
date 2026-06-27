@@ -846,6 +846,13 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
 		case "ociTerminalLiveRegistry":
 			output = try OrlixOCIDerivedLiveRegistryTerminalProof().run()
+		case "ociTerminalLiveRegistryAlpine":
+			output = try OrlixOCIDerivedLiveRegistryTerminalProof(
+				liveImageReference: "alpine:3.20",
+				terminalEnvironmentID:
+					"oci-live-registry-terminal-alpine-test-fixture",
+				successMarker: "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_OK"
+			).run()
 		case "ociNetwork":
 			output = try OrlixOCIDerivedNetworkRuntimeProof().run()
 		case "ociVirtioNet":
@@ -1589,9 +1596,9 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRuntimeProof:
 private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendable {
 	private static let timeout: TimeInterval = 600
 	private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
-	private static let terminalEnvironmentID =
+	private static let defaultTerminalEnvironmentID =
 		"oci-live-registry-terminal-test-fixture"
-	private static let liveImageReference = "registry.k8s.io/pause:3.10"
+	private static let defaultLiveImageReference = "registry.k8s.io/pause:3.10"
 	private static let requiredMarkers = [
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
@@ -1600,6 +1607,19 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 
 	private let fileManager = FileManager.default
 	private let recorder = OrlixRuntimeProofOutputRecorder()
+	private let liveImageReference: String
+	private let terminalEnvironmentID: String
+	private let successMarker: String?
+
+	init(
+		liveImageReference: String = defaultLiveImageReference,
+		terminalEnvironmentID: String = defaultTerminalEnvironmentID,
+		successMarker: String? = nil
+	) {
+		self.liveImageReference = liveImageReference
+		self.terminalEnvironmentID = terminalEnvironmentID
+		self.successMarker = successMarker
+	}
 
 	func run() throws -> String {
 		let resultBox = OrlixAsyncRuntimeProofResultBox<String>()
@@ -1654,7 +1674,7 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 			scratchRoot: fixture.scratchRoot
 		)
 		let terminalLayout = try OrlixEnvironmentStorageLayout.layout(
-			forEnvironmentID: Self.terminalEnvironmentID,
+			forEnvironmentID: terminalEnvironmentID,
 			linuxStateRoot: fixture.linuxStateRoot,
 			cacheRoot: fixture.cacheRoot,
 			scratchRoot: fixture.scratchRoot
@@ -1670,11 +1690,11 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		let result = try await installer.run(
 			arguments: [
 				"orlix", "run",
-				"--id", Self.terminalEnvironmentID,
+				"--id", terminalEnvironmentID,
 				"--tty",
 				"--user", "0:0",
 				"--rm",
-				Self.liveImageReference,
+				liveImageReference,
 				"--", "/bin/sh", "-c", Self.executionScript,
 			],
 			tools: OrlixOCIEnvironmentMaterializationTools(
@@ -1699,14 +1719,18 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		try Self.validateText(text)
 		try Self.validateLifecycle(
 			result: result,
+			expectedEnvironmentID: terminalEnvironmentID,
 			lifecycleRecordURL: try OrlixOCIRuntime(registry: registry)
-				.lifecycleStore.recordURL(forID: Self.terminalEnvironmentID),
+				.lifecycleStore.recordURL(forID: terminalEnvironmentID),
 			environmentDirectoryURL: terminalLayout.rootDirectory
 		)
 		text += "\nORLIX_OCI_LIVE_REGISTRY_TERMINAL_PULL_OK\n"
 		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STARTED_OK\n"
 		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STOPPED_OK\n"
 		text += "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK\n"
+		if let successMarker {
+			text += "\(successMarker)\n"
+		}
 		return text
 	}
 
@@ -1731,12 +1755,13 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 
 	private static func validateLifecycle(
 		result: OrlixOCIRegistryEnvironmentInstallRunResult,
+		expectedEnvironmentID: String,
 		lifecycleRecordURL: URL,
 		environmentDirectoryURL: URL
 	) throws {
-		guard result.installResult.id == Self.terminalEnvironmentID else {
+		guard result.installResult.id == expectedEnvironmentID else {
 			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected live registry terminal install id \(Self.terminalEnvironmentID)"
+				"expected live registry terminal install id \(expectedEnvironmentID)"
 			)
 		}
 		guard result.runResult.startedStateReport.status == .running,

@@ -10,6 +10,30 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 live registry Alpine terminal checkpoint
+
+Changes:
+- Parameterized the existing `OrlixOCIDerivedLiveRegistryTerminalProof` so live terminal proofs can use distinct image references, lifecycle environment IDs, and success markers while preserving the existing pause-image default.
+- Added app-hosted `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpine`.
+- The new proof pulls `alpine:3.20`, runs it through `orlix run --tty --user 0:0 --rm`, validates PTY-backed Linux stdin/stdout/stderr with `/bin/test -t`, lifecycle started/stopped/delete, lifecycle-record cleanup, environment-directory cleanup, and appends `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_OK`.
+- Fixed `OrlixOS/Sources/init/init.c` so the configured command completion marker is emitted only after Linux init syncs and remounts `/` read-only. Alpine terminal initially exposed `I/O error, dev vdb` writeback failures after child process exit when `--rm` deleted the state image before dirty overlay/ext4 writes were quiesced.
+
+Evidence:
+- `rtk proxy clang -fsyntax-only -I Build/OrlixMLibC/sysroot/release/usr/include -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0, `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b` reported the iPhone 17 simulator already booted.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- First strict direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpine` before the init remount fix emitted all runtime/lifecycle markers but failed the stricter artifact assertion with 20 `I/O error, dev vdb` writeback lines.
+- After the init remount fix, strict direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpine` exited 0 on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_PULL_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STARTED_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_STOPPED_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK`, and `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_OK`; `io_error_count 0`, `runner_error_count 0`.
+- Regression direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistry` exited 0 under the same strict `I/O error, dev vdb` rejection.
+- Regression direct simulator launch `--orlix-runtime-test-spec ociRunLiveRegistryAlpine` exited 0 under the same strict `I/O error, dev vdb` rejection.
+- Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known current-status warning; recent Orlix/OrlixTestRunner crash scan found no reports.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+
+Boundary:
+- This proves Docker Hub Alpine can run through the PTY-backed `orlix run --tty --rm` path and that lifecycle cleanup no longer races dirty state-image writes in this proof. It does not prove arbitrary OCI image compatibility, interactive shell editing UX, package manager behavior inside Alpine, DNS/NAT/external networking, registry auth with private credentials, large image behavior, offline cache policy, product registry UX, multi-session app-hosted execution, or beta readiness.
+
 ### 2026-06-27 live registry Alpine runtime checkpoint
 
 Changes:
