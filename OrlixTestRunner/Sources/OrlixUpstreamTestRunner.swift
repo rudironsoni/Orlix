@@ -872,13 +872,32 @@ enum OrlixAppLaunchRuntimeRunner {
 					.interactiveRequiredMarkers,
 				inputAfterMarker:
 					"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_READY",
-				input: Data("orlix-interactive-alpine\n".utf8),
-				successMarker:
-					"ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_INPUT_OK"
-			).run()
-		case "ociTerminalLiveRegistryBusyboxSize":
-			output = try OrlixOCIDerivedLiveRegistryTerminalProof(
-				liveImageReference: "registry.k8s.io/e2e-test-images/busybox:1.29-4",
+input: Data("orlix-interactive-alpine\n".utf8),
+successMarker:
+"ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_INPUT_OK"
+).run()
+case "ociTerminalLiveRegistryAlpineResize":
+output = try OrlixOCIDerivedLiveRegistryTerminalProof(
+liveImageReference: "alpine:3.20",
+terminalEnvironmentID:
+"oci-live-registry-terminal-alpine-resize-test-fixture",
+executionScript: OrlixOCIDerivedLiveRegistryTerminalProof
+.dynamicResizeExecutionScript,
+requiredMarkers: OrlixOCIDerivedLiveRegistryTerminalProof
+.dynamicResizeRequiredMarkers,
+inputAfterMarker:
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_READY",
+input: Data("\n".utf8),
+resizeAfterMarker:
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_READY",
+resizeRows: 41,
+resizeColumns: 117,
+successMarker:
+"ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_RESIZE_OK"
+).run()
+case "ociTerminalLiveRegistryBusyboxSize":
+output = try OrlixOCIDerivedLiveRegistryTerminalProof(
+liveImageReference: "registry.k8s.io/e2e-test-images/busybox:1.29-4",
 				terminalEnvironmentID: "oci-live-registry-terminal-busybox-size-test-fixture",
 				executionScript: OrlixOCIDerivedLiveRegistryTerminalProof
 					.terminalSizeExecutionScript,
@@ -2016,12 +2035,19 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_OK",
 		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
 	]
-	static let terminalSizeRequiredMarkers = [
-		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
-		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
-		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIZE_OK",
-		"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
-	]
+static let terminalSizeRequiredMarkers = [
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIZE_OK",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
+]
+static let dynamicResizeRequiredMarkers = [
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_READY",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_OK",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
+]
 
 	private let fileManager = FileManager.default
 	private let recorder = OrlixRuntimeProofOutputRecorder()
@@ -2029,10 +2055,13 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 	private let terminalEnvironmentID: String
 	private let executionScript: String
 	private let requiredMarkers: [String]
-	private let inputAfterMarker: String?
-	private let input: Data?
-	private let terminalRows: UInt32?
-	private let terminalColumns: UInt32?
+private let inputAfterMarker: String?
+private let input: Data?
+private let resizeAfterMarker: String?
+private let resizeRows: UInt32?
+private let resizeColumns: UInt32?
+private let terminalRows: UInt32?
+private let terminalColumns: UInt32?
 	private let readOnlyRoot: Bool
 	private let successMarker: String?
 
@@ -2041,10 +2070,13 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		terminalEnvironmentID: String = defaultTerminalEnvironmentID,
 		executionScript: String = defaultExecutionScript,
 		requiredMarkers: [String] = defaultRequiredMarkers,
-		inputAfterMarker: String? = nil,
-		input: Data? = nil,
-		terminalRows: UInt32? = nil,
-		terminalColumns: UInt32? = nil,
+inputAfterMarker: String? = nil,
+input: Data? = nil,
+resizeAfterMarker: String? = nil,
+resizeRows: UInt32? = nil,
+resizeColumns: UInt32? = nil,
+terminalRows: UInt32? = nil,
+terminalColumns: UInt32? = nil,
 		readOnlyRoot: Bool = false,
 		successMarker: String? = nil
 	) {
@@ -2052,9 +2084,12 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		self.terminalEnvironmentID = terminalEnvironmentID
 		self.executionScript = executionScript
 		self.requiredMarkers = requiredMarkers
-		self.inputAfterMarker = inputAfterMarker
-		self.input = input
-		self.terminalRows = terminalRows
+self.inputAfterMarker = inputAfterMarker
+self.input = input
+self.resizeAfterMarker = resizeAfterMarker
+self.resizeRows = resizeRows
+self.resizeColumns = resizeColumns
+self.terminalRows = terminalRows
 		self.terminalColumns = terminalColumns
 		self.readOnlyRoot = readOnlyRoot
 		self.successMarker = successMarker
@@ -2123,11 +2158,19 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 			recorder.append(data)
 		}
 		defer { output.cancel() }
-		if let inputAfterMarker, let input {
-			send(input, to: terminal, after: inputAfterMarker)
-		}
+if let inputAfterMarker, let input {
+send(input, to: terminal, after: inputAfterMarker)
+}
+if let resizeAfterMarker, let resizeRows, let resizeColumns {
+resize(
+terminal,
+rows: resizeRows,
+columns: resizeColumns,
+after: resizeAfterMarker
+)
+}
 
-		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+let installer = OrlixOCIEnvironmentInstaller(registry: registry)
 		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: Self.timeout)
 		var runArguments = [
 			"orlix", "run",
@@ -2217,7 +2260,20 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 		].joined(separator: "\n")
 	}
 
-	private func send(
+static var dynamicResizeExecutionScript: String {
+[
+"m=ORLIX_ENV_LIVE_REGISTRY_TERMINAL_",
+"printf '%s\\n' ${m}BEGIN",
+"if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s\\n' ${m}PTY_OK; else printf '%s\\n' ${m}NOT_PTY; exit 42; fi",
+"printf '%s\\n' ${m}RESIZE_READY",
+"IFS= read -r _orlix_resize_gate",
+"s=\"$(stty -a 2>&1 || true)\"",
+"case \"$s\" in *'rows 41'*'columns 117'*|*'columns 117'*'rows 41'*) printf '%s\\n' ${m}RESIZE_OK;; *) printf 'ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_BAD=%s\\n' \"$s\"; exit 45;; esac",
+"printf '%s\\n' ${m}DONE",
+].joined(separator: "\n")
+}
+
+private func send(
 		_ input: Data,
 		to terminal: OrlixTerminalSession,
 		after marker: String
@@ -2232,9 +2288,27 @@ private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendabl
 				Thread.sleep(forTimeInterval: 0.05)
 			}
 		}
-	}
+}
 
-	private func validateText(_ text: String) throws {
+private func resize(
+_ terminal: OrlixTerminalSession,
+rows: UInt32,
+columns: UInt32,
+after marker: String
+) {
+DispatchQueue.global(qos: .userInitiated).async { [recorder] in
+let deadline = Date().addingTimeInterval(Self.timeout)
+while Date() < deadline {
+if Self.normalized(recorder.text).contains(marker) {
+terminal.resize(rows: rows, columns: columns)
+return
+}
+Thread.sleep(forTimeInterval: 0.05)
+}
+}
+}
+
+private func validateText(_ text: String) throws {
 		for marker in requiredMarkers where !text.contains(marker) {
 			throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(marker, text)
 		}

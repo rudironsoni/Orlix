@@ -10,6 +10,26 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 Live OCI terminal dynamic resize proof
+
+Changes:
+- Added `OrlixTerminalSession.resize(rows:columns:)` and transport support that emits a private resize control frame through the existing terminal input queue.
+- Updated `OrlixOS/Sources/init/init.c` so the PTY relay consumes the private resize frame before it reaches the shell, validates `struct winsize` bounds, and applies the resize through Linux `TIOCSWINSZ` on the PTY master.
+- Added app-hosted `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineResize`. The proof pulls `alpine:3.20`, runs it through `orlix run --tty --rm`, waits for a guest `RESIZE_READY` marker, calls the app-facing resize API to set `41x117`, lets the guest continue, and validates Linux userspace observes the new size through `stty -a`.
+
+Evidence:
+- `rtk proxy clang -fsyntax-only -I Build/OrlixMLibC/sysroot/release/usr/include -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineResize` on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` exited 0 on clean rerun. Marker gate found `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_RESIZE_OK`, and `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK`, with no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, `LIFECYCLE_TIMEOUT`, `I/O error, dev vdb`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_BAD`, or `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_NOT_PTY`.
+- Adjacent direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryBusyboxSize` exited 0 on clean rerun with `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIZE_OK` and `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_BUSYBOX_SIZE_OK`.
+- Adjacent `ociTerminalLiveRegistryAlpineInput` artifact showed `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_INPUT_OK`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE`, and `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_INPUT_OK`; the first wrapper guard was overly broad and matched the literal `INPUT_BAD` text embedded in the guest script on the kernel command line, not a runtime failure.
+
+Boundary:
+- This proves dynamic PTY resize for one live Docker Hub Alpine terminal session through the OrlixOS `orlix run --tty` path on iOS Simulator. Linux userspace observed the app-requested size via `stty`. It does not prove terminal-emulator UI resize event plumbing, SIGWINCH handler delivery, job-control behavior, multiple concurrent terminal sessions, arbitrary OCI image compatibility, or beta readiness.
+
 ### 2026-06-27 OCI healthcheck app-hosted runtime proof
 
 Changes:

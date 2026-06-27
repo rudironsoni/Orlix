@@ -38,6 +38,7 @@
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
 #define ORLIX_INIT_MAX_SYSCTLS 16
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
+#define ORLIX_INIT_RESIZE_PREFIX "\033]777;orlix.resize="
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
 #define ORLIX_INIT_HOST_MOUNT_TARGET_SIZE 256
@@ -1063,24 +1064,31 @@ static int open_pty_slave(int master)
 	return open(path, O_RDWR | O_NOCTTY);
 }
 
-static void apply_initial_pty_winsize(int master, int slave)
+static int apply_pty_winsize(int fd, unsigned long rows, unsigned long columns)
 {
-	unsigned long rows = 0;
-	unsigned long columns = 0;
 	struct winsize size;
 
-	if (read_cmdline_unsigned("orlix.terminal.rows=", &rows) != 0 ||
-	    read_cmdline_unsigned("orlix.terminal.cols=", &columns) != 0)
-		return;
-	if (rows == 0 || rows > USHRT_MAX ||
-	    columns == 0 || columns > USHRT_MAX)
-		return;
+	if (rows == 0 || rows > USHRT_MAX || columns == 0 ||
+	    columns > USHRT_MAX)
+		return -1;
 
 	memset(&size, 0, sizeof(size));
 	size.ws_row = (unsigned short)rows;
 	size.ws_col = (unsigned short)columns;
-	if (ioctl(slave, TIOCSWINSZ, &size) != 0 &&
-	    ioctl(master, TIOCSWINSZ, &size) != 0)
+	return ioctl(fd, TIOCSWINSZ, &size);
+}
+
+static void apply_initial_pty_winsize(int master, int slave)
+{
+	unsigned long rows = 0;
+	unsigned long columns = 0;
+
+	if (read_cmdline_unsigned("orlix.terminal.rows=", &rows) != 0 ||
+	    read_cmdline_unsigned("orlix.terminal.cols=", &columns) != 0)
+		return;
+
+	if (apply_pty_winsize(slave, rows, columns) != 0 &&
+	    apply_pty_winsize(master, rows, columns) != 0)
 		write_literal(STDERR_FILENO,
 			      "orlix-init: set PTY window size failed\n");
 }
@@ -2122,6 +2130,90 @@ static int copy_available_or_eof(int input_fd, int output_fd)
 	return write_all(output_fd, buffer, (size_t)bytes);
 }
 
+static int parse_resize_frame(const unsigned char *buffer, size_t length,
+			      size_t offset, unsigned long *rows,
+			      unsigned long *columns, size_t *consumed)
+{
+	const char prefix[] = ORLIX_INIT_RESIZE_PREFIX;
+	size_t prefix_length = sizeof(prefix) - 1;
+	size_t cursor;
+	unsigned long parsed_rows = 0;
+	unsigned long parsed_columns = 0;
+
+	if (length - offset < prefix_length ||
+	    memcmp(buffer + offset, prefix, prefix_length) != 0)
+		return 0;
+
+	cursor = offset + prefix_length;
+	while (cursor < length && buffer[cursor] >= '0' &&
+	       buffer[cursor] <= '9') {
+		parsed_rows = parsed_rows * 10 + (unsigned long)(buffer[cursor] - '0');
+		if (parsed_rows > USHRT_MAX)
+			return -1;
+		cursor++;
+	}
+
+	if (cursor >= length || buffer[cursor] != 'x')
+		return -1;
+	cursor++;
+
+	while (cursor < length && buffer[cursor] >= '0' &&
+	       buffer[cursor] <= '9') {
+		parsed_columns = parsed_columns * 10 +
+				 (unsigned long)(buffer[cursor] - '0');
+		if (parsed_columns > USHRT_MAX)
+			return -1;
+		cursor++;
+	}
+
+	if (cursor >= length || buffer[cursor] != '\a')
+		return -1;
+
+	*rows = parsed_rows;
+	*columns = parsed_columns;
+	*consumed = cursor - offset + 1;
+	return 1;
+}
+
+static int relay_console_available_or_eof(int console_fd, int master)
+{
+	unsigned char buffer[4096];
+	size_t offset = 0;
+	ssize_t bytes;
+
+	do {
+		bytes = read(console_fd, buffer, sizeof(buffer));
+	} while (bytes < 0 && errno == EINTR);
+
+	if (bytes < 0)
+		return -1;
+	if (bytes == 0)
+		return 1;
+
+	while (offset < (size_t)bytes) {
+		unsigned long rows = 0;
+		unsigned long columns = 0;
+		size_t consumed = 0;
+		int parsed = parse_resize_frame(buffer, (size_t)bytes, offset,
+						&rows, &columns, &consumed);
+
+		if (parsed > 0) {
+			if (apply_pty_winsize(master, rows, columns) != 0)
+				return -1;
+			offset += consumed;
+			continue;
+		}
+		if (parsed < 0)
+			return -1;
+
+		if (write_all(master, &buffer[offset], 1) != 0)
+			return -1;
+		offset++;
+	}
+
+	return 0;
+}
+
 static int shell_exit_status(int status)
 {
 	if (WIFEXITED(status))
@@ -2208,8 +2300,9 @@ static int relay_pty(int console_fd, int master, pid_t shell, int *child_status)
 		short console_revents = fds[0].revents;
 		short pty_revents = fds[1].revents;
 
-		if ((console_revents & POLLIN) != 0) {
-			int copy_status = copy_available_or_eof(console_fd, master);
+	if ((console_revents & POLLIN) != 0) {
+		int copy_status = relay_console_available_or_eof(console_fd,
+								 master);
 			if (copy_status > 0) {
 				fds[0].fd = -1;
 				console_revents = 0;
