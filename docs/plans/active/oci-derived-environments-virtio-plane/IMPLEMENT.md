@@ -24356,3 +24356,31 @@ Boundary:
 Current status:
 
 - OCI-derived environments now have app-hosted simulator evidence that an OCI bind mount can be preserved by OrlixOS orchestration and realized by Linux through virtio-fs. Continue toward broader mount option behavior, security-scoped external folder product integration, virtio-net userspace receive, DNS/NAT/external networking, device behavior, broader namespace/cgroup coverage, arbitrary image compatibility, and OCI Runtime Spec lifecycle breadth.
+
+## 2026-06-27 OCI configured host mount target runtime proof
+
+Implemented app-hosted OCI configured mount-target proof without moving Linux semantics into OrlixOS:
+
+- `OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/oci_host_mount_target_probe.c` validates the OCI-configured `/mnt/oci-host` path from inside Linux: the target is a directory, appears in Linux mountinfo, writable mode writes and fsyncs a host-backed file, read-only mode rejects writes, and Linux access checks work.
+- `OrlixOS/Makefile` now treats `oci_host_mount_target_probe` like the other Linux-owned runtime fixture probes: it is a kselftest input, copied into `/orlix/oci_host_mount_target_probe`, and tracked by the fixture readiness stamp SHA.
+- `OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` adds `--orlix-runtime-test-spec ociHostMountTarget` and `ociHostMountTargetReadOnly`. They run as separate app launches because the app-hosted Orlix boot path is one boot per runner process.
+
+Verification:
+
+- `rtk proxy clang -fsyntax-only -D_GNU_SOURCE -std=c17 OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/oci_host_mount_target_probe.c` exited 0.
+- `rtk make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc` exited 0.
+- `rtk make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release` exited 0 and copied `/orlix/oci_host_mount_target_probe` into the OCI imported runtime fixture.
+- `rtk swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 through the Xcode wrapper using external SSD-backed DerivedData and PackageCache.
+- Installed `/Volumes/1TB/Xcode/DerivedData/Build/Products/Debug-iphonesimulator/OrlixTestRunner.app` on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- Direct simulator launch `--orlix-runtime-test-spec ociHostMountTarget` exited 0 and produced `ORLIX_OCI_HOST_MOUNT_TARGET_RW_OK`.
+- Direct simulator launch `--orlix-runtime-test-spec ociHostMountTargetReadOnly` exited 0 and produced `ORLIX_OCI_HOST_MOUNT_TARGET_RO_OK`.
+- Focused regression launches `ociVirtioFS`, `ociNetwork`, `ociRun`, `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 on the same installed app and simulator with expected lifecycle markers and no app runner error.
+
+Boundary:
+
+- This proves OCI-configured bind mount targets reach Linux mountinfo and enforce writable/read-only behavior through OrlixOS lifecycle launches. It does not yet claim security-scoped Files UI integration, arbitrary host-folder product UX, pre-existing host file visibility through the configured target path, full mount option coverage, Docker/runc compatibility, packet receive, DNS, NAT, external networking, cgroup enforcement, arbitrary image compatibility, or full product readiness.
+
+Current status:
+
+- OCI-derived environments now have simulator evidence for both Linux virtio-fs tag mounting and OCI-configured host mount target writable/read-only behavior. Continue toward pre-existing host file visibility on configured targets, broader mount option behavior, security-scoped external folder integration, virtio-net userspace receive, DNS/NAT/external networking, device behavior, broader namespace/cgroup coverage, arbitrary image compatibility, and OCI Runtime Spec lifecycle breadth.
