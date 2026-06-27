@@ -158,6 +158,16 @@ static void write_process_completion(pid_t pid, int status)
 		(void)write_all(STDERR_FILENO, buffer, (size_t)length);
 }
 
+static void flush_filesystems_before_completion(void)
+{
+	sync();
+	if (mount(NULL, "/", NULL, MS_REMOUNT | MS_RDONLY, NULL) != 0)
+		write_errno_message(STDERR_FILENO,
+				    "orlix-init: remount root read-only failed: ",
+				    errno);
+	sync();
+}
+
 static void write_unsigned_decimal(int fd, unsigned long value)
 {
 	char buffer[32];
@@ -2688,6 +2698,7 @@ static int run_stdio_command(void)
 		if (errno != EINTR)
 			return 1;
 	}
+	flush_filesystems_before_completion();
 	write_process_completion(child, status);
 	return shell_exit_status(status);
 }
@@ -2735,6 +2746,7 @@ static int run_pty_shell(int console_fd)
 	}
 	close(master);
 	if (child_status >= 0) {
+		flush_filesystems_before_completion();
 		write_process_completion(shell, child_status);
 		write_shell_exit_status(shell_exit_status(child_status));
 	}
