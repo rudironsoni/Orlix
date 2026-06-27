@@ -2175,7 +2175,7 @@ static int parse_resize_frame(const unsigned char *buffer, size_t length,
 	return 1;
 }
 
-static int relay_console_available_or_eof(int console_fd, int master)
+static int relay_console_available_or_eof(int console_fd, int master, int slave)
 {
 	unsigned char buffer[4096];
 	size_t offset = 0;
@@ -2198,7 +2198,8 @@ static int relay_console_available_or_eof(int console_fd, int master)
 						&rows, &columns, &consumed);
 
 		if (parsed > 0) {
-			if (apply_pty_winsize(master, rows, columns) != 0)
+			if (apply_pty_winsize(slave, rows, columns) != 0 &&
+			    apply_pty_winsize(master, rows, columns) != 0)
 				return -1;
 			offset += consumed;
 			continue;
@@ -2265,7 +2266,8 @@ static void write_shell_exit_status(int exit_status)
 	write_literal(STDERR_FILENO, "\n");
 }
 
-static int relay_pty(int console_fd, int master, pid_t shell, int *child_status)
+static int relay_pty(int console_fd, int master, int slave, pid_t shell,
+		     int *child_status)
 {
 	struct pollfd fds[] = {
 		{
@@ -2302,7 +2304,7 @@ static int relay_pty(int console_fd, int master, pid_t shell, int *child_status)
 
 	if ((console_revents & POLLIN) != 0) {
 		int copy_status = relay_console_available_or_eof(console_fd,
-								 master);
+								 master, slave);
 			if (copy_status > 0) {
 				fds[0].fd = -1;
 				console_revents = 0;
@@ -2769,6 +2771,11 @@ static pid_t start_command_on_pty(int master, int slave)
 		write_literal(STDERR_FILENO,
 			      "orlix-init: shell TIOCSCTTY failed\n");
 
+	pid_t foreground_pgrp = getpgrp();
+	if (ioctl(slave, TIOCSPGRP, &foreground_pgrp) < 0)
+		write_literal(STDERR_FILENO,
+			      "orlix-init: shell TIOCSPGRP failed\n");
+
 	install_stdio(slave);
 	run_configured_command_child();
 	_exit(127);
@@ -2824,10 +2831,10 @@ static int run_pty_shell(int console_fd)
 		return 1;
 	}
 
-	close(slave);
-	write_process_started(shell);
-	make_transport_raw(console_fd);
-	status = relay_pty(console_fd, master, shell, &child_status);
+write_process_started(shell);
+make_transport_raw(console_fd);
+status = relay_pty(console_fd, master, slave, shell, &child_status);
+close(slave);
 	if (child_status < 0) {
 		if (wait_for_shell_exit(shell, &child_status) > 0) {
 			status = shell_exit_status(child_status);

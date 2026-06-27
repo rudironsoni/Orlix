@@ -895,6 +895,25 @@ resizeColumns: 117,
 successMarker:
 "ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_RESIZE_OK"
 ).run()
+case "ociTerminalLiveRegistryAlpineSIGWINCH":
+output = try OrlixOCIDerivedLiveRegistryTerminalProof(
+liveImageReference: "alpine:3.20",
+terminalEnvironmentID:
+"oci-live-registry-terminal-alpine-sigwinch-test-fixture",
+executionScript: OrlixOCIDerivedLiveRegistryTerminalProof
+.sigwinchExecutionScript,
+requiredMarkers: OrlixOCIDerivedLiveRegistryTerminalProof
+.sigwinchRequiredMarkers,
+inputAfterMarker:
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_READY",
+input: Data("\n".utf8),
+resizeAfterMarker:
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_READY",
+resizeRows: 43,
+resizeColumns: 119,
+successMarker:
+"ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_SIGWINCH_OK"
+).run()
 case "ociTerminalLiveRegistryBusyboxSize":
 output = try OrlixOCIDerivedLiveRegistryTerminalProof(
 liveImageReference: "registry.k8s.io/e2e-test-images/busybox:1.29-4",
@@ -2048,6 +2067,14 @@ static let dynamicResizeRequiredMarkers = [
 "ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_OK",
 "ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
 ]
+static let sigwinchRequiredMarkers = [
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_BEGIN",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_PTY_OK",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_READY",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_SEEN",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_OK",
+"ORLIX_ENV_LIVE_REGISTRY_TERMINAL_DONE",
+]
 
 	private let fileManager = FileManager.default
 	private let recorder = OrlixRuntimeProofOutputRecorder()
@@ -2269,6 +2296,22 @@ static var dynamicResizeExecutionScript: String {
 "IFS= read -r _orlix_resize_gate",
 "s=\"$(stty -a 2>&1 || true)\"",
 "case \"$s\" in *'rows 41'*'columns 117'*|*'columns 117'*'rows 41'*) printf '%s\\n' ${m}RESIZE_OK;; *) printf 'ORLIX_ENV_LIVE_REGISTRY_TERMINAL_RESIZE_BAD=%s\\n' \"$s\"; exit 45;; esac",
+"printf '%s\\n' ${m}DONE",
+].joined(separator: "\n")
+}
+
+static var sigwinchExecutionScript: String {
+[
+"m=ORLIX_ENV_LIVE_REGISTRY_TERMINAL_",
+"printf '%s\\n' ${m}BEGIN",
+"if /bin/test -t 0 && /bin/test -t 1 && /bin/test -t 2; then printf '%s\\n' ${m}PTY_OK; else printf '%s\\n' ${m}NOT_PTY; exit 42; fi",
+"winch_seen=0",
+"trap 'winch_seen=1; printf \"%s\\n\" ${m}SIGWINCH_SEEN' WINCH",
+"printf '%s\\n' ${m}SIGWINCH_READY",
+"IFS= read -r _orlix_sigwinch_gate",
+"if /bin/test \"$winch_seen\" = 1; then :; else printf '%s\\n' ${m}SIGWINCH_MISSING; exit 46; fi",
+"s=\"$(stty -a 2>&1 || true)\"",
+"case \"$s\" in *'rows 43'*'columns 119'*|*'columns 119'*'rows 43'*) printf '%s\\n' ${m}SIGWINCH_OK;; *) printf 'ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_SIZE_BAD=%s\\n' \"$s\"; exit 47;; esac",
 "printf '%s\\n' ${m}DONE",
 ].joined(separator: "\n")
 }
