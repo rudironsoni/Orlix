@@ -10,6 +10,25 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 Live OCI terminal SIGWINCH proof
+
+Changes:
+- Added app-hosted `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineSIGWINCH`.
+- The proof pulls `alpine:3.20`, runs through `orlix run --tty --rm`, installs a guest shell `WINCH` trap, waits for a resize trigger, calls `OrlixTerminalSession.resize(rows: 43, columns: 119)`, and requires the guest to print both `SIGWINCH_SEEN` and `SIGWINCH_OK`.
+- Fixed `OrlixOS/Sources/init/init.c` PTY setup so the shell session explicitly sets its foreground process group with `TIOCSPGRP` after `TIOCSCTTY`.
+- Kept the PTY slave open in the parent relay so dynamic resize first targets the child controlling terminal and falls back to the master only if needed.
+
+Evidence:
+- First direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineSIGWINCH` failed with `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_MISSING`, proving the prior dynamic resize path updated PTY size but did not deliver `SIGWINCH` to the guest shell.
+- `rtk proxy clang -fsyntax-only -I Build/OrlixMLibC/sysroot/release/usr/include -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 OrlixOS/Sources/init/init.c` exited 0.
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixOS/Sources/Session/OrlixEnvironment.swift OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixOS/Sources/Session/OrlixHostDirectoryMetadata.swift OrlixOS/Sources/Session/OrlixOCIImageLayout.swift OrlixOS/Sources/Session/OrlixOS.swift OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 after the init fix.
+- Direct simulator launch `--orlix-runtime-test-spec ociTerminalLiveRegistryAlpineSIGWINCH` on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` exited 0. Marker gate found `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_SEEN`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_OK`, `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_ALPINE_SIGWINCH_OK`, and `ORLIX_OCI_LIVE_REGISTRY_TERMINAL_DELETE_OK`, with no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, `LIFECYCLE_TIMEOUT`, `I/O error, dev vdb`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_MISSING`, `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_SIGWINCH_SIZE_BAD`, or `ORLIX_ENV_LIVE_REGISTRY_TERMINAL_NOT_PTY`.
+- Adjacent direct simulator launches `ociTerminalLiveRegistryAlpineResize` and `ociTerminalLiveRegistryAlpineInput` exited 0 on the same simulator, each passing marker gates and delete cleanup.
+
+Boundary:
+- This proves Linux-visible SIGWINCH delivery for one live Docker Hub Alpine terminal session after an app-driven PTY resize through the OrlixOS `orlix run --tty` path. It does not prove terminal-emulator viewport measurement, UIKit/SwiftUI resize event plumbing, job control completeness, multiple concurrent terminal sessions, arbitrary OCI image compatibility, or beta readiness.
+
 ### 2026-06-27 Live OCI terminal dynamic resize proof
 
 Changes:
