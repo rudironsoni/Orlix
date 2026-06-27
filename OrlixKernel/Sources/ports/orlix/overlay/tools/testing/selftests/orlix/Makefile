@@ -15,6 +15,7 @@ TEST_GEN_PROGS += hostname_domainname_probe
 TEST_GEN_PROGS += oci_cgroup_resources_probe
 TEST_GEN_PROGS += oci_device_nodes_probe
 TEST_GEN_PROGS += oci_host_mount_target_probe
+TEST_GEN_PROGS += oci_namespace_identity_probe
 TEST_GEN_PROGS += oci_process_attributes_probe
 TEST_GEN_PROGS += oci_rootfs_controls_probe
 TEST_GEN_PROGS += readonly_root_probe

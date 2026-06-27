@@ -24372,6 +24372,16 @@ Boundary:
 Current status:
 - `orlix run` now has simulator evidence for both deterministic registry input and live public registry pull through `registry.k8s.io/pause:3.10`, with Linux process execution and `--rm` cleanup. Continue toward arbitrary image compatibility, live auth/error coverage, networking, namespace/cgroup/device behavior, and broader OCI Runtime Spec coverage.
 
+## 2026-06-27 OCI namespace identity runtime proof
+
+- Added Linux-owned `oci_namespace_identity_probe` under the Orlix kselftest overlay and included it in the OrlixOS OCI imported runtime fixture under `/orlix/oci_namespace_identity_probe`.
+- Added `--orlix-runtime-test-spec ociNamespaceIdentity` to `OrlixTestRunner`, using standard OCI `hostname`, `domainname`, `linux.namespaces` for `user` and `uts`, and `uidMappings`/`gidMappings` with `0:0:1`.
+- The app-hosted simulator proof showed the OCI-derived kernel command line carrying `orlix.hostname=oci-namespace-host`, `orlix.domainname=oci.example`, `orlix.namespace0=user`, `orlix.namespace1=uts`, `orlix.uidmap0=0:0:1`, and `orlix.gidmap0=0:0:1`.
+- Direct simulator launch on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` with `--orlix-runtime-test-spec ociNamespaceIdentity` exited 0. Artifact validation found `ORLIX-OCI-NAMESPACE-IDENTITY-PROBE`, `1..6`, all six `ok` TAP lines for hostname, domainname, `/proc/self/ns/uts`, `/proc/self/ns/user`, `/proc/self/uid_map`, and `/proc/self/gid_map`, plus `ORLIX_OCI_NAMESPACE_IDENTITY_RUNTIME_STARTED_OK`, `ORLIX_OCI_NAMESPACE_IDENTITY_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_NAMESPACE_IDENTITY_RUNTIME_DELETE_OK`; no `not ok` or app runner error was present.
+- Validation commands exited 0: probe syntax check, Swift parse check, `make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc`, `make -f OrlixOS/Makefile environment-runtime-test-fixtures PROFILE=release`, and Xcode wrapper build of `OrlixTestRunnerTests` using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Focused simulator regressions passed on the same installed app and single booted simulator: `ociRootfsControls`, `ociProcessAttributes`, `ociDeviceNodes`, `ociCgroupResources`, `ociVirtioFS` after one retry for a transient read-only virtio-fs subcheck, `ociHostMountTarget`, `ociHostMountTargetReadOnly`, `ociNetwork`, `ociRun`, `ociStdio`, and `ociSignal`. A rapid launch loop hit one CoreSimulator FIFO collision before `ociNetwork`; rerunning remaining specs with launch spacing passed.
+- Final hygiene passed: `rtk git diff --check`, `rtk python3 .codex/hooks/compact_plan_check.py`, single booted iPhone 17 simulator, and no recent Orlix or OrlixTestRunner crash reports.
+
 ## 2026-06-27 OCI rootfs controls runtime proof
 
 - Added Linux-owned `oci_rootfs_controls_probe` under OrlixKernel selftests and included it in the OCI runtime fixture under `/orlix/oci_rootfs_controls_probe`.
