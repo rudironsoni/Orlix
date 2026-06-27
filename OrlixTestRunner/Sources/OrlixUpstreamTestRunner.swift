@@ -1936,7 +1936,7 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
 		": >/tmp/i",
 		"truncate -s 8m /tmp/i",
 		"printf 'ORLIX_%s\\n' MKE2FS_D_TRUNCATE_OK",
-		"mke2fs -q -t ext4 -F -m 0 -O ^metadata_csum -d /tmp/s /tmp/i",
+		"mke2fs -q -t ext4 -F -m 0 -O ^metadata_csum -U clear -L ORLIXROOT -E root_owner=0:0 -d /tmp/s /tmp/i",
 		"printf 'ORLIX_%s\\n' MKE2FS_D_OK",
 		"printf 'stats\\n' >/tmp/c",
 		"debugfs -w -f /tmp/c /tmp/i >/tmp/debugfs.out 2>&1",
