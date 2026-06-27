@@ -16842,11 +16842,15 @@ private final class RecordingTerminalTransport:
         }
     }
 
-    func send(_ data: Data) {
-        sentInput.append(data)
-    }
+func send(_ data: Data) {
+sentInput.append(data)
+}
 
-    func emit(_ data: Data) {
+func resize(rows: UInt32, columns: UInt32) {
+sentInput.append(Data("\u{1B}]777;orlix.resize=\(rows)x\(columns)\u{7}".utf8))
+}
+
+func emit(_ data: Data) {
         for handler in outputHandlers.values {
             handler(data)
         }

@@ -694,14 +694,16 @@ enum OrlixOSPayload {
 }
 
 public protocol OrlixTerminalInput: AnyObject {
-    func send(_ data: Data)
+	func send(_ data: Data)
+	func resize(rows: UInt32, columns: UInt32)
 }
 
 protocol OrlixTerminalTransport: AnyObject {
-    func attachOutput(
-        _ handler: @escaping @Sendable (Data) -> Void
-    ) -> OrlixTerminalOutput
-    func send(_ data: Data)
+	func attachOutput(
+		_ handler: @escaping @Sendable (Data) -> Void
+	) -> OrlixTerminalOutput
+	func send(_ data: Data)
+	func resize(rows: UInt32, columns: UInt32)
 }
 
 public final class OrlixTerminalOutput: @unchecked Sendable {
@@ -747,9 +749,13 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
         transport.attachOutput(handler)
     }
 
-    public func send(_ data: Data) {
-        transport.send(data)
-    }
+	public func send(_ data: Data) {
+		transport.send(data)
+	}
+
+	public func resize(rows: UInt32, columns: UInt32) {
+		transport.resize(rows: rows, columns: columns)
+	}
 }
 
 public final class OrlixLinuxSession: @unchecked Sendable {
@@ -7721,19 +7727,29 @@ private final class HostConsoleTerminalTransport:
         }
     }
 
-    func send(_ data: Data) {
-        data.withUnsafeBytes { buffer in
-            guard let baseAddress = buffer.baseAddress else {
-                return
+	func send(_ data: Data) {
+		data.withUnsafeBytes { buffer in
+			guard let baseAddress = buffer.baseAddress else {
+				return
             }
             _ = orlix_host_console_enqueue_input(
                 baseAddress,
                 UInt(buffer.count)
-            )
-        }
-    }
+			)
+		}
+	}
 
-    private func emit(_ data: Data) {
+	func resize(rows: UInt32, columns: UInt32) {
+		guard rows > 0, rows <= UInt32(UInt16.max),
+		      columns > 0, columns <= UInt32(UInt16.max)
+		else {
+			return
+		}
+
+		send(Data("\u{1B}]777;orlix.resize=\(rows)x\(columns)\u{7}".utf8))
+	}
+
+	private func emit(_ data: Data) {
         lock.lock()
         let handlers = Array(outputHandlers.values)
         lock.unlock()
