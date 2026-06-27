@@ -2059,10 +2059,37 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 {
 	private static let timeout: TimeInterval = 600
 	private static let fixtureEnvironmentID = "oci-imported-runtime-test-fixture"
-	private static let environmentID =
-		"oci-live-registry-alpine-rootfs-import-test-fixture"
+    private static let environmentID =
+        "oci-live-registry-alpine-rootfs-import-test-fixture"
 
-	private let fileManager = FileManager.default
+    private let fileManager = FileManager.default
+
+    private struct MaterializationCommandObservation: Equatable {
+        let executable: String
+        let arguments: [String]
+    }
+
+    private final class MaterializationCommandRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [MaterializationCommandObservation] = []
+
+        var commands: [MaterializationCommandObservation] {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
+
+        func append(executable: URL, arguments: [String]) {
+            lock.lock()
+            storage.append(
+                MaterializationCommandObservation(
+                    executable: executable.path,
+                    arguments: arguments
+                )
+            )
+            lock.unlock()
+        }
+    }
 
 	func run() throws -> String {
 		let resultBox = OrlixAsyncRuntimeProofResultBox<String>()
@@ -2125,8 +2152,9 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 			scratchRoot: fixture.scratchRoot
 		)
 
-		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
-		let installResult = try await installer.install(
+        let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+        let materializationCommands = MaterializationCommandRecorder()
+        let installResult = try await installer.install(
 			image: OrlixOCIRegistryImageReference("alpine:3.20"),
 			id: Self.environmentID,
 			tools: OrlixOCIEnvironmentMaterializationTools(
@@ -2134,20 +2162,29 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 				truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
 				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
 			),
-			puller: OrlixOCIRegistryPuller(),
-			fileManager: fileManager
-		) { executable, arguments in
-			try OrlixOCIDerivedRunCommandRuntimeProof
-				.runFixtureMaterializationCommand(
+            puller: OrlixOCIRegistryPuller(),
+            fileManager: fileManager
+        ) { executable, arguments in
+            materializationCommands.append(
+                executable: executable,
+                arguments: arguments
+            )
+            try OrlixOCIDerivedRunCommandRuntimeProof
+                .runFixtureMaterializationCommand(
 					executable: executable,
 					arguments: arguments,
 					sourceBaseImageURL: sourceLayout.baseImageURL,
 					sourceStateImageURL: sourceLayout.stateImageURL
 				)
-		}
+        }
 
-		try validateImportedRootfs(installResult)
-		let deletedEnvironment = try installer.delete(id: Self.environmentID)
+        try validateImportedRootfs(installResult)
+        try validateMaterializationCommands(
+            materializationCommands.commands,
+            rootfs: installResult.rootfsImport.baseTreeDirectory,
+            layout: importedLayout
+        )
+        let deletedEnvironment = try installer.delete(id: Self.environmentID)
 		guard deletedEnvironment.lifecycleState == .deleted else {
 			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
 				"expected Alpine rootfs import delete cleanup"
@@ -2161,12 +2198,13 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 
 		return [
 			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_PULL_OK",
-			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_LAYER_OK",
-			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_STAGING_OK",
-			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_APK_OK",
-			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_DELETE_OK",
-		].joined(separator: "\n") + "\n"
-	}
+            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_LAYER_OK",
+            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_STAGING_OK",
+            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_APK_OK",
+            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_MATERIALIZATION_PLAN_OK",
+            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_DELETE_OK",
+        ].joined(separator: "\n") + "\n"
+    }
 
 	private func validateImportedRootfs(
 		_ result: OrlixOCIRegistryEnvironmentInstallResult
@@ -2202,15 +2240,115 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 			contentsOf: root.appendingPathComponent("lib/apk/db/installed"),
 			encoding: .utf8
 		)
-		guard installed.contains("P:alpine-baselayout")
-			|| installed.contains("P:busybox")
-			|| installed.contains("P:musl")
-		else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"Alpine installed package database missing expected packages"
-			)
-		}
-	}
+        guard installed.contains("P:alpine-baselayout")
+            || installed.contains("P:busybox")
+            || installed.contains("P:musl")
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "Alpine installed package database missing expected packages"
+            )
+        }
+    }
+
+    private func validateMaterializationCommands(
+        _ commands: [MaterializationCommandObservation],
+        rootfs: URL,
+        layout: OrlixEnvironmentStorageLayout
+    ) throws {
+        guard commands.count == 6 else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected 6 Alpine materialization commands, got \(commands.count)"
+            )
+        }
+        try validateTruncateCommand(
+            commands[0],
+            size: "64m",
+            imageURL: layout.baseImageURL
+        )
+        try validateMke2fsCommand(
+            commands[1],
+            sourceTree: rootfs,
+            imageURL: layout.baseImageURL,
+            label: "ORLIXROOT"
+        )
+        try validateDebugfsCommand(commands[2], imageURL: layout.baseImageURL)
+        try validateTruncateCommand(
+            commands[3],
+            size: "32m",
+            imageURL: layout.stateImageURL
+        )
+        try validateMke2fsCommand(
+            commands[4],
+            sourceTree: layout.importScratchDirectory
+                .appendingPathComponent("state-tree", isDirectory: true),
+            imageURL: layout.stateImageURL,
+            label: "ORLIXSTATE"
+        )
+        try validateDebugfsCommand(commands[5], imageURL: layout.stateImageURL)
+    }
+
+    private func validateTruncateCommand(
+        _ command: MaterializationCommandObservation,
+        size: String,
+        imageURL: URL
+    ) throws {
+        guard command.executable == "/usr/bin/orlix-truncate",
+            command.arguments == ["-s", size, imageURL.path]
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "unexpected Alpine truncate command \(command)"
+            )
+        }
+    }
+
+    private func validateMke2fsCommand(
+        _ command: MaterializationCommandObservation,
+        sourceTree: URL,
+        imageURL: URL,
+        label: String
+    ) throws {
+        guard command.executable == "/usr/bin/orlix-mke2fs",
+            command.arguments == [
+                "-q",
+                "-t",
+                "ext4",
+                "-F",
+                "-m",
+                "0",
+                "-O",
+                "^metadata_csum",
+                "-U",
+                "clear",
+                "-L",
+                label,
+                "-E",
+                "root_owner=0:0",
+                "-d",
+                sourceTree.path,
+                imageURL.path,
+            ]
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "unexpected Alpine mke2fs command \(command)"
+            )
+        }
+    }
+
+    private func validateDebugfsCommand(
+        _ command: MaterializationCommandObservation,
+        imageURL: URL
+    ) throws {
+        guard command.executable == "/usr/bin/orlix-debugfs",
+            command.arguments.count == 4,
+            command.arguments[0] == "-w",
+            command.arguments[1] == "-f",
+            command.arguments[3] == imageURL.path
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "unexpected Alpine debugfs command \(command)"
+            )
+        }
+    }
 }
 
 private final class OrlixOCIDerivedLiveRegistryTerminalProof: @unchecked Sendable {
