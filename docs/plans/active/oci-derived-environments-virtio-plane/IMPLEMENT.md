@@ -10,6 +10,24 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-27 Live Alpine import materialization-plan proof
+
+Changes:
+- Extended the app-hosted `--orlix-runtime-test-spec ociLiveRegistryAlpineRootfsImport` proof to record the installer's actual materialization callback commands during a live `alpine:3.20` registry import.
+- Added strict validation that the live Alpine import uses the canonical product ext4 command shape for both base and state images: `orlix-truncate`, `orlix-mke2fs -q -t ext4 -F -m 0 -O ^metadata_csum -U clear -L ... -E root_owner=0:0 -d ...`, then `orlix-debugfs`.
+- Kept the existing fixture image callback in place for this proof's image substitution boundary, but now the proof fails if the live import stops using the canonical materialization plan.
+
+Evidence:
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor` exited 0 with `OK xcode external storage doctor passed`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0.
+- Direct simulator launch `--orlix-runtime-test-spec ociLiveRegistryAlpineRootfsImport` exited 0 on the single booted iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757`. Artifact validation found `ORLIX_OCI_ALPINE_ROOTFS_IMPORT_PULL_OK`, `ORLIX_OCI_ALPINE_ROOTFS_IMPORT_LAYER_OK`, `ORLIX_OCI_ALPINE_ROOTFS_IMPORT_STAGING_OK`, `ORLIX_OCI_ALPINE_ROOTFS_IMPORT_APK_OK`, `ORLIX_OCI_ALPINE_ROOTFS_IMPORT_MATERIALIZATION_PLAN_OK`, and `ORLIX_OCI_ALPINE_ROOTFS_IMPORT_DELETE_OK`.
+- Strict failure guards found no `not ok`, `ORLIX-APP-RUNTIME-RUNNER-ERROR`, timeout, missing marker, unexpected Alpine command, expected-command-count failure, or `I/O error, dev vdb`.
+- Final guards: `rtk git diff --check` exited 0; `rtk python3 .codex/hooks/compact_plan_check.py` exited 0 with the known current-status warning; `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`; recent Orlix/OrlixTestRunner crash scan found no reports.
+
+Boundary:
+- This proves live registry Alpine import stages real Alpine rootfs content and invokes the canonical ext4 materialization command plan through the app-hosted OrlixOS installer path. It does not yet prove booting from the generated Alpine ext4 image, Linux execution of `apk` inside that generated root, external networking from the imported environment, arbitrary OCI image compatibility, or beta readiness.
+
 ### 2026-06-27 Live OCI terminal SIGTSTP proof
 
 Changes:
