@@ -30,6 +30,27 @@ Evidence:
 
 Boundary:
 
+## 2026-06-27 OCI device node runtime proof
+
+Changes:
+
+- Added Linux-owned `oci_device_nodes_probe` to the Orlix kselftest overlay. It validates that OCI-declared `/dev` nodes exist as Linux character, FIFO, and block device nodes, and that the configured character node uses Linux `/dev/null` behavior.
+- Included `oci_device_nodes_probe` in the OCI imported runtime fixture under `/orlix/oci_device_nodes_probe` and fixture stamp freshness checks.
+- Added app-hosted `--orlix-runtime-test-spec ociDeviceNodes`, which creates an OCI bundle with `linux.devices` entries for `/dev/orlix-oci-null`, `/dev/orlix-oci-pipe`, and `/dev/orlix-oci-block`, then executes the Linux probe through the OrlixOS OCI lifecycle path.
+
+Verification:
+
+- `rtk proxy env TMPDIR=/private/tmp TEMP=/private/tmp TMP=/private/tmp clang --target=aarch64-linux-gnu --sysroot=Build/OrlixMLibC/sysroot/release -isystem Build/OrlixMLibC/kernel-headers/release/include -D_GNU_SOURCE -std=c17 -fsyntax-only OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/oci_device_nodes_probe.c` exited 0.
+- `rtk proxy swiftc -parse OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift` exited 0.
+- `rtk proxy env USER=rudironsoni LOGNAME=rudironsoni make -f OrlixKernel/Makefile kselftest PROFILE=release libc=orlixmlibc` exited 0 and packaged `Build/OrlixMLibC/test-initramfs/release/OrlixTestInitramfs.bundle`.
+- `rtk proxy env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build` exited 0 through the Xcode wrapper using `/Volumes/1TB/Xcode/DerivedData` and `/Volumes/1TB/Xcode/PackageCache`.
+- Direct simulator launch `--orlix-runtime-test-spec ociDeviceNodes` on iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` exited 0. Artifact validation found `1..4`, all four `ok` TAP lines for configured character, FIFO, and block device nodes plus `/dev/null` behavior, and `ORLIX_OCI_DEVICE_NODES_RUNTIME_STARTED_OK`, `ORLIX_OCI_DEVICE_NODES_RUNTIME_STOPPED_OK`, and `ORLIX_OCI_DEVICE_NODES_RUNTIME_DELETE_OK`.
+- Adjacent simulator launches `ociCgroupResources`, `ociVirtioFS`, `ociNetwork`, `ociRun`, `ociTerminal`, `ociStdio`, and `ociSignal` exited 0 on the same installed app and simulator with expected runtime markers.
+- `rtk git diff --check` exited 0.
+- `rtk python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757` booted.
+- Recent Orlix crash report scan under `$HOME/Library/Logs/DiagnosticReports` found no matching crash reports.
+
 ## 2026-06-27 OCI cgroup resources and virtio-fs nested directory runtime proof
 
 Changes:
