@@ -846,12 +846,19 @@ enum OrlixAppLaunchRuntimeRunner {
 			).run()
 		case "ociRunLiveRegistryBusybox":
 			output = try OrlixOCIDerivedLiveRegistryBusyboxRuntimeProof().run()
-            case "ociRunLiveRegistryAlpine":
-                output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
+        case "ociRunLiveRegistryAlpine":
+            output = try OrlixOCIDerivedLiveRegistryAlpineRuntimeProof().run()
         case "ociLiveRegistryAlpineRootfsImport":
             output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof().run()
-        case "orlixPayloadE2fsprogs":
-            output = try OrlixPayloadE2fsprogsRuntimeProof().run()
+		case "ociLiveRegistryAlpineLinuxMaterialization":
+			output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof(
+				useLinuxMaterialization: true
+			).run()
+		case "ociLiveRegistryAlpineGeneratedRoot":
+			output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof
+				.validatePreparedLinuxMaterializedAlpine()
+		case "orlixPayloadE2fsprogs":
+			output = try OrlixPayloadE2fsprogsRuntimeProof().run()
         case "orlixPayloadE2fsprogsMaterialization":
             output = try OrlixPayloadE2fsprogsRuntimeProof(
                 script: OrlixPayloadE2fsprogsRuntimeProof
@@ -1936,7 +1943,7 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
 		": >/tmp/i",
 		"truncate -s 8m /tmp/i",
 		"printf 'ORLIX_%s\\n' MKE2FS_D_TRUNCATE_OK",
-		"mke2fs -q -t ext4 -F -m 0 -O ^metadata_csum -U clear -L ORLIXROOT -E root_owner=0:0 -d /tmp/s /tmp/i",
+		"mke2fs -q -t ext4 -F -m 0 -O ^metadata_csum -U clear -L ORLIXROOT -E root_owner=0:0,no_copy_xattrs -d /tmp/s /tmp/i",
 		"printf 'ORLIX_%s\\n' MKE2FS_D_OK",
 		"printf 'stats\\n' >/tmp/c",
 		"debugfs -w -f /tmp/c /tmp/i >/tmp/debugfs.out 2>&1",
@@ -2063,6 +2070,11 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
         "oci-live-registry-alpine-rootfs-import-test-fixture"
 
     private let fileManager = FileManager.default
+    private let useLinuxMaterialization: Bool
+
+    init(useLinuxMaterialization: Bool = false) {
+        self.useLinuxMaterialization = useLinuxMaterialization
+    }
 
     private struct MaterializationCommandObservation: Equatable {
         let executable: String
@@ -2103,7 +2115,8 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 			completion.signal()
 		}
 
-		guard completion.wait(timeout: .now() + .seconds(Int(Self.timeout))) == .success else {
+		let timeout = useLinuxMaterialization ? Self.timeout * 2 : Self.timeout
+		guard completion.wait(timeout: .now() + .seconds(Int(timeout))) == .success else {
 			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
 				"live registry Alpine rootfs import proof timed out"
 			)
@@ -2123,14 +2136,25 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 			throw OrlixOCIDerivedStdioRuntimeProofError.missingFixture(ready.path)
 		}
 
-		let copiedRoot = FileManager.default.temporaryDirectory
-			.appendingPathComponent(
-				"orlix-oci-alpine-import-\(UUID().uuidString)",
-				isDirectory: true
-			)
+		let copiedRoot = useLinuxMaterialization
+			? try Self.persistentLinuxMaterializationRoot()
+			: FileManager.default.temporaryDirectory
+				.appendingPathComponent(
+					"orlix-oci-alpine-import-\(UUID().uuidString)",
+					isDirectory: true
+				)
+		if fileManager.fileExists(atPath: copiedRoot.path) {
+			try fileManager.removeItem(at: copiedRoot)
+		}
+		try fileManager.createDirectory(
+			at: copiedRoot.deletingLastPathComponent(),
+			withIntermediateDirectories: true
+		)
 		try fileManager.copyItem(at: sourceRoot, to: copiedRoot)
 		defer {
-			try? fileManager.removeItem(at: copiedRoot)
+			if !useLinuxMaterialization {
+				try? fileManager.removeItem(at: copiedRoot)
+			}
 		}
 
 		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
@@ -2169,13 +2193,15 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
                 executable: executable,
                 arguments: arguments
             )
-            try OrlixOCIDerivedRunCommandRuntimeProof
-                .runFixtureMaterializationCommand(
-					executable: executable,
-					arguments: arguments,
-					sourceBaseImageURL: sourceLayout.baseImageURL,
-					sourceStateImageURL: sourceLayout.stateImageURL
-				)
+			if !self.useLinuxMaterialization {
+				try OrlixOCIDerivedRunCommandRuntimeProof
+					.runFixtureMaterializationCommand(
+						executable: executable,
+                        arguments: arguments,
+                        sourceBaseImageURL: sourceLayout.baseImageURL,
+                        sourceStateImageURL: sourceLayout.stateImageURL
+                    )
+            }
         }
 
         try validateImportedRootfs(installResult)
@@ -2184,27 +2210,42 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
             rootfs: installResult.rootfsImport.baseTreeDirectory,
             layout: importedLayout
         )
-        let deletedEnvironment = try installer.delete(id: Self.environmentID)
-		guard deletedEnvironment.lifecycleState == .deleted else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected Alpine rootfs import delete cleanup"
+		if useLinuxMaterialization {
+			try runLinuxMaterializationCommands(
+				materializationCommands.commands,
+				hostRoot: copiedRoot,
+				mountPath: "/mnt/orlix-materialize"
 			)
 		}
-		guard !fileManager.fileExists(atPath: importedLayout.rootDirectory.path) else {
-			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
-				"expected Alpine rootfs import environment directory cleanup"
-			)
+		if !useLinuxMaterialization {
+			let deletedEnvironment = try installer.delete(id: Self.environmentID)
+			guard deletedEnvironment.lifecycleState == .deleted else {
+				throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+					"expected Alpine rootfs import delete cleanup"
+				)
+			}
+			guard !fileManager.fileExists(atPath: importedLayout.rootDirectory.path)
+			else {
+				throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+					"expected Alpine rootfs import environment directory cleanup"
+				)
+			}
 		}
 
-		return [
-			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_PULL_OK",
+        var markers = [
+            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_PULL_OK",
             "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_LAYER_OK",
-            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_STAGING_OK",
-            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_APK_OK",
-            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_MATERIALIZATION_PLAN_OK",
-            "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_DELETE_OK",
-        ].joined(separator: "\n") + "\n"
-    }
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_STAGING_OK",
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_APK_OK",
+			"ORLIX_OCI_ALPINE_ROOTFS_IMPORT_MATERIALIZATION_PLAN_OK",
+		].joined(separator: "\n") + "\n"
+		if useLinuxMaterialization {
+			markers += "ORLIX_OCI_ALPINE_LINUX_MATERIALIZATION_PREPARED_OK\n"
+		} else {
+			markers += "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_DELETE_OK\n"
+		}
+		return markers
+	}
 
 	private func validateImportedRootfs(
 		_ result: OrlixOCIRegistryEnvironmentInstallResult
@@ -2247,6 +2288,296 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
             throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
                 "Alpine installed package database missing expected packages"
             )
+        }
+    }
+
+	private func runLinuxMaterializationCommands(
+		_ commands: [MaterializationCommandObservation],
+		hostRoot: URL,
+		mountPath: String
+	) throws {
+        guard let profile = OrlixOSDistribution.bundledBootProfile else {
+            throw OrlixUpstreamTestRunError.missingBundledBootProfile
+        }
+        guard let rootImageIdentifier = OrlixOSDistribution
+            .productRootImageIdentifier
+        else {
+            throw OrlixUpstreamTestRunError.missingRootImageDescriptor("product")
+        }
+
+		let commandScript = commands.map { command in
+			([linuxMaterializationExecutable(command.executable)]
+				+ command.arguments).map
+			{
+				shellQuote(
+					linuxMaterializationPath(
+						$0,
+						hostRoot: hostRoot,
+						mountPath: mountPath
+					)
+				)
+			}.joined(separator: " ")
+		}.joined(separator: "\n")
+		let scriptURL = hostRoot.appendingPathComponent(
+			".orlix-materialize.sh",
+			isDirectory: false
+		)
+		let script = [
+			"set -e",
+			"printf '%s\\n' ORLIX_LINUX_MATERIALIZATION_COMMAND_BEGIN",
+			commandScript,
+			"printf '%s\\n' ORLIX_LINUX_MATERIALIZATION_COMMAND_DONE",
+		].joined(separator: "\n") + "\n"
+		try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+		let linuxScriptPath = mountPath + "/" + scriptURL.lastPathComponent
+		let kernelCommandLine = [
+			OrlixEnvironmentRootImage.defaultKernelCommandLine,
+			"orlix.mount.host0.target=\(mountPath)",
+			"orlix.exec=\(kernelToken("/bin/sh"))",
+			"orlix.argv0=\(kernelToken("/bin/sh"))",
+			"orlix.argv1=\(kernelToken(linuxScriptPath))",
+            "orlix.env0=\(kernelToken("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))",
+            "orlix.cwd=\(kernelToken("/"))",
+            "orlix.uid=0",
+            "orlix.gid=0",
+        ].joined(separator: " ")
+        let terminal = OrlixTerminalSession()
+        let recorder = TerminalOutputRecorder()
+        let completion = DispatchSemaphore(value: 0)
+        let bootStatus = BootStatusRecorder()
+        let output = terminal.attachOutput { data in
+            recorder.append(data)
+			if recorder.text.contains(
+				"ORLIX_LINUX_MATERIALIZATION_COMMAND_DONE"
+			) || recorder.text.contains(
+				"orlix-init: shell exit status="
+			) {
+				completion.signal()
+			}
+        }
+        defer { output.cancel() }
+
+        let session = OrlixLinuxSession(
+            bootConfig: OrlixBootConfig(
+                profile: profile,
+                kernelCommandLine: kernelCommandLine,
+                rootImageIdentifier: rootImageIdentifier,
+                terminalIdentifier: "orlix.oci.linux.materialization"
+            ),
+            hostDirectories: [
+                OrlixHostDirectoryRegistration(
+                    identifier: OrlixEnvironmentRootImage
+                        .defaultHostDirectoryIdentifier,
+                    hostPath: hostRoot.path,
+                    readOnly: false
+                )
+            ],
+            terminal: terminal
+        )
+        DispatchQueue.global(qos: .userInitiated).async {
+            let status = session.boot()
+            bootStatus.set(status)
+            if status != .ok {
+                completion.signal()
+            }
+        }
+
+        guard completion.wait(timeout: .now() + Self.timeout) == .success else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"Linux materialization command timed out: \(commandScript)\n\(recorder.text)"
+            )
+        }
+        if let status = bootStatus.value, status != .ok {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "Linux materialization command boot failed: \(status)\n\(recorder.text)"
+            )
+        }
+        let text = recorder.text
+        guard text.contains("ORLIX_LINUX_MATERIALIZATION_COMMAND_BEGIN"),
+            text.contains("ORLIX_LINUX_MATERIALIZATION_COMMAND_DONE")
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"Linux materialization command missing markers: \(commandScript)\n\(text)"
+            )
+        }
+    }
+
+	private func validateGeneratedAlpineRuntime(
+		installer: OrlixOCIEnvironmentInstaller
+	) throws -> String {
+        let terminal = OrlixTerminalSession()
+        let recorder = OrlixRuntimeProofOutputRecorder()
+        let output = terminal.attachOutput { [recorder] data in
+            recorder.append(data)
+        }
+        defer { output.cancel() }
+        let run = try installer.run(
+            id: Self.environmentID,
+            command: [
+                "/bin/sh",
+                "-c",
+                Self.generatedAlpineRuntimeScript,
+            ],
+            terminal: terminal,
+            observationTimeout: Self.timeout
+        )
+        guard run.startedStateReport.status == .running,
+            run.startedStateReport.pid != nil
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected generated Alpine runtime started state"
+            )
+        }
+        guard run.completedStateReport.status == .stopped,
+            run.completedStateReport.exitStatus == 0
+        else {
+            throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+                "expected generated Alpine runtime stopped exit 0\n\(recorder.text)"
+            )
+        }
+        let text = recorder.text
+		try Self.validateGeneratedAlpineRuntimeText(text)
+		return text
+	}
+
+	private static func persistentLinuxMaterializationRoot() throws -> URL {
+		let supportRoot = try FileManager.default.url(
+			for: .applicationSupportDirectory,
+			in: .userDomainMask,
+			appropriateFor: nil,
+			create: true
+		)
+		return supportRoot.appendingPathComponent(
+			"OrlixRuntimeProofs/alpine-linux-materialization",
+			isDirectory: true
+		)
+	}
+
+	static func validatePreparedLinuxMaterializedAlpine() throws -> String {
+		let copiedRoot = try persistentLinuxMaterializationRoot()
+		let fixture = OrlixRuntimeEnvironmentFixture(root: copiedRoot)
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let proof = OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof()
+		let generatedRootRuntimeMarkers = try proof
+			.validateGeneratedAlpineRuntime(installer: installer)
+		let deletedEnvironment = try installer.delete(id: environmentID)
+		guard deletedEnvironment.lifecycleState == .deleted else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected Linux materialized Alpine delete cleanup"
+			)
+		}
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: environmentID,
+			linuxStateRoot: fixture.linuxStateRoot,
+			cacheRoot: fixture.cacheRoot,
+			scratchRoot: fixture.scratchRoot
+		)
+		guard !FileManager.default.fileExists(atPath: layout.rootDirectory.path)
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"expected Linux materialized Alpine environment cleanup"
+			)
+		}
+		try? FileManager.default.removeItem(at: copiedRoot)
+		return generatedRootRuntimeMarkers
+			+ "ORLIX_OCI_ALPINE_LINUX_MATERIALIZATION_GENERATED_ROOT_OK\n"
+			+ "ORLIX_OCI_ALPINE_LINUX_MATERIALIZATION_DELETE_OK\n"
+	}
+
+	private static var generatedAlpineRuntimeScript: String {
+        [
+            "printf '%s\\n' ORLIX_ALPINE_GENERATED_ROOT_BEGIN",
+            "test -x /sbin/apk",
+            "/sbin/apk --help >/tmp/orlix-apk-help.txt 2>&1",
+            "printf '%s\\n' ORLIX_ALPINE_GENERATED_ROOT_APK_HELP_OK",
+            "test -r /lib/apk/db/installed",
+            "grep 'P:busybox' /lib/apk/db/installed >/dev/null",
+            "printf '%s\\n' ORLIX_ALPINE_GENERATED_ROOT_PACKAGE_DB_OK",
+            "printf '%s\\n' ORLIX_ALPINE_GENERATED_ROOT_DONE",
+        ].joined(separator: "\n")
+    }
+
+    private static func validateGeneratedAlpineRuntimeText(_ text: String)
+        throws
+    {
+        for marker in [
+            "ORLIX_ALPINE_GENERATED_ROOT_BEGIN",
+            "ORLIX_ALPINE_GENERATED_ROOT_APK_HELP_OK",
+            "ORLIX_ALPINE_GENERATED_ROOT_PACKAGE_DB_OK",
+            "ORLIX_ALPINE_GENERATED_ROOT_DONE",
+        ] where !text.contains(marker) {
+            throw OrlixOCIDerivedStdioRuntimeProofError.missingMarker(
+                marker,
+                text
+            )
+        }
+    }
+
+    private func linuxMaterializationPath(
+        _ value: String,
+        hostRoot: URL,
+        mountPath: String
+    ) -> String {
+        let rootPath = hostRoot.path
+        if value == rootPath {
+            return mountPath
+        }
+        let prefix = rootPath + "/"
+        if value.hasPrefix(prefix) {
+            let suffix = value.dropFirst(prefix.count)
+            return mountPath + "/" + suffix
+        }
+		return value
+	}
+
+	private func linuxMaterializationExecutable(_ executable: String) -> String {
+		switch URL(fileURLWithPath: executable).lastPathComponent {
+		case "orlix-truncate":
+			return "truncate"
+		case "orlix-mke2fs":
+			return "mke2fs"
+		case "orlix-debugfs":
+			return "debugfs"
+		default:
+			return executable
+		}
+	}
+
+	private func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    private func kernelToken(_ value: String) -> String {
+        var encoded = ""
+        for byte in value.utf8 {
+            if Self.isKernelCommandLineTokenByte(byte) {
+                encoded.append(Character(UnicodeScalar(byte)))
+            } else {
+                encoded += String(format: "%%%02X", byte)
+            }
+        }
+        return encoded
+    }
+
+    private static func isKernelCommandLineTokenByte(_ byte: UInt8) -> Bool {
+        switch byte {
+        case UInt8(ascii: "A")...UInt8(ascii: "Z"),
+            UInt8(ascii: "a")...UInt8(ascii: "z"),
+            UInt8(ascii: "0")...UInt8(ascii: "9"),
+            UInt8(ascii: "/"),
+            UInt8(ascii: "."),
+            UInt8(ascii: "_"),
+            UInt8(ascii: "-"),
+            UInt8(ascii: ":"),
+            UInt8(ascii: "="):
+            return true
+        default:
+            return false
         }
     }
 
@@ -2322,7 +2653,7 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
                 "-L",
                 label,
                 "-E",
-                "root_owner=0:0",
+                "root_owner=0:0,no_copy_xattrs",
                 "-d",
                 sourceTree.path,
                 imageURL.path,

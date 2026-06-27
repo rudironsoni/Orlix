@@ -131,15 +131,19 @@ __attribute__((visibility("hidden"))) int orlix_host_directory_create_file_at_pa
     const char *relative_path,
     uint32_t mode);
 __attribute__((visibility("hidden"))) long orlix_host_directory_write_file_at_path(
-    unsigned int directory,
-    const char *relative_path,
-    uint64_t offset,
-    const void *buffer,
-    uint32_t length);
+	unsigned int directory,
+	const char *relative_path,
+	uint64_t offset,
+	const void *buffer,
+	uint32_t length);
+__attribute__((visibility("hidden"))) int orlix_host_directory_truncate_file_at_path(
+	unsigned int directory,
+	const char *relative_path,
+	uint64_t size);
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_link(
-    unsigned int directory,
-    unsigned int entry_index,
-    void *buffer,
+	unsigned int directory,
+	unsigned int entry_index,
+	void *buffer,
     uint32_t length);
 __attribute__((visibility("hidden"))) long orlix_host_directory_read_link_at_path(
     unsigned int directory,

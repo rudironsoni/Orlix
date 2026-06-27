@@ -60,14 +60,17 @@ int orlix_host_directory_create_file_at_path(unsigned int directory,
 					    const char *relative_path,
 					    u32 mode);
 long orlix_host_directory_write_file_at_path(unsigned int directory,
-					    const char *relative_path,
-					    u64 offset,
-					    const void *buffer,
-					    u32 length);
+	const char *relative_path,
+	u64 offset,
+	const void *buffer,
+	u32 length);
+int orlix_host_directory_truncate_file_at_path(unsigned int directory,
+	const char *relative_path,
+	u64 size);
 long orlix_host_directory_read_link(unsigned int directory,
-				    unsigned int entry_index,
-				    void *buffer,
-				    u32 length);
+	unsigned int entry_index,
+	void *buffer,
+	u32 length);
 long orlix_host_directory_read_link_at_path(unsigned int directory,
 					    const char *relative_path,
 					    void *buffer,
