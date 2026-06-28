@@ -53,7 +53,7 @@ make beta-install-simulator
 make beta-simulator-gate
 ```
 
-`beta-install-simulator` builds the Release simulator app, uninstalls any stale `org.orlix.OrlixTerminal` already on the chosen simulator, installs the current build, verifies the installed OrlixOS payload metadata selects the direct release root, and launches the app.
+`beta-install-simulator` builds the Release simulator app, uninstalls any stale `com.rudironsoni.OrlixTerminal` app and the legacy `org.orlix.OrlixTerminal` install on the chosen simulator, installs the current build, verifies the installed OrlixOS payload metadata selects the direct release root, and launches the app.
 
 `beta-simulator-gate` runs the minimum app-hosted beta proof on the chosen simulator:
 

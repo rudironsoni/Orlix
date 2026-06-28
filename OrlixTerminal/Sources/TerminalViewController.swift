@@ -8,7 +8,7 @@ final class TerminalViewController: UIViewController {
     private static let darkThemeKey = "SelectedTheme.dark"
 
     private var didStartBoot = false
-    private let bootQueue = DispatchQueue(label: "org.orlix.terminal.boot", qos: .userInitiated)
+    private let bootQueue = DispatchQueue(label: "com.rudironsoni.terminal.boot", qos: .userInitiated)
     private let launchConfiguration: OrlixTerminalLaunchConfiguration
     private lazy var linuxSessionResult = launchConfiguration.makeLinuxSession()
     private var terminalOutput: OrlixTerminalOutput?

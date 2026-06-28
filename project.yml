@@ -1,6 +1,6 @@
 name: OrlixSystem
 options:
-  bundleIdPrefix: org.orlix
+  bundleIdPrefix: com.rudironsoni
   deploymentTarget:
     iOS: "16.0"
   generateEmptyDirectories: true
@@ -50,7 +50,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         INFOPLIST_FILE: OrlixKernel/Sources/Support/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixKernel
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernel
         PRODUCT_NAME: OrlixKernel
         ORLIX_PROFILE: release
         HEADER_SEARCH_PATHS:
@@ -185,7 +185,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         INFOPLIST_FILE: OrlixOS/Sources/Session/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixOS
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOS
         PRODUCT_NAME: OrlixOS
         ORLIX_PROFILE: release
         ORLIX_OS_PAYLOAD_SOURCE_ROOT: $(SRCROOT)/Build/OrlixKernel/payload
@@ -204,7 +204,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixOSTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOSTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixTerminal:
@@ -225,7 +225,7 @@ targets:
       base:
         CODE_SIGN_STYLE: Automatic
         INFOPLIST_FILE: OrlixTerminal/Sources/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixTerminal
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTerminal
         PRODUCT_NAME: OrlixTerminal
   OrlixTestRunner:
     type: application
@@ -278,7 +278,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunner
         PRODUCT_NAME: OrlixTestRunner
         ORLIX_PROFILE: release
   OrlixKernelHostProofTests:
@@ -292,7 +292,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixKernelHostProofTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelHostProofTests
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OrlixKernel/Sources/include
         GCC_PREPROCESSOR_DEFINITIONS:
@@ -316,7 +316,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixLinuxProofOutputParserTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixLinuxProofOutputParserTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTerminal.app/OrlixTerminal
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixHostAdapterTests:
@@ -333,7 +333,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixHostAdapterTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixHostAdapterTests
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OrlixHostAdapter/Sources
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include
@@ -350,7 +350,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixTestRunnerTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunnerTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixKernelUpstreamTests:
@@ -364,7 +364,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixKernelUpstreamTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelUpstreamTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixMLibCUpstreamTests:
@@ -378,7 +378,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixMLibCUpstreamTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixMLibCUpstreamTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixCoreutilsUpstreamTests:
@@ -392,7 +392,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixCoreutilsUpstreamTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixCoreutilsUpstreamTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixPTYRuntimeTests:
@@ -413,7 +413,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixPTYRuntimeTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixPTYRuntimeTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
 schemes:
