@@ -25093,3 +25093,22 @@ Blocked validation:
 
 Boundary:
 - This makes the repo capable of asking Xcode/App Store Connect to generate provisioning profiles. It does not prove TestFlight archive readiness until local Apple account/keychain access, App Store Connect API-key credentials, or Xcode-managed signing state is valid.
+## 2026-06-28 - OrlixOS payload archive sandbox declarations
+
+Checkpoint:
+- Fixed the TestFlight archive `Embed OrlixOS Payload` script phase source of truth in `project.yml`.
+- Added concrete Xcode user-script sandbox input/output declarations for the payload files copied by the phase:
+  - `rootfs/initramfs.cpio.gz`
+  - `rootfs/base.ext4`
+  - `rootfs/state.ext4`
+  - `arch/orlix/boot/dts/development.dtb`
+  - `arch/orlix/boot/dts/release.dtb`
+- Re-enabled dependency analysis for the phase now that the file lists are explicit, removing the recurring warning and avoiding unnecessary payload copies when inputs are unchanged.
+
+Validation:
+- `xcodegen generate --spec project.yml` succeeded.
+- Generated `Orlix.xcodeproj/project.pbxproj` contains the concrete rootfs and DTB sandbox paths.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` progressed through OrlixMLibC, OrlixOS package/rootfs assembly, Coreutils, Findutils, and e2fsprogs work instead of failing at `Embed OrlixOS Payload`.
+
+Blocked validation:
+- The same archive run then failed inside this executor at Xcode package resolution with `sandbox-exec: sandbox_apply: Operation not permitted`, after CoreSimulatorService/simdiskimaged connection errors. This is the known executor environment limit and is separate from the prior payload embed sandbox denial.
