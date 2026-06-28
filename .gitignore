@@ -60,6 +60,10 @@ dkms.conf
 
 # Xcode
 xcuserdata/
+profiles/
+*.mobileprovision
+*.provisionprofile
+AuthKey_*.p8
 /.build/
 .DS_Store
 Orlix.xcodeproj/

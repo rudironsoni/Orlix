@@ -21,6 +21,7 @@ ORLIX_ALLOW_PROVISIONING_UPDATES ?= YES
 ORLIX_ASC_API_KEY_PATH ?=
 ORLIX_ASC_API_KEY_ID ?=
 ORLIX_ASC_API_ISSUER_ID ?=
+ORLIX_XCODEBUILD_EXPORT ?= /usr/bin/xcodebuild
 ORLIX_BETA_SIMULATOR_ID ?= E65F0D05-980C-4368-8CDC-2D2BF3E05757
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
@@ -203,12 +204,12 @@ beta-export-archive: beta-validate-archive
 		xcodebuild_signing_flags+=(-authenticationKeyPath "$(ORLIX_ASC_API_KEY_PATH)" -authenticationKeyID "$(ORLIX_ASC_API_KEY_ID)" -authenticationKeyIssuerID "$(ORLIX_ASC_API_ISSUER_ID)"); \
 	fi; \
 	mkdir -p "$(ORLIX_BETA_EXPORT_DIR)"; \
-	xcodebuild \
-		-exportArchive \
-		-archivePath "$(ORLIX_BETA_ARCHIVE_PATH)" \
-		-exportOptionsPlist "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" \
-		"$${xcodebuild_signing_flags[@]}" \
-		-exportPath "$(ORLIX_BETA_EXPORT_DIR)"
+	"$(ORLIX_XCODEBUILD_EXPORT)" \
+	-exportArchive \
+	-archivePath "$(ORLIX_BETA_ARCHIVE_PATH)" \
+	-exportOptionsPlist "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" \
+	$${xcodebuild_signing_flags[@]+"$${xcodebuild_signing_flags[@]}"} \
+	-exportPath "$(ORLIX_BETA_EXPORT_DIR)"
 
 xcodeproj:
 	@$(KERNEL_MAKE) xcodeproj
