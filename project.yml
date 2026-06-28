@@ -15,6 +15,7 @@ settings:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
     CURRENT_PROJECT_VERSION: 1
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
     MARKETING_VERSION: "0.1"
     SWIFT_VERSION: "6.0"
 packages:
@@ -48,6 +49,7 @@ targets:
       - sdk: CoreFoundation.framework
     settings:
       base:
+        CLANG_ENABLE_MODULE_VERIFIER: YES
         DEFINES_MODULE: YES
         INFOPLIST_FILE: OrlixKernel/Sources/Support/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernel
@@ -183,6 +185,7 @@ targets:
           cp -R "$payload" "$destination"
     settings:
       base:
+        CLANG_ENABLE_MODULE_VERIFIER: YES
         DEFINES_MODULE: YES
         INFOPLIST_FILE: OrlixOS/Sources/Session/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOS
@@ -276,6 +279,7 @@ targets:
           copy_if_present "Build/OrlixOS/environment-runtime-test-fixtures" "EnvironmentRuntimeTestFixtures"
     settings:
       base:
+        CLANG_ENABLE_MODULE_VERIFIER: YES
         DEFINES_MODULE: YES
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunner
