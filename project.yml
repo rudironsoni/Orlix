@@ -14,7 +14,7 @@ settings:
   base:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
-    CURRENT_PROJECT_VERSION: 1
+    CURRENT_PROJECT_VERSION: 2
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     MARKETING_VERSION: "0.1"
     SWIFT_VERSION: "6.0"
@@ -252,6 +252,7 @@ targets:
     platform: iOS
     sources:
       - path: Orlix/Sources
+      - path: Orlix/Assets.xcassets
     dependencies:
       - target: OrlixOS
         embed: true
@@ -265,6 +266,7 @@ targets:
       base:
         CODE_SIGN_STYLE: Automatic
         INFOPLIST_FILE: Orlix/Sources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
         PRODUCT_NAME: Orlix
   OrlixTestRunner:

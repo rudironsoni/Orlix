@@ -10,6 +10,22 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 TestFlight Build 2 Upload And Metadata
+
+Changes: - Rebuilt TestFlight upload as build `0.1 (2)` after adding `ITSAppUsesNonExemptEncryption=false`. - Kept the AppIcon, iPad orientation, export target, and local signing ignore fixes from the previous checkpoint. - Bumped `CURRENT_PROJECT_VERSION` to `2` because App Store Connect already accepted build `1`.
+
+Validation: - Archive validation passed for `Build/Release/Orlix.xcarchive`. - Archive and exported IPA both showed `CFBundleVersion=2`, `ITSAppUsesNonExemptEncryption=false`, and `CFBundleIconName=AppIcon`. - `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed. - `fastlane pilot upload --api_key_path ~/.config/fastlane/appstore_api_key.json --ipa Build/Release/Export-Make/Orlix.ipa --app_identifier com.rudironsoni.Orlix --skip_waiting_for_build_processing true` passed for build `0.1 (2)`: `Successfully uploaded new binary to App Store Connect`. - `fastlane pilot distribute ... --localized_app_info ... --skip_submission true` exited 0, setting feedback email and beta app description. - Attempts to set beta review contact with placeholder phone values failed App Store Connect validation; a real `contactPhone` remains required for external beta review information.
+
+Current status: - App Store Connect accepted TestFlight build `0.1 (2)` for app `6785306909` with export compliance embedded in Info.plist. - Beta app description and feedback email are set. - External testing submission still requires a real beta review contact phone number in App Store Connect. - Final pre-commit checks passed after all source mutations: `git diff --check`, asset JSON parse, `plutil -lint Orlix/Sources/Info.plist`, and `make beta-validate-archive`.
+
+### 2026-06-29 TestFlight Upload And Export Compliance
+
+Changes: - Added `Orlix/Assets.xcassets/AppIcon.appiconset` and wired `ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon` through `project.yml`. - Added `CFBundleIconName=AppIcon`, `ITSAppUsesNonExemptEncryption=false`, and full iPad multitasking orientation set to `Orlix/Sources/Info.plist`. - Fixed `beta-export-archive` so empty signing flags do not fail under `set -u` and export uses explicit export-only `ORLIX_XCODEBUILD_EXPORT`. - Added git ignores for local provisioning profiles and App Store Connect private keys.
+
+Validation: - Installed local App Store profile `Orlix` for `ZQ3L7M567L.com.rudironsoni.Orlix`, expiring `2027-03-24T17:16:56Z`. - Exported IPA validation showed bundle id `com.rudironsoni.Orlix`, `CFBundleIconName=AppIcon`, all required iPad orientations, `Assets.car`, `Apple Distribution: Rudimar Luis Ronsoni Junior (ZQ3L7M567L)`, and embedded profile `Orlix`. - `fastlane pilot upload --api_key_path ~/.config/fastlane/appstore_api_key.json --ipa Build/Release/Export-Make/Orlix.ipa --app_identifier com.rudironsoni.Orlix --skip_waiting_for_build_processing true` passed once after icon/orientation fixes: `Successfully uploaded new binary to App Store Connect`. - TestFlight then requested export compliance because the uploaded build lacked `ITSAppUsesNonExemptEncryption`; the source plist now declares no non-exempt encryption for the next uploaded build.
+
+Current status: - App Store Connect accepted one TestFlight binary upload for app `6785306909`, but that build still needs compliance answered manually in TestFlight. - Next gate is re-archive/re-export/re-upload with `ITSAppUsesNonExemptEncryption=false` embedded.
+
 ### 2026-06-27 Live Alpine import materialization-plan proof
 
 Changes:
