@@ -25132,3 +25132,22 @@ Current status:
 - Latest checkpoint: Codex project policy is fixed for non-interactive push, archive, Xcode, simulator, and long make workflows, with destructive deletion still forbidden.
 - Latest evidence: `.codex/rules/tests/test_execpolicy_rules.py` passed and `git diff --check` passed.
 - Next validation: rerun the beta archive path to determine whether SwiftPM package resolution still fails from the executor sandbox or proceeds to the next TestFlight readiness gate.
+
+[2026-06-28] Beta archive retry after Codex restart
+
+Changes:
+- Set the beta archive default signing identity to `Apple Distribution`, matching the TestFlight archive path instead of letting Xcode auto-select a development certificate.
+- Fixed `beta-signing-diagnostics` to count provisioning profiles from Xcode's active profile directory under `~/Library/Developer/Xcode/UserData/Provisioning Profiles`, while still checking the legacy MobileDevice profile directory when present.
+
+Validation:
+- `xcode-storage-doctor` passed after Codex restart.
+- `xcodebuild -resolvePackageDependencies -project Orlix.xcodeproj -scheme Orlix -skipPackageUpdates` passed, resolving SwiftPM `GhosttyKit` and `MSDisplayLink`.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` progressed through OrlixMLibC, OrlixOS rootfs/package assembly, Coreutils, Findutils, e2fsprogs, and into the Xcode archive phase.
+- Direct Xcode archive rerun reached codesigning and failed at `CodeSign ... OrlixKernel.framework` with `errSecInternalComponent`.
+- `make beta-signing-diagnostics ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` now reports `provisioning_profiles_total=5`, then fails at the signing probe with `errSecInternalComponent`.
+
+Current status:
+- The previous SwiftPM `sandbox-exec` blocker is cleared under the restarted Codex session.
+- The current TestFlight blocker is local keychain/private-key access for codesign. `security show-keychain-info login.keychain-db` reports `User interaction is not allowed`, and direct codesign probes fail with `errSecInternalComponent`.
+- The archive cannot be claimed ready until the Apple Distribution private key is unlocked or granted non-interactive `codesign` access on this machine.
+- Publish note: SSH to GitHub port 22 timed out from this session, so GitHub CLI git credential setup was refreshed to allow HTTPS push for the checkpoint.
