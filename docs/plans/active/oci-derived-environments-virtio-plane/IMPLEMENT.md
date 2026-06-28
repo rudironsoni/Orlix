@@ -25069,3 +25069,27 @@ Validation:
 - `wc -m docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md` reported 3995 characters.
 - `python3 .codex/hooks/compact_plan_check.py` exited 0.
 - `git diff --check` exited 0.
+
+## 2026-06-28 TestFlight provisioning generation support
+
+Current status:
+- The beta archive/export Makefile path now asks Xcode to create or download provisioning profiles by default via `-allowProvisioningUpdates`.
+- The beta archive/export path now accepts local-only App Store Connect API key arguments so profile generation can work even when the local Xcode account cannot create profiles.
+
+Changes:
+- Added `ORLIX_ALLOW_PROVISIONING_UPDATES`, `ORLIX_ASC_API_KEY_PATH`, `ORLIX_ASC_API_KEY_ID`, and `ORLIX_ASC_API_ISSUER_ID` to the beta release Makefile interface.
+- Passed `-allowProvisioningUpdates` and optional `-authenticationKeyPath`, `-authenticationKeyID`, and `-authenticationKeyIssuerID` to `xcodebuild archive` and `xcodebuild -exportArchive`.
+- Documented the profile-generation path in `docs/release/testflight-beta.md` without committing profiles or private keys.
+
+Validation:
+- `make beta-prerequisites` exited 0.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ORLIX_ASC_API_KEY_ID=dummy` failed early with `ORLIX_ASC_API_KEY_PATH is required when App Store Connect API key signing is used`, proving incomplete ASC credentials are rejected before release builds start.
+- `xcodegen generate --spec project.yml` exited 0 when run with `USER=rudironsoni LOGNAME=rudironsoni`.
+
+Blocked validation:
+- `make beta-signing-diagnostics ORLIX_CODE_SIGN_IDENTITY="Apple Distribution"` found the Apple Distribution identity but reported `provisioning_profiles=0` and failed a local codesign probe with `errSecInternalComponent`.
+- `xcodebuild ... -allowProvisioningUpdates -showBuildSettings` did not reach provisioning because Swift package resolution failed with `sandbox-exec: sandbox_apply: Operation not permitted`.
+- `xcode-storage-doctor` still failed because wrapped `simctl runtimes` and `simctl devices` cannot reach CoreSimulatorService/simdiskimaged in this executor.
+
+Boundary:
+- This makes the repo capable of asking Xcode/App Store Connect to generate provisioning profiles. It does not prove TestFlight archive readiness until local Apple account/keychain access, App Store Connect API-key credentials, or Xcode-managed signing state is valid.

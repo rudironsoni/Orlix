@@ -17,6 +17,10 @@ ORLIX_DEVELOPMENT_TEAM ?=
 ORLIX_CODE_SIGN_STYLE ?= Automatic
 ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
+ORLIX_ALLOW_PROVISIONING_UPDATES ?= YES
+ORLIX_ASC_API_KEY_PATH ?=
+ORLIX_ASC_API_KEY_ID ?=
+ORLIX_ASC_API_ISSUER_ID ?=
 ORLIX_BETA_SIMULATOR_ID ?= E65F0D05-980C-4368-8CDC-2D2BF3E05757
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
@@ -146,6 +150,14 @@ beta-archive: beta-prerequisites
 	xcodegen generate --spec project.yml; \
 	[ -n "$(ORLIX_DEVELOPMENT_TEAM)" ] || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }; \
 	archive_settings=(DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" CODE_SIGN_STYLE="$(ORLIX_CODE_SIGN_STYLE)"); \
+	xcodebuild_signing_flags=(); \
+	if [ "$(ORLIX_ALLOW_PROVISIONING_UPDATES)" = YES ]; then xcodebuild_signing_flags+=(-allowProvisioningUpdates); fi; \
+	if [ -n "$(ORLIX_ASC_API_KEY_PATH)$(ORLIX_ASC_API_KEY_ID)$(ORLIX_ASC_API_ISSUER_ID)" ]; then \
+		[ -n "$(ORLIX_ASC_API_KEY_PATH)" ] || { echo "ORLIX_ASC_API_KEY_PATH is required when App Store Connect API key signing is used" >&2; exit 1; }; \
+		[ -n "$(ORLIX_ASC_API_KEY_ID)" ] || { echo "ORLIX_ASC_API_KEY_ID is required when App Store Connect API key signing is used" >&2; exit 1; }; \
+		[ -n "$(ORLIX_ASC_API_ISSUER_ID)" ] || { echo "ORLIX_ASC_API_ISSUER_ID is required when App Store Connect API key signing is used" >&2; exit 1; }; \
+		xcodebuild_signing_flags+=(-authenticationKeyPath "$(ORLIX_ASC_API_KEY_PATH)" -authenticationKeyID "$(ORLIX_ASC_API_KEY_ID)" -authenticationKeyIssuerID "$(ORLIX_ASC_API_ISSUER_ID)"); \
+	fi; \
 	if [ -n "$(ORLIX_CODE_SIGN_IDENTITY)" ]; then archive_settings+=(CODE_SIGN_IDENTITY="$(ORLIX_CODE_SIGN_IDENTITY)"); fi; \
 	if [ -n "$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)" ]; then archive_settings+=(PROVISIONING_PROFILE_SPECIFIER="$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)"); fi; \
 	$(MAKE) -f OrlixMLibC/Makefile build PROFILE=release; \
@@ -159,6 +171,7 @@ beta-archive: beta-prerequisites
 		-configuration Release \
 		-destination 'generic/platform=iOS' \
 		-archivePath "$(ORLIX_BETA_ARCHIVE_PATH)" \
+		"$${xcodebuild_signing_flags[@]}" \
 		"$${archive_settings[@]}" \
 		archive
 
@@ -175,11 +188,20 @@ beta-export-archive: beta-validate-archive
 	@set -euo pipefail; \
 	[ -n "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" ] || { echo "ORLIX_BETA_EXPORT_OPTIONS_PLIST is required to export the archive" >&2; exit 1; }; \
 	test -f "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" || { echo "missing export options plist: $(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" >&2; exit 1; }; \
+	xcodebuild_signing_flags=(); \
+	if [ "$(ORLIX_ALLOW_PROVISIONING_UPDATES)" = YES ]; then xcodebuild_signing_flags+=(-allowProvisioningUpdates); fi; \
+	if [ -n "$(ORLIX_ASC_API_KEY_PATH)$(ORLIX_ASC_API_KEY_ID)$(ORLIX_ASC_API_ISSUER_ID)" ]; then \
+		[ -n "$(ORLIX_ASC_API_KEY_PATH)" ] || { echo "ORLIX_ASC_API_KEY_PATH is required when App Store Connect API key signing is used" >&2; exit 1; }; \
+		[ -n "$(ORLIX_ASC_API_KEY_ID)" ] || { echo "ORLIX_ASC_API_KEY_ID is required when App Store Connect API key signing is used" >&2; exit 1; }; \
+		[ -n "$(ORLIX_ASC_API_ISSUER_ID)" ] || { echo "ORLIX_ASC_API_ISSUER_ID is required when App Store Connect API key signing is used" >&2; exit 1; }; \
+		xcodebuild_signing_flags+=(-authenticationKeyPath "$(ORLIX_ASC_API_KEY_PATH)" -authenticationKeyID "$(ORLIX_ASC_API_KEY_ID)" -authenticationKeyIssuerID "$(ORLIX_ASC_API_ISSUER_ID)"); \
+	fi; \
 	mkdir -p "$(ORLIX_BETA_EXPORT_DIR)"; \
 	xcodebuild \
 		-exportArchive \
 		-archivePath "$(ORLIX_BETA_ARCHIVE_PATH)" \
 		-exportOptionsPlist "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" \
+		"$${xcodebuild_signing_flags[@]}" \
 		-exportPath "$(ORLIX_BETA_EXPORT_DIR)"
 
 xcodeproj:

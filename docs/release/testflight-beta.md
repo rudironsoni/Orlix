@@ -85,6 +85,18 @@ make beta-archive \
 
 Signing, App Store Connect app registration, provisioning, account access, and keychain private-key access are external Apple state. If archive signing fails there, record the exact Apple blocker instead of changing Orlix runtime code.
 
+Automatic signing asks Xcode to create or download provisioning profiles by default through `ORLIX_ALLOW_PROVISIONING_UPDATES=YES`. If the local Xcode account cannot create profiles, provide App Store Connect API key credentials through local-only paths:
+
+```sh
+make beta-archive \
+  ORLIX_DEVELOPMENT_TEAM=<Apple team id> \
+  ORLIX_ASC_API_KEY_PATH=<local AuthKey_XXXX.p8 path> \
+  ORLIX_ASC_API_KEY_ID=<key id> \
+  ORLIX_ASC_API_ISSUER_ID=<issuer id>
+```
+
+Do not commit App Store Connect private keys or provisioning profiles.
+
 ## Upload
 
 If `make beta-archive` succeeds, upload with Xcode Organizer or export using the archive at:
@@ -98,6 +110,8 @@ To export from the command line, provide an App Store export options plist:
 ```sh
 make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=<ExportOptions.plist>
 ```
+
+The export target also honors `ORLIX_ALLOW_PROVISIONING_UPDATES` and the `ORLIX_ASC_API_*` variables above.
 
 An App Store Connect export template is available at:
 
