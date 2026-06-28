@@ -4,7 +4,7 @@ test coreutils-test: $(ORLIXOS_COREUTILS_TEST_INITRAMFS)
 	mkdir -p "$(dir $(ORLIXOS_COREUTILS_TEST_RUN_LOG))"; \
 	$(KERNEL_MAKE) run PROFILE="$(PROFILE)" type=coreutils libc=orlixmlibc ORLIX_KERNEL_TEST_INITRAMFS_INPUT="$(ORLIXOS_COREUTILS_TEST_INITRAMFS)" ORLIX_KERNEL_RUN_UNTIL_MARKER="ORLIX-COREUTILS-TEST-END" ORLIX_KERNEL_RUN_TIMEOUT_SECONDS="$(ORLIXOS_COREUTILS_TEST_TIMEOUT_SECONDS)" | tee "$$run_log"; \
 	runtime_log="$$(awk -F'"' '/runtimeLogPath/ { print $$4 }' "$$run_log" | tail -n 1)"; \
-	[ -n "$$runtime_log" ] || { echo "missing OrlixTerminal runtime log path in $$run_log" >&2; exit 1; }; \
+	[ -n "$$runtime_log" ] || { echo "missing Orlix runtime log path in $$run_log" >&2; exit 1; }; \
 	for _ in $$(seq 1 3600); do \
 		grep -F -q 'ORLIX-COREUTILS-TEST-END' "$$runtime_log" && break; \
 		sleep 1; \

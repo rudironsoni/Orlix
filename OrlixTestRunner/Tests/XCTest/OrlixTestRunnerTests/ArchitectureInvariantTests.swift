@@ -27,7 +27,7 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixKernel/Sources",
             "OrlixOS/Sources",
             "OrlixHostAdapter/Sources",
-            "OrlixTerminal/Sources",
+            "Orlix/Sources",
             "OrlixTestRunner/Sources",
             "tools"
         ])
@@ -78,7 +78,7 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixKernel/Sources",
             "OrlixOS/Sources",
             "OrlixHostAdapter/Sources",
-            "OrlixTerminal/Sources",
+            "Orlix/Sources",
             "OrlixTestRunner/Sources"
         ])
         let forbidden = [

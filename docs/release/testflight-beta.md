@@ -1,14 +1,14 @@
 # TestFlight Beta Checklist
 
-This checklist gates the first OrlixTerminal TestFlight beta. It is scoped to publishing the existing iOS app with the current OrlixOS payload and an honest runtime boundary. It is not a claim that OCI environments, upstream package conformance, or the full package ladder are complete.
+This checklist gates the first Orlix TestFlight beta. It is scoped to publishing the existing iOS app with the current OrlixOS payload and an honest runtime boundary. It is not a claim that OCI environments, upstream package conformance, or the full package ladder are complete.
 
 ## Source Of Truth
 
 - Xcode project source: `project.yml`.
 - Generated project: `Orlix.xcodeproj`, local output only.
-- App target and archive scheme: `OrlixTerminal`.
+- App target and archive scheme: `Orlix`.
 - Release profile: `PROFILE=release`.
-- Archive output: `Build/Release/OrlixTerminal.xcarchive`.
+- Archive output: `Build/Release/Orlix.xcarchive`.
 - Export output: `Build/Release/Export`.
 
 Do not commit generated `.xcodeproj`, DerivedData, archives, `.ipa` files, or other build products.
@@ -90,7 +90,7 @@ Signing, App Store Connect app registration, provisioning, account access, and k
 If `make beta-archive` succeeds, upload with Xcode Organizer or export using the archive at:
 
 ```text
-Build/Release/OrlixTerminal.xcarchive
+Build/Release/Orlix.xcarchive
 ```
 
 To export from the command line, provide an App Store export options plist:
@@ -115,7 +115,7 @@ Build/Release/Export
 
 The first beta may claim:
 
-- OrlixTerminal is packaged as the iOS host app.
+- Orlix is packaged as the iOS host app.
 - The app consumes the `OrlixOS` delivered Kit.
 - The release archive embeds the expected OrlixOS and OrlixKernel frameworks.
 - The bundled release OrlixOS payload is present in the archive.

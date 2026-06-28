@@ -27,8 +27,8 @@ OrlixMLibC/Sources
 OrlixMLibC/Tests
 OrlixOS/Sources
 OrlixOS/Tests
-OrlixTerminal/Sources
-OrlixTerminal/Tests
+Orlix/Sources
+Orlix/Tests
 ```
 
 Each project has its own `Makefile`; the top-level `Makefile` orchestrates calls into those project Makefiles.
@@ -54,7 +54,7 @@ Do not claim product runtime readiness from KUnit, kselftest, boot logs, packagi
 
 ## Build And Test Commands
 
-The top-level Makefile keeps a small, Linux-shaped interface and delegates to `OrlixKernel/Makefile`, `OrlixHostAdapter/Makefile`, `OrlixMLibC/Makefile`, `OrlixOS/Makefile`, and `OrlixTerminal/Makefile`:
+The top-level Makefile keeps a small, Linux-shaped interface and delegates to `OrlixKernel/Makefile`, `OrlixHostAdapter/Makefile`, `OrlixMLibC/Makefile`, `OrlixOS/Makefile`, and `Orlix/Makefile`:
 
 ```bash
 make help
@@ -93,7 +93,7 @@ Do not run kselftest or KUnit on Darwin and do not use a VM as product proof. Do
 
 Both `iphoneos` and `iphonesimulator` are iOS proof destinations. Milestones must validate the same scope on both.
 
-XCTest suites are organized under project-local test trees. `OrlixKernel/Tests/XCTest/OrlixKernelHostProofTests` launches the lower-level bootloader path, `OrlixKernel/Tests/XCTest/OrlixLinuxProofOutputParserTests` parses Linux-native KUnit and kselftest output fixtures under `OrlixKernel/Tests/Fixtures`, `OrlixOS/Tests/XCTest` covers OrlixOS payload/session wiring, and `OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests` covers narrow host mechanics. They do not own Linux subsystem assertions.
+XCTest suites are organized under project-local test trees. `OrlixKernel/Tests/XCTest/OrlixKernelHostedTests` launches the lower-level bootloader path, `OrlixKernel/Tests/XCTest/OrlixKernelLogParserTests` parses Linux-native KUnit and kselftest output fixtures under `OrlixKernel/Tests/Fixtures`, `OrlixOS/Tests/XCTest` covers OrlixOS payload/session wiring, and `OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests` covers narrow host mechanics. They do not own Linux subsystem assertions.
 
 Milestone 5 boot-to-virtio-probe proof keeps the dependency chain honest. Static DTS, defconfig, and kselftest source inputs are preparatory only. The milestone is proved only when iOS-hosted Orlix Linux consumes the profile device tree and reaches the point where upstream virtio-mmio probing can be attempted.
 

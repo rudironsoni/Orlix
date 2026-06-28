@@ -22,7 +22,7 @@ Durable architecture decisions live in this directory. `AGENTS.md` and skills ma
 - `0003-default-to-the-app-store-profile.md`
 - `0013-package-real-linux-artifact-before-ios-execution.md`
 - `0014-use-xcodegen-for-ios-packaging-and-test-harness.md`
-- `0015-build-orlixterminal-as-the-ios-host-app.md`
+- `0015-build-orlix-as-the-ios-host-app.md`
 - `0016-keep-orlix-userspace-abi-profile-invariant.md`
 - `0019-keep-make-targets-linux-shaped.md`
 - `0023-use-release-development-profiles-and-curated-orlixos-distribution.md`

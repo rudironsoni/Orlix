@@ -18,9 +18,9 @@ Commit `project.yml` as the durable XcodeGen source of truth. Do not commit the 
 
 XcodeGen schemes should make local Xcode use clear, but repository `make` targets own non-interactive proof orchestration for the full App Store/development by `iphoneos`/`iphonesimulator` matrix.
 
-The generated project includes `OrlixOS` as the delivered OS Kit/framework, `OrlixTerminal/Sources` as the interactive iOS host app, and `OrlixTestRunner` as the private XCTest host application.
+The generated project includes `OrlixOS` as the delivered OS Kit/framework, `Orlix/Sources` as the interactive iOS host app, and `OrlixTestRunner` as the private XCTest host application.
 
-The generated project may depend on `libghostty-spm` for terminal UI packages needed by `OrlixTerminal`, but Linux execution remains owned by Orlix.
+The generated project may depend on `libghostty-spm` for terminal UI packages needed by `Orlix`, but Linux execution remains owned by Orlix.
 
 The full iOS proof matrix should run through repository automation using the Linux-shaped Make surface and XcodeBuildMCP, not implicitly through a generic fast local test target or a separate public command for every milestone.
 
@@ -36,7 +36,7 @@ For a selected Orlix profile, both slices must run the same Linux-visible kernel
 
 Xcode targets may run build phases that invoke repository build targets through the top-level Makefile or project Makefiles, but they must not become the source of Linux semantics or replace Kbuild proof. Target-owned payload names and bundle metadata belong in `project.yml`/target Info.plist settings; runtime code should read that metadata rather than hardcoding product bundle identifiers or resource names.
 
-XCTest targets live under project-local test roots such as `OrlixKernel/Tests/XCTest`, `OrlixHostAdapter/Tests/XCTest`, `OrlixOS/Tests/XCTest`, and `OrlixTerminal/Tests/XCTest`. They are for iOS-hosted Orlix launch, Linux test-output collection, packaging checks, OrlixOS payload/session wiring, and narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions remain in KUnit or kselftest.
+XCTest targets live under project-local test roots such as `OrlixKernel/Tests/XCTest`, `OrlixHostAdapter/Tests/XCTest`, `OrlixOS/Tests/XCTest`, and `Orlix/Tests/XCTest`. They are for iOS-hosted Orlix launch, Linux test-output collection, packaging checks, OrlixOS payload/session wiring, and narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions remain in KUnit or kselftest.
 
 Milestone proof should not treat Simulator as a lighter preflight or physical device as a different scope. The same XCTest suite and assertions must pass on both destinations. Destination-specific wiring is allowed for signing, bundle/resource lookup, simulator/device transport, or host-adapter mechanics, but not for skipping milestone scope.
 

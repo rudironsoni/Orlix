@@ -17,12 +17,12 @@ all: build
 
 help:
 	@printf '%s\n' 'Targets:'
-	@printf '%s\n' '  build     validate OrlixTerminal source ownership'
-	@printf '%s\n' '  run       build and run the OrlixTerminal iOS host app'
+	@printf '%s\n' '  build     validate Orlix source ownership'
+	@printf '%s\n' '  run       build and run the Orlix iOS host app'
 	@printf '%s\n' '  clean     no project-local generated outputs'
 
 build:
-	@printf '%s\n' 'OrlixTerminal is built through the generated OrlixTerminal Xcode scheme.'
+	@printf '%s\n' 'Orlix is built through the generated Orlix Xcode scheme.'
 
 run:
 	@$(ORLIXOS_MAKE) rootfs PROFILE="$(PROFILE)"

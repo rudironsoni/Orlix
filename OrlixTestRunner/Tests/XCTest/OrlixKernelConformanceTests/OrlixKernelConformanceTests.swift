@@ -1,7 +1,7 @@
 import XCTest
 @testable import OrlixTestRunner
 
-final class OrlixKernelUpstreamTests: XCTestCase {
+final class OrlixKernelConformanceTests: XCTestCase {
     func testProcessLifecycleProbeCompletesThroughOrlixOSTerminalSession()
         throws
     {

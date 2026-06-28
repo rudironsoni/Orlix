@@ -1,10 +1,10 @@
 #import <Foundation/Foundation.h>
 #import <XCTest/XCTest.h>
 
-@interface OrlixLinuxProofOutputParserTests : XCTestCase
+@interface OrlixKernelLogParserTests : XCTestCase
 @end
 
-@implementation OrlixLinuxProofOutputParserTests
+@implementation OrlixKernelLogParserTests
 
 - (NSString *)fixtureNamed:(NSString *)name directory:(NSString *)directory
 {

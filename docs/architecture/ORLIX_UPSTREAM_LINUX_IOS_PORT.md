@@ -8,7 +8,7 @@ Orlix does not imitate Linux by rewriting Linux core subsystems locally. It adap
 
 When upstream Linux already has a surface, implementation convention, build/test flow, or ownership model for a problem, Orlix follows that Linux shape. Orlix-specific alternatives require a concrete iOS constraint and a documented exception.
 
-The product goal is Linux userspace compatibility inside an iOS app boundary. OrlixKernel is Linux. OrlixMLibC fills the libc role for Orlix Linux userspace with glibc/musl source compatibility, not a new Orlix application ABI. Apps consume `OrlixOS` as the delivered OS Kit; they must not depend on a separate `OrlixKit` module or on `OrlixTerminal` for OS delivery.
+The product goal is Linux userspace compatibility inside an iOS app boundary. OrlixKernel is Linux. OrlixMLibC fills the libc role for Orlix Linux userspace with glibc/musl source compatibility, not a new Orlix application ABI. Apps consume `OrlixOS` as the delivered OS Kit; they must not depend on a separate `OrlixKit` module or on `Orlix` for OS delivery.
 
 ## Product Identity
 
@@ -19,7 +19,7 @@ Correct names:
 - Kernel product: `OrlixKernel.xcframework`
 - Delivered OS Kit: `OrlixOS`
 - Userspace libc: `OrlixMLibC`
-- Host app: `OrlixTerminal`
+- Host app: `Orlix`
 - Architecture port: `arch/orlix`
 - Orlix driver subtree: `drivers/orlix`
 - Host mediation: `OrlixHostAdapter`
@@ -101,8 +101,8 @@ OrlixMLibC/Sources
 OrlixMLibC/Tests
 OrlixOS/Sources
 OrlixOS/Tests
-OrlixTerminal/Sources
-OrlixTerminal/Tests
+Orlix/Sources
+Orlix/Tests
 ```
 
 Upstream Linux is generated input. The pristine upstream repository is a bare clone:
@@ -161,9 +161,9 @@ PROFILE=release
 
 Profile defconfigs are durable product-profile configs under `OrlixKernel/Sources/ports/orlix/configs`. The selected profile is materialized into the generated port tree in the location Kbuild expects.
 
-The repository Makefile is the command surface for repeatable local orchestration. It delegates to one Makefile per top-level project: `OrlixKernel/Makefile`, `OrlixHostAdapter/Makefile`, `OrlixMLibC/Makefile`, `OrlixOS/Makefile`, and `OrlixTerminal/Makefile`. The top-level public targets stay small and Linux-shaped: `all`, `build`, `setup-env`, `prepare`, `scripts`, `dtbs`, `headers_install`, `kunit`, `kselftest`, `kselftest-install`, `test`, `clean`, `mrproper`, `xcodeproj`, and `run`.
+The repository Makefile is the command surface for repeatable local orchestration. It delegates to one Makefile per top-level project: `OrlixKernel/Makefile`, `OrlixHostAdapter/Makefile`, `OrlixMLibC/Makefile`, `OrlixOS/Makefile`, and `Orlix/Makefile`. The top-level public targets stay small and Linux-shaped: `all`, `build`, `setup-env`, `prepare`, `scripts`, `dtbs`, `headers_install`, `kunit`, `kselftest`, `kselftest-install`, `test`, `clean`, `mrproper`, `xcodeproj`, and `run`.
 
-`make build` means orchestration of the current component build hooks. It first runs `make clean`, removing `Build/`, then the OrlixKernel build reclones upstream Linux through the bootstrap path. OrlixMLibC builds materialize upstream mlibc as a bare clone plus patched working source under `Build/OrlixMLibC` and apply durable OrlixMLibC inputs from `OrlixMLibC/Sources`. It must not be described as proof that every component is runtime-complete. Until OrlixTerminal is backed by a Linux console path, its build hook may be source-ownership or placeholder checks only.
+`make build` means orchestration of the current component build hooks. It first runs `make clean`, removing `Build/`, then the OrlixKernel build reclones upstream Linux through the bootstrap path. OrlixMLibC builds materialize upstream mlibc as a bare clone plus patched working source under `Build/OrlixMLibC` and apply durable OrlixMLibC inputs from `OrlixMLibC/Sources`. It must not be described as proof that every component is runtime-complete. Until Orlix is backed by a Linux console path, its build hook may be source-ownership or placeholder checks only.
 
 When Linux has a conventional target name, use that name. Orlix-specific dimensions should be variables such as `PROFILE=release`, `type=kunit,kselftest`, and `libc=orlixmlibc` when the libc lane must be explicit, not new target names. Do not add milestone, proof-lane, or artifact-path names such as `build-temporary-*`, `stage-temporary-*`, `proof-kernel-*`, or `proof-ios-*` as normal user-facing targets.
 
@@ -382,7 +382,7 @@ Durable kselftests live under `OrlixKernel/Sources/ports/orlix/overlay/tools/tes
 
 OrlixMLibC-built kselftests install under `Build/OrlixMLibC/kselftest/<profile>/` and carry `proof_lane=orlixmlibc-kselftest-syscall-uapi` metadata.
 
-XCTest targets live under project-local `Tests/XCTest/` trees such as `OrlixKernel/Tests/XCTest`, `OrlixHostAdapter/Tests/XCTest`, `OrlixOS/Tests/XCTest`, and `OrlixTerminal/Tests/XCTest`. XCTest is limited to app-hosted launch, packaging, proof-output collection, parser behavior, OrlixOS payload/session wiring, and narrow host-adapter mechanics. XCTest must not replace KUnit, kselftest, OrlixMLibC tests, or package proof as the owner of Linux-visible assertions.
+XCTest targets live under project-local `Tests/XCTest/` trees such as `OrlixKernel/Tests/XCTest`, `OrlixHostAdapter/Tests/XCTest`, `OrlixOS/Tests/XCTest`, and `Orlix/Tests/XCTest`. XCTest is limited to app-hosted launch, packaging, proof-output collection, parser behavior, OrlixOS payload/session wiring, and narrow host-adapter mechanics. XCTest must not replace KUnit, kselftest, OrlixMLibC tests, or package proof as the owner of Linux-visible assertions.
 
 ## Milestones
 

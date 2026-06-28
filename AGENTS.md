@@ -10,7 +10,7 @@ If a change makes Orlix less suitable for real Linux userspace, the change is wr
 
 OrlixKernel is Linux. It does not own shell behavior, libc behavior, package management, public syscall APIs, or a custom runtime facade. Shells and packages are normal Orlix Linux userspace binaries linked against OrlixMLibC and executed through Linux mechanisms.
 
-Apps consume `OrlixOS` for the delivered OS session and payload surface. Do not recreate a separate `OrlixKit` module or move OS delivery into `OrlixTerminal` or `OrlixHostAdapter`.
+Apps consume `OrlixOS` for the delivered OS session and payload surface. Do not recreate a separate `OrlixKit` module or move OS delivery into `Orlix` or `OrlixHostAdapter`.
 
 ## First Reads
 
@@ -187,8 +187,8 @@ Good:
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 xcodebuild \
-  -project OrlixSystem.xcodeproj \
-  -scheme OrlixKernelUpstreamTests \
+  -project Orlix.xcodeproj \
+  -scheme "OrlixKernel Conformance" \
   -configuration Debug \
   -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
   test
@@ -389,7 +389,7 @@ mount | grep '/Library/Developer/CoreSimulator/Caches'
 xcrun simctl list runtimes available
 xcrun simctl list devices available
 xcodebuild -version
-xcodebuild -project OrlixSystem.xcodeproj -list
+xcodebuild -project Orlix.xcodeproj -list
 ```
 
 ### Sandbox Caveat
@@ -529,8 +529,8 @@ xcode-storage-doctor
 xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b
 
 xcodebuild \
-  -project OrlixSystem.xcodeproj \
-  -scheme OrlixTestRunnerTests \
+  -project Orlix.xcodeproj \
+  -scheme "OrlixTestRunner Tests" \
   -configuration Debug \
   -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
   -only-testing:OrlixTestRunnerTests \

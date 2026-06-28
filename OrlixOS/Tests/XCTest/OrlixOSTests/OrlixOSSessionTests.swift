@@ -2,7 +2,7 @@ import XCTest
 import zlib
 @_spi(OrlixPrivateTesting) @testable import OrlixOS
 
-final class OrlixTerminalSessionTests: XCTestCase {
+final class OrlixOSSessionTests: XCTestCase {
     func testBootStatusMapsAlreadyStartedResult() {
         XCTAssertEqual(OrlixBootStatus(rawStatus: -3), .alreadyStarted)
         XCTAssertEqual(
@@ -7018,7 +7018,7 @@ options: [.sortedKeys]
     }
 }
 
-extension OrlixTerminalSessionTests {
+extension OrlixOSSessionTests {
 	func testOCIRuntimeFeatureReportDoesNotOverclaimBroadLinuxFeatures() throws {
 		let report = OrlixOCIRuntimeFeatureReport.current
 

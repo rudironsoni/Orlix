@@ -9,7 +9,7 @@ final class TerminalViewController: UIViewController {
 
     private var didStartBoot = false
     private let bootQueue = DispatchQueue(label: "com.rudironsoni.terminal.boot", qos: .userInitiated)
-    private let launchConfiguration: OrlixTerminalLaunchConfiguration
+    private let launchConfiguration: OrlixLaunchConfiguration
     private lazy var linuxSessionResult = launchConfiguration.makeLinuxSession()
     private var terminalOutput: OrlixTerminalOutput?
     private lazy var terminalView = TerminalView(frame: .zero)
@@ -27,7 +27,7 @@ final class TerminalViewController: UIViewController {
         builder.withBackgroundOpacity(0)
     }
 
-    init(launchConfiguration: OrlixTerminalLaunchConfiguration = .current()) {
+    init(launchConfiguration: OrlixLaunchConfiguration = .current()) {
         self.launchConfiguration = launchConfiguration
         super.init(nibName: nil, bundle: nil)
     }
@@ -96,7 +96,7 @@ final class TerminalViewController: UIViewController {
         }
         didStartBoot = true
 
-        terminalSession.receive("OrlixTerminal\r\n")
+        terminalSession.receive("Orlix\r\n")
         guard let session = linuxSession else {
             terminalSession.receive(launchConfiguration.failureMessage + "\r\n")
             return
@@ -272,11 +272,11 @@ final class TerminalViewController: UIViewController {
     }
 }
 
-struct OrlixTerminalLaunchConfiguration {
+struct OrlixLaunchConfiguration {
     static let environmentIDArgument = "--orlix-environment-id"
-    static let environmentIDDefaultsKey = "OrlixTerminal.environmentID"
+    static let environmentIDDefaultsKey = "Orlix.environmentID"
     static let runArgumentsArgument = "--orlix-run"
-    static let runArgumentsDefaultsKey = "OrlixTerminal.runArguments"
+    static let runArgumentsDefaultsKey = "Orlix.runArguments"
 
     let environmentID: String?
     let runArguments: [String]?
@@ -284,8 +284,8 @@ struct OrlixTerminalLaunchConfiguration {
     static func current(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         defaults: UserDefaults = .standard
-    ) -> OrlixTerminalLaunchConfiguration {
-        OrlixTerminalLaunchConfiguration(
+    ) -> OrlixLaunchConfiguration {
+        OrlixLaunchConfiguration(
             environmentID: environmentID(from: arguments)
                 ?? defaults.string(forKey: environmentIDDefaultsKey),
             runArguments: runArguments(from: arguments)

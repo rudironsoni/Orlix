@@ -5,12 +5,12 @@ KERNEL_MAKE := $(MAKE) -f OrlixKernel/Makefile
 HOSTADAPTER_MAKE := $(MAKE) -f OrlixHostAdapter/Makefile
 MLIBC_MAKE := $(MAKE) -f OrlixMLibC/Makefile
 ORLIXOS_MAKE := $(MAKE) -f OrlixOS/Makefile
-TERMINAL_MAKE := $(MAKE) -f OrlixTerminal/Makefile
+APP_MAKE := $(MAKE) -f Orlix/Makefile
 PROFILE ?= release
 ORLIXOS_BASE_ROOT_TREE := $(CURDIR)/Build/OrlixOS/rootfs/$(PROFILE)/base-tree
-ORLIX_BETA_SCHEME ?= OrlixTerminal
+ORLIX_BETA_SCHEME ?= Orlix
 ORLIX_BETA_ARCHIVE_DIR ?= $(CURDIR)/Build/Release
-ORLIX_BETA_ARCHIVE_PATH ?= $(ORLIX_BETA_ARCHIVE_DIR)/OrlixTerminal.xcarchive
+ORLIX_BETA_ARCHIVE_PATH ?= $(ORLIX_BETA_ARCHIVE_DIR)/Orlix.xcarchive
 ORLIX_BETA_EXPORT_DIR ?= $(ORLIX_BETA_ARCHIVE_DIR)/Export
 ORLIX_BETA_EXPORT_OPTIONS_PLIST ?=
 ORLIX_DEVELOPMENT_TEAM ?=
@@ -19,8 +19,8 @@ ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
 ORLIX_BETA_SIMULATOR_ID ?= E65F0D05-980C-4368-8CDC-2D2BF3E05757
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
-ORLIX_TERMINAL_BUNDLE_ID ?= com.rudironsoni.Orlix
-ORLIX_TERMINAL_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
+ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
+ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
 .PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-install-simulator beta-simulator-gate beta-archive beta-validate-archive beta-export-archive build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
@@ -33,16 +33,16 @@ help:
 	@printf '%s\n' '  OrlixHostAdapter/Makefile'
 	@printf '%s\n' '  OrlixMLibC/Makefile'
 	@printf '%s\n' '  OrlixOS/Makefile'
-	@printf '%s\n' '  OrlixTerminal/Makefile'
+	@printf '%s\n' '  Orlix/Makefile'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Beta targets:'
 	@printf '%s\n' '  beta-prerequisites  verify local TestFlight build prerequisites'
 	@printf '%s\n' '  beta-signing-diagnostics check local Apple signing/keychain state'
-	@printf '%s\n' '  beta-install-simulator build, fresh-install, and launch Release OrlixTerminal'
+	@printf '%s\n' '  beta-install-simulator build, fresh-install, and launch Release Orlix'
 	@printf '%s\n' '  beta-simulator-gate run focused simulator gate for first beta'
-	@printf '%s\n' '  beta-archive        generate Xcode project and archive OrlixTerminal Release'
+	@printf '%s\n' '  beta-archive        generate Xcode project and archive Orlix Release'
 	@printf '%s\n' '  beta-validate-archive inspect required app/framework/payload archive contents'
-	@printf '%s\n' '  beta-export-archive export archived OrlixTerminal for upload'
+	@printf '%s\n' '  beta-export-archive export archived Orlix for upload'
 
 setup-env: check-build-tools
 	@$(KERNEL_MAKE) setup-env
@@ -101,44 +101,44 @@ beta-install-simulator: beta-prerequisites
 		-showBuildSettings \
 		| awk -F' = ' '/TARGET_BUILD_DIR = / { build_dir=$$2 } /WRAPPER_NAME = / { wrapper=$$2 } END { if (build_dir != "" && wrapper != "") print build_dir "/" wrapper }')"; \
 	test -d "$$app" || { echo "missing built simulator app: $$app" >&2; exit 1; }; \
-	for bundle_id in $(ORLIX_TERMINAL_LEGACY_BUNDLE_IDS); do \
+	for bundle_id in $(ORLIX_APP_LEGACY_BUNDLE_IDS); do \
 		xcrun simctl terminate "$(ORLIX_BETA_SIMULATOR_ID)" "$$bundle_id" >/dev/null 2>&1 || true; \
 		xcrun simctl uninstall "$(ORLIX_BETA_SIMULATOR_ID)" "$$bundle_id" >/dev/null 2>&1 || true; \
 	done; \
-	xcrun simctl terminate "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_TERMINAL_BUNDLE_ID)" >/dev/null 2>&1 || true; \
-	xcrun simctl uninstall "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_TERMINAL_BUNDLE_ID)" >/dev/null 2>&1 || true; \
+	xcrun simctl terminate "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_APP_BUNDLE_ID)" >/dev/null 2>&1 || true; \
+	xcrun simctl uninstall "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_APP_BUNDLE_ID)" >/dev/null 2>&1 || true; \
 	xcrun simctl install "$(ORLIX_BETA_SIMULATOR_ID)" "$$app"; \
-	installed_app="$$(xcrun simctl get_app_container "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_TERMINAL_BUNDLE_ID)" app)"; \
+	installed_app="$$(xcrun simctl get_app_container "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_APP_BUNDLE_ID)" app)"; \
 	payload_info="$$installed_app/Frameworks/OrlixOS.framework/OrlixOSPayload.bundle/Info.plist"; \
 	test -f "$$payload_info" || { echo "missing installed OrlixOS payload metadata: $$payload_info" >&2; exit 1; }; \
 	plutil -extract OrlixSelectedRootMode raw -o - "$$payload_info" | grep -qx 'direct'; \
 	plutil -extract OrlixKernelCommandLine raw -o - "$$payload_info" | grep -q 'root=/dev/vda'; \
-	xcrun simctl launch "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_TERMINAL_BUNDLE_ID)"
+	xcrun simctl launch "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_APP_BUNDLE_ID)"
 
 beta-simulator-gate: beta-prerequisites
 	@set -euo pipefail; \
 	xcodegen generate --spec project.yml; \
 	xcodebuild \
 		-project Orlix.xcodeproj \
-		-scheme OrlixOSTests \
+		-scheme "OrlixOS Tests" \
 		-configuration Debug \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
-		-only-testing:OrlixOSTests/OrlixTerminalSessionTests/testPayloadBundleIsResolvedFromOrlixOSTargetMetadata \
-		-only-testing:OrlixOSTests/OrlixTerminalSessionTests/testRootImageDescriptorsComeFromOrlixOSTargetMetadata \
+		-only-testing:OrlixOSTests/OrlixOSSessionTests/testPayloadBundleIsResolvedFromOrlixOSTargetMetadata \
+		-only-testing:OrlixOSTests/OrlixOSSessionTests/testRootImageDescriptorsComeFromOrlixOSTargetMetadata \
 		test; \
 	xcodebuild \
 		-project Orlix.xcodeproj \
-		-scheme OrlixPTYRuntimeTests \
+		-scheme "OrlixRuntime Tests" \
 		-configuration Debug \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
-		-only-testing:OrlixPTYRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput \
+		-only-testing:OrlixRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput \
 		test; \
 	xcodebuild \
 		-project Orlix.xcodeproj \
-		-scheme OrlixPTYRuntimeTests \
+		-scheme "OrlixRuntime Tests" \
 		-configuration Debug \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
-		-only-testing:OrlixPTYRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
+		-only-testing:OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
 		test
 
 beta-archive: beta-prerequisites
@@ -164,7 +164,7 @@ beta-archive: beta-prerequisites
 
 beta-validate-archive:
 	@set -euo pipefail; \
-	app="$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/OrlixTerminal.app"; \
+	app="$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app"; \
 	test -d "$$app" || { echo "missing archived app: $$app" >&2; exit 1; }; \
 	test -d "$$app/Frameworks/OrlixOS.framework" || { echo "missing OrlixOS.framework in archive" >&2; exit 1; }; \
 	test -d "$$app/Frameworks/OrlixKernel.framework" || { echo "missing OrlixKernel.framework in archive" >&2; exit 1; }; \
@@ -191,7 +191,7 @@ build:
 	@$(ORLIXOS_MAKE) rootfs PROFILE="$(PROFILE)"
 	@$(KERNEL_MAKE) build PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
 	@$(HOSTADAPTER_MAKE) build
-	@$(TERMINAL_MAKE) build
+	@$(APP_MAKE) build
 
 prepare scripts dtbs kunit kselftest kselftest-install test:
 	@$(KERNEL_MAKE) $@
@@ -200,18 +200,18 @@ headers_install:
 	@$(MLIBC_MAKE) headers_install
 
 run:
-	@$(TERMINAL_MAKE) run PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
+	@$(APP_MAKE) run PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
 
 clean:
 	@set -euo pipefail; \
 	if [ -L Build ]; then echo "refusing to clean symlinked Build directory" >&2; exit 1; fi; \
 	rm -rf Build
 	@$(HOSTADAPTER_MAKE) clean
-	@$(TERMINAL_MAKE) clean
+	@$(APP_MAKE) clean
 
 mrproper:
 	@$(KERNEL_MAKE) mrproper
 	@$(HOSTADAPTER_MAKE) mrproper
 	@$(MLIBC_MAKE) mrproper
 	@$(ORLIXOS_MAKE) mrproper
-	@$(TERMINAL_MAKE) mrproper
+	@$(APP_MAKE) mrproper

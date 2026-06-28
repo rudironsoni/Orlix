@@ -80,6 +80,20 @@ targets:
     postBuildScripts:
       - name: Embed OrlixOS Payload
         basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
+          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/.orlix-payload-ready
+          - $(ORLIX_OS_ROOT_INITRAMFS_INPUT)
+          - $(ORLIX_OS_BASE_ROOT_TREE_INPUT)
+          - $(ORLIX_OS_STATE_ROOT_TREE_INPUT)
+          - $(SRCROOT)/OrlixOS/Makefile
+          - $(SRCROOT)/OrlixOS/Sources/distribution/manifest.mk
+          - $(SRCROOT)/OrlixOS/Sources/init/init.c
+          - $(SRCROOT)/OrlixOS/Sources/init/rootinit.c
+          - $(SRCROOT)/OrlixOS/Sources/make/config.mk
+          - $(SRCROOT)/OrlixOS/Sources/make/rootfs.mk
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
         script: |
           set -eu
           if [ "${ORLIX_OS_SKIP_PAYLOAD_EMBED:-NO}" = YES ]; then
@@ -210,11 +224,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOSTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixTerminal:
+  Orlix:
     type: application
     platform: iOS
     sources:
-      - path: OrlixTerminal/Sources
+      - path: Orlix/Sources
     dependencies:
       - target: OrlixOS
         embed: true
@@ -227,9 +241,9 @@ targets:
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
-        INFOPLIST_FILE: OrlixTerminal/Sources/Info.plist
+        INFOPLIST_FILE: Orlix/Sources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
-        PRODUCT_NAME: OrlixTerminal
+        PRODUCT_NAME: Orlix
   OrlixTestRunner:
     type: application
     platform: iOS
@@ -285,30 +299,30 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunner
         PRODUCT_NAME: OrlixTestRunner
         ORLIX_PROFILE: release
-  OrlixKernelHostProofTests:
+  OrlixKernelHostedTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixKernel/Tests/XCTest/OrlixKernelHostProofTests
+      - path: OrlixKernel/Tests/XCTest/OrlixKernelHostedTests
     dependencies:
-      - target: OrlixTerminal
+      - target: Orlix
       - target: OrlixKernel
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelHostProofTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelHostedTests
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OrlixKernel/Sources/include
         GCC_PREPROCESSOR_DEFINITIONS:
           - $(inherited)
           - ORLIX_APP_HOSTED_BOOT=1
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTerminal.app/OrlixTerminal
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixLinuxProofOutputParserTests:
+  OrlixKernelLogParserTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixKernel/Tests/XCTest/OrlixLinuxProofOutputParserTests
+      - path: OrlixKernel/Tests/XCTest/OrlixKernelLogParserTests
       - path: OrlixKernel/Tests/Fixtures/KUnit
         type: folder
         buildPhase: resources
@@ -316,12 +330,12 @@ targets:
         type: folder
         buildPhase: resources
     dependencies:
-      - target: OrlixTerminal
+      - target: Orlix
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixLinuxProofOutputParserTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTerminal.app/OrlixTerminal
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelLogParserTests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixHostAdapterTests:
     type: bundle.unit-test
@@ -357,53 +371,53 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunnerTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixKernelUpstreamTests:
+  OrlixKernelConformanceTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: OrlixTestRunner/Tests/XCTest/Support
-      - path: OrlixTestRunner/Tests/XCTest/OrlixKernelUpstreamTests
+      - path: OrlixTestRunner/Tests/XCTest/OrlixKernelConformanceTests
     dependencies:
       - target: OrlixTestRunner
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelUpstreamTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelConformanceTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixMLibCUpstreamTests:
+  OrlixMLibCConformanceTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: OrlixTestRunner/Tests/XCTest/Support
-      - path: OrlixTestRunner/Tests/XCTest/OrlixMLibCUpstreamTests
+      - path: OrlixTestRunner/Tests/XCTest/OrlixMLibCConformanceTests
     dependencies:
       - target: OrlixTestRunner
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixMLibCUpstreamTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixMLibCConformanceTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixCoreutilsUpstreamTests:
+  OrlixPackagesConformanceTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: OrlixTestRunner/Tests/XCTest/Support
-      - path: OrlixTestRunner/Tests/XCTest/OrlixCoreutilsUpstreamTests
+      - path: OrlixTestRunner/Tests/XCTest/OrlixPackagesConformanceTests
     dependencies:
       - target: OrlixTestRunner
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixCoreutilsUpstreamTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixPackagesConformanceTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixPTYRuntimeTests:
+  OrlixRuntimeTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixTestRunner/Tests/XCTest/OrlixPTYRuntimeTests
+      - path: OrlixTestRunner/Tests/XCTest/OrlixRuntimeTests
     dependencies:
       - target: OrlixTestRunner
       - target: OrlixOS
@@ -417,7 +431,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixPTYRuntimeTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixRuntimeTests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
         BUNDLE_LOADER: $(TEST_HOST)
 schemes:
@@ -425,16 +439,16 @@ schemes:
     build:
       targets:
         OrlixKernel: all
-  OrlixTerminal:
+  Orlix:
     build:
       targets:
-        OrlixTerminal: all
+        Orlix: all
     run:
       config: Debug
-      executable: OrlixTerminal
+      executable: Orlix
     archive:
       config: Release
-  OrlixOSTests:
+  "OrlixOS Tests":
     build:
       targets:
         OrlixTestRunner: all
@@ -444,27 +458,27 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixOSTests
-  OrlixKernelHostProofTests:
+  "OrlixKernel Hosted Tests":
     build:
       targets:
-        OrlixTerminal: all
-        OrlixKernelHostProofTests: test
+        Orlix: all
+        OrlixKernelHostedTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixKernelHostProofTests
-  OrlixLinuxProofOutputParserTests:
+        - name: OrlixKernelHostedTests
+  "OrlixKernel Log Parser Tests":
     build:
       targets:
-        OrlixTerminal: all
-        OrlixLinuxProofOutputParserTests: test
+        Orlix: all
+        OrlixKernelLogParserTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixLinuxProofOutputParserTests
-  OrlixHostAdapterTests:
+        - name: OrlixKernelLogParserTests
+  "OrlixHostAdapter Tests":
     build:
       targets:
         OrlixHostAdapterTests: test
@@ -473,7 +487,7 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixHostAdapterTests
-  OrlixTestRunnerTests:
+  "OrlixTestRunner Tests":
     build:
       targets:
         OrlixTestRunner: all
@@ -483,45 +497,45 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixTestRunnerTests
-  OrlixPTYRuntimeTests:
+  "OrlixRuntime Tests":
     build:
       targets:
         OrlixTestRunner: all
-        OrlixPTYRuntimeTests: test
+        OrlixRuntimeTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixPTYRuntimeTests
+        - name: OrlixRuntimeTests
           selectedTests:
-            - OrlixPTYRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput
-  OrlixKernelUpstreamTests:
+            - OrlixRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput
+  "OrlixKernel Conformance":
     build:
       targets:
         OrlixTestRunner: all
-        OrlixKernelUpstreamTests: test
+        OrlixKernelConformanceTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixKernelUpstreamTests
-  OrlixMLibCUpstreamTests:
+        - name: OrlixKernelConformanceTests
+  "OrlixMLibC Conformance":
     build:
       targets:
         OrlixTestRunner: all
-        OrlixMLibCUpstreamTests: test
+        OrlixMLibCConformanceTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixMLibCUpstreamTests
-  OrlixCoreutilsUpstreamTests:
+        - name: OrlixMLibCConformanceTests
+  "OrlixPackages Conformance":
     build:
       targets:
         OrlixTestRunner: all
-        OrlixCoreutilsUpstreamTests: test
+        OrlixPackagesConformanceTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixCoreutilsUpstreamTests
+        - name: OrlixPackagesConformanceTests
