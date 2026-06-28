@@ -24955,3 +24955,20 @@ Evidence:
 
 Boundary:
 - This proves the personal bundle identifier is wired through durable project sources and the simulator app installs and launches under `com.rudironsoni.OrlixTerminal`. It does not prove a full beta simulator gate after the local Xcode/CoreSimulator version mismatch appeared.
+
+## 2026-06-28 Xcode recommended build settings checkpoint
+
+Changes:
+- Incorporated the checked Xcode recommendation dialog build settings into `project.yml`, the durable XcodeGen source of truth.
+- Enabled `ENABLE_USER_SCRIPT_SANDBOXING=YES` at project base settings scope.
+- Enabled `CLANG_ENABLE_MODULE_VERIFIER=YES` for the targets named by Xcode: `OrlixKernel`, `OrlixOS`, and `OrlixTestRunner`.
+- Did not add the asset-catalog generated symbol setting because that recommendation was unchecked in the dialog.
+
+Evidence:
+- `xcodegen generate --spec project.yml` exited 0 when run with `USER=rudironsoni LOGNAME=rudironsoni`.
+- Generated `OrlixSystem.xcodeproj/project.pbxproj` contains `ENABLE_USER_SCRIPT_SANDBOXING = YES;` and `CLANG_ENABLE_MODULE_VERIFIER = YES;`.
+- `git diff --check` exited 0.
+- `xcodebuild -project OrlixSystem.xcodeproj -list` was attempted but did not pass in this execution context: CoreSimulatorService became unavailable and package resolution hit `sandbox-exec: sandbox_apply: Operation not permitted`. This is recorded as an environment validation blocker, not a source validation pass.
+
+Boundary:
+- This checkpoint wires the selected Xcode recommendations into XcodeGen and verifies generation. It does not prove a clean Xcode build because the local Xcode/CoreSimulator/sandbox execution path is currently unhealthy.
