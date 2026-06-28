@@ -24890,3 +24890,50 @@ Boundary: this proves live registry pull plus OCI layer import stages actual Alp
 - Validation passed: `swiftc -parse OrlixOS/Sources/Session/OrlixEnvironmentImageMaterialization.swift OrlixTestRunner/Sources/AppDelegate.swift OrlixTestRunner/Sources/OrlixUpstreamTestRunner.swift OrlixOS/Tests/XCTest/OrlixOSTests/OrlixTerminalSessionTests.swift`; repeated `make -f OrlixKernel/Makefile build PROFILE=release` after the kernel changes; wrapper-backed `xcodebuild -quiet -project OrlixSystem.xcodeproj -scheme OrlixTestRunnerTests -configuration Debug -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' build`; and `rtk git diff --check`.
 - Current runtime status: direct simulator launch `--orlix-runtime-test-spec ociLiveRegistryAlpineLinuxMaterialization` still fails. The latest artifact reaches `ORLIX_LINUX_MATERIALIZATION_COMMAND_BEGIN`, emits three `mlibc: fallocate() is no-op` lines, then traps in guest `mke2fs` with `Orlix: hosted user trap signal 5 task=mke2fs pid=34 at pc 0x60000008650c lr=0x6000000a2498`, and the shell exits status 133. No recent Orlix/OrlixTestRunner host crash report was found, and only the single iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757` was booted during the proof.
 - Boundary: this checkpoint improves real Linux virtiofs behavior needed by OCI materialization, but it does not prove phase 1 prepared the generated Alpine root, does not run phase 2, and does not prove booting the generated Alpine root, `apk` inside that root, arbitrary OCI compatibility, networking, or beta readiness.
+
+## 2026-06-28 TestFlight beta release gate checkpoint
+
+- Added first-beta release gates without creating a new app, scheme, package manager, proof ladder, runtime facade, or host-side Linux behavior replacement.
+- `project.yml` remains the Xcode source of truth. The existing `OrlixTerminal` scheme now has a Release archive config, `OrlixTerminal` has automatic signing enabled, and simulator builds force arm64 to avoid ambiguous simulator architecture work.
+- Added Makefile beta targets:
+  - `beta-prerequisites` checks local XcodeGen/Xcode prerequisites.
+  - `beta-signing-diagnostics` checks available Apple signing identities, local provisioning profile count, and whether the requested signing identity can codesign a temporary framework.
+  - `beta-install-simulator` builds the existing `OrlixTerminal` Release simulator app, uninstalls stale `org.orlix.OrlixTerminal`, installs the current build on the single known-good simulator, verifies the installed OrlixOS payload selects the direct release root and `root=/dev/vda`, then launches the app.
+  - `beta-simulator-gate` runs focused OrlixOS payload metadata tests, PTY runtime smoke, and the existing focused OCI MVP descriptor-defaults proof.
+  - `beta-archive` builds release OrlixMLibC, OrlixOS rootfs, iPhoneOS OrlixKernel archive, OrlixOS kernel payload, then archives the existing `OrlixTerminal` scheme.
+  - `beta-validate-archive` checks an archive for `OrlixTerminal.app`, embedded `OrlixOS.framework`, embedded `OrlixKernel.framework`, and OrlixOS payload resources.
+  - `beta-export-archive` exports a validated archive with a caller-provided export options plist.
+- Added generic optional archive signing inputs: `ORLIX_CODE_SIGN_IDENTITY`, `ORLIX_PROVISIONING_PROFILE_SPECIFIER`, and `ORLIX_BETA_EXPORT_OPTIONS_PLIST`. These are command-line knobs only; no personal team, profile, or certificate is hardcoded into `project.yml`.
+- Added `docs/release/testflight-beta.md` with exact first-beta commands, scoped beta claims, non-claims, manual signing notes, upload/export notes, and post-beta catalog for OCI/runtime/package/conformance work.
+- Added `docs/release/ExportOptions-AppStore.plist.example` as a command-line export template with placeholder team id. It is a release helper only, not generated build output.
+- Fixed the iPhoneOS archive linker blocker in `OrlixHostAdapter` by replacing `__builtin___clear_cache` with a HostAdapter-local wrapper around Darwin `sys_icache_invalidate`. This keeps private Darwin cache maintenance inside HostAdapter and invisible to OrlixKernel, OrlixOS, and OrlixMLibC.
+
+Validation:
+- `xcrun simctl list devices booted` showed only iPhone 17 `E65F0D05-980C-4368-8CDC-2D2BF3E05757`.
+- `make beta-prerequisites` exited 0.
+- `git diff --check` and `git diff --cached --check` exited 0.
+- `make beta-install-simulator` exited 0 twice. The second run left `org.orlix.OrlixTerminal` launched from the current Release simulator app with installed payload metadata `OrlixSelectedRootMode=direct` and `OrlixKernelCommandLine` containing `root=/dev/vda`.
+- Final screenshot `/tmp/orlix-beta-final-terminal.png` showed `OrlixTerminal` at a real `sh-5.3#` prompt after direct-root boot, not test output.
+- `make beta-simulator-gate` exited 0. The OrlixOS metadata tests passed 2 selected tests with 0 failures; the PTY/runtime proof target exited 0. The runtime proof log still emitted `I/O error, dev vdb` lines, so this evidence supports the focused beta gate only, not broad runtime health.
+- Recent crash scan under `~/Library/Logs/DiagnosticReports` found no recent Orlix crash reports. Simulator `launchctl getenv ORLIX_RUNTIME_TEST_SPEC` returned empty.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` built the release dependency path through OrlixMLibC, OrlixOS rootfs, iPhoneOS OrlixKernel framework, OrlixOS framework, payload copy, and app link, then failed during iPhoneOS archive codesigning of `OrlixKernel.framework` with `errSecInternalComponent`. Xcode selected `Apple Development: Rudimar Luis Ronsoni Junior (A9C4N82KYY)` and `iOS Team Provisioning Profile: *`. No `Build/Release/OrlixTerminal.xcarchive` was produced, so `beta-validate-archive` remains blocked by local Apple signing/keychain/provisioning state.
+- `security find-identity -v -p codesigning` found valid Apple Development, Apple Distribution, and Developer ID identities, including `Apple Distribution: Rudimar Luis Ronsoni Junior (ZQ3L7M567L)`.
+- No local provisioning profiles were present under `~/Library/MobileDevice/Provisioning Profiles`.
+- Manual codesign of a temporary copy of the failed `OrlixKernel.framework` with both the Xcode-selected Apple Development identity and the Apple Distribution identity failed with `errSecInternalComponent`. Ad-hoc signing of the same framework copy succeeded and verified, proving the framework is signable and the failure is certificate/private-key/keychain access, not framework structure.
+- `security show-keychain-info login.keychain-db` failed with `User interaction is not allowed`, matching a noninteractive keychain/private-key access blocker.
+- After adding the export target, `make -n beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=/tmp/ExportOptions.plist` printed the expected `xcodebuild -exportArchive` command, and `make beta-prerequisites` still exited 0.
+- `make beta-signing-diagnostics ORLIX_CODE_SIGN_IDENTITY="Apple Distribution"` failed fast after listing 5 valid signing identities and `provisioning_profiles=0`; the temporary framework codesign step failed with `errSecInternalComponent`. This confirms the current TestFlight archive blocker without rerunning the full release build.
+- `plutil -lint docs/release/ExportOptions-AppStore.plist.example` exited 0, and `make -n beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=docs/release/ExportOptions-AppStore.plist.example` printed the expected archive validation and export command shape.
+
+Boundary:
+- First-beta simulator readiness and repeatable stale-install avoidance are now covered by commands. TestFlight archive/upload is not complete until the external Apple signing blocker is resolved and `make beta-archive ORLIX_DEVELOPMENT_TEAM=<team>` plus `make beta-validate-archive` pass.
+
+## 2026-06-28 TestFlight beta current status
+
+Current status:
+
+- Local checkpoint `23d491b2 build: add TestFlight beta release gates` is committed on `main` and is one commit ahead of `origin/main`.
+- Push attempts using `git push`, `rtk git push`, and `git push origin HEAD:main` are rejected by the command executor before Git runs with `approval required by policy, but AskForApproval is set to Never`.
+- The first-beta repository-side command surface is in place: project generation from `project.yml`, Release simulator fresh install, focused simulator gate, iPhoneOS archive, archive validation, signing diagnostics, and archive export.
+- The remaining TestFlight blocker is external Apple signing state in this execution context: no local provisioning profiles are installed, `login.keychain-db` reports `User interaction is not allowed`, and `make beta-signing-diagnostics ORLIX_CODE_SIGN_IDENTITY="Apple Distribution"` fails with `errSecInternalComponent` on the temporary framework codesign step.
+- Do not broaden scope into OCI feature work, upstream conformance expansion, package ladder work, or terminal polish until the signing/export path is unblocked or a first beta has shipped.
