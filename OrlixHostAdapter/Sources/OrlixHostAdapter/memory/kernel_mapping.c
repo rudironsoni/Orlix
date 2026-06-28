@@ -43,6 +43,11 @@ static struct OrlixHostIOMapping *OrlixHostIOMappings;
 static struct OrlixHostKernelShadowMapping *OrlixHostKernelShadowMappings;
 static struct OrlixHostUserMapping *OrlixHostUserMappings;
 
+#define ORLIX_HOST_IOMEM_BASE 0x0000780000000000UL
+#define ORLIX_HOST_IOMEM_SIZE 0x0000000010000000UL
+
+static unsigned long OrlixHostIOMappingCursor = ORLIX_HOST_IOMEM_BASE;
+
 static void OrlixHostUserMemoryBarrier(void)
 {
     __asm__ volatile("dmb ish" ::: "memory");
@@ -72,6 +77,47 @@ static vm_size_t OrlixHostRoundPageLength(unsigned long length)
     }
 
     return (requested + page_size - 1) & ~(page_size - 1);
+}
+
+static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
+{
+    unsigned long page_size = orlix_host_memory_page_size();
+    unsigned long aperture_end = ORLIX_HOST_IOMEM_BASE + ORLIX_HOST_IOMEM_SIZE;
+    unsigned long attempts;
+
+    if (!mapped || length == 0 || length > ORLIX_HOST_IOMEM_SIZE) {
+        return -1;
+    }
+
+    attempts = ORLIX_HOST_IOMEM_SIZE / page_size;
+    for (unsigned long index = 0; index < attempts; index++) {
+        vm_address_t target;
+        kern_return_t status;
+
+        if (OrlixHostIOMappingCursor < ORLIX_HOST_IOMEM_BASE ||
+            OrlixHostIOMappingCursor > aperture_end - length) {
+            OrlixHostIOMappingCursor = ORLIX_HOST_IOMEM_BASE;
+        }
+
+        target = (vm_address_t)OrlixHostIOMappingCursor;
+        status = vm_allocate(mach_task_self(),
+                             &target,
+                             length,
+                             VM_FLAGS_FIXED);
+        if (status == KERN_SUCCESS &&
+            target == (vm_address_t)OrlixHostIOMappingCursor) {
+            *mapped = target;
+            OrlixHostIOMappingCursor += length;
+            if (OrlixHostIOMappingCursor >= aperture_end) {
+                OrlixHostIOMappingCursor = ORLIX_HOST_IOMEM_BASE;
+            }
+            return 0;
+        }
+
+        OrlixHostIOMappingCursor += page_size;
+    }
+
+    return -1;
 }
 
 static void OrlixHostUnmapPages(unsigned long target_address,
@@ -991,11 +1037,8 @@ __attribute__((visibility("hidden"))) void *orlix_host_ioremap(
     }
 
     active_tls = OrlixHostEnterHostTls();
-    status = vm_allocate(mach_task_self(),
-                         &mapped,
-                         rounded_length,
-                         VM_FLAGS_ANYWHERE);
-    if (status != KERN_SUCCESS || mapped == 0) {
+    status = OrlixHostAllocateIOMapping(rounded_length, &mapped);
+    if (status != 0 || mapped == 0) {
         goto out;
     }
 
