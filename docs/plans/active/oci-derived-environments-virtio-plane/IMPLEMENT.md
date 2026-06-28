@@ -25054,3 +25054,18 @@ Blocked validation:
 
 Boundary:
 - This fixes the declared Xcode user-script sandbox contract for the `cp -R` source and destination paths reported by Xcode. It does not prove a full Xcode build until the current CoreSimulator/package-resolution environment blocker is cleared.
+
+## 2026-06-28 beta/TestFlight goal rewrite
+
+Current status:
+- `docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md` now centers the active goal on the first TestFlight-ready Orlix beta while preserving the OCI-derived Linux environment objective.
+
+Changes:
+- Reframed the beta deliverable around `Orlix` as the terminal app surface, `com.rudironsoni.Orlix`, `project.yml` as Xcode source of truth, payload sandbox declarations, archive/signing readiness, and keeping test runners separate from the installed app.
+- Preserved the ownership boundaries: OrlixOS as Kit/distro/session/payload layer, OrlixKernel as Linux, OrlixHostAdapter as private iOS/Darwin mechanics, and OrlixMLibC as a Linux consumer.
+- Kept OCI MVP as desired for first beta only when it does not block delivery, and retained the forbidden directions around Docker daemon/runtime dependency, custom ABI, proof packages, stamp ladders, and host simulations.
+
+Validation:
+- `wc -m docs/plans/active/oci-derived-environments-virtio-plane/GOAL.md` reported 3995 characters.
+- `python3 .codex/hooks/compact_plan_check.py` exited 0.
+- `git diff --check` exited 0.

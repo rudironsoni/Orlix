@@ -1,29 +1,47 @@
 # Goal
-Deliver OCI-derived Linux environments beside the default Orlix root. The product must feel like a real, capable Linux terminal on iOS: Linux exec, PTYs/inherited stdio, filesystems, namespaces, cgroups, networking, devices, `orlix run`, registry input, lifecycle, and package workflows run through Linux behavior.
 
-This is feature delivery. Parser rejections are temporary truth boundaries while implementation catches up. Do not optimize rejection coverage, unsupported-field reports, proof packages, stamp ladders, host simulation, or documentation theater.
+Ship the first TestFlight-ready Orlix beta while continuing OCI-derived Linux environment work on the correct architecture.
 
-## Reference Model
-Use Docker, the OCI specs, Apple `container`, and Apple `containerization` as design references, adapted to Orlix rules. Follow their proven separations and UX concepts: image reference, pull, unpack/materialize, content-addressed inputs, bundle/config, create, start, exec, kill, wait, state, delete, healthcheck, typed process I/O, signals, events, and lifecycle records.
+Orlix must feel like a real Linux terminal on iOS: open to an interactive terminal, boot the delivered OrlixOS payload, run Linux userspace through OrlixKernel and OrlixMLibC, and tie claims to behavior proven on Simulator or device.
 
-Do not import their incompatible runtime architecture. No Docker daemon, `runc`, Apple Containerization runtime dependency, Virtualization.framework, VM-per-container model, `vminitd`, `vmnet`, vsock runtime API, Rosetta, or custom Orlix ABI.
+## Beta Deliverable
 
-## Ownership
-- OrlixKernel is Linux. Linux behavior belongs in upstream Linux, Orlix arch port, Linux-native drivers, boot code, or Linux-facing port glue.
-- OrlixHostAdapter owns private iOS/Darwin mechanics only. It must not own Linux policy, ABI, syscalls, packages, OCI lifecycle, cgroups, namespaces, filesystems, shells, or runtime semantics.
-- OrlixMLibC consumes Linux. Keep it unpatched unless a defect is truly libc-owned. If mlibc exposes a Linux-surface issue, fix Linux.
-- OrlixOS is the Kit/session layer. It owns OCI import, descriptors, rootfs/package assembly, payload metadata, environment selection, lifecycle records, app APIs, and Linux-visible orchestration.
-- Virtio is internal device plumbing below Linux subsystems. It is not public ABI, VM lifecycle, runtime substitute, Linux policy copy, or a Linux-semantic clone.
+The beta priority is delivery readiness, not perfection. The repository must build from Xcode and command line using `project.yml` as source of truth, produce `Orlix` with bundle id `com.rudironsoni.Orlix`, embed `OrlixOS` correctly under Xcode user-script sandboxing, archive/sign when Apple signing assets are valid, and be ready for TestFlight.
 
-OrlixOS may preserve OCI intent and pass Linux-visible config to sessions, but it must not decide Linux semantics: cgroups, namespaces, mounts, devices, signals, wait/reaping, fd tables, procfs, sysfs, devtmpfs, devpts, sockets, exec, interpreters, permissions, syscalls, or package behavior. Missing behavior belongs in OrlixKernel or Linux-facing port code, not Swift, HostAdapter, fixtures, reports, or metadata.
+The first screen is the terminal. Users must not see harness tests in the installed app. Test runners, conformance schemes, and proof fixtures remain separate from product and named by Orlix architecture.
 
-## Build Efficiency
-For OrlixKernel/Linux, OrlixMLibC/mlibc, and Coreutils, use proven build-system mechanisms: Linux Kbuild, Meson/Ninja, Autotools/Make, and optional `ccache`/`sccache`. Caches accelerate work only. They are not proof. Cache misses, absent tools, stale dirs, or changed inputs fall back to the owning build. Do not invent package managers, stores, freshness DBs, Python caches, proof ladders, or stamp ladders.
+## Architecture
+
+- `Orlix` is the iOS app and terminal surface.
+- `OrlixOS` is the Kit/distro/session/payload layer. It owns rootfs assembly, OCI import/materialization, environment selection, lifecycle records, and app-facing session APIs.
+- `OrlixKernel` is upstream Linux plus the Orlix arch/device port. Linux behavior belongs in Linux, not OrlixOS or OrlixHostAdapter.
+- `OrlixHostAdapter` owns private iOS/Darwin mechanics only. It must not expose Linux ABI, policy, cgroups, namespaces, filesystems, packages, or OCI runtime semantics.
+- `OrlixMLibC` consumes the Linux surface. If mlibc exposes a Linux-surface issue, fix the Linux surface. Keep mlibc unpatched unless the defect is truly libc-owned.
+
+Do not recreate `OrlixKit`, custom Linux facades, fake cgroups, fake drivers, custom ABI, custom package managers, proof packages, stamp ladders, freshness DBs, or host simulations that replace Linux behavior.
+
+## OCI MVP Direction
+
+Aim to include an OCI MVP in the first beta if it does not block app delivery. Follow proven Docker/OCI and Apple container/containerization concepts where they fit Orlix: image reference, pull/import, unpack/materialize, descriptor/config, create/start/exec/kill/wait/state/delete, typed stdio, signals, lifecycle records, and truthful feature reporting.
+
+Adapt concepts, not incompatible runtime architecture. Do not add Docker daemon, `runc`, Apple runtime dependencies, Virtualization.framework, VM-per-container design, `vminitd`, `vmnet`, Rosetta, vsock runtime API, or custom Orlix ABI.
+
+## Build And Project Rules
+
+Use battle-tested build mechanisms only: Linux Kbuild, Meson/Ninja, Autotools/Make, XcodeGen, Xcode, and optional `ccache`/`sccache`. Caches accelerate work only. They are never proof.
+
+`project.yml` is authoritative for Xcode targets, schemes, bundle ids, signing, script inputs/outputs, and generated project shape. Do not hand-edit generated Xcode projects as durable fixes.
+
+Payload embedding must declare every source and destination required by Xcode user-script sandboxing, including child paths such as `Info.plist`, `.orlix-payload-ready`, `rootfs`, and `arch`.
 
 ## Proof
-Implement and prove behavior through Linux/kselftest, OrlixKernel probes, OrlixMLibC tests, Coreutils/upstream package tests, OrlixOS/XCTest runtime tests, hosted terminal proofs, and Linux-oracle comparisons. Package/rootfs/fixture assembly may exist only to launch those suites. It is not readiness proof, package management, stamp tracking, fresh DB, or a separate conformance framework.
 
-Simulator/app-hosted tests must prove claimed product runtime behavior. Mocked tests alone are insufficient. OCI reports may claim only implemented behavior backed by relevant tests. Parser rejections, fixtures, stamps, manifests, feature JSON, build metadata, and generated reports are not runtime proof.
+Behavior must be proven with the real test suite and real app-hosted execution. Mocked tests alone are insufficient.
 
-## Product Model
-One OrlixKernel runs the default root, imported roots, and OCI-derived environments. Deliver a first-class terminal and runtime surface, not a parser demo, host compatibility layer, custom runtime facade, fake OrlixOS Linux subsystem, or shallow unsupported-field matrix.
+Acceptable evidence includes Linux/kselftest, OrlixKernel probes, OrlixMLibC tests, Coreutils/upstream package tests, OrlixOS/XCTest runtime tests, hosted terminal proofs, Linux-oracle comparisons, XcodeGen validation, Xcode build/archive validation, and app launch checks.
+
+Do not claim runtime readiness from parser rejection coverage, generated reports, fixture assembly, stamps, manifests, build metadata, or package/rootfs construction alone.
+
+## Deferred After First Beta
+
+After TestFlight beta publication, continue deeper OCI work: richer runtime spec coverage, registry UX, host-folder mounts, virtio-fs, virtio-net, DNS/NAT, namespaces, cgroup v2 controllers, resource accounting, broader package workflows, native performance benchmarks, and expanded Linux oracle coverage.
