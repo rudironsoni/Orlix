@@ -1,4 +1,4 @@
-name: OrlixSystem
+name: Orlix
 options:
   bundleIdPrefix: com.rudironsoni
   deploymentTarget:
@@ -228,7 +228,7 @@ targets:
       base:
         CODE_SIGN_STYLE: Automatic
         INFOPLIST_FILE: OrlixTerminal/Sources/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTerminal
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
         PRODUCT_NAME: OrlixTerminal
   OrlixTestRunner:
     type: application
