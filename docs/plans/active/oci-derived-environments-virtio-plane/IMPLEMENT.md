@@ -25030,3 +25030,27 @@ Blocked validation:
 
 Boundary:
 - This checkpoint proves the durable XcodeGen/project naming, app bundle target naming, script-sandbox input declaration, and current-source reference cleanup. It does not prove simulator build/test execution, app launch, or TestFlight archive after the rename because CoreSimulator is unhealthy in the current execution context.
+
+## 2026-06-28 OrlixOS payload script sandbox child-path fix
+
+Current status:
+- The `OrlixOS` target payload embed script now declares the concrete payload child paths that Xcode's user script sandbox denied during `cp -R`.
+
+Changes:
+- Extended the `OrlixOS` target `Embed OrlixOS Payload` phase in `project.yml` with source inputs for `Info.plist`, `.orlix-payload-ready`, `rootfs`, and `arch` under `OrlixKernelPayload.bundle`.
+- Extended the same script phase with destination outputs for `Info.plist`, `.orlix-payload-ready`, `rootfs`, and `arch` under the embedded `OrlixOSPayload.bundle`.
+
+Validation:
+- `env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" USER=rudironsoni LOGNAME=rudironsoni xcodegen generate --spec project.yml` exited 0 and regenerated `Orlix.xcodeproj`.
+- `xcodegen dump --spec project.yml` exited 0.
+- Generated `Orlix.xcodeproj/project.pbxproj` contains the new concrete input paths for `OrlixKernelPayload.bundle/Info.plist`, `.orlix-payload-ready`, `rootfs`, and `arch`.
+- Generated `Orlix.xcodeproj/project.pbxproj` contains the new concrete output paths for `OrlixOSPayload.bundle/Info.plist`, `.orlix-payload-ready`, `rootfs`, and `arch`.
+- `git diff --check` exited 0.
+
+Blocked validation:
+- `xcode-storage-doctor` still fails in this executor because `simctl runtimes` and `simctl devices` fail through the wrapper.
+- `xcrun simctl list devices booted` fails before listing devices because CoreSimulatorService/simdiskimaged is unavailable.
+- `xcodebuild -project Orlix.xcodeproj -list` fails before project listing completes because Swift package resolution reports `sandbox-exec: sandbox_apply: Operation not permitted` after CoreSimulatorService/simdiskimaged errors.
+
+Boundary:
+- This fixes the declared Xcode user-script sandbox contract for the `cp -R` source and destination paths reported by Xcode. It does not prove a full Xcode build until the current CoreSimulator/package-resolution environment blocker is cleared.
