@@ -12,6 +12,7 @@ configFiles:
   Release: OrlixOS/Sources/distribution/target-settings.xcconfig
 settings:
   base:
+    ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: "0.1"
@@ -222,6 +223,7 @@ targets:
           - GhosttyTheme
     settings:
       base:
+        CODE_SIGN_STYLE: Automatic
         INFOPLIST_FILE: OrlixTerminal/Sources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: org.orlix.OrlixTerminal
         PRODUCT_NAME: OrlixTerminal
@@ -426,6 +428,8 @@ schemes:
     run:
       config: Debug
       executable: OrlixTerminal
+    archive:
+      config: Release
   OrlixOSTests:
     build:
       targets:

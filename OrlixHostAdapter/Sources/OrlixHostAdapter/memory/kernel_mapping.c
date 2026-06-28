@@ -2,6 +2,7 @@
 #include "OrlixHostAdapter/runtime/host_tls.h"
 #include "internal/asm/host_trap.h"
 
+#include <libkern/OSCacheControl.h>
 #include <mach/mach.h>
 #include <mach/vm_map.h>
 #include <stdbool.h>
@@ -45,6 +46,15 @@ static struct OrlixHostUserMapping *OrlixHostUserMappings;
 static void OrlixHostUserMemoryBarrier(void)
 {
     __asm__ volatile("dmb ish" ::: "memory");
+}
+
+static void OrlixHostInvalidateInstructionCache(unsigned long address,
+                                                unsigned long length)
+{
+    if (address == 0 || length == 0) {
+        return;
+    }
+    sys_icache_invalidate((void *)address, (size_t)length);
 }
 
 __attribute__((visibility("hidden"))) unsigned long orlix_host_memory_page_size(void)
@@ -446,8 +456,8 @@ static int OrlixHostMapShadowUserPages(unsigned long target_address,
                                         length);
     }
     if (executable) {
-        __builtin___clear_cache((char *)(mapping->target_address + offset),
-                                (char *)(mapping->target_address + offset + length));
+        OrlixHostInvalidateInstructionCache(mapping->target_address + offset,
+                                            length);
     }
 
     segment = malloc(sizeof(*segment));
@@ -907,9 +917,8 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
             OrlixHostTranslateLinuxSyscalls(
                 (void *)(mapping->target_address + offset),
                 input->length);
-            __builtin___clear_cache(
-                (char *)(mapping->target_address + offset),
-                (char *)(mapping->target_address + offset + input->length));
+            OrlixHostInvalidateInstructionCache(
+                mapping->target_address + offset, input->length);
         }
 
         segment = malloc(sizeof(*segment));
