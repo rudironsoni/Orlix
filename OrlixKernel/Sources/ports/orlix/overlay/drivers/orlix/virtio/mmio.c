@@ -3310,8 +3310,8 @@ orlix_virtio_mmio_fs_done_readlink:
 			if (!orlix_virtio_mmio_fs_make_child_path(
 				    parent_entry.name, host_entry.name,
 				    child_path, sizeof(child_path)) ||
-			    !orlix_virtio_mmio_fs_path_nodeid_for_path(
-				    child_path, false, &child_nodeid) ||
+			 !orlix_virtio_mmio_fs_path_nodeid_for_path(
+				 child_path, true, &child_nodeid) ||
 			    !orlix_virtio_mmio_append_fs_path_dirent(
 				    &dirents.header,
 				    sizeof(dirents.header) + payload_capacity,
@@ -3371,10 +3371,10 @@ orlix_virtio_mmio_fs_done_readlink:
 							    parent_path, host_entry.name,
 							    child_path,
 							    sizeof(child_path)) ||
-				    !orlix_virtio_mmio_fs_path_nodeid_for_path(
-					    child_path,
-					    false,
-					    &child_nodeid) ||
+			 !orlix_virtio_mmio_fs_path_nodeid_for_path(
+				 child_path,
+				 true,
+				 &child_nodeid) ||
 				    !orlix_virtio_mmio_append_fs_path_dirent(
 					    &dirents.header,
 					    sizeof(dirents.header) + payload_capacity,
@@ -3472,8 +3472,8 @@ orlix_virtio_mmio_fs_done_readlink:
 			if (!orlix_virtio_mmio_fs_make_child_path(
 				    parent_entry.name, host_entry.name,
 				    child_path, sizeof(child_path)) ||
-			    !orlix_virtio_mmio_fs_path_nodeid_for_path(
-				    child_path, false, &child_nodeid) ||
+			 !orlix_virtio_mmio_fs_path_nodeid_for_path(
+				 child_path, true, &child_nodeid) ||
 			    !orlix_virtio_mmio_append_fs_path_direntplus(
 				    &dirents.header,
 				    sizeof(dirents.header) + payload_capacity,

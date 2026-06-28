@@ -105,3 +105,6 @@ init.*.zsh
 
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+
+# Local agent token accounting state
+/.tokensave/
