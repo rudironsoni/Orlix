@@ -24991,3 +24991,14 @@ Validation:
 
 Remaining blocker:
 - `xcodebuild -project Orlix.xcodeproj -list` failed in this Codex executor during Swift package/CoreSimulator handling, consistent with the existing sandboxed Xcode limitation. This does not invalidate the XcodeGen/project rename proof, but full archive/signing still needs a normal Xcode/Terminal context with fixed Apple signing state.
+
+## 2026-06-28 `.tokensave` history cleanup checkpoint
+
+Changes:
+- Added `/.tokensave/` to `.gitignore`.
+- Removed `.tokensave/branch-meta.json`, `.tokensave/config.json`, and `.tokensave/tokensave.db` from the Git index while preserving the local directory.
+- Rewrote only the latest checkpoint commit because `.tokensave` existed only in that commit.
+
+Validation:
+- `git log --oneline -- .tokensave` showed only `f0e0452f chore: checkpoint local beta work` before the rewrite.
+- `git rm --cached -r .tokensave` removed the tracked token-accounting files from the index.

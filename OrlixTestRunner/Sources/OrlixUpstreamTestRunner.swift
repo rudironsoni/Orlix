@@ -854,6 +854,10 @@ enum OrlixAppLaunchRuntimeRunner {
 			output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof(
 				useLinuxMaterialization: true
 			).run()
+		case "ociLiveRegistryAlpineMaterializationProbe":
+			output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof(
+				probeLinuxMaterialization: true
+			).run()
 		case "ociLiveRegistryAlpineGeneratedRoot":
 			output = try OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof
 				.validatePreparedLinuxMaterializedAlpine()
@@ -2069,12 +2073,17 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
     private static let environmentID =
         "oci-live-registry-alpine-rootfs-import-test-fixture"
 
-    private let fileManager = FileManager.default
-    private let useLinuxMaterialization: Bool
+	private let fileManager = FileManager.default
+	private let useLinuxMaterialization: Bool
+	private let probeLinuxMaterialization: Bool
 
-    init(useLinuxMaterialization: Bool = false) {
-        self.useLinuxMaterialization = useLinuxMaterialization
-    }
+	init(
+		useLinuxMaterialization: Bool = false,
+		probeLinuxMaterialization: Bool = false
+	) {
+		self.useLinuxMaterialization = useLinuxMaterialization
+		self.probeLinuxMaterialization = probeLinuxMaterialization
+	}
 
     private struct MaterializationCommandObservation: Equatable {
         let executable: String
@@ -2115,7 +2124,9 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 			completion.signal()
 		}
 
-		let timeout = useLinuxMaterialization ? Self.timeout * 2 : Self.timeout
+		let timeout = (useLinuxMaterialization || probeLinuxMaterialization)
+			? Self.timeout * 2
+			: Self.timeout
 		guard completion.wait(timeout: .now() + .seconds(Int(timeout))) == .success else {
 			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
 				"live registry Alpine rootfs import proof timed out"
@@ -2210,7 +2221,14 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
             rootfs: installResult.rootfsImport.baseTreeDirectory,
             layout: importedLayout
         )
-		if useLinuxMaterialization {
+		var linuxMaterializationOutput = ""
+		if probeLinuxMaterialization {
+			linuxMaterializationOutput = try runLinuxMaterializationProbe(
+				rootfs: installResult.rootfsImport.baseTreeDirectory,
+				hostRoot: copiedRoot,
+				mountPath: "/mnt/orlix-materialize"
+			)
+		} else if useLinuxMaterialization {
 			try runLinuxMaterializationCommands(
 				materializationCommands.commands,
 				hostRoot: copiedRoot,
@@ -2241,10 +2259,12 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 		].joined(separator: "\n") + "\n"
 		if useLinuxMaterialization {
 			markers += "ORLIX_OCI_ALPINE_LINUX_MATERIALIZATION_PREPARED_OK\n"
+		} else if probeLinuxMaterialization {
+			markers += "ORLIX_OCI_ALPINE_LINUX_MATERIALIZATION_PROBE_OK\n"
 		} else {
 			markers += "ORLIX_OCI_ALPINE_ROOTFS_IMPORT_DELETE_OK\n"
 		}
-		return markers
+		return linuxMaterializationOutput + markers
 	}
 
 	private func validateImportedRootfs(
@@ -2546,6 +2566,198 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 		default:
 			return executable
 		}
+	}
+
+	private func runLinuxScript(
+		scriptURL: URL,
+		hostRoot: URL,
+		mountPath: String,
+		terminalIdentifier: String,
+		doneMarker: String
+	) throws -> String {
+		guard let profile = OrlixOSDistribution.bundledBootProfile else {
+			throw OrlixUpstreamTestRunError.missingBundledBootProfile
+		}
+		guard let rootImageIdentifier = OrlixOSDistribution
+			.productRootImageIdentifier
+		else {
+			throw OrlixUpstreamTestRunError.missingRootImageDescriptor("product")
+		}
+
+		let linuxScriptPath = mountPath + "/" + scriptURL.lastPathComponent
+		let kernelCommandLine = [
+			OrlixEnvironmentRootImage.defaultKernelCommandLine,
+			"orlix.mount.host0.target=\(mountPath)",
+			"orlix.exec=\(kernelToken("/bin/sh"))",
+			"orlix.argv0=\(kernelToken("/bin/sh"))",
+			"orlix.argv1=\(kernelToken(linuxScriptPath))",
+			"orlix.env0=\(kernelToken("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))",
+			"orlix.cwd=\(kernelToken("/"))",
+			"orlix.uid=0",
+			"orlix.gid=0",
+		].joined(separator: " ")
+		let terminal = OrlixTerminalSession()
+		let recorder = TerminalOutputRecorder()
+		let completion = DispatchSemaphore(value: 0)
+		let bootStatus = BootStatusRecorder()
+		let output = terminal.attachOutput { data in
+			recorder.append(data)
+			if recorder.text.contains(doneMarker)
+				|| recorder.text.contains("orlix-init: shell exit status=")
+			{
+				completion.signal()
+			}
+		}
+		defer { output.cancel() }
+
+		let session = OrlixLinuxSession(
+			bootConfig: OrlixBootConfig(
+				profile: profile,
+				kernelCommandLine: kernelCommandLine,
+				rootImageIdentifier: rootImageIdentifier,
+				terminalIdentifier: terminalIdentifier
+			),
+			hostDirectories: [
+				OrlixHostDirectoryRegistration(
+					identifier: OrlixEnvironmentRootImage
+						.defaultHostDirectoryIdentifier,
+					hostPath: hostRoot.path,
+					readOnly: false
+				)
+			],
+			terminal: terminal
+		)
+		DispatchQueue.global(qos: .userInitiated).async {
+			let status = session.boot()
+			bootStatus.set(status)
+			if status != .ok {
+				completion.signal()
+			}
+		}
+		guard completion.wait(timeout: .now() + Self.timeout) == .success
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"Linux script timed out: \(scriptURL.lastPathComponent)\n\(recorder.text)"
+			)
+		}
+		if let status = bootStatus.value, status != .ok {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"Linux script boot failed: \(status)\n\(recorder.text)"
+			)
+		}
+		return recorder.text
+	}
+
+	private func runLinuxMaterializationProbe(
+		rootfs: URL,
+		hostRoot: URL,
+		mountPath: String
+	) throws -> String {
+		let rootfsPath = linuxMaterializationPath(
+			rootfs.path,
+			hostRoot: hostRoot,
+			mountPath: mountPath
+		)
+		let probeRoot = "\(mountPath)/scratch/alpine-mke2fs-probe"
+		let hostProbeRoot = hostRoot.appendingPathComponent(
+			"scratch/alpine-mke2fs-probe",
+			isDirectory: true
+		)
+		let hostSyntheticRoot = hostProbeRoot.appendingPathComponent(
+			"synthetic",
+			isDirectory: true
+		)
+		let hostImagesRoot = hostProbeRoot.appendingPathComponent(
+			"images",
+			isDirectory: true
+		)
+		if fileManager.fileExists(atPath: hostProbeRoot.path) {
+			try fileManager.removeItem(at: hostProbeRoot)
+		}
+		try fileManager.createDirectory(
+			at: hostSyntheticRoot,
+			withIntermediateDirectories: true
+		)
+		try fileManager.createDirectory(
+			at: hostImagesRoot,
+			withIntermediateDirectories: true
+		)
+		try Data("synthetic\n".utf8).write(
+			to: hostSyntheticRoot.appendingPathComponent("file")
+		)
+		for index in 0..<120 {
+			let link = hostSyntheticRoot.appendingPathComponent("link-\(index)")
+			try fileManager.createSymbolicLink(
+				atPath: link.path,
+				withDestinationPath: "file"
+			)
+		}
+		let scriptURL = hostRoot.appendingPathComponent(
+			".orlix-materialize-probe.sh",
+			isDirectory: false
+		)
+		let script = [
+			"set +e",
+			"printf '%s\\n' ORLIX_ALPINE_MKE2FS_PROBE_BEGIN",
+			"probe_root=\(shellQuote(probeRoot))",
+			"src_root=\(shellQuote(rootfsPath))",
+			"run_probe() {",
+			"  name=\"$1\"",
+			"  src=\"$2\"",
+			"  size=\"$3\"",
+			"  img=\"$probe_root/images/$name.ext4\"",
+			"  printf 'ORLIX_ALPINE_MKE2FS_PROBE_CASE_BEGIN %s\\n' \"$name\"",
+			"  truncate -s \"$size\" \"$img\"",
+			"  truncate_status=$?",
+			"  printf 'ORLIX_ALPINE_MKE2FS_PROBE_TRUNCATE_STATUS %s %d\\n' \"$name\" \"$truncate_status\"",
+			"  if [ \"$truncate_status\" -ne 0 ]; then return 0; fi",
+			"  mke2fs -q -t ext4 -F -m 0 -O ^metadata_csum -U clear -L PROBE -E root_owner=0:0,no_copy_xattrs -d \"$src\" \"$img\"",
+			"  status=$?",
+			"  printf 'ORLIX_ALPINE_MKE2FS_PROBE_MKE2FS_STATUS %s %d\\n' \"$name\" \"$status\"",
+			"  return 0",
+			"}",
+			"run_subtree_probe() {",
+			" rel=\"$1\"",
+			" size=\"$2\"",
+			" src=\"$src_root/$rel\"",
+			" if [ -d \"$src\" ]; then run_probe \"$(printf '%s' \"$rel\" | tr / _)\" \"$src\" \"$size\"; fi",
+			"}",
+			"run_probe synthetic \"$probe_root/synthetic\" 8m",
+			"run_subtree_probe etc/apk 8m",
+			"run_subtree_probe etc/conf.d 8m",
+			"run_subtree_probe etc/init.d 8m",
+			"run_subtree_probe etc/network 8m",
+			"run_subtree_probe etc/periodic 8m",
+			"run_subtree_probe etc/profile.d 8m",
+			"run_subtree_probe etc/ssl 16m",
+			"run_probe etc \"$src_root/etc\" 16m",
+			"run_probe bin \"$src_root/bin\" 16m",
+			"run_probe sbin \"$src_root/sbin\" 16m",
+			"run_subtree_probe usr/bin 16m",
+			"run_subtree_probe usr/lib 16m",
+			"run_subtree_probe usr/sbin 16m",
+			"run_subtree_probe usr/share 16m",
+			"run_probe usr \"$src_root/usr\" 32m",
+			"run_probe full \"$src_root\" 64m",
+			"printf '%s\\n' ORLIX_ALPINE_MKE2FS_PROBE_DONE",
+		].joined(separator: "\n") + "\n"
+		try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+
+		let text = try runLinuxScript(
+			scriptURL: scriptURL,
+			hostRoot: hostRoot,
+			mountPath: mountPath,
+			terminalIdentifier: "orlix.oci.linux.materialization.probe",
+			doneMarker: "ORLIX_ALPINE_MKE2FS_PROBE_DONE"
+		)
+		guard text.contains("ORLIX_ALPINE_MKE2FS_PROBE_BEGIN"),
+			text.contains("ORLIX_ALPINE_MKE2FS_PROBE_DONE")
+		else {
+			throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
+				"Linux materialization probe missing markers\n\(text)"
+			)
+		}
+		return text + "\n"
 	}
 
 	private func shellQuote(_ value: String) -> String {
