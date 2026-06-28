@@ -650,4 +650,26 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
     XCTAssertEqual(orlix_host_resources_clear_host_directories(), 0);
 }
 
+- (void)testIOMappingAvoidsHostedKernelVmallocRange
+{
+    const unsigned long vmallocStart = 0x0000700000000000UL;
+    const unsigned long vmallocEnd = 0x0000780000000000UL;
+    void *mapping = orlix_host_ioremap(0x10000000UL, 0x200UL);
+    unsigned long address = (unsigned long)mapping;
+    unsigned long physicalAddress = 0;
+
+    XCTAssertNotEqual(mapping, NULL);
+    if (!mapping) {
+        return;
+    }
+
+    XCTAssertFalse(address >= vmallocStart && address < vmallocEnd);
+    XCTAssertEqual(orlix_host_iomem_physical_address(mapping,
+                                                     &physicalAddress),
+                   0);
+    XCTAssertEqual(physicalAddress, 0x10000000UL);
+
+    orlix_host_iounmap(mapping);
+}
+
 @end

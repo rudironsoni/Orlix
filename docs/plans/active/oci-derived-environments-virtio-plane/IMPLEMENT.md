@@ -10,6 +10,23 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 Hosted I/O Mappings Kept Out Of Linux Vmalloc
+
+Changes:
+- Moved HostAdapter `ioremap` VM allocation into a private HostAdapter-only I/O aperture above the hosted Linux vmalloc range, instead of accepting arbitrary Darwin VM addresses from `VM_FLAGS_ANYWHERE`.
+- Added an XCTest proving `orlix_host_ioremap()` does not return an address inside `0x0000700000000000..0x0000780000000000` and still resolves the mapped physical address.
+
+Validation:
+- `xcode-storage-doctor` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixHostAdapter Tests" -configuration Debug -destination 'generic/platform=iOS Simulator' build-for-testing` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixHostAdapter Tests" -configuration Debug -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' -only-testing:OrlixHostAdapterTests/OrlixHostAdapterTests/testIOMappingAvoidsHostedKernelVmallocRange test` passed.
+- `make beta-install-simulator ORLIX_BETA_SIMULATOR_ID=4B85E297-7A59-45BD-A94B-189238EC48FA` built, installed, and launched `com.rudironsoni.Orlix`.
+- `xcrun simctl launch --console --terminate-running-process 4B85E297-7A59-45BD-A94B-189238EC48FA com.rudironsoni.Orlix` passed the previous TestFlight panic point: boot output included `virtio_blk virtio0`, `virtio_blk virtio1`, `Run /init as init process`, `ORLIX-ROOTINIT-START`, EXT4 mounts, `ORLIX-ROOT-OVERLAY-READY`, `orlix-init: main entered`, and `orlix-init: process started pid=33`.
+
+Current status:
+- The original TestFlight panic `failed to synchronize hosted kernel PTE 0x700000000000` did not reproduce after the HostAdapter mapping fix.
+- The app is still not beta-ready: the next runtime blocker is a later hosted user-mode fault loop after `/bin/sh` starts, logged as `Orlix: user fault task=sh pid=33`. That is a separate kernel/user execution issue and must be fixed before uploading another beta.
+
 ### 2026-06-29 TestFlight Build 2 Upload And Metadata
 
 Changes: - Rebuilt TestFlight upload as build `0.1 (2)` after adding `ITSAppUsesNonExemptEncryption=false`. - Kept the AppIcon, iPad orientation, export target, and local signing ignore fixes from the previous checkpoint. - Bumped `CURRENT_PROJECT_VERSION` to `2` because App Store Connect already accepted build `1`.
