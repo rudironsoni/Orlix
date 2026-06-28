@@ -15,10 +15,10 @@ extern int orlix_host_resources_register_root_image_files(
     unsigned int state_block_device,
     unsigned long long state_block_minimum_bytes);
 
-@interface OrlixKernelHostProofTests : XCTestCase
+@interface OrlixKernelHostedTests : XCTestCase
 @end
 
-@implementation OrlixKernelHostProofTests
+@implementation OrlixKernelHostedTests
 
 - (void)testBootloaderRejectsUnavailableRootIdentifier
 {

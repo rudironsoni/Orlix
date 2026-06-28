@@ -25002,3 +25002,31 @@ Changes:
 Validation:
 - `git log --oneline -- .tokensave` showed only `f0e0452f chore: checkpoint local beta work` before the rewrite.
 - `git rm --cached -r .tokensave` removed the tracked token-accounting files from the index.
+
+## 2026-06-28 Orlix app surface and scheme alignment checkpoint
+
+Current status:
+- Durable product rename and scheme alignment are implemented and XcodeGen generation passes.
+- Simulator execution remains blocked by CoreSimulatorService/simdiskimaged environment failure, not by a known project compile or test assertion failure.
+
+Changes:
+- Renamed the iOS app surface from `OrlixTerminal` to `Orlix` in durable source: app directory, XcodeGen target, app scheme, product name, beta archive path, run/build helpers, docs, and HostAdapter log subsystem.
+- Kept `com.rudironsoni.OrlixTerminal` and `org.orlix.OrlixTerminal` only as explicit legacy simulator uninstall bundle IDs.
+- Renamed confusing visible Xcode test surfaces to architecture-aligned names while preserving their tests: `OrlixKernelHostedTests`, `OrlixKernelLogParserTests`, `OrlixKernelConformanceTests`, `OrlixMLibCConformanceTests`, `OrlixPackagesConformanceTests`, `OrlixRuntimeTests`, and `OrlixOSSessionTests`.
+- Updated readable generated schemes to `Orlix`, `OrlixOS Tests`, `OrlixRuntime Tests`, `OrlixKernel Hosted Tests`, `OrlixKernel Log Parser Tests`, `OrlixKernel Conformance`, `OrlixMLibC Conformance`, `OrlixPackages Conformance`, `OrlixHostAdapter Tests`, and `OrlixTestRunner Tests`.
+- Fixed the Xcode user-script sandbox failure in the `OrlixOS` payload embed phase by declaring the payload bundle, `.orlix-payload-ready`, rootfs inputs, and durable OrlixOS packaging files as script inputs, with the embedded payload bundle as output.
+
+Validation:
+- `env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" USER=rudironsoni LOGNAME=rudironsoni xcodegen generate --spec project.yml` exited 0 and created `Orlix.xcodeproj`.
+- `xcodegen dump --spec project.yml` exited 0 and showed the renamed targets/schemes plus `OrlixKernelHostedTests` and `OrlixKernelLogParserTests` using `TEST_HOST=$(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix`.
+- `git diff --check` exited 0.
+- Stale active-source scans found no `OrlixTerminal.app`, `OrlixTerminal.xcarchive`, `OrlixTerminal/Sources`, `OrlixTerminal/Tests`, `OrlixTerminal/Makefile`, `OrlixSystem.xcodeproj`, or old target names in active source/current docs. Remaining `OrlixTerminal` references are internal terminal-session APIs or explicit legacy bundle IDs.
+
+Blocked validation:
+- `xcode-storage-doctor` still failed on `simctl runtimes` and `simctl devices`.
+- `xcrun simctl list devices booted` failed before listing devices because CoreSimulatorService/simdiskimaged returned connection errors.
+- `xcodebuild -project Orlix.xcodeproj -list` failed before scheme listing for the same CoreSimulatorService/simdiskimaged environment failure.
+- Attempts to restart CoreSimulator from this executor were blocked: `launchctl kickstart` could not find the service in the user domain, and `killall` was denied `sysctl(KERN_PROC)`.
+
+Boundary:
+- This checkpoint proves the durable XcodeGen/project naming, app bundle target naming, script-sandbox input declaration, and current-source reference cleanup. It does not prove simulator build/test execution, app launch, or TestFlight archive after the rename because CoreSimulator is unhealthy in the current execution context.

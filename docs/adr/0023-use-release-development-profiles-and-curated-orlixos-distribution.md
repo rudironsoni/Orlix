@@ -21,7 +21,7 @@ Orlix supports exactly two product profiles:
 
 The profiles must remain userspace ABI invariant. Development may add diagnostics, assertions, tracing, and test knobs, but it must not expose a different Linux ABI, package ABI, device shape, or userspace contract.
 
-OrlixOS is the Kit. Release builds bundle curated executable userspace content as signed `OrlixOS` framework resources and update that content through app releases first. Apps consume `OrlixOS` for the delivered Linux session and payload surface; they must not depend on a separate `OrlixKit` module or make `OrlixTerminal` own OS delivery. Downloaded binary package repositories are deferred until a curated, signed, profile-approved channel with App Store-safe disclosure and policy checks is explicitly designed and reviewed.
+OrlixOS is the Kit. Release builds bundle curated executable userspace content as signed `OrlixOS` framework resources and update that content through app releases first. Apps consume `OrlixOS` for the delivered Linux session and payload surface; they must not depend on a separate `OrlixKit` module or make `Orlix` own OS delivery. Downloaded binary package repositories are deferred until a curated, signed, profile-approved channel with App Store-safe disclosure and policy checks is explicitly designed and reviewed.
 
 `OrlixOS` owns curated distribution policy, package/rootfs assembly, product payload packaging, target-derived payload metadata, and the app-facing Linux session API. It may wrap the bootloader-shaped entrypoint as a Linux session. It must not own kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, terminal UI rendering, shell behavior, or Linux test-result interpretation.
 

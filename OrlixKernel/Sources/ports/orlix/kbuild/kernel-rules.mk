@@ -1010,13 +1010,13 @@ ORLIX_MLIBC_KSELFTEST_INSTALL_DIR := $(CURDIR)/Build/OrlixMLibC/kselftest/$(PROF
 ORLIX_KSELFTEST_ARCH ?= arm64
 ORLIX_HOSTED_USER_BASE_ADDRESS ?= 0x0000600000000000
 
-ORLIX_XCODE_PROJECT ?= OrlixSystem.xcodeproj
+ORLIX_XCODE_PROJECT ?= Orlix.xcodeproj
 ORLIX_IOS_SIMULATOR_NAME ?= iPhone 17 Pro
 ORLIX_IOS_SIMULATOR_ID ?=
-ORLIX_IOS_SIMULATOR_DERIVED_DATA ?= $(CURDIR)/.deriveddata/OrlixSystem-sim
+ORLIX_IOS_SIMULATOR_DERIVED_DATA ?= $(CURDIR)/.deriveddata/Orlix-sim
 ORLIX_IOS_SIMULATOR_FRAMEWORK := $(ORLIX_IOS_SIMULATOR_DERIVED_DATA)/Build/Products/Debug-iphonesimulator/OrlixKernel.framework
 ORLIX_IOS_SIMULATOR_RUN_LOG_DIR ?= $(CURDIR)/Build/OrlixKernel/run/$(PROFILE)
-ORLIX_TERMINAL_BUNDLE_ID ?= com.rudironsoni.OrlixTerminal
+ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_KERNEL_RUN_UNTIL_MARKER ?=
 ORLIX_KERNEL_RUN_TIMEOUT_SECONDS ?= 120
 ORLIX_KERNEL_RUN_STARTUP_TIMEOUT_SECONDS ?= 30
@@ -1171,7 +1171,7 @@ __xcodeproj-generate:
 run: __ios-simulator-framework xcodeproj
 	@set -euo pipefail; \
 	command -v "$(XCODEBUILD_MCP)" >/dev/null 2>&1 || { echo "XcodeBuildMCP is required; install xcodebuildmcp or set XCODEBUILD_MCP=/path/to/xcodebuildmcp" >&2; exit 1; }; \
-	command -v xcrun >/dev/null 2>&1 || { echo "xcrun is required to launch OrlixTerminal in the simulator" >&2; exit 1; }; \
+	command -v xcrun >/dev/null 2>&1 || { echo "xcrun is required to launch Orlix in the simulator" >&2; exit 1; }; \
 	expected_rootfs_input="$(ORLIX_KERNEL_TEST_INITRAMFS_INPUT)"; \
 	expected_base_root_tree_input="$(ORLIX_KERNEL_BASE_ROOT_TREE_INPUT)"; \
 	expected_state_root_tree_input="$(ORLIX_KERNEL_STATE_ROOT_TREE_INPUT)"; \
@@ -1205,21 +1205,21 @@ run: __ios-simulator-framework xcodeproj
 	ORLIX_OS_EXPECTED_STATE_ROOT_TREE_INPUT="$$expected_state_root_tree_input" \
 	"$(XCODEBUILD_MCP)" simulator build \
 		--project-path "$(CURDIR)/$(ORLIX_XCODE_PROJECT)" \
-		--scheme "OrlixTerminal" \
+		--scheme "Orlix" \
 		--configuration "Debug" \
 		--derived-data-path "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)" \
 		"$${selector[@]}" \
 		--output json; \
 	app_json="$$(ORLIX_PROFILE="$(PROFILE)" "$(XCODEBUILD_MCP)" simulator get-app-path \
 		--project-path "$(CURDIR)/$(ORLIX_XCODE_PROJECT)" \
-		--scheme "OrlixTerminal" \
+		--scheme "Orlix" \
 		--configuration "Debug" \
 		--platform "iOS Simulator" \
 		--derived-data-path "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)" \
 		"$${selector[@]}" \
 		--output json)"; \
 	app_path="$$(printf '%s\n' "$$app_json" | awk -F'"' '/appPath/ { print $$4; exit }')"; \
-	[ -n "$$app_path" ] || { echo "missing OrlixTerminal app path" >&2; printf '%s\n' "$$app_json" >&2; exit 1; }; \
+	[ -n "$$app_path" ] || { echo "missing Orlix app path" >&2; printf '%s\n' "$$app_json" >&2; exit 1; }; \
 	xcrun simctl boot "$$simctl_boot_device" >/dev/null 2>&1 || true; \
 	xcrun simctl bootstatus "$$simctl_boot_device" -b >/dev/null; \
 	ORLIX_PROFILE="$(PROFILE)" "$(XCODEBUILD_MCP)" simulator install \
@@ -1227,24 +1227,24 @@ run: __ios-simulator-framework xcodeproj
 		--app-path "$$app_path" \
 		--output json; \
 	mkdir -p "$(ORLIX_IOS_SIMULATOR_RUN_LOG_DIR)"; \
-	runtime_log="$(ORLIX_IOS_SIMULATOR_RUN_LOG_DIR)/OrlixTerminal-runtime.log"; \
-	os_log="$(ORLIX_IOS_SIMULATOR_RUN_LOG_DIR)/OrlixTerminal-os.log"; \
+	runtime_log="$(ORLIX_IOS_SIMULATOR_RUN_LOG_DIR)/Orlix-runtime.log"; \
+	os_log="$(ORLIX_IOS_SIMULATOR_RUN_LOG_DIR)/Orlix-os.log"; \
 	: > "$$runtime_log"; \
 	: > "$$os_log"; \
 	log_pid=""; \
 	launch_pid=""; \
 	cleanup_tree() { pid="$$1"; [ -n "$$pid" ] || return 0; for child in $$(pgrep -P "$$pid" 2>/dev/null || true); do cleanup_tree "$$child"; done; kill "$$pid" >/dev/null 2>&1 || true; }; \
-	cleanup() { cleanup_tree "$$log_pid"; cleanup_tree "$$launch_pid"; xcrun simctl terminate "$$simctl_device" "$(ORLIX_TERMINAL_BUNDLE_ID)" >/dev/null 2>&1 || true; }; \
+	cleanup() { cleanup_tree "$$log_pid"; cleanup_tree "$$launch_pid"; xcrun simctl terminate "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT INT TERM; \
-	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "OrlixTerminal" || subsystem == "com.rudironsoni.OrlixTerminal"' >> "$$runtime_log" 2>&1 & \
+	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "Orlix" || subsystem == "com.rudironsoni.Orlix"' >> "$$runtime_log" 2>&1 & \
 	log_pid="$$!"; \
-	xcrun simctl launch --terminate-running-process --console "$$simctl_device" "$(ORLIX_TERMINAL_BUNDLE_ID)" >> "$$runtime_log" 2>&1 & \
+	xcrun simctl launch --terminate-running-process --console "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >> "$$runtime_log" 2>&1 & \
 	launch_pid="$$!"; \
-	app_has_started() { grep -E -q 'OrlixTerminal\[|Starting Orlix bootloader|ORLIX-COREUTILS-TEST-INIT' "$$runtime_log" || kill -0 "$$launch_pid" >/dev/null 2>&1; }; \
+	app_has_started() { grep -E -q 'Orlix\[|Starting Orlix bootloader|ORLIX-COREUTILS-TEST-INIT' "$$runtime_log" || kill -0 "$$launch_pid" >/dev/null 2>&1; }; \
 	validate_runtime_log() { \
 		LC_ALL=C tr -d '\r' < "$$runtime_log" | awk 'BEGIN { bad = 0 } /(^|[^[:alnum:]_])not ok[[:space:]]+[0-9]+([[:space:]-]|$$)/ { print "upstream failure marker: " $$0 > "/dev/stderr"; bad = 1 } /Kernel panic|kernel panic|panic:|Oops|BUG:|Out of memory|Killed process|Attempted to kill init/ { print "fatal runtime marker: " $$0 > "/dev/stderr"; bad = 1 } END { exit bad ? 1 : 0 }'; \
 	}; \
-	printf '{"runtimeLogPath":"%s","osLogPath":"%s","bundleId":"%s"}\n' "$$runtime_log" "$$os_log" "$(ORLIX_TERMINAL_BUNDLE_ID)"; \
+	printf '{"runtimeLogPath":"%s","osLogPath":"%s","bundleId":"%s"}\n' "$$runtime_log" "$$os_log" "$(ORLIX_APP_BUNDLE_ID)"; \
 	if [ -n "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" ]; then \
 		for _ in $$(seq 1 "$(ORLIX_KERNEL_RUN_STARTUP_TIMEOUT_SECONDS)"); do \
 			grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$runtime_log" && break; \
@@ -1252,7 +1252,7 @@ run: __ios-simulator-framework xcodeproj
 			sleep 1; \
 		done; \
 		if ! grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$runtime_log" && ! app_has_started; then \
-			echo "OrlixTerminal did not start before marker $(ORLIX_KERNEL_RUN_UNTIL_MARKER): $$runtime_log" >&2; \
+			echo "Orlix did not start before marker $(ORLIX_KERNEL_RUN_UNTIL_MARKER): $$runtime_log" >&2; \
 			exit 1; \
 		fi; \
 		for _ in $$(seq 1 "$(ORLIX_KERNEL_RUN_TIMEOUT_SECONDS)"); do \
@@ -1268,7 +1268,7 @@ run: __ios-simulator-framework xcodeproj
 clean:
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
-	for path in Build/OrlixKernel .deriveddata/OrlixSystem-sim; do \
+	for path in Build/OrlixKernel .deriveddata/Orlix-sim; do \
 		if [ -L "$$path" ]; then echo "refusing to clean symlinked path: $$path" >&2; exit 1; fi; \
 		rm -rf "$$path"; \
 	done; \
@@ -1276,7 +1276,7 @@ clean:
 
 mrproper: clean
 	@set -euo pipefail; \
-	for path in .deriveddata OrlixSystem.xcodeproj; do \
+	for path in .deriveddata Orlix.xcodeproj; do \
 		if [ -L "$$path" ]; then echo "refusing to remove symlinked path: $$path" >&2; exit 1; fi; \
 		rm -rf "$$path"; \
 	done; \
@@ -1887,7 +1887,7 @@ __verify-xcodegen-boundary:
 		exit 1; \
 	fi; \
 	if grep -R -n -E 'dlsym[[:space:]]*\([^;]*start_kernel|start_kernel[^;]*dlsym|RTLD_DEFAULT[^;]*start_kernel|start_kernel[^;]*RTLD_DEFAULT' \
-		OrlixHostAdapter/Sources OrlixKernel/Sources/boot OrlixTerminal/Sources; then \
+		OrlixHostAdapter/Sources OrlixKernel/Sources/boot Orlix/Sources; then \
 		echo "product boot path must not resolve start_kernel through dlsym or RTLD_DEFAULT" >&2; \
 		exit 1; \
 	fi; \

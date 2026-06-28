@@ -416,9 +416,9 @@ __test-run: __test-initramfs
 	mkdir -p "$(MLIBC_TEST_BUILD_DIR)"; \
 	$(KERNEL_MAKE) run PROFILE="$(PROFILE)" type=mlibc libc=orlixmlibc ORLIX_KERNEL_TEST_INITRAMFS_INPUT="$(MLIBC_TEST_INITRAMFS_DIR)/rootfs/initramfs.cpio.gz" ORLIX_KERNEL_RUN_UNTIL_MARKER="$(MLIBC_TEST_COMPLETION_MARKER)" ORLIX_KERNEL_RUN_TIMEOUT_SECONDS="$(MLIBC_TEST_RUN_TIMEOUT_SECONDS)" | tee "$$run_log"; \
 	runtime_log="$$(awk -F'"' '/runtimeLogPath/ { print $$4 }' "$$run_log" | tail -n 1)"; \
-	[ -n "$$runtime_log" ] || { echo "missing OrlixTerminal runtime log path in $$run_log" >&2; exit 1; }; \
+	[ -n "$$runtime_log" ] || { echo "missing Orlix runtime log path in $$run_log" >&2; exit 1; }; \
 	for _ in $$(seq 1 50); do [ -s "$$runtime_log" ] && break; sleep 0.1; done; \
-	[ -s "$$runtime_log" ] || { echo "missing OrlixTerminal runtime log: $$runtime_log" >&2; exit 1; }; \
+	[ -s "$$runtime_log" ] || { echo "missing Orlix runtime log: $$runtime_log" >&2; exit 1; }; \
 	for _ in $$(seq 1 $(MLIBC_TEST_RUN_WAIT_TICKS)); do \
 		if grep -E -q '(^|[^[:alnum:]])not ok[[:space:]][0-9]|Kernel panic|Out of memory|oom-killer|Assertion .* failed' "$$runtime_log"; then break; fi; \
 		grep -F -q '$(MLIBC_TEST_COMPLETION_MARKER)' "$$runtime_log" && break; \

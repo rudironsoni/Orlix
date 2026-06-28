@@ -124,7 +124,7 @@ The final test initramfs sequence first collects KUnit output from the kernel lo
 
 A test-kernel option set that enables Linux debugfs plus KUnit debugfs and exposes per-suite KUnit KTAP under `/sys/kernel/debug/kunit/<suite>/results`. It is useful to the test initramfs and XCTest proof path, but it is not public `OrlixKernel` API.
 
-## OrlixTerminal
+## Orlix
 
 The iOS terminal app that consumes `OrlixOS`, presents the terminal surface, and serves as an app host for iOS-hosted proof. It does not own OS delivery, Linux execution semantics, shell behavior, package behavior, or test-result interpretation.
 
@@ -138,7 +138,7 @@ The signed app resource bundle carried by the `OrlixOS` framework. It contains t
 
 ## Terminal UI Surface
 
-The libghostty-spm-provided terminal presentation layer used by `OrlixTerminal`. It renders terminal I/O but does not own Linux execution or shell semantics.
+The libghostty-spm-provided terminal presentation layer used by `Orlix`. It renders terminal I/O but does not own Linux execution or shell semantics.
 
 ## Orlix Terminal Backend
 
@@ -146,7 +146,7 @@ The Orlix-owned terminal byte path between Linux console/terminal plumbing and t
 
 ## No-Fake-Terminal Rule
 
-`OrlixTerminal` must not use fake shells, sandbox shells, or local execution backends to simulate Linux terminal behavior. Before Linux console bytes exist, it may display only real Orlix boot or proof output.
+`Orlix` must not use fake shells, sandbox shells, or local execution backends to simulate Linux terminal behavior. Before Linux console bytes exist, it may display only real Orlix boot or proof output.
 
 ## iOS-Targeted Build
 
@@ -290,7 +290,7 @@ The kselftest lane installed under `Build/OrlixMLibC/kselftest/<profile>/` and s
 
 ## XCTest Proof Topology
 
-The iOS proof harness under project-local `Tests/XCTest/` trees: `OrlixKernelHostProofTests`, `OrlixLinuxProofOutputParserTests`, and `OrlixHostAdapterTests`. XCTest launches or observes the hosted runtime, validates packaging and host mechanics, and parses Linux-native output. It does not own Linux subsystem assertions.
+The iOS proof harness under project-local `Tests/XCTest/` trees: `OrlixKernelHostedTests`, `OrlixKernelLogParserTests`, and `OrlixHostAdapterTests`. XCTest launches or observes the hosted runtime, validates packaging and host mechanics, and parses Linux-native output. It does not own Linux subsystem assertions.
 
 ## Ownership-Based Migration
 

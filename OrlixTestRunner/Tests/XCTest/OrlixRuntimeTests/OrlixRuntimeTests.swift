@@ -2,7 +2,7 @@
 import Foundation
 import XCTest
 
-final class OrlixPTYRuntimeTests: XCTestCase {
+final class OrlixRuntimeTests: XCTestCase {
     func testLinuxPTYCarriesInteractiveShellInputAndOutput() throws {
         let runner = OrlixPTYRuntimeProofRunner()
         let output = try runner.run()
