@@ -25151,3 +25151,11 @@ Current status:
 - The current TestFlight blocker is local keychain/private-key access for codesign. `security show-keychain-info login.keychain-db` reports `User interaction is not allowed`, and direct codesign probes fail with `errSecInternalComponent`.
 - The archive cannot be claimed ready until the Apple Distribution private key is unlocked or granted non-interactive `codesign` access on this machine.
 - Publish note: SSH to GitHub port 22 timed out from this session, so GitHub CLI git credential setup was refreshed to allow HTTPS push for the checkpoint.
+
+[2026-06-28] Beta archive after keychain unlock
+
+Changes: - Restored `ORLIX_CODE_SIGN_IDENTITY` archive default to blank so automatic signing does not receive a conflicting manual `Apple Distribution` identity. - Kept `beta-signing-diagnostics` probing `Apple Distribution` by default when no identity is explicitly supplied. - Patched local `~/.local/bin/xcodebuild` wrapper outside this repo so `archive` actions keep external DerivedData and SwiftPM cache, but do not override `SYMROOT`/`OBJROOT`/module-cache build settings. The wrapper overrides caused Xcode archive finalization to fail opening `BuildProductsPath`; direct archive with only external `-derivedDataPath` succeeded.
+
+Validation: - `make beta-signing-diagnostics ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed: 5 valid identities, 5 provisioning profiles, `validated signing identity: Apple Distribution`. - `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed through full release OrlixMLibC sysroot, OrlixOS package/rootfs payload, Coreutils, Findutils, e2fsprogs, kernel payload, and Xcode archive. - `make beta-validate-archive` passed: `Build/Release/Orlix.xcarchive` contains `Products/Applications/Orlix.app`, embedded `OrlixOS.framework`, `OrlixKernel.framework`, payload bundle, archive `Info.plist`, and dSYMs.
+
+Current status: - Archive generation is now working through the normal make gate. - The archive is signed by Xcode automatic signing with `Apple Development: Rudimar Luis Ronsoni Junior (A9C4N82KYY)` and `iOS Team Provisioning Profile: *`, not yet proven exported/uploadable for TestFlight. - Next beta gate is `beta-export`/upload with App Store distribution export options and a real App Store provisioning profile, or manual Xcode Organizer export if automatic export can re-sign successfully.

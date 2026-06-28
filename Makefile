@@ -15,7 +15,7 @@ ORLIX_BETA_EXPORT_DIR ?= $(ORLIX_BETA_ARCHIVE_DIR)/Export
 ORLIX_BETA_EXPORT_OPTIONS_PLIST ?=
 ORLIX_DEVELOPMENT_TEAM ?=
 ORLIX_CODE_SIGN_STYLE ?= Automatic
-ORLIX_CODE_SIGN_IDENTITY ?= Apple Distribution
+ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
 ORLIX_ALLOW_PROVISIONING_UPDATES ?= YES
 ORLIX_ASC_API_KEY_PATH ?=
@@ -71,6 +71,7 @@ beta-prerequisites: check-build-tools
 beta-signing-diagnostics:
 	@set -euo pipefail; \
 	identity="$(ORLIX_CODE_SIGN_IDENTITY)"; \
+	if [ -z "$$identity" ]; then identity="Apple Distribution"; fi; \
 	[ -n "$$identity" ] || { echo "ORLIX_CODE_SIGN_IDENTITY is required, for example: Apple Distribution" >&2; exit 1; }; \
 	security find-identity -v -p codesigning; \
 	profile_count=0; \
