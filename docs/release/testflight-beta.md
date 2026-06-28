@@ -5,7 +5,7 @@ This checklist gates the first OrlixTerminal TestFlight beta. It is scoped to pu
 ## Source Of Truth
 
 - Xcode project source: `project.yml`.
-- Generated project: `OrlixSystem.xcodeproj`, local output only.
+- Generated project: `Orlix.xcodeproj`, local output only.
 - App target and archive scheme: `OrlixTerminal`.
 - Release profile: `PROFILE=release`.
 - Archive output: `Build/Release/OrlixTerminal.xcarchive`.
@@ -53,7 +53,7 @@ make beta-install-simulator
 make beta-simulator-gate
 ```
 
-`beta-install-simulator` builds the Release simulator app, uninstalls any stale `com.rudironsoni.OrlixTerminal` app and the legacy `org.orlix.OrlixTerminal` install on the chosen simulator, installs the current build, verifies the installed OrlixOS payload metadata selects the direct release root, and launches the app.
+`beta-install-simulator` builds the Release simulator app, uninstalls any stale `com.rudironsoni.Orlix` app and the legacy `com.rudironsoni.OrlixTerminal` or `org.orlix.OrlixTerminal` install on the chosen simulator, installs the current build, verifies the installed OrlixOS payload metadata selects the direct release root, and launches the app.
 
 `beta-simulator-gate` runs the minimum app-hosted beta proof on the chosen simulator:
 

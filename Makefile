@@ -19,8 +19,8 @@ ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
 ORLIX_BETA_SIMULATOR_ID ?= E65F0D05-980C-4368-8CDC-2D2BF3E05757
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
-ORLIX_TERMINAL_BUNDLE_ID ?= com.rudironsoni.OrlixTerminal
-ORLIX_TERMINAL_LEGACY_BUNDLE_IDS ?= org.orlix.OrlixTerminal
+ORLIX_TERMINAL_BUNDLE_ID ?= com.rudironsoni.Orlix
+ORLIX_TERMINAL_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
 .PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-install-simulator beta-simulator-gate beta-archive beta-validate-archive beta-export-archive build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
@@ -88,13 +88,13 @@ beta-install-simulator: beta-prerequisites
 	@set -euo pipefail; \
 	xcodegen generate --spec project.yml; \
 	xcodebuild \
-		-project OrlixSystem.xcodeproj \
+		-project Orlix.xcodeproj \
 		-scheme "$(ORLIX_BETA_SCHEME)" \
 		-configuration Release \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
 		build; \
 	app="$$(xcodebuild \
-		-project OrlixSystem.xcodeproj \
+		-project Orlix.xcodeproj \
 		-scheme "$(ORLIX_BETA_SCHEME)" \
 		-configuration Release \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
@@ -119,7 +119,7 @@ beta-simulator-gate: beta-prerequisites
 	@set -euo pipefail; \
 	xcodegen generate --spec project.yml; \
 	xcodebuild \
-		-project OrlixSystem.xcodeproj \
+		-project Orlix.xcodeproj \
 		-scheme OrlixOSTests \
 		-configuration Debug \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
@@ -127,14 +127,14 @@ beta-simulator-gate: beta-prerequisites
 		-only-testing:OrlixOSTests/OrlixTerminalSessionTests/testRootImageDescriptorsComeFromOrlixOSTargetMetadata \
 		test; \
 	xcodebuild \
-		-project OrlixSystem.xcodeproj \
+		-project Orlix.xcodeproj \
 		-scheme OrlixPTYRuntimeTests \
 		-configuration Debug \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
 		-only-testing:OrlixPTYRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput \
 		test; \
 	xcodebuild \
-		-project OrlixSystem.xcodeproj \
+		-project Orlix.xcodeproj \
 		-scheme OrlixPTYRuntimeTests \
 		-configuration Debug \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
@@ -154,7 +154,7 @@ beta-archive: beta-prerequisites
 	$(MAKE) -f OrlixOS/Makefile kernel-payload PROFILE=release; \
 	mkdir -p "$(ORLIX_BETA_ARCHIVE_DIR)"; \
 	xcodebuild \
-		-project OrlixSystem.xcodeproj \
+		-project Orlix.xcodeproj \
 		-scheme "$(ORLIX_BETA_SCHEME)" \
 		-configuration Release \
 		-destination 'generic/platform=iOS' \

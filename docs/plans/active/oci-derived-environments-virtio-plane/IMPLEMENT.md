@@ -24972,3 +24972,22 @@ Evidence:
 
 Boundary:
 - This checkpoint wires the selected Xcode recommendations into XcodeGen and verifies generation. It does not prove a clean Xcode build because the local Xcode/CoreSimulator/sandbox execution path is currently unhealthy.
+
+## 2026-06-28 beta App ID/project rename checkpoint
+
+Changes:
+- Renamed the generated Xcode project source from `OrlixSystem` to `Orlix` in `project.yml`, so `xcodegen generate --spec project.yml` now creates `Orlix.xcodeproj`.
+- Changed the beta app bundle identifier from `com.rudironsoni.OrlixTerminal` to `com.rudironsoni.Orlix`.
+- Updated beta Makefile targets to use `Orlix.xcodeproj`.
+- Kept `com.rudironsoni.OrlixTerminal` and `org.orlix.OrlixTerminal` as simulator legacy uninstall bundle IDs.
+- Removed the stale local generated `OrlixSystem.xcodeproj` directory after generating `Orlix.xcodeproj`.
+
+Validation:
+- `env PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" USER=rudironsoni LOGNAME=rudironsoni xcodegen generate --spec project.yml` exited 0 and created `Orlix.xcodeproj`.
+- Generated `Orlix.xcodeproj/project.pbxproj` contains `PRODUCT_BUNDLE_IDENTIFIER = com.rudironsoni.Orlix;`.
+- `test -d Orlix.xcodeproj && test ! -d OrlixSystem.xcodeproj` exited 0.
+- `grep -n "OrlixSystem\\.xcodeproj" Makefile project.yml docs/release/testflight-beta.md` found no matches.
+- `make beta-prerequisites` exited 0.
+
+Remaining blocker:
+- `xcodebuild -project Orlix.xcodeproj -list` failed in this Codex executor during Swift package/CoreSimulator handling, consistent with the existing sandboxed Xcode limitation. This does not invalidate the XcodeGen/project rename proof, but full archive/signing still needs a normal Xcode/Terminal context with fixed Apple signing state.
