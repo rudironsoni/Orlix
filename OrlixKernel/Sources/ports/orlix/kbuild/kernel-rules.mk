@@ -1016,7 +1016,7 @@ ORLIX_IOS_SIMULATOR_ID ?=
 ORLIX_IOS_SIMULATOR_DERIVED_DATA ?= $(CURDIR)/.deriveddata/OrlixSystem-sim
 ORLIX_IOS_SIMULATOR_FRAMEWORK := $(ORLIX_IOS_SIMULATOR_DERIVED_DATA)/Build/Products/Debug-iphonesimulator/OrlixKernel.framework
 ORLIX_IOS_SIMULATOR_RUN_LOG_DIR ?= $(CURDIR)/Build/OrlixKernel/run/$(PROFILE)
-ORLIX_TERMINAL_BUNDLE_ID ?= org.orlix.OrlixTerminal
+ORLIX_TERMINAL_BUNDLE_ID ?= com.rudironsoni.OrlixTerminal
 ORLIX_KERNEL_RUN_UNTIL_MARKER ?=
 ORLIX_KERNEL_RUN_TIMEOUT_SECONDS ?= 120
 ORLIX_KERNEL_RUN_STARTUP_TIMEOUT_SECONDS ?= 30
@@ -1236,7 +1236,7 @@ run: __ios-simulator-framework xcodeproj
 	cleanup_tree() { pid="$$1"; [ -n "$$pid" ] || return 0; for child in $$(pgrep -P "$$pid" 2>/dev/null || true); do cleanup_tree "$$child"; done; kill "$$pid" >/dev/null 2>&1 || true; }; \
 	cleanup() { cleanup_tree "$$log_pid"; cleanup_tree "$$launch_pid"; xcrun simctl terminate "$$simctl_device" "$(ORLIX_TERMINAL_BUNDLE_ID)" >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT INT TERM; \
-	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "OrlixTerminal" || subsystem == "org.orlix.OrlixTerminal"' >> "$$runtime_log" 2>&1 & \
+	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "OrlixTerminal" || subsystem == "com.rudironsoni.OrlixTerminal"' >> "$$runtime_log" 2>&1 & \
 	log_pid="$$!"; \
 	xcrun simctl launch --terminate-running-process --console "$$simctl_device" "$(ORLIX_TERMINAL_BUNDLE_ID)" >> "$$runtime_log" 2>&1 & \
 	launch_pid="$$!"; \

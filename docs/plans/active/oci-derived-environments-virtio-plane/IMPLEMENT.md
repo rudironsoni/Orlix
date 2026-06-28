@@ -24937,3 +24937,21 @@ Current status:
 - The first-beta repository-side command surface is in place: project generation from `project.yml`, Release simulator fresh install, focused simulator gate, iPhoneOS archive, archive validation, signing diagnostics, and archive export.
 - The remaining TestFlight blocker is external Apple signing state in this execution context: no local provisioning profiles are installed, `login.keychain-db` reports `User interaction is not allowed`, and `make beta-signing-diagnostics ORLIX_CODE_SIGN_IDENTITY="Apple Distribution"` fails with `errSecInternalComponent` on the temporary framework codesign step.
 - Do not broaden scope into OCI feature work, upstream conformance expansion, package ladder work, or terminal polish until the signing/export path is unblocked or a first beta has shipped.
+
+## 2026-06-28 personal bundle identifier checkpoint
+
+Changes:
+- Switched durable XcodeGen, beta Makefile, OrlixOS payload bundle metadata, OrlixHostAdapter log subsystem, OrlixTerminal boot queue label, kernel run helper, and release docs from the old app identifier prefix to `com.rudironsoni`.
+- Kept `org.orlix.OrlixTerminal` only as an explicit legacy simulator uninstall input so `beta-install-simulator` removes stale installs left by the previous bundle identifier.
+
+Evidence:
+- `make beta-prerequisites` exited 0.
+- `xcodegen generate --spec project.yml` exited 0, and `xcodebuild -project OrlixSystem.xcodeproj -list` exited 0 with the expected Orlix schemes.
+- Regenerated `OrlixSystem.xcodeproj` contains `com.rudironsoni.*` product bundle identifiers.
+- `make beta-install-simulator` exited 0 on the single iPhone 17 simulator `E65F0D05-980C-4368-8CDC-2D2BF3E05757` and launched `com.rudironsoni.OrlixTerminal`.
+- Installed app `Info.plist` reported `CFBundleIdentifier=com.rudironsoni.OrlixTerminal`; `xcrun simctl launch --terminate-running-process ... com.rudironsoni.OrlixTerminal` exited 0; `xcrun simctl get_app_container ... org.orlix.OrlixTerminal app` found no installed legacy app.
+- `make beta-simulator-gate` partially passed: OrlixOS selected metadata tests passed 2/2 and `OrlixPTYRuntimeTests` first invocation reported `TEST SUCCEEDED`. The later gate step failed because `xcodebuild` could not load simulator destinations after local Xcode/CoreSimulator drift: CoreSimulator current `1051.54.0` older than Xcode build `1051.55.0`. `xcode-storage-doctor` still passed and `simctl` still showed only the iPhone 17 simulator booted.
+- `git diff --check`, `git diff --cached --check`, and `.codex/hooks/compact_plan_check.py` exited 0.
+
+Boundary:
+- This proves the personal bundle identifier is wired through durable project sources and the simulator app installs and launches under `com.rudironsoni.OrlixTerminal`. It does not prove a full beta simulator gate after the local Xcode/CoreSimulator version mismatch appeared.

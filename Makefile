@@ -19,7 +19,8 @@ ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
 ORLIX_BETA_SIMULATOR_ID ?= E65F0D05-980C-4368-8CDC-2D2BF3E05757
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
-ORLIX_TERMINAL_BUNDLE_ID ?= org.orlix.OrlixTerminal
+ORLIX_TERMINAL_BUNDLE_ID ?= com.rudironsoni.OrlixTerminal
+ORLIX_TERMINAL_LEGACY_BUNDLE_IDS ?= org.orlix.OrlixTerminal
 .PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-install-simulator beta-simulator-gate beta-archive beta-validate-archive beta-export-archive build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
@@ -100,6 +101,10 @@ beta-install-simulator: beta-prerequisites
 		-showBuildSettings \
 		| awk -F' = ' '/TARGET_BUILD_DIR = / { build_dir=$$2 } /WRAPPER_NAME = / { wrapper=$$2 } END { if (build_dir != "" && wrapper != "") print build_dir "/" wrapper }')"; \
 	test -d "$$app" || { echo "missing built simulator app: $$app" >&2; exit 1; }; \
+	for bundle_id in $(ORLIX_TERMINAL_LEGACY_BUNDLE_IDS); do \
+		xcrun simctl terminate "$(ORLIX_BETA_SIMULATOR_ID)" "$$bundle_id" >/dev/null 2>&1 || true; \
+		xcrun simctl uninstall "$(ORLIX_BETA_SIMULATOR_ID)" "$$bundle_id" >/dev/null 2>&1 || true; \
+	done; \
 	xcrun simctl terminate "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_TERMINAL_BUNDLE_ID)" >/dev/null 2>&1 || true; \
 	xcrun simctl uninstall "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_TERMINAL_BUNDLE_ID)" >/dev/null 2>&1 || true; \
 	xcrun simctl install "$(ORLIX_BETA_SIMULATOR_ID)" "$$app"; \

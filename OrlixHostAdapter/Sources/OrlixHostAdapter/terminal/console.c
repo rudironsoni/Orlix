@@ -23,7 +23,7 @@ static os_log_t OrlixHostConsoleLog(void)
     static os_log_t log;
 
     if (!log) {
-        log = os_log_create("org.orlix.OrlixTerminal", "kernel");
+        log = os_log_create("com.rudironsoni.OrlixTerminal", "kernel");
     }
 
     return log;
