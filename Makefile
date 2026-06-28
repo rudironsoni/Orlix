@@ -15,7 +15,7 @@ ORLIX_BETA_EXPORT_DIR ?= $(ORLIX_BETA_ARCHIVE_DIR)/Export
 ORLIX_BETA_EXPORT_OPTIONS_PLIST ?=
 ORLIX_DEVELOPMENT_TEAM ?=
 ORLIX_CODE_SIGN_STYLE ?= Automatic
-ORLIX_CODE_SIGN_IDENTITY ?=
+ORLIX_CODE_SIGN_IDENTITY ?= Apple Distribution
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
 ORLIX_ALLOW_PROVISIONING_UPDATES ?= YES
 ORLIX_ASC_API_KEY_PATH ?=
@@ -73,12 +73,17 @@ beta-signing-diagnostics:
 	identity="$(ORLIX_CODE_SIGN_IDENTITY)"; \
 	[ -n "$$identity" ] || { echo "ORLIX_CODE_SIGN_IDENTITY is required, for example: Apple Distribution" >&2; exit 1; }; \
 	security find-identity -v -p codesigning; \
-	profile_dir="$$HOME/Library/MobileDevice/Provisioning Profiles"; \
-	if [ -d "$$profile_dir" ]; then \
-		find "$$profile_dir" -maxdepth 1 -type f -name '*.mobileprovision' -print | wc -l | awk '{ print "provisioning_profiles=" $$1 }'; \
-	else \
-		echo "provisioning_profiles=0"; \
-	fi; \
+	profile_count=0; \
+	for profile_dir in \
+		"$$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
+		"$$HOME/Library/MobileDevice/Provisioning Profiles"; do \
+		if [ -d "$$profile_dir" ]; then \
+			count="$$(find "$$profile_dir" -maxdepth 1 -type f -name '*.mobileprovision' -print | wc -l | awk '{ print $$1 }')"; \
+			printf '%s\n' "provisioning_profiles[$$profile_dir]=$$count"; \
+			profile_count="$$((profile_count + count))"; \
+		fi; \
+	done; \
+	printf '%s\n' "provisioning_profiles_total=$$profile_count"; \
 	tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-signing-diagnostics.XXXXXX")"; \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	bundle="$$tmp/SigningProbe.framework"; \
