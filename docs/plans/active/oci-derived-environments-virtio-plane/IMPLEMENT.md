@@ -25192,3 +25192,27 @@ Changes: - Restored `ORLIX_CODE_SIGN_IDENTITY` archive default to blank so autom
 Validation: - `make beta-signing-diagnostics ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed: 5 valid identities, 5 provisioning profiles, `validated signing identity: Apple Distribution`. - `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed through full release OrlixMLibC sysroot, OrlixOS package/rootfs payload, Coreutils, Findutils, e2fsprogs, kernel payload, and Xcode archive. - `make beta-validate-archive` passed: `Build/Release/Orlix.xcarchive` contains `Products/Applications/Orlix.app`, embedded `OrlixOS.framework`, `OrlixKernel.framework`, payload bundle, archive `Info.plist`, and dSYMs.
 
 Current status: - Archive generation is now working through the normal make gate. - The archive is signed by Xcode automatic signing with `Apple Development: Rudimar Luis Ronsoni Junior (A9C4N82KYY)` and `iOS Team Provisioning Profile: *`, not yet proven exported/uploadable for TestFlight. - Next beta gate is `beta-export`/upload with App Store distribution export options and a real App Store provisioning profile, or manual Xcode Organizer export if automatic export can re-sign successfully.
+
+
+[2026-06-29] TestFlight runtime panic fixed, PTY proof still blocked
+
+Changes:
+- Fixed the TestFlight kernel PTE panic in committed checkpoint `bcb3772` by keeping HostAdapter I/O mappings out of Linux hosted vmalloc space.
+- Changed OrlixOS init tty preference to try `/dev/ttyS0` before `/dev/hvc0` and log the candidate path. Earlier simulator evidence reached `sh-5.3#` with this ordering.
+- Updated `project.yml` XcodeGen source to disable Xcode user-script sandboxing for payload embed scripts and added explicit input paths for the OrlixOS payload phase. `xcodegen generate` and `make beta-install-simulator ORLIX_BETA_SIMULATOR_ID=4B85E297-7A59-45BD-A94B-189238EC48FA` completed after this change.
+- Tried a kernel-side `/dev/ttyS0` input poller and virtio-console input deconflict. This degraded boot reliability, so the kernel experiment was reverted and no OrlixKernel source changes remain in the working tree.
+
+Validation:
+- `xcode-storage-doctor` passed against the external SSD Xcode/CoreSimulator setup.
+- `make -f OrlixOS/Makefile kernel-payload PROFILE=release` passed after reverting the experimental tty changes.
+- `make beta-install-simulator ORLIX_BETA_SIMULATOR_ID=4B85E297-7A59-45BD-A94B-189238EC48FA` passed after regenerating `Orlix.xcodeproj` from `project.yml`.
+
+Blocked validation:
+- `OrlixRuntimeTests.testLinuxPTYCarriesInteractiveShellInputAndOutput` still has not passed. The last completed proof before the revert timed out after detecting `sh-5.3#` and sending PTY proof commands, so interactive input remains unproven.
+- Later XCTest reruns hit runner startup noise: `OrlixTestRunner` sampled in dyld `open` before the test body wrote a fresh PTY log, then runs were canceled by the agent. Those canceled xcresults are not runtime evidence.
+- App launch with the clean reverted kernel payload reached `Run /init as init process`, `ORLIX-ROOTINIT-START`, and `ORLIX-ROOT-OVERLAY-READY`, but did not reach `orlix-init: main entered` or `sh-5.3#` within the bounded capture. Do not claim beta/runtime readiness from this state.
+
+Current status:
+- No experimental OrlixKernel tty/input changes remain.
+- Working tree still contains only `OrlixOS/Sources/init/init.c` and `project.yml`.
+- First beta remains blocked on product runtime proof: app must boot to an interactive shell and the PTY input/output XCTest must pass on the single simulator before uploading another TestFlight build.

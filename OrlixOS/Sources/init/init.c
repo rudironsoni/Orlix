@@ -186,8 +186,8 @@ static void write_unsigned_decimal(int fd, unsigned long value)
 static int open_controlling_tty(void)
 {
 	static const char *const tty_candidates[] = {
-		"/dev/hvc0",
 		"/dev/ttyS0",
+		"/dev/hvc0",
 		NULL,
 	};
 	int fd = -1;
@@ -196,7 +196,9 @@ static int open_controlling_tty(void)
 		write_literal(STDERR_FILENO, "orlix-init: setsid failed\n");
 
 	for (const char *const *path = tty_candidates; *path != NULL; path++) {
-		write_literal(STDERR_FILENO, "orlix-init: opening tty candidate\n");
+		write_literal(STDERR_FILENO, "orlix-init: opening tty candidate ");
+		write_literal(STDERR_FILENO, *path);
+		write_literal(STDERR_FILENO, "\n");
 		fd = open(*path, O_RDWR | O_NONBLOCK);
 		if (fd >= 0) {
 			int flags = fcntl(fd, F_GETFL, 0);
