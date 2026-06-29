@@ -4349,12 +4349,14 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 	public func materializationCommands(
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
-		debugfsExecutable: String = "debugfs"
+		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck"
 	) throws -> [OrlixEnvironmentImageMaterializationCommand] {
 		try materializationPlan.commands(
 			mke2fsExecutable: mke2fsExecutable,
 			truncateExecutable: truncateExecutable,
-			debugfsExecutable: debugfsExecutable
+			debugfsExecutable: debugfsExecutable,
+			e2fsckExecutable: e2fsckExecutable
 		)
 	}
 
@@ -4369,6 +4371,7 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		fileManager: FileManager = .default,
 		runner: OrlixEnvironmentImageMaterializationCommandRunner
 	) throws -> OrlixEnvironmentImageMaterializationResult {
@@ -4382,6 +4385,7 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 			mke2fsExecutable: mke2fsExecutable,
 			truncateExecutable: truncateExecutable,
 			debugfsExecutable: debugfsExecutable,
+			e2fsckExecutable: e2fsckExecutable,
 			runner: runner
 		)
 	}
@@ -4390,18 +4394,21 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		searchPath: [URL]? = nil,
 		fileManager: FileManager = .default
 	) throws -> OrlixOCIRuntimeBundleMaterializationToolchainCheck {
 		let commands = try materializationCommands(
 			mke2fsExecutable: mke2fsExecutable,
 			truncateExecutable: truncateExecutable,
-			debugfsExecutable: debugfsExecutable
+			debugfsExecutable: debugfsExecutable,
+			e2fsckExecutable: e2fsckExecutable
 		)
 		let requiredExecutables = [
 			mke2fsExecutable,
 			truncateExecutable,
-			debugfsExecutable
+			debugfsExecutable,
+			e2fsckExecutable
 		]
 		let resolvedExecutables = Self.resolveExecutables(
 			requiredExecutables,
