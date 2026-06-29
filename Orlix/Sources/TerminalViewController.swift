@@ -12,6 +12,7 @@ final class TerminalViewController: UIViewController {
     private let terminalOutputLock = NSLock()
     private var pendingTerminalOutput = ""
     private var terminalOutputFlushScheduled = false
+    private var bootWatchdogWorkItem: DispatchWorkItem?
     private let launchConfiguration: OrlixLaunchConfiguration
     private lazy var linuxSessionResult = launchConfiguration.makeLinuxSession()
     private var terminalOutput: OrlixTerminalOutput?
@@ -105,9 +106,11 @@ final class TerminalViewController: UIViewController {
             return
         }
         terminalSession.receive(launchConfiguration.startMessage(for: session) + "\r\n")
+        startBootWatchdog(for: session)
         bootQueue.async { [weak self] in
             let status = session.boot()
             DispatchQueue.main.async { [weak self] in
+                self?.cancelBootWatchdog()
                 self?.terminalSession.receive(status.message + "\r\n")
             }
         }
@@ -149,6 +152,7 @@ final class TerminalViewController: UIViewController {
     }
 
     private func enqueueTerminalOutput(_ text: String) {
+        cancelBootWatchdog()
         terminalOutputLock.lock()
         pendingTerminalOutput += text
         guard !terminalOutputFlushScheduled else {
@@ -172,6 +176,55 @@ final class TerminalViewController: UIViewController {
 
         guard !text.isEmpty else { return }
         terminalSession.receive(text)
+    }
+
+    private func startBootWatchdog(for session: OrlixLinuxSession) {
+        cancelBootWatchdog()
+        let workItem = DispatchWorkItem { [weak self, weak session] in
+            guard let self, let session else { return }
+            let stage = session.latestBootProgress?.stage ?? .unknown
+            self.terminalSession.receive(
+                "Boot still running: \(Self.bootStageDisplayName(stage))\r\n"
+            )
+        }
+        bootWatchdogWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
+    }
+
+    private func cancelBootWatchdog() {
+        bootWatchdogWorkItem?.cancel()
+        bootWatchdogWorkItem = nil
+    }
+
+    private static func bootStageDisplayName(_ stage: OrlixBootStage) -> String {
+        switch stage {
+        case .unknown:
+            return "unknown"
+        case .sessionCreated:
+            return "session created"
+        case .payloadRegistering:
+            return "payload registering"
+        case .payloadRegistered:
+            return "payload registered"
+        case .bootloaderEntered:
+            return "bootloader entered"
+        case .bootConfigValidated:
+            return "boot config validated"
+        case .hostResourcesReady:
+            return "host resources ready"
+        case .kernelHandoff:
+            return "kernel handoff"
+        case .archEntry:
+            return "architecture entry"
+        case .earlyConsoleReady:
+            return "early console ready"
+        case .linuxStartKernel:
+            return "Linux start kernel"
+        case .firstConsoleOutput:
+            return "first console output"
+        case .failed:
+            return "failed"
+        }
     }
 
     private static func savedTerminalTheme() -> TerminalTheme {

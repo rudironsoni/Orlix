@@ -3,6 +3,7 @@
 
 #include <string.h>
 #include <unistd.h>
+#include "OrlixHostAdapter/boot/progress.h"
 #include "OrlixHostAdapter/boot/resources.h"
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
 
@@ -863,6 +864,121 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     for (unsigned long index = 0; index < 7; index++) {
         vm_deallocate(mach_task_self(), occupied[index], (vm_size_t)pageSize);
     }
+}
+
+
+- (void)testBootProgressRecordsOrderedSequence
+{
+    orlix_host_boot_progress_event_t events[4] = {0};
+    orlix_host_boot_progress_reset();
+
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_SESSION_CREATED, 0, 0, 0);
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_PAYLOAD_REGISTERING, 0, 0, 0);
+
+    XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 2U);
+    XCTAssertEqual(events[0].sequence, 1ULL);
+    XCTAssertEqual(events[0].stage, ORLIX_HOST_BOOT_STAGE_SESSION_CREATED);
+    XCTAssertEqual(events[1].sequence, 2ULL);
+    XCTAssertEqual(events[1].stage, ORLIX_HOST_BOOT_STAGE_PAYLOAD_REGISTERING);
+    XCTAssertGreaterThanOrEqual(events[1].monotonic_ns, events[0].monotonic_ns);
+}
+
+- (void)testBootProgressRingBufferIsBoundedAndOldestToNewest
+{
+    orlix_host_boot_progress_event_t events[64] = {0};
+    orlix_host_boot_progress_reset();
+
+    for (uint32_t index = 0; index < 70; index++) {
+        orlix_host_boot_progress_record(index, (int32_t)index, 0, 0);
+    }
+
+    XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 64), 64U);
+    XCTAssertEqual(events[0].sequence, 7ULL);
+    XCTAssertEqual(events[0].stage, 6U);
+    XCTAssertEqual(events[63].sequence, 70ULL);
+    XCTAssertEqual(events[63].stage, 69U);
+}
+
+- (void)testBootProgressLatestReturnsNewestEvent
+{
+    orlix_host_boot_progress_event_t event = {0};
+    orlix_host_boot_progress_reset();
+
+    XCTAssertEqual(orlix_host_boot_progress_latest(&event), 0);
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_PAYLOAD_REGISTERED, 0, 0, 0);
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_BOOTLOADER_ENTERED, 0, 0, 0);
+
+    XCTAssertEqual(orlix_host_boot_progress_latest(&event), 1);
+    XCTAssertEqual(event.sequence, 2ULL);
+    XCTAssertEqual(event.stage, ORLIX_HOST_BOOT_STAGE_BOOTLOADER_ENTERED);
+}
+
+- (void)testBootProgressResetClearsEvents
+{
+    orlix_host_boot_progress_event_t event = {0};
+    orlix_host_boot_progress_reset();
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_SESSION_CREATED, 0, 0, 0);
+
+    XCTAssertEqual(orlix_host_boot_progress_latest(&event), 1);
+    orlix_host_boot_progress_reset();
+    XCTAssertEqual(orlix_host_boot_progress_latest(&event), 0);
+}
+
+- (void)testBootProgressConcurrentRecordsDoNotCorruptState
+{
+    orlix_host_boot_progress_event_t events[64] = {0};
+    orlix_host_boot_progress_reset();
+
+    dispatch_apply(128, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(size_t index) {
+        orlix_host_boot_progress_record(
+            ORLIX_HOST_BOOT_STAGE_HOST_RESOURCES_READY,
+            (int32_t)index,
+            0,
+            0
+        );
+    });
+
+    uint32_t count = orlix_host_boot_progress_snapshot(events, 64);
+    XCTAssertEqual(count, 64U);
+    for (uint32_t index = 1; index < count; index++) {
+        XCTAssertGreaterThan(events[index].sequence, events[index - 1].sequence);
+    }
+}
+
+- (void)testBootProgressFailureDetailsArePreserved
+{
+    orlix_host_boot_progress_event_t event = {0};
+    orlix_host_boot_progress_reset();
+
+    orlix_host_boot_progress_record(
+        ORLIX_HOST_BOOT_STAGE_FAILED,
+        -3,
+        5,
+        22
+    );
+
+    XCTAssertEqual(orlix_host_boot_progress_latest(&event), 1);
+    XCTAssertEqual(event.stage, ORLIX_HOST_BOOT_STAGE_FAILED);
+    XCTAssertEqual(event.status, -3);
+    XCTAssertEqual(event.mach_kern_return, 5);
+    XCTAssertEqual(event.posix_errno, 22);
+}
+
+- (void)testBootProgressFirstConsoleOutputRecordsOnlyOncePerReset
+{
+    orlix_host_boot_progress_event_t events[4] = {0};
+    orlix_host_boot_progress_reset();
+
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT, 0, 0, 0);
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT, 0, 0, 0);
+
+    XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 1U);
+    XCTAssertEqual(events[0].stage, ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT);
+
+    orlix_host_boot_progress_reset();
+    XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 0U);
+    orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT, 0, 0, 0);
+    XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 1U);
 }
 
 @end

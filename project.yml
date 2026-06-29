@@ -376,6 +376,7 @@ targets:
       - path: OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/boot
         includes:
+          - progress.c
           - resources.c
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/memory
         includes:
