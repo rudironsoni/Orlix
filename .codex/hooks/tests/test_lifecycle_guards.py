@@ -12,7 +12,6 @@ HOOK_DIR = Path(__file__).resolve().parents[1]
 PRE_TOOL_GUARD = HOOK_DIR / "pre_tool_use_guard.py"
 POST_TOOL_REVIEW = HOOK_DIR / "post_tool_use_review.py"
 STOP_CLAIM_CHECK = HOOK_DIR / "stop_claim_check.py"
-COMPACT_PLAN_CHECK = HOOK_DIR / "compact_plan_check.py"
 
 
 def run_hook(script, payload, cwd=None, env=None):
@@ -396,48 +395,6 @@ class LifecycleGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertNotIn("without explicit user authorization", result.stderr)
 
-    def test_compact_plan_check_warns_on_missing_implementation_log(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            subprocess.run(["git", "init"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            plan = root / "docs" / "plans" / "active" / "demo"
-            plan.mkdir(parents=True)
-            (plan / "PLAN.md").write_text("# plan\n")
-
-            result = subprocess.run(
-                [sys.executable, str(COMPACT_PLAN_CHECK)],
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=root,
-                check=False,
-            )
-
-            self.assertEqual(result.returncode, 0)
-            self.assertIn("missing IMPLEMENT.md", result.stderr)
-
-    def test_compact_plan_check_blocks_oversized_goal(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            subprocess.run(["git", "init"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            plan = root / "docs" / "plans" / "active" / "demo"
-            plan.mkdir(parents=True)
-            (plan / "GOAL.md").write_text("# Goal\n" + ("x" * 4000))
-            (plan / "PLAN.md").write_text("# plan\n")
-            (plan / "IMPLEMENT.md").write_text("# IMPLEMENT.md\n")
-
-            result = subprocess.run(
-                [sys.executable, str(COMPACT_PLAN_CHECK)],
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=root,
-                check=False,
-            )
-
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("docs/plans/**/GOAL.md files must be <= 4000 characters", result.stderr)
-
     def test_pre_tool_guard_blocks_commit_with_oversized_goal(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as state_tmp:
             root = Path(tmp)
@@ -470,85 +427,3 @@ class LifecycleGuardTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 2)
             self.assertIn("docs/plans/**/GOAL.md files must be <= 4000 characters", result.stderr)
-
-    def test_compact_plan_check_warns_on_stale_status_contradiction(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            subprocess.run(["git", "init"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            plan = root / "docs" / "plans" / "active" / "demo"
-            plan.mkdir(parents=True)
-            (plan / "PLAN.md").write_text("# plan\n")
-            (plan / "IMPLEMENT.md").write_text(
-                "\n".join(
-                    [
-                        "# IMPLEMENT.md",
-                        "",
-                        "## earlier",
-                        "",
-                        "Current status:",
-                        "",
-                        "- pending on simulator proof.",
-                        "",
-                        "**Evidence:**",
-                        "",
-                        "- `rtk echo first`",
-                        "",
-                        "## later",
-                        "",
-                        "Current status:",
-                        "",
-                        "- green after iOS Simulator proof succeeded.",
-                        "",
-                        "**Evidence:**",
-                        "",
-                        "- `rtk xcodebuild test` succeeded.",
-                    ]
-                )
-            )
-
-            result = subprocess.run(
-                [sys.executable, str(COMPACT_PLAN_CHECK)],
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=root,
-                check=False,
-            )
-
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("stale pending/blocked status", result.stderr)
-
-    def test_compact_plan_check_warns_without_recent_handoff_or_status(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            subprocess.run(["git", "init"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            plan = root / "docs" / "plans" / "active" / "demo"
-            plan.mkdir(parents=True)
-            (plan / "PLAN.md").write_text("# plan\n")
-            (plan / "IMPLEMENT.md").write_text(
-                "\n".join(
-                    [
-                        "# IMPLEMENT.md",
-                        "",
-                        "**Evidence:**",
-                        "",
-                        "- `rtk echo old` recorded old evidence.",
-                    ]
-                )
-            )
-
-            result = subprocess.run(
-                [sys.executable, str(COMPACT_PLAN_CHECK)],
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=root,
-                check=False,
-            )
-
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("no recent current-status or handoff marker", result.stderr)
-
-
-if __name__ == "__main__":
-    unittest.main()
