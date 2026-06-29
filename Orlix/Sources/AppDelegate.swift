@@ -7,7 +7,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         _: UIApplication,
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        TerminalDebugLog.enable(.standard)
+        #if DEBUG
+        TerminalDebugLog.enable([.lifecycle, .metrics, .input, .ime, .actions])
+        #else
+        TerminalDebugLog.disable()
+        #endif
         return true
     }
 
