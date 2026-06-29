@@ -1062,11 +1062,16 @@ static int OrlixHostEnsureStateBlockFile(const char *path,
                                          unsigned long long minimum_bytes,
                                          unsigned long long *size)
 {
+    unsigned long long template_size;
     unsigned long long target_size;
     struct stat state;
     int fd;
 
     if (!path || !template_path || minimum_bytes == 0 || !size) {
+        return -1;
+    }
+    if (OrlixHostResourceFileSize(template_path, &template_size) != 0 ||
+        template_size == 0) {
         return -1;
     }
 
@@ -1089,6 +1094,9 @@ static int OrlixHostEnsureStateBlockFile(const char *path,
     target_size = (unsigned long long)state.st_size;
     if (target_size < minimum_bytes) {
         target_size = minimum_bytes;
+    }
+    if (target_size < template_size) {
+        target_size = template_size;
     }
     if (target_size % ORLIX_HOST_BLOCK_SECTOR_SIZE) {
         target_size = ((target_size + ORLIX_HOST_BLOCK_SECTOR_SIZE - 1) /
