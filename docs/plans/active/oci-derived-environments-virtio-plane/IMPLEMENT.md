@@ -10,6 +10,34 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-30 TestFlight build 12 early hosted vmalloc preparation
+
+Root cause analysis:
+- TestFlight build `0.1 (11)` proved the physical iOS 27 boot reached `Linux start kernel`, which is recorded immediately before `arch_boot_start_kernel()` branches into upstream Linux `start_kernel()`.
+- The regression aligned with the automatic runtime-derived hosted vmalloc mapping changes. Commit `5d569973` made hosted `VMALLOC_START` and `VMALLOC_END` runtime globals selected in `paging_init()`.
+- That was too late for the earliest `start_kernel()` path. Early Linux initialization can observe vmalloc helpers and kernel virtual range state before `setup_arch()` reaches `paging_init()`. On the physical iOS 27 device this left the boot silent after the `Linux start kernel` marker.
+
+Changes:
+- Moved hosted vmalloc window selection to the app-hosted boot preparation path before the `start_kernel()` handoff.
+- Kept address selection runtime-derived through the existing HostAdapter reservation primitive. No hardcoded host VM candidate addresses were added.
+- Left `paging_init()` as validation and fallback, including the hosted vmalloc range log once printk is available.
+- If no host-mappable hosted vmalloc window can be reserved, boot now fails before the silent `start_kernel()` region with `ORLIX_ARCH_BOOT_UNAVAILABLE`.
+
+Validation:
+- `git diff --check` passed.
+- `make -f OrlixOS/Makefile kernel-payload PROFILE=release` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Debug -destination 'generic/platform=iOS Simulator' build` passed.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed, preserving build `12`.
+- `make beta-validate-archive` passed for `Build/Release/Orlix.xcarchive`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- Exported IPA metadata: bundle id `com.rudironsoni.Orlix`, version `0.1`, build `12`, `ITSAppUsesNonExemptEncryption=false`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed.
+- `fastlane run latest_testflight_build_number api_key_path:$HOME/.config/fastlane/appstore_api_key.json app_identifier:com.rudironsoni.Orlix version:0.1` reported `Result: 12`.
+
+Boundary:
+- This proves the fix builds, archives, exports, uploads, and is visible to App Store Connect as latest TestFlight build `12`.
+- It does not yet prove the physical iOS 27 phone advances past `Linux start kernel`; that requires installing build `12` on the iPhone 15 Pro Max and observing the final boot progress/console output.
+
 ### 2026-06-30 TestFlight build 11 upload
 
 Release:
