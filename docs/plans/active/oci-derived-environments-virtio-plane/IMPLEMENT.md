@@ -10,6 +10,34 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 TestFlight build 7 archive upload
+
+Release:
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ...` first failed during upstream Linux network access, then `make beta-archive ORLIX_BETA_BUMP_BUILD_NUMBER=NO ...` succeeded with `CURRENT_PROJECT_VERSION=7`.
+- `make beta-validate-archive` passed for `Build/Release/Orlix.xcarchive`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- IPA metadata verified `CFBundleIdentifier=com.rudironsoni.Orlix`, `CFBundleShortVersionString=0.1`, `CFBundleVersion=7`, `ITSAppUsesNonExemptEncryption=false`, embedded profile `Orlix`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed with fastlane upload to App Store Connect app `6785306909`.
+
+### 2026-06-29 Hosted vmalloc window discovery
+
+Changes:
+- Removed the fixed hosted kernel vmalloc candidate from the physical-device boot path.
+- Added `orlix_host_kernel_reserve_window()` so OrlixKernel asks OrlixHostAdapter to reserve a host-mappable Darwin VM gap at runtime.
+- Kept Linux window policy in OrlixKernel: hosted `VMALLOC_START`/`VMALLOC_END` are selected from the HostAdapter reservation before paging init validates the range.
+- Moved HostAdapter I/O mappings to `VM_FLAGS_ANYWHERE` allocations that reject the Linux-owned hosted address band instead of using a hardcoded high aperture.
+- Added HostAdapter tests proving I/O mappings avoid hosted Linux addresses and a discovered kernel reservation can be mapped and read back.
+
+Validation:
+- `xcode-storage-doctor` passed.
+- Only one simulator was booted: `ExternalSSDProof` `4B85E297-7A59-45BD-A94B-189238EC48FA`.
+- Focused `OrlixHostAdapter Tests` for I/O mapping and kernel reservation passed on that simulator.
+- Full `OrlixHostAdapter Tests` passed: 20 tests, 0 failures.
+- `make beta-simulator-gate` passed on the same simulator.
+- `make beta-install-simulator` passed.
+- Release simulator launch for `com.rudironsoni.Orlix` reached `Linux version 6.12.0`, `Run /init init process`, `ORLIX-ROOT-OVERLAY-READY`, and `orlix-init: main entered`; no `Kernel panic` or `failed to synchronize hosted kernel mapping` marker was present in the captured log.
+- `xcrun devicectl list devices` still reported `RRJ-iPhone-15-Pro-Max` unavailable, so physical iPhone 15 Pro Max proof remains open.
+
 ### 2026-06-29 TestFlight build 6 archive and upload
 
 Changes:

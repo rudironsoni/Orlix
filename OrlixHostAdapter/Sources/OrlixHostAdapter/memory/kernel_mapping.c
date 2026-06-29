@@ -43,12 +43,10 @@ static struct OrlixHostIOMapping *OrlixHostIOMappings;
 static struct OrlixHostKernelShadowMapping *OrlixHostKernelShadowMappings;
 static struct OrlixHostUserMapping *OrlixHostUserMappings;
 
-#define ORLIX_HOST_IOMEM_BASE 0x0000780000000000UL
-#define ORLIX_HOST_IOMEM_SIZE 0x0000000010000000UL
-#define ORLIX_HOST_HOSTED_RESERVED_BASE 0x0000600000000000UL
-#define ORLIX_HOST_HOSTED_RESERVED_END 0x00007f0000000000UL
-
-static unsigned long OrlixHostIOMappingCursor = ORLIX_HOST_IOMEM_BASE;
+#define ORLIX_HOST_IOMEM_MAX_SIZE 0x0000000010000000UL
+#define ORLIX_HOST_HOSTED_USER_BASE 0x0000600000000000UL
+#define ORLIX_HOST_HOSTED_STACK_TOP 0x0000700000000000UL
+#define ORLIX_HOST_HOSTED_KERNEL_MAX 0x00007f0000000000UL
 
 static void OrlixHostUserMemoryBarrier(void)
 {
@@ -96,45 +94,55 @@ static vm_size_t OrlixHostRoundPageLength(unsigned long length)
     return (requested + page_size - 1) & ~(page_size - 1);
 }
 
-static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
+static unsigned long OrlixHostAlignUp(unsigned long value,
+                                      unsigned long alignment)
 {
-    unsigned long page_size = orlix_host_memory_page_size();
-    unsigned long aperture_end = ORLIX_HOST_IOMEM_BASE + ORLIX_HOST_IOMEM_SIZE;
-    unsigned long attempts;
+    if (alignment == 0 || (alignment & (alignment - 1UL)) != 0) {
+        return 0;
+    }
+    if (value > (unsigned long)-1 - (alignment - 1UL)) {
+        return 0;
+    }
+    return (value + alignment - 1UL) & ~(alignment - 1UL);
+}
 
-    if (!mapped || length == 0 || length > ORLIX_HOST_IOMEM_SIZE) {
+static int OrlixHostReserveFixedRange(unsigned long base,
+                                      unsigned long length)
+{
+    vm_address_t target = (vm_address_t)base;
+    kern_return_t status;
+
+    status = vm_allocate(mach_task_self(),
+                         &target,
+                         (vm_size_t)length,
+                         VM_FLAGS_FIXED);
+    if (status != KERN_SUCCESS || target != (vm_address_t)base) {
+        if (status == KERN_SUCCESS) {
+            (void)vm_deallocate(mach_task_self(), target, (vm_size_t)length);
+        }
         return -1;
     }
 
-    attempts = ORLIX_HOST_IOMEM_SIZE / page_size;
-    for (unsigned long index = 0; index < attempts; index++) {
-        vm_address_t target;
-        kern_return_t status;
-
-        if (OrlixHostIOMappingCursor < ORLIX_HOST_IOMEM_BASE ||
-            OrlixHostIOMappingCursor > aperture_end - length) {
-            OrlixHostIOMappingCursor = ORLIX_HOST_IOMEM_BASE;
-        }
-
-        target = (vm_address_t)OrlixHostIOMappingCursor;
-        status = vm_allocate(mach_task_self(),
-                             &target,
-                             length,
-                             VM_FLAGS_FIXED);
-        if (status == KERN_SUCCESS &&
-            target == (vm_address_t)OrlixHostIOMappingCursor) {
-            *mapped = target;
-            OrlixHostIOMappingCursor += length;
-            if (OrlixHostIOMappingCursor >= aperture_end) {
-                OrlixHostIOMappingCursor = ORLIX_HOST_IOMEM_BASE;
-            }
-            return 0;
-        }
-
-        OrlixHostIOMappingCursor += page_size;
+    status = vm_protect(mach_task_self(),
+                        target,
+                        (vm_size_t)length,
+                        false,
+                        VM_PROT_NONE);
+    if (status != KERN_SUCCESS) {
+        (void)vm_deallocate(mach_task_self(), target, (vm_size_t)length);
+        return -1;
     }
 
-    for (unsigned int attempt = 0; attempt < 8; attempt++) {
+    return 0;
+}
+
+static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
+{
+    if (!mapped || length == 0 || length > ORLIX_HOST_IOMEM_MAX_SIZE) {
+        return -1;
+    }
+
+    for (unsigned int attempt = 0; attempt < 32; attempt++) {
         vm_address_t target = 0;
         kern_return_t status = vm_allocate(mach_task_self(),
                                            &target,
@@ -146,8 +154,12 @@ static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
         }
         if (OrlixHostRangeIntersects((unsigned long)target,
                                      length,
-                                     ORLIX_HOST_HOSTED_RESERVED_BASE,
-                                     ORLIX_HOST_HOSTED_RESERVED_END)) {
+                                     ORLIX_HOST_HOSTED_USER_BASE,
+                                     ORLIX_HOST_HOSTED_STACK_TOP) ||
+            OrlixHostRangeIntersects((unsigned long)target,
+                                     length,
+                                     ORLIX_HOST_HOSTED_STACK_TOP,
+                                     ORLIX_HOST_HOSTED_KERNEL_MAX)) {
             (void)vm_deallocate(mach_task_self(), target, length);
             continue;
         }
@@ -410,6 +422,90 @@ static int OrlixHostKernelCreateShadowMapping(unsigned long target_address,
     OrlixHostKernelShadowMappings = mapping;
     *out_mapping = mapping;
     return 0;
+}
+
+__attribute__((visibility("hidden"))) int orlix_host_kernel_reserve_window(
+    unsigned long minimum_address,
+    unsigned long maximum_address,
+    unsigned long length,
+    unsigned long alignment,
+    unsigned long *base_address)
+{
+    mach_port_t task = mach_task_self();
+    vm_address_t cursor;
+    unsigned long active_tls;
+
+    if (!base_address || minimum_address == 0 || maximum_address <= minimum_address ||
+        length == 0 || length > maximum_address - minimum_address ||
+        alignment == 0 || (alignment & (alignment - 1UL)) != 0) {
+        return -1;
+    }
+
+    *base_address = 0;
+    cursor = (vm_address_t)OrlixHostAlignUp(minimum_address, alignment);
+    if (cursor == 0 || cursor > maximum_address - length) {
+        return -1;
+    }
+
+    active_tls = OrlixHostEnterHostTls();
+    while (cursor <= (vm_address_t)(maximum_address - length)) {
+        vm_address_t region_address = cursor;
+        vm_size_t region_size = 0;
+        vm_region_basic_info_data_64_t info;
+        mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT_64;
+        memory_object_name_t object_name = MACH_PORT_NULL;
+        kern_return_t status;
+        unsigned long candidate;
+        vm_address_t region_end;
+
+        status = vm_region_64(task,
+                              &region_address,
+                              &region_size,
+                              VM_REGION_BASIC_INFO_64,
+                              (vm_region_info_t)&info,
+                              &count,
+                              &object_name);
+        if (object_name != MACH_PORT_NULL) {
+            mach_port_deallocate(task, object_name);
+        }
+        if (status != KERN_SUCCESS || region_address >= maximum_address) {
+            candidate = OrlixHostAlignUp((unsigned long)cursor, alignment);
+            if (candidate != 0 &&
+                candidate <= maximum_address - length &&
+                OrlixHostReserveFixedRange(candidate, length) == 0) {
+                *base_address = candidate;
+                OrlixHostLeaveHostTls(active_tls);
+                return 0;
+            }
+            break;
+        }
+
+        candidate = OrlixHostAlignUp((unsigned long)cursor, alignment);
+        if (candidate != 0 &&
+            candidate <= maximum_address - length &&
+            (vm_address_t)(candidate + length) <= region_address &&
+            OrlixHostReserveFixedRange(candidate, length) == 0) {
+            *base_address = candidate;
+            OrlixHostLeaveHostTls(active_tls);
+            return 0;
+        }
+
+        if (region_size > (vm_size_t)-1 - region_address) {
+            break;
+        }
+        region_end = region_address + region_size;
+        if (region_end <= cursor) {
+            break;
+        }
+        cursor = (vm_address_t)OrlixHostAlignUp((unsigned long)region_end,
+                                                alignment);
+        if (cursor == 0) {
+            break;
+        }
+    }
+
+    OrlixHostLeaveHostTls(active_tls);
+    return -1;
 }
 
 static int OrlixHostMapShadowKernelPage(unsigned long target_address,

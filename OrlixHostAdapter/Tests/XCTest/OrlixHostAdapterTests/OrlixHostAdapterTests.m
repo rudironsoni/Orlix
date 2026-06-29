@@ -727,8 +727,8 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
 
 - (void)testIOMappingAvoidsHostedKernelVmallocRange
 {
-    const unsigned long vmallocStart = 0x0000780010000000UL;
-    const unsigned long vmallocEnd = 0x00007f0000000000UL;
+    const unsigned long hostedLinuxStart = 0x0000600000000000UL;
+    const unsigned long hostedLinuxEnd = 0x00007f0000000000UL;
     void *mapping = orlix_host_ioremap(0x10000000UL, 0x200UL);
     unsigned long address = (unsigned long)mapping;
     unsigned long physicalAddress = 0;
@@ -738,13 +738,46 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
         return;
     }
 
-    XCTAssertFalse(address >= vmallocStart && address < vmallocEnd);
+    XCTAssertFalse(address >= hostedLinuxStart && address < hostedLinuxEnd);
     XCTAssertEqual(orlix_host_iomem_physical_address(mapping,
                                                      &physicalAddress),
                    0);
     XCTAssertEqual(physicalAddress, 0x10000000UL);
 
     orlix_host_iounmap(mapping);
+}
+
+- (void)testKernelReservationDiscoversHostMappableWindow
+{
+    const unsigned long minimumAddress = 0x0000710000000000UL;
+    const unsigned long maximumAddress = 0x00007f0000000000UL;
+    const unsigned long pageSize = orlix_host_memory_page_size();
+    const unsigned long length = pageSize * 2UL;
+    unsigned long base = 0;
+    void *page = NULL;
+
+    XCTAssertEqual(posix_memalign(&page, pageSize, pageSize), 0);
+    XCTAssertNotEqual(page, NULL);
+    if (!page) {
+        return;
+    }
+
+    memset(page, 0x5a, pageSize);
+    XCTAssertEqual(orlix_host_kernel_reserve_window(minimumAddress,
+                                                    maximumAddress,
+                                                    length,
+                                                    pageSize,
+                                                    &base),
+                   0);
+    XCTAssertGreaterThanOrEqual(base, minimumAddress);
+    XCTAssertLessThanOrEqual(base + length, maximumAddress);
+    XCTAssertEqual(base & (pageSize - 1UL), 0UL);
+    XCTAssertEqual(orlix_host_kernel_map_page(base, page, pageSize), 0);
+    XCTAssertEqual(((unsigned char *)base)[0], 0x5a);
+    XCTAssertEqual(((unsigned char *)base)[pageSize - 1UL], 0x5a);
+
+    orlix_host_kernel_unmap_pages(base, length);
+    free(page);
 }
 
 @end
