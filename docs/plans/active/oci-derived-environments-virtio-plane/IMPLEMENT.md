@@ -10,6 +10,27 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 TestFlight Boot Panic Boundary Fixes
+
+Changes:
+- Moved hosted `VMALLOC_START` above `TASK_SIZE` by adding a 64 KiB hosted vmalloc guard, so the hosted userspace limit `0x700000000000` is no longer also the first kernel vmalloc address.
+- Added a compile-time `BUILD_BUG_ON(VMALLOC_START <= TASK_SIZE)` to keep the hosted Linux user/kernel virtual split from regressing.
+- Fixed HostAdapter payload state block selection so app-private persisted state images are sized to at least the bundled state template size, not only `OrlixStateRootMinimumBytes`.
+- Added a HostAdapter XCTest for the persisted state regression: a shrunk ext4-looking state file is expanded back to the template capacity before being exposed as the writable block device.
+
+Validation:
+- `xcode-storage-doctor` passed.
+- `make -f OrlixOS/Makefile kernel-payload PROFILE=release` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixHostAdapter Tests" -configuration Debug -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' -only-testing:OrlixHostAdapterTests/OrlixHostAdapterTests/testPayloadRootImageExpandsPersistedStateBlockToTemplateSize test` passed.
+- Full `OrlixHostAdapter Tests` passed on simulator `4B85E297-7A59-45BD-A94B-189238EC48FA`.
+- `make beta-install-simulator ORLIX_BETA_SIMULATOR_ID=4B85E297-7A59-45BD-A94B-189238EC48FA ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed.
+- Simulator launch reached Linux boot, `/init`, `/dev/vdb` as `65536 512-byte logical blocks`, mounted `vdb` read-write, and emitted `ORLIX-ROOT-OVERLAY-READY`.
+
+Boundary:
+- The previous TestFlight panic `failed to synchronize hosted kernel PTE 0x700000000000` did not recur in the simulator launch.
+- The previous state image panic from `EXT4-fs (vdb): bad geometry` did not recur in the simulator launch.
+- The 120 second console capture timed out after `ORLIX-ROOT-OVERLAY-READY`; it did not prove an interactive shell prompt.
+
 ### 2026-06-29 Hosted I/O Mappings Kept Out Of Linux Vmalloc
 
 Changes:

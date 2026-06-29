@@ -8,6 +8,7 @@
 #include <linux/mm.h>
 #include <linux/mmzone.h>
 #include <linux/slab.h>
+#include <linux/build_bug.h>
 #include <linux/pgtable.h>
 #include <linux/pfn.h>
 #include <linux/sched.h>
@@ -55,6 +56,10 @@ void __init paging_init(void)
 	unsigned long max_zone_pfn[MAX_NR_ZONES] = { 0 };
 	phys_addr_t start = memblock_start_of_DRAM();
 	phys_addr_t end = memblock_end_of_DRAM();
+
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	BUILD_BUG_ON(VMALLOC_START <= TASK_SIZE);
+#endif
 
 	if (!end || end <= start)
 		panic("Orlix: no memblock RAM available\n");

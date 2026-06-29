@@ -316,6 +316,81 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
     XCTAssertEqual(orlix_host_resources_clear_root_images(), 0);
 }
 
+- (void)testPayloadRootImageExpandsPersistedStateBlockToTemplateSize
+{
+    NSURL *root = [NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES];
+    root = [root URLByAppendingPathComponent:NSUUID.UUID.UUIDString
+                                 isDirectory:YES];
+    NSURL *home = [root URLByAppendingPathComponent:@"home" isDirectory:YES];
+    NSURL *payload = [root URLByAppendingPathComponent:@"payload"
+                                           isDirectory:YES];
+    NSURL *rootfs = [payload URLByAppendingPathComponent:@"rootfs"
+                                             isDirectory:YES];
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    XCTAssertTrue([fileManager createDirectoryAtURL:home
+                        withIntermediateDirectories:YES
+                                         attributes:nil
+                                              error:nil]);
+    XCTAssertTrue([fileManager createDirectoryAtURL:rootfs
+                        withIntermediateDirectories:YES
+                                         attributes:nil
+                                              error:nil]);
+
+    NSURL *baseURL = [rootfs URLByAppendingPathComponent:@"base.ext4"];
+    NSURL *stateURL = [rootfs URLByAppendingPathComponent:@"state.ext4"];
+    NSMutableData *base = [NSMutableData dataWithLength:512];
+    NSMutableData *state = [NSMutableData dataWithLength:2048];
+    ((unsigned char *)base.mutableBytes)[0] = 0xba;
+    ((unsigned char *)state.mutableBytes)[1080] = 0x53;
+    ((unsigned char *)state.mutableBytes)[1081] = 0xef;
+    XCTAssertTrue([base writeToURL:baseURL atomically:YES]);
+    XCTAssertTrue([state writeToURL:stateURL atomically:YES]);
+
+    const char *oldHome = getenv("HOME");
+    NSString *oldHomeString = oldHome ? [NSString stringWithUTF8String:oldHome] : nil;
+    setenv("HOME", home.fileSystemRepresentation, 1);
+
+    @try {
+        XCTAssertEqual(orlix_host_resources_clear_root_images(), 0);
+        XCTAssertEqual(
+            orlix_host_resources_set_payload_root_path(
+                payload.fileSystemRepresentation),
+            0);
+        XCTAssertEqual(
+            orlix_host_resources_register_root_image(
+                "orlix.env.template",
+                "",
+                "",
+                "rootfs/initramfs.cpio.gz",
+                "rootfs/base.ext4",
+                "rootfs/state.ext4",
+                0,
+                1,
+                1024),
+            0);
+
+        XCTAssertEqual(OrlixHostSelectBootBlockImages("orlix.env.template"), 0);
+        unsigned long long sectors = 0;
+        XCTAssertEqual(orlix_host_block_capacity(1, &sectors), 0);
+        XCTAssertEqual(sectors, 4ULL);
+
+        NSURL *persistedState = [home URLByAppendingPathComponent:
+            @"Library/Application Support/Orlix/orlix-env-template-state.img"];
+        XCTAssertEqual(truncate(persistedState.fileSystemRepresentation, 1536), 0);
+        XCTAssertEqual(OrlixHostSelectBootBlockImages("orlix.env.template"), 0);
+        XCTAssertEqual(orlix_host_block_capacity(1, &sectors), 0);
+        XCTAssertEqual(sectors, 4ULL);
+    } @finally {
+        if (oldHomeString) {
+            setenv("HOME", oldHomeString.fileSystemRepresentation, 1);
+        } else {
+            unsetenv("HOME");
+        }
+        [fileManager removeItemAtURL:root error:nil];
+        XCTAssertEqual(orlix_host_resources_clear_root_images(), 0);
+    }
+}
+
 - (void)testAppPrivateRootImageFilesRejectRelativeAndParentPaths
 {
     XCTAssertEqual(orlix_host_resources_clear_root_images(), 0);
