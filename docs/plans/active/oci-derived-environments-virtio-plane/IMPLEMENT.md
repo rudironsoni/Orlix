@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 iPhone 15 Pro Max terminal input routing
+
+Root cause:
+- The installed Orlix app sent terminal input through the OrlixOS terminal transport backed by the HostAdapter virtio-console queue.
+- OrlixOS init selected `/dev/ttyS0` before `/dev/hvc0` for the shell controlling terminal.
+- `/dev/ttyS0` is the output console path, while `/dev/hvc0` is the virtio-console path with the existing input queue. This let the shell prompt appear while user input was routed to the other console.
+
+Fix:
+- Changed `OrlixOS/Sources/init/init.c` so init prefers `/dev/hvc0` and keeps `/dev/ttyS0` as fallback.
+- Added an OrlixOS source contract test proving init keeps `/dev/hvc0` before `/dev/ttyS0` and rootfs metadata still declares `transport=/dev/hvc0`.
+
+Validation:
+- `xcode-storage-doctor` passed.
+- Only one simulator was booted: `Orlix-iPhone-15-Pro-Max` `58CEE149-24B9-45C4-9FEC-F7D630C622CF`.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixOS Tests" -configuration Debug -destination 'platform=iOS Simulator,id=58CEE149-24B9-45C4-9FEC-F7D630C622CF' -only-testing:OrlixOSTests/OrlixOSSessionTests/testInitPrefersVirtioConsoleForInteractiveTerminalInput test` passed.
+- Fresh install with `make beta-install-simulator ORLIX_BETA_SIMULATOR_ID=58CEE149-24B9-45C4-9FEC-F7D630C622CF ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed.
+- Installed app launch on the iPhone 15 Pro Max simulator reached `sh-5.3#` and showed `orlix-init: opening tty candidate /dev/hvc0`.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixRuntime Tests" -configuration Debug -destination 'platform=iOS Simulator,id=58CEE149-24B9-45C4-9FEC-F7D630C622CF' -only-testing:OrlixRuntimeTests/OrlixRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput test` passed, proving OrlixOS terminal input reaches the interactive shell through the product session path.
+
+Boundary:
+- macOS synthetic keystrokes sent by `osascript` did not enter the iOS software keyboard in this executor, so manual human tapping remains the final UX check.
+- Duplicate kernel log lines remain a separate console-configuration issue from terminal input.
+
 ### 2026-06-29 iPhone 15 Pro Max terminal boot hang diagnosis
 
 Root cause:

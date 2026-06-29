@@ -1409,12 +1409,33 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         XCTAssertTrue(initSource.contains("parse_sysctl_assignment("))
         XCTAssertTrue(initSource.contains("snprintf(path, path_size, \"/proc/sys/%s\", key);"))
         XCTAssertTrue(initSource.contains("if (*cursor == '.')"))
-        XCTAssertTrue(initSource.contains("apply_sysctl(&config->sysctls[i]);"))
-    }
+		XCTAssertTrue(initSource.contains("apply_sysctl(&config->sysctls[i]);"))
+	}
 
-    func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
-        let root = temporaryRegistryRoot()
-        let layout = try OrlixEnvironmentStorageLayout.layout(
+	func testInitPrefersVirtioConsoleForInteractiveTerminalInput() throws {
+		let sourceRoot = try repositoryRoot()
+		let initSource = try String(
+			contentsOf: sourceRoot
+				.appendingPathComponent("OrlixOS/Sources/init/init.c")
+		)
+		let rootfsMakefile = try String(
+			contentsOf: sourceRoot
+				.appendingPathComponent("OrlixOS/Sources/make/rootfs.mk")
+		)
+		let candidatesRange = try XCTUnwrap(
+			initSource.range(of: "static const char *const tty_candidates[]")
+		)
+		let candidatesSource = initSource[candidatesRange.lowerBound...]
+		let hvcRange = try XCTUnwrap(candidatesSource.range(of: "\"/dev/hvc0\""))
+		let ttyS0Range = try XCTUnwrap(candidatesSource.range(of: "\"/dev/ttyS0\""))
+
+		XCTAssertLessThan(hvcRange.lowerBound, ttyS0Range.lowerBound)
+		XCTAssertTrue(rootfsMakefile.contains("transport=/dev/hvc0"))
+	}
+
+	func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
+		let root = temporaryRegistryRoot()
+		let layout = try OrlixEnvironmentStorageLayout.layout(
             forEnvironmentID: "unsafe-command",
             linuxStateRoot: root.appendingPathComponent(
                 "Application Support/Orlix",
