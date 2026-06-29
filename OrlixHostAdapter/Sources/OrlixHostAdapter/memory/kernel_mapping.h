@@ -12,13 +12,20 @@ struct orlix_host_user_page_segment {
 __attribute__((visibility("hidden"))) unsigned long orlix_host_memory_page_size(void);
 
 __attribute__((visibility("hidden"))) int orlix_host_kernel_map_page(
-    unsigned long target_address,
-    const void *source_page,
-    unsigned long length);
+unsigned long target_address,
+const void *source_page,
+unsigned long length);
+
+__attribute__((visibility("hidden"))) int orlix_host_kernel_reserve_window(
+    unsigned long minimum_address,
+    unsigned long maximum_address,
+    unsigned long length,
+    unsigned long alignment,
+    unsigned long *base_address);
 
 __attribute__((visibility("hidden"))) void orlix_host_kernel_unmap_pages(
-    unsigned long target_address,
-    unsigned long length);
+unsigned long target_address,
+unsigned long length);
 
 __attribute__((visibility("hidden"))) int orlix_host_user_map_page(
     unsigned long target_address,

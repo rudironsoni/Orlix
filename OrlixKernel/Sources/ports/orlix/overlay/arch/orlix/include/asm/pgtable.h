@@ -36,10 +36,12 @@
 #define KERN_VIRT_SIZE	((PTRS_PER_PGD / 2 * PGDIR_SIZE) / 2)
 #define VMALLOC_SIZE	(KERN_VIRT_SIZE >> 1)
 #if defined(ORLIX_APP_HOSTED_BOOT)
-#define ORLIX_HOSTED_IOMEM_BASE	_AC(0x0000780000000000, UL)
-#define ORLIX_HOSTED_IOMEM_SIZE	_AC(0x0000000010000000, UL)
-#define VMALLOC_START	(ORLIX_HOSTED_IOMEM_BASE + ORLIX_HOSTED_IOMEM_SIZE)
-#define VMALLOC_END	_AC(0x00007f0000000000, UL)
+#define ORLIX_HOSTED_VMALLOC_SIZE	_AC(0x0000000010000000, UL)
+#define ORLIX_HOSTED_KERNEL_WINDOW_MAX	_AC(0x00007f0000000000, UL)
+extern unsigned long orlix_hosted_vmalloc_start;
+extern unsigned long orlix_hosted_vmalloc_end;
+#define VMALLOC_START	orlix_hosted_vmalloc_start
+#define VMALLOC_END	orlix_hosted_vmalloc_end
 #else
 #define VMALLOC_END	PAGE_OFFSET
 #define VMALLOC_START	(PAGE_OFFSET - VMALLOC_SIZE)
