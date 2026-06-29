@@ -3,6 +3,85 @@ import zlib
 @_spi(OrlixPrivateTesting) @testable import OrlixOS
 
 final class OrlixOSSessionTests: XCTestCase {
+
+    func testLinuxSessionExposesTypedBootProgress() {
+        let session = OrlixLinuxSession(
+            bootConfig: OrlixBootConfig(
+                profile: .release,
+                kernelCommandLine: nil,
+                rootImageIdentifier: "orlix.missing.root"
+            )
+        )
+
+        XCTAssertEqual(session.boot(), .invalidConfig)
+        XCTAssertEqual(session.latestBootProgress?.stage, .failed)
+        XCTAssertEqual(session.latestBootProgress?.statusCode, -1)
+        XCTAssertNil(session.latestBootProgress?.machKernReturn)
+        XCTAssertNil(session.latestBootProgress?.posixErrno)
+        XCTAssertEqual(session.bootProgressSnapshot.map(\.stage), [
+            .sessionCreated,
+            .payloadRegistering,
+            .payloadRegistered,
+            .bootloaderEntered,
+            .failed,
+        ])
+        XCTAssertEqual(
+            session.instanceSnapshot,
+            OrlixInstanceSnapshot(
+                state: .failed(session.latestBootProgress),
+                latestBootProgress: session.latestBootProgress,
+                hasConsoleOutput: false
+            )
+        )
+    }
+
+    func testBootProgressSnapshotMapsUnknownStagesSafely() {
+        let event = OrlixBootProgressEvent(
+            sequence: 42,
+            rawStage: 777,
+            statusCode: -7,
+            machKernReturn: 0,
+            posixErrno: 0
+        )
+
+        XCTAssertEqual(event.sequence, 42)
+        XCTAssertEqual(event.stage, .unknown)
+        XCTAssertEqual(event.statusCode, -7)
+        XCTAssertNil(event.machKernReturn)
+        XCTAssertNil(event.posixErrno)
+    }
+
+    func testBootProgressEventPreservesEvidenceFields() {
+        let event = OrlixBootProgressEvent(
+            sequence: 7,
+            rawStage: 1000,
+            statusCode: -3,
+            machKernReturn: 5,
+            posixErrno: 22
+        )
+
+        XCTAssertEqual(event.stage, .failed)
+        XCTAssertEqual(event.statusCode, -3)
+        XCTAssertEqual(event.machKernReturn, 5)
+        XCTAssertEqual(event.posixErrno, 22)
+    }
+
+    func testOrlixOSSessionSourceDoesNotImportDarwinMachOrPOSIXModules()
+        throws
+    {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Session/OrlixOS.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertFalse(source.contains("import Darwin"))
+        XCTAssertFalse(source.contains("import MachO"))
+        XCTAssertFalse(source.contains("import Glibc"))
+    }
+
     func testBootStatusMapsAlreadyStartedResult() {
         XCTAssertEqual(OrlixBootStatus(rawStatus: -3), .alreadyStarted)
         XCTAssertEqual(

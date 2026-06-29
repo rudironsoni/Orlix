@@ -1,4 +1,5 @@
 #include "OrlixHostAdapter/terminal/console.h"
+#include "OrlixHostAdapter/boot/progress.h"
 #include "OrlixHostAdapter/runtime/host_tls.h"
 
 #include <fcntl.h>
@@ -157,6 +158,12 @@ __attribute__((visibility("hidden"))) void orlix_host_console_write(
     }
 
     active_tls = OrlixHostEnterHostTls();
+    orlix_host_boot_progress_record(
+        ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT,
+        0,
+        0,
+        0
+    );
     (void)write(STDERR_FILENO, bytes, (size_t)length);
     OrlixHostConsoleWriteFileDescriptor(bytes, length);
 

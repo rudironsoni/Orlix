@@ -25400,3 +25400,11 @@ Validation:
 - `xcodegen generate --spec project.yml` passed.
 - Generated `Orlix.xcodeproj/project.pbxproj` app targets now contain `CURRENT_PROJECT_VERSION = 4`.
 - `make -n beta-archive ORLIX_BETA_BUMP_BUILD_NUMBER=NO ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` was stopped after it entered submake output; no product validation is claimed from that dry run.
+
+[2026-06-29] Typed boot progress observation foundation
+
+Changes: - Removed the rejected generic boot diagnostics/milestone path and replaced it with typed HostAdapter boot progress events backed by a fixed, bounded, thread-safe ring buffer. - Added `OrlixLinuxSession` boot progress and instance snapshot accessors, with boot edge records for session created, payload registering, payload registered, bootloader entered, kernel handoff, and failed. - Connected first HostAdapter console output to `firstConsoleOutput` progress once per reset. - Added a TerminalViewController watchdog that prints `Boot still running: <stage>` through the OrlixOS session surface, not raw HostAdapter C. - Regenerated `Orlix.xcodeproj` from `project.yml` and added `progress.c` to the HostAdapter test target source list.
+
+Validation: - `git diff --check` passed. - `rg` found no remaining `diagnostics.*`, `orlix_host_boot_milestone`, `ORLIXOS_PACKAGE_PROOF`, or `ORLIXOS_PACKAGE_STAMP` references under Orlix/OrlixOS/OrlixHostAdapter/project.yml. - `xcode-storage-doctor` passed. - `xcrun simctl list devices booted` showed only `Orlix-iPhone-15-Pro-Max` `58CEE149-24B9-45C4-9FEC-F7D630C622CF` booted. - Focused `OrlixHostAdapter Tests` boot progress tests passed on that simulator. - Focused `OrlixOS Tests` boot progress/session mapping tests passed on that simulator. - `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Debug -destination 'platform=iOS Simulator,id=58CEE149-24B9-45C4-9FEC-F7D630C622CF' build` passed. - Simulator app install/launch produced a blank white screenshot after watchdog threshold, so app-hosted terminal UI behavior is not claimed from that run.
+
+Blocked validation: - Physical iOS 27 evidence is still missing. `xcrun devicectl --help`, `xcrun devicectl device --help`, and `xcrun devicectl device process --help` were checked, but `xcrun devicectl list devices` did not list the iPhone, only the watch. No final physical-device boot progress event was captured.

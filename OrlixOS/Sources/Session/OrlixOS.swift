@@ -3,6 +3,46 @@ import Foundation
 @_silgen_name("OrlixBoot")
 private func OrlixBoot(_ config: UnsafePointer<COrlixBootConfig>) -> CInt
 
+private struct COrlixBootProgressEvent {
+    var sequence: UInt64
+    var monotonicNS: UInt64
+    var stage: UInt32
+    var status: Int32
+    var machKernReturn: Int32
+    var posixErrno: Int32
+}
+
+@_silgen_name("orlix_host_boot_progress_reset")
+private func orlix_host_boot_progress_reset()
+
+@_silgen_name("orlix_host_boot_progress_record")
+private func orlix_host_boot_progress_record(
+    _ stage: UInt32,
+    _ status: Int32,
+    _ machKernReturn: Int32,
+    _ posixErrno: Int32
+)
+
+@_silgen_name("orlix_host_boot_progress_snapshot")
+private func orlix_host_boot_progress_snapshot(
+    _ events: UnsafeMutablePointer<COrlixBootProgressEvent>?,
+    _ capacity: UInt32
+) -> UInt32
+
+@_silgen_name("orlix_host_boot_progress_latest")
+private func orlix_host_boot_progress_latest(
+    _ event: UnsafeMutablePointer<COrlixBootProgressEvent>?
+) -> CInt
+
+private enum COrlixBootStage {
+    static let sessionCreated: UInt32 = 10
+    static let payloadRegistering: UInt32 = 20
+    static let payloadRegistered: UInt32 = 30
+    static let bootloaderEntered: UInt32 = 40
+    static let kernelHandoff: UInt32 = 70
+    static let failed: UInt32 = 1000
+}
+
 @_silgen_name("orlix_host_console_set_output_fd")
 private func orlix_host_console_set_output_fd(_ fd: CInt)
 
@@ -122,6 +162,73 @@ public enum OrlixBootStatus: Equatable, Sendable {
             return "Orlix bootloader returned an unknown status."
         }
     }
+}
+
+public enum OrlixBootStage: UInt32, Sendable {
+    case unknown = 0
+    case sessionCreated = 10
+    case payloadRegistering = 20
+    case payloadRegistered = 30
+    case bootloaderEntered = 40
+    case bootConfigValidated = 50
+    case hostResourcesReady = 60
+    case kernelHandoff = 70
+    case archEntry = 80
+    case earlyConsoleReady = 90
+    case linuxStartKernel = 100
+    case firstConsoleOutput = 110
+    case failed = 1000
+
+    fileprivate init(cStage: UInt32) {
+        self = OrlixBootStage(rawValue: cStage) ?? .unknown
+    }
+}
+
+public struct OrlixBootProgressEvent: Equatable, Sendable {
+    public let sequence: UInt64
+    public let stage: OrlixBootStage
+    public let statusCode: Int32
+    public let machKernReturn: Int32?
+    public let posixErrno: Int32?
+
+    fileprivate init(cEvent: COrlixBootProgressEvent) {
+        self.sequence = cEvent.sequence
+        self.stage = OrlixBootStage(cStage: cEvent.stage)
+        self.statusCode = cEvent.status
+        self.machKernReturn = cEvent.machKernReturn == 0
+            ? nil
+            : cEvent.machKernReturn
+        self.posixErrno = cEvent.posixErrno == 0 ? nil : cEvent.posixErrno
+    }
+
+    init(
+        sequence: UInt64,
+        rawStage: UInt32,
+        statusCode: Int32,
+        machKernReturn: Int32,
+        posixErrno: Int32
+    ) {
+        self.sequence = sequence
+        self.stage = OrlixBootStage(cStage: rawStage)
+        self.statusCode = statusCode
+        self.machKernReturn = machKernReturn == 0 ? nil : machKernReturn
+        self.posixErrno = posixErrno == 0 ? nil : posixErrno
+    }
+}
+
+public enum OrlixInstanceState: Equatable, Sendable {
+    case idle
+    case preparing
+    case booting
+    case running
+    case failed(OrlixBootProgressEvent?)
+    case stopped
+}
+
+public struct OrlixInstanceSnapshot: Equatable, Sendable {
+    public let state: OrlixInstanceState
+    public let latestBootProgress: OrlixBootProgressEvent?
+    public let hasConsoleOutput: Bool
 }
 
 public struct OrlixBootConfig: Equatable, Sendable {
@@ -813,6 +920,64 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         materializedRootImage
     }
 
+    public var latestBootProgress: OrlixBootProgressEvent? {
+        var cEvent = COrlixBootProgressEvent(
+            sequence: 0,
+            monotonicNS: 0,
+            stage: 0,
+            status: 0,
+            machKernReturn: 0,
+            posixErrno: 0
+        )
+        guard orlix_host_boot_progress_latest(&cEvent) != 0 else {
+            return nil
+        }
+        return OrlixBootProgressEvent(cEvent: cEvent)
+    }
+
+    public var bootProgressSnapshot: [OrlixBootProgressEvent] {
+        let capacity = 64
+        var cEvents = Array(
+            repeating: COrlixBootProgressEvent(
+                sequence: 0,
+                monotonicNS: 0,
+                stage: 0,
+                status: 0,
+                machKernReturn: 0,
+                posixErrno: 0
+            ),
+            count: capacity
+        )
+        let count = cEvents.withUnsafeMutableBufferPointer { buffer in
+            orlix_host_boot_progress_snapshot(buffer.baseAddress, UInt32(capacity))
+        }
+        return cEvents.prefix(Int(count)).map(OrlixBootProgressEvent.init(cEvent:))
+    }
+
+    public var instanceSnapshot: OrlixInstanceSnapshot {
+        let snapshot = bootProgressSnapshot
+        let latest = snapshot.last
+        let hasConsoleOutput = snapshot.contains { $0.stage == .firstConsoleOutput }
+        let state: OrlixInstanceState
+
+        switch latest?.stage {
+        case nil:
+            state = .idle
+        case .failed:
+            state = .failed(latest)
+        case .payloadRegistering:
+            state = .preparing
+        default:
+            state = .booting
+        }
+
+        return OrlixInstanceSnapshot(
+            state: state,
+            latestBootProgress: latest,
+            hasConsoleOutput: hasConsoleOutput
+        )
+    }
+
     @_spi(OrlixPrivateTesting)
     public convenience init(
         environmentID: String,
@@ -910,10 +1075,16 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 	}
 
     public func boot() -> OrlixBootStatus {
+        orlix_host_boot_progress_reset()
+        orlix_host_boot_progress_record(COrlixBootStage.sessionCreated, 0, 0, 0)
+        orlix_host_boot_progress_record(COrlixBootStage.payloadRegistering, 0, 0, 0)
+
         guard registerRootImagesForBoot() else {
+            orlix_host_boot_progress_record(COrlixBootStage.failed, -1, 0, 0)
             return .invalidConfig
         }
 
+        orlix_host_boot_progress_record(COrlixBootStage.payloadRegistered, 0, 0, 0)
         return bootConfig.rootImageIdentifier.withCString { rootImageIdentifier in
             bootConfig.terminalIdentifier.withCString { terminalIdentifier in
                 let boot = { (kernelCommandLine: UnsafePointer<CChar>?) in
@@ -923,7 +1094,31 @@ public final class OrlixLinuxSession: @unchecked Sendable {
                         rootImageIdentifier: rootImageIdentifier,
                         terminalIdentifier: terminalIdentifier
                     )
-                    return OrlixBootStatus(rawStatus: OrlixBoot(&cConfig))
+                    orlix_host_boot_progress_record(
+                        COrlixBootStage.bootloaderEntered,
+                        0,
+                        0,
+                        0
+                    )
+                    let rawStatus = OrlixBoot(&cConfig)
+                    let status = OrlixBootStatus(rawStatus: rawStatus)
+                    switch status {
+                    case .ok:
+                        orlix_host_boot_progress_record(
+                            COrlixBootStage.kernelHandoff,
+                            rawStatus,
+                            0,
+                            0
+                        )
+                    default:
+                        orlix_host_boot_progress_record(
+                            COrlixBootStage.failed,
+                            rawStatus,
+                            0,
+                            0
+                        )
+                    }
+                    return status
                 }
 
                 guard let kernelCommandLine = bootConfig.kernelCommandLine,
