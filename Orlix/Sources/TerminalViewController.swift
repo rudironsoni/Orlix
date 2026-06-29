@@ -9,6 +9,9 @@ final class TerminalViewController: UIViewController {
 
     private var didStartBoot = false
     private let bootQueue = DispatchQueue(label: "com.rudironsoni.terminal.boot", qos: .userInitiated)
+    private let terminalOutputLock = NSLock()
+    private var pendingTerminalOutput = ""
+    private var terminalOutputFlushScheduled = false
     private let launchConfiguration: OrlixLaunchConfiguration
     private lazy var linuxSessionResult = launchConfiguration.makeLinuxSession()
     private var terminalOutput: OrlixTerminalOutput?
@@ -141,10 +144,34 @@ final class TerminalViewController: UIViewController {
                 .replacingOccurrences(of: "\r\n", with: "\n")
                 .replacingOccurrences(of: "\n", with: "\r\n")
 
-            DispatchQueue.main.async { [weak self] in
-                self?.terminalSession.receive(text)
-            }
+            self?.enqueueTerminalOutput(text)
         }
+    }
+
+    private func enqueueTerminalOutput(_ text: String) {
+        terminalOutputLock.lock()
+        pendingTerminalOutput += text
+        guard !terminalOutputFlushScheduled else {
+            terminalOutputLock.unlock()
+            return
+        }
+        terminalOutputFlushScheduled = true
+        terminalOutputLock.unlock()
+
+        DispatchQueue.main.async { [weak self] in
+            self?.flushTerminalOutput()
+        }
+    }
+
+    private func flushTerminalOutput() {
+        terminalOutputLock.lock()
+        let text = pendingTerminalOutput
+        pendingTerminalOutput = ""
+        terminalOutputFlushScheduled = false
+        terminalOutputLock.unlock()
+
+        guard !text.isEmpty else { return }
+        terminalSession.receive(text)
     }
 
     private static func savedTerminalTheme() -> TerminalTheme {

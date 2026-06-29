@@ -10,6 +10,24 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 iPhone 15 Pro Max terminal boot hang diagnosis
+
+Root cause:
+- The iPhone 15 Pro Max simulator reproduced the visible stale terminal symptom after the app showed `clocksource: Switched to clocksource orlix-host-time`.
+- A live sample proved Linux was not stopped there: the boot thread had progressed through timers, softirqs, virtio console input, hosted user mapping sync, hosted user resume, worker threads, and `kcompactd`.
+- The app main thread sample was saturated in Ghostty terminal output receive/debug logging. The app had enabled Ghostty `.standard` debug logging, including `.output`, and forwarded every kernel output chunk as an individual main-queue receive.
+
+Fix:
+- Disable Ghostty terminal debug logging in Release and keep Debug logging away from the high-volume `.output` category.
+- Coalesce Orlix terminal output before feeding Ghostty on the main thread so boot bursts cannot flood the UI queue.
+
+Validation:
+- Only one simulator was booted: `Orlix-iPhone-15-Pro-Max` `58CEE149-24B9-45C4-9FEC-F7D630C622CF`; `ExternalSSDProof` remained shutdown.
+- `make beta-install-simulator ORLIX_BETA_SIMULATOR_ID=58CEE149-24B9-45C4-9FEC-F7D630C622CF ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed.
+- Release simulator launch reached `ORLIX-ROOT-OVERLAY-READY`, `orlix-init: process started pid=33`, and an interactive `sh-5.3#` prompt on the iPhone 15 Pro Max simulator.
+- Post-fix process sample showed the main thread back in the UIKit run loop instead of `TerminalDebugLog` or `InMemoryTerminalSession.receive`.
+- `git diff --check` passed.
+
 ### 2026-06-29 Host vmalloc gap probing fix
 
 Changes:
