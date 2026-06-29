@@ -10,6 +10,18 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 Host vmalloc gap probing fix
+
+Changes:
+- Updated HostAdapter hosted kernel window reservation to keep probing aligned addresses inside each OS-reported free VM gap instead of giving up after one fixed reservation failure.
+- Kept host address ranges runtime-derived from Darwin/Mach; no hardcoded host VM candidates and no test-only HostAdapter ABI.
+- Added a regression test that asks Darwin for a real free gap, occupies all but the last aligned page in that gap, then proves `orlix_host_kernel_reserve_window()` skips unavailable addresses and reserves the remaining page through the real public HostAdapter API.
+
+Validation:
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixHostAdapter Tests" -configuration Debug -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' test` passed: 21 tests, 0 failures.
+- `make beta-install-simulator ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed.
+- Release simulator launch for `com.rudironsoni.Orlix` moved past the bootloader line and emitted `Linux version 6.12.0`, `Run /init init process`, `ORLIX-ROOT-OVERLAY-READY`, and `orlix-init: main entered`; no `Kernel panic` or `failed to synchronize hosted kernel mapping` marker appeared in the captured log.
+
 ### 2026-06-29 TestFlight build 7 archive upload
 
 Release:

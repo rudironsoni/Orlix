@@ -136,6 +136,33 @@ static int OrlixHostReserveFixedRange(unsigned long base,
     return 0;
 }
 
+static int OrlixHostReserveFirstAvailableRangeInGap(unsigned long gap_start,
+                                                    unsigned long gap_end,
+                                                    unsigned long length,
+                                                    unsigned long alignment,
+                                                    unsigned long *base_address)
+{
+    unsigned long probe_address = OrlixHostAlignUp(gap_start, alignment);
+
+    if (!base_address || probe_address == 0 || gap_end <= gap_start ||
+        length > gap_end - gap_start) {
+        return -1;
+    }
+
+    while (probe_address <= gap_end - length) {
+        if (OrlixHostReserveFixedRange(probe_address, length) == 0) {
+            *base_address = probe_address;
+            return 0;
+        }
+        if (probe_address > (unsigned long)-1 - alignment) {
+            break;
+        }
+        probe_address += alignment;
+    }
+
+    return -1;
+}
+
 static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
 {
     if (!mapped || length == 0 || length > ORLIX_HOST_IOMEM_MAX_SIZE) {
@@ -455,7 +482,6 @@ __attribute__((visibility("hidden"))) int orlix_host_kernel_reserve_window(
         mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT_64;
         memory_object_name_t object_name = MACH_PORT_NULL;
         kern_return_t status;
-        unsigned long candidate;
         vm_address_t region_end;
 
         status = vm_region_64(task,
@@ -469,23 +495,23 @@ __attribute__((visibility("hidden"))) int orlix_host_kernel_reserve_window(
             mach_port_deallocate(task, object_name);
         }
         if (status != KERN_SUCCESS || region_address >= maximum_address) {
-            candidate = OrlixHostAlignUp((unsigned long)cursor, alignment);
-            if (candidate != 0 &&
-                candidate <= maximum_address - length &&
-                OrlixHostReserveFixedRange(candidate, length) == 0) {
-                *base_address = candidate;
+            if (OrlixHostReserveFirstAvailableRangeInGap((unsigned long)cursor,
+                                                         maximum_address,
+                                                         length,
+                                                         alignment,
+                                                         base_address) == 0) {
                 OrlixHostLeaveHostTls(active_tls);
                 return 0;
             }
             break;
         }
 
-        candidate = OrlixHostAlignUp((unsigned long)cursor, alignment);
-        if (candidate != 0 &&
-            candidate <= maximum_address - length &&
-            (vm_address_t)(candidate + length) <= region_address &&
-            OrlixHostReserveFixedRange(candidate, length) == 0) {
-            *base_address = candidate;
+        if (region_address > cursor &&
+            OrlixHostReserveFirstAvailableRangeInGap((unsigned long)cursor,
+                                                     (unsigned long)region_address,
+                                                     length,
+                                                     alignment,
+                                                     base_address) == 0) {
             OrlixHostLeaveHostTls(active_tls);
             return 0;
         }
