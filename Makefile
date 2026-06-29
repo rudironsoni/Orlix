@@ -18,6 +18,7 @@ ORLIX_CODE_SIGN_STYLE ?= Automatic
 ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
 ORLIX_ALLOW_PROVISIONING_UPDATES ?= YES
+ORLIX_BETA_BUMP_BUILD_NUMBER ?= YES
 ORLIX_ASC_API_KEY_PATH ?=
 ORLIX_ASC_API_KEY_ID ?=
 ORLIX_ASC_API_ISSUER_ID ?=
@@ -26,7 +27,7 @@ ORLIX_BETA_SIMULATOR_ID ?= E65F0D05-980C-4368-8CDC-2D2BF3E05757
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-install-simulator beta-simulator-gate beta-archive beta-validate-archive beta-export-archive build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate beta-archive beta-validate-archive beta-export-archive build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -68,6 +69,18 @@ beta-prerequisites: check-build-tools
 	command -v xcodegen >/dev/null 2>&1 || { echo "xcodegen is required; run: brew bundle --file Brewfile" >&2; exit 1; }; \
 	command -v xcodebuild >/dev/null 2>&1 || { echo "xcodebuild is required" >&2; exit 1; }; \
 	test -f project.yml || { echo "missing XcodeGen source: project.yml" >&2; exit 1; }
+
+beta-bump-build-number: beta-prerequisites
+	@set -euo pipefail; \
+	if [ "$(ORLIX_BETA_BUMP_BUILD_NUMBER)" != YES ]; then \
+		printf '%s\n' "skipping TestFlight build number bump (ORLIX_BETA_BUMP_BUILD_NUMBER=$(ORLIX_BETA_BUMP_BUILD_NUMBER))"; \
+		exit 0; \
+	fi; \
+	current="$$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
+	[[ "$$current" =~ ^[0-9]+$$ ]] || { echo "CURRENT_PROJECT_VERSION must be an integer in project.yml, got: $$current" >&2; exit 1; }; \
+	next="$$((current + 1))"; \
+	perl -0pi -e 's/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+([[:space:]]*)$$/$${1}'"$$next"'$${2}/m or die "CURRENT_PROJECT_VERSION not found\n"' project.yml; \
+	printf '%s\n' "bumped CURRENT_PROJECT_VERSION $$current -> $$next"
 
 beta-signing-diagnostics:
 	@set -euo pipefail; \
@@ -152,7 +165,7 @@ beta-simulator-gate: beta-prerequisites
 		-only-testing:OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
 		test
 
-beta-archive: beta-prerequisites
+beta-archive: beta-bump-build-number
 	@set -euo pipefail; \
 	xcodegen generate --spec project.yml; \
 	[ -n "$(ORLIX_DEVELOPMENT_TEAM)" ] || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }; \

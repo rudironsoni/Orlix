@@ -25216,3 +25216,33 @@ Current status:
 - No experimental OrlixKernel tty/input changes remain.
 - Working tree still contains only `OrlixOS/Sources/init/init.c` and `project.yml`.
 - First beta remains blocked on product runtime proof: app must boot to an interactive shell and the PTY input/output XCTest must pass on the single simulator before uploading another TestFlight build.
+
+[2026-06-29] TestFlight build 3 uploaded
+
+Changes:
+- Bumped `CURRENT_PROJECT_VERSION` from `2` to `3` in `project.yml` after App Store Connect rejected build `2` as already used.
+
+Validation:
+- `xcodegen generate --spec project.yml` passed.
+- Direct device archive with external DerivedData and package cache passed for scheme `Orlix`.
+- App Store export passed using `Build/Release/ExportOptions-AppStore-Manual.plist`.
+- Exported IPA metadata: bundle id `com.rudironsoni.Orlix`, version `0.1`, build `3`, `ITSAppUsesNonExemptEncryption=false`.
+- Exported IPA distribution summary reports `Apple Distribution` certificate `9DD07A84E35071408CF5C9900A0B7176755B912F`, App Store profile `Orlix`, `get-task-allow=false`, `beta-reports-active=true`.
+- `fastlane pilot upload --api_key_path ~/.config/fastlane/appstore_api_key.json --app_identifier com.rudironsoni.Orlix --ipa Build/Release/Export/Orlix.ipa --uses_non_exempt_encryption false --skip_waiting_for_build_processing true` passed.
+
+Current status:
+- Build `3` uploaded to App Store Connect/TestFlight. Delivery UUID: `4b48aa23-647a-4cad-a0fa-8311720fcbd3`.
+- Fastlane skipped waiting for App Store Connect build processing by request flag, so processing/availability must be checked in App Store Connect or by a later status command.
+
+[2026-06-29] TestFlight build number bump automated
+
+Changes:
+- Added `beta-bump-build-number` to increment `CURRENT_PROJECT_VERSION` in `project.yml`, the XcodeGen source of truth.
+- Made `beta-archive` depend on `beta-bump-build-number`, so normal TestFlight archives bump before `xcodegen generate`.
+- Left an explicit escape hatch, `ORLIX_BETA_BUMP_BUILD_NUMBER=NO`, for diagnostics that must not mutate release metadata.
+
+Validation:
+- `make beta-bump-build-number` passed and bumped `CURRENT_PROJECT_VERSION 3 -> 4`.
+- `xcodegen generate --spec project.yml` passed.
+- Generated `Orlix.xcodeproj/project.pbxproj` app targets now contain `CURRENT_PROJECT_VERSION = 4`.
+- `make -n beta-archive ORLIX_BETA_BUMP_BUILD_NUMBER=NO ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` was stopped after it entered submake output; no product validation is claimed from that dry run.
