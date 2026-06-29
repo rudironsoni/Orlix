@@ -25,6 +25,9 @@ int arch_boot_entry(const struct boot_params *params);
 int arch_boot_prepare_entry(const struct boot_params *params);
 const struct boot_params *arch_boot_params(void);
 unsigned long arch_boot_host_page_size(void);
+#if defined(ORLIX_APP_HOSTED_BOOT)
+int arch_boot_prepare_hosted_vmalloc_window(void);
+#endif
 
 #if defined(CONFIG_ORLIX_BOOT_KUNIT_TEST) || defined(ORLIX_APP_HOSTED_BOOT)
 void arch_boot_test_record_handoff(const struct boot_params *params);

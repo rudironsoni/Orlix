@@ -32,21 +32,23 @@ phys_addr_t orlix_phys_ram_base __ro_after_init;
 unsigned long orlix_hosted_vmalloc_start __ro_after_init;
 unsigned long orlix_hosted_vmalloc_end __ro_after_init;
 
-static void __init orlix_select_hosted_vmalloc_window(void)
+int arch_boot_prepare_hosted_vmalloc_window(void)
 {
 	unsigned long start = 0;
+
+	if (orlix_hosted_vmalloc_start && orlix_hosted_vmalloc_end)
+		return 0;
 
 	if (orlix_host_kernel_reserve_window(TASK_SIZE,
 					     ORLIX_HOSTED_KERNEL_WINDOW_MAX,
 					     ORLIX_HOSTED_VMALLOC_SIZE,
 					     PGDIR_SIZE,
 					     &start))
-		panic("Orlix: no host-mappable hosted vmalloc window available\n");
+		return -1;
 
 	orlix_hosted_vmalloc_start = start;
 	orlix_hosted_vmalloc_end = start + ORLIX_HOSTED_VMALLOC_SIZE;
-	pr_info("Orlix: hosted vmalloc window %#lx-%#lx\n",
-		orlix_hosted_vmalloc_start, orlix_hosted_vmalloc_end);
+	return 0;
 }
 #endif
 
@@ -81,10 +83,13 @@ void __init paging_init(void)
 	phys_addr_t end = memblock_end_of_DRAM();
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
-orlix_select_hosted_vmalloc_window();
-if (VMALLOC_START <= TASK_SIZE || VMALLOC_END <= VMALLOC_START)
-	panic("Orlix: invalid hosted vmalloc window %#lx-%#lx\n",
-	      VMALLOC_START, VMALLOC_END);
+	if (arch_boot_prepare_hosted_vmalloc_window())
+		panic("Orlix: no host-mappable hosted vmalloc window available\n");
+	if (VMALLOC_START <= TASK_SIZE || VMALLOC_END <= VMALLOC_START)
+		panic("Orlix: invalid hosted vmalloc window %#lx-%#lx\n",
+		      VMALLOC_START, VMALLOC_END);
+	pr_info("Orlix: hosted vmalloc window %#lx-%#lx\n",
+		VMALLOC_START, VMALLOC_END);
 #endif
 
 	if (!end || end <= start)

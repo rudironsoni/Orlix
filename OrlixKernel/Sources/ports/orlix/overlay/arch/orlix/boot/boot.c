@@ -90,6 +90,11 @@ int arch_boot_prepare_entry(const struct boot_params *params)
 	if (!arch_boot_params_valid(params))
 		return ORLIX_ARCH_BOOT_INVALID_CONFIG;
 
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	if (arch_boot_prepare_hosted_vmalloc_window())
+		return ORLIX_ARCH_BOOT_UNAVAILABLE;
+#endif
+
 	arch_boot_record_handoff(params);
 	return ORLIX_ARCH_BOOT_OK;
 }
