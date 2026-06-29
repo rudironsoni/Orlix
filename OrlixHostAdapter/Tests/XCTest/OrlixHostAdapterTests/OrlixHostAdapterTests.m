@@ -26,6 +26,45 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
     (void)active_tls;
 }
 
+static unsigned long OrlixHostAdapterTestAlignUp(unsigned long value,
+                                                 unsigned long alignment)
+{
+    return (value + alignment - 1UL) & ~(alignment - 1UL);
+}
+
+static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
+                                                   unsigned long alignment,
+                                                   unsigned long *minimumAddress,
+                                                   unsigned long *maximumAddress)
+{
+    vm_address_t allocation = 0;
+    vm_size_t allocationLength = (vm_size_t)(length + alignment);
+    unsigned long aligned;
+
+    if (!minimumAddress || !maximumAddress || length == 0 || alignment == 0) {
+        return -1;
+    }
+
+    if (vm_allocate(mach_task_self(),
+                    &allocation,
+                    allocationLength,
+                    VM_FLAGS_ANYWHERE) != KERN_SUCCESS) {
+        return -1;
+    }
+
+    aligned = OrlixHostAdapterTestAlignUp((unsigned long)allocation,
+                                          alignment);
+    if (aligned > (unsigned long)allocation + allocationLength - length) {
+        vm_deallocate(mach_task_self(), allocation, allocationLength);
+        return -1;
+    }
+
+    vm_deallocate(mach_task_self(), allocation, allocationLength);
+    *minimumAddress = aligned;
+    *maximumAddress = aligned + length;
+    return 0;
+}
+
 @interface OrlixHostAdapterTests : XCTestCase
 @end
 
@@ -749,13 +788,18 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
 
 - (void)testKernelReservationDiscoversHostMappableWindow
 {
-    const unsigned long minimumAddress = 0x0000710000000000UL;
-    const unsigned long maximumAddress = 0x00007f0000000000UL;
     const unsigned long pageSize = orlix_host_memory_page_size();
     const unsigned long length = pageSize * 2UL;
+    unsigned long minimumAddress = 0;
+    unsigned long maximumAddress = 0;
     unsigned long base = 0;
     void *page = NULL;
 
+    XCTAssertEqual(OrlixHostAdapterTestCreateDiscoveredGap(length,
+                                                           pageSize,
+                                                           &minimumAddress,
+                                                           &maximumAddress),
+                   0);
     XCTAssertEqual(posix_memalign(&page, pageSize, pageSize), 0);
     XCTAssertNotEqual(page, NULL);
     if (!page) {
@@ -778,6 +822,47 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
 
     orlix_host_kernel_unmap_pages(base, length);
     free(page);
+}
+
+- (void)testKernelReservationSkipsUnavailableAddressesInDiscoveredGap
+{
+    const unsigned long pageSize = orlix_host_memory_page_size();
+    const unsigned long gapLength = pageSize * 8UL;
+    unsigned long minimumAddress = 0;
+    unsigned long maximumAddress = 0;
+    vm_address_t occupied[7] = {0};
+    unsigned long base = 0;
+
+    XCTAssertEqual(OrlixHostAdapterTestCreateDiscoveredGap(gapLength,
+                                                           pageSize,
+                                                           &minimumAddress,
+                                                           &maximumAddress),
+                   0);
+    for (unsigned long index = 0; index < 7; index++) {
+        occupied[index] = (vm_address_t)(minimumAddress + pageSize * index);
+        XCTAssertEqual(vm_allocate(mach_task_self(),
+                                   &occupied[index],
+                                   (vm_size_t)pageSize,
+                                   VM_FLAGS_FIXED),
+                       KERN_SUCCESS);
+        XCTAssertEqual(occupied[index],
+                       (vm_address_t)(minimumAddress + pageSize * index));
+    }
+
+    XCTAssertEqual(orlix_host_kernel_reserve_window(minimumAddress,
+                                                    maximumAddress,
+                                                    pageSize,
+                                                    pageSize,
+                                                    &base),
+                   0);
+    XCTAssertEqual(base, minimumAddress + pageSize * 7UL);
+    XCTAssertLessThanOrEqual(base + pageSize, maximumAddress);
+    XCTAssertEqual(base & (pageSize - 1UL), 0UL);
+
+    orlix_host_kernel_unmap_pages(base, pageSize);
+    for (unsigned long index = 0; index < 7; index++) {
+        vm_deallocate(mach_task_self(), occupied[index], (vm_size_t)pageSize);
+    }
 }
 
 @end
