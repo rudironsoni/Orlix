@@ -1088,6 +1088,7 @@ ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP ?= 1970-01-01 00:00:00 UTC
 ORLIX_KERNEL_KBUILD_BUILD_USER ?= orlix
 ORLIX_KERNEL_KBUILD_BUILD_HOST ?= orlix
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
+ORLIX_E2FSCK ?= $(shell if command -v e2fsck >/dev/null 2>&1; then command -v e2fsck; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/e2fsck ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/e2fsck; else printf '%s\n' e2fsck; fi)
 ORLIX_KERNEL_NM ?= nm
 ORLIX_KERNEL_OTOOL ?= otool
 
@@ -2212,7 +2213,9 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	}; \
 	copy_payload_resource "$$rootfs_input" "$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)"; \
 	mke2fs_cmd="$(ORLIX_MKE2FS)"; \
+	e2fsck_cmd="$(ORLIX_E2FSCK)"; \
 	command -v "$$mke2fs_cmd" >/dev/null 2>&1 || { echo "mke2fs is required to generate OrlixKernel root block images; install e2fsprogs or set ORLIX_MKE2FS=/path/to/mke2fs" >&2; exit 1; }; \
+	command -v "$$e2fsck_cmd" >/dev/null 2>&1 || { echo "e2fsck is required to finalize OrlixKernel root block images; install e2fsprogs or set ORLIX_E2FSCK=/path/to/e2fsck" >&2; exit 1; }; \
 	rootfs_build="$(ORLIX_KERNEL_ROOTFS_BUILD_DIR)"; \
 	base_tree="$$rootfs_build/base-tree"; \
 	base_image="$(ORLIX_KERNEL_BASE_ROOT_IMAGE)"; \
@@ -2227,7 +2230,8 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	[ -d "$$base_tree/root" ] && chmod 0700 "$$base_tree/root"; \
 	[ -d "$$base_tree/tmp" ] && chmod 1777 "$$base_tree/tmp"; \
 	truncate -s "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_SIZE)" "$$base_image"; \
-	"$$mke2fs_cmd" -q -t ext4 -F -m 0 -U clear -L ORLIXROOT -E root_owner=0:0 -d "$$base_tree" "$$base_image"; \
+	"$$mke2fs_cmd" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXROOT -E root_owner=0:0 -d "$$base_tree" "$$base_image"; \
+	"$$e2fsck_cmd" -fy "$$base_image" >/dev/null; \
 	copy_payload_resource "$$base_image" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)"; \
 	mkdir -p "$$state_tree/upper" "$$state_tree/work"; \
 	if [ -n "$$state_root_tree_input" ]; then \
@@ -2235,7 +2239,8 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	fi; \
 	chmod 0755 "$$state_tree" "$$state_tree/upper" "$$state_tree/work"; \
 	truncate -s "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_SIZE)" "$$state_image"; \
-	"$$mke2fs_cmd" -q -t ext4 -F -m 0 -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$$state_tree" "$$state_image"; \
+	"$$mke2fs_cmd" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$$state_tree" "$$state_image"; \
+	"$$e2fsck_cmd" -fy "$$state_image" >/dev/null; \
 	copy_payload_resource "$$state_image" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)"; \
 	{ \
 		printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'; \

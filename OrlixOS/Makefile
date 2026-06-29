@@ -43,6 +43,7 @@ ORLIXOS_VIRTIO_NET_DEVICE_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFIL
 ORLIXOS_VIRTIO_FS_MOUNT_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/virtio_fs_mount_probe
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
+ORLIX_E2FSCK ?= $(shell if command -v e2fsck >/dev/null 2>&1; then command -v e2fsck; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/e2fsck ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/e2fsck; else printf '%s\n' e2fsck; fi)
 
 .PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-test-fixtures test coreutils-test clean mrproper __coreutils-source FORCE
 
@@ -108,6 +109,7 @@ environment-root-image:
 	[ -d "$(ORLIXOS_ENVIRONMENT_STAGING_ROOT)" ] || { echo "missing environment staging root: $(ORLIXOS_ENVIRONMENT_STAGING_ROOT)" >&2; exit 1; }; \
 	command -v "$(ORLIX_MKE2FS)" >/dev/null 2>&1 || { echo "mke2fs is required to generate Orlix environment root block images; install e2fsprogs or set ORLIX_MKE2FS=/path/to/mke2fs" >&2; exit 1; }; \
 	command -v "$(ORLIX_DEBUGFS)" >/dev/null 2>&1 || { echo "debugfs is required to normalize Orlix environment root image ownership; install e2fsprogs or set ORLIX_DEBUGFS=/path/to/debugfs" >&2; exit 1; }; \
+	command -v "$(ORLIX_E2FSCK)" >/dev/null 2>&1 || { echo "e2fsck is required to finalize Orlix environment root block images; install e2fsprogs or set ORLIX_E2FSCK=/path/to/e2fsck" >&2; exit 1; }; \
 	base_tree="$(ORLIXOS_ENVIRONMENT_IMAGE_WORK_DIR)/base-tree"; \
 	state_tree="$(ORLIXOS_ENVIRONMENT_IMAGE_WORK_DIR)/state-tree"; \
 	base_debugfs_commands="$(ORLIXOS_ENVIRONMENT_IMAGE_WORK_DIR)/base-debugfs.commands"; \
@@ -120,7 +122,7 @@ environment-root-image:
 	[ -d "$$base_tree/tmp" ] && chmod 1777 "$$base_tree/tmp"; \
 	mkdir -p "$$(dirname "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)")" "$$(dirname "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)")"; \
 	truncate -s "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE_SIZE)" "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)"; \
-	"$(ORLIX_MKE2FS)" -q -t ext4 -F -m 0 -U clear -L ORLIXROOT -E root_owner=0:0 -d "$$base_tree" "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)"; \
+	"$(ORLIX_MKE2FS)" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXROOT -E root_owner=0:0 -d "$$base_tree" "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)"; \
 	{ \
 		for path in /dev /proc /root /run /sys /tmp; do \
 			printf 'set_inode_field %s uid 0\n' "$$path"; \
@@ -132,10 +134,11 @@ environment-root-image:
 		[ -f "$(ORLIXOS_ENVIRONMENT_BASE_DEBUGFS_COMMANDS)" ] || { echo "missing ORLIXOS_ENVIRONMENT_BASE_DEBUGFS_COMMANDS: $(ORLIXOS_ENVIRONMENT_BASE_DEBUGFS_COMMANDS)" >&2; exit 1; }; \
 		"$(ORLIX_DEBUGFS)" -w -f "$(ORLIXOS_ENVIRONMENT_BASE_DEBUGFS_COMMANDS)" "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)" >/dev/null; \
 	fi; \
+	"$(ORLIX_E2FSCK)" -fy "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)" >/dev/null; \
 	mkdir -p "$$state_tree/upper" "$$state_tree/work"; \
 	chmod 0755 "$$state_tree" "$$state_tree/upper" "$$state_tree/work"; \
 	truncate -s "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE_SIZE)" "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)"; \
-	"$(ORLIX_MKE2FS)" -q -t ext4 -F -m 0 -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$$state_tree" "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)"; \
+	"$(ORLIX_MKE2FS)" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$$state_tree" "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)"; \
 	{ \
 		for path in /upper /work; do \
 			printf 'set_inode_field %s uid 0\n' "$$path"; \
@@ -148,6 +151,7 @@ environment-root-image:
 		[ -f "$(ORLIXOS_ENVIRONMENT_STATE_DEBUGFS_COMMANDS)" ] || { echo "missing ORLIXOS_ENVIRONMENT_STATE_DEBUGFS_COMMANDS: $(ORLIXOS_ENVIRONMENT_STATE_DEBUGFS_COMMANDS)" >&2; exit 1; }; \
 		"$(ORLIX_DEBUGFS)" -w -f "$(ORLIXOS_ENVIRONMENT_STATE_DEBUGFS_COMMANDS)" "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)" >/dev/null; \
 	fi; \
+	"$(ORLIX_E2FSCK)" -fy "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)" >/dev/null; \
 	printf 'materialized Orlix environment root images: %s %s\n' "$(ORLIXOS_ENVIRONMENT_BASE_IMAGE)" "$(ORLIXOS_ENVIRONMENT_STATE_IMAGE)"
 
 environment-runtime-test-fixtures:

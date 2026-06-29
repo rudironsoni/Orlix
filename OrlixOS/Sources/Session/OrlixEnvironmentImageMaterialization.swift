@@ -93,14 +93,16 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
 	public func commands(
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
-		debugfsExecutable: String = "debugfs"
+		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck"
 	) throws -> [OrlixEnvironmentImageMaterializationCommand] {
-        try validateExecutableName(mke2fsExecutable)
-        try validateExecutableName(truncateExecutable)
-        try validateExecutableName(debugfsExecutable)
-        return [
-            truncateCommand(
-                executable: truncateExecutable,
+		try validateExecutableName(mke2fsExecutable)
+		try validateExecutableName(truncateExecutable)
+		try validateExecutableName(debugfsExecutable)
+		try validateExecutableName(e2fsckExecutable)
+		return [
+			truncateCommand(
+				executable: truncateExecutable,
                 size: baseImageSize,
                 imageURL: baseImageURL
             ),
@@ -110,13 +112,17 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
                 imageURL: baseImageURL,
                 label: baseLabel
             ),
-            debugfsCommand(
-                executable: debugfsExecutable,
-                commandsURL: baseMetadataCommandsURL,
-                imageURL: baseImageURL
-            ),
-            truncateCommand(
-                executable: truncateExecutable,
+			debugfsCommand(
+				executable: debugfsExecutable,
+				commandsURL: baseMetadataCommandsURL,
+				imageURL: baseImageURL
+			),
+			e2fsckCommand(
+				executable: e2fsckExecutable,
+				imageURL: baseImageURL
+			),
+			truncateCommand(
+				executable: truncateExecutable,
                 size: stateImageSize,
                 imageURL: stateImageURL
             ),
@@ -126,10 +132,14 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
                 imageURL: stateImageURL,
                 label: stateLabel
             ),
-            debugfsCommand(
-                executable: debugfsExecutable,
-                commandsURL: stateMetadataCommandsURL,
-                imageURL: stateImageURL
+			debugfsCommand(
+				executable: debugfsExecutable,
+				commandsURL: stateMetadataCommandsURL,
+				imageURL: stateImageURL
+			),
+			e2fsckCommand(
+				executable: e2fsckExecutable,
+				imageURL: stateImageURL
 			)
 		]
 	}
@@ -139,12 +149,14 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		runner: OrlixEnvironmentImageMaterializationCommandRunner
 	) throws -> OrlixEnvironmentImageMaterializationResult {
 		let commands = try self.commands(
 			mke2fsExecutable: mke2fsExecutable,
 			truncateExecutable: truncateExecutable,
-			debugfsExecutable: debugfsExecutable
+			debugfsExecutable: debugfsExecutable,
+			e2fsckExecutable: e2fsckExecutable
 		)
 		for command in commands {
 			try runner.run(command)
@@ -261,9 +273,9 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
         )
     }
 
-    private func debugfsCommand(
-        executable: String,
-        commandsURL: URL,
+	private func debugfsCommand(
+		executable: String,
+		commandsURL: URL,
         imageURL: URL
     ) -> OrlixEnvironmentImageMaterializationCommand {
         OrlixEnvironmentImageMaterializationCommand(
@@ -273,11 +285,24 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
                 "-f",
                 commandsURL.path,
                 imageURL.path
-            ]
-        )
-    }
+			]
+		)
+	}
 
-    private func mke2fsCommand(
+	private func e2fsckCommand(
+		executable: String,
+		imageURL: URL
+	) -> OrlixEnvironmentImageMaterializationCommand {
+		OrlixEnvironmentImageMaterializationCommand(
+			executable: executable,
+			arguments: [
+				"-fy",
+				imageURL.path
+			]
+		)
+	}
+
+	private func mke2fsCommand(
         executable: String,
         sourceTree: URL,
         imageURL: URL,
@@ -289,13 +314,13 @@ public struct OrlixEnvironmentImageMaterializationPlan: Equatable, Sendable {
                 "-q",
                 "-t",
                 "ext4",
-			"-F",
-			"-m",
-			"0",
-			"-O",
-			"^metadata_csum",
-			"-U",
-			"clear",
+            "-F",
+            "-m",
+            "0",
+            "-O",
+            "^metadata_csum,^orphan_file",
+            "-U",
+            "clear",
                 "-L",
                 label,
                 "-E",

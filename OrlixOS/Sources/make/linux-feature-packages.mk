@@ -190,24 +190,29 @@ $(ORLIXOS_E2FSPROGS_STAMP): $(ORLIXOS_E2FSPROGS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SY
 	"$(ORLIXOS_E2FSPROGS_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --enable-elf-shlibs=no --disable-uuidd --disable-fuse2fs --disable-backtrace --disable-imager --disable-resizer --disable-defrag --disable-nls; \
 	$(MAKE) -j1 libs; \
 	$(MAKE) -C misc -j1 mke2fs; \
+	$(MAKE) -C e2fsck -j1 e2fsck; \
 	$(MAKE) -C debugfs -j1 debugfs; \
 	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/misc/mke2fs" "$(ORLIXOS_MKE2FS_BINARY)"; \
 	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/misc/mke2fs" "$(ORLIXOS_MKFS_EXT2_BINARY)"; \
 	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/misc/mke2fs" "$(ORLIXOS_MKFS_EXT4_BINARY)"; \
 	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/debugfs/debugfs" "$(ORLIXOS_DEBUGFS_BINARY)"; \
+	cp "$(ORLIXOS_E2FSPROGS_BUILD_DIR)/e2fsck/e2fsck" "$(ORLIXOS_E2FSCK_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_MKE2FS_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_MKFS_EXT2_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_MKFS_EXT4_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_DEBUGFS_BINARY)"; \
+	"$(ORLIXOS_STRIP)" "$(ORLIXOS_E2FSCK_BINARY)"; \
 	file "$(ORLIXOS_MKE2FS_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_MKE2FS_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT2_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_MKFS_EXT2_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT4_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_MKFS_EXT4_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_DEBUGFS_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_DEBUGFS_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_E2FSCK_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_E2FSCK_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKE2FS_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_MKE2FS_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT2_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_MKFS_EXT2_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_EXT4_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_MKFS_EXT4_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_DEBUGFS_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_DEBUGFS_BINARY)" >&2; exit 1; }; \
-	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=e2fsprogs\nversion=%s\nsha256=%s\nprograms=mke2fs,mkfs.ext2,mkfs.ext4,debugfs\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(E2FSPROGS_VERSION)" "$(E2FSPROGS_SHA256)" > "$(ORLIXOS_E2FSPROGS_STAMP)"; \
+	file "$(ORLIXOS_E2FSCK_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_E2FSCK_BINARY)" >&2; exit 1; }; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=e2fsprogs\nversion=%s\nsha256=%s\nprograms=mke2fs,mkfs.ext2,mkfs.ext4,debugfs,e2fsck\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(E2FSPROGS_VERSION)" "$(E2FSPROGS_SHA256)" > "$(ORLIXOS_E2FSPROGS_STAMP)"; \
 	rm -rf "$(ORLIXOS_E2FSPROGS_BUILD_DIR)"; \
 	echo "built Orlix Linux e2fsprogs package inputs: $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT2_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY)"
 

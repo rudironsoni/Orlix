@@ -55,6 +55,7 @@ final class OrlixOSSessionTests: XCTestCase {
         XCTAssertTrue(contents.contains("$(ORLIXOS_MKE2FS_BINARY)"))
         XCTAssertTrue(contents.contains("$(ORLIXOS_MKFS_EXT4_BINARY)"))
         XCTAssertTrue(contents.contains("$(ORLIXOS_DEBUGFS_BINARY)"))
+        XCTAssertTrue(contents.contains("$(ORLIXOS_E2FSCK_BINARY)"))
         XCTAssertTrue(contents.contains(
             #"install -m 0755 "$(ORLIXOS_MKE2FS_BINARY)" "$$root_tree/bin/mke2fs""#
         ))
@@ -63,6 +64,9 @@ final class OrlixOSSessionTests: XCTestCase {
         ))
         XCTAssertTrue(contents.contains(
             #"install -m 0755 "$(ORLIXOS_DEBUGFS_BINARY)" "$$root_tree/bin/debugfs""#
+        ))
+        XCTAssertTrue(contents.contains(
+            #"install -m 0755 "$(ORLIXOS_E2FSCK_BINARY)" "$$root_tree/bin/e2fsck""#
         ))
         XCTAssertTrue(contents.contains(
             "base_packages=bash coreutils findutils e2fsprogs"
@@ -2271,7 +2275,8 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         let commands = try plan.commands(
             mke2fsExecutable: "/opt/e2fsprogs/bin/mke2fs",
             truncateExecutable: "/usr/bin/truncate",
-            debugfsExecutable: "/opt/e2fsprogs/sbin/debugfs"
+            debugfsExecutable: "/opt/e2fsprogs/sbin/debugfs",
+            e2fsckExecutable: "/opt/e2fsprogs/sbin/e2fsck"
         )
 
         XCTAssertEqual(
@@ -2288,11 +2293,11 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                         "-t",
                         "ext4",
 						"-F",
-						"-m",
-						"0",
-						"-O",
-						"^metadata_csum",
-						"-U",
+                        "-m",
+                        "0",
+                        "-O",
+                        "^metadata_csum,^orphan_file",
+                        "-U",
 						"clear",
                         "-L",
                         "ORLIXROOT",
@@ -2311,6 +2316,10 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                         plan.baseMetadataCommandsURL.path,
                         layout.baseImageURL.path
                     ]
+                ),
+                OrlixEnvironmentImageMaterializationCommand(
+                    executable: "/opt/e2fsprogs/sbin/e2fsck",
+                    arguments: ["-fy", layout.baseImageURL.path]
                 ),
                 OrlixEnvironmentImageMaterializationCommand(
                     executable: "/usr/bin/truncate",
@@ -2346,6 +2355,10 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
                         plan.stateMetadataCommandsURL.path,
                         layout.stateImageURL.path
                     ]
+                ),
+                OrlixEnvironmentImageMaterializationCommand(
+                    executable: "/opt/e2fsprogs/sbin/e2fsck",
+                    arguments: ["-fy", layout.stateImageURL.path]
                 )
             ]
         )
@@ -2375,13 +2388,15 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 			mke2fsExecutable: "/opt/e2fsprogs/bin/mke2fs",
 			truncateExecutable: "/usr/bin/truncate",
 			debugfsExecutable: "/opt/e2fsprogs/sbin/debugfs",
+			e2fsckExecutable: "/opt/e2fsprogs/sbin/e2fsck",
 			runner: runner
 		)
 
 		let expectedCommands = try plan.commands(
 			mke2fsExecutable: "/opt/e2fsprogs/bin/mke2fs",
 			truncateExecutable: "/usr/bin/truncate",
-			debugfsExecutable: "/opt/e2fsprogs/sbin/debugfs"
+			debugfsExecutable: "/opt/e2fsprogs/sbin/debugfs",
+			e2fsckExecutable: "/opt/e2fsprogs/sbin/e2fsck"
 		)
 		XCTAssertEqual(result.commands, expectedCommands)
 		XCTAssertEqual(runner.commands, expectedCommands)
@@ -11297,7 +11312,8 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 	let tools = OrlixOCIEnvironmentMaterializationTools(
 		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 	)
 	let recorder = RecordingPublicOCIInstallerCommandRunner()
 	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
@@ -11406,7 +11422,8 @@ func testOCIEnvironmentInstallerStartsCreatedRegistryEnvironment() async throws 
 	let tools = OrlixOCIEnvironmentMaterializationTools(
 		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 	)
 	let recorder = RecordingPublicOCIInstallerCommandRunner()
 	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
@@ -11539,7 +11556,8 @@ func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSessi
 		let tools = OrlixOCIEnvironmentMaterializationTools(
 			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 		)
 		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
 		let recorder = RecordingPublicOCIInstallerCommandRunner()
@@ -11647,7 +11665,8 @@ func testOCIEnvironmentInstallerRunsOrlixRunArgumentsThroughRegistryImagePath() 
 	let tools = OrlixOCIEnvironmentMaterializationTools(
 		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 	)
 	let recorder = RecordingPublicOCIInstallerCommandRunner()
 	let driver = try RecordingOCIRuntimeProcessObservationDriver(
@@ -11781,7 +11800,8 @@ XCTAssertEqual(driver.events, [
 		let tools = OrlixOCIEnvironmentMaterializationTools(
 			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 		)
 		let recorder = RecordingPublicOCIInstallerCommandRunner()
 		let driver = try RecordingOCIRuntimeProcessObservationDriver(
@@ -11891,7 +11911,8 @@ XCTAssertEqual(driver.events, [
 	let tools = OrlixOCIEnvironmentMaterializationTools(
 		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 	)
 	let recorder = RecordingPublicOCIInstallerCommandRunner()
 	let installer = OrlixOCIEnvironmentInstaller(registry: registry)
@@ -12058,7 +12079,8 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		let tools = OrlixOCIEnvironmentMaterializationTools(
 			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 		)
 		let recorder = RecordingPublicOCIInstallerCommandRunner()
 		let driver = try RecordingOCIRuntimeProcessObservationDriver(
@@ -14454,7 +14476,8 @@ func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
 	let tools = OrlixOCIEnvironmentMaterializationTools(
 		mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 		truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+		debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 	)
 	let recorder = RecordingPublicOCIInstallerCommandRunner()
 	let installed = try installer.install(
@@ -14566,7 +14589,8 @@ func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
 		let tools = OrlixOCIEnvironmentMaterializationTools(
 			mke2fs: URL(fileURLWithPath: "/usr/local/bin/orlix-mke2fs"),
 			truncate: URL(fileURLWithPath: "/usr/local/bin/orlix-truncate"),
-			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs")
+			debugfs: URL(fileURLWithPath: "/usr/local/bin/orlix-debugfs"),
+            e2fsck: URL(fileURLWithPath: "/usr/local/bin/orlix-e2fsck")
 		)
 		let recorder = RecordingPublicOCIInstallerCommandRunner()
 		let driver = try RecordingOCIRuntimeProcessObservationDriver(

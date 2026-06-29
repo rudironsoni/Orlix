@@ -53,7 +53,7 @@ $(ORLIXOS_INITRAMFS_CPIO): $(ORLIXOS_ROOT_INIT_BINARY) $(ORLIXOS_MANIFEST) $(PRO
 	[ -s "$$output" ] || { echo "missing generated OrlixOS initramfs: $$output" >&2; exit 1; }; \
 	echo "built OrlixOS product initramfs: $$output"
 
-$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST)
+$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_E2FSCK_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST)
 	@set -euo pipefail; \
 	root_tree="$(ORLIXOS_BASE_ROOT_TREE)"; \
 	state_tree="$(ORLIXOS_STATE_ROOT_TREE)"; \
@@ -71,6 +71,7 @@ $(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORL
 	install -m 0755 "$(ORLIXOS_MKE2FS_BINARY)" "$$root_tree/bin/mke2fs"; \
 	install -m 0755 "$(ORLIXOS_MKFS_EXT4_BINARY)" "$$root_tree/bin/mkfs.ext4"; \
 	install -m 0755 "$(ORLIXOS_DEBUGFS_BINARY)" "$$root_tree/bin/debugfs"; \
+	install -m 0755 "$(ORLIXOS_E2FSCK_BINARY)" "$$root_tree/bin/e2fsck"; \
 	install -m 0755 "$(ORLIXOS_GETCONF_BINARY)" "$$root_tree/usr/bin/getconf"; \
 	install -m 0755 "$(ORLIXOS_INIT_BINARY)" "$$root_tree/sbin/init"; \
 	ln -s bash "$$root_tree/bin/sh"; \

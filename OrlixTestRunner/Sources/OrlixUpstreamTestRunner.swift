@@ -1667,7 +1667,8 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
             tools: OrlixOCIEnvironmentMaterializationTools(
                 mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
                 truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
-                debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
+                debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs"),
+                e2fsck: URL(fileURLWithPath: "/usr/bin/orlix-e2fsck")
             ),
             puller: try Self.registryPuller(for: registryMode),
             terminal: terminal,
@@ -1820,7 +1821,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
                 ? sourceBaseImageURL
                 : sourceStateImageURL
             try FileManager.default.copyItem(at: sourceURL, to: targetURL)
-        case "orlix-debugfs":
+        case "orlix-debugfs", "orlix-e2fsck":
             break
         default:
             throw OrlixOCIDerivedStdioRuntimeProofError.lifecycle(
@@ -1928,15 +1929,18 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
 	]
 	private static let versionScript = [
 		"set -eu",
-		"test -x /bin/mke2fs",
-		"test -x /bin/mkfs.ext4",
-		"test -x /bin/debugfs",
-		"/bin/mke2fs -V >/tmp/orlix-mke2fs-version.txt 2>&1",
-		"/bin/mkfs.ext4 -V >/tmp/orlix-mkfs-ext4-version.txt 2>&1",
-		"/bin/debugfs -V >/tmp/orlix-debugfs-version.txt 2>&1",
-		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKE2FS",
-		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKFS_EXT4",
-		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' DEBUGFS",
+        "test -x /bin/mke2fs",
+        "test -x /bin/mkfs.ext4",
+        "test -x /bin/debugfs",
+        "test -x /bin/e2fsck",
+        "/bin/mke2fs -V >/tmp/orlix-mke2fs-version.txt 2>&1",
+        "/bin/mkfs.ext4 -V >/tmp/orlix-mkfs-ext4-version.txt 2>&1",
+        "/bin/debugfs -V >/tmp/orlix-debugfs-version.txt 2>&1",
+        "/bin/e2fsck -V >/tmp/orlix-e2fsck-version.txt 2>&1",
+        "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKE2FS",
+        "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' MKFS_EXT4",
+        "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' DEBUGFS",
+        "printf 'ORLIX_PAYLOAD_E2FSPROGS_%s_OK\\n' E2FSCK",
 		"printf 'ORLIX_PAYLOAD_E2FSPROGS_%s\\n' DONE",
 	].joined(separator: "; ")
 	static let materializationScript = [
@@ -2195,7 +2199,8 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 			tools: OrlixOCIEnvironmentMaterializationTools(
 				mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
 				truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
-				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
+				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs"),
+                                e2fsck: URL(fileURLWithPath: "/usr/bin/orlix-e2fsck")
 			),
             puller: OrlixOCIRegistryPuller(),
             fileManager: fileManager
@@ -3095,7 +3100,8 @@ let installer = OrlixOCIEnvironmentInstaller(registry: registry)
 			tools: OrlixOCIEnvironmentMaterializationTools(
 				mke2fs: URL(fileURLWithPath: "/usr/bin/orlix-mke2fs"),
 				truncate: URL(fileURLWithPath: "/usr/bin/orlix-truncate"),
-				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs")
+				debugfs: URL(fileURLWithPath: "/usr/bin/orlix-debugfs"),
+                                e2fsck: URL(fileURLWithPath: "/usr/bin/orlix-e2fsck")
 			),
 			puller: OrlixOCIRegistryPuller(),
 			terminal: terminal,

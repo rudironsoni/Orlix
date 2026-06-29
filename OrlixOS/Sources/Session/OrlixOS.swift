@@ -1278,15 +1278,17 @@ public struct OrlixOCIRuntimeEphemeralRunFailure: Error {
 }
 
 public struct OrlixOCIEnvironmentMaterializationTools: Equatable, Sendable {
-	public let mke2fs: URL
-	public let truncate: URL
-	public let debugfs: URL
+    public let mke2fs: URL
+    public let truncate: URL
+    public let debugfs: URL
+    public let e2fsck: URL
 
-	public init(mke2fs: URL, truncate: URL, debugfs: URL) {
-		self.mke2fs = mke2fs
-		self.truncate = truncate
-		self.debugfs = debugfs
-	}
+    public init(mke2fs: URL, truncate: URL, debugfs: URL, e2fsck: URL) {
+        self.mke2fs = mke2fs
+        self.truncate = truncate
+        self.debugfs = debugfs
+        self.e2fsck = e2fsck
+    }
 }
 
 public struct OrlixOCIEnvironmentInstallResult: Sendable {
@@ -4764,12 +4766,13 @@ annotations: effectiveAnnotations
 		let created = try runtime.createMaterialized(
 			bundleURL: bundleURL,
 			id: id,
-			mke2fsExecutable: tools.mke2fs.path,
-			truncateExecutable: tools.truncate.path,
-			debugfsExecutable: tools.debugfs.path,
-			fileManager: fileManager,
-			runner: OrlixOCIEnvironmentInstallerCommandRunner(
-				runCommand: runCommand
+            mke2fsExecutable: tools.mke2fs.path,
+            truncateExecutable: tools.truncate.path,
+            debugfsExecutable: tools.debugfs.path,
+            e2fsckExecutable: tools.e2fsck.path,
+            fileManager: fileManager,
+            runner: OrlixOCIEnvironmentInstallerCommandRunner(
+                runCommand: runCommand
 			)
 		)
 		return OrlixOCIEnvironmentInstallResult(
@@ -5021,13 +5024,14 @@ mergingDeviceNodesWith: deviceNodeOverrides,
             if descriptor != importResult.descriptor {
                 try registry.save(descriptor, fileManager: fileManager)
             }
-            _ = try importResult.materializationPlan.materialize(
-                mke2fsExecutable: tools.mke2fs.path,
-                truncateExecutable: tools.truncate.path,
-				debugfsExecutable: tools.debugfs.path,
-				runner: OrlixOCIEnvironmentInstallerCommandRunner(
-					runCommand: runCommand
-				)
+        _ = try importResult.materializationPlan.materialize(
+            mke2fsExecutable: tools.mke2fs.path,
+            truncateExecutable: tools.truncate.path,
+            debugfsExecutable: tools.debugfs.path,
+            e2fsckExecutable: tools.e2fsck.path,
+            runner: OrlixOCIEnvironmentInstallerCommandRunner(
+                runCommand: runCommand
+            )
 			)
             let config = try registryLifecycleConfig(for: descriptor)
 			let lifecycleStore = OrlixOCIRuntimeLifecycleStore(registry: registry)
@@ -6921,6 +6925,7 @@ public struct OrlixOCIRuntime: Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		fileManager: FileManager = .default,
 		runner: OrlixEnvironmentImageMaterializationCommandRunner
 	) throws -> OrlixOCIRuntimeMaterializedCreatedEnvironment {
@@ -6934,6 +6939,7 @@ public struct OrlixOCIRuntime: Sendable {
 					mke2fsExecutable: mke2fsExecutable,
 					truncateExecutable: truncateExecutable,
 					debugfsExecutable: debugfsExecutable,
+					e2fsckExecutable: e2fsckExecutable,
 					fileManager: fileManager,
 					runner: runner
 				)
@@ -7260,6 +7266,7 @@ public struct OrlixOCIRuntime: Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
@@ -7273,6 +7280,7 @@ public struct OrlixOCIRuntime: Sendable {
 			mke2fsExecutable: mke2fsExecutable,
 			truncateExecutable: truncateExecutable,
 			debugfsExecutable: debugfsExecutable,
+			e2fsckExecutable: e2fsckExecutable,
 			fileManager: fileManager,
 			runner: materializationRunner
 		)
@@ -7297,6 +7305,7 @@ public struct OrlixOCIRuntime: Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
@@ -7310,6 +7319,7 @@ public struct OrlixOCIRuntime: Sendable {
 			mke2fsExecutable: mke2fsExecutable,
 			truncateExecutable: truncateExecutable,
 			debugfsExecutable: debugfsExecutable,
+			e2fsckExecutable: e2fsckExecutable,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
 			materializationRunner: materializationRunner,
@@ -7327,6 +7337,7 @@ public struct OrlixOCIRuntime: Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
@@ -7393,6 +7404,7 @@ public struct OrlixOCIRuntime: Sendable {
 		mke2fsExecutable: String = "mke2fs",
 		truncateExecutable: String = "truncate",
 		debugfsExecutable: String = "debugfs",
+		e2fsckExecutable: String = "e2fsck",
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		materializationRunner: OrlixEnvironmentImageMaterializationCommandRunner,
@@ -7406,6 +7418,7 @@ public struct OrlixOCIRuntime: Sendable {
 			mke2fsExecutable: mke2fsExecutable,
 			truncateExecutable: truncateExecutable,
 			debugfsExecutable: debugfsExecutable,
+			e2fsckExecutable: e2fsckExecutable,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
 			materializationRunner: materializationRunner,
