@@ -10,6 +10,38 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-30 TestFlight build 13 adaptive hosted vmalloc reservation
+
+Physical feedback:
+- TestFlight build `0.1 (12)` no longer froze at `Linux start kernel`; it returned `ORLIX_BOOT_STATUS_UNAVAILABLE` and the app printed the stale message `Orlix boot handoff is not wired to iOS-hosted Linux execution yet.`
+- That status is produced by `OrlixEnterLinux()` when `arch_boot_entry()` returns `ORLIX_ARCH_BOOT_UNAVAILABLE`, which build `12` introduced when early hosted vmalloc window reservation fails.
+
+Root cause refinement:
+- The release device path can fail to reserve the fixed 256 MiB hosted vmalloc span before `start_kernel()`.
+- The address mapping must remain runtime-discovered, but Linux should not require the maximum hosted vmalloc size when iOS can only provide a smaller host-mappable range.
+
+Changes:
+- Added `ORLIX_HOSTED_VMALLOC_MIN_SIZE` as a Linux-side minimum hosted vmalloc reservation size.
+- Changed `arch_boot_prepare_hosted_vmalloc_window()` to try the maximum hosted vmalloc size first, then reduce by halves down to the minimum while still using the HostAdapter OS-discovered reservation path. No fixed host address candidates were added.
+- Changed the stale `.unavailable` message to `Orlix could not reserve the hosted Linux boot address space.`
+
+Validation:
+- `git diff --check` passed.
+- `make -f OrlixOS/Makefile kernel-payload PROFILE=release` passed and rebuilt the release kernel payload including `arch/orlix/mm/init.c`.
+- `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Debug -destination 'generic/platform=iOS Simulator' build` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixOS Tests" -configuration Debug -destination 'generic/platform=iOS Simulator' -only-testing:OrlixOSTests/OrlixOSSessionTests test` failed before running tests because XCTest requires a concrete simulator destination.
+- Tried to boot the single iPhone 15 Pro Max simulator `58CEE149-24B9-45C4-9FEC-F7D630C622CF`; bootstatus stayed at `Waiting on System App`, so simulator runtime proof was not obtained.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed and bumped `CURRENT_PROJECT_VERSION` from `12` to `13`.
+- `make beta-validate-archive` passed for `Build/Release/Orlix.xcarchive`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- Exported IPA metadata: bundle id `com.rudironsoni.Orlix`, version `0.1`, build `13`, `ITSAppUsesNonExemptEncryption=false`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed.
+- `fastlane run latest_testflight_build_number api_key_path:$HOME/.config/fastlane/appstore_api_key.json app_identifier:com.rudironsoni.Orlix version:0.1` reported `Result: 13`.
+
+Boundary:
+- This proves build `13` is archived, exported, uploaded, and visible to App Store Connect.
+- It does not prove the physical iOS 27 phone reaches Linux console. That proof requires installing build `13` on the iPhone 15 Pro Max and observing whether boot progresses past the hosted address-space reservation path.
+
 ### 2026-06-30 TestFlight build 12 early hosted vmalloc preparation
 
 Root cause analysis:
