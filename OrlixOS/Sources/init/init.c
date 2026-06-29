@@ -186,8 +186,8 @@ static void write_unsigned_decimal(int fd, unsigned long value)
 static int open_controlling_tty(void)
 {
 	static const char *const tty_candidates[] = {
-		"/dev/ttyS0",
 		"/dev/hvc0",
+		"/dev/ttyS0",
 		NULL,
 	};
 	int fd = -1;
