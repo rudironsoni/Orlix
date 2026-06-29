@@ -10,6 +10,23 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 TestFlight build 10 upload
+
+Release:
+- Published typed boot progress observation and compact-plan hook removal to TestFlight build `0.1 (10)`.
+- `xcode-storage-doctor` passed before release.
+- Only one simulator was booted: `Orlix-iPhone-15-Pro-Max` `58CEE149-24B9-45C4-9FEC-F7D630C622CF`.
+- `make beta-simulator-gate ORLIX_BETA_SIMULATOR_ID=58CEE149-24B9-45C4-9FEC-F7D630C622CF` passed. It covered OrlixOS payload metadata tests and the targeted OCI-derived materialized root runtime test on the single iPhone 15 Pro Max simulator.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed and automatically bumped `CURRENT_PROJECT_VERSION` from `9` to `10`.
+- `make beta-validate-archive` passed for `Build/Release/Orlix.xcarchive`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- Exported archive metadata verified bundle id `com.rudironsoni.Orlix`, version `0.1`, build `10`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed. Fastlane reported successful upload to App Store Connect app `6785306909`.
+
+Boundary:
+- App Store Connect processing was not waited for because the beta upload uses `skip_waiting_for_build_processing`.
+- Physical iOS 27 device runtime proof is still not captured in this checkpoint.
+
 ### 2026-06-29 TestFlight build 9 upload
 
 Release:
