@@ -31,6 +31,14 @@ Boundary:
 - The previous state image panic from `EXT4-fs (vdb): bad geometry` did not recur in the simulator launch.
 - The 120 second console capture timed out after `ORLIX-ROOT-OVERLAY-READY`; it did not prove an interactive shell prompt.
 
+Release:
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` bumped `CURRENT_PROJECT_VERSION` from `4` to `5`, then hit the known Xcode wrapper archive finalization failure opening `BuildProductsPath`.
+- Direct `/usr/bin/xcodebuild archive` with external DerivedData and package cache completed successfully.
+- `make beta-validate-archive` passed.
+- Direct `/usr/bin/xcodebuild -exportArchive` exported `Build/Release/Export/Orlix.ipa`.
+- IPA metadata checked: bundle id `com.rudironsoni.Orlix`, version `0.1`, build `5`, `ITSAppUsesNonExemptEncryption=false`, profile `Orlix`, team `ZQ3L7M567L`.
+- `fastlane pilot upload --api_key_path ~/.config/fastlane/appstore_api_key.json --app_identifier com.rudironsoni.Orlix --ipa Build/Release/Export/Orlix.ipa --uses_non_exempt_encryption false --skip_waiting_for_build_processing true --verbose` succeeded. Delivery UUID `49d63721-4899-40fa-bac9-19a0b86970d5`.
+
 ### 2026-06-29 Hosted I/O Mappings Kept Out Of Linux Vmalloc
 
 Changes:
