@@ -10,6 +10,21 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-30 TestFlight build 11 upload
+
+Release:
+- Published pre-console boot progress hooks to TestFlight build `0.1 (11)`.
+- `make beta-signing-diagnostics ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed after the login keychain was unlocked. It validated the Apple Distribution signing identity.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed, preserving the existing build `11` bump.
+- `make beta-validate-archive` passed for `Build/Release/Orlix.xcarchive`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- Exported IPA metadata verified bundle id `com.rudironsoni.Orlix`, version `0.1`, build `11`, and `ITSAppUsesNonExemptEncryption=false`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed. Fastlane uploaded to App Store Connect app `6785306909`.
+
+Boundary:
+- App Store Connect processing was not waited for because the beta upload uses `skip_waiting_for_build_processing`.
+- This build improves physical iOS 27 freeze observability. It does not yet prove the physical iOS 27 freeze is fixed.
+
 ### 2026-06-29 iOS 27 pre-console boot progress hooks
 
 Changes:
