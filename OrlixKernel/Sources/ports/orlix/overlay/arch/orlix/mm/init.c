@@ -35,19 +35,27 @@ unsigned long orlix_hosted_vmalloc_end __ro_after_init;
 int arch_boot_prepare_hosted_vmalloc_window(void)
 {
 	unsigned long start = 0;
+	unsigned long size;
 
 	if (orlix_hosted_vmalloc_start && orlix_hosted_vmalloc_end)
 		return 0;
 
-	if (orlix_host_kernel_reserve_window(TASK_SIZE,
-					     ORLIX_HOSTED_KERNEL_WINDOW_MAX,
-					     ORLIX_HOSTED_VMALLOC_SIZE,
-					     PGDIR_SIZE,
-					     &start))
+	for (size = ORLIX_HOSTED_VMALLOC_SIZE;
+	     size >= ORLIX_HOSTED_VMALLOC_MIN_SIZE;
+	     size >>= 1) {
+		if (!orlix_host_kernel_reserve_window(TASK_SIZE,
+						      ORLIX_HOSTED_KERNEL_WINDOW_MAX,
+						      size,
+						      PGDIR_SIZE,
+						      &start))
+			break;
+	}
+
+	if (!start)
 		return -1;
 
 	orlix_hosted_vmalloc_start = start;
-	orlix_hosted_vmalloc_end = start + ORLIX_HOSTED_VMALLOC_SIZE;
+	orlix_hosted_vmalloc_end = start + size;
 	return 0;
 }
 #endif

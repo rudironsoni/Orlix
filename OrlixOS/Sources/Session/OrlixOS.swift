@@ -155,7 +155,7 @@ public enum OrlixBootStatus: Equatable, Sendable {
         case .invalidConfig:
             return "Orlix bootloader rejected the boot config."
         case .unavailable:
-            return "Orlix boot handoff is not wired to iOS-hosted Linux execution yet."
+            return "Orlix could not reserve the hosted Linux boot address space."
         case .alreadyStarted:
             return "Orlix boot already started in this process."
         case .unknown:

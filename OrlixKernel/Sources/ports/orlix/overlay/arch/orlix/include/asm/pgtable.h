@@ -37,6 +37,7 @@
 #define VMALLOC_SIZE	(KERN_VIRT_SIZE >> 1)
 #if defined(ORLIX_APP_HOSTED_BOOT)
 #define ORLIX_HOSTED_VMALLOC_SIZE	_AC(0x0000000010000000, UL)
+#define ORLIX_HOSTED_VMALLOC_MIN_SIZE	_AC(0x0000000001000000, UL)
 #define ORLIX_HOSTED_KERNEL_WINDOW_MAX	_AC(0x00007f0000000000, UL)
 extern unsigned long orlix_hosted_vmalloc_start;
 extern unsigned long orlix_hosted_vmalloc_end;
