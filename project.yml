@@ -15,7 +15,7 @@ settings:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
     CURRENT_PROJECT_VERSION: 2
-    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_VERSION: "6.0"
 packages:
@@ -81,6 +81,13 @@ targets:
       - name: Embed OrlixOS Payload
         basedOnDependencyAnalysis: true
         inputFiles:
+          - $(SRCROOT)/OrlixOS/Makefile
+          - $(SRCROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig
+          - $(SRCROOT)/OrlixOS/Sources/init
+          - $(SRCROOT)/OrlixOS/Sources/make
+          - $(SRCROOT)/OrlixOS/Sources/make/rules.mk
+          - $(SRCROOT)/OrlixKernel/Makefile
+          - $(SRCROOT)/Build/OrlixMLibC/sysroot/$(ORLIX_PROFILE)/usr/include
           - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
           - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/Info.plist
           - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/.orlix-payload-ready
