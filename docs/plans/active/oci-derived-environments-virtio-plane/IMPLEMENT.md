@@ -22,6 +22,13 @@ Validation:
 - `make beta-install-simulator ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed.
 - Release simulator launch for `com.rudironsoni.Orlix` moved past the bootloader line and emitted `Linux version 6.12.0`, `Run /init init process`, `ORLIX-ROOT-OVERLAY-READY`, and `orlix-init: main entered`; no `Kernel panic` or `failed to synchronize hosted kernel mapping` marker appeared in the captured log.
 
+Release:
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ...` passed and bumped `CURRENT_PROJECT_VERSION` from `7` to `8`.
+- `make beta-validate-archive` passed for `Build/Release/Orlix.xcarchive`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- IPA metadata verified `CFBundleIdentifier=com.rudironsoni.Orlix`, `CFBundleShortVersionString=0.1`, `CFBundleVersion=8`, `ITSAppUsesNonExemptEncryption=false`, embedded profile `Orlix`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed with fastlane upload to App Store Connect app `6785306909`.
+
 ### 2026-06-29 TestFlight build 7 archive upload
 
 Release:
