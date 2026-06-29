@@ -25408,3 +25408,9 @@ Changes: - Removed the rejected generic boot diagnostics/milestone path and repl
 Validation: - `git diff --check` passed. - `rg` found no remaining `diagnostics.*`, `orlix_host_boot_milestone`, `ORLIXOS_PACKAGE_PROOF`, or `ORLIXOS_PACKAGE_STAMP` references under Orlix/OrlixOS/OrlixHostAdapter/project.yml. - `xcode-storage-doctor` passed. - `xcrun simctl list devices booted` showed only `Orlix-iPhone-15-Pro-Max` `58CEE149-24B9-45C4-9FEC-F7D630C622CF` booted. - Focused `OrlixHostAdapter Tests` boot progress tests passed on that simulator. - Focused `OrlixOS Tests` boot progress/session mapping tests passed on that simulator. - `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Debug -destination 'platform=iOS Simulator,id=58CEE149-24B9-45C4-9FEC-F7D630C622CF' build` passed. - Simulator app install/launch produced a blank white screenshot after watchdog threshold, so app-hosted terminal UI behavior is not claimed from that run.
 
 Blocked validation: - Physical iOS 27 evidence is still missing. `xcrun devicectl --help`, `xcrun devicectl device --help`, and `xcrun devicectl device process --help` were checked, but `xcrun devicectl list devices` did not list the iPhone, only the watch. No final physical-device boot progress event was captured.
+
+[2026-06-29] Removed compact plan hook
+
+Changes: - Removed `.codex/hooks/compact_plan_check.py` at user request. - Removed the lifecycle hook tests that directly executed the deleted compact plan hook. - Left historical documentation entries that mention past executions untouched.
+
+Validation: - `python3 -m unittest discover .codex/hooks/tests` passed, 30 tests. - `rg -n "compact_plan_check|COMPACT_PLAN_CHECK" .codex AGENTS.md docs/harness docs/adr docs/reference project.yml Makefile` found no active references. - `git diff --check` passed.
