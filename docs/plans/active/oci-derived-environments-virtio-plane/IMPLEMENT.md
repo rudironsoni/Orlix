@@ -10,6 +10,25 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 iOS 27 pre-console boot progress hooks
+
+Changes:
+- Added typed boot progress records inside the C boot path so a pre-console physical-device freeze no longer stops at only Swift-side `bootloader entered`.
+- OrlixKernel now records `bootConfigValidated`, `hostResourcesReady`, `kernelHandoff`, `archEntry`, `linuxStartKernel`, and typed `failed` status through the existing HostAdapter boot progress ring.
+- Kept the hook narrow: no Darwin, POSIX fd, Mach type, process manager, generic diagnostics API, or Linux userspace semantics were added to OrlixKernel.
+
+Validation:
+- `git diff --check` passed.
+- `xcodegen generate --spec project.yml` passed.
+- `make -f OrlixOS/Makefile kernel-payload PROFILE=release` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Debug -destination 'generic/platform=iOS Simulator' build` passed.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` rebuilt mlibc, OrlixOS packages, rootfs, and the iPhoneOS Linux payload, then failed at codesigning `OrlixKernel.framework`.
+
+Boundary:
+- Focused XCTest runtime execution was blocked because the only simulator, `Orlix-iPhone-15-Pro-Max` `58CEE149-24B9-45C4-9FEC-F7D630C622CF`, did not reach terminal bootstatus and tests hung before emitting XCTest output.
+- `xcode-storage-doctor` currently reports CoreSimulator Caches not mounted at `/Library/Developer/CoreSimulator/Caches`; simctl and build-for-testing still respond.
+- TestFlight build `0.1 (11)` was not uploaded yet. Local signing is blocked by `errSecInternalComponent`; `security show-keychain-info login.keychain-db` reports `User interaction is not allowed`, and `security unlock-keychain` requires the login keychain password.
+
 ### 2026-06-29 TestFlight build 10 upload
 
 Release:

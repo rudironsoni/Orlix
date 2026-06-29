@@ -3,6 +3,7 @@
 #include <asm/hosted_exec.h>
 #include <asm/page.h>
 #include <asm/thread_info.h>
+#include <internal/asm/host_boot_progress.h>
 #include <linux/init.h>
 #include <linux/start_kernel.h>
 
@@ -34,6 +35,8 @@ static __attribute__((noreturn)) void arch_boot_start_kernel(void)
 	void (*entry)(void) = start_kernel;
 
 	orlix_hosted_capture_host_context();
+	orlix_host_boot_progress_note(
+		ORLIX_HOST_BOOT_STAGE_LINUX_START_KERNEL);
 	asm volatile("mov x29, xzr\n"
 		     "mov sp, %0\n"
 		     "blr %1\n"
@@ -95,6 +98,7 @@ int __orlix_boot_init arch_boot_entry(const struct boot_params *params)
 {
 	int status = arch_boot_prepare_entry(params);
 
+	orlix_host_boot_progress_note(ORLIX_HOST_BOOT_STAGE_ARCH_ENTRY);
 	if (status != ORLIX_ARCH_BOOT_OK)
 		return status;
 

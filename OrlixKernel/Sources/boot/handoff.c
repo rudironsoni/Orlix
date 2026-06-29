@@ -3,6 +3,7 @@
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
 #include "OrlixHostAdapter/boot/resources.h"
 #include <asm/boot.h>
+#include <internal/asm/host_boot_progress.h>
 
 static int OrlixLinuxBootStringIsPresent(const char *value)
 {
@@ -17,17 +18,21 @@ static int OrlixEnterLinux(const struct boot_params *params)
         !params->dtb_base || params->dtb_size == 0 ||
         !OrlixLinuxBootStringIsPresent(params->root_device) ||
         !OrlixLinuxBootStringIsPresent(params->console_device)) {
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
 
+    orlix_host_boot_progress_note(ORLIX_HOST_BOOT_STAGE_KERNEL_HANDOFF);
     status = arch_boot_entry(params);
     if (status == ORLIX_ARCH_BOOT_OK) {
         return ORLIX_BOOT_STATUS_OK;
     }
     if (status == ORLIX_ARCH_BOOT_UNAVAILABLE) {
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_UNAVAILABLE);
         return ORLIX_BOOT_STATUS_UNAVAILABLE;
     }
 
+    orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
     return ORLIX_BOOT_STATUS_INVALID_CONFIG;
 }
 
@@ -46,6 +51,7 @@ __attribute__((visibility("hidden"))) int OrlixBootHandoff(
     int status;
 
     if (!input) {
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
 
@@ -56,32 +62,39 @@ __attribute__((visibility("hidden"))) int OrlixBootHandoff(
 #endif
 
     if (!input->profile_dtb_path || input->profile_dtb_path[0] == '\0') {
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
 
     if (OrlixSelectRootImage(input->root_image_identifier) != 0) {
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
     if (OrlixHostSelectBootBlockImages(input->root_image_identifier) != 0) {
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
 
     params.cmdline = input->kernel_cmdline;
     if (OrlixHostLoadKernelPayloadResource(input->profile_dtb_path, &profile_dtb) != 0) {
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
     if (OrlixHostLoadInitrdResource(input->root_image_identifier, &initrd) != 0) {
         OrlixHostFreeResource(&profile_dtb);
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
     if (OrlixLoadDeviceTree(profile_dtb.data, profile_dtb.size) != 0) {
         OrlixHostFreeResource(&initrd);
         OrlixHostFreeResource(&profile_dtb);
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
     if (OrlixLoadInitrd(initrd.data, initrd.size) != 0) {
         OrlixHostFreeResource(&initrd);
         OrlixHostFreeResource(&profile_dtb);
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_INVALID_CONFIG);
         return ORLIX_BOOT_STATUS_INVALID_CONFIG;
     }
     params.dtb_base = profile_dtb.data;
@@ -92,6 +105,8 @@ __attribute__((visibility("hidden"))) int OrlixBootHandoff(
     params.console_device = input->console_device;
     params.host_page_size = orlix_host_memory_page_size();
 
+    orlix_host_boot_progress_note(
+        ORLIX_HOST_BOOT_STAGE_HOST_RESOURCES_READY);
     status = OrlixEnterLinux(&params);
     OrlixHostFreeResource(&initrd);
     OrlixHostFreeResource(&profile_dtb);
