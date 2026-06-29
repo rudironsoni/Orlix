@@ -100,6 +100,7 @@ For upstream conformance work, upstream sources and tests are authoritative. Fix
 10. Start each Orlix session by checking active plans before implementation or status claims.
 11. Keep `IMPLEMENT.md` current after each coherent checkpoint.
 12. Commit and push after a coherent verified checkpoint when implementation work is complete.
+13. Host virtual address implementation, diagnostics, and tests must derive address ranges from the OS/runtime under test. Do not hardcode host VM candidate addresses to simulate device behavior, and do not expose test-only HostAdapter APIs or ABI to reach internals.
 
 ## Xcode / Simulator / External SSD Environment Rules
 
