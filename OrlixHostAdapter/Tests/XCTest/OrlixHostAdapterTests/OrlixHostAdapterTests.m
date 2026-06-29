@@ -727,8 +727,8 @@ void OrlixHostLeaveHostTls(unsigned long active_tls)
 
 - (void)testIOMappingAvoidsHostedKernelVmallocRange
 {
-    const unsigned long vmallocStart = 0x0000700000000000UL;
-    const unsigned long vmallocEnd = 0x0000780000000000UL;
+    const unsigned long vmallocStart = 0x0000780010000000UL;
+    const unsigned long vmallocEnd = 0x00007f0000000000UL;
     void *mapping = orlix_host_ioremap(0x10000000UL, 0x200UL);
     unsigned long address = (unsigned long)mapping;
     unsigned long physicalAddress = 0;

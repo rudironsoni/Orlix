@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 TestFlight build 6 archive and upload
+
+Changes:
+- Kept hosted HostAdapter I/O mappings outside the hosted Linux reserved/kernel virtual range used by the TestFlight boot path.
+- Moved hosted Linux `VMALLOC_START` above the private HostAdapter I/O aperture and added compile-time range guards.
+- Added `make beta-upload`, backed by direct `fastlane pilot upload`, and made `beta-bump-build-number` consult App Store Connect/TestFlight latest build number when the fastlane API key JSON is available.
+- Fixed the beta archive path to avoid wrapper-injected `SYMROOT`/`OBJROOT` archive finalization settings while still routing DerivedData and SwiftPM package cache through `external-ssd-root`.
+- Updated `AGENTS.md` with the TestFlight release flow, fastlane upload rule, build-number rule, and current single simulator target.
+
+Validation:
+- `xcode-storage-doctor` passed.
+- Only one simulator was booted: `ExternalSSDProof` `4B85E297-7A59-45BD-A94B-189238EC48FA`.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixHostAdapter Tests" -configuration Debug -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' -only-testing:OrlixHostAdapterTests/OrlixHostAdapterTests/testIOMappingAvoidsHostedKernelVmallocRange test` passed.
+- `make beta-install-simulator` built, fresh-installed, and launched Release `com.rudironsoni.Orlix` on the single simulator.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed after `CURRENT_PROJECT_VERSION` had been bumped to `6`.
+- `make beta-validate-archive` passed, and the archive reports `CFBundleVersion=6`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist` passed.
+- Exported IPA metadata reports bundle id `com.rudironsoni.Orlix`, version `0.1`, build `6`, and `ITSAppUsesNonExemptEncryption=false`.
+- `make beta-upload` passed using fastlane, and `fastlane run latest_testflight_build_number ... version:0.1` now reports `Result: 6`.
+
+Boundary:
+- Fastlane upload skipped waiting for App Store Connect processing by design, so TestFlight processing/availability remains an App Store Connect state to watch after upload.
+
 ### 2026-06-29 TestFlight Boot Panic Boundary Fixes
 
 Changes:

@@ -45,6 +45,8 @@ static struct OrlixHostUserMapping *OrlixHostUserMappings;
 
 #define ORLIX_HOST_IOMEM_BASE 0x0000780000000000UL
 #define ORLIX_HOST_IOMEM_SIZE 0x0000000010000000UL
+#define ORLIX_HOST_HOSTED_RESERVED_BASE 0x0000600000000000UL
+#define ORLIX_HOST_HOSTED_RESERVED_END 0x00007f0000000000UL
 
 static unsigned long OrlixHostIOMappingCursor = ORLIX_HOST_IOMEM_BASE;
 
@@ -60,6 +62,21 @@ static void OrlixHostInvalidateInstructionCache(unsigned long address,
         return;
     }
     sys_icache_invalidate((void *)address, (size_t)length);
+}
+
+static bool OrlixHostRangeIntersects(unsigned long start,
+                                     unsigned long length,
+                                     unsigned long range_start,
+                                     unsigned long range_end)
+{
+    unsigned long end;
+
+    if (length == 0 || start > (unsigned long)-1 - length) {
+        return true;
+    }
+
+    end = start + length;
+    return start < range_end && end > range_start;
 }
 
 __attribute__((visibility("hidden"))) unsigned long orlix_host_memory_page_size(void)
@@ -115,6 +132,28 @@ static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
         }
 
         OrlixHostIOMappingCursor += page_size;
+    }
+
+    for (unsigned int attempt = 0; attempt < 8; attempt++) {
+        vm_address_t target = 0;
+        kern_return_t status = vm_allocate(mach_task_self(),
+                                           &target,
+                                           length,
+                                           VM_FLAGS_ANYWHERE);
+
+        if (status != KERN_SUCCESS || target == 0) {
+            continue;
+        }
+        if (OrlixHostRangeIntersects((unsigned long)target,
+                                     length,
+                                     ORLIX_HOST_HOSTED_RESERVED_BASE,
+                                     ORLIX_HOST_HOSTED_RESERVED_END)) {
+            (void)vm_deallocate(mach_task_self(), target, length);
+            continue;
+        }
+
+        *mapped = target;
+        return 0;
     }
 
     return -1;

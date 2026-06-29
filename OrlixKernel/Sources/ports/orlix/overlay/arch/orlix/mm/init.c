@@ -59,6 +59,7 @@ void __init paging_init(void)
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	BUILD_BUG_ON(VMALLOC_START <= TASK_SIZE);
+	BUILD_BUG_ON(VMALLOC_END <= VMALLOC_START);
 #endif
 
 	if (!end || end <= start)
@@ -218,9 +219,7 @@ void orlix_sync_hosted_kernel_pte(unsigned long address)
 	if (address < VMALLOC_START || address >= VMALLOC_END)
 		return;
 
-	if (orlix_sync_kernel_host_window(address))
-		panic("Orlix: failed to synchronize hosted kernel PTE %#lx\n",
-		      address);
+	(void)orlix_sync_kernel_host_window(address);
 }
 
 int orlix_sync_hosted_kernel_fault(unsigned long address)
