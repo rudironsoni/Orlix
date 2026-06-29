@@ -10,6 +10,20 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-29 TestFlight build 9 upload
+
+Release:
+- Published the terminal-input fix as TestFlight build `0.1 (9)` through the repository beta flow.
+- `make beta-simulator-gate ORLIX_BETA_SIMULATOR_ID=58CEE149-24B9-45C4-9FEC-F7D630C622CF` passed on the single booted `Orlix-iPhone-15-Pro-Max` simulator.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L` passed and automatically bumped `CURRENT_PROJECT_VERSION` from `8` to `9`.
+- `make beta-validate-archive` passed for `Build/Release/Orlix.xcarchive`.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- Exported IPA metadata verified bundle id `com.rudironsoni.Orlix`, version `0.1`, build `9`, `ITSAppUsesNonExemptEncryption=false`, App Store profile `Orlix`, team `ZQ3L7M567L`, and application identifier `ZQ3L7M567L.com.rudironsoni.Orlix`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed fastlane upload to App Store Connect app `6785306909`.
+
+Boundary:
+- Fastlane used `skip_waiting_for_build_processing`, so Apple build processing/TestFlight availability must be checked in App Store Connect or a later status command.
+
 ### 2026-06-29 iPhone 15 Pro Max terminal input routing
 
 Root cause:
