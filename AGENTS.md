@@ -130,7 +130,7 @@ The intended behavior is:
 Before running Xcode, `xcrun`, `simctl`, or build/test commands, use this PATH:
 
 ```sh
-export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 ```
 
 This ensures the wrappers are used:
@@ -140,6 +140,9 @@ This ensures the wrappers are used:
 ~/.local/bin/simctl
 ~/.local/bin/xcodebuild
 ```
+
+Keeping `/opt/homebrew/bin` after `$HOME/.local/bin` preserves `rtk`,
+`fastlane`, and Homebrew tools without bypassing the Xcode wrappers.
 
 Do not call these directly unless debugging wrapper behavior:
 
@@ -190,7 +193,7 @@ xcodebuild \
   -project Orlix.xcodeproj \
   -scheme "OrlixKernel Conformance" \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' \
   test
 ```
 
@@ -215,8 +218,8 @@ That is expected.
 The currently known-good simulator is:
 
 ```text
-iPhone 17
-UDID: E65F0D05-980C-4368-8CDC-2D2BF3E05757
+ExternalSSDProof
+UDID: 4B85E297-7A59-45BD-A94B-189238EC48FA
 Runtime: iOS 26.5
 ```
 
@@ -224,7 +227,7 @@ Prefer this destination for Xcode tests unless the task explicitly requires a
 fresh simulator:
 
 ```text
--destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757'
+-destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA'
 ```
 
 This simulator is booted and has already completed the expensive first-boot data
@@ -236,7 +239,7 @@ destinations can become ambiguous after agents create additional simulators.
 Prefer:
 
 ```text
--destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757'
+-destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA'
 ```
 
 Over:
@@ -445,7 +448,7 @@ Check environment first:
 
 ```sh
 xcode-storage-doctor
-xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b
+xcrun simctl bootstatus 4B85E297-7A59-45BD-A94B-189238EC48FA -b
 xcrun simctl list devices available
 ```
 
@@ -517,6 +520,35 @@ Do not hardcode `/Volumes/1TB`.
 Do not "fix" XCTest runner issues by changing Linux, OCI, kernel, or app code
 until the hosted XCTest attachment path is independently verified.
 
+### TestFlight Release Flow
+
+Use the repository beta targets and direct fastlane upload path for TestFlight.
+Do not switch to Xcode Organizer, ad hoc upload scripts, or a new release system
+unless the user explicitly asks.
+
+`make beta-archive` is the one sanctioned exception to the normal wrapped
+`xcodebuild` rule. It calls `/usr/bin/xcodebuild` directly while passing
+`-derivedDataPath "$(external-ssd-root)/Xcode/DerivedData"` and
+`-clonedSourcePackagesDirPath "$(external-ssd-root)/Xcode/PackageCache"`.
+Do not add `SYMROOT`, `OBJROOT`, module-cache build settings, or wrapper
+workarounds to archive finalization. Those settings break Xcode archive
+finalization with a missing `BuildProductsPath`.
+
+The default release flow is:
+
+```sh
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+make beta-simulator-gate
+make beta-archive ORLIX_DEVELOPMENT_TEAM=<Apple team id>
+make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=<export options plist>
+make beta-upload
+```
+
+`beta-archive` must keep automatic build-number bumping enabled unless the user
+explicitly disables it. The bump must account for App Store Connect/TestFlight
+when the fastlane API key JSON is available, so a new upload does not reuse an
+already uploaded build number.
+
 ### Known-Good Baseline Commands
 
 Use these when starting a task that depends on Xcode or Simulator:
@@ -526,13 +558,13 @@ export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 xcode-storage-doctor
 
-xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b
+xcrun simctl bootstatus 4B85E297-7A59-45BD-A94B-189238EC48FA -b
 
 xcodebuild \
   -project Orlix.xcodeproj \
   -scheme "OrlixTestRunner Tests" \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757' \
+  -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' \
   -only-testing:OrlixTestRunnerTests \
   test
 ```

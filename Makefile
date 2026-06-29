@@ -22,12 +22,17 @@ ORLIX_BETA_BUMP_BUILD_NUMBER ?= YES
 ORLIX_ASC_API_KEY_PATH ?=
 ORLIX_ASC_API_KEY_ID ?=
 ORLIX_ASC_API_ISSUER_ID ?=
+ORLIX_FASTLANE_API_KEY_PATH ?= $(HOME)/.config/fastlane/appstore_api_key.json
+ORLIX_BETA_IPA_PATH ?= $(ORLIX_BETA_EXPORT_DIR)/Orlix.ipa
+ORLIX_EXTERNAL_SSD_ROOT ?= $(shell external-ssd-root 2>/dev/null)
+ORLIX_XCODE_ROOT ?= $(ORLIX_EXTERNAL_SSD_ROOT)/Xcode
+ORLIX_XCODEBUILD_ARCHIVE ?= /usr/bin/xcodebuild
 ORLIX_XCODEBUILD_EXPORT ?= /usr/bin/xcodebuild
-ORLIX_BETA_SIMULATOR_ID ?= E65F0D05-980C-4368-8CDC-2D2BF3E05757
+ORLIX_BETA_SIMULATOR_ID ?= 4B85E297-7A59-45BD-A94B-189238EC48FA
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate beta-archive beta-validate-archive beta-export-archive build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -78,7 +83,16 @@ beta-bump-build-number: beta-prerequisites
 	fi; \
 	current="$$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
 	[[ "$$current" =~ ^[0-9]+$$ ]] || { echo "CURRENT_PROJECT_VERSION must be an integer in project.yml, got: $$current" >&2; exit 1; }; \
-	next="$$((current + 1))"; \
+	marketing="$$(awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
+	latest=""; \
+	if [ -s "$(ORLIX_FASTLANE_API_KEY_PATH)" ] && command -v fastlane >/dev/null 2>&1; then \
+		latest="$$(fastlane run latest_testflight_build_number api_key_path:"$(ORLIX_FASTLANE_API_KEY_PATH)" app_identifier:"$(ORLIX_APP_BUNDLE_ID)" version:"$$marketing" initial_build_number:0 | awk '/Result:/ { print $$NF }' | tail -n 1)"; \
+	fi; \
+	if [[ "$$latest" =~ ^[0-9]+$$ ]] && [ "$$latest" -ge "$$current" ]; then \
+		next="$$((latest + 1))"; \
+	else \
+		next="$$((current + 1))"; \
+	fi; \
 	perl -0pi -e 's/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+([[:space:]]*)$$/$${1}'"$$next"'$${2}/m or die "CURRENT_PROJECT_VERSION not found\n"' project.yml; \
 	printf '%s\n' "bumped CURRENT_PROJECT_VERSION $$current -> $$next"
 
@@ -185,7 +199,9 @@ beta-archive: beta-bump-build-number
 	$(MAKE) -f OrlixKernel/Makefile __kernel-archive PROFILE=release ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphoneos ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"; \
 	$(MAKE) -f OrlixOS/Makefile kernel-payload PROFILE=release; \
 	mkdir -p "$(ORLIX_BETA_ARCHIVE_DIR)"; \
-	xcodebuild \
+	TMPDIR="$(ORLIX_XCODE_ROOT)/tmp/" "$(ORLIX_XCODEBUILD_ARCHIVE)" \
+		-derivedDataPath "$(ORLIX_XCODE_ROOT)/DerivedData" \
+		-clonedSourcePackagesDirPath "$(ORLIX_XCODE_ROOT)/PackageCache" \
 		-project Orlix.xcodeproj \
 		-scheme "$(ORLIX_BETA_SCHEME)" \
 		-configuration Release \
@@ -223,6 +239,18 @@ beta-export-archive: beta-validate-archive
 	-exportOptionsPlist "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" \
 	$${xcodebuild_signing_flags[@]+"$${xcodebuild_signing_flags[@]}"} \
 	-exportPath "$(ORLIX_BETA_EXPORT_DIR)"
+
+beta-upload:
+	@set -euo pipefail; \
+	command -v fastlane >/dev/null 2>&1 || { echo "fastlane required to upload TestFlight build" >&2; exit 1; }; \
+	test -s "$(ORLIX_FASTLANE_API_KEY_PATH)" || { echo "missing fastlane App Store Connect API key JSON: $(ORLIX_FASTLANE_API_KEY_PATH)" >&2; exit 1; }; \
+	test -f "$(ORLIX_BETA_IPA_PATH)" || { echo "missing exported IPA: $(ORLIX_BETA_IPA_PATH)" >&2; exit 1; }; \
+	fastlane pilot upload \
+		--api_key_path "$(ORLIX_FASTLANE_API_KEY_PATH)" \
+		--app_identifier "$(ORLIX_APP_BUNDLE_ID)" \
+		--ipa "$(ORLIX_BETA_IPA_PATH)" \
+		--uses_non_exempt_encryption false \
+		--skip_waiting_for_build_processing true
 
 xcodeproj:
 	@$(KERNEL_MAKE) xcodeproj
