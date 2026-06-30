@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include <linux/mm.h>
+#include <linux/sched.h>
+#include <linux/sched/task_stack.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <asm/hosted_exec.h>
@@ -47,18 +49,52 @@ static int orlix_uaccess_resolve(struct mm_struct *mm, unsigned long address,
 static int orlix_uaccess_fault_in(struct mm_struct *mm, unsigned long address,
 				  bool write)
 {
-	unsigned int flags = write ? FAULT_FLAG_WRITE : 0;
+	struct pt_regs *regs = task_pt_regs(current);
+	bool tried = false;
+	vm_flags_t required = write ? VM_WRITE : VM_READ;
 
 	if (faulthandler_disabled())
 		return -EFAULT;
 
-	mmap_read_lock(mm);
-	if (fixup_user_fault(mm, address, flags, NULL)) {
+retry:
+	{
+		struct vm_area_struct *vma;
+		unsigned int flags = FAULT_FLAG_DEFAULT | FAULT_FLAG_USER;
+		vm_fault_t fault;
+
+		if (write)
+			flags |= FAULT_FLAG_WRITE;
+		if (tried)
+			flags |= FAULT_FLAG_TRIED;
+
+		vma = lock_mm_and_find_vma(mm, address, regs);
+		if (!vma)
+			return -EFAULT;
+
+		if (!(vma->vm_flags & required)) {
+			mmap_read_unlock(mm);
+			return -EFAULT;
+		}
+
+		fault = handle_mm_fault(vma, address, flags, regs);
+		if (fault_signal_pending(fault, regs))
+			return -EINTR;
+		if (fault & VM_FAULT_COMPLETED)
+			return 0;
+		if (fault & VM_FAULT_RETRY) {
+			tried = true;
+			goto retry;
+		}
+		if (unlikely(fault & VM_FAULT_ERROR)) {
+			int err = vm_fault_to_errno(fault, 0);
+
+			mmap_read_unlock(mm);
+			return err ? err : -EFAULT;
+		}
+
 		mmap_read_unlock(mm);
-		return -EFAULT;
+		return 0;
 	}
-	mmap_read_unlock(mm);
-	return 0;
 }
 
 static int orlix_uaccess_sync_to_user(unsigned long address, const void *kaddr)

@@ -48,6 +48,15 @@ static struct OrlixHostUserMapping *OrlixHostUserMappings;
 #define ORLIX_HOST_HOSTED_USER_BASE 0x0000000100000000UL
 #define ORLIX_HOST_HOSTED_STACK_TOP 0x0000000200000000UL
 #define ORLIX_HOST_HOSTED_KERNEL_MAX 0x0000000300000000UL
+#define ORLIX_HOST_VM_ANYWHERE_ATTEMPTS 128U
+#define ORLIX_HOST_VM_SCRATCH_MAX 8U
+#define ORLIX_HOST_VM_SCRATCH_MAX_BYTES 0x0000000020000000UL
+
+#ifdef VM_FLAGS_RANDOM_ADDR
+#define ORLIX_HOST_VM_ANYWHERE_FLAGS (VM_FLAGS_ANYWHERE | VM_FLAGS_RANDOM_ADDR)
+#else
+#define ORLIX_HOST_VM_ANYWHERE_FLAGS VM_FLAGS_ANYWHERE
+#endif
 
 static void OrlixHostUserMemoryBarrier(void)
 {
@@ -265,31 +274,43 @@ static int OrlixHostReserveAnyAvailableRange(unsigned long minimum_address,
                                              unsigned long alignment,
                                              unsigned long *base_address)
 {
-    const unsigned int max_attempts = 64;
+    vm_address_t scratch_addresses[ORLIX_HOST_VM_SCRATCH_MAX] = {0};
+    vm_size_t scratch_lengths[ORLIX_HOST_VM_SCRATCH_MAX] = {0};
+    unsigned int scratch_count = 0;
+    unsigned long scratch_bytes = 0;
+    unsigned int allocation_failures = 0;
+    unsigned int user_collisions = 0;
+    unsigned int unusable_candidates = 0;
+    unsigned int protect_failures = 0;
+    kern_return_t last_allocate_status = KERN_SUCCESS;
+    kern_return_t last_protect_status = KERN_SUCCESS;
 
     if (!base_address || length == 0 || alignment == 0 ||
         (alignment & (alignment - 1UL)) != 0) {
         return -1;
     }
 
-    for (unsigned int attempt = 0; attempt < max_attempts; attempt++) {
+    for (unsigned int attempt = 0; attempt < ORLIX_HOST_VM_ANYWHERE_ATTEMPTS; attempt++) {
         vm_address_t target = 0;
         vm_size_t reservation_length;
         kern_return_t status = vm_allocate(mach_task_self(),
                                            &target,
                                            (vm_size_t)length + alignment,
-                                           VM_FLAGS_ANYWHERE);
+                                           ORLIX_HOST_VM_ANYWHERE_FLAGS);
         unsigned long reservation_start = (unsigned long)target;
         unsigned long address;
         unsigned long reservation_end;
         unsigned long selected_end;
 
         if (status != KERN_SUCCESS || target == 0) {
+            allocation_failures++;
+            last_allocate_status = status;
             continue;
         }
 
         if (length > (unsigned long)-1 - alignment ||
             reservation_start > (unsigned long)-1 - length - alignment) {
+            unusable_candidates++;
             (void)vm_deallocate(mach_task_self(), target, (vm_size_t)length + alignment);
             continue;
         }
@@ -304,7 +325,24 @@ static int OrlixHostReserveAnyAvailableRange(unsigned long minimum_address,
                                      length,
                                      ORLIX_HOST_HOSTED_USER_BASE,
                                      ORLIX_HOST_HOSTED_STACK_TOP)) {
-            (void)vm_deallocate(mach_task_self(), target, reservation_length);
+            if (OrlixHostRangeIntersects(address,
+                                         length,
+                                         ORLIX_HOST_HOSTED_USER_BASE,
+                                         ORLIX_HOST_HOSTED_STACK_TOP)) {
+                user_collisions++;
+            } else {
+                unusable_candidates++;
+            }
+            if (scratch_count < ORLIX_HOST_VM_SCRATCH_MAX &&
+                scratch_bytes <= ORLIX_HOST_VM_SCRATCH_MAX_BYTES &&
+                reservation_length <= ORLIX_HOST_VM_SCRATCH_MAX_BYTES - scratch_bytes) {
+                scratch_addresses[scratch_count] = target;
+                scratch_lengths[scratch_count] = reservation_length;
+                scratch_count++;
+                scratch_bytes += reservation_length;
+            } else {
+                (void)vm_deallocate(mach_task_self(), target, reservation_length);
+            }
             continue;
         }
 
@@ -325,25 +363,55 @@ static int OrlixHostReserveAnyAvailableRange(unsigned long minimum_address,
                             false,
                             VM_PROT_NONE);
         if (status != KERN_SUCCESS) {
-            (void)vm_deallocate(mach_task_self(), (vm_address_t)address, (vm_size_t)length);
+            protect_failures++;
+            last_protect_status = status;
+            if (scratch_count < ORLIX_HOST_VM_SCRATCH_MAX &&
+                scratch_bytes <= ORLIX_HOST_VM_SCRATCH_MAX_BYTES &&
+                length <= ORLIX_HOST_VM_SCRATCH_MAX_BYTES - scratch_bytes) {
+                scratch_addresses[scratch_count] = (vm_address_t)address;
+                scratch_lengths[scratch_count] = (vm_size_t)length;
+                scratch_count++;
+                scratch_bytes += length;
+            } else {
+                (void)vm_deallocate(mach_task_self(),
+                                    (vm_address_t)address,
+                                    (vm_size_t)length);
+            }
             continue;
         }
 
         *base_address = address;
+        for (unsigned int index = 0; index < scratch_count; index++) {
+            (void)vm_deallocate(mach_task_self(),
+                                scratch_addresses[index],
+                                scratch_lengths[index]);
+        }
 #if DEBUG || ORLIX_BETA_OBSERVABILITY
         orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
                                 ORLIX_HOST_TRACE_LEVEL_INFO,
                                 ORLIX_HOST_TRACE_SINK_OS_LOG |
                                     ORLIX_HOST_TRACE_SINK_STDERR,
-                                "anywhere reservation selected base=0x%lx length=0x%lx preferredStart=0x%lx preferredEnd=0x%lx alignment=0x%lx attempts=%u",
+                                "anywhere reservation selected base=0x%lx length=0x%lx preferredStart=0x%lx preferredEnd=0x%lx alignment=0x%lx attempts=%u allocationFailures=%u collisions=%u unusable=%u protectFailures=%u scratchBytes=0x%lx flags=0x%x",
                                 address,
                                 length,
                                 minimum_address,
                                 maximum_address,
                                 alignment,
-                                attempt + 1);
+                                attempt + 1,
+                                allocation_failures,
+                                user_collisions,
+                                unusable_candidates,
+                                protect_failures,
+                                scratch_bytes,
+                                ORLIX_HOST_VM_ANYWHERE_FLAGS);
 #endif
         return 0;
+    }
+
+    for (unsigned int index = 0; index < scratch_count; index++) {
+        (void)vm_deallocate(mach_task_self(),
+                            scratch_addresses[index],
+                            scratch_lengths[index]);
     }
 
 #if DEBUG || ORLIX_BETA_OBSERVABILITY
@@ -351,32 +419,50 @@ static int OrlixHostReserveAnyAvailableRange(unsigned long minimum_address,
                             ORLIX_HOST_TRACE_LEVEL_ERROR,
                             ORLIX_HOST_TRACE_SINK_OS_LOG |
                                 ORLIX_HOST_TRACE_SINK_STDERR,
-                            "anywhere reservation failed length=0x%lx preferredStart=0x%lx preferredEnd=0x%lx alignment=0x%lx attempts=%u",
+                            "anywhere reservation failed length=0x%lx preferredStart=0x%lx preferredEnd=0x%lx alignment=0x%lx attempts=%u allocationFailures=%u collisions=%u unusable=%u protectFailures=%u lastAllocateStatus=%d lastProtectStatus=%d flags=0x%x",
                             length,
                             minimum_address,
                             maximum_address,
                             alignment,
-                            max_attempts);
+                            ORLIX_HOST_VM_ANYWHERE_ATTEMPTS,
+                            allocation_failures,
+                            user_collisions,
+                            unusable_candidates,
+                            protect_failures,
+                            last_allocate_status,
+                            last_protect_status,
+                            ORLIX_HOST_VM_ANYWHERE_FLAGS);
 #endif
     return -1;
 }
 
 static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
 {
+    vm_address_t scratch_addresses[ORLIX_HOST_VM_SCRATCH_MAX] = {0};
+    vm_size_t scratch_lengths[ORLIX_HOST_VM_SCRATCH_MAX] = {0};
+    unsigned int scratch_count = 0;
+    unsigned long scratch_bytes = 0;
+    unsigned int collisions = 0;
+    unsigned int allocation_failures = 0;
+    kern_return_t last_allocate_status = KERN_SUCCESS;
+
     if (!mapped || length == 0 || length > ORLIX_HOST_IOMEM_MAX_SIZE) {
         return -1;
     }
 
-    for (unsigned int attempt = 0; attempt < 32; attempt++) {
+    for (unsigned int attempt = 0; attempt < ORLIX_HOST_VM_ANYWHERE_ATTEMPTS; attempt++) {
         vm_address_t target = 0;
         kern_return_t status = vm_allocate(mach_task_self(),
                                            &target,
                                            length,
-                                           VM_FLAGS_ANYWHERE);
+                                           ORLIX_HOST_VM_ANYWHERE_FLAGS);
 
         if (status != KERN_SUCCESS || target == 0) {
+            allocation_failures++;
+            last_allocate_status = status;
             continue;
         }
+
         if (OrlixHostRangeIntersects((unsigned long)target,
                                      length,
                                      ORLIX_HOST_HOSTED_USER_BASE,
@@ -385,13 +471,62 @@ static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
                                      length,
                                      ORLIX_HOST_HOSTED_STACK_TOP,
                                      ORLIX_HOST_HOSTED_KERNEL_MAX)) {
-            (void)vm_deallocate(mach_task_self(), target, length);
+            collisions++;
+            if (scratch_count < ORLIX_HOST_VM_SCRATCH_MAX &&
+                scratch_bytes <= ORLIX_HOST_VM_SCRATCH_MAX_BYTES &&
+                length <= ORLIX_HOST_VM_SCRATCH_MAX_BYTES - scratch_bytes) {
+                scratch_addresses[scratch_count] = target;
+                scratch_lengths[scratch_count] = length;
+                scratch_count++;
+                scratch_bytes += length;
+            } else {
+                (void)vm_deallocate(mach_task_self(), target, length);
+            }
             continue;
         }
 
         *mapped = target;
+        for (unsigned int index = 0; index < scratch_count; index++) {
+            (void)vm_deallocate(mach_task_self(),
+                                scratch_addresses[index],
+                                scratch_lengths[index]);
+        }
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+        orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                                ORLIX_HOST_TRACE_LEVEL_INFO,
+                                ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                    ORLIX_HOST_TRACE_SINK_STDERR,
+                                "iomem reservation selected base=0x%lx length=0x%lx attempts=%u allocationFailures=%u collisions=%u scratchBytes=0x%lx flags=0x%x",
+                                (unsigned long)target,
+                                (unsigned long)length,
+                                attempt + 1,
+                                allocation_failures,
+                                collisions,
+                                scratch_bytes,
+                                ORLIX_HOST_VM_ANYWHERE_FLAGS);
+#endif
         return 0;
     }
+
+    for (unsigned int index = 0; index < scratch_count; index++) {
+        (void)vm_deallocate(mach_task_self(),
+                            scratch_addresses[index],
+                            scratch_lengths[index]);
+    }
+
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                            ORLIX_HOST_TRACE_LEVEL_ERROR,
+                            ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                ORLIX_HOST_TRACE_SINK_STDERR,
+                            "iomem reservation failed length=0x%lx attempts=%u allocationFailures=%u collisions=%u lastAllocateStatus=%d flags=0x%x",
+                            (unsigned long)length,
+                            ORLIX_HOST_VM_ANYWHERE_ATTEMPTS,
+                            allocation_failures,
+                            collisions,
+                            last_allocate_status,
+                            ORLIX_HOST_VM_ANYWHERE_FLAGS);
+#endif
 
     return -1;
 }
