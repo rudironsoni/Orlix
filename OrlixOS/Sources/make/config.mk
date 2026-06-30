@@ -93,7 +93,9 @@ ZSH_VERSION ?= 5.9
 ZSH_URL ?= https://www.zsh.org/pub/zsh-$(ZSH_VERSION).tar.xz
 ZSH_SHA256 ?= 9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5
 
-ORLIXOS_BUILD_ROOT := $(REPO_ROOT)/Build/OrlixOS
+ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
+ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(REPO_ROOT)/Build)
+ORLIXOS_BUILD_ROOT := $(ORLIX_BUILD_ROOT)/OrlixOS
 ORLIXOS_UPSTREAM_DIR := $(ORLIXOS_BUILD_ROOT)/upstream
 ORLIXOS_SRC_DIR := $(ORLIXOS_BUILD_ROOT)/src
 ORLIXOS_HOMEBREW_PREFIX ?= $(shell command -v brew >/dev/null 2>&1 && brew --prefix)
@@ -269,7 +271,7 @@ ORLIXOS_CHECKPOLICY_BUILD_DIR := $(ORLIXOS_PACKAGE_BUILD_DIR)/checkpolicy-$(CHEC
 ORLIXOS_CHECKPOLICY_HOST_COMPAT := $(PROJECT_DIR)/Sources/include/orlixos_checkpolicy_host_compat.h
 ORLIXOS_CHECKPOLICY_HOST_BINARY := $(ORLIXOS_PACKAGE_BUILD_DIR)/host-tools/checkpolicy
 ORLIXOS_CHECKPOLICY_STAMP := $(ORLIXOS_PACKAGE_BUILD_DIR)/host-tools/checkpolicy.stamp
-ORLIXOS_KERNEL_PORT_DIR := $(REPO_ROOT)/Build/OrlixKernel/src/linux-6.12-port
+ORLIXOS_KERNEL_PORT_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/src/linux-6.12-port
 ORLIXOS_KERNEL_SELINUX_CLASSMAP := $(ORLIXOS_KERNEL_PORT_DIR)/security/selinux/include/classmap.h
 ORLIXOS_KERNEL_SELINUX_INITIAL_SIDS := $(ORLIXOS_KERNEL_PORT_DIR)/security/selinux/include/initial_sid_to_string.h
 ORLIXOS_POLICYCOREUTILS_ARCHIVE := $(ORLIXOS_UPSTREAM_DIR)/policycoreutils-$(POLICYCOREUTILS_VERSION).tar.gz
@@ -327,9 +329,9 @@ ORLIXOS_ROOT_INIT_SOURCE := $(PROJECT_DIR)/Sources/init/rootinit.c
 ORLIXOS_ROOT_INIT_BINARY := $(ORLIXOS_PACKAGE_INSTALL_DIR)/initramfs/init
 ORLIXOS_ROOTFS_STAMP := $(ORLIXOS_ROOTFS_DIR)/rootfs.stamp
 
-ORLIXOS_MLIBC_SYSROOT := $(REPO_ROOT)/Build/OrlixMLibC/sysroot/$(PROFILE)
-ORLIXOS_MLIBC_HEADERS := $(REPO_ROOT)/Build/OrlixMLibC/kernel-headers/$(PROFILE)/include
-ORLIXOS_MLIBC_RTLIB := $(REPO_ROOT)/Build/OrlixMLibC/compiler-rt/$(PROFILE)/liborlix_compiler_rt.a
+ORLIXOS_MLIBC_SYSROOT := $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(PROFILE)
+ORLIXOS_MLIBC_HEADERS := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kernel-headers/$(PROFILE)/include
+ORLIXOS_MLIBC_RTLIB := $(ORLIX_BUILD_ROOT)/OrlixMLibC/compiler-rt/$(PROFILE)/liborlix_compiler_rt.a
 ORLIXOS_MLIBC_PATCHES := $(wildcard $(REPO_ROOT)/OrlixMLibC/Sources/patches/*.patch)
 ORLIXOS_HOSTED_USER_BASE_ADDRESS ?= 0x0000000100000000
 

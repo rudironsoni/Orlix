@@ -32,10 +32,10 @@ $(ORLIXOS_COREUTILS_TEST_INIT_BINARY): $(ORLIXOS_COREUTILS_TEST_INIT_SOURCE) $(O
 $(ORLIXOS_COREUTILS_TEST_INITRAMFS): $(ORLIXOS_COREUTILS_TEST_INIT_BINARY) $(ORLIXOS_COREUTILS_TEST_RUNNER) $(ORLIXOS_COREUTILS_TEST_ENV) $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_COREUTILS_TEST_LIST) $(ORLIXOS_COREUTILS_TEST_PASSWD) $(ORLIXOS_COREUTILS_TEST_GROUP) $(ORLIXOS_COREUTILS_TEST_SELINUX_CONFIG) $(ORLIXOS_COREUTILS_TEST_SELINUX_POLICY_BINARY) $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_GREP_BINARY) $(ORLIXOS_SED_BINARY) $(ORLIXOS_DIFF_BINARY) $(ORLIXOS_GAWK_BINARY) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_SETSID_BINARY) $(ORLIXOS_MOUNT_BINARY) $(ORLIXOS_UMOUNT_BINARY) $(ORLIXOS_MKFS_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT2_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_GETLIMITS_BINARY) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_GETFATTR_BINARY) $(ORLIXOS_SETFATTR_BINARY) $(ORLIXOS_GETFACL_BINARY) $(ORLIXOS_SETFACL_BINARY) $(ORLIXOS_SETCAP_BINARY) $(ORLIXOS_GETCAP_BINARY) $(ORLIXOS_GETENFORCE_BINARY) $(ORLIXOS_SETENFORCE_BINARY) $(ORLIXOS_SELINUXENABLED_BINARY) $(ORLIXOS_POLICYVERS_BINARY) $(ORLIXOS_GETPOLICYLOAD_BINARY) $(ORLIXOS_SESTATUS_BINARY) $(ORLIXOS_PERL_BINARY) $(ORLIXOS_PERL_STAMP)
 	@set -euo pipefail; \
 	$(KERNEL_MAKE) prepare PROFILE="$(PROFILE)" >/dev/null; \
-	gen_init_cpio="$(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/usr/gen_init_cpio"; \
+	gen_init_cpio="$(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/usr/gen_init_cpio"; \
 	output="$(ORLIXOS_COREUTILS_TEST_INITRAMFS_DIR)"; \
 	cpio_list="$(ORLIXOS_COREUTILS_TEST_INITRAMFS_DIR)/initramfs.list"; \
-	case "$$output" in "$(REPO_ROOT)"/Build/OrlixOS/test-initramfs/*) ;; *) echo "refusing to write Coreutils test initramfs outside Build/OrlixOS/test-initramfs: $$output" >&2; exit 1 ;; esac; \
+	case "$$output" in "$(ORLIX_BUILD_ROOT)"/OrlixOS/test-initramfs/*) ;; *) echo "refusing to write Coreutils test initramfs outside configured OrlixOS test-initramfs build root: $$output" >&2; exit 1 ;; esac; \
 	[ -x "$$gen_init_cpio" ] || { echo "missing Linux gen_init_cpio: $$gen_init_cpio" >&2; exit 1; }; \
 	[ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/tests" ] || { echo "missing upstream Coreutils tests directory: $(ORLIXOS_COREUTILS_SRC_DIR)/tests" >&2; exit 1; }; \
 	[ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/build-aux" ] || { echo "missing upstream Coreutils build-aux directory: $(ORLIXOS_COREUTILS_SRC_DIR)/build-aux" >&2; exit 1; }; \

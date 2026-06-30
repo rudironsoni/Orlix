@@ -73,11 +73,27 @@ targets:
           export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           profile="${ORLIX_PROFILE:-release}"
           platform="${PLATFORM_NAME:?}"
+          build_root="${ORLIX_BUILD_ROOT:-}"
+          if [ -z "$build_root" ] || [ "$build_root" = "$SRCROOT/Build" ]; then
+              external_root="$(external-ssd-root 2>/dev/null || true)"
+              if [ -n "$external_root" ]; then
+                  build_root="$external_root/Xcode/OrlixSystem/Build"
+              else
+                  build_root="$SRCROOT/Build"
+              fi
+          fi
           case "$platform" in
               iphoneos|iphonesimulator) ;;
               *) echo "unsupported OrlixKernel archive platform: $platform" >&2; exit 1 ;;
           esac
-          "${MAKE:-make}" -f "$SRCROOT/OrlixKernel/Makefile" __kernel-archive PROFILE="$profile" ORLIX_KERNEL_ARCHIVE_PLATFORMS="$platform"
+          "${MAKE:-make}" -f "$SRCROOT/OrlixKernel/Makefile" __kernel-archive PROFILE="$profile" ORLIX_BUILD_ROOT="$build_root" ORLIX_KERNEL_ARCHIVE_PLATFORMS="$platform"
+          archive="$build_root/OrlixKernel/$profile/$platform/OrlixKernel.a"
+          if [ ! -s "$archive" ]; then
+              echo "missing OrlixKernel archive: $archive" >&2
+              exit 1
+          fi
+          mkdir -p "$TARGET_TEMP_DIR"
+          cp -f "$archive" "$TARGET_TEMP_DIR/OrlixKernel.a"
     settings:
       base:
         CLANG_ENABLE_MODULE_VERIFIER: YES
@@ -95,7 +111,7 @@ targets:
           - $(SRCROOT)/OrlixHostAdapter/Sources
         OTHER_LDFLAGS:
           - $(inherited)
-          - $(SRCROOT)/Build/OrlixKernel/$(ORLIX_PROFILE)/$(PLATFORM_NAME)/OrlixKernel.a
+          - $(TARGET_TEMP_DIR)/OrlixKernel.a
         ARCHS[sdk=iphonesimulator*]: arm64
       GCC_PREPROCESSOR_DEFINITIONS:
         - $(inherited)
@@ -124,7 +140,7 @@ targets:
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/patches
-          - $(SRCROOT)/Build/OrlixMLibC/sysroot/$(ORLIX_PROFILE)/usr/include
+          - $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(ORLIX_PROFILE)/usr/include
           - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
           - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/Info.plist
           - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/.orlix-payload-ready
@@ -163,6 +179,17 @@ targets:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot/dts/release.dtb
         script: |
           set -eu
+          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          build_root="${ORLIX_BUILD_ROOT:-}"
+          if [ -z "$build_root" ] || [ "$build_root" = "$SRCROOT/Build" ]; then
+              external_root="$(external-ssd-root 2>/dev/null || true)"
+              if [ -n "$external_root" ]; then
+                  build_root="$external_root/Xcode/OrlixSystem/Build"
+              else
+                  build_root="$SRCROOT/Build"
+              fi
+          fi
+          ORLIX_BUILD_ROOT="$build_root"
           if [ "${ORLIX_OS_SKIP_PAYLOAD_EMBED:-NO}" = YES ]; then
               echo "Skipping OrlixOS payload embed because ORLIX_OS_SKIP_PAYLOAD_EMBED=YES"
               exit 0
@@ -171,6 +198,10 @@ targets:
           payload_name="${ORLIX_OS_PAYLOAD_BUNDLE_NAME:?}"
           payload_extension="${ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION:?}"
           source_payload_name="${ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME:?}"
+          ORLIX_OS_PAYLOAD_SOURCE_ROOT="$ORLIX_BUILD_ROOT/OrlixKernel/payload"
+          ORLIX_OS_ROOT_INITRAMFS_INPUT="$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/rootfs/initramfs.cpio.gz"
+          ORLIX_OS_BASE_ROOT_TREE_INPUT="$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/base-tree"
+          ORLIX_OS_STATE_ROOT_TREE_INPUT="$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/state-tree"
           payload="$ORLIX_OS_PAYLOAD_SOURCE_ROOT/$source_payload_name.$payload_extension"
           if [ "${ORLIX_OS_EXPECTED_ROOTFS_INPUT+x}" = x ]; then
               expected_rootfs_input="$ORLIX_OS_EXPECTED_ROOTFS_INPUT"
@@ -202,7 +233,7 @@ targets:
               fi
           fi
           if [ "$payload_needs_rebuild" = 1 ]; then
-              "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" kernel-payload PROFILE="$profile"
+              "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" kernel-payload PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
           else
               payload_inputs="
           $SRCROOT/OrlixOS/Makefile
@@ -225,7 +256,7 @@ targets:
                   fi
               done
               if [ "$payload_needs_rebuild" = 1 ]; then
-                  "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" kernel-payload PROFILE="$profile"
+              "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" kernel-payload PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
               fi
           fi
           if [ ! -d "$payload" ]; then
@@ -278,10 +309,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOS
         PRODUCT_NAME: OrlixOS
         ORLIX_PROFILE: release
-        ORLIX_OS_PAYLOAD_SOURCE_ROOT: $(SRCROOT)/Build/OrlixKernel/payload
-        ORLIX_OS_ROOT_INITRAMFS_INPUT: $(SRCROOT)/Build/OrlixOS/rootfs/$(ORLIX_PROFILE)/rootfs/initramfs.cpio.gz
-        ORLIX_OS_BASE_ROOT_TREE_INPUT: $(SRCROOT)/Build/OrlixOS/rootfs/$(ORLIX_PROFILE)/base-tree
-        ORLIX_OS_STATE_ROOT_TREE_INPUT: $(SRCROOT)/Build/OrlixOS/rootfs/$(ORLIX_PROFILE)/state-tree
+        ORLIX_BUILD_ROOT: $(DERIVED_DATA_DIR)/../OrlixSystem/Build
+        ORLIX_OS_PAYLOAD_SOURCE_ROOT: $(ORLIX_BUILD_ROOT)/OrlixKernel/payload
+        ORLIX_OS_ROOT_INITRAMFS_INPUT: $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(ORLIX_PROFILE)/rootfs/initramfs.cpio.gz
+        ORLIX_OS_BASE_ROOT_TREE_INPUT: $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(ORLIX_PROFILE)/base-tree
+        ORLIX_OS_STATE_ROOT_TREE_INPUT: $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(ORLIX_PROFILE)/state-tree
   OrlixOSTests:
     type: bundle.unit-test
     platform: iOS
@@ -334,10 +366,21 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -eu
+          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           profile="${ORLIX_PROFILE:-release}"
+          build_root="${ORLIX_BUILD_ROOT:-}"
+          if [ -z "$build_root" ] || [ "$build_root" = "$SRCROOT/Build" ]; then
+              external_root="$(external-ssd-root 2>/dev/null || true)"
+              if [ -n "$external_root" ]; then
+                  build_root="$external_root/Xcode/OrlixSystem/Build"
+              else
+                  build_root="$SRCROOT/Build"
+              fi
+          fi
+          ORLIX_BUILD_ROOT="$build_root"
           rebuild_kselftest_if_stale() {
-              source_root="$SRCROOT/$ORLIX_OS_KSELFTEST_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"
-              archive="$source_root/rootfs/initramfs.cpio.gz"
+            source_root="$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"
+            archive="$source_root/rootfs/initramfs.cpio.gz"
               needs_rebuild=0
               if [ ! -s "$archive" ]; then
                   needs_rebuild=1
@@ -346,13 +389,13 @@ targets:
               elif [ "$SRCROOT/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" -nt "$archive" ]; then
                   needs_rebuild=1
               fi
-              if [ "$needs_rebuild" -eq 1 ]; then
-                  make -f "$SRCROOT/OrlixKernel/Makefile" kselftest PROFILE="$profile" libc=orlixmlibc
-              fi
+            if [ "$needs_rebuild" -eq 1 ]; then
+                make -f "$SRCROOT/OrlixKernel/Makefile" kselftest PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT" libc=orlixmlibc
+            fi
           }
           copy_if_present() {
-              source="$SRCROOT/$1"
-              name="$2"
+            source="$1"
+            name="$2"
               destination="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/$name"
               if [ -d "$source" ]; then
                   rm -rf "$destination"
@@ -361,11 +404,11 @@ targets:
           }
           extension="${ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION:?}"
           rebuild_kselftest_if_stale
-            copy_if_present "$ORLIX_OS_KSELFTEST_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"
-            copy_if_present "$ORLIX_OS_MLIBC_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension"
-            copy_if_present "$ORLIX_OS_COREUTILS_INITRAMFS_SOURCE_ROOT/$profile/$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension"
-          "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-test-fixtures PROFILE="$profile"
-          copy_if_present "Build/OrlixOS/environment-runtime-test-fixtures" "EnvironmentRuntimeTestFixtures"
+          copy_if_present "$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"
+          copy_if_present "$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension"
+          copy_if_present "$ORLIX_BUILD_ROOT/OrlixOS/test-initramfs/$profile/$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension"
+          "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-test-fixtures PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
+          copy_if_present "$ORLIX_BUILD_ROOT/OrlixOS/environment-runtime-test-fixtures" "EnvironmentRuntimeTestFixtures"
     settings:
       base:
         CLANG_ENABLE_MODULE_VERIFIER: YES

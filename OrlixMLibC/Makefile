@@ -7,6 +7,8 @@ REPO_ROOT := $(abspath $(PROJECT_DIR)/..)
 KERNEL_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixKernel/Makefile
 
 PROFILE ?= release
+ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
+ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(REPO_ROOT)/Build)
 ORLIX_OS_TARGET_SETTINGS ?= $(REPO_ROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig
 include $(ORLIX_OS_TARGET_SETTINGS)
 
@@ -16,35 +18,35 @@ MLIBC_VERSION ?= 43ab07732cdf
 LLVM_PROJECT_REMOTE ?= https://github.com/llvm/llvm-project.git
 LLVM_PROJECT_REF ?= llvmorg-22.1.6
 LLVM_PROJECT_COMMIT ?= fc4aad7b5db3fff421df9a9637605b9ca5667881
-MLIBC_UPSTREAM_DIR := $(REPO_ROOT)/Build/OrlixMLibC/upstream/mlibc-$(MLIBC_VERSION).git
-MLIBC_SRC_DIR := $(REPO_ROOT)/Build/OrlixMLibC/src/mlibc-$(MLIBC_VERSION)
+MLIBC_UPSTREAM_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/upstream/mlibc-$(MLIBC_VERSION).git
+MLIBC_SRC_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/src/mlibc-$(MLIBC_VERSION)
 MLIBC_ORLIX_TEST_SRC_DIR := $(REPO_ROOT)/OrlixMLibC/Tests
-LLVM_PROJECT_UPSTREAM_DIR := $(REPO_ROOT)/Build/OrlixMLibC/upstream/llvm-project
-MLIBC_BUILD_DIR := $(REPO_ROOT)/Build/OrlixMLibC/build/$(PROFILE)
-MLIBC_SYSROOT := $(REPO_ROOT)/Build/OrlixMLibC/sysroot/$(PROFILE)
-MLIBC_CROSS_FILE := $(REPO_ROOT)/Build/OrlixMLibC/cross/$(PROFILE)-orlix-aarch64-linux.cross
-MLIBC_NATIVE_FILE := $(REPO_ROOT)/Build/OrlixMLibC/cross/$(PROFILE)-host.native
+LLVM_PROJECT_UPSTREAM_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/upstream/llvm-project
+MLIBC_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/build/$(PROFILE)
+MLIBC_SYSROOT := $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(PROFILE)
+MLIBC_CROSS_FILE := $(ORLIX_BUILD_ROOT)/OrlixMLibC/cross/$(PROFILE)-orlix-aarch64-linux.cross
+MLIBC_NATIVE_FILE := $(ORLIX_BUILD_ROOT)/OrlixMLibC/cross/$(PROFILE)-host.native
 MLIBC_MESON_CONFIG_STAMP := $(MLIBC_BUILD_DIR)/.orlix-meson-compiler-config
-MLIBC_TARGET_INCLUDE_DIR := $(REPO_ROOT)/Build/OrlixMLibC/target-include/$(PROFILE)
+MLIBC_TARGET_INCLUDE_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/target-include/$(PROFILE)
 MLIBC_TARGET_ARCH_DEFS := $(MLIBC_TARGET_INCLUDE_DIR)/mlibc/arch-defs.hpp
 MLIBC_PATCH_DIR := $(PROJECT_DIR)/Sources/patches
-MLIBC_KERNEL_HEADERS := $(REPO_ROOT)/Build/OrlixMLibC/kernel-headers/$(PROFILE)/include
-MLIBC_BUILD_KERNEL_HEADERS := $(REPO_ROOT)/Build/OrlixMLibC/build-kernel-headers/$(PROFILE)/include
-MLIBC_TEST_BUILD_DIR := $(REPO_ROOT)/Build/OrlixMLibC/tests/$(PROFILE)
-MLIBC_TEST_INSTALL_DIR := $(REPO_ROOT)/Build/OrlixMLibC/tests-install/$(PROFILE)
+MLIBC_KERNEL_HEADERS := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kernel-headers/$(PROFILE)/include
+MLIBC_BUILD_KERNEL_HEADERS := $(ORLIX_BUILD_ROOT)/OrlixMLibC/build-kernel-headers/$(PROFILE)/include
+MLIBC_TEST_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/tests/$(PROFILE)
+MLIBC_TEST_INSTALL_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/tests-install/$(PROFILE)
 MLIBC_TEST_INITRAMFS_BUNDLE_NAME ?= $(ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME)
 MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION ?= $(ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION)
 MLIBC_TEST_INITRAMFS_BUNDLE_IDENTIFIER ?= $(ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_IDENTIFIER)
-MLIBC_TEST_INITRAMFS_DIR := $(REPO_ROOT)/Build/OrlixMLibC/test-initramfs/$(PROFILE)/$(MLIBC_TEST_INITRAMFS_BUNDLE_NAME).$(MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION)
-MLIBC_TEST_LOCALE_DATA_DIR := $(REPO_ROOT)/Build/OrlixMLibC/locale-data/$(PROFILE)
+MLIBC_TEST_INITRAMFS_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/test-initramfs/$(PROFILE)/$(MLIBC_TEST_INITRAMFS_BUNDLE_NAME).$(MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION)
+MLIBC_TEST_LOCALE_DATA_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/locale-data/$(PROFILE)
 MLIBC_TEST_LOCALE_ROOT := $(MLIBC_TEST_LOCALE_DATA_DIR)/root
 MLIBC_TEST_LOCALES_ALL_URL ?= https://deb.debian.org/debian/pool/main/g/glibc/locales-all_2.41-12+deb13u3_arm64.deb
 MLIBC_TEST_LOCALES_ALL_SHA256 ?= 869275c8dcbfc55823f4658b9aeaf3d8f436392578607b241f51d7b04e89b5ef
 MLIBC_TEST_LIBC_BIN_URL ?= https://deb.debian.org/debian/pool/main/g/glibc/libc-bin_2.41-12+deb13u3_arm64.deb
 MLIBC_TEST_LIBC_BIN_SHA256 ?= 02f366115bea79b87fe26c7dec4dc444f9fdcc76440905d88cc26dbef075511b
-MLIBC_RTLIB_DIR := $(REPO_ROOT)/Build/OrlixMLibC/compiler-rt/$(PROFILE)
+MLIBC_RTLIB_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/compiler-rt/$(PROFILE)
 MLIBC_RTLIB := $(MLIBC_RTLIB_DIR)/liborlix_compiler_rt.a
-MLIBC_LOCK_ROOT := $(REPO_ROOT)/Build/OrlixMLibC/locks
+MLIBC_LOCK_ROOT := $(ORLIX_BUILD_ROOT)/OrlixMLibC/locks
 ORLIX_HOSTED_USER_BASE_ADDRESS ?= 0x0000000100000000
 # Apple arm64 reserves x18 for the host platform; Orlix-built Linux ELF keeps it unavailable to user code.
 MLIBC_HOSTED_EXEC_FIXED_REGISTER_FLAGS := -ffixed-x18
@@ -270,7 +272,7 @@ MLIBC_COMPILER_RT_BUILTINS := \
 define orlix_mlibc_with_profile_lock
 	@set -euo pipefail; \
 	lock_root="$(MLIBC_LOCK_ROOT)"; \
-	for path in Build Build/OrlixMLibC "$$lock_root"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$$lock_root"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixMLibC lock path: $$path" >&2; exit 1; fi; \
 	done; \
 	if [ "$${ORLIX_MLIBC_PROFILE_LOCK_HELD:-0}" = 1 ]; then \
@@ -307,7 +309,7 @@ __build: __write-cross-file
 	command -v "$(NINJA)" >/dev/null 2>&1 || { echo "ninja is required to build OrlixMLibC" >&2; exit 1; }; \
 	$(MAKE) -f "$(PROJECT_DIR)/Makefile" __ensure-kernel-headers PROFILE="$(PROFILE)"; \
 	[ -d "$(MLIBC_KERNEL_HEADERS)" ] || { echo "missing installed Orlix Linux UAPI headers: $(MLIBC_KERNEL_HEADERS)" >&2; exit 1; }; \
-	kernel_config="$(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/.config"; \
+	kernel_config="$(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/.config"; \
 	[ -s "$$kernel_config" ] || { echo "missing generated OrlixKernel config: $$kernel_config" >&2; exit 1; }; \
 	kernel_page_shift="$$(sed -n 's/^CONFIG_PAGE_SHIFT=//p' "$$kernel_config" | tail -n 1)"; \
 	[ -n "$$kernel_page_shift" ] || { echo "missing CONFIG_PAGE_SHIFT in $$kernel_config" >&2; exit 1; }; \
@@ -321,7 +323,7 @@ __build: __write-cross-file
 	mkdir -p "$(dir $(MLIBC_BUILD_KERNEL_HEADERS))"; \
 	cp -R "$(MLIBC_KERNEL_HEADERS)" "$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	[ -d "$(MLIBC_BUILD_KERNEL_HEADERS)" ] || { echo "missing OrlixMLibC build-local Linux UAPI headers: $(MLIBC_BUILD_KERNEL_HEADERS)" >&2; exit 1; }; \
-	meson_config_tmp="$(MLIBC_BUILD_DIR)/.orlix-meson-compiler-config.tmp"; \
+	meson_config_tmp="$(ORLIX_BUILD_ROOT)/OrlixMLibC/.orlix-meson-compiler-config.$(PROFILE).tmp"; \
 	{ \
 		printf 'profile=%s\n' "$(PROFILE)"; \
 		printf 'launcher=%s\n' "$(ORLIX_COMPILER_LAUNCHER)"; \
@@ -465,8 +467,8 @@ __prepare-test-locale-data:
 	locale_dir="$(MLIBC_TEST_LOCALE_DATA_DIR)"; \
 	locale_root="$(MLIBC_TEST_LOCALE_ROOT)"; \
 	locale_unpack="$$locale_dir/unpack"; \
-	case "$$locale_dir" in "$(REPO_ROOT)"/Build/OrlixMLibC/locale-data/*) ;; *) echo "refusing to prepare OrlixMLibC locale data outside Build/OrlixMLibC/locale-data: $$locale_dir" >&2; exit 1 ;; esac; \
-	for path in "$(REPO_ROOT)/Build" "$(REPO_ROOT)/Build/OrlixMLibC" "$(REPO_ROOT)/Build/OrlixMLibC/locale-data" "$$locale_dir"; do \
+	case "$$locale_dir" in "$(ORLIX_BUILD_ROOT)"/OrlixMLibC/locale-data/*) ;; *) echo "refusing to prepare OrlixMLibC locale data outside Build/OrlixMLibC/locale-data: $$locale_dir" >&2; exit 1 ;; esac; \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/locale-data" "$$locale_dir"; do \
 		if [ -L "$$path" ]; then echo "refusing to prepare OrlixMLibC locale data through symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch OrlixMLibC locale test data" >&2; exit 1; }; \
@@ -499,9 +501,9 @@ __test-initramfs: __test-build __prepare-test-locale-data
 	install_dir="$(MLIBC_TEST_INSTALL_DIR)"; \
 	locale_root="$(MLIBC_TEST_LOCALE_ROOT)"; \
 	$(KERNEL_MAKE) prepare PROFILE="$(PROFILE)"; \
-	gen_init_cpio="$(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/usr/gen_init_cpio"; \
-	case "$$output" in "$(REPO_ROOT)"/Build/OrlixMLibC/test-initramfs/*) ;; *) echo "refusing to write OrlixMLibC test initramfs outside Build/OrlixMLibC/test-initramfs: $$output" >&2; exit 1 ;; esac; \
-	for path in "$(REPO_ROOT)/Build" "$(REPO_ROOT)/Build/OrlixMLibC" "$(REPO_ROOT)/Build/OrlixMLibC/test-initramfs" "$$output"; do \
+	gen_init_cpio="$(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/usr/gen_init_cpio"; \
+	case "$$output" in "$(ORLIX_BUILD_ROOT)"/OrlixMLibC/test-initramfs/*) ;; *) echo "refusing to write OrlixMLibC test initramfs outside Build/OrlixMLibC/test-initramfs: $$output" >&2; exit 1 ;; esac; \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/test-initramfs" "$$output"; do \
 		if [ -L "$$path" ]; then echo "refusing to package OrlixMLibC test initramfs through symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	[ -x "$$gen_init_cpio" ] || { echo "missing executable Linux gen_init_cpio: $$gen_init_cpio" >&2; exit 1; }; \
@@ -586,7 +588,7 @@ clean:
 
 __clean:
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build/OrlixMLibC"; do \
+	for path in "$(ORLIX_BUILD_ROOT)/OrlixMLibC"; do \
 		if [ -L "$$path" ]; then echo "refusing to clean symlinked path: $$path" >&2; exit 1; fi; \
 		rm -rf "$$path"; \
 	done; \
@@ -596,7 +598,7 @@ mrproper: clean
 
 __bootstrap-mlibc:
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(REPO_ROOT)/Build/OrlixMLibC" "$(REPO_ROOT)/Build/OrlixMLibC/upstream" "$(REPO_ROOT)/Build/OrlixMLibC/src" "$(MLIBC_UPSTREAM_DIR)" "$(MLIBC_SRC_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/upstream" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/src" "$(MLIBC_UPSTREAM_DIR)" "$(MLIBC_SRC_DIR)"; do \
 		if [ -L "$$path" ]; then echo "refusing to use symlinked mlibc path: $$path" >&2; exit 1; fi; \
 	done; \
 	mkdir -p "$(dir $(MLIBC_UPSTREAM_DIR))"; \
@@ -642,7 +644,7 @@ __apply-mlibc-patches: __bootstrap-mlibc
 
 __bootstrap-compiler-rt:
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(REPO_ROOT)/Build/OrlixMLibC" "$(REPO_ROOT)/Build/OrlixMLibC/upstream" "$(LLVM_PROJECT_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/upstream" "$(LLVM_PROJECT_UPSTREAM_DIR)"; do \
 		if [ -L "$$path" ]; then echo "refusing to use symlinked compiler-rt path: $$path" >&2; exit 1; fi; \
 	done; \
 	rm -rf "$(LLVM_PROJECT_UPSTREAM_DIR)"; \

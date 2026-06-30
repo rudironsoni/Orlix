@@ -19,13 +19,16 @@ ORLIX_PROFILES := release development
 type ?= kunit
 libc ?= orlixmlibc
 
-LINUX_UPSTREAM_DIR ?= Build/OrlixKernel/upstream/linux-$(LINUX_VERSION).git
+ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
+ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(CURDIR)/Build)
+
+LINUX_UPSTREAM_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/upstream/linux-$(LINUX_VERSION).git
 
 ORLIX_LINUX_OVERLAY ?= OrlixKernel/Sources/ports/orlix/overlay
 ORLIX_LINUX_PATCH_DIR ?= OrlixKernel/Sources/ports/orlix/patches
 override ORLIX_PROFILE_CONFIG := OrlixKernel/Sources/ports/orlix/configs/$(PROFILE)_defconfig
 
-ORLIX_KERNEL_PORT_DIR ?= Build/OrlixKernel/src/linux-$(LINUX_VERSION)-port
+ORLIX_KERNEL_PORT_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/src/linux-$(LINUX_VERSION)-port
 ORLIX_KERNEL_PORT_ARCHIVE_PATHS := \
 	.clang-format \
 	.cocciconfig \
@@ -71,11 +74,11 @@ ORLIX_KERNEL_PORT_ARCHIVE_PATHS := \
 	tools/testing/selftests/kselftest_module.h \
 	tools/testing/selftests/lib.mk \
 	tools/testing/selftests/run_kselftest.sh
-ORLIX_KERNEL_BUILD_ROOT := $(CURDIR)/Build/OrlixKernel/build
+ORLIX_KERNEL_BUILD_ROOT := $(ORLIX_BUILD_ROOT)/OrlixKernel/build
 ORLIX_KERNEL_BUILD_DIR := $(ORLIX_KERNEL_BUILD_ROOT)/$(PROFILE)
-ORLIX_KERNEL_BUILD_LOCK_ROOT := $(CURDIR)/Build/OrlixKernel/locks
+ORLIX_KERNEL_BUILD_LOCK_ROOT := $(ORLIX_BUILD_ROOT)/OrlixKernel/locks
 ORLIX_KERNEL_BUILD_LOCK := $(ORLIX_KERNEL_BUILD_LOCK_ROOT)/$(PROFILE).lock
-ORLIX_KERNEL_ARCHIVE_ROOT := $(CURDIR)/Build/OrlixKernel/$(PROFILE)
+ORLIX_KERNEL_ARCHIVE_ROOT := $(ORLIX_BUILD_ROOT)/OrlixKernel/$(PROFILE)
 ORLIX_KERNEL_ARCHIVE_MANIFEST := $(ORLIX_KERNEL_ARCHIVE_ROOT)/linux-object-manifest.txt
 ORLIX_KERNEL_DEVICE_ARCHIVE_DIR := $(ORLIX_KERNEL_ARCHIVE_ROOT)/iphoneos
 ORLIX_KERNEL_SIMULATOR_ARCHIVE_DIR := $(ORLIX_KERNEL_ARCHIVE_ROOT)/iphonesimulator
@@ -89,7 +92,7 @@ ORLIX_KERNEL_HOSTCFLAGS = -I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -I$(ORLIX_KERNEL_P
 define orlix_kernel_acquire_profile_lock
 if [ "$${ORLIX_KERNEL_PROFILE_LOCK_HELD:-0}" != 1 ]; then \
 lock_root="$(ORLIX_KERNEL_BUILD_LOCK_ROOT)"; \
-for path in Build Build/OrlixKernel "$$lock_root"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$$lock_root"; do \
 	if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixKernel lock path: $$path" >&2; exit 1; fi; \
 done; \
 mkdir -p "$$lock_root"; \
@@ -1002,10 +1005,10 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/fdt_strerror.c \
 	lib/fdt_empty_tree.c \
 	lib/fdt_addresses.c
-ORLIX_KUNIT_BUILD_DIR := $(CURDIR)/Build/OrlixKernel/kunit/$(PROFILE)
-ORLIX_MLIBC_KERNEL_HEADERS_DIR := $(CURDIR)/Build/OrlixMLibC/kernel-headers/$(PROFILE)
-ORLIX_MLIBC_SYSROOT ?= Build/OrlixMLibC/sysroot/$(PROFILE)
-ORLIX_MLIBC_KSELFTEST_INSTALL_DIR := $(CURDIR)/Build/OrlixMLibC/kselftest/$(PROFILE)
+ORLIX_KUNIT_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/kunit/$(PROFILE)
+ORLIX_MLIBC_KERNEL_HEADERS_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kernel-headers/$(PROFILE)
+ORLIX_MLIBC_SYSROOT ?= $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(PROFILE)
+ORLIX_MLIBC_KSELFTEST_INSTALL_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kselftest/$(PROFILE)
 
 ORLIX_KSELFTEST_ARCH ?= arm64
 ORLIX_HOSTED_USER_BASE_ADDRESS ?= 0x0000000100000000
@@ -1013,9 +1016,9 @@ ORLIX_HOSTED_USER_BASE_ADDRESS ?= 0x0000000100000000
 ORLIX_XCODE_PROJECT ?= Orlix.xcodeproj
 ORLIX_IOS_SIMULATOR_NAME ?= iPhone 17 Pro
 ORLIX_IOS_SIMULATOR_ID ?=
-ORLIX_IOS_SIMULATOR_DERIVED_DATA ?= $(CURDIR)/.deriveddata/Orlix-sim
+ORLIX_IOS_SIMULATOR_DERIVED_DATA ?= $(ORLIX_BUILD_ROOT)/DerivedData/Orlix-sim
 ORLIX_IOS_SIMULATOR_FRAMEWORK := $(ORLIX_IOS_SIMULATOR_DERIVED_DATA)/Build/Products/Debug-iphonesimulator/OrlixKernel.framework
-ORLIX_IOS_SIMULATOR_RUN_LOG_DIR ?= $(CURDIR)/Build/OrlixKernel/run/$(PROFILE)
+ORLIX_IOS_SIMULATOR_RUN_LOG_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/run/$(PROFILE)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_KERNEL_RUN_UNTIL_MARKER ?=
 ORLIX_KERNEL_RUN_TIMEOUT_SECONDS ?= 120
@@ -1027,7 +1030,7 @@ endif
 ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_NAME ?= $(ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME)
 ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION ?= $(ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION)
 ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_IDENTIFIER ?= $(ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_IDENTIFIER)
-ORLIX_MLIBC_TEST_INITRAMFS_DIR := $(CURDIR)/Build/OrlixMLibC/test-initramfs/$(PROFILE)/$(ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_NAME).$(ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION)
+ORLIX_MLIBC_TEST_INITRAMFS_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/test-initramfs/$(PROFILE)/$(ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_NAME).$(ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION)
 ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME ?= $(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME)
 ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION ?= $(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
 ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER ?= $(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_IDENTIFIER)
@@ -1045,8 +1048,8 @@ ORLIX_KERNEL_LINUX_PAGE_SIZE ?= $(ORLIX_OS_LINUX_PAGE_SIZE)
 ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE ?= $(ORLIX_OS_ROOT_INITRAMFS_RESOURCE)
 ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE ?= $(ORLIX_OS_BASE_ROOT_IMAGE_RESOURCE)
 ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE ?= $(ORLIX_OS_STATE_ROOT_IMAGE_RESOURCE)
-ORLIX_KERNEL_PAYLOAD_DIR := $(CURDIR)/Build/OrlixKernel/payload/$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME).$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)
-ORLIX_KERNEL_ROOTFS_BUILD_DIR := $(CURDIR)/Build/OrlixKernel/rootfs/$(PROFILE)
+ORLIX_KERNEL_PAYLOAD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/payload/$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME).$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)
+ORLIX_KERNEL_ROOTFS_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/rootfs/$(PROFILE)
 ORLIX_KERNEL_BASE_ROOT_IMAGE := $(ORLIX_KERNEL_ROOTFS_BUILD_DIR)/$(notdir $(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE))
 ORLIX_KERNEL_STATE_ROOT_IMAGE := $(ORLIX_KERNEL_ROOTFS_BUILD_DIR)/$(notdir $(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE))
 ORLIX_KERNEL_BASE_ROOT_TREE_INPUT ?=
@@ -1069,7 +1072,7 @@ ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE ?= $(ORLIX_OS_STATE_ROOT_HOST_BLOCK_DE
 ORLIX_KERNEL_BASE_ROOT_IMAGE_SIZE ?= $(ORLIX_OS_BASE_ROOT_IMAGE_SIZE)
 ORLIX_KERNEL_STATE_ROOT_IMAGE_SIZE ?= $(ORLIX_OS_STATE_ROOT_IMAGE_SIZE)
 ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES ?= $(ORLIX_OS_STATE_ROOT_MINIMUM_BYTES)
-ORLIX_KERNEL_XCFRAMEWORK ?= $(CURDIR)/Build/OrlixKernel/xcframework/OrlixKernel.xcframework
+ORLIX_KERNEL_XCFRAMEWORK ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/xcframework/OrlixKernel.xcframework
 XCODEGEN ?= xcodegen
 XCODEBUILD_MCP ?= xcodebuildmcp
 
@@ -1269,7 +1272,7 @@ run: __ios-simulator-framework xcodeproj
 clean:
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
-	for path in Build/OrlixKernel .deriveddata/Orlix-sim; do \
+	for path in "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)"; do \
 		if [ -L "$$path" ]; then echo "refusing to clean symlinked path: $$path" >&2; exit 1; fi; \
 		rm -rf "$$path"; \
 	done; \
@@ -1288,12 +1291,12 @@ __bootstrap-linux-upstream:
 	linux_remote="$(LINUX_REMOTE)"; \
 	linux_tag="$(LINUX_TAG)"; \
 	upstream_dir="$(LINUX_UPSTREAM_DIR)"; \
-	expected_upstream_dir="Build/OrlixKernel/upstream/linux-$(LINUX_VERSION).git"; \
+	expected_upstream_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/upstream/linux-$(LINUX_VERSION).git"; \
 	if [ "$$upstream_dir" != "$$expected_upstream_dir" ]; then \
 		echo "Linux upstream directory must be $$expected_upstream_dir: $$upstream_dir" >&2; \
 		exit 1; \
 	fi; \
-	for path in Build Build/OrlixKernel Build/OrlixKernel/upstream "$$upstream_dir"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_BUILD_ROOT)/OrlixKernel/upstream" "$$upstream_dir"; do \
 		if [ -L "$$path" ]; then echo "refusing to use symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	mkdir -p "$$(dirname "$$upstream_dir")"; \
@@ -1351,7 +1354,7 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 	$(call orlix_kernel_acquire_profile_lock); \
 	upstream_dir="$(LINUX_UPSTREAM_DIR)"; \
 	port_dir="$(ORLIX_KERNEL_PORT_DIR)"; \
-	expected_port_dir="Build/OrlixKernel/src/linux-$(LINUX_VERSION)-port"; \
+	expected_port_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/src/linux-$(LINUX_VERSION)-port"; \
 	overlay_dir="$(ORLIX_LINUX_OVERLAY)"; \
 	patch_dir="$(ORLIX_LINUX_PATCH_DIR)"; \
 	profile_config="$(ORLIX_PROFILE_CONFIG)"; \
@@ -1370,7 +1373,7 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 		echo "Orlix kernel port tree must not equal upstream directory: $$port_dir" >&2; \
 		exit 1; \
 	fi; \
-	for path in Build Build/OrlixKernel "$$port_dir"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$$port_dir"; do \
 		if [ -L "$$path" ]; then echo "refusing to use symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	[ -d "$$overlay_dir" ] || { echo "missing Linux overlay directory: $$overlay_dir" >&2; exit 1; }; \
@@ -1474,7 +1477,7 @@ __prepare-kbuild: __prepare-port
 		exit 1; \
 	fi; \
 	build_dir="$(ORLIX_KERNEL_BUILD_DIR)"; \
-	expected_build_dir="$(CURDIR)/Build/OrlixKernel/build/$(PROFILE)"; \
+	expected_build_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)"; \
 	if [ "$$build_dir" != "$$expected_build_dir" ]; then \
 		echo "Orlix kernel build directory must be $$expected_build_dir: $$build_dir" >&2; \
 		exit 1; \
@@ -1496,7 +1499,7 @@ __prepare-kbuild: __prepare-port
 		echo "reusing prepared Orlix Kbuild output: $$build_dir (profile $(PROFILE))"; \
 		exit 0; \
 	fi; \
-	for path in Build/OrlixKernel/build; do \
+	for path in "$(ORLIX_BUILD_ROOT)/OrlixKernel/build"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	linux_sed_dir=""; \
@@ -1504,9 +1507,9 @@ __prepare-kbuild: __prepare-port
 		linux_sed="$(LINUX_SED)"; \
 		case "$$linux_sed" in /*) ;; *) linux_sed="$(CURDIR)/$$linux_sed" ;; esac; \
 		[ -x "$$linux_sed" ] || { echo "GNU sed is required by Linux Kbuild on this host; LINUX_SED is not executable: $$linux_sed" >&2; exit 1; }; \
-		sed_shim_dir="$(CURDIR)/Build/OrlixKernel/tool-shims/$(PROFILE)"; \
-		if [ -e Build/OrlixKernel/tool-shims ] && [ -L Build/OrlixKernel/tool-shims ]; then echo "refusing to use symlinked Build/OrlixKernel/tool-shims directory" >&2; exit 1; fi; \
-		if [ -e Build/OrlixKernel/tool-shims/$(PROFILE) ] && [ -L Build/OrlixKernel/tool-shims/$(PROFILE) ]; then echo "refusing to use symlinked Build/OrlixKernel/tool-shims/$(PROFILE) directory" >&2; exit 1; fi; \
+		sed_shim_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims/$(PROFILE)"; \
+		if [ -e $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims ] && [ -L $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims ]; then echo "refusing to use symlinked $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims directory" >&2; exit 1; fi; \
+		if [ -e $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims/$(PROFILE) ] && [ -L $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims/$(PROFILE) ]; then echo "refusing to use symlinked $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims/$(PROFILE) directory" >&2; exit 1; fi; \
 		mkdir -p "$$sed_shim_dir"; \
 		ln -sf "$$linux_sed" "$$sed_shim_dir/sed"; \
 		linux_sed_dir="$$sed_shim_dir"; \
@@ -1571,8 +1574,8 @@ __headers-install: __prepare-port
 		linux_sed="$(LINUX_SED)"; \
 		case "$$linux_sed" in /*) ;; *) linux_sed="$(CURDIR)/$$linux_sed" ;; esac; \
 		[ -x "$$linux_sed" ] || { echo "GNU sed is required by Linux headers_install; LINUX_SED is not executable: $$linux_sed" >&2; exit 1; }; \
-		sed_shim_dir="$(CURDIR)/Build/OrlixKernel/tool-shims/$(PROFILE)-headers"; \
-		if [ -e Build/OrlixKernel/tool-shims ] && [ -L Build/OrlixKernel/tool-shims ]; then echo "refusing to use symlinked Build/OrlixKernel/tool-shims directory" >&2; exit 1; fi; \
+		sed_shim_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims/$(PROFILE)-headers"; \
+		if [ -e $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims ] && [ -L $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims ]; then echo "refusing to use symlinked $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims directory" >&2; exit 1; fi; \
 		mkdir -p "$$sed_shim_dir"; \
 		ln -sf "$$linux_sed" "$$sed_shim_dir/sed"; \
 		linux_sed_dir="$$sed_shim_dir"; \
@@ -1584,7 +1587,7 @@ __headers-install: __prepare-port
 	PATH="$$linux_sed_dir:$$PATH"; \
 	export PATH; \
 	sed --version >/dev/null 2>&1 || { echo "GNU sed is required by Linux headers_install" >&2; exit 1; }; \
-	for path in Build/OrlixMLibC Build/OrlixMLibC/kernel-headers; do \
+	for path in "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/kernel-headers"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	header_install_dir="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)"; \
@@ -1659,8 +1662,8 @@ __kunit: __prepare-kbuild
 		linux_sed="$(LINUX_SED)"; \
 		case "$$linux_sed" in /*) ;; *) linux_sed="$(CURDIR)/$$linux_sed" ;; esac; \
 		[ -x "$$linux_sed" ] || { echo "GNU sed is required by Linux KUnit builds; LINUX_SED is not executable: $$linux_sed" >&2; exit 1; }; \
-		sed_shim_dir="$(CURDIR)/Build/OrlixKernel/tool-shims/$(PROFILE)-kunit"; \
-		if [ -e Build/OrlixKernel/tool-shims ] && [ -L Build/OrlixKernel/tool-shims ]; then echo "refusing to use symlinked Build/OrlixKernel/tool-shims directory" >&2; exit 1; fi; \
+		sed_shim_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims/$(PROFILE)-kunit"; \
+		if [ -e $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims ] && [ -L $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims ]; then echo "refusing to use symlinked $(ORLIX_BUILD_ROOT)/OrlixKernel/tool-shims directory" >&2; exit 1; fi; \
 		mkdir -p "$$sed_shim_dir"; \
 		ln -sf "$$linux_sed" "$$sed_shim_dir/sed"; \
 		linux_sed_dir="$$sed_shim_dir"; \
@@ -1703,8 +1706,8 @@ __kernel-archive: __prepare-kbuild
 	command -v "$$nm_cmd" >/dev/null 2>&1 || { echo "nm is required to verify OrlixKernel archive symbols; set ORLIX_KERNEL_NM=/path/to/nm" >&2; exit 1; }; \
 	command -v "$$otool_cmd" >/dev/null 2>&1 || { echo "otool is required to verify OrlixKernel archive contracts; set ORLIX_KERNEL_OTOOL=/path/to/otool" >&2; exit 1; }; \
 	root="$(ORLIX_KERNEL_ARCHIVE_ROOT)"; \
-	case "$$root" in "$(CURDIR)"/Build/OrlixKernel/$(PROFILE)) ;; *) echo "refusing to write OrlixKernel archive outside Build/OrlixKernel/$(PROFILE): $$root" >&2; exit 1 ;; esac; \
-	for path in Build/OrlixKernel "$$root"; do \
+	case "$$root" in "$(ORLIX_BUILD_ROOT)"/OrlixKernel/$(PROFILE)) ;; *) echo "refusing to write OrlixKernel archive outside configured OrlixKernel archive root: $$root" >&2; exit 1 ;; esac; \
+	for path in "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$$root"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked kernel archive path: $$path" >&2; exit 1; fi; \
 	done; \
 	mkdir -p "$$root"; \
@@ -2324,7 +2327,7 @@ __ios-simulator-xcframework: __ios-simulator-framework
 		*) echo "refusing to write simulator XCFramework outside Build/OrlixKernel/xcframework: $$xcframework" >&2; exit 1 ;; \
 	esac; \
 	[ -d "$$framework" ] || { echo "missing simulator framework: $$framework" >&2; exit 1; }; \
-	if [ -L Build ] || [ -L Build/OrlixKernel ] || [ -L Build/OrlixKernel/xcframework ] || [ -L "$$xcframework" ]; then \
+	if [ -L "$(ORLIX_BUILD_ROOT)" ] || [ -L "$(ORLIX_BUILD_ROOT)/OrlixKernel" ] || [ -L "$(ORLIX_BUILD_ROOT)/OrlixKernel/xcframework" ] || [ -L "$$xcframework" ]; then \
 		echo "refusing to package simulator XCFramework through symlinked Build path" >&2; \
 		exit 1; \
 	fi; \

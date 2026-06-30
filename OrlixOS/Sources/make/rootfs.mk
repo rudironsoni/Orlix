@@ -35,10 +35,10 @@ $(ORLIXOS_ROOT_INIT_BINARY): $(ORLIXOS_ROOT_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT
 $(ORLIXOS_INITRAMFS_CPIO): $(ORLIXOS_ROOT_INIT_BINARY) $(ORLIXOS_MANIFEST) $(PROJECT_DIR)/Sources/make/rootfs.mk
 	@set -euo pipefail; \
 	$(KERNEL_MAKE) prepare PROFILE="$(PROFILE)" >/dev/null; \
-	gen_init_cpio="$(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/usr/gen_init_cpio"; \
+	gen_init_cpio="$(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/usr/gen_init_cpio"; \
 	output="$(ORLIXOS_INITRAMFS_CPIO)"; \
 	cpio_list="$(ORLIXOS_ROOTFS_DIR)/initramfs.list"; \
-	case "$$output" in "$(REPO_ROOT)"/Build/OrlixOS/rootfs/*/rootfs/initramfs.cpio.gz) ;; *) echo "refusing to write OrlixOS initramfs outside Build/OrlixOS/rootfs: $$output" >&2; exit 1 ;; esac; \
+	case "$$output" in "$(ORLIX_BUILD_ROOT)"/OrlixOS/rootfs/*/rootfs/initramfs.cpio.gz) ;; *) echo "refusing to write OrlixOS initramfs outside configured OrlixOS rootfs build root: $$output" >&2; exit 1 ;; esac; \
 	[ -x "$$gen_init_cpio" ] || { echo "missing Linux gen_init_cpio: $$gen_init_cpio" >&2; exit 1; }; \
 	mkdir -p "$(ORLIXOS_INITRAMFS_DIR)"; \
 	{ \
@@ -53,13 +53,13 @@ $(ORLIXOS_INITRAMFS_CPIO): $(ORLIXOS_ROOT_INIT_BINARY) $(ORLIXOS_MANIFEST) $(PRO
 	[ -s "$$output" ] || { echo "missing generated OrlixOS initramfs: $$output" >&2; exit 1; }; \
 	echo "built OrlixOS product initramfs: $$output"
 
-$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_E2FSCK_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST)
+$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_E2FSCK_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST) $(ORLIXOS_TARGET_SETTINGS)
 	@set -euo pipefail; \
 	root_tree="$(ORLIXOS_BASE_ROOT_TREE)"; \
 	state_tree="$(ORLIXOS_STATE_ROOT_TREE)"; \
-	case "$$root_tree" in "$(REPO_ROOT)"/Build/OrlixOS/rootfs/*/base-tree) ;; *) echo "refusing to write OrlixOS root tree outside Build/OrlixOS/rootfs: $$root_tree" >&2; exit 1 ;; esac; \
-	case "$$state_tree" in "$(REPO_ROOT)"/Build/OrlixOS/rootfs/*/state-tree) ;; *) echo "refusing to write OrlixOS state tree outside Build/OrlixOS/rootfs: $$state_tree" >&2; exit 1 ;; esac; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_ROOTFS_DIR)" "$$root_tree" "$$state_tree"; do \
+	case "$$root_tree" in "$(ORLIX_BUILD_ROOT)"/OrlixOS/rootfs/*/base-tree) ;; *) echo "refusing to write OrlixOS root tree outside configured OrlixOS rootfs build root: $$root_tree" >&2; exit 1 ;; esac; \
+	case "$$state_tree" in "$(ORLIX_BUILD_ROOT)"/OrlixOS/rootfs/*/state-tree) ;; *) echo "refusing to write OrlixOS state tree outside configured OrlixOS rootfs build root: $$state_tree" >&2; exit 1 ;; esac; \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_ROOTFS_DIR)" "$$root_tree" "$$state_tree"; do \
 		if [ -L "$$path" ]; then echo "refusing to package OrlixOS root tree through symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	rm -rf "$$root_tree" "$$state_tree"; \
