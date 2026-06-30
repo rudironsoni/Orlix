@@ -24,9 +24,9 @@ Validation:
 - Previous physical failure disappeared: no `create-reservation-protect status=1`, no `copy_to_user` EFAULT while copying init arguments.
 
 Current blocker:
-- Physical device now fails later at executable user mapping: `shadow user page map failed reason=refresh-window-segment-protect ... requested_prot=0x5 ... status=2`, followed by `failed to synchronize hosted user pc`.
-- Signed app entitlements do not include JIT. JIT/MAP_JIT/dynamic code signing is not an allowed App Store path.
-- Next architecture must use an App Store-safe no-JIT signed/AOT executable code-cache approach for Linux executable VMAs, not anonymous mirrored ELF text promoted to executable at runtime.
+- Physical device now fails later at hosted user PC synchronization: `failed to synchronize hosted user pc`.
+- The observed screen output proves Linux console mirroring is active and boot reaches `/init`.
+- Next work must diagnose the Linux hosted user mapping and PC synchronization path from first principles. Do not assume JIT, MAP_JIT, or an AOT/signed-code-cache requirement without direct evidence.
 
 ### 2026-06-30 iOS 27 hosted VM allocator and init exec checkpoint
 
@@ -25618,6 +25618,12 @@ Blocked validation: - Physical iOS 27 evidence is still missing. `xcrun devicect
 Changes: - Removed `.codex/hooks/compact_plan_check.py` at user request. - Removed the lifecycle hook tests that directly executed the deleted compact plan hook. - Left historical documentation entries that mention past executions untouched.
 
 Validation: - `python3 -m unittest discover .codex/hooks/tests` passed, 30 tests. - `rg -n "compact_plan_check|COMPACT_PLAN_CHECK" .codex AGENTS.md docs/harness docs/adr docs/reference project.yml Makefile` found no active references. - `git diff --check` passed.
+
+[2026-06-30] External build root and simulator environment checkpoint
+
+Changes: - Routed top-level, OrlixKernel, OrlixMLibC, OrlixOS, and XcodeGen-driven payload/test fixture build outputs through `ORLIX_BUILD_ROOT`; default resolution uses `external-ssd-root` and Xcode's external-backed `DERIVED_DATA_DIR`, with repo-local fallback only when the external helper is unavailable. - Updated the default simulator destination to the fresh `Orlix-iPhone-15-Pro-Max` simulator UDID `4C88CA42-EA50-463F-B989-7B0560075A9B`. - Stopped stale simulator/app helper processes, erased the same simulator after first-boot stall, and retried first boot without creating another simulator.
+
+Validation: - `xcodegen generate --spec project.yml` passed. - `xcodebuild -project Orlix.xcodeproj -scheme OrlixOS -configuration Debug -showBuildSettings` resolved `ORLIX_BUILD_ROOT` under external-backed Xcode DerivedData. - `git diff --check` passed. - `xcrun simctl list devices available` showed only `Orlix-iPhone-15-Pro-Max (4C88CA42-EA50-463F-B989-7B0560075A9B)` for iOS 26.5. - Simulator UI still did not become a valid proof surface: `simctl bootstatus` remained non-terminal in Data Migration and screenshots stayed on the Apple logo. - `xcode-storage-doctor` still fails because `/Library/Developer/CoreSimulator/Caches` is not mounted; `hdiutil imageinfo "$(external-ssd-root)/Xcode/CoreSimulator/Caches.sparsebundle"` reports `image not recognized`, and the sparsebundle is root-owned, so repair requires root credentials outside this shell.
 
 [2026-06-30] TestFlight build 15 hosted vmalloc search granularity
 

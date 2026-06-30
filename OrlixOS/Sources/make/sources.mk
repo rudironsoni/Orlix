@@ -1,6 +1,6 @@
 $(ORLIXOS_BASH_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch Bash source" >&2; exit 1; }; \
@@ -29,7 +29,7 @@ __coreutils-source: $(ORLIXOS_COREUTILS_SOURCE_STAMP)
 
 $(ORLIXOS_COREUTILS_SOURCE_STAMP): FORCE
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)" "$(ORLIXOS_SRC_DIR)" "$(ORLIXOS_COREUTILS_UPSTREAM_DIR)" "$(ORLIXOS_COREUTILS_SRC_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)" "$(ORLIXOS_SRC_DIR)" "$(ORLIXOS_COREUTILS_UPSTREAM_DIR)" "$(ORLIXOS_COREUTILS_SRC_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	export PATH="$(ORLIXOS_COREUTILS_BOOTSTRAP_PATH)"; \
@@ -73,7 +73,7 @@ $(ORLIXOS_COREUTILS_SOURCE_STAMP): FORCE
 
 $(ORLIXOS_GREP_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch grep source" >&2; exit 1; }; \
@@ -100,7 +100,7 @@ $(ORLIXOS_GREP_SOURCE_STAMP): $(ORLIXOS_GREP_ARCHIVE_STAMP)
 
 $(ORLIXOS_SED_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch sed source" >&2; exit 1; }; \
@@ -127,7 +127,7 @@ $(ORLIXOS_SED_SOURCE_STAMP): $(ORLIXOS_SED_ARCHIVE_STAMP)
 
 $(ORLIXOS_DIFFUTILS_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch diffutils source" >&2; exit 1; }; \
@@ -154,7 +154,7 @@ $(ORLIXOS_DIFFUTILS_SOURCE_STAMP): $(ORLIXOS_DIFFUTILS_ARCHIVE_STAMP)
 
 $(ORLIXOS_GAWK_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch gawk source" >&2; exit 1; }; \
@@ -181,7 +181,7 @@ $(ORLIXOS_GAWK_SOURCE_STAMP): $(ORLIXOS_GAWK_ARCHIVE_STAMP)
 
 $(ORLIXOS_FINDUTILS_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch findutils source" >&2; exit 1; }; \
@@ -208,7 +208,7 @@ $(ORLIXOS_FINDUTILS_SOURCE_STAMP): $(ORLIXOS_FINDUTILS_ARCHIVE_STAMP)
 
 $(ORLIXOS_UTIL_LINUX_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch util-linux source" >&2; exit 1; }; \
@@ -235,7 +235,7 @@ $(ORLIXOS_UTIL_LINUX_SOURCE_STAMP): $(ORLIXOS_UTIL_LINUX_ARCHIVE_STAMP)
 
 $(ORLIXOS_E2FSPROGS_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch e2fsprogs source" >&2; exit 1; }; \
@@ -262,7 +262,7 @@ $(ORLIXOS_E2FSPROGS_SOURCE_STAMP): $(ORLIXOS_E2FSPROGS_ARCHIVE_STAMP)
 
 $(ORLIXOS_ATTR_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch attr source" >&2; exit 1; }; \
@@ -289,7 +289,7 @@ $(ORLIXOS_ATTR_SOURCE_STAMP): $(ORLIXOS_ATTR_ARCHIVE_STAMP)
 
 $(ORLIXOS_ACL_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch acl source" >&2; exit 1; }; \
@@ -316,7 +316,7 @@ $(ORLIXOS_ACL_SOURCE_STAMP): $(ORLIXOS_ACL_ARCHIVE_STAMP)
 
 $(ORLIXOS_LIBCAP_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch libcap source" >&2; exit 1; }; \
@@ -343,7 +343,7 @@ $(ORLIXOS_LIBCAP_SOURCE_STAMP): $(ORLIXOS_LIBCAP_ARCHIVE_STAMP)
 
 $(ORLIXOS_PCRE2_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch pcre2 source" >&2; exit 1; }; \
@@ -370,7 +370,7 @@ $(ORLIXOS_PCRE2_SOURCE_STAMP): $(ORLIXOS_PCRE2_ARCHIVE_STAMP)
 
 $(ORLIXOS_FTS_STANDALONE_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch musl-fts source" >&2; exit 1; }; \
@@ -397,7 +397,7 @@ $(ORLIXOS_FTS_STANDALONE_SOURCE_STAMP): $(ORLIXOS_FTS_STANDALONE_ARCHIVE_STAMP)
 
 $(ORLIXOS_LIBSEPOL_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch libsepol source" >&2; exit 1; }; \
@@ -424,7 +424,7 @@ $(ORLIXOS_LIBSEPOL_SOURCE_STAMP): $(ORLIXOS_LIBSEPOL_ARCHIVE_STAMP)
 
 $(ORLIXOS_LIBSELINUX_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch libselinux source" >&2; exit 1; }; \
@@ -452,7 +452,7 @@ $(ORLIXOS_LIBSELINUX_SOURCE_STAMP): $(ORLIXOS_LIBSELINUX_ARCHIVE_STAMP) $(PROJEC
 
 $(ORLIXOS_CHECKPOLICY_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch checkpolicy source" >&2; exit 1; }; \
@@ -479,7 +479,7 @@ $(ORLIXOS_CHECKPOLICY_SOURCE_STAMP): $(ORLIXOS_CHECKPOLICY_ARCHIVE_STAMP)
 
 $(ORLIXOS_POLICYCOREUTILS_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch policycoreutils source" >&2; exit 1; }; \
@@ -506,7 +506,7 @@ $(ORLIXOS_POLICYCOREUTILS_SOURCE_STAMP): $(ORLIXOS_POLICYCOREUTILS_ARCHIVE_STAMP
 
 $(ORLIXOS_PERL_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch perl source" >&2; exit 1; }; \
@@ -550,7 +550,7 @@ $(ORLIXOS_PERL_SOURCE_STAMP): $(ORLIXOS_PERL_ARCHIVE_STAMP) $(ORLIXOS_PERL_CROSS
 
 $(ORLIXOS_JQ_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch jq source" >&2; exit 1; }; \
@@ -577,7 +577,7 @@ $(ORLIXOS_JQ_SOURCE_STAMP): $(ORLIXOS_JQ_ARCHIVE_STAMP)
 
 $(ORLIXOS_CURL_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch curl source" >&2; exit 1; }; \
@@ -604,7 +604,7 @@ $(ORLIXOS_CURL_SOURCE_STAMP): $(ORLIXOS_CURL_ARCHIVE_STAMP)
 
 $(ORLIXOS_NCURSES_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch ncurses source" >&2; exit 1; }; \
@@ -631,7 +631,7 @@ $(ORLIXOS_NCURSES_SOURCE_STAMP): $(ORLIXOS_NCURSES_ARCHIVE_STAMP)
 
 $(ORLIXOS_ZSH_ARCHIVE):
 	@set -euo pipefail; \
-	for path in "$(REPO_ROOT)/Build" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
 	done; \
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch zsh source" >&2; exit 1; }; \

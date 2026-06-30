@@ -9,7 +9,9 @@ KERNEL_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixKernel/Makefile
 
 PROFILE ?= release
 
-include $(PROJECT_DIR)/Sources/distribution/target-settings.xcconfig
+ORLIXOS_TARGET_SETTINGS := $(PROJECT_DIR)/Sources/distribution/target-settings.xcconfig
+
+include $(ORLIXOS_TARGET_SETTINGS)
 include $(PROJECT_DIR)/Sources/distribution/manifest.mk
 
 ifeq ($(PROFILE),release)
@@ -31,16 +33,16 @@ ORLIXOS_ENVIRONMENT_BASE_IMAGE_SIZE ?= $(ORLIX_OS_BASE_ROOT_IMAGE_SIZE)
 ORLIXOS_ENVIRONMENT_STATE_IMAGE_SIZE ?= $(ORLIX_OS_STATE_ROOT_IMAGE_SIZE)
 ORLIXOS_ENVIRONMENT_RUNTIME_TEST_BASE_IMAGE_SIZE ?= 192m
 ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP := $(ORLIXOS_BUILD_ROOT)/environment-runtime-test-fixtures/.fixtures-ready
-ORLIXOS_NETWORK_NAMESPACE_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/network_namespace_probe
-ORLIXOS_OCI_CGROUP_RESOURCES_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_cgroup_resources_probe
-ORLIXOS_OCI_DEVICE_NODES_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_device_nodes_probe
-ORLIXOS_OCI_HOST_MOUNT_TARGET_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_host_mount_target_probe
-ORLIXOS_OCI_NAMESPACE_IDENTITY_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_namespace_identity_probe
-ORLIXOS_OCI_PROCESS_ATTRIBUTES_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_process_attributes_probe
-ORLIXOS_OCI_ROOTFS_CONTROLS_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_rootfs_controls_probe
-ORLIXOS_OCI_TIME_NAMESPACE_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_time_namespace_probe
-ORLIXOS_VIRTIO_NET_DEVICE_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/virtio_net_device_probe
-ORLIXOS_VIRTIO_FS_MOUNT_PROBE ?= $(REPO_ROOT)/Build/OrlixKernel/build/$(PROFILE)/kselftest/orlix/virtio_fs_mount_probe
+ORLIXOS_NETWORK_NAMESPACE_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/network_namespace_probe
+ORLIXOS_OCI_CGROUP_RESOURCES_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_cgroup_resources_probe
+ORLIXOS_OCI_DEVICE_NODES_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_device_nodes_probe
+ORLIXOS_OCI_HOST_MOUNT_TARGET_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_host_mount_target_probe
+ORLIXOS_OCI_NAMESPACE_IDENTITY_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_namespace_identity_probe
+ORLIXOS_OCI_PROCESS_ATTRIBUTES_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_process_attributes_probe
+ORLIXOS_OCI_ROOTFS_CONTROLS_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_rootfs_controls_probe
+ORLIXOS_OCI_TIME_NAMESPACE_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/oci_time_namespace_probe
+ORLIXOS_VIRTIO_NET_DEVICE_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/virtio_net_device_probe
+ORLIXOS_VIRTIO_FS_MOUNT_PROBE ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/kselftest/orlix/virtio_fs_mount_probe
 ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mke2fs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/mke2fs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/mke2fs; else printf '%s\n' mke2fs; fi)
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 ORLIX_E2FSCK ?= $(shell if command -v e2fsck >/dev/null 2>&1; then command -v e2fsck; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/e2fsck ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/e2fsck; else printf '%s\n' e2fsck; fi)
