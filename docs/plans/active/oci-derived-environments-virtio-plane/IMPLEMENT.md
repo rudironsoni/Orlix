@@ -10,6 +10,36 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-30 TestFlight build 14 hosted vmalloc alignment fix
+
+Physical feedback:
+- TestFlight build `0.1 (13)` still returned `ORLIX_BOOT_STATUS_UNAVAILABLE` and printed `Orlix could not reserve the hosted Linux boot address space.`
+
+Root cause:
+- The failed reservation was not caused by the requested vmalloc size.
+- On the 16 KiB-page iPhoneOS build, `PGDIR_SIZE` is `0x800000000000`, while the hosted kernel reservation band is `0x700000000000..0x7f0000000000`.
+- Aligning the reservation to `PGDIR_SIZE` rounded the first candidate up to `0x800000000000`, outside the allowed band, so every reservation attempt failed before probing any host VM gap.
+
+Changes:
+- Added explicit `ORLIX_HOSTED_VMALLOC_ALIGNMENT` and set it to `PUD_SIZE`, which is valid inside the hosted kernel band on 16 KiB-page builds.
+- Changed `arch_boot_prepare_hosted_vmalloc_window()` to use that hosted-vmalloc alignment instead of `PGDIR_SIZE`.
+- Added a static geometry guard so hosted vmalloc alignment cannot exceed the hosted kernel reservation band.
+
+Validation:
+- `git diff --check` passed.
+- `make -f OrlixOS/Makefile kernel-payload PROFILE=release` passed and rebuilt the release kernel payload.
+- `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Debug -destination 'generic/platform=iOS Simulator' build` passed.
+- `make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ORLIX_BETA_BUMP_BUILD_NUMBER=NO` passed after preserving the already-bumped build `14`.
+- `make beta-validate-archive` passed.
+- `make beta-export-archive ORLIX_BETA_EXPORT_OPTIONS_PLIST=Build/Release/ExportOptions-AppStore-Manual.plist ORLIX_ALLOW_PROVISIONING_UPDATES=NO ORLIX_BETA_EXPORT_DIR=Build/Release/Export-Make` passed.
+- Exported IPA metadata: bundle id `com.rudironsoni.Orlix`, version `0.1`, build `14`, `ITSAppUsesNonExemptEncryption=false`.
+- `make beta-upload ORLIX_FASTLANE_API_KEY_PATH=$HOME/.config/fastlane/appstore_api_key.json ORLIX_BETA_IPA_PATH=Build/Release/Export-Make/Orlix.ipa` passed.
+- `fastlane run latest_testflight_build_number api_key_path:$HOME/.config/fastlane/appstore_api_key.json app_identifier:com.rudironsoni.Orlix version:0.1` reported `Result: 14`.
+
+Boundary:
+- This proves build `14` is archived, exported, uploaded, and visible to App Store Connect.
+- It does not yet prove the physical iOS 27 phone reaches Linux console. That proof requires installing build `14` on the iPhone 15 Pro Max and observing whether the boot progresses past hosted address-space reservation.
+
 ### 2026-06-30 TestFlight build 13 adaptive hosted vmalloc reservation
 
 Physical feedback:
