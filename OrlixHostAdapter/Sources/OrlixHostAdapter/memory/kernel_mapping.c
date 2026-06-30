@@ -1,4 +1,5 @@
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
+#include "OrlixHostAdapter/observability/log.h"
 #include "OrlixHostAdapter/runtime/host_tls.h"
 #include "internal/asm/host_trap.h"
 
@@ -44,9 +45,9 @@ static struct OrlixHostKernelShadowMapping *OrlixHostKernelShadowMappings;
 static struct OrlixHostUserMapping *OrlixHostUserMappings;
 
 #define ORLIX_HOST_IOMEM_MAX_SIZE 0x0000000010000000UL
-#define ORLIX_HOST_HOSTED_USER_BASE 0x0000600000000000UL
-#define ORLIX_HOST_HOSTED_STACK_TOP 0x0000700000000000UL
-#define ORLIX_HOST_HOSTED_KERNEL_MAX 0x00007f0000000000UL
+#define ORLIX_HOST_HOSTED_USER_BASE 0x0000000100000000UL
+#define ORLIX_HOST_HOSTED_STACK_TOP 0x0000000200000000UL
+#define ORLIX_HOST_HOSTED_KERNEL_MAX 0x0000000300000000UL
 
 static void OrlixHostUserMemoryBarrier(void)
 {
@@ -107,15 +108,34 @@ static unsigned long OrlixHostAlignUp(unsigned long value,
 }
 
 static int OrlixHostReserveFixedRange(unsigned long base,
-                                      unsigned long length)
+                                      unsigned long length,
+                                      kern_return_t *allocate_status,
+                                      vm_address_t *returned_address,
+                                      kern_return_t *protect_status)
 {
     vm_address_t target = (vm_address_t)base;
     kern_return_t status;
+
+    if (allocate_status) {
+        *allocate_status = KERN_SUCCESS;
+    }
+    if (returned_address) {
+        *returned_address = target;
+    }
+    if (protect_status) {
+        *protect_status = KERN_SUCCESS;
+    }
 
     status = vm_allocate(mach_task_self(),
                          &target,
                          (vm_size_t)length,
                          VM_FLAGS_FIXED);
+    if (allocate_status) {
+        *allocate_status = status;
+    }
+    if (returned_address) {
+        *returned_address = target;
+    }
     if (status != KERN_SUCCESS || target != (vm_address_t)base) {
         if (status == KERN_SUCCESS) {
             (void)vm_deallocate(mach_task_self(), target, (vm_size_t)length);
@@ -125,13 +145,36 @@ static int OrlixHostReserveFixedRange(unsigned long base,
 
     status = vm_protect(mach_task_self(),
                         target,
-                        (vm_size_t)length,
-                        false,
-                        VM_PROT_NONE);
+                         (vm_size_t)length,
+                         false,
+                         VM_PROT_NONE);
+    if (protect_status) {
+        *protect_status = status;
+    }
     if (status != KERN_SUCCESS) {
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+        orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                                ORLIX_HOST_TRACE_LEVEL_ERROR,
+                                ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                    ORLIX_HOST_TRACE_SINK_STDERR,
+                                "fixed reservation protect failed base=0x%lx length=0x%lx status=%d",
+                                base,
+                                length,
+                                status);
+#endif
         (void)vm_deallocate(mach_task_self(), target, (vm_size_t)length);
         return -1;
     }
+
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                            ORLIX_HOST_TRACE_LEVEL_INFO,
+                            ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                ORLIX_HOST_TRACE_SINK_STDERR,
+                            "fixed reservation ready base=0x%lx length=0x%lx",
+                            base,
+                            length);
+#endif
 
     return 0;
 }
@@ -143,6 +186,14 @@ static int OrlixHostReserveFirstAvailableRangeInGap(unsigned long gap_start,
                                                     unsigned long *base_address)
 {
     unsigned long probe_address = OrlixHostAlignUp(gap_start, alignment);
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    unsigned long first_probe = probe_address;
+    unsigned long last_probe = 0;
+    unsigned long probe_count = 0;
+    kern_return_t last_allocate_status = KERN_SUCCESS;
+    kern_return_t last_protect_status = KERN_SUCCESS;
+    vm_address_t last_returned_address = 0;
+#endif
 
     if (!base_address || probe_address == 0 || gap_end <= gap_start ||
         length > gap_end - gap_start) {
@@ -150,8 +201,35 @@ static int OrlixHostReserveFirstAvailableRangeInGap(unsigned long gap_start,
     }
 
     while (probe_address <= gap_end - length) {
-        if (OrlixHostReserveFixedRange(probe_address, length) == 0) {
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+        last_probe = probe_address;
+        probe_count++;
+#endif
+        if (OrlixHostReserveFixedRange(probe_address,
+                                       length,
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+                                       &last_allocate_status,
+                                       &last_returned_address,
+                                       &last_protect_status
+#else
+                                       NULL,
+                                       NULL,
+                                       NULL
+#endif
+                                       ) == 0) {
             *base_address = probe_address;
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+            orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                                    ORLIX_HOST_TRACE_LEVEL_INFO,
+                                    ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                        ORLIX_HOST_TRACE_SINK_STDERR,
+                                    "gap reservation selected base=0x%lx length=0x%lx gapStart=0x%lx gapEnd=0x%lx alignment=0x%lx",
+                                    probe_address,
+                                    length,
+                                    gap_start,
+                                    gap_end,
+                                    alignment);
+#endif
             return 0;
         }
         if (probe_address > (unsigned long)-1 - alignment) {
@@ -160,6 +238,126 @@ static int OrlixHostReserveFirstAvailableRangeInGap(unsigned long gap_start,
         probe_address += alignment;
     }
 
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                            ORLIX_HOST_TRACE_LEVEL_ERROR,
+                            ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                ORLIX_HOST_TRACE_SINK_STDERR,
+                            "gap reservation failed length=0x%lx gapStart=0x%lx gapEnd=0x%lx alignment=0x%lx probes=%lu firstProbe=0x%lx lastProbe=0x%lx lastAllocateStatus=%d lastReturned=0x%lx lastProtectStatus=%d",
+                            length,
+                            gap_start,
+                            gap_end,
+                            alignment,
+                            probe_count,
+                            first_probe,
+                            last_probe,
+                            last_allocate_status,
+                            (unsigned long)last_returned_address,
+                            last_protect_status);
+#endif
+
+    return -1;
+}
+
+static int OrlixHostReserveAnyAvailableRange(unsigned long minimum_address,
+                                             unsigned long maximum_address,
+                                             unsigned long length,
+                                             unsigned long alignment,
+                                             unsigned long *base_address)
+{
+    const unsigned int max_attempts = 64;
+
+    if (!base_address || length == 0 || alignment == 0 ||
+        (alignment & (alignment - 1UL)) != 0) {
+        return -1;
+    }
+
+    for (unsigned int attempt = 0; attempt < max_attempts; attempt++) {
+        vm_address_t target = 0;
+        vm_size_t reservation_length;
+        kern_return_t status = vm_allocate(mach_task_self(),
+                                           &target,
+                                           (vm_size_t)length + alignment,
+                                           VM_FLAGS_ANYWHERE);
+        unsigned long reservation_start = (unsigned long)target;
+        unsigned long address;
+        unsigned long reservation_end;
+        unsigned long selected_end;
+
+        if (status != KERN_SUCCESS || target == 0) {
+            continue;
+        }
+
+        if (length > (unsigned long)-1 - alignment ||
+            reservation_start > (unsigned long)-1 - length - alignment) {
+            (void)vm_deallocate(mach_task_self(), target, (vm_size_t)length + alignment);
+            continue;
+        }
+
+        reservation_length = (vm_size_t)length + alignment;
+        reservation_end = reservation_start + reservation_length;
+        address = OrlixHostAlignUp(reservation_start, alignment);
+        selected_end = address + length;
+
+        if (address == 0 || selected_end > reservation_end ||
+            OrlixHostRangeIntersects(address,
+                                     length,
+                                     ORLIX_HOST_HOSTED_USER_BASE,
+                                     ORLIX_HOST_HOSTED_STACK_TOP)) {
+            (void)vm_deallocate(mach_task_self(), target, reservation_length);
+            continue;
+        }
+
+        if (address > reservation_start) {
+            (void)vm_deallocate(mach_task_self(),
+                                (vm_address_t)reservation_start,
+                                (vm_size_t)(address - reservation_start));
+        }
+        if (selected_end < reservation_end) {
+            (void)vm_deallocate(mach_task_self(),
+                                (vm_address_t)selected_end,
+                                (vm_size_t)(reservation_end - selected_end));
+        }
+
+        status = vm_protect(mach_task_self(),
+                            (vm_address_t)address,
+                            (vm_size_t)length,
+                            false,
+                            VM_PROT_NONE);
+        if (status != KERN_SUCCESS) {
+            (void)vm_deallocate(mach_task_self(), (vm_address_t)address, (vm_size_t)length);
+            continue;
+        }
+
+        *base_address = address;
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+        orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                                ORLIX_HOST_TRACE_LEVEL_INFO,
+                                ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                    ORLIX_HOST_TRACE_SINK_STDERR,
+                                "anywhere reservation selected base=0x%lx length=0x%lx preferredStart=0x%lx preferredEnd=0x%lx alignment=0x%lx attempts=%u",
+                                address,
+                                length,
+                                minimum_address,
+                                maximum_address,
+                                alignment,
+                                attempt + 1);
+#endif
+        return 0;
+    }
+
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                            ORLIX_HOST_TRACE_LEVEL_ERROR,
+                            ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                ORLIX_HOST_TRACE_SINK_STDERR,
+                            "anywhere reservation failed length=0x%lx preferredStart=0x%lx preferredEnd=0x%lx alignment=0x%lx attempts=%u",
+                            length,
+                            minimum_address,
+                            maximum_address,
+                            alignment,
+                            max_attempts);
+#endif
     return -1;
 }
 
@@ -528,6 +726,15 @@ __attribute__((visibility("hidden"))) int orlix_host_kernel_reserve_window(
         if (cursor == 0) {
             break;
         }
+    }
+
+    if (OrlixHostReserveAnyAvailableRange(minimum_address,
+                                          maximum_address,
+                                          length,
+                                          alignment,
+                                          base_address) == 0) {
+        OrlixHostLeaveHostTls(active_tls);
+        return 0;
     }
 
     OrlixHostLeaveHostTls(active_tls);

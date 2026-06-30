@@ -16,8 +16,8 @@ static uintptr_t read_tls_register(void)
 
 static bool has_hosted_user_tls_shape(uintptr_t value)
 {
-	return value >= UINT64_C(0x600000000000) &&
-		value < UINT64_C(0x700000000000);
+	return value >= UINT64_C(0x100000000) &&
+		value < UINT64_C(0x200000000);
 }
 
 int main(void)

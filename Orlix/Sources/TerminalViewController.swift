@@ -1,11 +1,18 @@
 import GhosttyTerminal
 import GhosttyTheme
 import OrlixOS
+import os
 import UIKit
 
 final class TerminalViewController: UIViewController {
     private static let lightThemeKey = "SelectedTheme.light"
     private static let darkThemeKey = "SelectedTheme.dark"
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    private static let terminalUILogger = Logger(
+        subsystem: "com.rudironsoni.Orlix",
+        category: "terminal-ui"
+    )
+#endif
 
     private var didStartBoot = false
     private let bootQueue = DispatchQueue(label: "com.rudironsoni.terminal.boot", qos: .userInitiated)
@@ -102,14 +109,27 @@ final class TerminalViewController: UIViewController {
 
         terminalSession.receive("Orlix\r\n")
         guard let session = linuxSession else {
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+            Self.terminalUILogger.error("linux session unavailable at terminal activation")
+#endif
             terminalSession.receive(launchConfiguration.failureMessage + "\r\n")
             return
         }
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+        Self.terminalUILogger.info(
+            "boot starting profile=\(Self.profileDisplayName(session.bootConfig.profile), privacy: .public)"
+        )
+#endif
         terminalSession.receive(launchConfiguration.startMessage(for: session) + "\r\n")
         startBootWatchdog(for: session)
         bootQueue.async { [weak self] in
             let status = session.boot()
             DispatchQueue.main.async { [weak self] in
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+                Self.terminalUILogger.info(
+                    "boot finished status=\(status.message, privacy: .public)"
+                )
+#endif
                 self?.cancelBootWatchdog()
                 self?.terminalSession.receive(status.message + "\r\n")
             }
@@ -153,6 +173,11 @@ final class TerminalViewController: UIViewController {
 
     private func enqueueTerminalOutput(_ text: String) {
         cancelBootWatchdog()
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+        Self.terminalUILogger.info(
+            "terminal ui output received bytes=\(text.utf8.count, privacy: .public)"
+        )
+#endif
         terminalOutputLock.lock()
         pendingTerminalOutput += text
         guard !terminalOutputFlushScheduled else {
@@ -182,10 +207,7 @@ final class TerminalViewController: UIViewController {
         cancelBootWatchdog()
         let workItem = DispatchWorkItem { [weak self, weak session] in
             guard let self, let session else { return }
-            let stage = session.latestBootProgress?.stage ?? .unknown
-            self.terminalSession.receive(
-                "Boot still running: \(Self.bootStageDisplayName(stage))\r\n"
-            )
+            self.terminalSession.receive(Self.bootWatchdogMessage(for: session))
         }
         bootWatchdogWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
@@ -194,6 +216,28 @@ final class TerminalViewController: UIViewController {
     private func cancelBootWatchdog() {
         bootWatchdogWorkItem?.cancel()
         bootWatchdogWorkItem = nil
+    }
+
+    private static func bootWatchdogMessage(for session: OrlixLinuxSession) -> String {
+        let recentConsoleOutput = session.recentConsoleOutputText
+        guard recentConsoleOutput.isEmpty else {
+            return """
+            Linux console emitted output but the terminal UI is silent.\r
+            \(Self.terminalOutputTail(recentConsoleOutput))\r
+
+            """
+        }
+
+        let stage = session.latestBootProgress?.stage ?? .unknown
+        return "Boot still running: \(Self.bootStageDisplayName(stage))\r\n"
+    }
+
+    private static func terminalOutputTail(_ text: String) -> String {
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let suffix = String(normalized.suffix(2048))
+        return suffix.replacingOccurrences(of: "\n", with: "\r\n")
     }
 
     private static func bootStageDisplayName(_ stage: OrlixBootStage) -> String {
