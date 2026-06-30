@@ -45,9 +45,9 @@ static struct OrlixHostKernelShadowMapping *OrlixHostKernelShadowMappings;
 static struct OrlixHostUserMapping *OrlixHostUserMappings;
 
 #define ORLIX_HOST_IOMEM_MAX_SIZE 0x0000000010000000UL
-#define ORLIX_HOST_HOSTED_USER_BASE 0x0000000100000000UL
-#define ORLIX_HOST_HOSTED_STACK_TOP 0x0000000200000000UL
-#define ORLIX_HOST_HOSTED_KERNEL_MAX 0x0000000300000000UL
+#define ORLIX_HOST_HOSTED_USER_BASE_DEFAULT 0x0000000100000000UL
+#define ORLIX_HOST_HOSTED_STACK_TOP_DEFAULT 0x0000000200000000UL
+#define ORLIX_HOST_HOSTED_KERNEL_MAX_DEFAULT 0x0000000300000000UL
 #define ORLIX_HOST_VM_ANYWHERE_ATTEMPTS 128U
 #define ORLIX_HOST_VM_SCRATCH_MAX 8U
 #define ORLIX_HOST_VM_SCRATCH_MAX_BYTES 0x0000000020000000UL
@@ -57,6 +57,19 @@ static struct OrlixHostUserMapping *OrlixHostUserMappings;
 #else
 #define ORLIX_HOST_VM_ANYWHERE_FLAGS VM_FLAGS_ANYWHERE
 #endif
+
+static unsigned long OrlixHostHostedUserBase =
+    ORLIX_HOST_HOSTED_USER_BASE_DEFAULT;
+static unsigned long OrlixHostHostedStackTop =
+    ORLIX_HOST_HOSTED_STACK_TOP_DEFAULT;
+static unsigned long OrlixHostHostedKernelMax =
+    ORLIX_HOST_HOSTED_KERNEL_MAX_DEFAULT;
+
+static unsigned long OrlixHostPageStart(unsigned long address);
+static unsigned long OrlixHostPageEnd(unsigned long address,
+                                      unsigned long length);
+static void OrlixHostUnmapPages(unsigned long target_address,
+                                unsigned long length);
 
 static void OrlixHostUserMemoryBarrier(void)
 {
@@ -72,6 +85,41 @@ static void OrlixHostInvalidateInstructionCache(unsigned long address,
     sys_icache_invalidate((void *)address, (size_t)length);
 }
 
+static void OrlixHostTraceShadowUserPageFailure(const char *reason,
+                                                unsigned long target_address,
+                                                unsigned long length,
+                                                unsigned long mapping_address,
+                                                unsigned long mapping_length,
+                                                vm_prot_t requested_protection,
+                                                vm_prot_t copy_protection,
+                                                kern_return_t status)
+{
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                            ORLIX_HOST_TRACE_LEVEL_ERROR,
+                            ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                ORLIX_HOST_TRACE_SINK_STDERR,
+                            "shadow user page map failed reason=%s target=0x%lx length=0x%lx mapping=0x%lx mapping_length=0x%lx requested_prot=0x%x copy_prot=0x%x status=%d",
+                            reason,
+                            target_address,
+                            length,
+                            mapping_address,
+                            mapping_length,
+                            requested_protection,
+                            copy_protection,
+                            status);
+#else
+    (void)reason;
+    (void)target_address;
+    (void)length;
+    (void)mapping_address;
+    (void)mapping_length;
+    (void)requested_protection;
+    (void)copy_protection;
+    (void)status;
+#endif
+}
+
 static bool OrlixHostRangeIntersects(unsigned long start,
                                      unsigned long length,
                                      unsigned long range_start,
@@ -85,6 +133,34 @@ static bool OrlixHostRangeIntersects(unsigned long start,
 
     end = start + length;
     return start < range_end && end > range_start;
+}
+
+static bool OrlixHostRangeInsideHostedUserWindow(unsigned long start,
+                                                 unsigned long end)
+{
+    return start >= OrlixHostHostedUserBase && end <= OrlixHostHostedStackTop;
+}
+
+static void OrlixHostReleaseUserRange(unsigned long target_address,
+                                      unsigned long length)
+{
+    unsigned long start = OrlixHostPageStart(target_address);
+    unsigned long end = OrlixHostPageEnd(target_address, length);
+
+    if (target_address == 0 || end == 0 || end <= start) {
+        return;
+    }
+
+    if (OrlixHostRangeInsideHostedUserWindow(start, end)) {
+        (void)vm_protect(mach_task_self(),
+                         (vm_address_t)start,
+                         (vm_size_t)(end - start),
+                         false,
+                         VM_PROT_NONE);
+        return;
+    }
+
+    OrlixHostUnmapPages(start, end - start);
 }
 
 __attribute__((visibility("hidden"))) unsigned long orlix_host_memory_page_size(void)
@@ -323,12 +399,12 @@ static int OrlixHostReserveAnyAvailableRange(unsigned long minimum_address,
         if (address == 0 || selected_end > reservation_end ||
             OrlixHostRangeIntersects(address,
                                      length,
-                                     ORLIX_HOST_HOSTED_USER_BASE,
-                                     ORLIX_HOST_HOSTED_STACK_TOP)) {
+                                     OrlixHostHostedUserBase,
+                                     OrlixHostHostedStackTop)) {
             if (OrlixHostRangeIntersects(address,
                                          length,
-                                         ORLIX_HOST_HOSTED_USER_BASE,
-                                         ORLIX_HOST_HOSTED_STACK_TOP)) {
+                                         OrlixHostHostedUserBase,
+                                         OrlixHostHostedStackTop)) {
                 user_collisions++;
             } else {
                 unusable_candidates++;
@@ -465,12 +541,12 @@ static int OrlixHostAllocateIOMapping(vm_size_t length, vm_address_t *mapped)
 
         if (OrlixHostRangeIntersects((unsigned long)target,
                                      length,
-                                     ORLIX_HOST_HOSTED_USER_BASE,
-                                     ORLIX_HOST_HOSTED_STACK_TOP) ||
+                                     OrlixHostHostedUserBase,
+                                     OrlixHostHostedStackTop) ||
             OrlixHostRangeIntersects((unsigned long)target,
                                      length,
-                                     ORLIX_HOST_HOSTED_STACK_TOP,
-                                     ORLIX_HOST_HOSTED_KERNEL_MAX)) {
+                                     OrlixHostHostedStackTop,
+                                     OrlixHostHostedKernelMax)) {
             collisions++;
             if (scratch_count < ORLIX_HOST_VM_SCRATCH_MAX &&
                 scratch_bytes <= ORLIX_HOST_VM_SCRATCH_MAX_BYTES &&
@@ -876,6 +952,61 @@ __attribute__((visibility("hidden"))) int orlix_host_kernel_reserve_window(
     return -1;
 }
 
+__attribute__((visibility("hidden"))) int orlix_host_user_reserve_window(
+    unsigned long length,
+    unsigned long alignment,
+    unsigned long *base_address,
+    unsigned long *limit_address)
+{
+    unsigned long base = 0;
+    unsigned long active_tls;
+    int result;
+
+    if (!base_address || !limit_address || length == 0 ||
+        alignment == 0 || length > (unsigned long)-1 - alignment) {
+        return -1;
+    }
+
+    if (OrlixHostHostedUserBase != ORLIX_HOST_HOSTED_USER_BASE_DEFAULT ||
+        OrlixHostHostedStackTop != ORLIX_HOST_HOSTED_STACK_TOP_DEFAULT) {
+        *base_address = OrlixHostHostedUserBase;
+        *limit_address = OrlixHostHostedStackTop;
+        return 0;
+    }
+
+    active_tls = OrlixHostEnterHostTls();
+    result = OrlixHostReserveAnyAvailableRange(0,
+                                               (unsigned long)-1,
+                                               length,
+                                               alignment,
+                                               &base);
+    OrlixHostLeaveHostTls(active_tls);
+
+    if (result != 0 || base == 0 || length > ((unsigned long)-1 / 2UL) ||
+        base > (unsigned long)-1 - (length * 2UL)) {
+        return -1;
+    }
+
+    OrlixHostHostedUserBase = base;
+    OrlixHostHostedStackTop = base + length;
+    OrlixHostHostedKernelMax = OrlixHostHostedStackTop + length;
+    *base_address = OrlixHostHostedUserBase;
+    *limit_address = OrlixHostHostedStackTop;
+
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
+                            ORLIX_HOST_TRACE_LEVEL_INFO,
+                            ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                ORLIX_HOST_TRACE_SINK_STDERR,
+                            "hosted user window selected base=0x%lx limit=0x%lx length=0x%lx alignment=0x%lx",
+                            OrlixHostHostedUserBase,
+                            OrlixHostHostedStackTop,
+                            length,
+                            alignment);
+#endif
+    return 0;
+}
+
 static int OrlixHostMapShadowKernelPage(unsigned long target_address,
                                         const void *source_page,
                                         unsigned long length)
@@ -964,6 +1095,14 @@ static int OrlixHostMapShadowUserPages(unsigned long target_address,
 
     if (target_address == 0 || !source_page || length == 0 ||
         target_address > (unsigned long)-1 - length) {
+        OrlixHostTraceShadowUserPageFailure("invalid-argument",
+                                            target_address,
+                                            length,
+                                            0,
+                                            0,
+                                            requested_protection,
+                                            copy_protection,
+                                            KERN_INVALID_ARGUMENT);
         return -1;
     }
 
@@ -977,9 +1116,25 @@ static int OrlixHostMapShadowUserPages(unsigned long target_address,
                                    requested_protection,
                                    requested_protection & VM_PROT_WRITE,
                                    &mapping) != 0) {
+        OrlixHostTraceShadowUserPageFailure("create-mapping",
+                                            target_address,
+                                            length,
+                                            0,
+                                            0,
+                                            requested_protection,
+                                            copy_protection,
+                                            KERN_FAILURE);
         return -1;
     }
     if (!mapping) {
+        OrlixHostTraceShadowUserPageFailure("missing-mapping",
+                                            target_address,
+                                            length,
+                                            0,
+                                            0,
+                                            requested_protection,
+                                            copy_protection,
+                                            KERN_FAILURE);
         return -1;
     }
 
@@ -989,6 +1144,14 @@ static int OrlixHostMapShadowUserPages(unsigned long target_address,
                         false,
                         copy_protection);
     if (status != KERN_SUCCESS) {
+        OrlixHostTraceShadowUserPageFailure("copy-protect",
+                                            target_address,
+                                            length,
+                                            mapping->target_address,
+                                            mapping->length,
+                                            requested_protection,
+                                            copy_protection,
+                                            status);
         return -1;
     }
 
@@ -1011,6 +1174,14 @@ static int OrlixHostMapShadowUserPages(unsigned long target_address,
 
     segment = malloc(sizeof(*segment));
     if (!segment) {
+        OrlixHostTraceShadowUserPageFailure("segment-alloc",
+                                            target_address,
+                                            length,
+                                            mapping->target_address,
+                                            mapping->length,
+                                            requested_protection,
+                                            copy_protection,
+                                            KERN_RESOURCE_SHORTAGE);
         return -1;
     }
     segment->target_address = target_address;
@@ -1025,9 +1196,19 @@ static int OrlixHostMapShadowUserPages(unsigned long target_address,
                         false,
                         requested_protection);
     if (status != KERN_SUCCESS) {
+        OrlixHostTraceShadowUserPageFailure("final-protect",
+                                            target_address,
+                                            length,
+                                            mapping->target_address,
+                                            mapping->length,
+                                            requested_protection,
+                                            copy_protection,
+                                            status);
         return -1;
     }
 
+    mapping->protection = requested_protection;
+    mapping->writable = !!(requested_protection & VM_PROT_WRITE);
     return 0;
 }
 
@@ -1165,11 +1346,23 @@ static void OrlixHostUserUnmapMappedRange(unsigned long target_address,
         unsigned long mapping_end = mapping->target_address + mapping->length;
 
         if (start < mapping_end && mapping->target_address < end) {
+            bool uses_hosted_user_reservation =
+                OrlixHostRangeInsideHostedUserWindow(mapping->target_address,
+                                                     mapping_end);
+
             OrlixHostUserCopyBackMapping(mapping);
             OrlixHostUserFreeSegments(mapping);
-            (void)vm_deallocate(mach_task_self(),
-                                (vm_address_t)mapping->target_address,
-                                (vm_size_t)mapping->length);
+            if (uses_hosted_user_reservation) {
+                (void)vm_protect(mach_task_self(),
+                                 (vm_address_t)mapping->target_address,
+                                 mapping->length,
+                                 false,
+                                 VM_PROT_NONE);
+            } else {
+                (void)vm_deallocate(mach_task_self(),
+                                    (vm_address_t)mapping->target_address,
+                                    (vm_size_t)mapping->length);
+            }
             *link = mapping->next;
             free(mapping);
             continue;
@@ -1185,15 +1378,16 @@ static struct OrlixHostUserMapping *OrlixHostUserFindMapping(
     vm_prot_t protection,
     bool writable)
 {
+    (void)protection;
+    (void)writable;
+
     for (struct OrlixHostUserMapping *mapping = OrlixHostUserMappings;
          mapping;
          mapping = mapping->next) {
         unsigned long mapping_end = mapping->target_address + mapping->length;
 
         if (mapping->target_address <= target_address &&
-            mapping_end >= target_address + length &&
-            mapping->protection == protection &&
-            mapping->writable == writable) {
+            mapping_end >= target_address + length) {
             return mapping;
         }
     }
@@ -1211,26 +1405,66 @@ static int OrlixHostUserCreateMapping(unsigned long target_address,
     unsigned long end = OrlixHostPageEnd(target_address, length);
     vm_address_t target = (vm_address_t)start;
     struct OrlixHostUserMapping *mapping;
+    bool uses_hosted_user_reservation;
     kern_return_t status;
 
     if (!out_mapping || target_address == 0 || end == 0 || end <= start) {
         return -1;
     }
 
-    OrlixHostUserUnmapMappedRange(start, end - start);
-    OrlixHostUnmapPages(start, end - start);
+    uses_hosted_user_reservation =
+        OrlixHostRangeInsideHostedUserWindow(start, end);
 
-    status = vm_allocate(mach_task_self(),
-                         &target,
-                         (vm_size_t)(end - start),
-                         VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE);
-    if (status != KERN_SUCCESS || target != (vm_address_t)start) {
-        return -1;
+    OrlixHostUserUnmapMappedRange(start, end - start);
+    if (uses_hosted_user_reservation) {
+        status = vm_protect(mach_task_self(),
+                            target,
+                            (vm_size_t)(end - start),
+                            false,
+                            VM_PROT_READ | VM_PROT_WRITE);
+        if (status != KERN_SUCCESS) {
+            OrlixHostTraceShadowUserPageFailure("create-reservation-protect",
+                                                target_address,
+                                                length,
+                                                start,
+                                                end - start,
+                                                protection,
+                                                VM_PROT_READ | VM_PROT_WRITE,
+                                                status);
+            return -1;
+        }
+    } else {
+        OrlixHostUnmapPages(start, end - start);
+        status = vm_allocate(mach_task_self(),
+                             &target,
+                             (vm_size_t)(end - start),
+                             VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE);
+        if (status != KERN_SUCCESS || target != (vm_address_t)start) {
+            OrlixHostTraceShadowUserPageFailure("create-fixed-allocate",
+                                                target_address,
+                                                length,
+                                                start,
+                                                end - start,
+                                                protection,
+                                                VM_PROT_READ | VM_PROT_WRITE,
+                                                status);
+            return -1;
+        }
     }
 
     mapping = malloc(sizeof(*mapping));
     if (!mapping) {
-        (void)vm_deallocate(mach_task_self(), target, (vm_size_t)(end - start));
+        if (uses_hosted_user_reservation) {
+            (void)vm_protect(mach_task_self(),
+                             target,
+                             (vm_size_t)(end - start),
+                             false,
+                             VM_PROT_NONE);
+        } else {
+            (void)vm_deallocate(mach_task_self(),
+                                target,
+                                (vm_size_t)(end - start));
+        }
         return -1;
     }
 
@@ -1488,14 +1722,56 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
                         (vm_address_t)mapping->target_address,
                         mapping->length,
                         false,
-                        protection);
+                        VM_PROT_NONE);
     if (status != KERN_SUCCESS) {
+        OrlixHostTraceShadowUserPageFailure("refresh-window-clear-protect",
+                                            target_address,
+                                            length,
+                                            mapping->target_address,
+                                            mapping->length,
+                                            protection,
+                                            VM_PROT_NONE,
+                                            status);
         OrlixHostUserUnmapMappedRange(mapping->target_address,
                                       mapping->length);
         OrlixHostLeaveHostTls(active_tls);
         return -1;
     }
 
+    for (unsigned long index = 0; index < segment_count; index++) {
+        const struct orlix_host_user_page_segment *input = &segments[index];
+        vm_prot_t segment_protection = VM_PROT_READ;
+
+        if (input->writable) {
+            segment_protection |= VM_PROT_WRITE;
+        }
+        if (input->executable) {
+            segment_protection |= VM_PROT_EXECUTE;
+        }
+
+        status = vm_protect(mach_task_self(),
+                            (vm_address_t)input->target_address,
+                            (vm_size_t)input->length,
+                            false,
+                            segment_protection);
+        if (status != KERN_SUCCESS) {
+            OrlixHostTraceShadowUserPageFailure("refresh-window-segment-protect",
+                                                input->target_address,
+                                                input->length,
+                                                mapping->target_address,
+                                                mapping->length,
+                                                segment_protection,
+                                                copy_protection,
+                                                status);
+            OrlixHostUserUnmapMappedRange(mapping->target_address,
+                                          mapping->length);
+            OrlixHostLeaveHostTls(active_tls);
+            return -1;
+        }
+    }
+
+    mapping->protection = protection;
+    mapping->writable = writable;
     OrlixHostLeaveHostTls(active_tls);
     return 0;
 }
@@ -1507,7 +1783,7 @@ __attribute__((visibility("hidden"))) void orlix_host_user_unmap_pages(
     unsigned long active_tls = OrlixHostEnterHostTls();
 
     OrlixHostUserUnmapMappedRange(target_address, length);
-    OrlixHostUnmapPages(target_address, length);
+    OrlixHostReleaseUserRange(target_address, length);
     OrlixHostLeaveHostTls(active_tls);
 }
 

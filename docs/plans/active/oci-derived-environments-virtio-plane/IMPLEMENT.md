@@ -10,6 +10,24 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-30 physical iOS 27 hosted user window checkpoint
+
+Changes:
+- Runtime-derived hosted user window now comes from HostAdapter OS-selected VM reservation instead of fixed candidate addresses.
+- User unmap inside the hosted user reservation now preserves the reserved VM range with `VM_PROT_NONE` instead of deallocating it.
+- First-stage `/init` and initramfs `/init` build as static PIE so Linux can place them in the runtime-selected user window.
+
+Validation:
+- `git diff --check` passed.
+- Release device build passed: `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Release -destination 'generic/platform=iOS' DEVELOPMENT_TEAM=ZQ3L7M567L CODE_SIGN_STYLE=Automatic build`.
+- Physical iPhone 15 Pro Max iOS 27 install and `devicectl --console` launch reached Linux `/init`.
+- Previous physical failure disappeared: no `create-reservation-protect status=1`, no `copy_to_user` EFAULT while copying init arguments.
+
+Current blocker:
+- Physical device now fails later at executable user mapping: `shadow user page map failed reason=refresh-window-segment-protect ... requested_prot=0x5 ... status=2`, followed by `failed to synchronize hosted user pc`.
+- Signed app entitlements do not include JIT. JIT/MAP_JIT/dynamic code signing is not an allowed App Store path.
+- Next architecture must use an App Store-safe no-JIT signed/AOT executable code-cache approach for Linux executable VMAs, not anonymous mirrored ELF text promoted to executable at runtime.
+
 ### 2026-06-30 iOS 27 hosted VM allocator and init exec checkpoint
 
 Changes:

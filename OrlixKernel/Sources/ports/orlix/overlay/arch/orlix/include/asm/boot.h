@@ -12,6 +12,8 @@ struct boot_params {
 	const char *root_device;
 	const char *console_device;
 	unsigned long host_page_size;
+	unsigned long hosted_user_base;
+	unsigned long hosted_user_limit;
 	unsigned long flags;
 };
 

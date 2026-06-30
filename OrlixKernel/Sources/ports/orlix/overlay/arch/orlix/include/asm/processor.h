@@ -6,12 +6,12 @@
 #include <asm/thread_info.h>
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
-#define ORLIX_HOSTED_USER_BASE	(0x0000000100000000UL)
-#define ORLIX_HOSTED_STACK_TOP	(0x0000000200000000UL)
-#ifndef ORLIX_HOSTED_SYSCALL_GATE_ADDRESS
-#define ORLIX_HOSTED_SYSCALL_GATE_ADDRESS	0x00000001fff00000UL
-#endif
-#define ORLIX_HOSTED_SYSCALL_GATE	ORLIX_HOSTED_SYSCALL_GATE_ADDRESS
+extern unsigned long orlix_hosted_user_base;
+extern unsigned long orlix_hosted_stack_top;
+extern unsigned long orlix_hosted_syscall_gate_address;
+#define ORLIX_HOSTED_USER_BASE	orlix_hosted_user_base
+#define ORLIX_HOSTED_STACK_TOP	orlix_hosted_stack_top
+#define ORLIX_HOSTED_SYSCALL_GATE	orlix_hosted_syscall_gate_address
 #define TASK_SIZE		ORLIX_HOSTED_STACK_TOP
 #define TASK_UNMAPPED_BASE	ORLIX_HOSTED_USER_BASE
 #else

@@ -5,6 +5,9 @@
 #include <asm/boot.h>
 #include <internal/asm/host_boot_progress.h>
 
+#define ORLIX_HOSTED_USER_WINDOW_SIZE 0x0000000010000000UL
+#define ORLIX_HOSTED_USER_WINDOW_ALIGNMENT 0x0000000000010000UL
+
 static int OrlixLinuxBootStringIsPresent(const char *value)
 {
     return value && value[0] != '\0';
@@ -104,6 +107,15 @@ __attribute__((visibility("hidden"))) int OrlixBootHandoff(
     params.root_device = input->root_device;
     params.console_device = input->console_device;
     params.host_page_size = orlix_host_memory_page_size();
+    if (orlix_host_user_reserve_window(ORLIX_HOSTED_USER_WINDOW_SIZE,
+                                       ORLIX_HOSTED_USER_WINDOW_ALIGNMENT,
+                                       &params.hosted_user_base,
+                                       &params.hosted_user_limit) != 0) {
+        OrlixHostFreeResource(&initrd);
+        OrlixHostFreeResource(&profile_dtb);
+        orlix_host_boot_progress_fail(ORLIX_BOOT_STATUS_UNAVAILABLE);
+        return ORLIX_BOOT_STATUS_UNAVAILABLE;
+    }
 
     orlix_host_boot_progress_note(
         ORLIX_HOST_BOOT_STAGE_HOST_RESOURCES_READY);
