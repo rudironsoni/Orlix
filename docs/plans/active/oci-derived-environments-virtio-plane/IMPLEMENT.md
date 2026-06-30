@@ -10,6 +10,29 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-30 iOS 27 hosted VM allocator and init exec checkpoint
+
+Changes:
+- Changed HostAdapter hosted vmalloc and I/O mapping fallback allocations to use OS-selected randomized VM ranges when available, with bounded scratch retention so rejected hosted user/kernel collisions do not repeatedly return the same first-fit address.
+- Kept address selection runtime-derived from Darwin VM APIs. No fixed candidate addresses or test-only HostAdapter ABI were added.
+- Changed Orlix `raw_copy_to_user()` fault-in path to use Linux stack-aware `lock_mm_and_find_vma()` plus `handle_mm_fault()` instead of `fixup_user_fault()`, so exec argument transfer can grow/fault in the initial userspace stack.
+- Added HostAdapter regression coverage for fallback reservation when the preferred discovered gap is unavailable.
+
+Validation:
+- `git diff --check` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixHostAdapter Tests" -configuration Debug -destination 'generic/platform=iOS Simulator' build-for-testing` passed.
+- Direct `make -f OrlixKernel/Makefile __kernel-archive PROFILE=release ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphoneos` passed with `TMPDIR` routed to the external Xcode tmp path after an earlier Error 137 kill.
+- `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Release -destination 'generic/platform=iOS' DEVELOPMENT_TEAM=ZQ3L7M567L CODE_SIGN_STYLE=Automatic build` passed.
+
+Physical iOS 27 evidence:
+- Before the I/O allocator fix, physical iPhone 15 Pro Max selected hosted vmalloc and reached `linuxStartKernel`, but virtio-mmio probes failed `-12`.
+- After the I/O allocator fix, physical iPhone 15 Pro Max selected hosted vmalloc, mirrored Linux console, probed `vda`, `vdb`, and `hvc0`, then failed `/init` with `error -14`.
+- The latest build containing the `uaccess` stack-fault fix installed on the iPhone, but launch was blocked because the device was locked. Runtime proof for that last fix is still pending.
+
+Current status:
+- Hosted VM reservation and virtio-mmio allocation are fixed on physical iOS 27.
+- `/init` exec fix is build-verified but still needs unlocked physical-device launch proof.
+
 ### 2026-06-30 HostAdapter beta tracing checkpoint
 
 Changes:

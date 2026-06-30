@@ -868,6 +868,52 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     }
 }
 
+- (void)testKernelReservationFallsBackToHostChosenRangeWhenPreferredGapIsUnavailable
+{
+    const unsigned long pageSize = orlix_host_memory_page_size();
+    unsigned long minimumAddress = 0;
+    unsigned long maximumAddress = 0;
+    vm_address_t occupied = 0;
+    unsigned long base = 0;
+    void *page = NULL;
+
+    XCTAssertEqual(OrlixHostAdapterTestCreateDiscoveredGap(pageSize,
+                                                           pageSize,
+                                                           &minimumAddress,
+                                                           &maximumAddress),
+                   0);
+    occupied = (vm_address_t)minimumAddress;
+    XCTAssertEqual(vm_allocate(mach_task_self(),
+                               &occupied,
+                               (vm_size_t)pageSize,
+                               VM_FLAGS_FIXED),
+                   KERN_SUCCESS);
+    XCTAssertEqual(occupied, (vm_address_t)minimumAddress);
+    XCTAssertEqual(posix_memalign(&page, pageSize, pageSize), 0);
+    XCTAssertNotEqual(page, NULL);
+    if (!page) {
+        vm_deallocate(mach_task_self(), occupied, (vm_size_t)pageSize);
+        return;
+    }
+
+    memset(page, 0xa5, pageSize);
+    XCTAssertEqual(orlix_host_kernel_reserve_window(minimumAddress,
+                                                    maximumAddress,
+                                                    pageSize,
+                                                    pageSize,
+                                                    &base),
+                   0);
+    XCTAssertNotEqual(base, 0UL);
+    XCTAssertNotEqual(base, minimumAddress);
+    XCTAssertEqual(base & (pageSize - 1UL), 0UL);
+    XCTAssertEqual(orlix_host_kernel_map_page(base, page, pageSize), 0);
+    XCTAssertEqual(((unsigned char *)base)[0], 0xa5);
+
+    orlix_host_kernel_unmap_pages(base, pageSize);
+    vm_deallocate(mach_task_self(), occupied, (vm_size_t)pageSize);
+    free(page);
+}
+
 
 - (void)testBootProgressRecordsOrderedSequence
 {
