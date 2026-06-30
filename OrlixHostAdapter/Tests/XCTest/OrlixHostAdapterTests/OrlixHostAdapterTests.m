@@ -6,10 +6,12 @@
 #include "OrlixHostAdapter/boot/progress.h"
 #include "OrlixHostAdapter/boot/resources.h"
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
+#include "OrlixHostAdapter/terminal/console.h"
 
 #include <limits.h>
 #include <mach/mach.h>
 #include <mach/vm_page_size.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -767,8 +769,8 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
 
 - (void)testIOMappingAvoidsHostedKernelVmallocRange
 {
-    const unsigned long hostedLinuxStart = 0x0000600000000000UL;
-    const unsigned long hostedLinuxEnd = 0x00007f0000000000UL;
+    const unsigned long hostedLinuxStart = 0x0000000100000000UL;
+    const unsigned long hostedLinuxEnd = 0x0000000300000000UL;
     void *mapping = orlix_host_ioremap(0x10000000UL, 0x200UL);
     unsigned long address = (unsigned long)mapping;
     unsigned long physicalAddress = 0;
@@ -979,6 +981,130 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 0U);
     orlix_host_boot_progress_record(ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT, 0, 0, 0);
     XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 1U);
+}
+
+- (void)testConsoleRecentOutputClearMakesSnapshotEmpty
+{
+    unsigned char buffer[32] = {0};
+    const char payload[] = "linux console boot\n";
+
+    orlix_host_console_recent_output_clear();
+    orlix_host_console_write(payload, sizeof(payload) - 1);
+    XCTAssertGreaterThan(orlix_host_console_recent_output_snapshot(
+                             buffer,
+                             sizeof(buffer)),
+                         0UL);
+
+    orlix_host_console_recent_output_clear();
+    XCTAssertEqual(orlix_host_console_recent_output_snapshot(buffer,
+                                                             sizeof(buffer)),
+                   0UL);
+}
+
+- (void)testConsoleRecentOutputSnapshotReturnsWrittenBytes
+{
+    unsigned char buffer[64] = {0};
+    const char payload[] = "console mirror line\n";
+
+    orlix_host_console_recent_output_clear();
+    orlix_host_console_write(payload, sizeof(payload) - 1);
+
+    unsigned long count =
+        orlix_host_console_recent_output_snapshot(buffer, sizeof(buffer));
+    XCTAssertEqual(count, sizeof(payload) - 1);
+    XCTAssertEqual(memcmp(buffer, payload, sizeof(payload) - 1), 0);
+}
+
+- (void)testConsoleRecentOutputPreservesMultipleWriteOrdering
+{
+    unsigned char buffer[64] = {0};
+    const char first[] = "first";
+    const char second[] = "-second";
+    const char expected[] = "first-second";
+
+    orlix_host_console_recent_output_clear();
+    orlix_host_console_write(first, sizeof(first) - 1);
+    orlix_host_console_write(second, sizeof(second) - 1);
+
+    unsigned long count =
+        orlix_host_console_recent_output_snapshot(buffer, sizeof(buffer));
+    XCTAssertEqual(count, sizeof(expected) - 1);
+    XCTAssertEqual(memcmp(buffer, expected, sizeof(expected) - 1), 0);
+}
+
+- (void)testConsoleRecentOutputSnapshotRespectsCapacity
+{
+    unsigned char buffer[5] = {0};
+    const char payload[] = "abcdef";
+
+    orlix_host_console_recent_output_clear();
+    orlix_host_console_write(payload, sizeof(payload) - 1);
+
+    XCTAssertEqual(orlix_host_console_recent_output_snapshot(buffer,
+                                                             sizeof(buffer)),
+                   5UL);
+    XCTAssertEqual(memcmp(buffer, "abcde", 5), 0);
+}
+
+- (void)testConsoleRecentOutputRingBufferIsBoundedAndOldestToNewest
+{
+    enum { payloadLength = 65536 + 17 };
+    NSMutableData *payload = [NSMutableData dataWithLength:payloadLength];
+    NSMutableData *snapshot = [NSMutableData dataWithLength:65536];
+    unsigned char *payloadBytes = payload.mutableBytes;
+
+    for (NSUInteger index = 0; index < payloadLength; index++) {
+        payloadBytes[index] = (unsigned char)('a' + (index % 26));
+    }
+
+    orlix_host_console_recent_output_clear();
+    orlix_host_console_write(payload.bytes, payload.length);
+
+    unsigned long count = orlix_host_console_recent_output_snapshot(
+        snapshot.mutableBytes,
+        snapshot.length);
+    XCTAssertEqual(count, 65536UL);
+    XCTAssertEqual(memcmp(snapshot.bytes,
+                          payloadBytes + 17,
+                          65536),
+                   0);
+}
+
+- (void)testConsoleRecentOutputConcurrentWritesDoNotCorruptState
+{
+    unsigned char buffer[65536] = {0};
+
+    orlix_host_console_recent_output_clear();
+    dispatch_apply(128,
+                   dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
+                   ^(size_t index) {
+                       char payload[32];
+                       int length = snprintf(payload,
+                                             sizeof(payload),
+                                             "line-%03zu\n",
+                                             index);
+                       orlix_host_console_write(payload,
+                                                (unsigned long)length);
+                   });
+
+    unsigned long count =
+        orlix_host_console_recent_output_snapshot(buffer, sizeof(buffer));
+    XCTAssertGreaterThan(count, 0UL);
+    XCTAssertLessThanOrEqual(count, (unsigned long)sizeof(buffer));
+}
+
+- (void)testConsoleWriteRecordsFirstConsoleOutputBootProgress
+{
+    orlix_host_boot_progress_event_t events[4] = {0};
+    const char payload[] = "first console byte";
+
+    orlix_host_console_recent_output_clear();
+    orlix_host_boot_progress_reset();
+    orlix_host_console_write(payload, sizeof(payload) - 1);
+    orlix_host_console_write(payload, sizeof(payload) - 1);
+
+    XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 1U);
+    XCTAssertEqual(events[0].stage, ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT);
 }
 
 @end

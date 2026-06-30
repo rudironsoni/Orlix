@@ -66,8 +66,23 @@ final class OrlixOSSessionTests: XCTestCase {
         XCTAssertEqual(event.posixErrno, 22)
     }
 
+    func testLinuxSessionExposesRecentConsoleOutputThroughSessionSurface() {
+        let session = OrlixLinuxSession(
+            bootConfig: OrlixBootConfig(
+                profile: .release,
+                kernelCommandLine: nil,
+                rootImageIdentifier: "orlix.missing.root"
+            )
+        )
+
+        XCTAssertEqual(
+            session.recentConsoleOutputText,
+            String(decoding: session.recentConsoleOutput, as: UTF8.self)
+        )
+    }
+
     func testOrlixOSSessionSourceDoesNotImportDarwinMachOrPOSIXModules()
-        throws
+    throws
     {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

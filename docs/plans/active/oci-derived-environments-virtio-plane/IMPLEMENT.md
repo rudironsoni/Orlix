@@ -10,6 +10,28 @@ Implementation log. Append-only. Capture decisions, deviations from the plan, ev
 
 ## Log
 
+### 2026-06-30 HostAdapter beta tracing checkpoint
+
+Changes:
+- Added HostAdapter observability tracing layer for boot progress, Linux console, and host VM reservation logs.
+- Moved console mirror and hosted VM diagnostics onto the shared HostAdapter trace layer instead of local hardcoded logging helpers.
+- Added OrlixKernel Xcode pre-build archive phase so Xcode app/device builds do not link a stale kernel archive.
+
+Validation:
+- `git diff --check` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixHostAdapter Tests" -configuration Debug -destination 'generic/platform=iOS Simulator' build-for-testing` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme "OrlixOS Tests" -configuration Debug -destination 'generic/platform=iOS Simulator' build-for-testing` passed.
+- `xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Release -destination 'generic/platform=iOS' DEVELOPMENT_TEAM=ZQ3L7M567L CODE_SIGN_STYLE=Automatic build` passed.
+
+Physical iOS 27 evidence:
+- iPhone 15 Pro Max reached boot progress `kernelHandoff`, `archEntry`, then failed before Linux console output.
+- No `linux-console` mirrored bytes appeared, proving the failure is before the HostAdapter console boundary.
+- Host VM trace shows hosted vmalloc reservation failure for lengths down through `0x1000000` with `ORLIX_ARCH_BOOT_UNAVAILABLE`.
+
+Current status:
+- App remains broken on physical iOS 27.
+- Next fix must target hosted vmalloc reservation mechanics and the `arch/orlix` vmalloc window contract, without hardcoded host address candidates and without moving Linux semantics into HostAdapter.
+
 ### 2026-06-30 TestFlight build 14 hosted vmalloc alignment fix
 
 Physical feedback:

@@ -52,6 +52,15 @@ private func orlix_host_console_enqueue_input(
     _ length: UInt
 ) -> UInt
 
+@_silgen_name("orlix_host_console_recent_output_clear")
+private func orlix_host_console_recent_output_clear()
+
+@_silgen_name("orlix_host_console_recent_output_snapshot")
+private func orlix_host_console_recent_output_snapshot(
+    _ bytes: UnsafeMutableRawPointer?,
+    _ capacity: UInt
+) -> UInt
+
 @_silgen_name("orlix_host_resources_set_payload_root_path")
 private func orlix_host_resources_set_payload_root_path(
     _ path: UnsafePointer<CChar>
@@ -954,6 +963,22 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         return cEvents.prefix(Int(count)).map(OrlixBootProgressEvent.init(cEvent:))
     }
 
+    public var recentConsoleOutput: Data {
+        let capacity = 64 * 1024
+        var bytes = [UInt8](repeating: 0, count: capacity)
+        let count = bytes.withUnsafeMutableBytes { buffer in
+            orlix_host_console_recent_output_snapshot(
+                buffer.baseAddress,
+                UInt(capacity)
+            )
+        }
+        return Data(bytes.prefix(Int(count)))
+    }
+
+    public var recentConsoleOutputText: String {
+        String(decoding: recentConsoleOutput, as: UTF8.self)
+    }
+
     public var instanceSnapshot: OrlixInstanceSnapshot {
         let snapshot = bootProgressSnapshot
         let latest = snapshot.last
@@ -1076,6 +1101,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 
     public func boot() -> OrlixBootStatus {
         orlix_host_boot_progress_reset()
+        orlix_host_console_recent_output_clear()
         orlix_host_boot_progress_record(COrlixBootStage.sessionCreated, 0, 0, 0)
         orlix_host_boot_progress_record(COrlixBootStage.payloadRegistering, 0, 0, 0)
 

@@ -29,14 +29,14 @@
 {
     unsigned long correctedBase = 0;
     unsigned long hostTls = 0x1005;
-    unsigned long activeUserTls = 0x6000002bff80;
+    unsigned long activeUserTls = 0x1002bff80;
     unsigned long badTcbBase = hostTls - 0x78;
 
     XCTAssertTrue(orlix_host_user_trap_rebase_register_from_host_tls(hostTls,
                                                                      activeUserTls,
                                                                      badTcbBase,
-                                                                     0x600000000000,
-                                                                     0x700000000000,
+                                                                     0x100000000,
+                                                                     0x200000000,
                                                                      &correctedBase));
     XCTAssertEqual(correctedBase, activeUserTls - 0x78);
 }
@@ -46,20 +46,20 @@
     unsigned long correctedBase = 0;
     unsigned long installedHostTls = 0x1007;
     unsigned long liveSignalHostTls = 0x1005;
-    unsigned long activeUserTls = 0x6000002bff80;
+    unsigned long activeUserTls = 0x1002bff80;
     unsigned long badTcbBase = liveSignalHostTls - 0x78;
     unsigned long hostTls = orlix_host_user_trap_host_tls_reference(
         installedHostTls,
         liveSignalHostTls,
-        0x600000000000,
-        0x700000000000);
+                                                                     0x100000000,
+                                                                     0x200000000);
 
     XCTAssertEqual(hostTls, liveSignalHostTls);
     XCTAssertTrue(orlix_host_user_trap_rebase_register_from_host_tls(hostTls,
                                                                      activeUserTls,
                                                                      badTcbBase,
-                                                                     0x600000000000,
-                                                                     0x700000000000,
+                                                                     0x100000000,
+                                                                     0x200000000,
                                                                      &correctedBase));
     XCTAssertEqual(correctedBase, activeUserTls - 0x78);
 }
@@ -81,25 +81,25 @@
 
 - (void)testRejectsMisalignedHostedUserTls
 {
-    XCTAssertTrue(orlix_host_user_trap_valid_user_tls(0x600000000000,
-                                                      0x700000000000,
-                                                      0x6000002bff80));
-    XCTAssertFalse(orlix_host_user_trap_valid_user_tls(0x600000000000,
-                                                       0x700000000000,
-                                                       0x6000002bff7e));
+    XCTAssertTrue(orlix_host_user_trap_valid_user_tls(0x100000000,
+                                                      0x200000000,
+                                                      0x1002bff80));
+    XCTAssertFalse(orlix_host_user_trap_valid_user_tls(0x100000000,
+                                                       0x200000000,
+                                                       0x1002bff7e));
 }
 
 - (void)testRejectsTlsRepairWithoutActiveUserTls
 {
-    XCTAssertFalse(orlix_host_user_trap_can_repair_user_tls(0x600000000000,
-                                                            0x700000000000,
+    XCTAssertFalse(orlix_host_user_trap_can_repair_user_tls(0x100000000,
+                                                            0x200000000,
                                                             0));
-    XCTAssertFalse(orlix_host_user_trap_can_repair_user_tls(0x600000000000,
-                                                            0x700000000000,
+    XCTAssertFalse(orlix_host_user_trap_can_repair_user_tls(0x100000000,
+                                                            0x200000000,
                                                             0x1005));
-    XCTAssertTrue(orlix_host_user_trap_can_repair_user_tls(0x600000000000,
-                                                           0x700000000000,
-                                                           0x6000002bff80));
+    XCTAssertTrue(orlix_host_user_trap_can_repair_user_tls(0x100000000,
+                                                           0x200000000,
+                                                           0x1002bff80));
 }
 
 @end

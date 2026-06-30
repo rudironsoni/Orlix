@@ -1,4 +1,5 @@
 #include "OrlixHostAdapter/boot/progress.h"
+#include "OrlixHostAdapter/observability/log.h"
 
 #include <mach/mach_time.h>
 #include <os/lock.h>
@@ -15,6 +16,40 @@ static uint32_t OrlixHostBootProgressStart;
 static uint32_t OrlixHostBootProgressCount;
 static int OrlixHostBootProgressHasFirstConsoleOutput;
 
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+static const char *OrlixHostBootProgressStageName(uint32_t stage)
+{
+    switch (stage) {
+    case ORLIX_HOST_BOOT_STAGE_SESSION_CREATED:
+        return "sessionCreated";
+    case ORLIX_HOST_BOOT_STAGE_PAYLOAD_REGISTERING:
+        return "payloadRegistering";
+    case ORLIX_HOST_BOOT_STAGE_PAYLOAD_REGISTERED:
+        return "payloadRegistered";
+    case ORLIX_HOST_BOOT_STAGE_BOOTLOADER_ENTERED:
+        return "bootloaderEntered";
+    case ORLIX_HOST_BOOT_STAGE_BOOT_CONFIG_VALIDATED:
+        return "bootConfigValidated";
+    case ORLIX_HOST_BOOT_STAGE_HOST_RESOURCES_READY:
+        return "hostResourcesReady";
+    case ORLIX_HOST_BOOT_STAGE_KERNEL_HANDOFF:
+        return "kernelHandoff";
+    case ORLIX_HOST_BOOT_STAGE_ARCH_ENTRY:
+        return "archEntry";
+    case ORLIX_HOST_BOOT_STAGE_EARLY_CONSOLE_READY:
+        return "earlyConsoleReady";
+    case ORLIX_HOST_BOOT_STAGE_LINUX_START_KERNEL:
+        return "linuxStartKernel";
+    case ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT:
+        return "firstConsoleOutput";
+    case ORLIX_HOST_BOOT_STAGE_FAILED:
+        return "failed";
+    default:
+        return "unknown";
+    }
+}
+#endif
+
 static uint64_t OrlixHostBootProgressMonotonicNanos(void)
 {
     static mach_timebase_info_data_t timebase;
@@ -30,14 +65,13 @@ static uint64_t OrlixHostBootProgressMonotonicNanos(void)
     return ticks * (uint64_t)timebase.numer / (uint64_t)timebase.denom;
 }
 
-__attribute__((visibility("default"))) void orlix_host_boot_progress_reset(void)
+__attribute__((visibility("default"))) void
+orlix_host_boot_progress_reset(void)
 {
     os_unfair_lock_lock(&OrlixHostBootProgressLock);
-    memset(
-        OrlixHostBootProgressEvents,
-        0,
-        sizeof(OrlixHostBootProgressEvents)
-    );
+    memset(OrlixHostBootProgressEvents,
+           0,
+           sizeof(OrlixHostBootProgressEvents));
     OrlixHostBootProgressNextSequence = 1;
     OrlixHostBootProgressStart = 0;
     OrlixHostBootProgressCount = 0;
@@ -45,12 +79,11 @@ __attribute__((visibility("default"))) void orlix_host_boot_progress_reset(void)
     os_unfair_lock_unlock(&OrlixHostBootProgressLock);
 }
 
-__attribute__((visibility("default"))) void orlix_host_boot_progress_record(
-    uint32_t stage,
-    int32_t status,
-    int32_t mach_kern_return,
-    int32_t posix_errno
-)
+__attribute__((visibility("default"))) void
+orlix_host_boot_progress_record(uint32_t stage,
+                                int32_t status,
+                                int32_t mach_kern_return,
+                                int32_t posix_errno)
 {
     orlix_host_boot_progress_event_t event;
     uint32_t index;
@@ -85,12 +118,25 @@ __attribute__((visibility("default"))) void orlix_host_boot_progress_record(
 
     OrlixHostBootProgressEvents[index] = event;
     os_unfair_lock_unlock(&OrlixHostBootProgressLock);
+
+#if DEBUG || ORLIX_BETA_OBSERVABILITY
+    orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_BOOT_PROGRESS,
+                            ORLIX_HOST_TRACE_LEVEL_INFO,
+                            ORLIX_HOST_TRACE_SINK_OS_LOG |
+                                ORLIX_HOST_TRACE_SINK_STDERR,
+                            "sequence=%llu stage=%s rawStage=%u status=%d mach=%d errno=%d",
+                            (unsigned long long)event.sequence,
+                            OrlixHostBootProgressStageName(stage),
+                            stage,
+                            status,
+                            mach_kern_return,
+                            posix_errno);
+#endif
 }
 
-__attribute__((visibility("default"))) uint32_t orlix_host_boot_progress_snapshot(
-    orlix_host_boot_progress_event_t *events,
-    uint32_t capacity
-)
+__attribute__((visibility("default"))) uint32_t
+orlix_host_boot_progress_snapshot(orlix_host_boot_progress_event_t *events,
+                                  uint32_t capacity)
 {
     uint32_t copied = 0;
 
@@ -110,9 +156,8 @@ __attribute__((visibility("default"))) uint32_t orlix_host_boot_progress_snapsho
     return copied;
 }
 
-__attribute__((visibility("default"))) int orlix_host_boot_progress_latest(
-    orlix_host_boot_progress_event_t *event
-)
+__attribute__((visibility("default"))) int
+orlix_host_boot_progress_latest(orlix_host_boot_progress_event_t *event)
 {
     uint32_t index;
 
