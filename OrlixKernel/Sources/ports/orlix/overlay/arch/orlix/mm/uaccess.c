@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include <linux/mm.h>
+#include <linux/printk.h>
 #include <linux/sched.h>
 #include <linux/sched/task_stack.h>
 #include <linux/string.h>
@@ -131,11 +132,13 @@ static unsigned long orlix_uaccess_copy_from_user(void *to,
 			mmap_read_unlock(mm);
 			if (orlix_uaccess_fault_in(mm, from, false))
 				return remaining;
-			mmap_read_lock(mm);
-			if (orlix_uaccess_resolve(mm, from, false, &src)) {
-				mmap_read_unlock(mm);
-				return remaining;
-			}
+		mmap_read_lock(mm);
+		if (orlix_uaccess_resolve(mm, from, false, &src)) {
+			mmap_read_unlock(mm);
+			pr_err_ratelimited("Orlix: uaccess copy_from unresolved addr=%#lx chunk=%#lx remaining=%#lx\n",
+					   from, chunk, remaining);
+			return remaining;
+		}
 		}
 		memcpy(dst, src, chunk);
 		mmap_read_unlock(mm);
@@ -166,18 +169,26 @@ static unsigned long orlix_uaccess_copy_to_user(unsigned long to,
 		mmap_read_lock(mm);
 		if (orlix_uaccess_resolve(mm, to, true, &dst)) {
 			mmap_read_unlock(mm);
-			if (orlix_uaccess_fault_in(mm, to, true))
+			if (orlix_uaccess_fault_in(mm, to, true)) {
+				pr_err_ratelimited("Orlix: uaccess copy_to fault-in failed addr=%#lx chunk=%#lx remaining=%#lx\n",
+						   to, chunk, remaining);
 				return remaining;
+			}
 			mmap_read_lock(mm);
 			if (orlix_uaccess_resolve(mm, to, true, &dst)) {
 				mmap_read_unlock(mm);
+				pr_err_ratelimited("Orlix: uaccess copy_to unresolved addr=%#lx chunk=%#lx remaining=%#lx\n",
+						   to, chunk, remaining);
 				return remaining;
 			}
 		}
 		memcpy(dst, src, chunk);
 		mmap_read_unlock(mm);
-		if (orlix_uaccess_sync_to_user(to, dst))
+		if (orlix_uaccess_sync_to_user(to, dst)) {
+			pr_err_ratelimited("Orlix: uaccess copy_to sync failed addr=%#lx chunk=%#lx remaining=%#lx\n",
+					   to, chunk, remaining);
 			return remaining;
+		}
 
 		src += chunk;
 		to += chunk;

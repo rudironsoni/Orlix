@@ -5,6 +5,7 @@
 #include <asm/thread_info.h>
 #include <internal/asm/host_boot_progress.h>
 #include <linux/init.h>
+#include <linux/kernel.h>
 #include <linux/start_kernel.h>
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
@@ -14,6 +15,10 @@ static unsigned long app_hosted_boot_memory[ORLIX_APP_HOSTED_BOOT_MEMORY_SIZE /
 					    sizeof(unsigned long)]
 	__aligned(PAGE_SIZE);
 static struct boot_params app_hosted_boot_params;
+unsigned long orlix_hosted_user_base = 0x0000000100000000UL;
+unsigned long orlix_hosted_stack_top = 0x0000000200000000UL;
+unsigned long orlix_hosted_syscall_gate_address = 0x00000001fff00000UL;
+unsigned long orlix_hosted_kernel_window_max = 0x0000000300000000UL;
 #else
 #define __orlix_boot_init __init
 #endif
@@ -25,6 +30,29 @@ static int arch_boot_power_of_two(unsigned long value)
 {
 	return value && !(value & (value - 1));
 }
+
+#if defined(ORLIX_APP_HOSTED_BOOT)
+static int arch_boot_apply_hosted_user_window(const struct boot_params *params)
+{
+	unsigned long base;
+	unsigned long limit;
+
+	if (!params)
+		return -1;
+
+	base = params->hosted_user_base;
+	limit = params->hosted_user_limit;
+	if (!base || limit <= base || !IS_ALIGNED(base, PAGE_SIZE) ||
+	    !IS_ALIGNED(limit, PAGE_SIZE) || limit > ~0UL - (limit - base))
+		return -1;
+
+	orlix_hosted_user_base = base;
+	orlix_hosted_stack_top = limit;
+	orlix_hosted_syscall_gate_address = limit - PAGE_SIZE;
+	orlix_hosted_kernel_window_max = limit + (limit - base);
+	return 0;
+}
+#endif
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
 extern unsigned long init_stack[THREAD_SIZE / sizeof(unsigned long)];
@@ -91,6 +119,8 @@ int arch_boot_prepare_entry(const struct boot_params *params)
 		return ORLIX_ARCH_BOOT_INVALID_CONFIG;
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
+	if (arch_boot_apply_hosted_user_window(params))
+		return ORLIX_ARCH_BOOT_INVALID_CONFIG;
 	if (arch_boot_prepare_hosted_vmalloc_window())
 		return ORLIX_ARCH_BOOT_UNAVAILABLE;
 #endif

@@ -32,9 +32,6 @@ phys_addr_t orlix_phys_ram_base __ro_after_init;
 unsigned long orlix_hosted_vmalloc_start __ro_after_init;
 unsigned long orlix_hosted_vmalloc_end __ro_after_init;
 
-static_assert(ORLIX_HOSTED_VMALLOC_ALIGNMENT <=
-	      ORLIX_HOSTED_KERNEL_WINDOW_MAX - TASK_SIZE);
-
 int arch_boot_prepare_hosted_vmalloc_window(void)
 {
 	unsigned long start = 0;
@@ -42,6 +39,10 @@ int arch_boot_prepare_hosted_vmalloc_window(void)
 
 	if (orlix_hosted_vmalloc_start && orlix_hosted_vmalloc_end)
 		return 0;
+	if (TASK_SIZE >= ORLIX_HOSTED_KERNEL_WINDOW_MAX ||
+	    ORLIX_HOSTED_KERNEL_WINDOW_MAX - TASK_SIZE <
+		    ORLIX_HOSTED_VMALLOC_ALIGNMENT)
+		return -1;
 
 	for (size = ORLIX_HOSTED_VMALLOC_SIZE;
 	     size >= ORLIX_HOSTED_VMALLOC_MIN_SIZE;
