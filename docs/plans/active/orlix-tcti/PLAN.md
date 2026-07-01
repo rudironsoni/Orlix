@@ -20,8 +20,9 @@ TCTI only executes guest AArch64 EL0 instructions until Linux needs control agai
 - Orlix TCTI exists under `arch/orlix`, not HostAdapter.
 - TCTI does not decode Linux syscall policy, model Linux processes, or own VFS/fd/signal/wait/exec semantics.
 - Guest ELF text remains host data. No guest ELF text path requests `vm_protect(... EXECUTE ...)`, guest-text `mmap(... PROT_EXEC ...)`, JIT, MAP_JIT, RWX, or generated executable memory.
+- The plan cannot be marked complete by documentation alone. It requires local no-phone test targets, machine-readable JSON reports, checked-in golden artifacts, reducer artifacts, and static audits before simulator or physical-device debugging.
 - Physical iPhone gate proves static `/init` reaches real `svc #0`, enters `orlix_syscall_dispatch`, writes one Linux console line, and emits HostAdapter console mirror evidence.
-- Performance claims include exact workload, device, build configuration, command, baseline, counters, wall-clock result, and Markdown report.
+- Performance claims include exact workload, device, build configuration, command, baseline, counters, wall-clock result, JSON report, and Markdown report.
 
 ## Physical Evidence Being Corrected
 
@@ -74,9 +75,14 @@ Generated-tree policy:
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/signal.c`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/fault.c`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/hosted_exec.h`
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/tcti.h`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/pgtable.h`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/tlbflush.h`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/mmu_context.h`
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c`
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/block_cache.h`
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tlb.h`
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/Kconfig`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/Makefile`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/Makefile`
@@ -88,6 +94,24 @@ Generated-tree policy:
 - `OrlixHostAdapter/Sources/OrlixHostAdapter/terminal/console.c`
 - `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/progress.c`
 - `Makefile`
+
+## Current-State Audit
+
+Record this before the next implementation patch changes behavior:
+
+- `hosted_exec.c` already includes `<asm/tcti.h>`.
+- `orlix_hosted_enter_user(struct pt_regs *regs)` already calls `orlix_tcti_enter_user(regs)` when `CONFIG_ORLIX_HOSTED_EXEC_TCTI` is enabled.
+- `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/tcti.h` already exists.
+- `orlix_tcti_enter_user()` already exists in `hosted_exec/tcti/engine.c`.
+- The current development KUnit/build audit passed:
+
+```sh
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+  make -f OrlixKernel/Makefile kunit PROFILE=development
+```
+
+- Current hook state: compiled and linked in the development KUnit path, not stub-only, but runtime-incomplete and not physical-device proven.
+- Current `development_defconfig` and `release_defconfig` set `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` and `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`; this is premature for product defaults until the gates below pass.
 
 ## Exact Files To Change
 
@@ -120,7 +144,7 @@ Kernel integration:
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/pgtable.h`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/tlbflush.h`
 
-New TCTI files:
+TCTI files, existing or to extend:
 
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/tcti.h`
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/mmu.h`
@@ -176,6 +200,21 @@ Initial defaults:
 Reason for not flipping release default immediately:
 
 - An unfinished TCTI scaffold must not replace the currently booting native path until `tcti-init-first-syscall` passes on physical iPhone. The ADR direction is TCTI as the first physical-iPhone beta backend, but the config flip is a gated implementation milestone.
+- Test targets may enable TCTI through generated test configs. Product `development_defconfig` and `release_defconfig` must not default to TCTI until the gates below pass.
+
+Development default may flip only after:
+
+- `make tcti-contract` passes
+- `make tcti-golden-elf` passes
+- `make tcti-diff-switch` passes
+- `make tcti-appstore-safety-audit` passes
+- physical `tcti-init-first-syscall` passes
+
+Release default may flip only after:
+
+- all first gates pass
+- release physical matrix passes
+- JSON reports show no forbidden behavior
 
 Build integration:
 
@@ -191,7 +230,7 @@ Exact integration point:
 - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/hosted_exec.c`
 - Function: `void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)`
 
-Required shape:
+Current shape to preserve and tighten:
 
 ```c
 void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
@@ -205,6 +244,8 @@ void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
 	orlix_hosted_resume_current_user(regs, true, 0);
 }
 ```
+
+This hook already exists. Future tasks must audit whether the existing hook is compiled, linked, and runtime-reachable in the selected config before proposing hosted-exec integration work.
 
 Native backend handling:
 
@@ -224,6 +265,13 @@ Exact syscall dispatch target:
 
 - `long orlix_syscall_dispatch(struct pt_regs *regs)` in `arch/orlix/kernel/syscall.c`
 
+Current helper semantics:
+
+- `orlix_syscall_dispatch()` already sets the syscall return value.
+- It already calls `orlix_timer_poll()`.
+- It already calls `orlix_exit_to_user_mode_work(regs)`.
+- It already calls `forget_syscall(regs)` when appropriate.
+
 On guest `svc #0`:
 
 1. TCTI exits with `TCTI_EXIT_SYSCALL`.
@@ -232,8 +280,15 @@ On guest `svc #0`:
 4. Advance `regs->pc += sizeof(u32)`.
 5. Call `orlix_syscall_dispatch(regs)`.
 6. Reload `regs = task_pt_regs(current)`.
-7. Run the existing arch/orlix exit-to-user signal/task-work/schedule path.
+7. Return to the TCTI loop without invoking exit-to-user work again.
 8. Resume TCTI if the task still has `mm` and is not exiting.
+
+If a later implementation needs separate raw syscall invocation, split `kernel/syscall.c` into:
+
+- `orlix_syscall_invoke_raw(regs)`
+- `orlix_syscall_dispatch(regs) = raw invoke + return value + timer + exit-to-user work + forget_syscall`
+
+Until that split exists, TCTI must treat current `orlix_syscall_dispatch()` as the complete syscall path.
 
 AArch64 Linux syscall ABI:
 
@@ -242,6 +297,13 @@ AArch64 Linux syscall ABI:
 - `x0` is return value.
 
 HostAdapter must never see the syscall number.
+
+Required test:
+
+- `svc #0` enters `orlix_syscall_dispatch()` exactly once.
+- `orlix_exit_to_user_mode_work(regs)` is not double-run by the TCTI caller.
+- syscall return value is written to `x0`.
+- `forget_syscall(regs)` has run when the helper requires it.
 
 ## TCTI Entry Contract
 
@@ -297,7 +359,7 @@ Register convention:
 - host `x28`: current gadget stream pointer
 - host `x27`: next gadget pointer
 - host `x26`: current guest PC cache or block metadata pointer, only if counters justify it
-- host `x18`: reserved, never guest state on Apple arm64
+- host `x18/w18`: forbidden Apple platform register
 - host `x16/x17`: scratch/IP only
 - host `x19-x25`: hot guest register carriers only if entry/exit saves and restores Apple callee-saved ABI correctly
 - host `x29`: host frame pointer preserved unless explicitly saved/restored
@@ -312,6 +374,55 @@ Guest state:
 - NZCV/PSTATE is stored in `regs->pstate` or a dedicated `tcti_cpu_state->nzcv` field with deterministic commit-back.
 - Guest TPIDR_EL0 lives in `current->thread.user_tls`.
 - Host TPIDR_EL0 is never modified for guest behavior.
+
+## Apple arm64 Host Register Rules
+
+Host `x18/w18` is red:
+
+- never guest `x18`
+- never scratch
+- never CPU-state pointer
+- never TLB pointer
+- never gadget-program pointer
+- never inline-asm clobber
+- never saved/restored as a workaround
+
+Guest `x18` is ordinary virtual AArch64 state:
+
+- it lives in guest CPU state, backed by `pt_regs` or a TCTI CPU-state wrapper
+- it may be memory-backed
+- it may be assigned to another safe host carrier when profiling proves it is hot
+- it must never be assigned to host `x18/w18`
+
+The static audit must parse assembly tokens, not comments. It must scan:
+
+- handwritten TCTI `.S`
+- generated TCTI `.S`, `.h`, and `.c` inline asm
+- generator templates
+- compiled disassembly for TCTI object files
+
+Allow `x18/w18` only in comments explaining the ban and test fixtures explicitly named `x18_forbidden`.
+
+## TPIDR_EL0 Transition Audit
+
+Native hosted execution currently reads and writes host `TPIDR_EL0` in `hosted_exec.c`, including the native user TLS restore path and native syscall gate path. TCTI must not inherit those side effects accidentally.
+
+Audit before changing TLS behavior:
+
+- list every `mrs ..., tpidr_el0` and `msr tpidr_el0, ...` in `hosted_exec.c`
+- mark each site native-hosted-only or shared
+- define which sites are legal during TCTI entry and exit
+- keep guest `TPIDR_EL0` in guest architectural state, currently `current->thread.user_tls`
+- implement guest `MRS/MSR TPIDR_EL0` against guest state only
+- never modify host `TPIDR_EL0` from TCTI gadgets
+
+Required tests:
+
+- guest `MSR TPIDR_EL0` changes guest TLS
+- guest `MSR TPIDR_EL0` does not mutate host `TPIDR_EL0`
+- guest `MRS TPIDR_EL0` reads the guest TLS value
+- syscall, fault, and yield exits preserve guest TLS
+- task switch preserves distinct guest TLS values
 
 ## Hot Register Mapping Candidates
 
@@ -553,6 +664,30 @@ Required counters:
 - incoming slots unpatched
 - deferred frees
 
+## TCTI Concurrency Model
+
+Milestone 1 chooses single TCTI runner per `mm`.
+
+Rules:
+
+- enforce with a per-mm lock or assertion before entering TCTI
+- reject concurrent TCTI entry for the same `mm`
+- document why this is acceptable for the first `/init` gate
+- add a test proving concurrent entry is rejected
+- L0 caches must not hold unpinned stale blocks across invalidation
+- mm teardown must flush the runner state before address-space destruction completes
+
+Multi-runner execution is a later milestone only. It requires:
+
+- block lookup increments a ref
+- the executing block is pinned
+- invalidation unchains before retire
+- L0 caches cannot hold unpinned stale blocks
+- free happens only after a grace period
+- mm teardown races are covered by tests
+
+Do not implement half-RCU. Either milestone 1 is single-runner enforced, or the multi-runner rules above are fully implemented and tested.
+
 ## Invalidation Rules
 
 Page-index reverse lookup is required before serious chaining.
@@ -607,6 +742,15 @@ Milestone 2:
 - tests cover unmap, mprotect, and write-to-code on source and target pages
 
 Chaining patches only data slots in the gadget program. No executable code patching. No generated native code.
+
+Every direct-chain implementation must prove:
+
+- source block records outgoing patch slots
+- target block records incoming patch slots
+- page invalidation finds all overlapping blocks
+- invalidation unpatches incoming slots before freeing targets
+- a running block cannot jump into a freed target
+- same-page chaining is tested before cross-page chaining
 
 ## Gadget Program And Generator
 
@@ -743,6 +887,173 @@ It must produce opcode/decode-class inventory for:
 
 Do not expand instruction support by guessing broadly.
 
+## Autonomous Test Contract
+
+No physical-device debugging is allowed until these pass:
+
+- `make tcti-contract`
+- `make tcti-golden-elf`
+- `make tcti-diff-switch`
+- `make tcti-memory-fuzz`
+- `make tcti-direct-chain-fuzz`
+- `make tcti-appstore-safety-audit`
+- `make tcti-report-schema-check`
+
+Each target must:
+
+- run locally without an iPhone
+- avoid implementing a second Linux runtime
+- produce machine-readable JSON under `Build/TCTI/reports/<target>/report.json`
+- produce human-readable Markdown only as a secondary artifact under `Build/TCTI/reports/<target>/report.md`
+- fail with a reducer artifact under `Build/TCTI/reproducers/<target>/<case-id>.json`
+- print the exact next command to reproduce the failure, `make tcti-repro REPRO=<path>`
+
+Minimum report schema:
+
+```json
+{
+  "gate": "tcti-contract",
+  "passed": true,
+  "git_sha": "",
+  "backend": "tcti",
+  "virtual_cpu_model": "orlix-aarch64-v1",
+  "host_page_size": 16384,
+  "guest_page_size": 4096,
+  "forbidden_behavior": {
+    "host_exec_guest_text": false,
+    "map_jit": false,
+    "rwx": false,
+    "generated_exec_memory": false,
+    "host_x18": false,
+    "native_ios_api_exposure_to_guest": false
+  },
+  "counters": {},
+  "failures": [],
+  "artifacts": []
+}
+```
+
+`make tcti-contract` proves:
+
+- decoder
+- gadget ABI
+- register commit-back
+- SP/XZR/WZR
+- NZCV/PSTATE
+- TPIDR_EL0 guest state
+- FETCH/READ/WRITE distinction
+- TLB generation
+- block-cache `code_generation`
+- store-to-translated-page invalidation
+- direct-chain patch/unpatch
+
+`make tcti-golden-elf` runs checked-in tiny static AArch64 Linux ELF artifacts:
+
+- `init_001_exit`
+- `init_002_write`
+- `init_003_stack`
+- `init_004_tls`
+- `init_005_branches`
+- `init_006_memory`
+- `init_007_mprotect`
+- `init_008_self_modify`
+- `init_009_faults`
+- `init_010_cpu_model`
+
+Each corpus item has checked-in source and checked-in golden JSON under `OrlixKernel/Tests/TCTI/golden_elf/`, including:
+
+- binary name
+- expected final registers
+- expected memory changes
+- expected syscalls
+- expected signal or fault
+- expected console output
+- expected TCTI counters
+- forbidden behavior expectations
+
+Physical-device gates must consume the same golden artifacts. They must not invent ad hoc device-only proof cases.
+
+`make tcti-diff-switch` compares the debug switch backend against the gadget backend:
+
+- same decoder
+- same memory model
+- same syscall capture
+- same fault capture
+- different dispatch only
+
+For every generated block, compare:
+
+- GPRs
+- SP
+- PC
+- PSTATE/NZCV
+- TPIDR_EL0
+- memory writes
+- exit reason
+- fault address
+
+Do not implement an unrelated switch emulator. It would create a second bug surface.
+
+`make tcti-memory-fuzz` covers:
+
+- simulated host page sizes: 4 KiB, 16 KiB, 64 KiB
+- fixed Linux guest page size
+- guest page backed by offset in a larger host page
+- multiple guest pages inside one host allocation
+- cross-page instruction fetch
+- cross-page data read/write
+- mprotect transitions
+- munmap/remap
+- CoW replacement
+- store to translated executable page
+- stale TLB generation
+- stale `code_generation`
+
+`make tcti-direct-chain-fuzz` covers:
+
+- source outgoing patch slots
+- target incoming patch slots
+- page-index overlap lookup
+- invalidation unpatch before retire
+- no jump into freed targets
+- same-page chaining before cross-page chaining
+
+`make tcti-appstore-safety-audit` fails on:
+
+- host `x18/w18` in TCTI assembly, generated gadgets, inline asm, or compiled TCTI object disassembly
+- guest ELF text mapped host-executable
+- `MAP_JIT` in the product path
+- RWX mappings in the product path
+- `vm_protect(... EXECUTE ...)` for guest text
+- generated executable memory
+- private executable-memory entitlements
+- guest software exposed to native iOS APIs
+
+`make tcti-report-schema-check` validates every TCTI JSON report and fails if a required field is absent, hand-written, or not parseable.
+
+## Failure Reduction
+
+Every failed gate must emit:
+
+- failing binary or block id
+- last successful guest PC
+- faulting PC
+- raw instruction word
+- minimized block reproducer if possible
+- exact host command to reproduce
+- exact device command to rerun, when a device was involved
+- trace artifact path
+
+A physical-device failure may not be patched directly. It must first be reduced into one of:
+
+- golden ELF test
+- switch-vs-gadget differential block
+- memory fuzz case
+- direct-chain fuzz case
+- appstore-safety audit case
+
+No patching by reading iPhone logs and guessing.
+
 ## Runtime Validation Gates
 
 First gate command:
@@ -758,6 +1069,7 @@ rtk proxy make runtime-validation \
 
 The target must:
 
+- refuse to run on a physical iPhone unless the Autonomous Test Contract targets pass or an explicit emergency override is supplied and logged
 - build the requested profile
 - auto-discover exactly one connected eligible physical iPhone through `xcrun devicectl --json-output`
 - fail if zero or multiple devices match unless `ORLIX_DEVICE_ID` is supplied
@@ -767,6 +1079,7 @@ The target must:
 - capture recent console mirror output
 - capture `host-vm` trace lines
 - capture TCTI counters
+- write one JSON report under `REPORT_DIR`
 - write one Markdown report under `REPORT_DIR`
 
 TCTI gates:
@@ -794,6 +1107,12 @@ A gate does not pass if:
 - it requires host executable mappings
 - it requires modified guest binaries
 - it bypasses Linux syscall dispatch
+- its JSON report is missing or invalid
+- `forbidden_behavior.host_exec_guest_text` is not false
+- `forbidden_behavior.map_jit` is not false
+- `forbidden_behavior.rwx` is not false
+- `forbidden_behavior.generated_exec_memory` is not false
+- `forbidden_behavior.native_ios_api_exposure_to_guest` is not false
 
 ## First Physical-Device Proof Target
 
@@ -809,6 +1128,7 @@ Connected physical iPhone:
 - `/init` writes one line to Linux console
 - output appears through Linux console, PTY, HostAdapter console mirror, and device logs
 - `host-vm` logs prove no host executable mapping request for guest ELF text
+- the JSON sidecar proves all forbidden-behavior fields are false
 
 ## Performance Counters
 
@@ -846,6 +1166,7 @@ No performance claim is valid without:
 - build configuration
 - command
 - baseline
+- JSON report
 - Markdown report
 
 ## Benchmark Ladder
@@ -896,6 +1217,155 @@ Add a design note covering:
 
 This is a design note, not first implementation scope.
 
+## Host Capability And Virtual CPU Model
+
+Do not expose physical iPhone CPU variability directly to Linux userspace.
+
+Initial guest-visible CPU model:
+
+- `orlix-aarch64-v1`
+- baseline AArch64 integer
+- guest `TPIDR_EL0`
+- guest NZCV/PSTATE
+- no LSE until atomics/exclusives are correct
+- no crypto until crypto gadgets are correct
+- no SVE
+- no MTE
+- no guest PAC/BTI until explicitly implemented
+- baseline FP/SIMD only after implemented and tested
+
+Guest-visible capability surfaces must derive from `orlix-aarch64-v1`, not the physical host:
+
+- `AT_HWCAP`
+- `AT_HWCAP2`
+- `CTR_EL0`
+- `DCZID_EL0`
+- ID registers, if exposed
+- `/proc/cpuinfo`
+
+Host CPU features may choose faster internal gadget implementations only when guest-visible semantics do not change.
+
+Required proof:
+
+- `init_010_cpu_model` in the golden ELF corpus reads auxv, cpuinfo, and supported sysreg surfaces, then verifies they match `orlix-aarch64-v1`.
+- JSON reports include `virtual_cpu_model`.
+
+Host capability report at app startup:
+
+```json
+{
+  "device_model": "",
+  "chip_family": "",
+  "ios_version": "",
+  "host_page_size": 0,
+  "guest_page_size": 4096,
+  "jit_available": false,
+  "map_jit_available": false,
+  "guest_text_host_executable": false,
+  "tcti_backend": "safe-nojit",
+  "virtual_cpu_model": "orlix-aarch64-v1"
+}
+```
+
+TCTI may depend on this report only through a tiny capability layer. It must not let host capability variation leak into Linux userspace.
+
+## Virtio Boundary
+
+Do not use virtio to define the virtual CPU model.
+
+`arch/orlix` plus TCTI owns:
+
+- guest AArch64 instruction semantics
+- guest register state
+- guest system-register behavior
+- `AT_HWCAP` / `AT_HWCAP2` / cpuinfo policy
+- syscall, fault, and yield exits
+
+Virtio may expose Linux-visible devices:
+
+- block/rootfs
+- console
+- rng
+- network
+- filesystem sharing
+- host service transport
+- future input/GPU devices
+
+Virtio must not expose:
+
+- instruction execution
+- native iOS API calls
+- syscall dispatch
+- process creation
+- arbitrary host filesystem access
+- CPU feature probing
+
+No virtio device may become a syscall escape hatch or HostAdapter ABI backdoor.
+
+## Device Matrix
+
+Physical devices certify the already-proven host contract. They are not where instruction semantics are first debugged.
+
+Tier 0, every commit:
+
+- autonomous TCTI targets
+- appstore-safety audit
+- report-schema check
+
+Tier 1, every PR or nightly:
+
+- Orlix integration tests
+- simulator smoke only for app wiring
+
+Tier 2, nightly physical smoke:
+
+- one physical iPhone
+- current iOS
+- `tcti-init-first-syscall`
+- `tcti-init-console-write`
+- no host executable guest text
+
+Tier 3, release physical matrix:
+
+- oldest supported chip
+- current mainstream chip
+- newest chip
+- iPad/M-series if supported
+- oldest supported iOS version
+- current stable iOS
+- latest beta as advisory only
+
+Tier 4, pre-TestFlight soak:
+
+- shell/coreutils workload
+- memory pressure
+- background/foreground lifecycle
+- repeated launch
+- thermal throttling
+
+When a device fails, collect a structured trace, reduce it into the autonomous harness, fix the contract-layer bug, rerun host/oracle tests, then rerun the physical gate.
+
+## App Store Product Constraint
+
+Treat App Store compatibility as an executable engineering constraint.
+
+Phase 1 product shape:
+
+- bundled curated Linux environment
+- bundled tools
+- user source editing and compilation where product policy permits
+- no arbitrary package repository UI
+- no guest executable host mappings
+- no native iOS APIs exposed to guest software
+
+Later phases require explicit App Review/legal strategy before:
+
+- user-owned rootfs import
+- arbitrary package-manager downloads
+- package repositories that introduce new executable functionality after review
+
+The audit target is the enforcement mechanism. Do not claim App Store safety from intent or guideline citations alone.
+
 ## Tests
 
 KUnit tests under the TCTI area:
@@ -915,7 +1385,9 @@ KUnit tests under the TCTI area:
 - Linux execute-permission fault
 - Linux page-fault propagation
 - `svc #0` enters existing `orlix_syscall_dispatch`
+- `svc #0` does not double-run exit-to-user work
 - TPIDR_EL0 TLS behavior
+- guest `MSR TPIDR_EL0` does not mutate host `TPIDR_EL0`
 - unsupported-instruction reporting
 - block-cache lookup
 - page-index invalidation
@@ -924,11 +1396,20 @@ KUnit tests under the TCTI area:
 - TLB hit/miss/generation flush
 - self-modifying executable-page invalidation
 - guest store to translated page invalidation
+- single-runner-per-mm enforcement
+- virtual CPU model surfaces
+- x18 forbidden-token audit fixtures
+- JSON report schema validation
+- golden ELF corpus execution
+- switch-vs-gadget differential execution
+- memory fuzz with simulated host page sizes
+- direct-chain fuzz
 
 HostAdapter/XCTest coverage only for:
 
 - TCTI gate does not call host executable mapping for guest ELF text
 - console mirror captures guest output
+- host capability report emits no forbidden executable-memory behavior
 
 Do not add raw string diagnostics or make UIKit the proof surface.
 
@@ -992,6 +1473,20 @@ Concepts not copied blindly:
 - READ/FETCH permission conflation
 - SIGSEGV-based recovery as milestone-1 memory model
 
+Migration accountability:
+
+| Fork feature | Orlix equivalent | Copied? | Proof |
+| --- | --- | --- | --- |
+| generation-stamped TLB | `arch/orlix` TCTI TLB | no | `make tcti-memory-fuzz` generation tests |
+| separate translation/code generations | `tcti_mm_cache` generations | no | self-modifying executable-page invalidation test |
+| data-only gadget stream | Orlix gadget program | no | `make tcti-diff-switch` |
+| `tcti_entry_block(gadgets, cpu)` shape | `tcti_entry_block(program, cpu, tlb)` | no | gadget ABI contract test |
+| generated gadget tables | Orlix generator | no | deterministic generator audit |
+| `x0-x12` hot mapping | benchmark candidate A only | no | `make tcti-benchmark` mapping comparison |
+| READ/FETCH conflation | split FETCH/READ/WRITE | no | permission contract tests |
+| O(n) invalidation | page-index invalidation | no | `make tcti-direct-chain-fuzz` and invalidation tests |
+| SIGSEGV recovery | deferred beyond milestone 1 | no | safe pinned TLB tests |
+
 Secondary references read for comparison:
 
 - `https://github.com/ish-app/ish`
@@ -1007,6 +1502,14 @@ Secondary references read for comparison:
 - `https://github.com/rcarmo/ios-linuxkit/blob/master/docs/RUNTIME_VALIDATION.md`
 - `https://github.com/rcarmo/ios-linuxkit/blob/master/docs/ARM64_WORKLOAD_SMOKE_TESTS.md`
 - `https://github.com/rcarmo/ios-linuxkit/blob/master/docs/LINUX_BUILD_AND_HOST_ABI.md`
+
+Current public references to preserve:
+
+- Apple App Review Guidelines: `https://developer.apple.com/app-store/review/guidelines/`
+- Apple arm64 `x18` guidance: `https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms`
+- QEMU TCG direct chaining and invalidation: `https://www.qemu.org/docs/master/devel/tcg.html`
+- Virtio 1.3 specification: `https://docs.oasis-open.org/virtio/virtio/v1.3/virtio-v1.3.html`
+- UTM iOS no-JIT precedent: `https://docs.getutm.app/installation/ios/`
 
 ## License And Source-Copy Rules
 
@@ -1025,21 +1528,23 @@ Any future copied source requires:
 
 ## Implementation Order
 
-1. Update ADR 0022 and active plan with physical-device evidence and TCTI correction.
-2. Add TCTI config/build scaffolding without flipping release default before proof.
-3. Add TCTI ABI and debug switch oracle.
-4. Add safe `FETCH/READ/WRITE` user-page backing API.
-5. Add decoder and first instruction semantic helpers.
-6. Add block cache with `code_generation`.
-7. Add TLB with `translation_generation`.
-8. Wire `hosted_exec.c` to call TCTI and call `orlix_syscall_dispatch` on `svc #0`.
-9. Add assembly entry/dispatch and first hot gadgets.
-10. Add page-index invalidation and guest store-to-translated-page invalidation.
-11. Add same-page direct chaining.
-12. Add hot-register mapping counters and compare mappings A/B/C/D.
-13. Add runtime-validation gate and physical-device Markdown report.
-14. Expand instructions only from `orlix-a64-opprofile` traces and focused tests.
-15. Add cross-page chaining, then atomics/exclusives, then NEON/SIMD, then crypto only after benchmark evidence justifies each expansion.
+1. Record current-state audit: existing TCTI hook, `asm/tcti.h`, `orlix_tcti_enter_user()`, defconfig state, and development build result.
+2. Correct build defaults so product profiles do not silently default to an unproved TCTI backend.
+3. Fix syscall handoff semantics so current `orlix_syscall_dispatch()` owns exit-to-user work for this path.
+4. Add autonomous test targets and JSON/reducer report contracts before physical-device work.
+5. Add TPIDR_EL0 transition audit and tests separating guest TLS from host TLS.
+6. Add host `x18/w18` static and object-disassembly audit.
+7. Add single-runner-per-mm enforcement for milestone 1.
+8. Add safe `FETCH/READ/WRITE` user-page backing API and pinned TLB lifetime.
+9. Add decoder and first instruction semantic helpers.
+10. Add block cache with `code_generation` and page-index invalidation.
+11. Add TLB with `translation_generation` and host-page-size fuzzing.
+12. Add assembly entry/dispatch and first hot gadgets.
+13. Add same-page direct chaining and `make tcti-direct-chain-fuzz`.
+14. Add hot-register mapping counters and compare mappings A/B/C/D.
+15. Add runtime-validation gate with JSON and Markdown reports.
+16. Expand instructions only from `orlix-a64-opprofile` traces and focused tests.
+17. Add cross-page chaining, then atomics/exclusives, then NEON/SIMD, then crypto only after benchmark evidence justifies each expansion.
 
 ## Current Checkpoint Scope
 
@@ -1052,10 +1557,13 @@ The first implementation checkpoint is intentionally narrow:
 - debug switch backend stub
 - block cache and TLB structure headers
 - user-page API stub
-- hosted-exec selection hook
+- existing hosted-exec selection hook audit
+- autonomous test target contract
+- syscall handoff correction
+- TPIDR_EL0, x18, virtual CPU, App Store safety, and concurrency guardrails
 
 This checkpoint is not runtime-ready. It is not a performance claim. It is not a physical-device proof.
 
 ## Final Architecture Sentence
 
-Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel's existing Linux userspace surface run on iOS without host-executable guest text.
+Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel’s existing Linux userspace surface run on iOS without host-executable guest text.
