@@ -521,6 +521,44 @@ func switchBranches005Pass() -> (Bool, String) {
     }
 }
 
+func switchMemory006Pass() -> (Bool, String) {
+ do {
+ let object = try executionObject("init_006_memory")
+ let exit = object["exit"] as? [String: Any]
+ let entered = boolValue(object["entered_entrypoint"])
+ let backend = stringValue(object["backend"]) == "switch-debug"
+ let instructionCountOK = intValue(object["guest_instructions_executed"]) == 4
+ let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 42
+ let syscallOK = syscalls(object).contains { syscall in
+ guard stringValue(syscall["name"]) == "exit",
+ intValue(syscall["nr"]) == 93,
+ boolValue(syscall["captured"]),
+ let args = syscall["args"] as? [Any],
+ let first = args.first else {
+ return false
+ }
+ return intValue(first) == 42
+ }
+ let decoded = object["decoded_instructions"] as? [Any] ?? []
+ let hasLoad = decoded.contains { item in
+ guard let instruction = item as? [String: Any] else { return false }
+ return stringValue(instruction["class"]) == "load_store_unsigned_immediate" &&
+ stringValue(instruction["op"]) == "ldr" &&
+ intValue(instruction["rt"]) == 0 &&
+ intValue(instruction["rn"]) == 1 &&
+ intValue(instruction["offset"]) == 0 &&
+ intValue(instruction["width"]) == 64 &&
+ stringValue(instruction["effective_address"]) == "0x0000000000210130"
+ }
+ if entered && backend && instructionCountOK && exitOK && syscallOK && hasLoad {
+ return (true, "init_006_memory switch-debug execution captured file-backed PT_LOAD memory-derived exit(42)")
+ }
+ return (false, "init_006_memory execution artifact does not show file-backed memory-derived exit(42)")
+ } catch {
+ return (false, "missing malformed init_006_memory execution artifact: \(error)")
+ }
+}
+
 func firstGadgetExit001Pass() -> (Bool, String) {
     let report = reportFact(target: "tcti-diff-switch")
     guard report.exists, report.status == "pass", report.passed else {
@@ -630,6 +668,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-005-branches":
         let check = switchBranches005Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "switch-init-006-memory":
+        let check = switchMemory006Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         let check = diffSwitchExit001Pass()
