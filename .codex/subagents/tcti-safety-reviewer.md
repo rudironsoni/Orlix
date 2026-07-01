@@ -9,6 +9,8 @@ Review Orlix TCTI changes for App Store constraints, host `x18/w18`, JIT/MAP_JIT
 - `git diff`
 - `AGENTS.md`
 - `.codex/hooks/**`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
+- `Build/AgentHarness/orlix-tcti/next-task.md`
 - `tools/tcti/orlix-tcti-gate.swift`
 - product defconfigs
 - TCTI reports and safety audit JSON
@@ -28,6 +30,7 @@ Review Orlix TCTI changes for App Store constraints, host `x18/w18`, JIT/MAP_JIT
 
 - `rtk proxy make tcti-appstore-safety-audit`
 - `rtk proxy make tcti-plan-consistency`
+- `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy make agent-harness-check`
 - `rtk grep -n "x18\\|w18\\|MAP_JIT\\|RWX\\|PROT_EXEC\\|vm_protect"`
 - `rtk git diff --check`
@@ -38,6 +41,7 @@ Review Orlix TCTI changes for App Store constraints, host `x18/w18`, JIT/MAP_JIT
 - `Findings:`
 - `Forbidden behavior evidence:`
 - `Reports reviewed:`
+- `Task envelope forbidden scope:`
 - `Defconfig status:`
 - `Generated-tree status:`
 - `Decision: pass | fail | evidence-only`

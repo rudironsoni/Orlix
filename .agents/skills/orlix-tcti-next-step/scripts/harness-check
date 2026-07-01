@@ -76,6 +76,12 @@ check_skills() {
       fail "$skill agents/openai.yaml must not depend on custom orlix-tcti MCP"
     fi
   done
+  require_file ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json"
+  for script in status next task-envelope-check tcti-next-step.swift; do
+    require_file ".agents/skills/orlix-tcti-next-step/scripts/$script"
+    test -x "$root/.agents/skills/orlix-tcti-next-step/scripts/$script" ||
+      fail ".agents/skills/orlix-tcti-next-step/scripts/$script is not executable"
+  done
 }
 
 check_mcp() {
@@ -110,6 +116,9 @@ check_layout() {
   require_file "docs/harness/MCP_POLICY.md"
   require_file "docs/harness/ORLIX_TCTI_AGENT_HARNESS.md"
   test ! -e "$root/docs/harness/ORLIX_TCTI_CODEX_HARNESS.md" || fail "Codex-specific harness doc must be replaced by agent-neutral doc"
+  for target in agent-status agent-next agent-task-envelope-check; do
+    grep -q "^$target:" "$root/Makefile" || fail "Makefile lacks $target"
+  done
   ! find "$root/AGENTS.md" "$root/docs/harness" "$root/.agents/skills" -type f \
     ! -path '*/scripts/*' \
     -print0 | xargs -0 grep -E "${codex_prefix}harness-check|${codex_prefix}hooks-check|${codex_prefix}skills-check|${codex_prefix}subagents-check|${codex_prefix}mcp-check" >/dev/null 2>&1 ||

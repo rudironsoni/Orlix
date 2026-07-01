@@ -48,11 +48,25 @@ Use agent-neutral targets:
 - `make agent-skills-check`
 - `make agent-subagents-check`
 - `make agent-mcp-check`
+- `make agent-status AREA=orlix-tcti`
+- `make agent-next AREA=orlix-tcti`
+- `make agent-task-envelope-check AREA=orlix-tcti`
 
 Do not add Codex-specific compatibility aliases for these targets.
 
 ## Workflow
 
-Use `$orlix-tcti-next-step` for TCTI continuation. The skill routes through planner and safety review before implementation. The oracle skill owns no-phone switch-debug and golden ELF work. The debug skill owns LLVM and LLDB inspection. The reproducer skill owns reducer replay. The safety skill owns App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, and generated-tree checks.
+Use `$orlix-tcti-next-step` for TCTI continuation. The skill runs `agent-status`, `agent-next`, and `agent-task-envelope-check` so the repo selects the next eligible gate from `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` and current reports. The generated task envelope under `Build/AgentHarness/orlix-tcti/` is the scope contract.
+
+The standard autonomous workflow is:
+
+1. `orlix-tcti-next-step` runs `agent-status` and `agent-next`.
+2. `tcti-planner` reviews the task envelope.
+3. `tcti-safety-reviewer` reviews forbidden scope.
+4. The relevant implementer subagent works only inside allowed scope.
+5. `tcti-test-reducer` handles failures before production changes.
+6. `tcti-release-gate-reviewer` decides whether the checkpoint advances readiness.
+
+The oracle skill owns no-phone switch-debug and golden ELF work. The debug skill owns LLVM and LLDB inspection. The reproducer skill owns reducer replay. The safety skill owns App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, and generated-tree checks.
 
 Do not run physical-device TCTI work unless runtime-validation preflight permits it. Do not add production TCTI assembly or gadget dispatch until switch-debug oracle coverage exists for the target and safety reports pass.

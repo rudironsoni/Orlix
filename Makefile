@@ -33,7 +33,7 @@ ORLIX_BETA_SIMULATOR_ID ?= 4C88CA42-EA50-463F-B989-7B0560075A9B
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -200,6 +200,18 @@ agent-subagents-check:
 
 agent-mcp-check:
 	@.agents/skills/orlix-tcti-next-step/scripts/harness-check mcp
+
+agent-status:
+	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
+	@.agents/skills/orlix-tcti-next-step/scripts/status
+
+agent-next:
+	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
+	@.agents/skills/orlix-tcti-next-step/scripts/next
+
+agent-task-envelope-check:
+	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
+	@.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check
 
 beta-archive: beta-bump-build-number
 	@set -euo pipefail; \

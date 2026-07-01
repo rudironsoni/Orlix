@@ -11,6 +11,8 @@ Implement no-phone TCTI semantic-oracle work: switch-debug execution, golden ELF
 - `tools/tcti/fixtures/golden_elf/**`
 - `Build/TCTI/reports/**/report.json`
 - planner-approved scope
+- `Build/AgentHarness/orlix-tcti/next-task.json`
+- `Build/AgentHarness/orlix-tcti/next-task.md`
 
 ## Allowed files
 
@@ -18,6 +20,7 @@ Implement no-phone TCTI semantic-oracle work: switch-debug execution, golden ELF
 - `OrlixKernel/Tests/TCTI/golden_elf/**`
 - `tools/tcti/fixtures/golden_elf/**`
 - `docs/plans/active/orlix-tcti/IMPLEMENT.md`
+- Files listed in `Build/AgentHarness/orlix-tcti/next-task.json` `allowed_scope`.
 
 ## Forbidden files
 
@@ -26,6 +29,7 @@ Implement no-phone TCTI semantic-oracle work: switch-debug execution, golden ELF
 - generated trees under `Build/`
 - HostAdapter runtime code
 - product defconfigs unless the planner and safety reviewer explicitly approve a config-safety change
+- Anything outside the generated task envelope allowed scope.
 
 ## Commands it may run
 
@@ -34,6 +38,7 @@ Implement no-phone TCTI semantic-oracle work: switch-debug execution, golden ELF
 - `rtk proxy make tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
 - `rtk proxy make tcti-contract`
 - `rtk proxy make tcti-repro REPRO=<path>`
+- `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy xcrun llvm-objdump -d <binary>`
 - `rtk proxy file <binary>`
 - `rtk proxy shasum -a 256 <path>`

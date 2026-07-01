@@ -80,6 +80,8 @@ For TCTI work, use the Orlix TCTI agent harness before direct implementation:
 - No custom Orlix MCP is active. Do not add repo-local MCP wrappers for Make targets, report readers, reducers, or golden ELF status.
 - Non-Codex agents must follow the same agent-neutral Make targets and skills.
 - Use `.agents/skills/orlix-tcti-next-step/SKILL.md` when asked to continue TCTI work, run the harness, or choose what is next.
+- To choose TCTI work autonomously, run `make agent-status AREA=orlix-tcti`, then `make agent-next AREA=orlix-tcti`, then `make agent-task-envelope-check AREA=orlix-tcti`.
+- The next task envelope under `Build/AgentHarness/orlix-tcti/` is the scope contract for selected gate, allowed files, forbidden work, verification commands, reducers, subagents, and commit message.
 - Use `.agents/skills/orlix-tcti-status/SKILL.md`, `.agents/skills/orlix-tcti-report-reader/SKILL.md`, `.agents/skills/orlix-tcti-reproducer/SKILL.md`, `.agents/skills/orlix-tcti-golden-elf/SKILL.md`, `.agents/skills/orlix-tcti-safety/SKILL.md`, `.agents/skills/orlix-tcti-plan-consistency/SKILL.md`, and `.agents/skills/orlix-tcti-debug/SKILL.md` for their named workflows.
 - Spawn or simulate `.codex/subagents/` planner, safety reviewer, LLVM inspector, oracle engineer, test reducer, gadget reviewer, and release-gate reviewer as the TCTI task requires.
 - Do not implement TCTI features directly without planner and safety reviewer scope.
