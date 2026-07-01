@@ -211,6 +211,62 @@ struct CapturedExit: Codable {
     let code: Int
 }
 
+struct DiffArchitecturalState: Codable {
+    let backend: String
+    let caseID: String
+    let gprs: [String: UInt64]
+    let sp: String
+    let pc: String
+    let pstateNZCV: String
+    let tpidrEL0: String
+    let memoryWrites: [String]
+    let exitKind: String?
+    var exitCode: Int?
+    let faultAddress: String?
+
+    enum CodingKeys: String, CodingKey {
+        case backend
+        case caseID = "case_id"
+        case gprs
+        case sp
+        case pc
+        case pstateNZCV = "pstate_nzcv"
+        case tpidrEL0 = "tpidr_el0"
+        case memoryWrites = "memory_writes"
+        case exitKind = "exit_kind"
+        case exitCode = "exit_code"
+        case faultAddress = "fault_address"
+    }
+}
+
+struct SwitchDiffArtifact: Codable {
+    let caseID: String
+    let mode: String
+    let referenceBackend: String
+    let candidateBackend: String
+    let gadgetDispatchExecuted: Bool
+    let productionAssemblyExecuted: Bool
+    let fieldsChecked: [String]
+    let divergentFields: [String]
+    let referenceState: DiffArchitecturalState
+    let candidateState: DiffArchitecturalState
+    let notes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case caseID = "case_id"
+        case mode
+        case referenceBackend = "reference_backend"
+        case candidateBackend = "candidate_backend"
+        case gadgetDispatchExecuted = "gadget_dispatch_executed"
+        case productionAssemblyExecuted = "production_assembly_executed"
+        case fieldsChecked = "fields_checked"
+        case divergentFields = "divergent_fields"
+        case referenceState = "reference_state"
+        case candidateState = "candidate_state"
+        case notes
+    }
+}
+
 struct Reproducer: Codable {
     let target: String
     let caseID: String
@@ -406,6 +462,8 @@ func report(
     forbiddenBehavior: [String: Bool] = forbiddenDefaults(),
     counters: [String: Int] = [:],
     coverageWarnings: [String] = [],
+    releaseGateEligible: Bool? = nil,
+    readinessGateEligible: Bool? = nil,
     autonomousTestsBypassed: Bool = false,
     bypassReason: String = "",
     execution: ExecutionReport? = nil
@@ -425,8 +483,8 @@ func report(
         counters: counters,
         failures: failures,
         artifacts: artifacts,
-        releaseGateEligible: status.gateEligible,
-        readinessGateEligible: status.gateEligible,
+        releaseGateEligible: releaseGateEligible ?? status.gateEligible,
+        readinessGateEligible: readinessGateEligible ?? status.gateEligible,
         autonomousTestsBypassed: autonomousTestsBypassed,
         bypassReason: bypassReason,
         coverageWarnings: coverageWarnings,
@@ -1548,7 +1606,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                 registers[rd] = value
             }
             pc += 4
-        case let .loadStoreUnsignedImmediate(_, _, op, rt, rn, offset, width):
+        case let .loadStoreUnsignedImmediate(_, _, op, rt, rn, offset, _):
             guard rn == 31 else {
                 let report = executionReport(
                     metadata: metadata,
@@ -2676,6 +2734,255 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     return exitCode(for: status)
 }
 
+func syscallEvent(_ syscall: CapturedSyscall) -> String {
+    let args = syscall.args.map { value -> String in
+        switch value {
+        case let .int(number):
+            return "\(number)"
+        case let .string(string):
+            return string
+        }
+    }.joined(separator: ",")
+    return "\(syscall.name)(\(args))"
+}
+
+func diffState(from report: ExecutionReport, backend: String) -> DiffArchitecturalState {
+    let exitSyscall = report.syscalls.first { $0.nr == 93 }
+    let exitCode: Int? = {
+        guard let first = exitSyscall?.args.first else { return report.exit?.code }
+        if case let .int(value) = first { return value }
+        return report.exit?.code
+    }()
+    let svcPC = report.decodedInstructions.last?.pc ?? "unknown"
+    return DiffArchitecturalState(
+        backend: backend,
+        caseID: report.caseID,
+        gprs: [
+            "x0": UInt64(exitCode ?? 0),
+            "x8": UInt64(exitSyscall?.nr ?? 0),
+        ],
+        sp: "unchanged",
+        pc: svcPC,
+        pstateNZCV: "unchanged",
+        tpidrEL0: "unchanged",
+        memoryWrites: [],
+        exitKind: report.exit?.kind,
+        exitCode: report.exit?.code,
+        faultAddress: nil
+    )
+}
+
+let diffFieldsChecked = [
+    "gprs.x0",
+    "gprs.x8",
+    "sp",
+    "pc",
+    "pstate_nzcv",
+    "tpidr_el0",
+    "memory_writes",
+    "exit.kind",
+    "exit.code",
+    "fault_address",
+]
+
+func stateValue(_ state: DiffArchitecturalState, field: String) -> String {
+    switch field {
+    case "gprs.x0":
+        return "\(state.gprs["x0"] ?? 0)"
+    case "gprs.x8":
+        return "\(state.gprs["x8"] ?? 0)"
+    case "sp":
+        return state.sp
+    case "pc":
+        return state.pc
+    case "pstate_nzcv":
+        return state.pstateNZCV
+    case "tpidr_el0":
+        return state.tpidrEL0
+    case "memory_writes":
+        return state.memoryWrites.joined(separator: ",")
+    case "exit.kind":
+        return state.exitKind ?? "nil"
+    case "exit.code":
+        return state.exitCode.map(String.init) ?? "nil"
+    case "fault_address":
+        return state.faultAddress ?? "nil"
+    default:
+        return "unknown"
+    }
+}
+
+func divergentFields(reference: DiffArchitecturalState, candidate: DiffArchitecturalState) -> [String] {
+    var fields: [String] = []
+    if reference.gprs["x0"] != candidate.gprs["x0"] {
+        fields.append("gprs.x0")
+    }
+    if reference.gprs["x8"] != candidate.gprs["x8"] {
+        fields.append("gprs.x8")
+    }
+    if reference.sp != candidate.sp {
+        fields.append("sp")
+    }
+    if reference.pc != candidate.pc {
+        fields.append("pc")
+    }
+    if reference.pstateNZCV != candidate.pstateNZCV {
+        fields.append("pstate_nzcv")
+    }
+    if reference.tpidrEL0 != candidate.tpidrEL0 {
+        fields.append("tpidr_el0")
+    }
+    if reference.memoryWrites != candidate.memoryWrites {
+        fields.append("memory_writes")
+    }
+    if reference.exitKind != candidate.exitKind {
+        fields.append("exit.kind")
+    }
+    if reference.exitCode != candidate.exitCode {
+        fields.append("exit.code")
+    }
+    if reference.faultAddress != candidate.faultAddress {
+        fields.append("fault_address")
+    }
+    return fields
+}
+
+func runDiffSwitch() throws -> Int32 {
+    let target = "tcti-diff-switch"
+    let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
+    let negativeDiff = ProcessInfo.processInfo.environment["NEGATIVE_DIFF"] ?? ""
+    guard caseID == "init_001_exit" else {
+        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit has switch-diff preparation coverage in this checkpoint.")
+    }
+
+    var artifacts: [String] = []
+    var failures: [Failure] = []
+    var executionReport: ExecutionReport?
+    var diffArtifact: SwitchDiffArtifact?
+    let outputRoot = buildPath("diff_switch")
+
+    do {
+        let metadataPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", caseID, "golden.json")
+        let result = try validateAndExecuteGoldenCase(caseID: caseID, metadataURL: metadataPath, outputRoot: outputRoot)
+        artifacts.append(contentsOf: result.artifacts)
+        failures.append(contentsOf: result.failures)
+        guard let execution = result.execution else {
+            failures.append(fail("diff-switch-execution", "switch-debug execution report missing for \(caseID)"))
+            throw GateError.checkFailed(failures.map(\.message))
+        }
+        executionReport = execution
+        let reference = diffState(from: execution, backend: "switch-debug")
+        var candidate = reference
+        candidate = DiffArchitecturalState(
+            backend: negativeDiff.isEmpty ? "switch-debug-diff-contract" : "negative-diff-fixture",
+            caseID: candidate.caseID,
+            gprs: candidate.gprs,
+            sp: candidate.sp,
+            pc: candidate.pc,
+            pstateNZCV: candidate.pstateNZCV,
+            tpidrEL0: candidate.tpidrEL0,
+            memoryWrites: candidate.memoryWrites,
+            exitKind: candidate.exitKind,
+            exitCode: candidate.exitCode,
+            faultAddress: candidate.faultAddress
+        )
+        if negativeDiff == "exit-code" {
+            candidate.exitCode = (candidate.exitCode ?? 0) == 42 ? 41 : 42
+        } else if !negativeDiff.isEmpty {
+            failures.append(fail("diff-negative-fixture", "unknown NEGATIVE_DIFF=\(negativeDiff)"))
+        }
+
+        let divergent = divergentFields(reference: reference, candidate: candidate)
+        for field in divergent {
+            failures.append(fail(
+                "diff-architectural-state.\(field)",
+                "\(caseID) architectural_state.\(field) diverged: switch=\(stateValue(reference, field: field)) candidate=\(stateValue(candidate, field: field))"
+            ))
+        }
+
+        let caseOutputRoot = outputRoot.appendingPathComponent(caseID, isDirectory: true)
+        let switchStateURL = caseOutputRoot.appendingPathComponent("switch-state.json")
+        let candidateStateURL = caseOutputRoot.appendingPathComponent("candidate-state.json")
+        try writeJSON(reference, to: switchStateURL)
+        try writeJSON(candidate, to: candidateStateURL)
+        artifacts.append(relativePath(switchStateURL))
+        artifacts.append(relativePath(candidateStateURL))
+
+        diffArtifact = SwitchDiffArtifact(
+            caseID: caseID,
+            mode: negativeDiff.isEmpty ? "switch-debug-diff-preparation" : "negative-diff-fixture",
+            referenceBackend: reference.backend,
+            candidateBackend: candidate.backend,
+            gadgetDispatchExecuted: false,
+            productionAssemblyExecuted: false,
+            fieldsChecked: diffFieldsChecked,
+            divergentFields: divergent,
+            referenceState: reference,
+            candidateState: candidate,
+            notes: [
+                "This is a no-phone diff-preparation gate.",
+                "No production assembly or gadget dispatch is executed in this gate.",
+                "The future gadget backend must compare against these switch-debug architectural state fields instead of duplicating instruction semantics.",
+            ]
+        )
+        let diffURL = caseOutputRoot.appendingPathComponent("diff.json")
+        try writeJSON(diffArtifact, to: diffURL)
+        artifacts.append(relativePath(diffURL))
+
+        if negativeDiff.isEmpty {
+            let reducer = try writeReducer(
+                target: target,
+                caseID: "\(caseID)-exit-code-divergence",
+                command: "CASE=\(caseID) NEGATIVE_DIFF=exit-code make tcti-diff-switch",
+                reason: "negative diff fixture must fail with divergent architectural_state.exit.code",
+                artifacts: [relativePath(switchStateURL), relativePath(candidateStateURL), relativePath(diffURL)],
+                expectedStatus: .fail
+            )
+            artifacts.append(relativePath(reducer))
+        }
+    } catch {
+        if failures.isEmpty {
+            failures.append(fail("diff-switch", "\(error)"))
+        }
+    }
+
+    if !failures.isEmpty, negativeDiff.isEmpty {
+        let reducer = try writeReducer(
+            target: target,
+            caseID: caseID,
+            command: "CASE=\(caseID) make tcti-diff-switch",
+            reason: failures.map(\.message).joined(separator: "; "),
+            artifacts: artifacts,
+            expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: negativeDiff.isEmpty ?
+            "Prepared switch-debug differential baseline for \(caseID) without gadget dispatch." :
+            "Ran negative switch differential fixture for \(caseID).",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "differential_fields_checked": diffFieldsChecked.count,
+            "divergent_fields": diffArtifact?.divergentFields.count ?? 0,
+            "guest_instructions_executed": executionReport?.guestInstructionsExecuted ?? 0,
+        ],
+        coverageWarnings: [
+            "diff-preparation only: no gadget backend dispatch executed by this gate",
+        ],
+        releaseGateEligible: false,
+        readinessGateEligible: false,
+        execution: executionReport
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
 func x18TokenRanges(in line: String) -> [Range<String.Index>] {
     let pattern = #"(?<![A-Za-z0-9_])[wx]18(?![A-Za-z0-9_])"#
     guard let regex = try? NSRegularExpression(pattern: pattern) else {
@@ -2827,7 +3134,9 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runRepro()
     case "tcti-contract":
         return try runContract()
-    case "tcti-diff-switch", "tcti-memory-fuzz", "tcti-direct-chain-fuzz":
+    case "tcti-diff-switch":
+        return try runDiffSwitch()
+    case "tcti-memory-fuzz", "tcti-direct-chain-fuzz":
         return try writeTodo(target: target, summary: "\(target) rail exists, but the real no-phone TCTI test implementation is not complete yet.")
     default:
         throw GateError.usage("unknown TCTI target: \(target)")

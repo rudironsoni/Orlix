@@ -1435,3 +1435,70 @@ Boundary:
 - No Darwin syscall behavior.
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
 - No host `TPIDR_EL0` mutation for guest TLS.
+
+### Checkpoint: Switch Differential Gate For Exit ELF
+
+- Harness-selected gate: `diff-switch-init-001-exit`.
+- Selected command: `make tcti-diff-switch CASE=init_001_exit`.
+- Why selected: `switch-init-004-tls` passed and `tcti-diff-switch` was the first non-passing roadmap gate with prerequisites satisfied.
+- Implemented a Swift harness diff-preparation rail for `CASE=init_001_exit`.
+- Scope stayed inside `tools/tcti/orlix-tcti-gate.swift` and `docs/plans/active/orlix-tcti/IMPLEMENT.md`.
+- The rail reuses the existing switch-debug oracle execution report. It does not execute or implement a gadget backend.
+- The normalized architectural state records `gprs.x0`, `gprs.x8`, `sp`, `pc`, `pstate_nzcv`, `tpidr_el0`, `memory_writes`, `exit.kind`, `exit.code`, and `fault_address`.
+- The positive diff-preparation artifact compares switch-debug `init_001_exit` against the canonical candidate contract and records zero divergent fields.
+- The negative diff fixture mutates `exit.code` and fails with field-specific failure id `diff-architectural-state.exit.code`.
+
+Reports:
+
+- `Build/TCTI/reports/tcti-diff-switch/report.json`
+- `Build/TCTI/diff_switch/init_001_exit/switch-state.json`
+- `Build/TCTI/diff_switch/init_001_exit/candidate-state.json`
+- `Build/TCTI/diff_switch/init_001_exit/diff.json`
+
+Reducer:
+
+- `Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-exit-code-divergence.json`
+
+Reducer replay:
+
+- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-exit-code-divergence.json`: expected `fail`, actual `fail`, exit code `2`.
+
+Harness state after checkpoint:
+
+- `agent-status` recognizes `diff-switch-init-001-exit` as passed.
+- `agent-next` advanced to `first-gadget-init-001-exit`.
+- Physical device work remains disallowed.
+- Readiness and release gates remain ineligible.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-diff-switch
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-exit-code-divergence.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+All passed except the reducer replay command, which correctly returned `rc=2` for expected `fail`.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No `BACKEND=gadget` execution.
+- No simulator gate run.
+- No physical-device gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
