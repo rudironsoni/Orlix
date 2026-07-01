@@ -1,9 +1,7 @@
 # Codex adapter for Orlix.
 # Repo-local workflow logic belongs in .agents/skills, not in custom MCP servers.
-# User secrets and machine-local MCP credentials belong in ~/.codex/config.toml.
-
-sandbox_mode = "danger-full-access"
-approval_policy = "never"
+# User secrets, machine-local MCP credentials, sandbox mode, and approval policy
+# belong in ~/.codex/config.toml.
 
 [features]
 hooks = true

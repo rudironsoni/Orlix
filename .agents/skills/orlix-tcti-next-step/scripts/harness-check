@@ -83,6 +83,8 @@ check_mcp() {
   test ! -e "$root/tools/mcp/orlix-llvm-mcp-wrapper" || fail "repo-local LLDB MCP wrapper must not exist"
   ! grep -q 'mcp_servers.orlix-tcti' "$root/.codex/config.toml" || fail ".codex/config.toml references custom orlix-tcti MCP"
   ! grep -q 'orlix-tcti-mcp' "$root/.codex/config.toml" || fail ".codex/config.toml references custom Orlix MCP path"
+  ! grep -Eq '^[[:space:]]*(sandbox_mode|approval_policy)[[:space:]]*=' "$root/.codex/config.toml" ||
+    fail ".codex/config.toml must not commit machine-local sandbox or approval policy"
   for server in openaiDeveloperDocs context7 lldb; do
     grep -q "\\[mcp_servers\\.$server\\]" "$root/.codex/config.toml" || fail ".codex/config.toml lacks external MCP server $server"
   done
