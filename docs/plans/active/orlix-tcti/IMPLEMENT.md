@@ -1624,3 +1624,64 @@ Boundary:
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
+
+### Checkpoint: No-Phone Contract Gate Passes
+
+- Harness-selected gate: `tcti-contract`.
+- Selected command: `make tcti-contract`.
+- Why selected: `first-gadget-init-001-exit` passed and `tcti-contract` was the first non-passing runtime-preflight roadmap gate.
+- Implemented the smallest missing contract group:
+  - gadget data-program ABI and `x0`/`x8` register commit-back for `init_001_exit`.
+- The contract validates the existing no-phone switch-vs-gadget evidence:
+  - reference backend: `switch-debug`;
+  - candidate backend: `gadget-data-program`;
+  - mode: `contract-gadget-abi-register-commit-back`;
+  - `gadget_dispatch_executed=true`;
+  - `production_assembly_executed=false`;
+  - divergent fields: none;
+  - checked fields: `gprs.x0`, `gprs.x8`, `sp`, `pc`, `pstate_nzcv`, `tpidr_el0`, `memory_writes`, `exit.kind`, `exit.code`, and `fault_address`;
+  - candidate state commits `x0=42`, `x8=93`, `pc=0x0000000000210128`, and `exit_code=42`.
+- The remaining runtime-preflight surfaces are not marked as pass inside `tcti-contract`; they are delegated to their own harness gates:
+  - `tcti-memory-fuzz` for `FETCH`/`READ`/`WRITE` memory execution;
+  - `tcti-direct-chain-fuzz` for TLB, block-cache, invalidation, and direct-chain execution.
+- Updated the next-step harness status predicate so a later `switch-vs-gadget` diff report still satisfies the earlier `diff-switch-init-001-exit` baseline gate when the switch-debug reference backend, required fields, and zero divergent fields are present.
+
+Reports:
+
+- `Build/TCTI/reports/tcti-contract/report.json`
+- `Build/TCTI/contract/gadget_abi/init_001_exit/execution.json`
+- `Build/TCTI/contract/gadget_abi/init_001_exit/switch-state.json`
+- `Build/TCTI/contract/gadget_abi/init_001_exit/candidate-state.json`
+- `Build/TCTI/contract/gadget_abi/init_001_exit/diff.json`
+
+Reducers:
+
+- `Build/TCTI/reproducers/tcti-contract/contract-pass-regression.json`
+- `Build/TCTI/reproducers/tcti-diff-switch/gadget-abi-init-001-exit-x0-divergence.json`
+
+Reducer replay:
+
+- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/contract-pass-regression.json`: expected `pass`, actual `pass`, exit code `0`.
+
+Harness state:
+
+- `agent-status` now reports `tcti-contract` as passing.
+- `agent-next` advances to `tcti-memory-fuzz`.
+- `physical_device_allowed=false`.
+- `release_gate_eligible=false`.
+- `readiness_gate_eligible=false`.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No generated executable memory.
+- No host-executable guest text.
+- No simulator gate run.
+- No phone gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- Release and readiness gates remain ineligible.
