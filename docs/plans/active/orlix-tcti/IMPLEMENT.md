@@ -628,3 +628,107 @@ Boundary:
 - No long simulator gate was rerun for publish preparation.
 - No physical-device runtime gate was rerun for publish preparation.
 - TCTI remains not runtime-ready.
+
+### Checkpoint: Swift TCTI Rails And Product Defconfig Safety
+
+- Restored product defconfigs to native hosted execution by default:
+  - `OrlixKernel/Sources/ports/orlix/configs/development_defconfig`
+  - `OrlixKernel/Sources/ports/orlix/configs/release_defconfig`
+  - both now keep `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y`
+  - both keep `CONFIG_ORLIX_HOSTED_EXEC_TCTI` unset
+  - both no longer enable `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`
+- Added top-level Make targets routed through a Swift rail driver:
+  - `make tcti-plan-consistency`
+  - `make tcti-report-schema-check`
+  - `make tcti-toolchain-check`
+  - `make tcti-contract`
+  - `make tcti-golden-elf`
+  - `make tcti-golden-elf-refresh`
+  - `make tcti-diff-switch`
+  - `make tcti-memory-fuzz`
+  - `make tcti-direct-chain-fuzz`
+  - `make tcti-appstore-safety-audit`
+  - `make tcti-repro`
+- Added `tools/tcti/orlix-tcti-gate.swift`.
+  - Uses Swift/Foundation for the repo rails.
+  - Does not add Python tooling for this checkpoint.
+  - Writes JSON reports atomically under `Build/TCTI/reports/<target>/report.json`.
+  - Writes Markdown sidecars under `Build/TCTI/reports/<target>/report.md`.
+  - Writes reducer artifacts under `Build/TCTI/reproducers/<target>/<case-id>.json`.
+  - Defines report statuses: `pass`, `fail`, `todo`, `skipped`, `error`, and `evidence`.
+  - Treats `todo` as `passed=false` and exits non-zero.
+  - Treats `evidence` as `passed=false`, not release/readiness eligible.
+- Added report-schema fixtures:
+  - `tools/tcti/fixtures/report.pass.json`
+  - `tools/tcti/fixtures/report.fail.missing-field.json`
+  - `tools/tcti/fixtures/report.fail.invalid-status.json`
+- Added x18 audit fixture:
+  - `tools/tcti/fixtures/x18_forbidden/bad.S`
+- Added seed golden ELF source and metadata:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_001_exit/init_001_exit.S`
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_001_exit/golden.json`
+  - source SHA256 `b03c642881ff3fe1f8397b3191cdf76a3e41467f3dcb2c81cac0f4f995c6b8ac`
+  - expected binary SHA256 `93d1fe89ade104cd4c674c4a870211d94c5354d37575dfde61344de4434ff4a4`
+- Hardened `tools/runtime/orlix-runtime-validation.sh` physical TCTI preflight:
+  - physical TCTI gates refuse to run unless autonomous reports pass
+  - emergency evidence collection requires `ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT`
+  - emergency evidence collection requires non-empty `ORLIX_TCTI_DEVICE_OVERRIDE_REASON`
+  - override reports use `status=evidence`, `passed=false`, and are not release/readiness eligible
+  - report filenames include the process id to avoid same-second JSON temp-file collisions
+  - `ORLIX_RUNTIME_PREFLIGHT_ONLY=1` can verify blocking/override behavior without touching a device
+- Updated ADR 0022 and `PLAN.md` to reflect:
+  - product defconfig safety is a release blocker
+  - Swift rail driver, not Python, owns these rails
+  - report status semantics are explicit
+  - schema check covers TCTI reports and top-level runtime JSON sidecars
+  - golden ELF reproducibility records toolchain and hashes
+  - milestone-1 single-runner mode is not a pthread/package-manager correctness claim
+
+Evidence:
+
+```sh
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-appstore-safety-audit
+```
+
+All five passed and wrote reports under `Build/TCTI/reports/`.
+
+```sh
+rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+```
+
+`tcti-contract` emitted `status=todo`, wrote `Build/TCTI/reports/tcti-contract/report.json`, wrote `Build/TCTI/reproducers/tcti-contract/todo.json`, and exited non-zero through Make (`rc=2`).
+
+```sh
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/todo.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+The reducer replayed `make tcti-contract` and exited non-zero through Make (`rc=2`).
+
+```sh
+rtk proxy sh -c 'ORLIX_RUNTIME_PREFLIGHT_ONLY=1 DESTINATION=iphoneos GATE=tcti-init-first-syscall tools/runtime/orlix-runtime-validation.sh; rc=$?; echo rc=$rc; exit 0'
+```
+
+Physical TCTI preflight without autonomous passing reports failed before device work (`rc=1`).
+
+```sh
+rtk proxy sh -c 'ORLIX_RUNTIME_PREFLIGHT_ONLY=1 DESTINATION=iphoneos GATE=tcti-init-first-syscall ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT tools/runtime/orlix-runtime-validation.sh; rc=$?; echo rc=$rc; exit 0'
+```
+
+Override without a reason failed before device work (`rc=1`).
+
+```sh
+rtk proxy sh -c 'ORLIX_RUNTIME_PREFLIGHT_ONLY=1 DESTINATION=iphoneos GATE=tcti-init-first-syscall ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT ORLIX_TCTI_DEVICE_OVERRIDE_REASON="rails checkpoint evidence test" tools/runtime/orlix-runtime-validation.sh; rc=$?; echo rc=$rc; exit 0'
+```
+
+Override with a reason wrote runtime JSON with `status=evidence`, `passed=false`, `autonomous_tests_bypassed=true`, `release_gate_eligible=false`, and `readiness_gate_eligible=false`, then exited non-zero (`rc=1`).
+
+Boundary:
+
+- No TCTI runtime or assembly gadget work was added in this checkpoint.
+- No physical device gate was run.
+- `tcti-contract`, `tcti-diff-switch`, `tcti-memory-fuzz`, and `tcti-direct-chain-fuzz` are real failing rails, not implemented tests.
+- This checkpoint proves rails, reporting, defconfig safety, golden seed reproducibility, and preflight behavior. It does not prove TCTI runtime readiness.

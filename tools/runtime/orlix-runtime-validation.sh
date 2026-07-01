@@ -15,18 +15,24 @@ simulator_boot_timeout_seconds="${ORLIX_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
 development_team="${ORLIX_DEVELOPMENT_TEAM:-}"
 code_sign_style="${ORLIX_CODE_SIGN_STYLE:-}"
 provisioning_profile_specifier="${ORLIX_PROVISIONING_PROFILE_SPECIFIER:-}"
+runtime_preflight_only="${ORLIX_RUNTIME_PREFLIGHT_ONLY:-}"
+tcti_device_override="${ORLIX_TCTI_DEVICE_OVERRIDE:-}"
+tcti_device_override_reason="${ORLIX_TCTI_DEVICE_OVERRIDE_REASON:-${ORLIX_TCTI_DEVICE_OVERRIDE_REASON_TEXT:-}}"
+tcti_evidence_mode=0
 
 devices_json=""
 device_name=""
 app_path=""
 
 mkdir -p "$report_dir"
-report="$report_dir/${gate}-$(date -u +%Y%m%dT%H%M%SZ).md"
+report="$report_dir/${gate}-$(date -u +%Y%m%dT%H%M%SZ)-$$.md"
+json_report="${report%.md}.json"
 artifact_dir="${report%.md}.artifacts"
 mkdir -p "$artifact_dir"
 
 die() {
 	local message="$1"
+	write_json_report "fail" "false" "$message" "false" ""
 	write_report "failed" "$message"
 	printf 'runtime validation failed, report: %s\n' "$report" >&2
 	exit 1
@@ -72,6 +78,100 @@ write_report() {
 			printf -- '- none\n'
 		fi
 	} >"$report"
+}
+
+json_escape() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+write_json_report() {
+	local status="$1"
+	local passed="$2"
+	local message="$3"
+	local bypassed="$4"
+	local bypass_reason="$5"
+	local release_eligible="false"
+	local readiness_eligible="false"
+	if [ "$status" = "pass" ]; then
+		release_eligible="true"
+		readiness_eligible="true"
+	fi
+	local escaped_message
+	local escaped_reason
+	escaped_message="$(json_escape "$message")"
+	escaped_reason="$(json_escape "$bypass_reason")"
+	cat >"$json_report.tmp" <<JSON
+{
+  "artifacts": [],
+  "autonomous_tests_bypassed": $bypassed,
+  "backend": "tcti",
+  "bypass_reason": "$escaped_reason",
+  "counters": {},
+  "coverage_warnings": [],
+  "failures": [],
+  "forbidden_behavior": {
+    "generated_exec_memory": false,
+    "host_exec_guest_text": false,
+    "host_x18": false,
+    "map_jit": false,
+    "native_ios_api_exposure_to_guest": false,
+    "rwx": false
+  },
+  "gate": "$gate",
+  "git_sha": "$(git rev-parse HEAD 2>/dev/null || true)",
+  "guest_page_size": 4096,
+  "host_page_size": $(getconf PAGESIZE),
+  "passed": $passed,
+  "readiness_gate_eligible": $readiness_eligible,
+  "release_gate_eligible": $release_eligible,
+  "status": "$status",
+  "summary": "$escaped_message",
+  "target": "$gate",
+  "virtual_cpu_model": "orlix-aarch64-v1"
+}
+JSON
+	mv "$json_report.tmp" "$json_report"
+}
+
+is_tcti_physical_gate() {
+	[ "$destination" = "iphoneos" ] && [[ "$gate" == tcti-* ]]
+}
+
+report_has_passed() {
+	local path="$1"
+	[ -s "$path" ] &&
+		grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$path" &&
+		grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$path"
+}
+
+autonomous_tcti_reports_passed() {
+	local root="${ORLIX_TCTI_BUILD_ROOT:-Build/TCTI}"
+	local target
+	for target in \
+		tcti-contract \
+		tcti-golden-elf \
+		tcti-diff-switch \
+		tcti-memory-fuzz \
+		tcti-direct-chain-fuzz \
+		tcti-appstore-safety-audit \
+		tcti-report-schema-check; do
+		report_has_passed "$root/reports/$target/report.json" || return 1
+	done
+	return 0
+}
+
+physical_tcti_preflight() {
+	is_tcti_physical_gate || return 0
+	if autonomous_tcti_reports_passed; then
+		return 0
+	fi
+	if [ "$tcti_device_override" = "I_ACCEPT_DEVICE_DEBUG_DEBT" ]; then
+		[ -n "$tcti_device_override_reason" ] ||
+			die "ORLIX_TCTI_DEVICE_OVERRIDE_REASON is required when using ORLIX_TCTI_DEVICE_OVERRIDE."
+		tcti_evidence_mode=1
+		return 0
+	fi
+	die "Physical TCTI gates require passing autonomous TCTI reports before device work. Set ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT and ORLIX_TCTI_DEVICE_OVERRIDE_REASON only for evidence collection."
 }
 
 validate_gate() {
@@ -537,6 +637,20 @@ assert_gate_markers() {
 
 main() {
 	validate_gate
+	physical_tcti_preflight
+
+	if [ -n "$runtime_preflight_only" ]; then
+		if [ "$tcti_evidence_mode" -eq 1 ]; then
+			write_json_report "evidence" "false" "Preflight accepted emergency evidence mode; this is not a passing gate." "true" "$tcti_device_override_reason"
+			write_report "evidence" "Preflight accepted emergency evidence mode. This is not a passing gate."
+			printf 'runtime validation evidence-only preflight, report: %s\n' "$report" >&2
+			exit 1
+		fi
+		write_json_report "pass" "true" "Runtime validation preflight passed." "false" ""
+		write_report "passed" "Runtime validation preflight passed."
+		printf 'runtime validation preflight passed, report: %s\n' "$report"
+		exit 0
+	fi
 
 	require_command xcrun
 	require_command xcodebuild
@@ -552,6 +666,13 @@ main() {
 	assert_no_host_exec_guest_text
 	assert_gate_markers
 
+	if [ "$tcti_evidence_mode" -eq 1 ]; then
+		write_json_report "evidence" "false" "Gate evidence collected with autonomous TCTI tests bypassed. This is not a passing gate." "true" "$tcti_device_override_reason"
+		write_report "evidence" "Gate evidence collected with autonomous TCTI tests bypassed. This is not a passing gate."
+		printf 'runtime validation evidence-only report: %s\n' "$report" >&2
+		exit 1
+	fi
+	write_json_report "pass" "true" "Gate \`$gate\` captured the required \`$destination\` marker." "false" ""
 	write_report "passed" "Gate \`$gate\` captured the required \`$destination\` marker."
 	printf 'runtime validation passed, report: %s\n' "$report"
 }

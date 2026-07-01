@@ -64,4 +64,4 @@ Linux ELF / AArch64 Linux userspace
 - Treating QEMU, Wasm, JIT, MAP_JIT, RWX memory, generated executable memory, or host-executable guest text as the TestFlight/App Store path.
 - Copying iSH, OpenMinis, or ios-linuxkit internals wholesale and renaming them Orlix.
 
-Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel's existing Linux userspace surface run on iOS without host-executable guest text.
+Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel’s existing Linux userspace surface run on iOS without host-executable guest text.
