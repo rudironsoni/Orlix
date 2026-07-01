@@ -69,6 +69,7 @@ struct Reproducer: Codable {
     let workingDirectory: String
     let artifacts: [String]
     let reason: String
+    let expectedStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case target
@@ -77,6 +78,7 @@ struct Reproducer: Codable {
         case workingDirectory = "working_directory"
         case artifacts
         case reason
+        case expectedStatus = "expected_status"
     }
 }
 
@@ -317,14 +319,22 @@ func writeReport(_ value: Report) throws -> URL {
 }
 
 @discardableResult
-func writeReducer(target: String, caseID: String, command: String, reason: String, artifacts: [String] = []) throws -> URL {
+func writeReducer(
+    target: String,
+    caseID: String,
+    command: String,
+    reason: String,
+    artifacts: [String] = [],
+    expectedStatus: GateStatus = .fail
+) throws -> URL {
     let reducer = Reproducer(
         target: target,
         caseID: caseID,
         command: command,
         workingDirectory: repoRoot().path,
         artifacts: artifacts,
-        reason: reason
+        reason: reason,
+        expectedStatus: expectedStatus.rawValue
     )
     let url = buildPath("reproducers", target, "\(caseID).json")
     try writeJSON(reducer, to: url)
@@ -344,7 +354,8 @@ func writeTodo(target: String, caseID: String = "todo", summary: String) throws 
         target: target,
         caseID: caseID,
         command: "make \(target)",
-        reason: summary
+        reason: summary,
+        expectedStatus: .todo
     )
     let reportURL = try writeReport(report(
         target: target,
@@ -459,6 +470,180 @@ func checkReportFile(_ url: URL) -> [String] {
     } catch {
         return ["\(relativePath(url)): cannot parse JSON: \(error)"]
     }
+}
+
+func reportValidationFixture(status: GateStatus) throws -> Any {
+    let sample = report(
+        target: "contract-\(status.rawValue)",
+        status: status,
+        summary: "contract status fixture",
+        failures: status == .pass ? [] : [fail("fixture", "fixture failure")],
+        autonomousTestsBypassed: status == .evidence,
+        bypassReason: status == .evidence ? "contract evidence fixture" : ""
+    )
+    let data = try encoder.encode(sample)
+    return try JSONSerialization.jsonObject(with: data)
+}
+
+func validateReportStatusContracts() -> [Failure] {
+    var failures: [Failure] = []
+    for status in [GateStatus.pass, .fail, .todo, .skipped, .error, .evidence] {
+        do {
+            let errors = validateReportObject(try reportValidationFixture(status: status))
+            for error in errors {
+                failures.append(fail("report-status-\(status.rawValue)", error))
+            }
+        } catch {
+            failures.append(fail("report-status-\(status.rawValue)", "\(error)"))
+        }
+    }
+    return failures
+}
+
+func validateProductDefconfigSafety() -> [Failure] {
+    var failures: [Failure] = []
+    for config in [
+        path("OrlixKernel", "Sources", "ports", "orlix", "configs", "development_defconfig"),
+        path("OrlixKernel", "Sources", "ports", "orlix", "configs", "release_defconfig"),
+    ] {
+        do {
+            let text = try readText(config)
+            if !text.contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y") {
+                failures.append(fail("defconfig-native", "\(relativePath(config)) lacks CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y"))
+            }
+            for forbidden in ["CONFIG_ORLIX_HOSTED_EXEC_TCTI=y", "CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y"] where text.contains(forbidden) {
+                failures.append(fail("defconfig-tcti", "\(relativePath(config)) contains \(forbidden)"))
+            }
+        } catch {
+            failures.append(fail("defconfig-read", "\(relativePath(config)): \(error)"))
+        }
+    }
+    return failures
+}
+
+func runContractReproFixture(artifacts: inout [String]) -> [Failure] {
+    do {
+        let reducer = try writeReducer(
+            target: "tcti-contract-repro-pass-fixture",
+            caseID: "repro-pass",
+            command: "/usr/bin/true",
+            reason: "contract reducer replay fixture",
+            expectedStatus: .pass
+        )
+        artifacts.append(relativePath(reducer))
+        _ = try run(["make", "tcti-repro", "REPRO=\(relativePath(reducer))"])
+        return []
+    } catch {
+        return [fail("reducer-replay", "contract reducer replay fixture failed: \(error)")]
+    }
+}
+
+func runContract() throws -> Int32 {
+    let target = "tcti-contract"
+    var artifacts: [String] = []
+    var failures: [Failure] = []
+    var passedGroups: [String] = []
+
+    let reportStatusFailures = validateReportStatusContracts()
+    if reportStatusFailures.isEmpty {
+        passedGroups.append("report status schema: pass/fail/todo/skipped/error/evidence")
+    } else {
+        failures.append(contentsOf: reportStatusFailures)
+    }
+
+    var reducerArtifacts: [String] = []
+    let reducerFailures = runContractReproFixture(artifacts: &reducerArtifacts)
+    artifacts.append(contentsOf: reducerArtifacts)
+    if reducerFailures.isEmpty {
+        passedGroups.append("reducer replay fixture")
+    } else {
+        failures.append(contentsOf: reducerFailures)
+    }
+
+    let defconfigFailures = validateProductDefconfigSafety()
+    if defconfigFailures.isEmpty {
+        passedGroups.append("product defconfig safety")
+    } else {
+        failures.append(contentsOf: defconfigFailures)
+    }
+
+    let x18Fixture = path("tools", "tcti", "fixtures", "x18_forbidden", "bad.S")
+    artifacts.append(relativePath(x18Fixture))
+    if scanSourceForX18(x18Fixture).isEmpty {
+        failures.append(fail("x18-negative-fixture", "forbidden host x18 fixture did not fail scanner"))
+    } else {
+        passedGroups.append("x18 forbidden negative fixture")
+    }
+
+    let outputRoot = buildPath("contract", "golden_elf")
+    let goldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json")
+    do {
+        let validation = try validateInit001Golden(metadataURL: goldenPath, outputRoot: outputRoot)
+        artifacts.append(contentsOf: validation.artifacts)
+        if validation.failures.isEmpty {
+            passedGroups.append("init_001_exit golden metadata, ELF header, entrypoint, and syscall shape")
+        } else {
+            failures.append(contentsOf: validation.failures)
+        }
+    } catch {
+        failures.append(fail("init-001-golden", "\(error)"))
+    }
+
+    let wrongMetadata = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_wrong_binary_sha.json")
+    artifacts.append(relativePath(wrongMetadata))
+    do {
+        let validation = try validateInit001Golden(metadataURL: wrongMetadata, outputRoot: buildPath("contract", "negative_golden_elf"))
+        if validation.failures.contains(where: { $0.id == "binary-sha256" || $0.id == "actual-binary-sha256" }) {
+            artifacts.append(contentsOf: validation.artifacts)
+            passedGroups.append("golden metadata wrong-SHA negative fixture")
+        } else {
+            failures.append(fail("golden-negative-fixture", "wrong binary SHA fixture did not fail metadata validation"))
+        }
+    } catch {
+        failures.append(fail("golden-negative-fixture", "\(error)"))
+    }
+
+    let todoGroups = [
+        "guest instruction execution semantics",
+        "gadget ABI and register commit-back execution",
+        "FETCH/READ/WRITE memory execution",
+        "TLB, block-cache, invalidation, and direct-chain execution",
+    ]
+    let todoFailures = todoGroups.map { fail("todo", "\($0) contract remains TODO") }
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "todo",
+        command: "make \(target)",
+        reason: "deeper CPU-state contract groups remain TODO",
+        artifacts: artifacts,
+        expectedStatus: failures.isEmpty ? .todo : .fail
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .todo : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Real contract groups passed: \(passedGroups.joined(separator: ", ")). TODO groups: \(todoGroups.joined(separator: ", ")).",
+        failures: failures + todoFailures,
+        artifacts: artifacts,
+        counters: [
+            "contract_groups_passed": passedGroups.count,
+            "contract_groups_todo": todoGroups.count,
+            "contract_groups_failed": failures.count,
+        ]
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    print("real contract groups passed:")
+    for group in passedGroups {
+        print("- \(group)")
+    }
+    print("todo contract groups:")
+    for group in todoGroups {
+        print("- \(group)")
+    }
+    print("reproduce with: make tcti-repro REPRO=\(relativePath(reducer))")
+    return exitCode(for: status)
 }
 
 func runReportSchemaCheck() throws -> Int32 {
@@ -605,6 +790,7 @@ func buildInit001(outputRoot: URL) throws -> (binary: URL, source: URL, metadata
     _ = try run(["clang"] + flags)
     let fileOutput = try run(["file", binary.path])
     let objdumpOutput = try run(["xcrun", "llvm-objdump", "-f", binary.path])
+    let disassembly = try run(["xcrun", "llvm-objdump", "-d", binary.path])
     return (
         binary,
         source,
@@ -613,9 +799,118 @@ func buildInit001(outputRoot: URL) throws -> (binary: URL, source: URL, metadata
             "binary_sha256": try sha256(binary),
             "file_output": fileOutput,
             "objdump_header": objdumpOutput,
+            "disassembly": disassembly,
             "flags": flags.joined(separator: " "),
         ]
     )
+}
+
+func expectedEntrypoint(_ metadata: GoldenMetadata) -> String {
+    metadata.entrypoint.lowercased()
+}
+
+func validateInit001Metadata(
+    _ metadata: GoldenMetadata,
+    sourceHash: String,
+    binaryHash: String,
+    fileOutput: String,
+    objdumpHeader: String,
+    disassembly: String
+) -> [Failure] {
+    var failures: [Failure] = []
+    if metadata.caseID != "init_001_exit" {
+        failures.append(fail("case-id", "golden case id must be init_001_exit"))
+    }
+    if metadata.sourceSHA256 != sourceHash {
+        failures.append(fail("source-sha256", "source hash changed for init_001_exit"))
+    }
+    if metadata.expectedBinarySHA256 != binaryHash {
+        failures.append(fail("binary-sha256", "binary hash changed for init_001_exit; inspect or run make tcti-golden-elf-refresh CASE=init_001_exit"))
+    }
+    if metadata.actualBinarySHA256 != binaryHash {
+        failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_001_exit"))
+    }
+    if metadata.elfType != "ET_EXEC" {
+        failures.append(fail("elf-type", "init_001_exit golden metadata must use ET_EXEC"))
+    }
+    if metadata.machine != "AArch64" {
+        failures.append(fail("elf-machine", "init_001_exit golden metadata must use AArch64"))
+    }
+    if metadata.expectedExitCode != 42 {
+        failures.append(fail("expected-exit", "init_001_exit must expect exit code 42"))
+    }
+    if metadata.expectedSyscalls.count != 1 ||
+        metadata.expectedSyscalls.first?.nr != "exit" ||
+        metadata.expectedSyscalls.first?.code != 42 {
+        failures.append(fail("expected-syscall", "init_001_exit must expect exactly exit(42)"))
+    }
+    if !fileOutput.contains("ELF 64-bit LSB executable") {
+        failures.append(fail("elf-class", "init_001_exit must be ELF64 executable"))
+    }
+    if !fileOutput.contains("ARM aarch64") {
+        failures.append(fail("elf-file-machine", "init_001_exit file output must identify ARM aarch64"))
+    }
+    if !objdumpHeader.contains("file format elf64-littleaarch64") {
+        failures.append(fail("objdump-format", "init_001_exit must disassemble as elf64-littleaarch64"))
+    }
+    if !objdumpHeader.contains("architecture: aarch64") {
+        failures.append(fail("objdump-architecture", "init_001_exit objdump architecture must be aarch64"))
+    }
+    if !objdumpHeader.lowercased().contains("start address: \(expectedEntrypoint(metadata))") {
+        failures.append(fail("entrypoint", "init_001_exit entrypoint does not match \(metadata.entrypoint)"))
+    }
+    let requiredInstructionWords = [
+        "d2800ba8": "mov x8, #93",
+        "d2800540": "mov x0, #42",
+        "d4000001": "svc #0",
+    ]
+    for (word, description) in requiredInstructionWords where !disassembly.contains(word) {
+        failures.append(fail("instruction-shape", "init_001_exit disassembly missing \(description) instruction word \(word)"))
+    }
+    if !disassembly.contains("mov\tx8") || !disassembly.contains("#0x5d") {
+        failures.append(fail("syscall-nr", "init_001_exit disassembly must load x8 with Linux exit syscall 93"))
+    }
+    if !disassembly.contains("mov\tx0") || !disassembly.contains("#0x2a") {
+        failures.append(fail("syscall-arg", "init_001_exit disassembly must load x0 with exit code 42"))
+    }
+    if !disassembly.contains("svc\t#0") {
+        failures.append(fail("svc", "init_001_exit disassembly must end in svc #0"))
+    }
+    for (key, value) in metadata.forbiddenBehavior where value {
+        failures.append(fail("forbidden-behavior", "init_001_exit golden metadata sets forbidden_behavior.\(key)=true"))
+    }
+    return failures
+}
+
+func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String]) {
+    let built = try buildInit001(outputRoot: outputRoot)
+    let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataURL))
+    let sourceHash = try sha256(built.source)
+    let binaryHash = try sha256(built.binary)
+    let fileOutput = built.metadata["file_output"] ?? ""
+    let objdumpHeader = built.metadata["objdump_header"] ?? ""
+    let disassembly = built.metadata["disassembly"] ?? ""
+    let validationURL = outputRoot
+        .appendingPathComponent("init_001_exit", isDirectory: true)
+        .appendingPathComponent("validation.json")
+    let validationPayload = [
+        "binary": relativePath(built.binary),
+        "source_sha256": sourceHash,
+        "binary_sha256": binaryHash,
+        "file_output": fileOutput,
+        "objdump_header": objdumpHeader,
+        "disassembly": disassembly,
+    ]
+    try writeJSON(validationPayload, to: validationURL)
+    let failures = validateInit001Metadata(
+        expected,
+        sourceHash: sourceHash,
+        binaryHash: binaryHash,
+        fileOutput: fileOutput,
+        objdumpHeader: objdumpHeader,
+        disassembly: disassembly
+    )
+    return (failures, [relativePath(built.binary), relativePath(validationURL)])
 }
 
 func goldenMetadata(actualBinaryHash: String, sourceHash: String, toolchain: [String: String]) -> GoldenMetadata {
@@ -692,32 +987,18 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     var failures: [Failure] = []
     do {
         let toolchain = try toolchainInfo()
-        let built = try buildInit001(outputRoot: outputRoot)
-        artifacts.append(relativePath(built.binary))
-        let sourceHash: String
-        if let recordedSourceHash = built.metadata["source_sha256"] {
-            sourceHash = recordedSourceHash
-        } else {
-            sourceHash = try sha256(built.source)
-        }
-        let binaryHash: String
-        if let recordedBinaryHash = built.metadata["binary_sha256"] {
-            binaryHash = recordedBinaryHash
-        } else {
-            binaryHash = try sha256(built.binary)
-        }
         if refresh {
+            let built = try buildInit001(outputRoot: outputRoot)
+            artifacts.append(relativePath(built.binary))
+            let sourceHash = try sha256(built.source)
+            let binaryHash = try sha256(built.binary)
             let metadata = goldenMetadata(actualBinaryHash: binaryHash, sourceHash: sourceHash, toolchain: toolchain)
             try writeJSON(metadata, to: metadataPath)
             artifacts.append(relativePath(metadataPath))
         } else {
-            let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataPath))
-            if expected.sourceSHA256 != sourceHash {
-                failures.append(fail("source-sha256", "source hash changed for \(caseID)"))
-            }
-            if expected.expectedBinarySHA256 != binaryHash {
-                failures.append(fail("binary-sha256", "binary hash changed for \(caseID); inspect or run make tcti-golden-elf-refresh CASE=\(caseID)"))
-            }
+            let validation = try validateInit001Golden(metadataURL: metadataPath, outputRoot: outputRoot)
+            artifacts.append(contentsOf: validation.artifacts)
+            failures.append(contentsOf: validation.failures)
         }
     } catch {
         failures.append(fail("golden-elf", "\(error)"))
@@ -728,7 +1009,8 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
             caseID: caseID,
             command: "make \(target) CASE=\(caseID)",
             reason: failures.map(\.message).joined(separator: "; "),
-            artifacts: artifacts
+            artifacts: artifacts,
+            expectedStatus: .fail
         )
         artifacts.append(relativePath(reducer))
     }
@@ -843,8 +1125,17 @@ func runRepro() throws -> Int32 {
         throw GateError.invalidReducer("\(relativePath(url)) does not contain command")
     }
     print("target: \(payload.target)")
-    print("case_id: \(payload.caseID)")
-    print("command: \(payload.command)")
+    print("case id: \(payload.caseID)")
+    print("original command: \(payload.command)")
+    print("artifact paths:")
+    if payload.artifacts.isEmpty {
+        print("- none")
+    } else {
+        for artifact in payload.artifacts {
+            print("- \(artifact)")
+        }
+    }
+    print("expected status: \(payload.expectedStatus ?? "unknown")")
     print("reason: \(payload.reason)")
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -852,6 +1143,19 @@ func runRepro() throws -> Int32 {
     process.currentDirectoryURL = URL(fileURLWithPath: payload.workingDirectory)
     try process.run()
     process.waitUntilExit()
+    let reportURL = buildPath("reports", payload.target, "report.json")
+    var actualStatus = process.terminationStatus == 0 ? "pass" : "fail"
+    if let object = try? loadJSON(reportURL),
+       let dictionary = object as? [String: Any],
+       let status = dictionary["status"] as? String {
+        actualStatus = status
+    }
+    print("actual replay status: \(actualStatus)")
+    print("actual replay exit code: \(process.terminationStatus)")
+    if let expected = payload.expectedStatus, expected != actualStatus {
+        fputs("reproducer expected status \(expected), got \(actualStatus)\n", stderr)
+        return 1
+    }
     return process.terminationStatus
 }
 
@@ -871,7 +1175,9 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runSafetyAudit()
     case "tcti-repro":
         return try runRepro()
-    case "tcti-contract", "tcti-diff-switch", "tcti-memory-fuzz", "tcti-direct-chain-fuzz":
+    case "tcti-contract":
+        return try runContract()
+    case "tcti-diff-switch", "tcti-memory-fuzz", "tcti-direct-chain-fuzz":
         return try writeTodo(target: target, summary: "\(target) rail exists, but the real no-phone TCTI test implementation is not complete yet.")
     default:
         throw GateError.usage("unknown TCTI target: \(target)")

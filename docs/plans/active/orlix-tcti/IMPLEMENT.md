@@ -732,3 +732,105 @@ Boundary:
 - No physical device gate was run.
 - `tcti-contract`, `tcti-diff-switch`, `tcti-memory-fuzz`, and `tcti-direct-chain-fuzz` are real failing rails, not implemented tests.
 - This checkpoint proves rails, reporting, defconfig safety, golden seed reproducibility, and preflight behavior. It does not prove TCTI runtime readiness.
+
+### Checkpoint: Seed Golden ELF Contract Validation
+
+- Turned `make tcti-contract` from a pure TODO rail into a partial real no-phone contract rail.
+- `tcti-contract` still exits non-zero with `status=todo` because deeper CPU execution contract groups are intentionally not implemented yet.
+- Real contract groups now passing:
+  - report schema status representation for `pass`, `fail`, `todo`, `skipped`, `error`, and `evidence`
+  - reducer replay fixture
+  - product defconfig safety
+  - forbidden host `x18/w18` negative fixture
+  - `init_001_exit` golden metadata, ELF header, entrypoint, and syscall shape
+  - wrong-binary-SHA golden metadata negative fixture
+- Contract groups still TODO:
+  - guest instruction execution semantics
+  - gadget ABI and register commit-back execution
+  - `FETCH`/`READ`/`WRITE` memory execution
+  - TLB, block-cache, invalidation, and direct-chain execution
+- Strengthened `make tcti-golden-elf` for `init_001_exit`.
+  - Builds the seed no-libc AArch64 Linux ELF.
+  - Verifies source SHA256.
+  - Verifies binary SHA256 against `golden.json`.
+  - Verifies ELF64 AArch64 executable shape through `file` and `llvm-objdump`.
+  - Verifies entrypoint matches `golden.json`.
+  - Verifies syscall instruction shape by disassembly:
+    - `mov x8, #93`
+    - `mov x0, #42`
+    - `svc #0`
+- Added negative golden metadata fixture:
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_wrong_binary_sha.json`
+- Strengthened `make tcti-repro REPRO=<path>` output.
+  - Prints target.
+  - Prints case id.
+  - Prints original command.
+  - Prints artifact paths.
+  - Prints expected status.
+  - Prints actual replay status.
+  - Prints actual replay exit code.
+
+Report and reducer paths:
+
+- `Build/TCTI/reports/tcti-contract/report.json`
+- `Build/TCTI/reports/tcti-golden-elf/report.json`
+- `Build/TCTI/reproducers/tcti-contract/todo.json`
+- `Build/TCTI/reproducers/tcti-contract-repro-pass-fixture/repro-pass.json`
+
+Evidence:
+
+```sh
+rtk proxy git diff --check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-appstore-safety-audit
+```
+
+All passed.
+
+```sh
+rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+- `tcti-contract` wrote `status=todo`.
+- real contract groups were listed as passing.
+- deeper CPU-state groups were listed as TODO.
+- Make exited non-zero with `rc=2`.
+
+```sh
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/todo.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+- reducer replayed `make tcti-contract`.
+- expected status was `todo`.
+- actual replay status was `todo`.
+- actual replay exit code was `2`.
+- Make exited non-zero with `rc=2`.
+
+```sh
+rtk proxy sh -c 'if rg -n "CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y" OrlixKernel/Sources/ports/orlix/configs/development_defconfig OrlixKernel/Sources/ports/orlix/configs/release_defconfig; then exit 1; else echo product-defconfigs-no-tcti-defaults; fi'
+```
+
+Result: no product defconfig TCTI/default debug-switch matches.
+
+```sh
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Both passed. The existing Xcode SDK `__alloc_size` redefinition warning remains present.
+
+Boundary:
+
+- No production TCTI assembly was added.
+- No gadget dispatch was implemented.
+- No switch-debug instruction execution was implemented.
+- No simulator gate was run.
+- No physical-device gate was run.
+- This is structural and contractual no-phone proof for the seed golden ELF. It is not guest execution proof and not runtime readiness.
