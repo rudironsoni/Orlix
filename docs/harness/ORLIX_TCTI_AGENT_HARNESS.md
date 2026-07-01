@@ -27,6 +27,7 @@ Codex-specific integration remains under `.codex/`:
 - `.codex/subagents/`
 
 Codex hooks call skill-local scripts. They should not become the canonical project workflow.
+Sandbox mode, approval policy, secrets, and machine-local MCP credentials belong in `~/.codex/config.toml`, not in the committed repo adapter.
 
 ## MCP
 

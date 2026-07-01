@@ -1173,3 +1173,20 @@ Boundary:
 - No simulator gate was run.
 - No physical-device gate was run.
 - No HostAdapter, UIKit, Darwin syscall, fd table, VFS, process, signal, scheduler, or Linux runtime behavior was added.
+
+### Checkpoint: Agent Harness Policy Split
+
+- Removed committed Codex execution policy from `.codex/config.toml`:
+  - no repo-level `sandbox_mode`;
+  - no repo-level `approval_policy`.
+- Documented that sandbox mode, approval policy, secrets, and machine-local MCP credentials belong in `~/.codex/config.toml`.
+- Renamed the broad `AGENTS.md` harness section from `Codex Harness` to `Agent Harness`.
+- Added harness enforcement that fails if `.codex/config.toml` reintroduces committed `sandbox_mode` or `approval_policy`.
+
+Boundary:
+
+- No TCTI runtime feature was implemented.
+- No production TCTI assembly was added.
+- No gadget dispatch was implemented.
+- No simulator gate was run.
+- No physical-device gate was run.

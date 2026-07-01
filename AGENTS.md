@@ -55,9 +55,9 @@ Do not edit generated upstream trees, adapted upstream tests, generated package 
 
 The local kernel prototype is retired. Do not restore `LegacyOrlix/`, `OrlixKernel/fs`, `OrlixKernel/kernel`, or `OrlixKernel/runtime`. Useful behavior must move by ownership into upstream Linux, `arch/orlix`, Linux-native drivers, boot code, or narrow host-adapter seams.
 
-## Codex Harness
+## Agent Harness
 
-Use Codex-native surfaces deliberately:
+Use agent harness surfaces deliberately. Codex-specific files are adapters, not the project identity:
 
 - `.codex/agents/orlix-planner.toml` for non-trivial planning and `docs/plans/active/<task>/PLAN.md`.
 - `.codex/agents/orlix-implementer.toml` for executing an active plan and maintaining `IMPLEMENT.md`.
