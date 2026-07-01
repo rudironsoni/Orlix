@@ -16,6 +16,8 @@ unsigned long orlix_hosted_prepare_user_entry(unsigned long entry_user_tls);
 void orlix_hosted_note_user_entry_tls(unsigned long user_tls);
 void __noreturn orlix_hosted_enter_user(struct pt_regs *regs);
 int orlix_hosted_sync_syscall_gate(void);
+int orlix_try_sync_current_user_mappings(struct pt_regs *regs);
+int orlix_try_sync_current_user_minimal_mappings(struct pt_regs *regs);
 void orlix_sync_current_user_mappings(struct pt_regs *regs);
 void orlix_sync_current_user_minimal_mappings(struct pt_regs *regs);
 int orlix_sync_current_user_mapping_page(unsigned long address);

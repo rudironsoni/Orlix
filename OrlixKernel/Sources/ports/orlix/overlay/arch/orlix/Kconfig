@@ -41,4 +41,34 @@ config ORLIX_HOSTED_ASYNC_USER_TIMER
 	bool
 	default y
 
+config ORLIX_HOSTED_EXEC_NATIVE
+	bool "Use native hosted user execution"
+	default y
+	help
+	  Keep the existing HostAdapter trap-frame native execution backend
+	  available as an explicit development backend.
+
+config ORLIX_HOSTED_EXEC_TCTI
+	bool "Use Orlix TCTI hosted user execution"
+	default n
+	help
+	  Enable the Orlix-owned no-JIT same-ISA threaded interpreter backend
+	  for AArch64 Linux ELF userspace. This backend executes guest text as
+	  host data and must not request host-executable mappings for guest ELF
+	  text.
+
+config ORLIX_TCTI_DEBUG_SWITCH
+	bool "Enable Orlix TCTI switch debug oracle"
+	depends on ORLIX_HOSTED_EXEC_TCTI
+	default y if DEBUG_KERNEL
+	help
+	  Build the slow switch-dispatch correctness oracle used to test TCTI
+	  decoding, fault, syscall, and register semantics. It is not the
+	  physical-iPhone performance backend.
+
+config ORLIX_TCTI_KUNIT_TEST
+	bool "Enable Orlix TCTI KUnit tests"
+	depends on ORLIX_HOSTED_EXEC_TCTI && KUNIT
+	default n
+
 source "kernel/Kconfig.hz"

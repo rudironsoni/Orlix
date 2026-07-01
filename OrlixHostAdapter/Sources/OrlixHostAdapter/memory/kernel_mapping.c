@@ -85,6 +85,37 @@ static void OrlixHostInvalidateInstructionCache(unsigned long address,
     sys_icache_invalidate((void *)address, (size_t)length);
 }
 
+static struct orlix_host_user_mapping_failure OrlixHostLastUserMappingFailure;
+
+static unsigned long OrlixHostUserMappingFailureOperation(const char *reason)
+{
+    if (!reason) {
+        return ORLIX_HOST_USER_MAPPING_FAILURE_NONE;
+    }
+    if (strcmp(reason, "invalid-argument") == 0) {
+        return ORLIX_HOST_USER_MAPPING_FAILURE_INVALID_ARGUMENT;
+    }
+    if (strcmp(reason, "create-mapping") == 0 ||
+        strcmp(reason, "refresh-window-create-mapping") == 0) {
+        return ORLIX_HOST_USER_MAPPING_FAILURE_CREATE_MAPPING;
+    }
+    if (strcmp(reason, "missing-mapping") == 0 ||
+        strcmp(reason, "refresh-window-missing-mapping") == 0) {
+        return ORLIX_HOST_USER_MAPPING_FAILURE_MISSING_MAPPING;
+    }
+    if (strcmp(reason, "copy-protect") == 0 ||
+        strcmp(reason, "refresh-window-copy-protect") == 0) {
+        return ORLIX_HOST_USER_MAPPING_FAILURE_COPY_PROTECT;
+    }
+    if (strcmp(reason, "refresh-window-clear-protect") == 0) {
+        return ORLIX_HOST_USER_MAPPING_FAILURE_CLEAR_PROTECT;
+    }
+    if (strcmp(reason, "refresh-window-segment-protect") == 0) {
+        return ORLIX_HOST_USER_MAPPING_FAILURE_SEGMENT_PROTECT;
+    }
+    return ORLIX_HOST_USER_MAPPING_FAILURE_NONE;
+}
+
 static void OrlixHostTraceShadowUserPageFailure(const char *reason,
                                                 unsigned long target_address,
                                                 unsigned long length,
@@ -94,6 +125,18 @@ static void OrlixHostTraceShadowUserPageFailure(const char *reason,
                                                 vm_prot_t copy_protection,
                                                 kern_return_t status)
 {
+    OrlixHostLastUserMappingFailure =
+        (struct orlix_host_user_mapping_failure) {
+            .operation = OrlixHostUserMappingFailureOperation(reason),
+            .target_address = target_address,
+            .length = length,
+            .mapping_address = mapping_address,
+            .mapping_length = mapping_length,
+            .requested_protection = requested_protection,
+            .attempted_protection = copy_protection,
+            .host_status = status,
+        };
+
 #if DEBUG || ORLIX_BETA_OBSERVABILITY
     orlix_host_trace_printf(ORLIX_HOST_TRACE_CATEGORY_HOST_VM,
                             ORLIX_HOST_TRACE_LEVEL_ERROR,
@@ -1660,29 +1703,53 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
                                        length,
                                        protection,
                                        writable);
-    if (!mapping &&
-        OrlixHostUserCreateMapping(target_address,
-                                   length,
-                                   protection,
-                                   writable,
-                                   &mapping) != 0) {
-        OrlixHostLeaveHostTls(active_tls);
-        return -1;
-    }
-    if (!mapping) {
-        OrlixHostLeaveHostTls(active_tls);
-        return -1;
-    }
+	if (!mapping &&
+	    OrlixHostUserCreateMapping(target_address,
+				       length,
+				       protection,
+				       writable,
+				       &mapping) != 0) {
+		OrlixHostTraceShadowUserPageFailure("refresh-window-create-mapping",
+						    target_address,
+						    length,
+						    0,
+						    0,
+						    protection,
+						    protection,
+						    KERN_FAILURE);
+		OrlixHostLeaveHostTls(active_tls);
+		return -1;
+	}
+	if (!mapping) {
+		OrlixHostTraceShadowUserPageFailure("refresh-window-missing-mapping",
+						    target_address,
+						    length,
+						    0,
+						    0,
+						    protection,
+						    protection,
+						    KERN_FAILURE);
+		OrlixHostLeaveHostTls(active_tls);
+		return -1;
+	}
 
     status = vm_protect(mach_task_self(),
                         (vm_address_t)mapping->target_address,
                         mapping->length,
                         false,
                         copy_protection);
-    if (status != KERN_SUCCESS) {
-        OrlixHostLeaveHostTls(active_tls);
-        return -1;
-    }
+	if (status != KERN_SUCCESS) {
+		OrlixHostTraceShadowUserPageFailure("refresh-window-copy-protect",
+						    target_address,
+						    length,
+						    mapping->target_address,
+						    mapping->length,
+						    protection,
+						    copy_protection,
+						    status);
+		OrlixHostLeaveHostTls(active_tls);
+		return -1;
+	}
 
     OrlixHostUserRemoveSegmentsInRange(mapping,
                                        target_address,
@@ -1773,6 +1840,18 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
     mapping->protection = protection;
     mapping->writable = writable;
     OrlixHostLeaveHostTls(active_tls);
+    return 0;
+}
+
+__attribute__((visibility("hidden"))) int orlix_host_user_mapping_last_failure(
+    struct orlix_host_user_mapping_failure *failure)
+{
+    if (!failure || OrlixHostLastUserMappingFailure.operation ==
+                        ORLIX_HOST_USER_MAPPING_FAILURE_NONE) {
+        return -1;
+    }
+
+    *failure = OrlixHostLastUserMappingFailure;
     return 0;
 }
 

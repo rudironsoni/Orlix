@@ -60,6 +60,7 @@ MLIBC_CXX ?= clang++
 MLIBC_HOST_CC ?= clang
 MLIBC_HOST_CXX ?= clang++
 MLIBC_HOST_SDKROOT ?= $(shell xcrun --sdk macosx --show-sdk-path 2>/dev/null)
+MLIBC_HOST_TOOL_ENV = env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET -u XROS_DEPLOYMENT_TARGET -u PLATFORM_NAME -u EFFECTIVE_PLATFORM_NAME -u ARCHS -u CURRENT_ARCH -u VALID_ARCHS -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)"
 MLIBC_AR ?= $(if $(MLIBC_LLVM_PREFIX),$(MLIBC_LLVM_PREFIX)/llvm-ar,llvm-ar)
 MLIBC_STRIP ?= $(if $(MLIBC_LLVM_PREFIX),$(MLIBC_LLVM_PREFIX)/llvm-strip,llvm-strip)
 MESON ?= meson
@@ -337,7 +338,7 @@ __build: __write-cross-file
 	} > "$$meson_config_tmp"; \
 	if [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ] && { [ ! -s "$(MLIBC_BUILD_DIR)/meson-private/coredata.dat" ] || [ ! -s "$(MLIBC_MESON_CONFIG_STAMP)" ] || ! cmp -s "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; }; then \
 		echo "OrlixMLibC Meson compiler configuration changed; wiping Meson build directory"; \
-		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --wipe "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
+		$(MLIBC_HOST_TOOL_ENV) "$(MESON)" setup --wipe "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
 			--prefix /usr \
@@ -352,7 +353,7 @@ __build: __write-cross-file
 			-Dbsd_option=enabled \
 			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	elif [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ]; then \
-		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup --reconfigure "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
+		$(MLIBC_HOST_TOOL_ENV) "$(MESON)" setup --reconfigure "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
 			--prefix /usr \
@@ -367,7 +368,7 @@ __build: __write-cross-file
 			-Dbsd_option=enabled \
 			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	else \
-		env -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)" "$(MESON)" setup "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
+		$(MLIBC_HOST_TOOL_ENV) "$(MESON)" setup "$(MLIBC_BUILD_DIR)" "$(MLIBC_SRC_DIR)" \
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
 			--prefix /usr \
@@ -383,8 +384,8 @@ __build: __write-cross-file
 			-Dlinux_kernel_headers="$(MLIBC_BUILD_KERNEL_HEADERS)"; \
 	fi; \
 	mv "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; \
-	"$(MESON)" compile -C "$(MLIBC_BUILD_DIR)"; \
-	DESTDIR="$(MLIBC_SYSROOT)" "$(MESON)" install -C "$(MLIBC_BUILD_DIR)"; \
+	$(MLIBC_HOST_TOOL_ENV) "$(MESON)" compile -C "$(MLIBC_BUILD_DIR)"; \
+	$(MLIBC_HOST_TOOL_ENV) DESTDIR="$(MLIBC_SYSROOT)" "$(MESON)" install -C "$(MLIBC_BUILD_DIR)"; \
 	$(MAKE) -f "$(PROJECT_DIR)/Makefile" __build-compiler-rt PROFILE="$(PROFILE)"; \
 	[ -d "$(MLIBC_SYSROOT)/usr/include" ] || { echo "missing OrlixMLibC installed headers: $(MLIBC_SYSROOT)/usr/include" >&2; exit 1; }; \
 	[ -d "$(MLIBC_SYSROOT)/usr/lib" ] || { echo "missing OrlixMLibC installed libraries: $(MLIBC_SYSROOT)/usr/lib" >&2; exit 1; }; \

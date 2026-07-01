@@ -501,6 +501,7 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 	unsigned long window_pages;
 	unsigned long cursor;
 	struct orlix_host_user_page_segment *segments;
+	struct orlix_host_user_page_segment *page_segment = NULL;
 	unsigned long segment_count = 0;
 	int page_ret = -EFAULT;
 	int ret;
@@ -548,8 +549,10 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 				.writable = window.writable,
 				.executable = window.executable,
 			};
-		if (cursor == page)
+		if (cursor == page) {
 			page_ret = 0;
+			page_segment = &segments[segment_count - 1];
+		}
 	}
 
 	if (page_ret) {
@@ -558,9 +561,57 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 	}
 
 	ret = orlix_host_user_refresh_window(window_start,
-					    window_end - window_start,
-					    segments,
-					    segment_count);
+					     window_end - window_start,
+					     segments,
+					     segment_count);
+	if (ret) {
+		struct orlix_host_user_mapping_failure failure;
+		int failure_ret;
+
+		failure_ret = orlix_host_user_mapping_last_failure(&failure);
+		if (!failure_ret)
+			pr_info("Orlix: hosted user window refresh failed task=%s pid=%d page=%#lx window=%#lx-%#lx page_size=%#lx host_granule=%#lx segments=%lu ret=%d op=%lu host_status=%ld target=%#lx length=%#lx mapping=%#lx mapping_length=%#lx requested_prot=%#lx attempted_prot=%#lx\n",
+				current->comm, task_pid_nr(current), page,
+				window_start, window_end, PAGE_SIZE,
+				orlix_host_mapping_granule(), segment_count, ret,
+				failure.operation, failure.host_status,
+				failure.target_address, failure.length,
+				failure.mapping_address, failure.mapping_length,
+				failure.requested_protection,
+				failure.attempted_protection);
+		else
+			pr_info("Orlix: hosted user window refresh failed task=%s pid=%d page=%#lx window=%#lx-%#lx page_size=%#lx host_granule=%#lx segments=%lu ret=%d\n",
+				current->comm, task_pid_nr(current), page,
+				window_start, window_end, PAGE_SIZE,
+				orlix_host_mapping_granule(), segment_count, ret);
+		if (!page_segment)
+			ret = -EFAULT;
+		else
+			ret = orlix_refresh_user_pte_page_from_kernel(
+				mm, page, page_segment->source_page);
+		if (ret) {
+			failure_ret = orlix_host_user_mapping_last_failure(&failure);
+			if (!failure_ret)
+				pr_info("Orlix: hosted user page refresh fallback failed task=%s pid=%d page=%#lx target=%#lx length=%#lx writable=%d executable=%d ret=%d op=%lu host_status=%ld mapping=%#lx mapping_length=%#lx requested_prot=%#lx attempted_prot=%#lx\n",
+					current->comm, task_pid_nr(current), page,
+					page_segment ? page_segment->target_address : 0,
+					page_segment ? page_segment->length : 0,
+					page_segment ? page_segment->writable : 0,
+					page_segment ? page_segment->executable : 0,
+					ret, failure.operation, failure.host_status,
+					failure.mapping_address, failure.mapping_length,
+					failure.requested_protection,
+					failure.attempted_protection);
+			else
+				pr_info("Orlix: hosted user page refresh fallback failed task=%s pid=%d page=%#lx target=%#lx length=%#lx writable=%d executable=%d ret=%d\n",
+					current->comm, task_pid_nr(current), page,
+					page_segment ? page_segment->target_address : 0,
+					page_segment ? page_segment->length : 0,
+					page_segment ? page_segment->writable : 0,
+					page_segment ? page_segment->executable : 0,
+					ret);
+		}
+	}
 	kfree(segments);
 	return ret;
 }
@@ -588,7 +639,7 @@ static int orlix_sync_current_user_stack_window(unsigned long start,
 
 #define ORLIX_HOSTED_STACK_ENTRY_WINDOW_PAGES	16
 
-void orlix_sync_current_user_mappings(struct pt_regs *regs)
+int orlix_try_sync_current_user_mappings(struct pt_regs *regs)
 {
 	struct mm_struct *mm = current->mm;
 	unsigned long sp_page = regs->sp & PAGE_MASK;
@@ -596,20 +647,21 @@ void orlix_sync_current_user_mappings(struct pt_regs *regs)
 		((regs->sp - 1) & PAGE_MASK) : 0;
 	unsigned long stack_window_start = 0;
 	unsigned long stack_window_end = 0;
+	int ret;
 
 	if (!mm)
-		panic("Orlix: current task has no user mm for pc %#llx\n",
-		      regs->pc);
+		return -EINVAL;
 
 	/*
 	 * Darwin cannot reliably deliver the hosted trap signal if the first
 	 * user stack access faults on the same unmapped stack needed for signal
 	 * delivery. Keep the writable user stack VMA mirrored before user entry.
 	 */
-	if (regs->pc && regs->pc < TASK_SIZE &&
-	    orlix_sync_current_user_mapping_page(regs->pc))
-		panic("Orlix: failed to synchronize hosted user pc %#llx\n",
-		      regs->pc);
+	if (regs->pc && regs->pc < TASK_SIZE) {
+		ret = orlix_sync_current_user_mapping_page(regs->pc);
+		if (ret)
+			return ret;
+	}
 
 	if (stack_access_page) {
 		stack_window_end = sp_page +
@@ -627,50 +679,66 @@ void orlix_sync_current_user_mappings(struct pt_regs *regs)
 	if (stack_access_page &&
 	    orlix_sync_current_user_stack_window(stack_window_start,
 						stack_window_end))
-		panic("Orlix: failed to synchronize hosted user stack window %#lx\n",
-		      stack_access_page);
+		return -EFAULT;
 	if (stack_access_page &&
 	    orlix_sync_user_stack_page_if_present(mm, stack_access_page))
-		panic("Orlix: failed to synchronize hosted user stack access page %#lx\n",
-		      stack_access_page);
+		return -EFAULT;
 	if (sp_page != stack_access_page &&
 	    orlix_sync_user_stack_page_if_present(mm, sp_page))
-		panic("Orlix: failed to synchronize hosted user sp page %#lx\n",
-		      sp_page);
+		return -EFAULT;
 
 	if (orlix_hosted_sync_syscall_gate())
-		panic("Orlix: failed to synchronize hosted syscall gate %#lx\n",
-		      ORLIX_HOSTED_SYSCALL_GATE);
+		return -EFAULT;
+
+	return 0;
 }
 
-void orlix_sync_current_user_minimal_mappings(struct pt_regs *regs)
+void orlix_sync_current_user_mappings(struct pt_regs *regs)
+{
+	int ret = orlix_try_sync_current_user_mappings(regs);
+
+	if (ret)
+		panic("Orlix: failed to synchronize hosted user mappings pc %#llx ret %d\n",
+		      regs->pc, ret);
+}
+
+int orlix_try_sync_current_user_minimal_mappings(struct pt_regs *regs)
 {
 	struct mm_struct *mm = current->mm;
 	unsigned long sp_page = regs->sp & PAGE_MASK;
 	unsigned long stack_access_page = regs->sp ?
 		((regs->sp - 1) & PAGE_MASK) : 0;
+	int ret;
 
 	if (!current->mm)
-		panic("Orlix: current task has no user mm for pc %#llx\n",
-		      regs->pc);
+		return -EINVAL;
 
-	if (regs->pc && regs->pc < TASK_SIZE &&
-	    orlix_sync_current_user_mapping_page(regs->pc))
-		panic("Orlix: failed to synchronize hosted user pc %#llx\n",
-		      regs->pc);
+	if (regs->pc && regs->pc < TASK_SIZE) {
+		ret = orlix_sync_current_user_mapping_page(regs->pc);
+		if (ret)
+			return ret;
+	}
 
 	if (stack_access_page &&
 	    orlix_sync_user_stack_page_if_present(mm, stack_access_page))
-		panic("Orlix: failed to synchronize hosted user stack access page %#lx\n",
-		      stack_access_page);
+		return -EFAULT;
 	if (sp_page != stack_access_page &&
 	    orlix_sync_user_stack_page_if_present(mm, sp_page))
-		panic("Orlix: failed to synchronize hosted user sp page %#lx\n",
-		      sp_page);
+		return -EFAULT;
 
 	if (orlix_hosted_sync_syscall_gate())
-		panic("Orlix: failed to synchronize hosted syscall gate %#lx\n",
-		      ORLIX_HOSTED_SYSCALL_GATE);
+		return -EFAULT;
+
+	return 0;
+}
+
+void orlix_sync_current_user_minimal_mappings(struct pt_regs *regs)
+{
+	int ret = orlix_try_sync_current_user_minimal_mappings(regs);
+
+	if (ret)
+		panic("Orlix: failed to synchronize hosted minimal user mappings pc %#llx ret %d\n",
+		      regs->pc, ret);
 }
 
 int orlix_sync_current_user_mapping_page(unsigned long address)
