@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+printf '%s\n' "Orlix TCTI context:"
+printf '%s\n' "- current proof lane: no-phone golden ELF and switch-debug oracle before gadgets or device work"
+printf '%s\n' "- no production TCTI assembly until switch-debug oracle coverage and safety reports cover the target"
+printf '%s\n' "- no physical device TCTI gate until no-phone reports pass and runtime-validation preflight permits it"
+printf '%s\n' "- start with: rtk proxy make tcti-plan-consistency && rtk proxy make codex-harness-check"
+if test -f "$root/Build/TCTI/reports/tcti-golden-elf/report.json"; then
+  printf '%s\n' "- latest golden report: Build/TCTI/reports/tcti-golden-elf/report.json"
+fi

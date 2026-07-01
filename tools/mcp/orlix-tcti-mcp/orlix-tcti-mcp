@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+repo_root="$(cd "$(dirname "$0")/../../.." && pwd)"
+exec swift "$repo_root/tools/mcp/orlix-tcti-mcp/orlix-tcti-mcp.swift"

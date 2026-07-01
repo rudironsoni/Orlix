@@ -1,0 +1,9 @@
+dependencies:
+  subagents:
+    - .codex/subagents/tcti-safety-reviewer.md
+    - .codex/subagents/tcti-release-gate-reviewer.md
+  mcp_servers:
+    - orlix-tcti
+  commands:
+    - make tcti-appstore-safety-audit
+    - make tcti-plan-consistency

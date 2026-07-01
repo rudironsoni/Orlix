@@ -1100,3 +1100,85 @@ Boundary:
 - No Linux runtime semantics were implemented.
 - No fd table, VFS, process, signal, scheduler, or real syscall behavior was implemented.
 - Write and exit are captured test-harness syscall events only.
+
+### Checkpoint: Codex TCTI Agent Harness
+
+- Added repo-scoped Codex configuration for TCTI orchestration:
+  - `.codex/config.toml` now declares TCTI subagent roles.
+  - `.codex/config.toml` now declares MCP entries for OpenAI developer docs, Context7, LLDB, and the local Orlix TCTI MCP.
+  - user-local secrets and machine-specific MCP enablement stay outside the repo.
+- Added TCTI lifecycle hook scripts:
+  - `.codex/hooks/pre_tool_use_policy`
+  - `.codex/hooks/post_tool_use_review`
+  - `.codex/hooks/session_start_context`
+  - `.codex/hooks/stop_guard`
+  - `.codex/hooks.json` wires these into the existing hook lifecycle.
+- Added TCTI subagent role packets:
+  - `.codex/subagents/tcti-planner.md`
+  - `.codex/subagents/tcti-oracle-engineer.md`
+  - `.codex/subagents/tcti-llvm-inspector.md`
+  - `.codex/subagents/tcti-safety-reviewer.md`
+  - `.codex/subagents/tcti-test-reducer.md`
+  - `.codex/subagents/tcti-gadget-reviewer.md`
+  - `.codex/subagents/tcti-release-gate-reviewer.md`
+- Added repo-scoped TCTI skills:
+  - `.agents/skills/orlix-tcti-next-step/SKILL.md`
+  - `.agents/skills/orlix-tcti-oracle/SKILL.md`
+  - `.agents/skills/orlix-tcti-safety/SKILL.md`
+  - `.agents/skills/orlix-tcti-debug/SKILL.md`
+  - each skill includes `agents/openai.yaml` dependencies for the relevant subagents and MCP servers.
+- Added local MCP skeletons and docs:
+  - `tools/mcp/orlix-tcti-mcp/`
+  - `tools/mcp/orlix-llvm-mcp-wrapper/`
+  - `docs/harness/ORLIX_TCTI_CODEX_HARNESS.md`
+- The Orlix TCTI MCP exposes only domain tools:
+  - `tcti_status`
+  - `tcti_next`
+  - `tcti_report_read`
+  - `tcti_reproducer_read`
+  - `tcti_golden_list`
+  - `tcti_golden_validate`
+  - `tcti_safety_audit`
+  - `tcti_plan_consistency`
+- Added Codex harness check targets:
+  - `make codex-harness-check`
+  - `make codex-hooks-check`
+  - `make codex-skills-check`
+  - `make codex-subagents-check`
+  - `make codex-mcp-check`
+- Updated `AGENTS.md` so future TCTI work routes through the Orlix TCTI Codex harness, planner, safety reviewer, and no-phone gates before direct implementation.
+
+Evidence:
+
+```sh
+rtk proxy git diff --check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make codex-harness-check
+rtk proxy make codex-hooks-check
+rtk proxy make codex-skills-check
+rtk proxy make codex-subagents-check
+rtk proxy make codex-mcp-check
+```
+
+All passed.
+
+```sh
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Both passed. The existing Xcode SDK `__alloc_size` redefinition warning remains present.
+
+Boundary:
+
+- No TCTI runtime feature was implemented.
+- No production TCTI assembly was added.
+- No gadget dispatch was implemented.
+- No simulator gate was run.
+- No physical-device gate was run.
+- No HostAdapter, UIKit, Darwin syscall, fd table, VFS, process, signal, scheduler, or Linux runtime behavior was added.

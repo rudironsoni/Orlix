@@ -1,0 +1,9 @@
+dependencies:
+  subagents:
+    - .codex/subagents/tcti-llvm-inspector.md
+  mcp_servers:
+    - lldb
+    - orlix-tcti
+  commands:
+    - xcrun llvm-objdump
+    - xcrun llvm-readelf

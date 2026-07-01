@@ -1,0 +1,14 @@
+dependencies:
+  subagents:
+    - .codex/subagents/tcti-planner.md
+    - .codex/subagents/tcti-safety-reviewer.md
+    - .codex/subagents/tcti-oracle-engineer.md
+    - .codex/subagents/tcti-llvm-inspector.md
+    - .codex/subagents/tcti-test-reducer.md
+  mcp_servers:
+    - orlix-tcti
+    - openaiDeveloperDocs
+    - context7
+  commands:
+    - make tcti-plan-consistency
+    - make codex-harness-check

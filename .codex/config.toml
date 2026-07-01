@@ -10,3 +10,61 @@ hooks = true
 
 [agents]
 max_depth = 1
+
+[agents."tcti-planner"]
+description = "Orlix TCTI planner: reads PLAN.md, IMPLEMENT.md, reports, and harness status; selects the next safe no-phone task; refuses runtime expansion when prerequisites are missing. See .codex/subagents/tcti-planner.md."
+
+[agents."tcti-oracle-engineer"]
+description = "Orlix TCTI oracle engineer: implements no-phone switch-debug semantic oracle, golden ELF validation, and reducers only after planner and safety scope are clear. See .codex/subagents/tcti-oracle-engineer.md."
+
+[agents."tcti-llvm-inspector"]
+description = "Orlix TCTI LLVM inspector: reports exact ELF, Mach-O, disassembly, relocation, symbol, section, and LLDB facts without changing source. See .codex/subagents/tcti-llvm-inspector.md."
+
+[agents."tcti-safety-reviewer"]
+description = "Orlix TCTI safety reviewer: checks App Store constraints, x18, JIT/MAP_JIT/RWX/prot_exec, HostAdapter boundaries, defconfigs, and generated-tree policy. See .codex/subagents/tcti-safety-reviewer.md."
+
+[agents."tcti-test-reducer"]
+description = "Orlix TCTI test reducer: converts failed gates into minimal fixtures and verifies make tcti-repro before production patches. See .codex/subagents/tcti-test-reducer.md."
+
+[agents."tcti-gadget-reviewer"]
+description = "Orlix TCTI gadget reviewer: later-stage reviewer for gadget ABI and switch-vs-gadget differential tests; refuses until switch-debug oracle and safety audits cover the target. See .codex/subagents/tcti-gadget-reviewer.md."
+
+[agents."tcti-release-gate-reviewer"]
+description = "Orlix TCTI release gate reviewer: decides whether a TCTI change can advance readiness based on JSON reports, reducer evidence, defconfig safety, and physical gate preflight. See .codex/subagents/tcti-release-gate-reviewer.md."
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
+enabled = true
+required = false
+tool_timeout_sec = 60
+
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+enabled = false
+required = false
+tool_timeout_sec = 60
+env_http_headers = { "CONTEXT7_API_KEY" = "CONTEXT7_API_KEY" }
+
+[mcp_servers.lldb]
+command = "tools/mcp/orlix-llvm-mcp-wrapper/lldb-mcp-wrapper.sh"
+enabled = false
+required = false
+enabled_tools = ["lldb_command"]
+tool_timeout_sec = 60
+
+[mcp_servers.orlix-tcti]
+command = "tools/mcp/orlix-tcti-mcp/orlix-tcti-mcp"
+cwd = "."
+enabled = false
+required = false
+enabled_tools = [
+  "tcti_status",
+  "tcti_next",
+  "tcti_report_read",
+  "tcti_reproducer_read",
+  "tcti_golden_list",
+  "tcti_golden_validate",
+  "tcti_safety_audit",
+  "tcti_plan_consistency",
+]
+tool_timeout_sec = 120
