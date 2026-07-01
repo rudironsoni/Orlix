@@ -1026,6 +1026,8 @@ Golden binaries are generated build artifacts unless a later checkpoint explicit
 
 `make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` is the first no-phone execution proof. It may decode and execute only the seed `init_001_exit` MOVZ/SVC subset through the Swift rail's switch-debug harness and capture the guest `exit(42)` syscall event. It must not dispatch by exact full instruction word, host-execute guest code, call real host exit, call Darwin syscalls, implement Linux runtime semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
 
+`make tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug` is the second no-phone execution proof. It may decode and execute only the emitted `init_002_write` subset: MOVZ 64-bit `hw=0`, ADR to an X register, and SVC `#0`. It may capture test-harness syscall events for `write(1, "hello\n", 6)` and `exit(0)`. The write capture may read bytes only from file-backed PT_LOAD guest memory. It must not write to host stdout, call Darwin `write`, implement fd tables, implement VFS, implement Linux process or signal semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
+
 Physical-device gates must consume the same golden artifacts. They must not invent ad hoc device-only proof cases.
 
 `make tcti-diff-switch` compares the debug switch backend against the gadget backend:
