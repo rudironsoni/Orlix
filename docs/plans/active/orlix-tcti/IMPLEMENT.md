@@ -1,5 +1,44 @@
 # IMPLEMENT.md
 
+## 2026-07-01
+
+### Checkpoint: Executable-Proof Plan Tightening
+
+- Updated `docs/plans/active/orlix-tcti/PLAN.md` so the next TCTI checkpoint cannot be completed by documentation alone.
+- Recorded current source reality:
+  - `hosted_exec.c` already includes `<asm/tcti.h>`.
+  - `orlix_hosted_enter_user()` already calls `orlix_tcti_enter_user(regs)` when `CONFIG_ORLIX_HOSTED_EXEC_TCTI` is enabled.
+  - `include/asm/tcti.h` and `hosted_exec/tcti/engine.c` already exist.
+  - `orlix_tcti_enter_user()` compiles and links in the development KUnit path, but is not runtime-proven.
+- Corrected syscall handoff plan:
+  - current `orlix_syscall_dispatch(regs)` already writes return value, polls timer, runs `orlix_exit_to_user_mode_work(regs)`, and calls `forget_syscall(regs)` when appropriate.
+  - TCTI must return to its loop without invoking exit-to-user work again after calling the current helper.
+  - added a required test for no double-run of exit-to-user work.
+- Added executable proof obligations:
+  - `make tcti-contract`
+  - `make tcti-golden-elf`
+  - `make tcti-diff-switch`
+  - `make tcti-memory-fuzz`
+  - `make tcti-direct-chain-fuzz`
+  - `make tcti-appstore-safety-audit`
+  - `make tcti-report-schema-check`
+- Added JSON-first report contracts, reducer artifact requirements, and failure-reduction rules before physical-device debugging.
+- Added hard guardrails for:
+  - host `x18/w18` token and object-disassembly audit
+  - guest `TPIDR_EL0` versus host `TPIDR_EL0`
+  - single TCTI runner per `mm` for milestone 1
+  - `orlix-aarch64-v1` virtual CPU determinism
+  - host-page-size fuzzing for 4 KiB, 16 KiB, and 64 KiB
+  - virtio as device/I/O only, not CPU model or syscall escape hatch
+  - App Store safety as an audit target, not a claim from prose
+- Noted current defconfig state is premature for product defaults: development and release currently enable TCTI/debug switch, while the revised plan requires gated defaults until autonomous and physical first-syscall gates pass.
+
+### Evidence
+
+- `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development` exited 0 after the docs patch.
+- No simulator runtime proof was performed in this checkpoint.
+- No physical-device runtime proof was performed in this checkpoint.
+
 ## 2026-06-30
 
 ### Checkpoint: Plan And Backend Boundary
