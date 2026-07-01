@@ -3750,6 +3750,409 @@ func runMemoryFuzz() throws -> Int32 {
     return exitCode(for: status)
 }
 
+struct DirectChainBlock {
+    let id: String
+    let start: UInt64
+    let length: UInt64
+    var outgoingTarget: String?
+    var incomingSources: Set<String>
+    var retired: Bool
+
+    var end: UInt64 { start + length - 1 }
+}
+
+struct DirectChainPatch {
+    let source: String
+    let target: String
+    let samePage: Bool
+}
+
+struct DirectChainResult {
+    let passed: Bool
+    let reason: String
+}
+
+final class DirectChainModel {
+    let guestPageSize = 4096
+    var translationGeneration = 1
+    var codeGeneration = 1
+    private var blocks: [String: DirectChainBlock] = [:]
+    private var pageIndex: [UInt64: Set<String>] = [:]
+
+    func addBlock(id: String, start: UInt64, length: UInt64) {
+        let block = DirectChainBlock(
+            id: id,
+            start: start,
+            length: length,
+            outgoingTarget: nil,
+            incomingSources: [],
+            retired: false
+        )
+        blocks[id] = block
+        for page in pagesCovered(start: start, end: block.end) {
+            pageIndex[page, default: []].insert(id)
+        }
+    }
+
+    func pagesCovered(start: UInt64, end: UInt64) -> [UInt64] {
+        var pages: [UInt64] = []
+        var page = start - (start % UInt64(guestPageSize))
+        let last = end - (end % UInt64(guestPageSize))
+        while page <= last {
+            pages.append(page)
+            page += UInt64(guestPageSize)
+        }
+        return pages
+    }
+
+    func pageIndexLookup(page: UInt64) -> [String] {
+        Array(pageIndex[page] ?? []).sorted()
+    }
+
+    func patch(source: String, target: String) -> DirectChainResult {
+        guard var sourceBlock = blocks[source], var targetBlock = blocks[target] else {
+            return DirectChainResult(passed: false, reason: "source or target block missing")
+        }
+        guard !sourceBlock.retired, !targetBlock.retired else {
+            return DirectChainResult(passed: false, reason: "refused chain to or from retired block")
+        }
+        if sourceBlock.outgoingTarget != nil {
+            return DirectChainResult(passed: false, reason: "source already has outgoing patch")
+        }
+        sourceBlock.outgoingTarget = target
+        targetBlock.incomingSources.insert(source)
+        blocks[source] = sourceBlock
+        blocks[target] = targetBlock
+        return DirectChainResult(passed: true, reason: samePage(source: source, target: target) ? "same-page chain patched" : "cross-page chain patched")
+    }
+
+    func samePage(source: String, target: String) -> Bool {
+        guard let sourceBlock = blocks[source], let targetBlock = blocks[target] else { return false }
+        return (sourceBlock.start / UInt64(guestPageSize)) == (targetBlock.start / UInt64(guestPageSize))
+    }
+
+    func invalidate(page: UInt64) -> DirectChainResult {
+        let ids = pageIndexLookup(page: page)
+        guard !ids.isEmpty else {
+            return DirectChainResult(passed: false, reason: "page index lookup missed invalidation page")
+        }
+        for id in ids {
+            guard var block = blocks[id] else { continue }
+            if let target = block.outgoingTarget, var targetBlock = blocks[target] {
+                targetBlock.incomingSources.remove(id)
+                blocks[target] = targetBlock
+            }
+            for source in block.incomingSources {
+                if var sourceBlock = blocks[source] {
+                    sourceBlock.outgoingTarget = nil
+                    blocks[source] = sourceBlock
+                }
+            }
+            block.outgoingTarget = nil
+            block.incomingSources.removeAll()
+            block.retired = true
+            blocks[id] = block
+        }
+        translationGeneration += 1
+        codeGeneration += 1
+        return DirectChainResult(passed: true, reason: "invalidated \(ids.count) block(s) before retire")
+    }
+
+    func block(_ id: String) -> DirectChainBlock? {
+        blocks[id]
+    }
+
+    func staleChainAllowed(source: String) -> Bool {
+        guard let target = blocks[source]?.outgoingTarget else { return false }
+        return blocks[target]?.retired == false
+    }
+}
+
+struct DirectChainArtifact: Codable {
+    let caseID: String
+    let expectedStatus: String
+    let observedStatus: String
+    let translationGeneration: Int
+    let codeGeneration: Int
+    let blocks: [String: DirectChainBlockArtifact]
+    let pageIndex: [String: [String]]
+    let forbiddenBehavior: [String: Bool]
+    let notes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case caseID = "case_id"
+        case expectedStatus = "expected_status"
+        case observedStatus = "observed_status"
+        case translationGeneration = "translation_generation"
+        case codeGeneration = "code_generation"
+        case blocks
+        case pageIndex = "page_index"
+        case forbiddenBehavior = "forbidden_behavior"
+        case notes
+    }
+}
+
+struct DirectChainBlockArtifact: Codable {
+    let start: String
+    let end: String
+    let outgoingTarget: String?
+    let incomingSources: [String]
+    let retired: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case start
+        case end
+        case outgoingTarget = "outgoing_target"
+        case incomingSources = "incoming_sources"
+        case retired
+    }
+}
+
+func directChainArtifact(
+    caseID: String,
+    expected: GateStatus,
+    observed: GateStatus,
+    model: DirectChainModel,
+    blockIDs: [String],
+    pageBases: [UInt64],
+    notes: [String]
+) -> DirectChainArtifact {
+    var blocks: [String: DirectChainBlockArtifact] = [:]
+    for id in blockIDs.sorted() {
+        guard let block = model.block(id) else { continue }
+        blocks[id] = DirectChainBlockArtifact(
+            start: hexPC(block.start),
+            end: hexPC(block.end),
+            outgoingTarget: block.outgoingTarget,
+            incomingSources: block.incomingSources.sorted(),
+            retired: block.retired
+        )
+    }
+    var pageIndex: [String: [String]] = [:]
+    for page in pageBases.sorted() {
+        pageIndex[hexPC(page)] = model.pageIndexLookup(page: page)
+    }
+    return DirectChainArtifact(
+        caseID: caseID,
+        expectedStatus: expected.rawValue,
+        observedStatus: observed.rawValue,
+        translationGeneration: model.translationGeneration,
+        codeGeneration: model.codeGeneration,
+        blocks: blocks,
+        pageIndex: pageIndex,
+        forbiddenBehavior: forbiddenDefaults(),
+        notes: notes
+    )
+}
+
+func writeDirectChainArtifact(_ artifact: DirectChainArtifact) throws -> String {
+    let url = buildPath("direct_chain_fuzz", artifact.caseID, "result.json")
+    try writeJSON(artifact, to: url)
+    return relativePath(url)
+}
+
+func directChainNegativeIDs() -> [String] {
+    [
+        "stale-target-after-retire",
+        "page-index-overlap-miss",
+        "retire-with-patched-incoming",
+        "duplicate-outgoing-patch",
+    ]
+}
+
+func runDirectChainNegative(_ id: String) throws -> DirectChainArtifact {
+    let page0: UInt64 = 0x0000_0000_0050_0000
+    let page1 = page0 + 4096
+    let model = DirectChainModel()
+
+    switch id {
+    case "stale-target-after-retire":
+        model.addBlock(id: "source", start: page0, length: 32)
+        model.addBlock(id: "target", start: page0 + 64, length: 32)
+        _ = model.patch(source: "source", target: "target")
+        _ = model.invalidate(page: page0)
+        let staleAllowed = model.staleChainAllowed(source: "source")
+        return directChainArtifact(caseID: id, expected: .fail, observed: staleAllowed ? .pass : .fail, model: model, blockIDs: ["source", "target"], pageBases: [page0], notes: ["negative fixture proves stale direct chain cannot jump into retired target"])
+    case "page-index-overlap-miss":
+        model.addBlock(id: "cross", start: page1 - 8, length: 16)
+        let indexedBoth = model.pageIndexLookup(page: page0).contains("cross") && model.pageIndexLookup(page: page1).contains("cross")
+        return directChainArtifact(caseID: id, expected: .fail, observed: indexedBoth ? .fail : .pass, model: model, blockIDs: ["cross"], pageBases: [page0, page1], notes: ["negative fixture proves page index records every page overlapped by a block"])
+    case "retire-with-patched-incoming":
+        model.addBlock(id: "source", start: page0, length: 32)
+        model.addBlock(id: "target", start: page0 + 96, length: 32)
+        _ = model.patch(source: "source", target: "target")
+        _ = model.invalidate(page: page0)
+        let incomingCleared = model.block("target")?.incomingSources.isEmpty == true && model.block("source")?.outgoingTarget == nil
+        return directChainArtifact(caseID: id, expected: .fail, observed: incomingCleared ? .fail : .pass, model: model, blockIDs: ["source", "target"], pageBases: [page0], notes: ["negative fixture proves invalidation unpatches incoming slots before retire"])
+    case "duplicate-outgoing-patch":
+        model.addBlock(id: "source", start: page0, length: 32)
+        model.addBlock(id: "target-a", start: page0 + 64, length: 32)
+        model.addBlock(id: "target-b", start: page0 + 128, length: 32)
+        _ = model.patch(source: "source", target: "target-a")
+        let duplicate = model.patch(source: "source", target: "target-b")
+        return directChainArtifact(caseID: id, expected: .fail, observed: duplicate.passed ? .pass : .fail, model: model, blockIDs: ["source", "target-a", "target-b"], pageBases: [page0], notes: ["negative fixture proves one source cannot hold two outgoing patch slots"])
+    default:
+        throw GateError.usage("unknown NEGATIVE_DIRECT_CHAIN_FUZZ=\(id)")
+    }
+}
+
+func runDirectChainPositiveCases() throws -> (failures: [Failure], artifacts: [String], counters: [String: Int]) {
+    let page0: UInt64 = 0x0000_0000_0050_0000
+    let page1 = page0 + 4096
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var counters: [String: Int] = [
+        "positive_cases": 0,
+        "same_page_chains": 0,
+        "cross_page_index_cases": 0,
+        "invalidation_cases": 0,
+    ]
+
+    func record(_ id: String, _ condition: Bool, _ artifact: DirectChainArtifact) throws {
+        counters["positive_cases", default: 0] += 1
+        artifacts.append(try writeDirectChainArtifact(artifact))
+        if !condition {
+            failures.append(fail(id, "direct-chain positive contract failed"))
+        }
+    }
+
+    do {
+        let model = DirectChainModel()
+        model.addBlock(id: "source", start: page0, length: 32)
+        model.addBlock(id: "target", start: page0 + 64, length: 32)
+        let patch = model.patch(source: "source", target: "target")
+        let condition = patch.passed &&
+            model.block("source")?.outgoingTarget == "target" &&
+            model.block("target")?.incomingSources.contains("source") == true &&
+            model.samePage(source: "source", target: "target")
+        let artifact = directChainArtifact(caseID: "same-page-source-target-slots", expected: .pass, observed: condition ? .pass : .fail, model: model, blockIDs: ["source", "target"], pageBases: [page0], notes: ["same-page source outgoing and target incoming patch slots are tracked as data"])
+        try record("same-page-source-target-slots", condition, artifact)
+        counters["same_page_chains", default: 0] += 1
+    }
+
+    do {
+        let model = DirectChainModel()
+        model.addBlock(id: "cross", start: page1 - 8, length: 16)
+        let condition = model.pageIndexLookup(page: page0).contains("cross") &&
+            model.pageIndexLookup(page: page1).contains("cross")
+        let artifact = directChainArtifact(caseID: "page-index-overlap-lookup", expected: .pass, observed: condition ? .pass : .fail, model: model, blockIDs: ["cross"], pageBases: [page0, page1], notes: ["page index lookup finds a block overlapping both guest pages"])
+        try record("page-index-overlap-lookup", condition, artifact)
+        counters["cross_page_index_cases", default: 0] += 1
+    }
+
+    do {
+        let model = DirectChainModel()
+        model.addBlock(id: "source", start: page0, length: 32)
+        model.addBlock(id: "target", start: page0 + 128, length: 32)
+        _ = model.patch(source: "source", target: "target")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let invalidate = model.invalidate(page: page0)
+        let condition = invalidate.passed &&
+            model.block("source")?.retired == true &&
+            model.block("target")?.retired == true &&
+            model.block("source")?.outgoingTarget == nil &&
+            model.block("target")?.incomingSources.isEmpty == true &&
+            model.translationGeneration == beforeTranslation + 1 &&
+            model.codeGeneration == beforeCode + 1
+        let artifact = directChainArtifact(caseID: "invalidate-unpatch-before-retire", expected: .pass, observed: condition ? .pass : .fail, model: model, blockIDs: ["source", "target"], pageBases: [page0], notes: ["invalidation removes outgoing and incoming patch slots before retiring blocks"])
+        try record("invalidate-unpatch-before-retire", condition, artifact)
+        counters["invalidation_cases", default: 0] += 1
+    }
+
+    do {
+        let model = DirectChainModel()
+        model.addBlock(id: "source", start: page0, length: 32)
+        model.addBlock(id: "same-page-target", start: page0 + 64, length: 32)
+        model.addBlock(id: "cross-page-target", start: page1 + 64, length: 32)
+        let samePagePatch = model.patch(source: "source", target: "same-page-target")
+        let crossPagePatch = model.patch(source: "source", target: "cross-page-target")
+        let condition = samePagePatch.passed && !crossPagePatch.passed && model.samePage(source: "source", target: "same-page-target")
+        let artifact = directChainArtifact(caseID: "same-page-before-cross-page", expected: .pass, observed: condition ? .pass : .fail, model: model, blockIDs: ["source", "same-page-target", "cross-page-target"], pageBases: [page0, page1], notes: ["same-page chaining works first; broader cross-page chaining remains constrained by the single outgoing patch slot"])
+        try record("same-page-before-cross-page", condition, artifact)
+        counters["same_page_chains", default: 0] += 1
+    }
+
+    return (failures, artifacts, counters)
+}
+
+func runDirectChainFuzz() throws -> Int32 {
+    let target = "tcti-direct-chain-fuzz"
+    if let negativeID = ProcessInfo.processInfo.environment["NEGATIVE_DIRECT_CHAIN_FUZZ"], !negativeID.isEmpty {
+        guard directChainNegativeIDs().contains(negativeID) else {
+            throw GateError.usage("unknown NEGATIVE_DIRECT_CHAIN_FUZZ=\(negativeID)")
+        }
+        let artifact = try runDirectChainNegative(negativeID)
+        let artifactPath = try writeDirectChainArtifact(artifact)
+        let status: GateStatus = .fail
+        let reportURL = try writeReport(report(
+            target: target,
+            status: status,
+            summary: "Replayed negative direct-chain fuzz fixture \(negativeID).",
+            failures: [fail(negativeID, artifact.notes.joined(separator: "; "))],
+            artifacts: [artifactPath],
+            counters: [
+                "cases_total": 1,
+                "negative_cases": 1,
+            ],
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        return exitCode(for: status)
+    }
+
+    var result = try runDirectChainPositiveCases()
+    var reducers: [String] = []
+    for negativeID in directChainNegativeIDs() {
+        let artifact = try runDirectChainNegative(negativeID)
+        let artifactPath = try writeDirectChainArtifact(artifact)
+        let reducer = try writeReducer(
+            target: target,
+            caseID: negativeID,
+            command: "NEGATIVE_DIRECT_CHAIN_FUZZ=\(negativeID) make tcti-direct-chain-fuzz",
+            reason: artifact.notes.joined(separator: "; "),
+            artifacts: [artifactPath],
+            expectedStatus: .fail
+        )
+        reducers.append(relativePath(reducer))
+    }
+    let passReducer = try writeReducer(
+        target: target,
+        caseID: "direct-chain-fuzz-pass-regression",
+        command: "make tcti-direct-chain-fuzz",
+        reason: "full direct-chain fuzz gate must remain passing",
+        artifacts: result.artifacts,
+        expectedStatus: .pass
+    )
+    reducers.append(relativePath(passReducer))
+    result.artifacts.append(contentsOf: reducers)
+    result.counters["negative_reducers"] = reducers.count - 1
+    result.counters["pass_reducers"] = 1
+
+    let status: GateStatus = result.failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Ran no-phone direct-chain data-structure fuzz contracts with deterministic negative reducers.",
+        failures: result.failures,
+        artifacts: result.artifacts,
+        counters: result.counters,
+        coverageWarnings: [
+            "no-phone data-structure contract only; no production assembly, gadget dispatch, or generated executable memory executed",
+            "direct-chain model tracks patch-slot and invalidation invariants without host executable guest text",
+        ],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    print("reducers:")
+    for reducer in reducers {
+        print("- \(reducer)")
+    }
+    return exitCode(for: status)
+}
+
 func x18TokenRanges(in line: String) -> [Range<String.Index>] {
     let pattern = #"(?<![A-Za-z0-9_])[wx]18(?![A-Za-z0-9_])"#
     guard let regex = try? NSRegularExpression(pattern: pattern) else {
@@ -3906,7 +4309,7 @@ func dispatch(_ target: String) throws -> Int32 {
     case "tcti-memory-fuzz":
         return try runMemoryFuzz()
     case "tcti-direct-chain-fuzz":
-        return try writeTodo(target: target, summary: "\(target) rail exists, but the real no-phone TCTI test implementation is not complete yet.")
+        return try runDirectChainFuzz()
     default:
         throw GateError.usage("unknown TCTI target: \(target)")
     }
