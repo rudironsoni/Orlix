@@ -1248,8 +1248,59 @@ Boundary:
   - full TCTI completion requires the final reports listed in `PLAN.md`.
 - Strengthened the current checkpoint language so `switch-init-003-stack` is sequencing proof only, not a TCTI completion claim.
 - Boundary:
-  - No TCTI runtime feature implemented.
-  - No production assembly.
+- No TCTI runtime feature implemented.
+- No production assembly.
+- No gadget dispatch.
+- No app-hosted gate run.
+- No custom MCP or `tools/agent` added.
+
+### Checkpoint: Stack Golden ELF Executes In Switch Backend
+
+- Harness-selected gate: `switch-init-003-stack`.
+- Selected command: `make tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug`.
+- Why selected: `switch-init-002-write` was pass and `init_003_stack` validation/execution artifacts were missing.
+- Added `init_003_stack` no-libc AArch64 Linux golden ELF fixture.
+- Generated canonical `golden.json` with `make tcti-golden-elf-refresh CASE=init_003_stack`.
+- Exact emitted instruction words:
+  - `0x910003e0` `mov x0, sp`
+  - `0xd10043ff` `sub sp, sp, #0x10`
+  - `0xd2800541` `mov x1, #0x2a`
+  - `0xf90007e1` `str x1, [sp, #0x8]`
+  - `0xf94007e0` `ldr x0, [sp, #0x8]`
+  - `0x910043ff` `add sp, sp, #0x10`
+  - `0xd2800ba8` `mov x8, #0x5d`
+  - `0xd4000001` `svc #0`
+- Added decoded switch-debug support for only the stack fixture subset:
+  - `ADD/SUB immediate`, 64-bit, no flags, shift 0.
+  - `MOV x0, sp` through the decoded `ADD x0, sp, #0` alias.
+  - `LDR/STR unsigned immediate`, 64-bit, SP base.
+  - bounded 4 KiB harness stack with little-endian 64-bit initialized-slot loads.
+- Added stack negative fixtures:
+  - wrong exit value;
+  - invalid/uninitialized stack read;
+  - unsupported pre-index stack store.
+- Fixed case-specific reducer commands so execution reducers preserve `CASE`, `EXECUTE`, and `NEGATIVE_EXECUTION`.
+- Reports written:
+  - `Build/TCTI/golden_elf/init_003_stack/validation.json`
+  - `Build/TCTI/golden_elf/init_003_stack/execution.json`
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`
+- Reducers written:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-stack-wrong-exit.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-stack-invalid-memory.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-stack-unsupported-preindex.json`
+- Replayed reducers:
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-stack-invalid-memory.json`: expected `fail`, actual `fail`, nonzero replay exit.
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-stack-unsupported-preindex.json`: expected `fail`, actual `fail`, nonzero replay exit.
+- `tcti-contract` now lists real passing group:
+  - decoded switch-debug executes `init_003_stack` and captures stack-derived `exit(42)`.
+- `tcti-contract` intentionally remains `todo` for:
+  - gadget ABI and register commit-back execution;
+  - FETCH/READ/WRITE memory execution;
+  - TLB, block-cache, invalidation, and direct-chain execution.
+- Boundary:
+  - No production TCTI assembly.
   - No gadget dispatch.
-  - No app-hosted gate run.
+  - No simulator gate run.
+  - No physical-device gate run.
+  - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime behavior added.
   - No custom MCP or `tools/agent` added.
