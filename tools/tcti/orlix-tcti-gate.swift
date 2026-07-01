@@ -69,6 +69,7 @@ struct ExecutionReport: Codable {
     let caseID: String
     let enteredEntrypoint: Bool
     let guestInstructionsExecuted: Int
+    let decodedInstructions: [DecodedInstructionReport]
     let syscalls: [CapturedSyscall]
     let exit: CapturedExit?
     let instructionEncodings: [String]
@@ -79,10 +80,35 @@ struct ExecutionReport: Codable {
         case caseID = "case_id"
         case enteredEntrypoint = "entered_entrypoint"
         case guestInstructionsExecuted = "guest_instructions_executed"
+        case decodedInstructions = "decoded_instructions"
         case syscalls
         case exit
         case instructionEncodings = "instruction_encodings"
         case notes
+    }
+}
+
+struct DecodedInstructionReport: Codable {
+    let pc: String
+    let raw: String
+    let instructionClass: String
+    let op: String?
+    let sf: Int?
+    let rd: Int?
+    let imm: Int?
+    let shift: Int?
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case pc
+        case raw
+        case instructionClass = "class"
+        case op
+        case sf
+        case rd
+        case imm
+        case shift
+        case reason
     }
 }
 
@@ -635,7 +661,7 @@ func runContract() throws -> Int32 {
         if result.failures.isEmpty,
            result.execution?.exit?.kind == "guest_exit_syscall",
            result.execution?.exit?.code == 42 {
-            passedGroups.append("switch-debug executes init_001_exit to captured exit(42)")
+            passedGroups.append("minimal AArch64 decode semantics execute init_001_exit to captured exit(42)")
         } else {
             failures.append(contentsOf: result.failures)
             failures.append(fail("switch-debug-exit", "switch-debug did not capture init_001_exit exit(42)"))
@@ -976,6 +1002,106 @@ func hexWord(_ word: UInt32) -> String {
     String(format: "0x%08x", word)
 }
 
+func hexPC(_ value: UInt64) -> String {
+    String(format: "0x%016llx", value)
+}
+
+enum A64DecodedInstruction {
+    case moveWideImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rd: Int, imm: UInt64, shift: Int)
+    case svc(raw: UInt32, pc: UInt64, imm: UInt16)
+    case unsupported(raw: UInt32, pc: UInt64, reason: String)
+
+    var raw: UInt32 {
+        switch self {
+        case let .moveWideImmediate(raw, _, _, _, _, _, _),
+             let .svc(raw, _, _),
+             let .unsupported(raw, _, _):
+            return raw
+        }
+    }
+
+    var pc: UInt64 {
+        switch self {
+        case let .moveWideImmediate(_, pc, _, _, _, _, _),
+             let .svc(_, pc, _),
+             let .unsupported(_, pc, _):
+            return pc
+        }
+    }
+
+    var report: DecodedInstructionReport {
+        switch self {
+        case let .moveWideImmediate(raw, pc, op, sf, rd, imm, shift):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "move_wide_immediate",
+                op: op,
+                sf: sf,
+                rd: rd,
+                imm: Int(imm),
+                shift: shift,
+                reason: nil
+            )
+        case let .svc(raw, pc, imm):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "exception_generation",
+                op: "svc",
+                sf: nil,
+                rd: nil,
+                imm: Int(imm),
+                shift: nil,
+                reason: nil
+            )
+        case let .unsupported(raw, pc, reason):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "unsupported",
+                op: nil,
+                sf: nil,
+                rd: nil,
+                imm: nil,
+                shift: nil,
+                reason: reason
+            )
+        }
+    }
+}
+
+func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction {
+    if (raw & 0x1f80_0000) == 0x1280_0000 {
+        let sf = Int((raw >> 31) & 0x1)
+        let opc = Int((raw >> 29) & 0x3)
+        let hw = Int((raw >> 21) & 0x3)
+        let imm16 = UInt64((raw >> 5) & 0xffff)
+        let rd = Int(raw & 0x1f)
+
+        guard sf == 1 else {
+            return .unsupported(raw: raw, pc: pc, reason: "move-wide immediate W-register variants are not implemented")
+        }
+        guard opc == 2 else {
+            return .unsupported(raw: raw, pc: pc, reason: "move-wide immediate variant opc=\(opc) is not implemented")
+        }
+        guard hw == 0 else {
+            return .unsupported(raw: raw, pc: pc, reason: "MOVZ nonzero hw shift \(hw) is not implemented")
+        }
+        return .moveWideImmediate(raw: raw, pc: pc, op: "movz", sf: 64, rd: rd, imm: imm16, shift: 0)
+    }
+
+    if (raw & 0xffe0_001f) == 0xd400_0001 {
+        let imm = UInt16((raw >> 5) & 0xffff)
+        guard imm == 0 else {
+            return .unsupported(raw: raw, pc: pc, reason: "SVC immediate \(imm) is not implemented")
+        }
+        return .svc(raw: raw, pc: pc, imm: imm)
+    }
+
+    return .unsupported(raw: raw, pc: pc, reason: "unknown instruction")
+}
+
 func executeInit001SwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report: ExecutionReport, failures: [Failure]) {
     let elf = try TinyElf64Aarch64(binary: binary)
     let expectedEntry = try parseEntrypoint(metadata.entrypoint)
@@ -988,20 +1114,20 @@ func executeInit001SwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> 
     var instructionWords: [UInt32] = []
     var syscalls: [CapturedSyscall] = []
     var capturedExit: CapturedExit?
+    var decodedInstructions: [DecodedInstructionReport] = []
     var instructionsExecuted = 0
 
     for _ in 0..<16 {
         let word = try elf.readInstruction(at: pc)
         instructionWords.append(word)
         instructionsExecuted += 1
-        switch word {
-        case 0xd2800ba8:
-            registers[8] = 93
+        let decoded = decodeA64SeedInstruction(raw: word, pc: pc)
+        decodedInstructions.append(decoded.report)
+        switch decoded {
+        case let .moveWideImmediate(_, _, _, _, rd, imm, shift):
+            registers[rd] = imm << UInt64(shift)
             pc += 4
-        case 0xd2800540:
-            registers[0] = 42
-            pc += 4
-        case 0xd4000001:
+        case .svc:
             let syscallNumber = Int(registers[8])
             let arg0 = Int(registers[0])
             let syscallName = syscallNumber == 93 ? "exit" : "unknown"
@@ -1016,10 +1142,11 @@ func executeInit001SwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> 
                 caseID: metadata.caseID,
                 enteredEntrypoint: elf.entrypoint == expectedEntry,
                 guestInstructionsExecuted: instructionsExecuted,
+                decodedInstructions: decodedInstructions,
                 syscalls: syscalls,
                 exit: capturedExit,
                 instructionEncodings: instructionWords.map(hexWord),
-                notes: ["switch-debug captures svc #0 as a test event and does not call host exit or host syscalls"]
+                notes: ["switch-debug executes decoded MOVZ/SVC seed semantics and captures svc #0 as a test event without calling host exit or host syscalls"]
             )
             if capturedExit?.code != metadata.expectedExitCode {
                 failures.append(fail("execution-exit-code", "expected guest exit code \(metadata.expectedExitCode), captured \(capturedExit?.code ?? -1)"))
@@ -1028,18 +1155,19 @@ func executeInit001SwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> 
                 failures.append(fail("execution-instruction-count", "expected 3 guest instructions, executed \(instructionsExecuted)"))
             }
             return (report, failures)
-        default:
+        case let .unsupported(raw, pc, reason):
             let report = ExecutionReport(
                 backend: "switch-debug",
                 caseID: metadata.caseID,
                 enteredEntrypoint: elf.entrypoint == expectedEntry,
                 guestInstructionsExecuted: instructionsExecuted,
+                decodedInstructions: decodedInstructions,
                 syscalls: syscalls,
                 exit: capturedExit,
                 instructionEncodings: instructionWords.map(hexWord),
-                notes: ["unsupported instruction stopped the seed switch-debug execution harness"]
+                notes: ["unsupported decoded instruction stopped the seed switch-debug execution harness"]
             )
-            failures.append(fail("execution-unsupported-instruction", String(format: "unsupported instruction 0x%08x at guest PC 0x%llx", word, pc)))
+            failures.append(fail("execution-unsupported-instruction", "\(reason): \(hexWord(raw)) at guest PC \(hexPC(pc))"))
             return (report, failures)
         }
     }
@@ -1049,6 +1177,7 @@ func executeInit001SwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> 
         caseID: metadata.caseID,
         enteredEntrypoint: elf.entrypoint == expectedEntry,
         guestInstructionsExecuted: instructionsExecuted,
+        decodedInstructions: decodedInstructions,
         syscalls: syscalls,
         exit: capturedExit,
         instructionEncodings: instructionWords.map(hexWord),
@@ -1097,6 +1226,8 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             outputRoot: outputRoot
         )
     case "unsupported":
+        fallthrough
+    case "unknown":
         let built = try buildFixtureBinary(
             source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_unsupported_before_svc.S"),
             outputRoot: outputRoot,
@@ -1106,6 +1237,30 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
         let executionURL = outputRoot
             .appendingPathComponent("init_001_exit", isDirectory: true)
             .appendingPathComponent("unsupported-execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "unsupported-movz-shift":
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_movz_shift.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_movz_shift"
+        )
+        let execution = try executeInit001SwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit", isDirectory: true)
+            .appendingPathComponent("unsupported-movz-shift-execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "unsupported-svc-immediate":
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_svc_imm1.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_svc_imm1"
+        )
+        let execution = try executeInit001SwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit", isDirectory: true)
+            .appendingPathComponent("unsupported-svc-immediate-execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     case "wrong-syscall":
@@ -1127,7 +1282,7 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
 
 func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
     var failures: [Failure] = []
-    for fixture in ["wrong-exit", "unsupported", "wrong-syscall"] {
+    for fixture in ["wrong-exit", "unsupported-movz-shift", "unsupported-svc-immediate", "unknown", "wrong-syscall"] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
             artifacts.append(contentsOf: result.artifacts)

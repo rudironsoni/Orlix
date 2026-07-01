@@ -1024,7 +1024,7 @@ Each corpus item has checked-in source and checked-in golden JSON under `OrlixKe
 
 Golden binaries are generated build artifacts unless a later checkpoint explicitly chooses to check them in. The source and golden JSON are canonical. If the generated binary hash differs from golden JSON, `make tcti-golden-elf` fails and prints either the reducer command or `make tcti-golden-elf-refresh CASE=<case-id>` after inspection.
 
-`make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` is the first no-phone execution proof. It may execute only the seed `init_001_exit` instruction words through the Swift rail's switch-debug harness and capture the guest `exit(42)` syscall event. It must not host-execute guest code, call real host exit, call Darwin syscalls, implement Linux runtime semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
+`make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` is the first no-phone execution proof. It may decode and execute only the seed `init_001_exit` MOVZ/SVC subset through the Swift rail's switch-debug harness and capture the guest `exit(42)` syscall event. It must not dispatch by exact full instruction word, host-execute guest code, call real host exit, call Darwin syscalls, implement Linux runtime semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
 
 Physical-device gates must consume the same golden artifacts. They must not invent ad hoc device-only proof cases.
 

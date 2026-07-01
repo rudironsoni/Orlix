@@ -933,3 +933,98 @@ Boundary:
 - No Linux runtime semantics were implemented.
 - No syscall implementation was added beyond a captured test-harness syscall event.
 - This is only the seed ELF switch-debug no-phone execution proof.
+
+### Checkpoint: Decoded Seed ELF Switch Semantics
+
+- Replaced exact full-word switch execution with a tiny decoded AArch64 semantic layer for the seed ELF.
+- `make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` still captures guest `exit(42)`.
+- Execution now decodes instructions into `decoded_instructions` before switch-debug semantics run.
+- MOVZ decoder mask and fields:
+  - class predicate: `(raw & 0x1f80_0000) == 0x1280_0000`
+  - `sf = (raw >> 31) & 1`
+  - `opc = (raw >> 29) & 3`
+  - `hw = (raw >> 21) & 3`
+  - `imm16 = (raw >> 5) & 0xffff`
+  - `rd = raw & 0x1f`
+  - supported subset: `sf == 1`, `opc == 2`, `hw == 0`
+- SVC decoder mask and fields:
+  - class predicate: `(raw & 0xffe0_001f) == 0xd400_0001`
+  - `imm = (raw >> 5) & 0xffff`
+  - supported subset: `imm == 0`
+- Decoded seed instructions:
+  - `0xd2800ba8` at `0x0000000000210120`: `move_wide_immediate`, `movz`, `sf=64`, `rd=8`, `imm=93`, `shift=0`
+  - `0xd2800540` at `0x0000000000210124`: `move_wide_immediate`, `movz`, `sf=64`, `rd=0`, `imm=42`, `shift=0`
+  - `0xd4000001` at `0x0000000000210128`: `exception_generation`, `svc`, `imm=0`
+- Added decoder-specific negative fixtures:
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_movz_shift.S`
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_svc_imm1.S`
+  - existing `tools/tcti/fixtures/golden_elf/init_001_exit_unsupported_before_svc.S` now covers unknown instruction
+- Decoder-specific reducer paths:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-unsupported-movz-shift.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-unsupported-svc-immediate.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-unknown.json`
+- `tcti-contract` now reports the passing group:
+  - minimal AArch64 decode semantics execute `init_001_exit` to captured `exit(42)`
+- `tcti-contract` still exits non-zero with `status=todo` because deeper groups remain TODO:
+  - gadget ABI and register commit-back execution
+  - `FETCH`/`READ`/`WRITE` memory execution
+  - TLB, block-cache, invalidation, and direct-chain execution
+
+Report paths:
+
+- `Build/TCTI/reports/tcti-golden-elf/report.json`
+- `Build/TCTI/golden_elf/init_001_exit/execution.json`
+- `Build/TCTI/reports/tcti-contract/report.json`
+
+Evidence:
+
+```sh
+rtk proxy git diff --check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+```
+
+All passed.
+
+```sh
+rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+- real contract groups include minimal decoded AArch64 semantics to captured `exit(42)`
+- deeper groups remain TODO
+- Make exited non-zero with `rc=2`
+
+```sh
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-unsupported-svc-immediate.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+- expected status `fail`
+- actual replay status `fail`
+- actual replay exit code `2`
+- Make exited non-zero with `rc=2`
+
+```sh
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Both passed. The existing Xcode SDK `__alloc_size` redefinition warning remains present.
+
+Boundary:
+
+- No production TCTI assembly was added.
+- No gadget dispatch was implemented.
+- No simulator gate was run.
+- No physical-device gate was run.
+- No HostAdapter, UIKit, or Darwin syscall path was used.
+- No Linux runtime semantics were implemented.
+- No syscall implementation was added beyond a captured test-harness syscall event.
+- This is only decoded seed ELF switch-debug no-phone execution proof.
