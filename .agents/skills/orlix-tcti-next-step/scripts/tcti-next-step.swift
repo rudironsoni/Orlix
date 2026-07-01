@@ -551,6 +551,12 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
     case "first-gadget-init-001-exit":
         let check = firstGadgetExit001Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "tcti-contract":
+        return basicReportGate(gate, target: "tcti-contract")
+    case "tcti-memory-fuzz":
+        return basicReportGate(gate, target: "tcti-memory-fuzz")
+    case "tcti-direct-chain-fuzz":
+        return basicReportGate(gate, target: "tcti-direct-chain-fuzz")
     case "physical-tcti-init-first-syscall":
         return missingGate(gate, reason: "physical first-syscall gate is not allowed until all no-phone prerequisites pass")
     default:
@@ -580,8 +586,138 @@ func missingGate(_ gate: Gate, reason: String) -> GateStatus {
     artifactStatus(gate, passed: false, reason: reason)
 }
 
+func runtimePreflightGates() -> [Gate] {
+    [
+        Gate(
+            id: "tcti-contract",
+            command: "make tcti-contract",
+            kind: "no-phone-contract",
+            prerequisites: ["first-gadget-init-001-exit"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                "tools/tcti/fixtures/**",
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Stay no-phone.",
+                "Do not mark TODO contract groups as pass.",
+                "Do not broaden beyond the smallest missing no-phone contract group selected by the report.",
+            ],
+            expectedReportPaths: ["Build/TCTI/reports/tcti-contract/report.json"],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-contract",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            ],
+            reducerRequirements: ["Any failing contract group must produce a replayable reducer."],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-oracle",
+                "orlix-tcti-safety",
+                "tcti-test-reducer",
+            ],
+            commitMessageTemplate: "test(tcti): complete no-phone contract gate",
+            stopConditions: [
+                "Stop if the contract report remains TODO without selecting the smallest missing no-phone group.",
+                "Stop if a TODO group is reported as pass.",
+            ]
+        ),
+        Gate(
+            id: "tcti-memory-fuzz",
+            command: "make tcti-memory-fuzz",
+            kind: "no-phone-fuzz",
+            prerequisites: ["tcti-contract"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                "tools/tcti/fixtures/**",
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Stay no-phone.",
+                "Do not patch from certification logs.",
+                "Do not bypass executable-memory safety policy.",
+            ],
+            expectedReportPaths: ["Build/TCTI/reports/tcti-memory-fuzz/report.json"],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-memory-fuzz",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            ],
+            reducerRequirements: ["Any memory fuzz failure must produce a replayable reducer."],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-oracle",
+                "orlix-tcti-safety",
+                "tcti-test-reducer",
+            ],
+            commitMessageTemplate: "test(tcti): add no-phone memory fuzz gate",
+            stopConditions: [
+                "Stop if memory permissions or backing semantics are unclear.",
+                "Stop if the failure cannot be reduced before implementation.",
+            ]
+        ),
+        Gate(
+            id: "tcti-direct-chain-fuzz",
+            command: "make tcti-direct-chain-fuzz",
+            kind: "no-phone-fuzz",
+            prerequisites: ["tcti-memory-fuzz"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                "tools/tcti/fixtures/**",
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Stay no-phone.",
+                "Do not implement production assembly unless a separate selected gate allows it.",
+                "Do not bypass executable-memory safety policy.",
+            ],
+            expectedReportPaths: ["Build/TCTI/reports/tcti-direct-chain-fuzz/report.json"],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-direct-chain-fuzz",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            ],
+            reducerRequirements: ["Any direct-chain fuzz failure must produce a replayable reducer."],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-oracle",
+                "orlix-tcti-safety",
+                "tcti-test-reducer",
+            ],
+            commitMessageTemplate: "test(tcti): add no-phone direct-chain fuzz gate",
+            stopConditions: [
+                "Stop if direct chaining would require production assembly before its selected gate.",
+                "Stop if the failure cannot be reduced before implementation.",
+            ]
+        ),
+    ]
+}
+
+func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
+    let inserts = runtimePreflightGates()
+    var result: [Gate] = []
+    var inserted = false
+    for gate in roadmap.gates {
+        if !inserted && gate.kind == "physical-device" {
+            result.append(contentsOf: inserts)
+            inserted = true
+        }
+        result.append(gate)
+    }
+    if !inserted {
+        result.append(contentsOf: inserts)
+    }
+    return result
+}
+
 func statuses(for roadmap: Roadmap) -> [GateStatus] {
-    let bases = roadmap.gates.map(baseGateStatus)
+    let bases = roadmapGatesWithRuntimePreflight(roadmap).map(baseGateStatus)
     let byID = Dictionary(uniqueKeysWithValues: bases.map { ($0.id, $0) })
     return bases.map { status in
         let satisfied = status.prerequisites.allSatisfy { byID[$0]?.passed == true }
@@ -636,7 +772,11 @@ func statusDocument() throws -> StatusDocument {
     let gateStatuses = statuses(for: roadmap)
     let physicalGate = gateStatuses.first { $0.physicalDevice }
     let next = selectedStatus(from: gateStatuses)
-    let physicalAllowed = physicalGate?.prerequisitesSatisfied == true
+    let preflightGateIDs = Set(runtimePreflightGates().map(\.id))
+    let preflightPassed = gateStatuses
+        .filter { preflightGateIDs.contains($0.id) }
+        .allSatisfy { $0.passed }
+    let physicalAllowed = physicalGate?.prerequisitesSatisfied == true && preflightPassed
     let releaseEligible = physicalGate?.passed == true
     let readinessEligible = physicalGate?.passed == true
     return StatusDocument(
@@ -678,7 +818,7 @@ func writeStatus(printHuman: Bool) throws -> StatusDocument {
 func envelope(from status: StatusDocument) throws -> TaskEnvelope {
     let roadmap = try loadRoadmap()
     guard let selectedID = status.nextEligibleGate,
-          let gate = roadmap.gates.first(where: { $0.id == selectedID }) else {
+          let gate = roadmapGatesWithRuntimePreflight(roadmap).first(where: { $0.id == selectedID }) else {
         throw HarnessError.invalid("no next eligible gate found")
     }
     let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })
@@ -794,7 +934,7 @@ func validateEnvelope() throws {
     guard task.area == "orlix-tcti" else {
         throw HarnessError.invalid("next-task area must be orlix-tcti")
     }
-    guard let gate = roadmap.gates.first(where: { $0.id == task.selectedGateID }) else {
+    guard let gate = roadmapGatesWithRuntimePreflight(roadmap).first(where: { $0.id == task.selectedGateID }) else {
         throw HarnessError.invalid("selected gate \(task.selectedGateID) does not exist in roadmap")
     }
     let status = try statusDocument()

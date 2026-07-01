@@ -1580,3 +1580,47 @@ Boundary:
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
 - No product defconfig flip.
 - Release and readiness gates remain ineligible for this checkpoint.
+
+### Checkpoint: Runtime Preflight Reflected In Agent Next-Step
+
+- Harness-selected gate before this checkpoint: the first runtime certification gate.
+- Runtime validation rejected that gate before execution because the autonomous no-phone preflight reports are incomplete.
+- The generated runtime report recorded `status: fail`, `passed: false`, `autonomous_tests_bypassed: false`, and no artifacts.
+- Blockers observed:
+  - `Build/TCTI/reports/tcti-contract/report.json` is not passing.
+  - `Build/TCTI/reports/tcti-memory-fuzz/report.json` is missing.
+  - `Build/TCTI/reports/tcti-direct-chain-fuzz/report.json` is missing.
+- Updated the TCTI next-step skill driver to synthesize the runtime preflight gates before the certification gate:
+  - `tcti-contract`
+  - `tcti-memory-fuzz`
+  - `tcti-direct-chain-fuzz`
+- `agent-status` now reports certification work is not allowed while those preflight gates are incomplete.
+- `agent-next` now selects `tcti-contract` instead of the certification gate.
+- This keeps the autonomous harness aligned with `tools/runtime/orlix-runtime-validation.sh`.
+
+Verification:
+
+```text
+swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+```
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No generated executable memory.
+- No host-executable guest text.
+- No simulator gate run.
+- No phone gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- Release and readiness gates remain ineligible.
