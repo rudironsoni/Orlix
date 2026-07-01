@@ -1708,6 +1708,81 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: No-Phone Direct-Chain Fuzz Gate
+
+- Harness-selected gate: `tcti-direct-chain-fuzz`.
+- Selected command: `make tcti-direct-chain-fuzz`.
+- Why selected: `tcti-memory-fuzz` passed and the harness selected the next runtime-preflight gate. Physical device, release, and readiness gates remained ineligible before this checkpoint.
+- Implemented the gate as a no-phone Swift/Foundation data-structure contract in `tools/tcti/orlix-tcti-gate.swift`.
+- Positive contracts covered:
+  - source outgoing patch slots and target incoming patch slots.
+  - same-page source-to-target chain patching.
+  - page-index overlap lookup for a block spanning two guest pages.
+  - invalidation removes outgoing and incoming patch slots before retiring blocks.
+  - invalidation advances translation and code generations.
+  - same-page chaining works before broader cross-page chaining.
+- Negative reducers added:
+  - `Build/TCTI/reproducers/tcti-direct-chain-fuzz/stale-target-after-retire.json`
+  - `Build/TCTI/reproducers/tcti-direct-chain-fuzz/page-index-overlap-miss.json`
+  - `Build/TCTI/reproducers/tcti-direct-chain-fuzz/retire-with-patched-incoming.json`
+  - `Build/TCTI/reproducers/tcti-direct-chain-fuzz/duplicate-outgoing-patch.json`
+  - `Build/TCTI/reproducers/tcti-direct-chain-fuzz/direct-chain-fuzz-pass-regression.json`
+- Report path:
+  - `Build/TCTI/reports/tcti-direct-chain-fuzz/report.json`
+- Per-case artifacts:
+  - `Build/TCTI/direct_chain_fuzz/*/result.json`
+
+Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make tcti-direct-chain-fuzz
+```
+
+Full checkpoint verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make agent-harness-check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-contract
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-direct-chain-fuzz
+rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-direct-chain-fuzz/direct-chain-fuzz-pass-regression.json
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-direct-chain-fuzz/stale-target-after-retire.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+```
+
+Results:
+
+- All commands above exited 0 except the expected negative reducer replay wrapper, which reported `rc=2` from the replayed failing fixture and exited 0.
+- `agent-status` reported that no-phone preflight permits the next runtime-certification envelope.
+- `agent-next` wrote the next runtime-certification envelope under `Build/AgentHarness/orlix-tcti/next-task.json`.
+- Release and readiness gates remained false because the runtime-certification report is still missing.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No generated executable memory.
+- No host-executable guest text.
+- No simulator gate run.
+- No phone gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- Release and readiness gates remain ineligible pending harness status after verification.
+
 ### Checkpoint: No-Phone Contract Gate Passes
 
 - Harness-selected gate: `tcti-contract`.
