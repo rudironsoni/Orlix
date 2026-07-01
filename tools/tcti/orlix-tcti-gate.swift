@@ -95,9 +95,46 @@ struct DecodedInstructionReport: Codable {
     let op: String?
     let sf: Int?
     let rd: Int?
+    let rn: Int?
+    let rt: Int?
     let imm: Int?
     let shift: Int?
+    let offset: Int?
+    let width: Int?
+    let effectiveAddress: String?
     let reason: String?
+
+    init(
+        pc: String,
+        raw: String,
+        instructionClass: String,
+        op: String?,
+        sf: Int?,
+        rd: Int?,
+        rn: Int? = nil,
+        rt: Int? = nil,
+        imm: Int?,
+        shift: Int?,
+        offset: Int? = nil,
+        width: Int? = nil,
+        effectiveAddress: String? = nil,
+        reason: String?
+    ) {
+        self.pc = pc
+        self.raw = raw
+        self.instructionClass = instructionClass
+        self.op = op
+        self.sf = sf
+        self.rd = rd
+        self.rn = rn
+        self.rt = rt
+        self.imm = imm
+        self.shift = shift
+        self.offset = offset
+        self.width = width
+        self.effectiveAddress = effectiveAddress
+        self.reason = reason
+    }
 
     enum CodingKeys: String, CodingKey {
         case pc
@@ -106,8 +143,13 @@ struct DecodedInstructionReport: Codable {
         case op
         case sf
         case rd
+        case rn
+        case rt
         case imm
         case shift
+        case offset
+        case width
+        case effectiveAddress = "effective_address"
         case reason
     }
 }
@@ -460,10 +502,11 @@ func exitCode(for status: GateStatus) -> Int32 {
 }
 
 func writeTodo(target: String, caseID: String = "todo", summary: String) throws -> Int32 {
+    let command = caseID == "todo" ? "make \(target)" : "CASE=\(caseID) make \(target)"
     let reducer = try writeReducer(
         target: target,
         caseID: caseID,
-        command: "make \(target)",
+        command: command,
         reason: summary,
         expectedStatus: .todo
     )
@@ -688,6 +731,7 @@ func runContract() throws -> Int32 {
     let outputRoot = buildPath("contract", "golden_elf")
     let goldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json")
     let writeGoldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_002_write", "golden.json")
+    let stackGoldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_003_stack", "golden.json")
     do {
         let validation = try validateInit001Golden(metadataURL: goldenPath, outputRoot: outputRoot)
         artifacts.append(contentsOf: validation.artifacts)
@@ -755,6 +799,25 @@ func runContract() throws -> Int32 {
         }
     } catch {
         failures.append(fail("switch-debug-write", "\(error)"))
+    }
+
+    do {
+        let result = try validateAndExecuteGoldenCase(
+            caseID: "init_003_stack",
+            metadataURL: stackGoldenPath,
+            outputRoot: buildPath("contract", "switch_debug_stack")
+        )
+        artifacts.append(contentsOf: result.artifacts)
+        if result.failures.isEmpty,
+           result.execution?.exit?.kind == "guest_exit_syscall",
+           result.execution?.exit?.code == 42 {
+            passedGroups.append("decoded switch-debug executes init_003_stack and captures stack-derived exit(42)")
+        } else {
+            failures.append(contentsOf: result.failures)
+            failures.append(fail("switch-debug-stack", "switch-debug did not capture init_003_stack stack-derived exit(42)"))
+        }
+    } catch {
+        failures.append(fail("switch-debug-stack", "\(error)"))
     }
 
     let wrongMetadata = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_wrong_binary_sha.json")
@@ -1108,6 +1171,8 @@ func hexPC(_ value: UInt64) -> String {
 enum A64DecodedInstruction {
     case moveWideImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rd: Int, imm: UInt64, shift: Int)
     case pcRelativeAddress(raw: UInt32, pc: UInt64, op: String, rd: Int, imm: Int64)
+    case addSubImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rd: Int, rn: Int, imm: UInt64, shift: Int)
+    case loadStoreUnsignedImmediate(raw: UInt32, pc: UInt64, op: String, rt: Int, rn: Int, offset: Int, width: Int)
     case svc(raw: UInt32, pc: UInt64, imm: UInt16)
     case unsupported(raw: UInt32, pc: UInt64, reason: String)
 
@@ -1115,6 +1180,8 @@ enum A64DecodedInstruction {
         switch self {
         case let .moveWideImmediate(raw, _, _, _, _, _, _),
              let .pcRelativeAddress(raw, _, _, _, _),
+             let .addSubImmediate(raw, _, _, _, _, _, _, _),
+             let .loadStoreUnsignedImmediate(raw, _, _, _, _, _, _),
              let .svc(raw, _, _),
              let .unsupported(raw, _, _):
             return raw
@@ -1125,6 +1192,8 @@ enum A64DecodedInstruction {
         switch self {
         case let .moveWideImmediate(_, pc, _, _, _, _, _),
              let .pcRelativeAddress(_, pc, _, _, _),
+             let .addSubImmediate(_, pc, _, _, _, _, _, _),
+             let .loadStoreUnsignedImmediate(_, pc, _, _, _, _, _),
              let .svc(_, pc, _),
              let .unsupported(_, pc, _):
             return pc
@@ -1155,6 +1224,35 @@ enum A64DecodedInstruction {
                 rd: rd,
                 imm: Int(imm),
                 shift: nil,
+                reason: nil
+            )
+        case let .addSubImmediate(raw, pc, op, sf, rd, rn, imm, shift):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "add_subtract_immediate",
+                op: op,
+                sf: sf,
+                rd: rd,
+                rn: rn,
+                imm: Int(imm),
+                shift: shift,
+                reason: nil
+            )
+        case let .loadStoreUnsignedImmediate(raw, pc, op, rt, rn, offset, width):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "load_store_unsigned_immediate",
+                op: op,
+                sf: 64,
+                rd: nil,
+                rn: rn,
+                rt: rt,
+                imm: nil,
+                shift: nil,
+                offset: offset,
+                width: width,
                 reason: nil
             )
         case let .svc(raw, pc, imm):
@@ -1218,6 +1316,52 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
         return .pcRelativeAddress(raw: raw, pc: pc, op: "adr", rd: rd, imm: imm)
     }
 
+    if (raw & 0x1f00_0000) == 0x1100_0000 {
+        let sf = Int((raw >> 31) & 0x1)
+        let op = Int((raw >> 30) & 0x1)
+        let setFlags = Int((raw >> 29) & 0x1)
+        let shift = Int((raw >> 22) & 0x3)
+        let imm12 = UInt64((raw >> 10) & 0xfff)
+        let rn = Int((raw >> 5) & 0x1f)
+        let rd = Int(raw & 0x1f)
+
+        guard sf == 1 else {
+            return .unsupported(raw: raw, pc: pc, reason: "ADD/SUB immediate W-register variants are not implemented")
+        }
+        guard setFlags == 0 else {
+            return .unsupported(raw: raw, pc: pc, reason: "ADD/SUB immediate flag-setting variants are not implemented")
+        }
+        guard shift == 0 else {
+            return .unsupported(raw: raw, pc: pc, reason: "ADD/SUB immediate shifted variants are not implemented")
+        }
+        return .addSubImmediate(
+            raw: raw,
+            pc: pc,
+            op: op == 0 ? "add" : "sub",
+            sf: 64,
+            rd: rd,
+            rn: rn,
+            imm: imm12,
+            shift: 0
+        )
+    }
+
+    if (raw & 0xffc0_0000) == 0xf900_0000 || (raw & 0xffc0_0000) == 0xf940_0000 {
+        let isLoad = (raw & 0x0040_0000) != 0
+        let imm12 = Int((raw >> 10) & 0xfff)
+        let rn = Int((raw >> 5) & 0x1f)
+        let rt = Int(raw & 0x1f)
+        return .loadStoreUnsignedImmediate(
+            raw: raw,
+            pc: pc,
+            op: isLoad ? "ldr" : "str",
+            rt: rt,
+            rn: rn,
+            offset: imm12 * 8,
+            width: 64
+        )
+    }
+
     if (raw & 0xffe0_001f) == 0xd400_0001 {
         let imm = UInt16((raw >> 5) & 0xffff)
         guard imm == 0 else {
@@ -1253,6 +1397,44 @@ func executionReport(
     )
 }
 
+let switchDebugInitialSP: UInt64 = 0x0000_0000_7fff_0000
+let switchDebugStackSize: UInt64 = 4096
+
+struct SwitchDebugStack {
+    let top: UInt64 = switchDebugInitialSP
+    let size: UInt64 = switchDebugStackSize
+    var words: [UInt64: UInt64] = [:]
+
+    var bottom: UInt64 {
+        top - size
+    }
+
+    func check(_ address: UInt64, width: Int) throws {
+        guard width == 64 else {
+            throw GateError.commandFailed("switch-debug stack supports only 64-bit accesses, requested \(width)")
+        }
+        guard address % 8 == 0 else {
+            throw GateError.commandFailed(String(format: "unaligned switch-debug stack access at 0x%llx", address))
+        }
+        guard address >= bottom && address + 8 <= top else {
+            throw GateError.commandFailed(String(format: "switch-debug stack access outside bounded test stack: address=0x%llx", address))
+        }
+    }
+
+    mutating func store64(_ value: UInt64, at address: UInt64) throws {
+        try check(address, width: 64)
+        words[address] = value
+    }
+
+    func load64(at address: UInt64) throws -> UInt64 {
+        try check(address, width: 64)
+        guard let value = words[address] else {
+            throw GateError.commandFailed(String(format: "uninitialized switch-debug stack read at 0x%llx", address))
+        }
+        return value
+    }
+}
+
 func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report: ExecutionReport, failures: [Failure]) {
     let elf = try TinyElf64Aarch64(binary: binary)
     let expectedEntry = try parseEntrypoint(metadata.entrypoint)
@@ -1262,6 +1444,8 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
     }
     var pc = elf.entrypoint
     var registers = Array(repeating: UInt64(0), count: 31)
+    var sp = switchDebugInitialSP
+    var stack = SwitchDebugStack()
     var instructionWords: [UInt32] = []
     var syscalls: [CapturedSyscall] = []
     var capturedExit: CapturedExit?
@@ -1297,6 +1481,70 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
             }
             registers[rd] = UInt64(address)
             pc += 4
+        case let .addSubImmediate(_, _, op, _, rd, rn, imm, _):
+            let source = rn == 31 ? sp : registers[rn]
+            let value = op == "add" ? source &+ imm : source &- imm
+            if rd == 31 {
+                sp = value
+            } else {
+                registers[rd] = value
+            }
+            pc += 4
+        case let .loadStoreUnsignedImmediate(_, _, op, rt, rn, offset, width):
+            guard rn == 31 else {
+                let report = executionReport(
+                    metadata: metadata,
+                    elf: elf,
+                    expectedEntry: expectedEntry,
+                    instructionsExecuted: instructionsExecuted,
+                    decodedInstructions: decodedInstructions,
+                    instructionWords: instructionWords,
+                    syscalls: syscalls,
+                    capturedExit: capturedExit,
+                    notes: ["switch-debug stack fixture stopped because only SP-based load/store is supported"]
+                )
+                failures.append(fail("execution-unsupported-instruction", "load/store unsigned immediate is only implemented for SP base in this no-phone stack fixture"))
+                return (report, failures)
+            }
+            let address = sp + UInt64(offset)
+            decodedInstructions[decodedInstructions.count - 1] = DecodedInstructionReport(
+                pc: decoded.report.pc,
+                raw: decoded.report.raw,
+                instructionClass: decoded.report.instructionClass,
+                op: decoded.report.op,
+                sf: decoded.report.sf,
+                rd: decoded.report.rd,
+                rn: decoded.report.rn,
+                rt: decoded.report.rt,
+                imm: decoded.report.imm,
+                shift: decoded.report.shift,
+                offset: decoded.report.offset,
+                width: decoded.report.width,
+                effectiveAddress: hexPC(address),
+                reason: decoded.report.reason
+            )
+            do {
+                if op == "str" {
+                    try stack.store64(registers[rt], at: address)
+                } else {
+                    registers[rt] = try stack.load64(at: address)
+                }
+                pc += 4
+            } catch {
+                let report = executionReport(
+                    metadata: metadata,
+                    elf: elf,
+                    expectedEntry: expectedEntry,
+                    instructionsExecuted: instructionsExecuted,
+                    decodedInstructions: decodedInstructions,
+                    instructionWords: instructionWords,
+                    syscalls: syscalls,
+                    capturedExit: capturedExit,
+                    notes: ["switch-debug stopped on bounded stack-memory failure"]
+                )
+                failures.append(fail("execution-stack-memory", "\(error)"))
+                return (report, failures)
+            }
         case .svc:
             let syscallNumber = Int(registers[8])
             let arg0 = Int(registers[0])
@@ -1357,7 +1605,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
-                    notes: ["switch-debug executes decoded MOVZ/ADR/SVC seed semantics and captures svc #0 as test events without calling host syscalls"]
+                    notes: ["switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/SVC seed semantics and captures svc #0 as test events without calling host syscalls"]
                 )
                 failures.append(contentsOf: validateCapturedExecution(metadata: metadata, report: report))
                 return (report, failures)
@@ -1419,6 +1667,19 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-exit", "expected captured exit(0) after write"))
         }
     }
+    if metadata.caseID == "init_003_stack" {
+        if report.guestInstructionsExecuted != 8 {
+            failures.append(fail("execution-instruction-count", "expected 8 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 1 else {
+            failures.append(fail("execution-syscalls", "expected one exit syscall, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let exit = report.syscalls[0]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 42 {
+            failures.append(fail("execution-exit", "expected captured stack-derived exit(42)"))
+        }
+    }
     return failures
 }
 
@@ -1459,7 +1720,7 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     if caseID == "init_001_exit" {
         return try validateAndExecuteInit001(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard caseID == "init_002_write" else {
+    guard ["init_002_write", "init_003_stack"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF execution case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -1469,15 +1730,22 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     let fileOutput = built.metadata["file_output"] ?? ""
     let objdumpHeader = built.metadata["objdump_header"] ?? ""
     let disassembly = built.metadata["disassembly"] ?? ""
-    var failures = validateInit002Metadata(
-        expected,
-        sourceHash: sourceHash,
-        binaryHash: binaryHash,
-        fileOutput: fileOutput,
-        objdumpHeader: objdumpHeader,
-        disassembly: disassembly,
-        binary: built.binary
-    )
+    var failures = caseID == "init_002_write" ? validateInit002Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly,
+            binary: built.binary
+        ) : validateInit003Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        )
     let execution = try executeSwitchDebug(binary: built.binary, metadata: expected)
     failures.append(contentsOf: execution.failures)
     let executionURL = outputRoot
@@ -1594,6 +1862,54 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "stack-wrong-exit":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_003_stack", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_003_stack_wrong_exit.S"),
+            outputRoot: outputRoot,
+            name: "init_003_stack_wrong_exit"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_003_stack_wrong_exit", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "stack-invalid-memory":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_003_stack", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_003_stack_invalid_stack_read.S"),
+            outputRoot: outputRoot,
+            name: "init_003_stack_invalid_stack_read"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_003_stack_invalid_stack_read", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "stack-unsupported-preindex":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_003_stack", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_003_stack_unsupported_preindex.S"),
+            outputRoot: outputRoot,
+            name: "init_003_stack_unsupported_preindex"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_003_stack_unsupported_preindex", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     default:
         throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
     }
@@ -1610,6 +1926,9 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         "write-wrong-length",
         "write-invalid-buffer",
         "write-unsupported-adrp",
+        "stack-wrong-exit",
+        "stack-invalid-memory",
+        "stack-unsupported-preindex",
     ] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
@@ -1617,7 +1936,8 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
             if result.failures.isEmpty {
                 failures.append(fail("negative-\(fixture)", "negative execution fixture \(fixture) unexpectedly passed"))
             }
-            let fixtureCaseID = fixture.hasPrefix("write-") ? "init_002_write" : "init_001_exit"
+            let fixtureCaseID = fixture.hasPrefix("write-") ? "init_002_write" :
+                (fixture.hasPrefix("stack-") ? "init_003_stack" : "init_001_exit")
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
@@ -1805,6 +2125,84 @@ func validateInit002Metadata(
     return failures
 }
 
+func validateInit003Metadata(
+    _ metadata: GoldenMetadata,
+    sourceHash: String,
+    binaryHash: String,
+    fileOutput: String,
+    objdumpHeader: String,
+    disassembly: String
+) -> [Failure] {
+    var failures: [Failure] = []
+    if metadata.caseID != "init_003_stack" {
+        failures.append(fail("case-id", "golden case id must be init_003_stack"))
+    }
+    if metadata.sourceSHA256 != sourceHash {
+        failures.append(fail("source-sha256", "source hash changed for init_003_stack"))
+    }
+    if metadata.expectedBinarySHA256 != binaryHash {
+        failures.append(fail("binary-sha256", "binary hash changed for init_003_stack; inspect or run make tcti-golden-elf-refresh CASE=init_003_stack"))
+    }
+    if metadata.actualBinarySHA256 != binaryHash {
+        failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_003_stack"))
+    }
+    if metadata.elfType != "ET_EXEC" {
+        failures.append(fail("elf-type", "init_003_stack golden metadata must use ET_EXEC"))
+    }
+    if metadata.machine != "AArch64" {
+        failures.append(fail("elf-machine", "init_003_stack golden metadata must use AArch64"))
+    }
+    if metadata.expectedExitCode != 42 {
+        failures.append(fail("expected-exit", "init_003_stack must expect exit code 42"))
+    }
+    if metadata.expectedSyscalls.count != 1 ||
+        metadata.expectedSyscalls.first?.nr != "exit" ||
+        metadata.expectedSyscalls.first?.code != 42 {
+        failures.append(fail("expected-syscall", "init_003_stack must expect exactly exit(42)"))
+    }
+    if !fileOutput.contains("ELF 64-bit LSB executable") {
+        failures.append(fail("elf-class", "init_003_stack must be ELF64 executable"))
+    }
+    if !fileOutput.contains("ARM aarch64") {
+        failures.append(fail("elf-file-machine", "init_003_stack file output must identify ARM aarch64"))
+    }
+    if !objdumpHeader.contains("file format elf64-littleaarch64") {
+        failures.append(fail("objdump-format", "init_003_stack must disassemble as elf64-littleaarch64"))
+    }
+    if !objdumpHeader.contains("architecture: aarch64") {
+        failures.append(fail("objdump-architecture", "init_003_stack objdump architecture must be aarch64"))
+    }
+    if !objdumpHeader.lowercased().contains("start address: \(expectedEntrypoint(metadata))") {
+        failures.append(fail("entrypoint", "init_003_stack entrypoint does not match \(metadata.entrypoint)"))
+    }
+    let requiredInstructionWords = [
+        "910003e0": "mov x0, sp",
+        "d10043ff": "sub sp, sp, #16",
+        "d2800541": "mov x1, #42",
+        "f90007e1": "str x1, [sp, #8]",
+        "f94007e0": "ldr x0, [sp, #8]",
+        "910043ff": "add sp, sp, #16",
+        "d2800ba8": "mov x8, #93",
+        "d4000001": "svc #0",
+    ]
+    for (word, description) in requiredInstructionWords where !disassembly.contains(word) {
+        failures.append(fail("instruction-shape", "init_003_stack disassembly missing \(description) instruction word \(word)"))
+    }
+    if !disassembly.contains("mov\tx0, sp") {
+        failures.append(fail("stack-sp-copy", "init_003_stack must copy sp through the decoded ADD alias"))
+    }
+    if !disassembly.contains("str\tx1, [sp, #0x8]") || !disassembly.contains("ldr\tx0, [sp, #0x8]") {
+        failures.append(fail("stack-memory-shape", "init_003_stack must store and load x1/x0 through [sp, #8]"))
+    }
+    if !disassembly.contains("svc\t#0") {
+        failures.append(fail("svc", "init_003_stack disassembly must use svc #0"))
+    }
+    for (key, value) in metadata.forbiddenBehavior where value {
+        failures.append(fail("forbidden-behavior", "init_003_stack golden metadata sets forbidden_behavior.\(key)=true"))
+    }
+    return failures
+}
+
 func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String]) {
     let built = try buildInit001(outputRoot: outputRoot)
     let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataURL))
@@ -1840,7 +2238,7 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
     if caseID == "init_001_exit" {
         return try validateInit001Golden(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard caseID == "init_002_write" else {
+    guard ["init_002_write", "init_003_stack"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -1862,20 +2260,50 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
         "disassembly": disassembly,
     ]
     try writeJSON(validationPayload, to: validationURL)
-    let failures = validateInit002Metadata(
-        expected,
-        sourceHash: sourceHash,
-        binaryHash: binaryHash,
-        fileOutput: fileOutput,
-        objdumpHeader: objdumpHeader,
-        disassembly: disassembly,
-        binary: built.binary
-    )
+    let failures = caseID == "init_002_write" ? validateInit002Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly,
+            binary: built.binary
+        ) : validateInit003Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        )
     return (failures, [relativePath(built.binary), relativePath(validationURL)])
 }
 
 func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String, toolchain: [String: String]) -> GoldenMetadata {
-    let isWriteCase = caseID == "init_002_write"
+    let expectedSyscalls: [ExpectedSyscall]
+    let expectedExitCode: Int
+    let expectedMessage: String?
+    switch caseID {
+    case "init_002_write":
+        expectedSyscalls = [
+            ExpectedSyscall(nr: "write", code: nil, fd: 1, len: 6, bytes: "hello\n"),
+            ExpectedSyscall(nr: "exit", code: 0, fd: nil, len: nil, bytes: nil),
+        ]
+        expectedExitCode = 0
+        expectedMessage = "hello\n"
+    case "init_003_stack":
+        expectedSyscalls = [
+            ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
+        ]
+        expectedExitCode = 42
+        expectedMessage = nil
+    default:
+        expectedSyscalls = [
+            ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
+        ]
+        expectedExitCode = 42
+        expectedMessage = nil
+    }
     return GoldenMetadata(
         caseID: caseID,
         generatorCommand: "make tcti-golden-elf-refresh CASE=\(caseID)",
@@ -1895,14 +2323,9 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
         elfType: "ET_EXEC",
         entrypoint: "0x0000000000210120",
         machine: "AArch64",
-        expectedSyscalls: isWriteCase ? [
-            ExpectedSyscall(nr: "write", code: nil, fd: 1, len: 6, bytes: "hello\n"),
-            ExpectedSyscall(nr: "exit", code: 0, fd: nil, len: nil, bytes: nil),
-        ] : [
-            ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
-        ],
-        expectedExitCode: isWriteCase ? 0 : 42,
-        expectedMessage: isWriteCase ? "hello\n" : nil,
+        expectedSyscalls: expectedSyscalls,
+        expectedExitCode: expectedExitCode,
+        expectedMessage: expectedMessage,
         forbiddenBehavior: forbiddenDefaults()
     )
 }
@@ -1948,8 +2371,8 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
     let executeMode = ProcessInfo.processInfo.environment["EXECUTE"] ?? ""
     let negativeExecution = ProcessInfo.processInfo.environment["NEGATIVE_EXECUTION"] ?? ""
-    guard ["init_001_exit", "init_002_write"].contains(caseID) else {
-        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit and init_002_write are implemented in this rails checkpoint.")
+    guard ["init_001_exit", "init_002_write", "init_003_stack"].contains(caseID) else {
+        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit, init_002_write, and init_003_stack are implemented in this rails checkpoint.")
     }
     if refresh && !executeMode.isEmpty {
         throw GateError.usage("EXECUTE is not supported with tcti-golden-elf-refresh")
@@ -1994,10 +2417,18 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
         failures.append(fail("golden-elf", "\(error)"))
     }
     if !failures.isEmpty {
+        var replayCommand = "CASE=\(caseID)"
+        if !executeMode.isEmpty {
+            replayCommand += " EXECUTE=\(executeMode)"
+        }
+        if !negativeExecution.isEmpty {
+            replayCommand += " NEGATIVE_EXECUTION=\(negativeExecution)"
+        }
+        replayCommand += " make \(target)"
         let reducer = try writeReducer(
             target: target,
             caseID: caseID,
-            command: "make \(target) CASE=\(caseID)",
+            command: replayCommand,
             reason: failures.map(\.message).joined(separator: "; "),
             artifacts: artifacts,
             expectedStatus: .fail

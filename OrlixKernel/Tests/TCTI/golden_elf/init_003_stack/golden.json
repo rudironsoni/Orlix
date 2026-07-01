@@ -1,0 +1,39 @@
+{
+  "actual_binary_sha256" : "1080eeda78feb8353aa670f22f06b41904efab565fbd3b63778e6be25f3079aa",
+  "case_id" : "init_003_stack",
+  "compiler_path" : "\/usr\/bin\/clang",
+  "compiler_version" : "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "elf_type" : "ET_EXEC",
+  "entrypoint" : "0x0000000000210120",
+  "expected_binary_sha256" : "1080eeda78feb8353aa670f22f06b41904efab565fbd3b63778e6be25f3079aa",
+  "expected_exit_code" : 42,
+  "expected_syscalls" : [
+    {
+      "code" : 42,
+      "nr" : "exit"
+    }
+  ],
+  "flags" : [
+    "-target",
+    "aarch64-linux-gnu",
+    "-nostdlib",
+    "-static",
+    "-fuse-ld=lld",
+    "-Wl,--build-id=none",
+    "-Wl,-e,_start"
+  ],
+  "forbidden_behavior" : {
+    "generated_exec_memory" : false,
+    "host_exec_guest_text" : false,
+    "host_x18" : false,
+    "map_jit" : false,
+    "native_ios_api_exposure_to_guest" : false,
+    "rwx" : false
+  },
+  "generator_command" : "make tcti-golden-elf-refresh CASE=init_003_stack",
+  "libc_mode" : "no-libc",
+  "linker_path" : "\/opt\/homebrew\/bin\/ld.lld",
+  "linker_version" : "Homebrew LLD 22.1.8 (compatible with GNU linkers)",
+  "machine" : "AArch64",
+  "source_sha256" : "a7462ee9ef1114a28b9603fe148a2b7ef644da91d6315646da890782454d3777"
+}
