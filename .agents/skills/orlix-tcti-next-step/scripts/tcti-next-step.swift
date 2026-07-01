@@ -496,6 +496,42 @@ func firstGadgetExit001Pass() -> (Bool, String) {
     }
 }
 
+func diffSwitchExit001Pass() -> (Bool, String) {
+    let report = reportFact(target: "tcti-diff-switch")
+    guard report.exists, report.status == "pass", report.passed else {
+        return (false, "tcti-diff-switch report is not passing for switch diff gate")
+    }
+    let diffURL = root.appendingPathComponent("Build/TCTI/diff_switch/init_001_exit/diff.json")
+    do {
+        let object = try loadJSONObject(diffURL)
+        let divergent = object["divergent_fields"] as? [Any] ?? []
+        let mode = stringValue(object["mode"])
+        let modeOK = mode == "switch-debug-diff-preparation" || mode == "switch-vs-gadget"
+        let referenceOK = stringValue(object["reference_backend"]) == "switch-debug"
+        let fields = object["fields_checked"] as? [Any] ?? []
+        let requiredFields = [
+            "gprs.x0",
+            "gprs.x8",
+            "sp",
+            "pc",
+            "pstate_nzcv",
+            "tpidr_el0",
+            "memory_writes",
+            "exit.kind",
+            "exit.code",
+            "fault_address",
+        ]
+        let fieldStrings = Set(fields.compactMap { stringValue($0) })
+        let fieldsOK = requiredFields.allSatisfy { fieldStrings.contains($0) }
+        if modeOK && referenceOK && fieldsOK && divergent.isEmpty {
+            return (true, "init_001_exit switch-debug diff baseline has zero divergent fields")
+        }
+        return (false, "init_001_exit diff artifact is not a passing switch-debug baseline")
+    } catch {
+        return (false, "missing or malformed init_001_exit diff artifact: \(error)")
+    }
+}
+
 func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
     let report = reportFact(target: target)
     let state = report.status
@@ -547,7 +583,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         let check = switchTLS004Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
-        return basicReportGate(gate, target: "tcti-diff-switch")
+        let check = diffSwitchExit001Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
     case "first-gadget-init-001-exit":
         let check = firstGadgetExit001Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
