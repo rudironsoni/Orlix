@@ -1400,6 +1400,8 @@ enum A64DecodedInstruction {
     case addSubImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rd: Int, rn: Int, imm: UInt64, shift: Int)
     case loadStoreUnsignedImmediate(raw: UInt32, pc: UInt64, op: String, rt: Int, rn: Int, offset: Int, width: Int)
     case systemRegister(raw: UInt32, pc: UInt64, op: String, rt: Int, sysreg: String)
+    case compareAndBranchImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rt: Int, offset: Int64)
+    case unconditionalBranchImmediate(raw: UInt32, pc: UInt64, op: String, offset: Int64)
     case svc(raw: UInt32, pc: UInt64, imm: UInt16)
     case unsupported(raw: UInt32, pc: UInt64, reason: String)
 
@@ -1410,6 +1412,8 @@ enum A64DecodedInstruction {
              let .addSubImmediate(raw, _, _, _, _, _, _, _),
              let .loadStoreUnsignedImmediate(raw, _, _, _, _, _, _),
              let .systemRegister(raw, _, _, _, _),
+             let .compareAndBranchImmediate(raw, _, _, _, _, _),
+             let .unconditionalBranchImmediate(raw, _, _, _),
              let .svc(raw, _, _),
              let .unsupported(raw, _, _):
             return raw
@@ -1423,6 +1427,8 @@ enum A64DecodedInstruction {
              let .addSubImmediate(_, pc, _, _, _, _, _, _),
              let .loadStoreUnsignedImmediate(_, pc, _, _, _, _, _),
              let .systemRegister(_, pc, _, _, _),
+             let .compareAndBranchImmediate(_, pc, _, _, _, _),
+             let .unconditionalBranchImmediate(_, pc, _, _),
              let .svc(_, pc, _),
              let .unsupported(_, pc, _):
             return pc
@@ -1496,6 +1502,33 @@ enum A64DecodedInstruction {
                 imm: nil,
                 shift: nil,
                 sysreg: sysreg,
+                reason: nil
+            )
+        case let .compareAndBranchImmediate(raw, pc, op, sf, rt, offset):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "compare_and_branch_immediate",
+                op: op,
+                sf: sf,
+                rd: nil,
+                rt: rt,
+                imm: nil,
+                shift: nil,
+                offset: Int(offset),
+                reason: nil
+            )
+        case let .unconditionalBranchImmediate(raw, pc, op, offset):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "unconditional_branch_immediate",
+                op: op,
+                sf: nil,
+                rd: nil,
+                imm: nil,
+                shift: nil,
+                offset: Int(offset),
                 reason: nil
             )
         case let .svc(raw, pc, imm):
@@ -1619,6 +1652,27 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
             rt: rt,
             sysreg: "tpidr_el0"
         )
+    }
+
+    if (raw & 0x7e00_0000) == 0x3400_0000 {
+        let sf = Int((raw >> 31) & 0x1)
+        let op = Int((raw >> 24) & 0x1)
+        let imm19 = UInt64((raw >> 5) & 0x7ffff)
+        let rt = Int(raw & 0x1f)
+        guard sf == 1 else {
+            return .unsupported(raw: raw, pc: pc, reason: "CBZ/CBNZ W-register variants are not implemented")
+        }
+        guard op == 0 else {
+            return .unsupported(raw: raw, pc: pc, reason: "CBNZ is not implemented")
+        }
+        let offset = signExtend(imm19 << 2, bitCount: 21)
+        return .compareAndBranchImmediate(raw: raw, pc: pc, op: "cbz", sf: 64, rt: rt, offset: offset)
+    }
+
+    if (raw & 0xfc00_0000) == 0x1400_0000 {
+        let imm26 = UInt64(raw & 0x03ff_ffff)
+        let offset = signExtend(imm26 << 2, bitCount: 28)
+        return .unconditionalBranchImmediate(raw: raw, pc: pc, op: "b", offset: offset)
     }
 
     if (raw & 0xffe0_001f) == 0xd400_0001 {
@@ -1827,6 +1881,76 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                 registers[rt] = guestTPIDREL0
             }
             pc += 4
+        case let .compareAndBranchImmediate(_, instructionPC, op, _, rt, offset):
+            guard op == "cbz" else {
+                let report = executionReport(
+                    metadata: metadata,
+                    elf: elf,
+                    expectedEntry: expectedEntry,
+                    instructionsExecuted: instructionsExecuted,
+                    decodedInstructions: decodedInstructions,
+                    instructionWords: instructionWords,
+                    syscalls: syscalls,
+                    capturedExit: capturedExit,
+                    notes: ["switch-debug branch fixture stopped because only CBZ is supported"]
+                )
+                failures.append(fail("execution-unsupported-instruction", "unsupported compare-and-branch op \(op)"))
+                return (report, failures)
+            }
+            if registers[rt] == 0 {
+                let targetPC = Int64(bitPattern: instructionPC) + offset
+                guard targetPC >= 0 else {
+                    let report = executionReport(
+                        metadata: metadata,
+                        elf: elf,
+                        expectedEntry: expectedEntry,
+                        instructionsExecuted: instructionsExecuted,
+                        decodedInstructions: decodedInstructions,
+                        instructionWords: instructionWords,
+                        syscalls: syscalls,
+                        capturedExit: capturedExit,
+                        notes: ["switch-debug branch fixture stopped because CBZ computed a negative PC"]
+                    )
+                    failures.append(fail("execution-branch-target", "CBZ computed negative guest PC \(targetPC)"))
+                    return (report, failures)
+                }
+                pc = UInt64(targetPC)
+            } else {
+                pc += 4
+            }
+        case let .unconditionalBranchImmediate(_, instructionPC, op, offset):
+            guard op == "b" else {
+                let report = executionReport(
+                    metadata: metadata,
+                    elf: elf,
+                    expectedEntry: expectedEntry,
+                    instructionsExecuted: instructionsExecuted,
+                    decodedInstructions: decodedInstructions,
+                    instructionWords: instructionWords,
+                    syscalls: syscalls,
+                    capturedExit: capturedExit,
+                    notes: ["switch-debug branch fixture stopped because only B is supported"]
+                )
+                failures.append(fail("execution-unsupported-instruction", "unsupported unconditional branch op \(op)"))
+                return (report, failures)
+            }
+            let targetPC = Int64(bitPattern: instructionPC) + offset
+            guard targetPC >= 0 else {
+                let report = executionReport(
+                    metadata: metadata,
+                    elf: elf,
+                    expectedEntry: expectedEntry,
+                    instructionsExecuted: instructionsExecuted,
+                    decodedInstructions: decodedInstructions,
+                    instructionWords: instructionWords,
+                    syscalls: syscalls,
+                    capturedExit: capturedExit,
+                    notes: ["switch-debug branch fixture stopped because B computed a negative PC"]
+                )
+                failures.append(fail("execution-branch-target", "B computed negative guest PC \(targetPC)"))
+                return (report, failures)
+            }
+            pc = UInt64(targetPC)
         case .svc:
             let syscallNumber = Int(registers[8])
             let arg0 = Int(registers[0])
@@ -1980,6 +2104,23 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-tls", "expected decoded MSR/MRS TPIDR_EL0 instructions"))
         }
     }
+    if metadata.caseID == "init_005_branches" {
+        if report.guestInstructionsExecuted != 5 {
+            failures.append(fail("execution-instruction-count", "expected 5 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 1 else {
+            failures.append(fail("execution-syscalls", "expected one exit syscall, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let exit = report.syscalls[0]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 42 {
+            failures.append(fail("execution-exit", "expected captured branch-derived exit(42)"))
+        }
+        let decoded = report.decodedInstructions
+        if !decoded.contains(where: { $0.instructionClass == "compare_and_branch_immediate" && $0.op == "cbz" && $0.rt == 0 }) {
+            failures.append(fail("execution-branch", "expected decoded CBZ x0 branch instruction"))
+        }
+    }
     return failures
 }
 
@@ -2020,7 +2161,7 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     if caseID == "init_001_exit" {
         return try validateAndExecuteInit001(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF execution case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -2045,14 +2186,21 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
-        ) : validateInit004Metadata(
+        ) : (caseID == "init_004_tls" ? validateInit004Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
-        ))
+        ) : validateInit005Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        )))
     let execution = try executeSwitchDebug(binary: built.binary, metadata: expected)
     failures.append(contentsOf: execution.failures)
     let executionURL = outputRoot
@@ -2249,6 +2397,22 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "branches-unsupported-cbnz":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_005_branches", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_005_branches_unsupported_cbnz.S"),
+            outputRoot: outputRoot,
+            name: "init_005_branches_unsupported_cbnz"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_005_branches_unsupported_cbnz", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     default:
         throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
     }
@@ -2270,6 +2434,7 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         "stack-unsupported-preindex",
         "tls-wrong-exit",
         "tls-unsupported-sysreg",
+        "branches-unsupported-cbnz",
     ] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
@@ -2277,9 +2442,10 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
             if result.failures.isEmpty {
                 failures.append(fail("negative-\(fixture)", "negative execution fixture \(fixture) unexpectedly passed"))
             }
-            let fixtureCaseID = fixture.hasPrefix("write-") ? "init_002_write" :
-                (fixture.hasPrefix("stack-") ? "init_003_stack" :
-                    (fixture.hasPrefix("tls-") ? "init_004_tls" : "init_001_exit"))
+        let fixtureCaseID = fixture.hasPrefix("write-") ? "init_002_write" :
+            (fixture.hasPrefix("stack-") ? "init_003_stack" :
+            (fixture.hasPrefix("tls-") ? "init_004_tls" :
+            (fixture.hasPrefix("branches-") ? "init_005_branches" : "init_001_exit")))
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
