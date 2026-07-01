@@ -51,6 +51,48 @@ Boundary:
 - No custom MCP.
 - No `tools/agent`.
 
+### Checkpoint: Memory Switch-Debug Execution Gate
+
+- Harness-selected gate implemented: `switch-init-006-memory`.
+- Selected command: `make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug`.
+- Why selected: `agent-next` selected the first non-passing roadmap gate after `golden-init-006-memory-structural` passed.
+- Added narrow decoded switch-debug semantics for the existing `init_006_memory` fixture:
+  - `ADR x1, value` computes `x1 = pc + imm`.
+  - `LDR x0, [x1]` reads one 64-bit little-endian value from file-backed `PT_LOAD` bytes only.
+  - existing `MOVZ x8, #93` sets the Linux exit syscall number.
+  - existing `SVC #0` captures Linux `exit(42)` as a test-harness event.
+- Exact decoded execution:
+  - `0x10000081` `adr x1, 0x210130 <value>`.
+  - `0xf9400020` `ldr x0, [x1]`, effective address `0x0000000000210130`.
+  - `0xd2800ba8` `mov x8, #93`.
+  - `0xd4000001` `svc #0`.
+- Execution report:
+  - `Build/TCTI/golden_elf/init_006_memory/execution.json`.
+- Captured syscall:
+  - Linux `exit(42)`, captured by the switch-debug harness.
+  - Host `exit` was not called.
+  - Darwin syscalls were not called as guest side effects.
+- Negative execution reducers:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-unsupported-store.json`.
+- Replayed reducer:
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json` produced expected `fail`, actual `fail`, replay exit code `2`.
+
+Boundary:
+
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No physical-device gate.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+- No custom MCP.
+- No `tools/agent`.
+
 ### Checkpoint: Branch Switch-Debug Execution And Harness No-Phone Roadmap Guard
 
 - Harness-selected gate implemented: `switch-init-005-branches`.
@@ -1817,6 +1859,81 @@ Boundary:
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
+
+### Correction: init_006_memory Reducer Replay Set
+
+- Correct reducer lane result for harness-selected gate `switch-init-006-memory`.
+- Replayed negative reducers:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-unsupported-ldur.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-unsupported-store.json`.
+- Replay results:
+  - `execution-memory-invalid-read.json`: expected `fail`, actual `fail`, replay exit code `2`.
+  - `execution-memory-unsupported-ldur.json`: expected `fail`, actual `fail`, replay exit code `2`.
+  - `execution-memory-unsupported-store.json`: expected `fail`, actual `fail`, replay exit code `2`.
+- Fixture sources:
+  - `tools/tcti/fixtures/golden_elf/init_006_memory_invalid_read.S`.
+  - `tools/tcti/fixtures/golden_elf/init_006_memory_unsupported_ldur.S`.
+  - `tools/tcti/fixtures/golden_elf/init_006_memory_unsupported_store.S`.
+- Boundary:
+  - No simulator or physical-device gate was run.
+  - No production TCTI assembly or gadget dispatch was added.
+  - No HostAdapter, Darwin, VFS, fd table, process, signal, scheduler, or Linux runtime semantics were changed.
+  - No reducer-lane edit was made to `tools/tcti/orlix-tcti-gate.swift`.
+
+### Reducer Lane: init_006_memory Negative Fixture Scope
+
+- Reducer lane for harness-selected gate: `switch-init-006-memory`.
+- Positive switch-debug execution was run after the oracle rail update and passed:
+  - `make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug`.
+  - report: `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - execution artifact: `Build/TCTI/golden_elf/init_006_memory/execution.json`.
+- Smallest replayed negative fixture set for the memory gate:
+  - invalid guest memory read from an unmapped guest address.
+  - unsupported file-backed guest memory store.
+- Added reducer-lane fixture sources:
+  - `tools/tcti/fixtures/golden_elf/init_006_memory_invalid_read.S`.
+  - `tools/tcti/fixtures/golden_elf/init_006_memory_unsupported_ldur.S`.
+- Parallel oracle lane supplied and wired:
+  - `tools/tcti/fixtures/golden_elf/init_006_memory_unsupported_store.S`.
+- Verified reducer replay:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json`.
+  - original command: `CASE=init_006_memory EXECUTE=switch-debug NEGATIVE_EXECUTION=memory-invalid-read make tcti-golden-elf`.
+  - expected `fail`, actual `fail`, replay exit code `2`.
+  - failure id: `execution-memory-read`.
+  - reason: guest memory read outside file-backed `PT_LOAD` at address `0x0`, length `8`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-unsupported-store.json`.
+  - original command: `CASE=init_006_memory EXECUTE=switch-debug NEGATIVE_EXECUTION=memory-unsupported-store make tcti-golden-elf`.
+  - expected `fail`, actual `fail`, replay exit code `2`.
+  - failure id: `execution-unsupported-instruction`.
+  - reason: file-backed `STR` remains unsupported in the seed switch-debug memory fixture.
+
+Boundary:
+
+- No `tools/tcti/orlix-tcti-gate.swift` edits were made by this reducer lane.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No physical-device gate.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+
+Boundary:
+
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No physical-device gate.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
 
 ### Checkpoint: Branches Golden ELF Structural Gate
 

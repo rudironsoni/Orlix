@@ -1805,6 +1805,45 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
             }
             pc += 4
         case let .loadStoreUnsignedImmediate(_, _, op, rt, rn, offset, _):
+            if rn != 31 && op == "ldr" {
+                let address = registers[rn] + UInt64(offset)
+                decodedInstructions[decodedInstructions.count - 1] = DecodedInstructionReport(
+                    pc: decoded.report.pc,
+                    raw: decoded.report.raw,
+                    instructionClass: decoded.report.instructionClass,
+                    op: decoded.report.op,
+                    sf: decoded.report.sf,
+                    rd: decoded.report.rd,
+                    rn: decoded.report.rn,
+                    rt: decoded.report.rt,
+                    imm: decoded.report.imm,
+                    shift: decoded.report.shift,
+                    offset: decoded.report.offset,
+                    width: decoded.report.width,
+                    effectiveAddress: hexPC(address),
+                    reason: decoded.report.reason
+                )
+                do {
+                    let bytes = try elf.readBytes(at: address, length: 8)
+                    registers[rt] = try littleEndianUInt64(bytes, 0)
+                    pc += 4
+                } catch {
+                    let report = executionReport(
+                        metadata: metadata,
+                        elf: elf,
+                        expectedEntry: expectedEntry,
+                        instructionsExecuted: instructionsExecuted,
+                        decodedInstructions: decodedInstructions,
+                        instructionWords: instructionWords,
+                        syscalls: syscalls,
+                        capturedExit: capturedExit,
+                        notes: ["switch-debug stopped on file-backed PT_LOAD memory-read failure"]
+                    )
+                    failures.append(fail("execution-memory-read", "\(error)"))
+                    return (report, failures)
+                }
+                continue
+            }
             guard rn == 31 else {
                 let report = executionReport(
                     metadata: metadata,
@@ -1815,9 +1854,9 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
-                    notes: ["switch-debug stack fixture stopped because only SP-based load/store is supported"]
+                    notes: ["switch-debug memory fixture stopped because only register-based LDR and SP-based load/store are supported"]
                 )
-                failures.append(fail("execution-unsupported-instruction", "load/store unsigned immediate is only implemented for SP base in this no-phone stack fixture"))
+                failures.append(fail("execution-unsupported-instruction", "load/store unsigned immediate is only implemented for register-based LDR and SP base in this no-phone fixture"))
                 return (report, failures)
             }
             let address = sp + UInt64(offset)
@@ -2121,6 +2160,31 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-branch", "expected decoded CBZ x0 branch instruction"))
         }
     }
+    if metadata.caseID == "init_006_memory" {
+        if report.guestInstructionsExecuted != 4 {
+            failures.append(fail("execution-instruction-count", "expected 4 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 1 else {
+            failures.append(fail("execution-syscalls", "expected one exit syscall, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let exit = report.syscalls[0]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 42 {
+            failures.append(fail("execution-exit", "expected captured memory-derived exit(42)"))
+        }
+        let decoded = report.decodedInstructions
+        if !decoded.contains(where: {
+            $0.instructionClass == "load_store_unsigned_immediate" &&
+            $0.op == "ldr" &&
+            $0.rt == 0 &&
+            $0.rn == 1 &&
+            $0.offset == 0 &&
+            $0.width == 64 &&
+            $0.effectiveAddress == "0x0000000000210130"
+        }) {
+            failures.append(fail("execution-memory", "expected decoded LDR x0, [x1] from file-backed PT_LOAD address 0x210130"))
+        }
+    }
     return failures
 }
 
@@ -2171,7 +2235,10 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     let fileOutput = built.metadata["file_output"] ?? ""
     let objdumpHeader = built.metadata["objdump_header"] ?? ""
     let disassembly = built.metadata["disassembly"] ?? ""
-    var failures = caseID == "init_002_write" ? validateInit002Metadata(
+    var failures: [Failure]
+    switch caseID {
+    case "init_002_write":
+        failures = validateInit002Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
@@ -2179,28 +2246,46 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
             objdumpHeader: objdumpHeader,
             disassembly: disassembly,
             binary: built.binary
-        ) : (caseID == "init_003_stack" ? validateInit003Metadata(
+        )
+    case "init_003_stack":
+        failures = validateInit003Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
-        ) : (caseID == "init_004_tls" ? validateInit004Metadata(
+        )
+    case "init_004_tls":
+        failures = validateInit004Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
-        ) : validateInit005Metadata(
+        )
+    case "init_005_branches":
+        failures = validateInit005Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
-        )))
+        )
+    case "init_006_memory":
+        failures = validateInit006Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        )
+    default:
+        failures = [fail("case-id", "unsupported golden ELF execution case \(caseID)")]
+    }
     let execution = try executeSwitchDebug(binary: built.binary, metadata: expected)
     failures.append(contentsOf: execution.failures)
     let executionURL = outputRoot
@@ -2413,6 +2498,54 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "memory-invalid-read":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_006_memory", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_006_memory_invalid_read.S"),
+            outputRoot: outputRoot,
+            name: "init_006_memory_invalid_read"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_006_memory_invalid_read", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "memory-unsupported-ldur":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_006_memory", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_006_memory_unsupported_ldur.S"),
+            outputRoot: outputRoot,
+            name: "init_006_memory_unsupported_ldur"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_006_memory_unsupported_ldur", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "memory-unsupported-store":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_006_memory", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_006_memory_unsupported_store.S"),
+            outputRoot: outputRoot,
+            name: "init_006_memory_unsupported_store"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_006_memory_unsupported_store", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     default:
         throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
     }
@@ -2435,6 +2568,9 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         "tls-wrong-exit",
         "tls-unsupported-sysreg",
         "branches-unsupported-cbnz",
+        "memory-invalid-read",
+        "memory-unsupported-ldur",
+        "memory-unsupported-store",
     ] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
@@ -2445,7 +2581,8 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         let fixtureCaseID = fixture.hasPrefix("write-") ? "init_002_write" :
             (fixture.hasPrefix("stack-") ? "init_003_stack" :
             (fixture.hasPrefix("tls-") ? "init_004_tls" :
-            (fixture.hasPrefix("branches-") ? "init_005_branches" : "init_001_exit")))
+            (fixture.hasPrefix("branches-") ? "init_005_branches" :
+            (fixture.hasPrefix("memory-") ? "init_006_memory" : "init_001_exit"))))
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
