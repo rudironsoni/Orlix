@@ -20,10 +20,28 @@ TCTI only executes guest AArch64 EL0 instructions until Linux needs control agai
 - Orlix TCTI exists under `arch/orlix`, not HostAdapter.
 - TCTI does not decode Linux syscall policy, model Linux processes, or own VFS/fd/signal/wait/exec semantics.
 - Guest ELF text remains host data. No guest ELF text path requests `vm_protect(... EXECUTE ...)`, guest-text `mmap(... PROT_EXEC ...)`, JIT, MAP_JIT, RWX, or generated executable memory.
-- The plan cannot be marked complete by documentation alone. It requires local no-phone test targets, machine-readable JSON reports, checked-in golden artifacts, reducer artifacts, and static audits before simulator or physical-device debugging.
+- Neither this plan nor the full TCTI objective can be marked complete by documentation, harness rails, or no-phone seed proofs alone. Completion requires local no-phone test targets, machine-readable JSON reports, checked-in golden artifacts, reducer artifacts, static audits, gadget readiness where required, and physical-device runtime evidence.
 - The repo can select the next eligible TCTI gate without a human naming it. `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, and `make agent-task-envelope-check AREA=orlix-tcti` must produce and validate a machine-readable next-task envelope from current reports and the skill-owned roadmap.
 - Physical iPhone gate proves static `/init` reaches real `svc #0`, enters `orlix_syscall_dispatch`, writes one Linux console line, and emits HostAdapter console mirror evidence.
 - Performance claims include exact workload, device, build configuration, command, baseline, counters, wall-clock result, JSON report, and Markdown report.
+
+## Completion Claim Boundary
+
+Current status: full TCTI is incomplete.
+
+The current harness and no-phone proofs are scaffolding and early oracle evidence only. They do not prove that Orlix TCTI is the physical-iPhone userspace execution backend. They do not prove runtime readiness. They do not prove package readiness. They do not prove performance.
+
+Agents may mark only the exact scoped checkpoint they just verified. They must not mark the whole `orlix-tcti` objective, this plan, ADR 0022 implementation, product readiness, or physical-iPhone TCTI support complete while any of these are true:
+
+- the next selected gate is still a no-phone switch-debug gate such as `switch-init-003-stack`
+- `make agent-status AREA=orlix-tcti` reports `physical_device_allowed=false`
+- release or readiness eligibility is false
+- any required TCTI report is missing, `todo`, `fail`, `error`, `skipped`, or `evidence`
+- gadget prerequisites are incomplete for a gadget or physical-device claim
+- `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall` has not produced a passing JSON report
+- the physical-device report does not prove real `/init` reaches `svc #0`, enters `orlix_syscall_dispatch`, writes a Linux console line, and has all forbidden-behavior fields false
+
+Full TCTI completion requires a final evidence checkpoint in `IMPLEMENT.md` with exact commands, report paths, reducer status, physical-device evidence, and explicit confirmation that the product defconfig flip is allowed by the gates. Anything less is partial progress.
 
 ## Agent Harness Autonomy
 
@@ -97,6 +115,7 @@ Current roadmap state after the latest no-phone proofs:
 - The current next eligible gate is `switch-init-003-stack`.
 - Physical-device gates remain blocked because no-phone and gadget prerequisites are incomplete.
 - Gadget gates remain blocked because switch-debug and differential prerequisites are incomplete.
+- This status is proof of sequencing only. It is not a completion claim for TCTI.
 
 No custom Orlix MCP may be introduced for these workflows. Repo-local workflow logic belongs in `.agents/skills`; `.codex` is only an adapter; MCP is reserved for external/proven tools such as LLDB MCP, Context7, OpenAI Docs MCP, or externally configured issue-tracker and GitHub MCP.
 
@@ -1751,6 +1770,7 @@ The current harness checkpoint remains no-phone and harness-first:
 - TPIDR_EL0, x18, virtual CPU, App Store safety, and concurrency guardrails
 
 This checkpoint is not runtime-ready. It is not a performance claim. It is not a physical-device proof.
+It is not the full TCTI goal. It must remain open until the completion claim boundary above is satisfied by reports and physical-device evidence.
 
 ## Final Architecture Sentence
 
