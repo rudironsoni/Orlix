@@ -787,6 +787,106 @@ func runContractReproFixture(artifacts: inout [String]) -> [Failure] {
     }
 }
 
+func validateFirstGadgetContract(artifacts: inout [String]) -> [Failure] {
+    let target = "tcti-contract"
+    let caseID = "init_001_exit"
+    let metadataPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", caseID, "golden.json")
+    let outputRoot = buildPath("contract", "gadget_abi")
+    var failures: [Failure] = []
+    var reducerArtifacts: [String] = []
+
+    do {
+        let result = try validateAndExecuteGoldenCase(
+            caseID: caseID,
+            metadataURL: metadataPath,
+            outputRoot: outputRoot
+        )
+        artifacts.append(contentsOf: result.artifacts)
+
+        guard result.failures.isEmpty else {
+            failures.append(contentsOf: result.failures)
+            throw GateError.checkFailed(result.failures.map(\.message))
+        }
+        guard let execution = result.execution else {
+            failures.append(fail("gadget-contract-execution", "switch-debug execution report missing for \(caseID)"))
+            throw GateError.checkFailed(failures.map(\.message))
+        }
+
+        let reference = diffState(from: execution, backend: "switch-debug")
+        let candidate = try gadgetCandidateStateForInit001(from: execution)
+        let divergent = divergentFields(reference: reference, candidate: candidate)
+        for field in divergent {
+            failures.append(fail(
+                "gadget-contract.\(field)",
+                "\(caseID) gadget contract field \(field) diverged: switch=\(stateValue(reference, field: field)) candidate=\(stateValue(candidate, field: field))"
+            ))
+        }
+
+        let caseOutputRoot = outputRoot.appendingPathComponent(caseID, isDirectory: true)
+        let switchStateURL = caseOutputRoot.appendingPathComponent("switch-state.json")
+        let candidateStateURL = caseOutputRoot.appendingPathComponent("candidate-state.json")
+        let diffURL = caseOutputRoot.appendingPathComponent("diff.json")
+        try writeJSON(reference, to: switchStateURL)
+        try writeJSON(candidate, to: candidateStateURL)
+        let diffArtifact = SwitchDiffArtifact(
+            caseID: caseID,
+            mode: "contract-gadget-abi-register-commit-back",
+            referenceBackend: reference.backend,
+            candidateBackend: candidate.backend,
+            gadgetDispatchExecuted: true,
+            productionAssemblyExecuted: false,
+            fieldsChecked: diffFieldsChecked,
+            divergentFields: divergent,
+            referenceState: reference,
+            candidateState: candidate,
+            notes: [
+                "This is a no-phone tcti-contract group for the bounded init_001_exit data-gadget candidate.",
+                "The contract checks x8 and x0 register commit-back plus the SVC boundary against switch-debug state.",
+                "No production assembly, generated executable memory, host-executable guest text, HostAdapter behavior, or device execution is used.",
+            ]
+        )
+        try writeJSON(diffArtifact, to: diffURL)
+        reducerArtifacts = [
+            relativePath(switchStateURL),
+            relativePath(candidateStateURL),
+            relativePath(diffURL),
+        ]
+        artifacts.append(contentsOf: reducerArtifacts)
+
+        let reducer = try writeReducer(
+            target: "tcti-diff-switch",
+            caseID: "gadget-abi-init-001-exit-x0-divergence",
+            command: "CASE=init_001_exit BACKEND=gadget NEGATIVE_DIFF=gadget-x0 make tcti-diff-switch",
+            reason: "contract reducer for gadget register commit-back mismatch",
+            artifacts: reducerArtifacts,
+            expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+    } catch {
+        if failures.isEmpty {
+            failures.append(fail("gadget-contract", "\(error)"))
+        }
+    }
+
+    if !failures.isEmpty {
+        do {
+            let reducer = try writeReducer(
+                target: target,
+                caseID: "gadget-abi-init-001-exit",
+                command: "make \(target)",
+                reason: failures.map(\.message).joined(separator: "; "),
+                artifacts: artifacts,
+                expectedStatus: .fail
+            )
+            artifacts.append(relativePath(reducer))
+        } catch {
+            failures.append(fail("gadget-contract-reducer", "\(error)"))
+        }
+    }
+
+    return failures
+}
+
 func runContract() throws -> Int32 {
     let target = "tcti-contract"
     var artifacts: [String] = []
@@ -950,33 +1050,43 @@ func runContract() throws -> Int32 {
         failures.append(fail("golden-negative-fixture", "\(error)"))
     }
 
-    let todoGroups = [
-        "gadget ABI and register commit-back execution",
-        "FETCH/READ/WRITE memory execution",
-        "TLB, block-cache, invalidation, and direct-chain execution",
+    let gadgetContractFailures = validateFirstGadgetContract(artifacts: &artifacts)
+    if gadgetContractFailures.isEmpty {
+        passedGroups.append("gadget data-program ABI and x0/x8 register commit-back for init_001_exit")
+    } else {
+        failures.append(contentsOf: gadgetContractFailures)
+    }
+
+    let delegatedGroups = [
+        "FETCH/READ/WRITE memory execution: delegated to tcti-memory-fuzz gate",
+        "TLB, block-cache, invalidation, and direct-chain execution: delegated to tcti-direct-chain-fuzz gate",
     ]
+    let todoGroups: [String] = []
     let todoFailures = todoGroups.map { fail("todo", "\($0) contract remains TODO") }
     let reducer = try writeReducer(
         target: target,
-        caseID: "todo",
+        caseID: failures.isEmpty ? "contract-pass-regression" : "contract-failure",
         command: "make \(target)",
-        reason: "deeper CPU-state contract groups remain TODO",
+        reason: failures.isEmpty ?
+            "contract regression reducer: all tcti-contract groups should remain pass" :
+            failures.map(\.message).joined(separator: "; "),
         artifacts: artifacts,
-        expectedStatus: failures.isEmpty ? .todo : .fail
+        expectedStatus: failures.isEmpty ? .pass : .fail
     )
     artifacts.append(relativePath(reducer))
 
-    let status: GateStatus = failures.isEmpty ? .todo : .fail
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Real contract groups passed: \(passedGroups.joined(separator: ", ")). TODO groups: \(todoGroups.joined(separator: ", ")).",
+        summary: "Real contract groups passed: \(passedGroups.joined(separator: ", ")). Delegated preflight groups: \(delegatedGroups.joined(separator: ", ")).",
         failures: failures + todoFailures,
         artifacts: artifacts,
         counters: [
             "contract_groups_passed": passedGroups.count,
             "contract_groups_todo": todoGroups.count,
             "contract_groups_failed": failures.count,
+            "contract_groups_delegated": delegatedGroups.count,
         ]
     ))
     print("\(status.rawValue): \(relativePath(reportURL))")
@@ -984,8 +1094,8 @@ func runContract() throws -> Int32 {
     for group in passedGroups {
         print("- \(group)")
     }
-    print("todo contract groups:")
-    for group in todoGroups {
+    print("delegated preflight groups:")
+    for group in delegatedGroups {
         print("- \(group)")
     }
     print("reproduce with: make tcti-repro REPRO=\(relativePath(reducer))")
