@@ -402,6 +402,38 @@ func switchWrite002Pass() -> (Bool, String) {
     }
 }
 
+func switchStack003Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_003_stack")
+        let exit = object["exit"] as? [String: Any]
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 8
+        let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 42
+        let syscallOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "exit",
+                  intValue(syscall["nr"]) == 93,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  let first = args.first else {
+                return false
+            }
+            return intValue(first) == 42
+        }
+        let decoded = object["decoded_instructions"] as? [Any] ?? []
+        let hasStackOps = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "load_store_unsigned_immediate"
+        }
+        if entered && backend && instructionCountOK && exitOK && syscallOK && hasStackOps {
+            return (true, "init_003_stack switch-debug execution captured stack-derived exit(42)")
+        }
+        return (false, "init_003_stack execution artifact does not capture stack-derived exit(42)")
+    } catch {
+        return (false, "missing or malformed init_003_stack execution artifact: \(error)")
+    }
+}
+
 func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
     let report = reportFact(target: target)
     let state = report.status
@@ -447,7 +479,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         let check = switchWrite002Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-003-stack":
-        return missingGate(gate, reason: "init_003_stack golden and switch-debug execution artifacts are not present")
+        let check = switchStack003Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-004-tls":
         return missingGate(gate, reason: "init_004_tls golden and switch-debug execution artifacts are not present")
     case "diff-switch-init-001-exit":

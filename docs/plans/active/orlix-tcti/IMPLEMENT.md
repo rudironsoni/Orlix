@@ -1304,3 +1304,36 @@ Boundary:
   - No physical-device gate run.
   - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime behavior added.
   - No custom MCP or `tools/agent` added.
+
+### Checkpoint: Harness Advances Past Stack Gate
+
+- Fixed `agent-status` and `agent-next` detection for `switch-init-003-stack`.
+- The next-step harness now reads `Build/TCTI/golden_elf/init_003_stack/execution.json` and treats the stack gate as pass only when:
+  - backend is `switch-debug`;
+  - entrypoint was entered;
+  - eight guest instructions executed;
+  - decoded instructions include stack load/store class evidence;
+  - captured syscall is `exit(42)`.
+- After the fix, the harness selected the next eligible gate:
+  - `switch-init-004-tls`
+  - command `make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug`
+
+Evidence:
+
+```sh
+rtk proxy git diff --check
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+```
+
+All passed. Boundary:
+
+- No TCTI runtime feature implemented.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate run.
+- No physical-device gate run.
+- No custom MCP or `tools/agent` added.
