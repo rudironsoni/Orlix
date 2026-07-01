@@ -834,3 +834,102 @@ Boundary:
 - No simulator gate was run.
 - No physical-device gate was run.
 - This is structural and contractual no-phone proof for the seed golden ELF. It is not guest execution proof and not runtime readiness.
+
+### Checkpoint: Seed ELF Switch-Debug Execution
+
+- Added `make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`.
+- The execution mode validates the existing seed golden metadata before execution:
+  - source SHA256
+  - binary SHA256
+  - ELF64 AArch64 executable shape
+  - entrypoint
+  - syscall instruction shape
+- The switch-debug harness reads the ELF entrypoint from the generated ELF and fetches 32-bit instruction words from PT_LOAD file-backed bytes.
+- Exact instruction encodings observed and handled:
+  - `0xd2800ba8`: `mov x8, #93`
+  - `0xd2800540`: `mov x0, #42`
+  - `0xd4000001`: `svc #0`
+- Switch-debug semantic handlers added:
+  - exact `0xd2800ba8` sets guest `x8 = 93`
+  - exact `0xd2800540` sets guest `x0 = 42`
+  - exact `0xd4000001` captures a test-harness syscall event
+- Captured execution result:
+  - backend `switch-debug`
+  - case id `init_001_exit`
+  - entered entrypoint `true`
+  - guest instructions executed `3`
+  - syscall `exit`, number `93`, args `[42]`, captured `true`
+  - exit kind `guest_exit_syscall`, code `42`
+- Added negative execution fixtures:
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_wrong_expected_exit.json`
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_unsupported_before_svc.S`
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_wrong_syscall.S`
+- Negative execution reducer paths:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-wrong-exit.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-unsupported.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-wrong-syscall.json`
+- `tcti-contract` now has one more real passing group:
+  - switch-debug executes `init_001_exit` to captured `exit(42)`
+- `tcti-contract` still exits non-zero with `status=todo` because deeper groups remain TODO:
+  - gadget ABI and register commit-back execution
+  - `FETCH`/`READ`/`WRITE` memory execution
+  - TLB, block-cache, invalidation, and direct-chain execution
+
+Report paths:
+
+- `Build/TCTI/reports/tcti-golden-elf/report.json`
+- `Build/TCTI/golden_elf/init_001_exit/execution.json`
+- `Build/TCTI/reports/tcti-contract/report.json`
+
+Evidence:
+
+```sh
+rtk proxy git diff --check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+```
+
+All passed.
+
+```sh
+rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+- real contract groups include switch-debug execution to captured `exit(42)`
+- deeper groups remain TODO
+- Make exited non-zero with `rc=2`
+
+```sh
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-wrong-syscall.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+- expected status `fail`
+- actual replay status `fail`
+- actual replay exit code `2`
+- Make exited non-zero with `rc=2`
+
+```sh
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Both passed. The existing Xcode SDK `__alloc_size` redefinition warning remains present.
+
+Boundary:
+
+- No production TCTI assembly was added.
+- No gadget dispatch was implemented.
+- No simulator gate was run.
+- No physical-device gate was run.
+- No HostAdapter, UIKit, or Darwin syscall path was used.
+- No Linux runtime semantics were implemented.
+- No syscall implementation was added beyond a captured test-harness syscall event.
+- This is only the seed ELF switch-debug no-phone execution proof.
