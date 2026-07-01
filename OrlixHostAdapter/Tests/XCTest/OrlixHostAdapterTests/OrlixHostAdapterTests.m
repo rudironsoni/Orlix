@@ -73,13 +73,25 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
 
 @implementation OrlixHostAdapterTests
 
+- (void)testConfiguredLinuxPageSizeCanRepresentHostPageGranularity
+{
+    const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
+    const unsigned long hostPageSize = orlix_host_memory_page_size();
+
+    XCTAssertGreaterThan(hostPageSize, 0UL);
+    XCTAssertEqual(hostPageSize & (hostPageSize - 1UL), 0UL);
+    XCTAssertGreaterThanOrEqual(linuxPageSize, hostPageSize);
+    XCTAssertEqual(linuxPageSize % hostPageSize, 0UL);
+}
+
 - (void)testUserMappingAdaptsLinuxPageInsideHostPage
 {
     const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
+    const unsigned long mappingLength = linuxPageSize * 2UL;
     vm_address_t reserved = 0;
     kern_return_t status = vm_allocate(mach_task_self(),
                                        &reserved,
-                                       (vm_size_t)vm_page_size,
+                                       (vm_size_t)mappingLength,
                                        VM_FLAGS_ANYWHERE);
     XCTAssertEqual(status, KERN_SUCCESS);
     XCTAssertNotEqual(reserved, (vm_address_t)0);
@@ -87,7 +99,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
         return;
     }
 
-    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)vm_page_size);
+    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)mappingLength);
     XCTAssertEqual(status, KERN_SUCCESS);
 
     unsigned char *source = malloc((size_t)linuxPageSize);
@@ -126,10 +138,11 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     }
 
     const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
+    const unsigned long mappingLength = linuxPageSize * 2UL;
     vm_address_t reserved = 0;
     kern_return_t status = vm_allocate(mach_task_self(),
                                        &reserved,
-                                       (vm_size_t)vm_page_size,
+                                       (vm_size_t)mappingLength,
                                        VM_FLAGS_ANYWHERE);
     XCTAssertEqual(status, KERN_SUCCESS);
     XCTAssertNotEqual(reserved, (vm_address_t)0);
@@ -137,7 +150,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
         return;
     }
 
-    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)vm_page_size);
+    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)mappingLength);
     XCTAssertEqual(status, KERN_SUCCESS);
 
     unsigned char *first = malloc((size_t)linuxPageSize);
@@ -170,7 +183,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     };
 
     int ret = orlix_host_user_refresh_window((unsigned long)reserved,
-                                             (unsigned long)vm_page_size,
+                                                 mappingLength,
                                              segments,
                                              sizeof(segments) / sizeof(segments[0]));
     XCTAssertEqual(ret, 0);
@@ -180,10 +193,59 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     XCTAssertEqual(firstByte, 0x11);
     XCTAssertEqual(secondByte, 0x22);
 
-    orlix_host_user_unmap_pages((unsigned long)reserved,
-                                (unsigned long)vm_page_size);
+    orlix_host_user_unmap_pages((unsigned long)reserved, mappingLength);
     free(first);
     free(second);
+}
+
+- (void)testUserWindowRefreshCopiesExecutableLinuxPage
+{
+    const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
+    vm_address_t reserved = 0;
+    kern_return_t status = vm_allocate(mach_task_self(),
+                                       &reserved,
+                                       (vm_size_t)linuxPageSize,
+                                       VM_FLAGS_ANYWHERE);
+    XCTAssertEqual(status, KERN_SUCCESS);
+    XCTAssertNotEqual(reserved, (vm_address_t)0);
+    if (status != KERN_SUCCESS || !reserved) {
+        return;
+    }
+
+    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)linuxPageSize);
+    XCTAssertEqual(status, KERN_SUCCESS);
+
+    unsigned char *source = malloc((size_t)linuxPageSize);
+    XCTAssertTrue(source != NULL);
+    if (!source) {
+        return;
+    }
+
+    memset(source, 0xd5, (size_t)linuxPageSize);
+
+    struct orlix_host_user_page_segment segments[] = {
+        {
+            .target_address = (unsigned long)reserved,
+            .source_page = source,
+            .length = linuxPageSize,
+            .writable = 0,
+            .executable = 1,
+        },
+    };
+
+    int ret = orlix_host_user_refresh_window((unsigned long)reserved,
+                                             linuxPageSize,
+                                             segments,
+                                             sizeof(segments) / sizeof(segments[0]));
+    XCTAssertEqual(ret, 0);
+
+    if (ret == 0) {
+        unsigned char mappedByte = ((volatile unsigned char *)reserved)[0];
+        XCTAssertEqual(mappedByte, 0xd5);
+        orlix_host_user_unmap_pages((unsigned long)reserved, linuxPageSize);
+    }
+
+    free(source);
 }
 
 - (void)testUserWindowRefreshMapsWritableLinuxPageAfterHoles
@@ -193,10 +255,11 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     }
 
     const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
+    const unsigned long mappingLength = linuxPageSize * 2UL;
     vm_address_t reserved = 0;
     kern_return_t status = vm_allocate(mach_task_self(),
                                        &reserved,
-                                       (vm_size_t)vm_page_size,
+                                       (vm_size_t)mappingLength,
                                        VM_FLAGS_ANYWHERE);
     XCTAssertEqual(status, KERN_SUCCESS);
     XCTAssertNotEqual(reserved, (vm_address_t)0);
@@ -204,7 +267,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
         return;
     }
 
-    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)vm_page_size);
+    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)mappingLength);
     XCTAssertEqual(status, KERN_SUCCESS);
 
     unsigned char *source = malloc((size_t)linuxPageSize);
@@ -214,7 +277,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     }
     memset(source, 0x33, (size_t)linuxPageSize);
 
-    unsigned long target = (unsigned long)reserved + (unsigned long)vm_page_size - linuxPageSize;
+    unsigned long target = (unsigned long)reserved + mappingLength - linuxPageSize;
     struct orlix_host_user_page_segment segment = {
         .target_address = target,
         .source_page = source,
@@ -224,7 +287,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     };
 
     int ret = orlix_host_user_refresh_window((unsigned long)reserved,
-                                             (unsigned long)vm_page_size,
+                                             mappingLength,
                                              &segment,
                                              1);
     XCTAssertEqual(ret, 0);
@@ -235,8 +298,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     XCTAssertEqual(source[0], 0x44);
     XCTAssertEqual(source[linuxPageSize - 1], 0x55);
 
-    orlix_host_user_unmap_pages((unsigned long)reserved,
-                                (unsigned long)vm_page_size);
+    orlix_host_user_unmap_pages((unsigned long)reserved, mappingLength);
     free(source);
 }
 
@@ -247,10 +309,11 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     }
 
     const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
+    const unsigned long mappingLength = linuxPageSize * 2UL;
     vm_address_t reserved = 0;
     kern_return_t status = vm_allocate(mach_task_self(),
                                        &reserved,
-                                       (vm_size_t)vm_page_size,
+                                       (vm_size_t)mappingLength,
                                        VM_FLAGS_ANYWHERE);
     XCTAssertEqual(status, KERN_SUCCESS);
     XCTAssertNotEqual(reserved, (vm_address_t)0);
@@ -258,7 +321,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
         return;
     }
 
-    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)vm_page_size);
+    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)mappingLength);
     XCTAssertEqual(status, KERN_SUCCESS);
 
     unsigned char *first = malloc((size_t)linuxPageSize);
@@ -290,7 +353,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
 
     ((volatile unsigned char *)target)[0] = 0x71;
     ((volatile unsigned char *)target)[linuxPageSize] = 0x72;
-    orlix_host_kernel_unmap_pages(target, (unsigned long)vm_page_size);
+    orlix_host_kernel_unmap_pages(target, mappingLength);
     XCTAssertEqual(first[0], 0x71);
     XCTAssertEqual(second[0], 0x72);
 

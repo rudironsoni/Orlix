@@ -114,6 +114,13 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/boot/boot.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/cpuinfo.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/engine.c \
+arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/report.c \
+arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/switch_debug.c \
+arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/decode_aarch64.c \
+arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/gadget_program.c \
+arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/block_cache.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tlb.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/idle.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/irq.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/process.c \
@@ -130,6 +137,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/mm/iomem.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/init.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/mmap.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/tcti_user_page.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/tcti_invalidate.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/uaccess.c \
 	init/version.c \
 	init/main.c \
@@ -1643,7 +1652,7 @@ __headers-install: __prepare-port
 		done; \
 	done; \
 	mkdir -p "$$uapi_build_dir"; \
-	env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" "$$linux_make" -j"$(ORLIX_HEADERS_INSTALL_JOBS)" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$uapi_build_dir" ARCH="$(LINUX_UAPI_ARCH)" LLVM=1 INSTALL_HDR_PATH="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)" headers_install; \
+	env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET -u XROS_DEPLOYMENT_TARGET -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -j"$(ORLIX_HEADERS_INSTALL_JOBS)" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$uapi_build_dir" ARCH="$(LINUX_UAPI_ARCH)" LLVM=1 HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" INSTALL_HDR_PATH="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)" headers_install; \
 	[ -d "$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" ] || { echo "missing installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" >&2; exit 1; }; \
 	printf 'profile=%s\nlinux_version=%s\nlinux_uapi_arch=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(LINUX_UAPI_ARCH)" > "$$header_install_stamp"; \
 	echo "installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include"
@@ -1684,7 +1693,7 @@ __kunit: __prepare-kbuild
 	[ -n "$(ORLIX_KERNEL_HOST_SDKROOT)" ] || { echo "macOS SDK is required for Linux KUnit host tools; set ORLIX_KERNEL_HOST_SDKROOT=/path/to/MacOSX.sdk" >&2; exit 1; }; \
 	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
 	"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$(ORLIX_KUNIT_BUILD_DIR)" "$(ORLIX_KUNIT_BUILD_DIR)/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o; \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.o; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
 __kernel-archive: __prepare-kbuild
@@ -2103,9 +2112,9 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	validate_unsigned_int "$(ORLIX_KERNEL_BASE_ROOT_HOST_BLOCK_DEVICE)"; \
 	validate_unsigned_int "$(ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE)"; \
 	validate_unsigned_int "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)"; \
-	expected_output="$(CURDIR)/Build/OrlixKernel/payload/$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME).$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)"; \
+	expected_output="$(ORLIX_BUILD_ROOT)/OrlixKernel/payload/$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME).$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)"; \
 	[ "$$output" = "$$expected_output" ] || { echo "OrlixKernel payload path must come from OrlixOS target metadata: $$output" >&2; exit 1; }; \
-	for path in Build Build/OrlixKernel Build/OrlixKernel/payload "$$output"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_BUILD_ROOT)/OrlixKernel/payload" "$$output"; do \
 		if [ -L "$$path" ]; then echo "refusing to package OrlixKernel payload through symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	rootfs_input="$(ORLIX_KERNEL_TEST_INITRAMFS_INPUT)"; \
@@ -2123,19 +2132,19 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	base_root_tree_input="$(ORLIX_KERNEL_BASE_ROOT_TREE_INPUT)"; \
 	state_root_tree_input="$(ORLIX_KERNEL_STATE_ROOT_TREE_INPUT)"; \
 	case "$$rootfs_input" in \
-		"$(CURDIR)"/Build/OrlixKernel/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixMLibC/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixOS/test-initramfs/*/*/rootfs/initramfs.cpio.gz|"$(CURDIR)"/Build/OrlixOS/rootfs/*/rootfs/initramfs.cpio.gz|"$(ORLIX_KERNEL_BUILD_DIR)"/usr/initramfs_inc_data) ;; \
+	"$(ORLIX_BUILD_ROOT)"/OrlixKernel/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(ORLIX_BUILD_ROOT)"/OrlixMLibC/test-initramfs/*/rootfs/initramfs.cpio.gz|"$(ORLIX_BUILD_ROOT)"/OrlixOS/test-initramfs/*/*/rootfs/initramfs.cpio.gz|"$(ORLIX_BUILD_ROOT)"/OrlixOS/rootfs/*/rootfs/initramfs.cpio.gz|"$(ORLIX_KERNEL_BUILD_DIR)"/usr/initramfs_inc_data) ;; \
 		*) echo "refusing to package root initramfs outside Orlix Build roots: $$rootfs_input" >&2; exit 1 ;; \
 	esac; \
 	if [ -n "$$base_root_tree_input" ]; then \
 		case "$$base_root_tree_input" in \
-			"$(CURDIR)"/Build/OrlixOS/rootfs/*/base-tree) ;; \
+		"$(ORLIX_BUILD_ROOT)"/OrlixOS/rootfs/*/base-tree) ;; \
 			*) echo "refusing to package base root tree outside Build/OrlixOS/rootfs: $$base_root_tree_input" >&2; exit 1 ;; \
 		esac; \
 		[ -d "$$base_root_tree_input" ] || { echo "missing OrlixOS base root tree: $$base_root_tree_input" >&2; exit 1; }; \
 	fi; \
 	if [ -n "$$state_root_tree_input" ]; then \
 		case "$$state_root_tree_input" in \
-			"$(CURDIR)"/Build/OrlixOS/rootfs/*/state-tree) ;; \
+		"$(ORLIX_BUILD_ROOT)"/OrlixOS/rootfs/*/state-tree) ;; \
 			*) echo "refusing to package state root tree outside Build/OrlixOS/rootfs: $$state_root_tree_input" >&2; exit 1 ;; \
 		esac; \
 		[ -d "$$state_root_tree_input" ] || { echo "missing OrlixOS state root tree: $$state_root_tree_input" >&2; exit 1; }; \

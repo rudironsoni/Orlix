@@ -31,6 +31,13 @@ static int arch_boot_power_of_two(unsigned long value)
 	return value && !(value & (value - 1));
 }
 
+int arch_boot_host_page_size_supported(unsigned long host_page_size)
+{
+	return arch_boot_power_of_two(host_page_size) &&
+	       host_page_size <= PAGE_SIZE &&
+	       PAGE_SIZE % host_page_size == 0;
+}
+
 #if defined(ORLIX_APP_HOSTED_BOOT)
 static int arch_boot_apply_hosted_user_window(const struct boot_params *params)
 {
@@ -90,9 +97,6 @@ arch_boot_materialize_handoff(const struct boot_params *params)
 		app_hosted_boot_params.memory_base = __pa(app_hosted_boot_memory);
 		app_hosted_boot_params.memory_size = sizeof(app_hosted_boot_memory);
 	}
-	if (!arch_boot_power_of_two(app_hosted_boot_params.host_page_size) ||
-	    app_hosted_boot_params.host_page_size < PAGE_SIZE)
-		app_hosted_boot_params.host_page_size = PAGE_SIZE;
 	return &app_hosted_boot_params;
 #else
 	return params;
@@ -119,6 +123,9 @@ int arch_boot_prepare_entry(const struct boot_params *params)
 		return ORLIX_ARCH_BOOT_INVALID_CONFIG;
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
+	if (!arch_boot_host_page_size_supported(params->host_page_size))
+		return ORLIX_ARCH_BOOT_UNAVAILABLE;
+
 	if (arch_boot_apply_hosted_user_window(params))
 		return ORLIX_ARCH_BOOT_INVALID_CONFIG;
 	if (arch_boot_prepare_hosted_vmalloc_window())
@@ -151,8 +158,7 @@ unsigned long arch_boot_host_page_size(void)
 {
 	const struct boot_params *params = arch_boot_params();
 
-	if (!params || !arch_boot_power_of_two(params->host_page_size) ||
-	    params->host_page_size < PAGE_SIZE)
+	if (!params || !arch_boot_host_page_size_supported(params->host_page_size))
 		return PAGE_SIZE;
 	return params->host_page_size;
 }

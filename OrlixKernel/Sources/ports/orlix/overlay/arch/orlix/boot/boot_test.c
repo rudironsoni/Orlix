@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
 #include <asm/boot.h>
+#include <asm/page.h>
 
 static void orlix_boot_handoff_records_params(struct kunit *test)
 {
@@ -42,9 +43,21 @@ static void orlix_boot_handoff_rejects_missing_dtb(struct kunit *test)
 	KUNIT_EXPECT_PTR_EQ(test, NULL, arch_boot_last_params());
 }
 
+static void orlix_boot_host_page_size_requires_linux_granule(struct kunit *test)
+{
+	KUNIT_EXPECT_FALSE(test, arch_boot_host_page_size_supported(0));
+	KUNIT_EXPECT_FALSE(test, arch_boot_host_page_size_supported(PAGE_SIZE - 1));
+	KUNIT_EXPECT_TRUE(test, arch_boot_host_page_size_supported(PAGE_SIZE));
+	KUNIT_EXPECT_FALSE(test, arch_boot_host_page_size_supported(PAGE_SIZE * 2));
+
+	if (PAGE_SIZE > 4096)
+		KUNIT_EXPECT_TRUE(test, arch_boot_host_page_size_supported(4096));
+}
+
 static struct kunit_case orlix_boot_test_cases[] = {
 	KUNIT_CASE(orlix_boot_handoff_records_params),
 	KUNIT_CASE(orlix_boot_handoff_rejects_missing_dtb),
+	KUNIT_CASE(orlix_boot_host_page_size_requires_linux_granule),
 	{}
 };
 

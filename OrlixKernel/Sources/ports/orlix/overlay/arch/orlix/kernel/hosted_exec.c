@@ -21,6 +21,7 @@
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/signal.h>
+#include <asm/tcti.h>
 #include <asm/time.h>
 #include <asm/unistd.h>
 #include <internal/asm/host_memory.h>
@@ -344,6 +345,44 @@ static void orlix_hosted_handle_invalid_resume_pc(struct pt_regs *regs)
 		orlix_hosted_die_from_user_trap(SIGSEGV);
 }
 
+static void orlix_hosted_sync_resume_mappings(struct pt_regs *regs,
+					      bool full_stack_window)
+{
+	int ret;
+
+	if (full_stack_window)
+		ret = orlix_try_sync_current_user_mappings(regs);
+	else
+		ret = orlix_try_sync_current_user_minimal_mappings(regs);
+	if (!ret)
+		return;
+
+	pr_info("Orlix: hosted resume sync failed task=%s pid=%d pc=%#llx lr=%#llx sp=%#llx full=%d ret=%d\n",
+		current->comm, task_pid_nr(current), regs->pc, regs->regs[30],
+		regs->sp, full_stack_window, ret);
+	orlix_hosted_dump_recent_user_events();
+
+	if (regs->pc && regs->pc < TASK_SIZE &&
+	    !orlix_handle_host_user_fault(regs, regs->pc,
+					  ORLIX_HOST_USER_FAULT_EXEC)) {
+		orlix_exit_to_user_mode_work(regs);
+		if (full_stack_window)
+			ret = orlix_try_sync_current_user_mappings(
+				task_pt_regs(current));
+		else
+			ret = orlix_try_sync_current_user_minimal_mappings(
+				task_pt_regs(current));
+		if (!ret)
+			return;
+		pr_info("Orlix: hosted resume sync still failed after Linux fault path task=%s pid=%d pc=%#llx ret=%d\n",
+			current->comm, task_pid_nr(current),
+			task_pt_regs(current)->pc, ret);
+		orlix_hosted_dump_recent_user_events();
+	}
+
+	orlix_hosted_die_from_user_trap(SIGSEGV);
+}
+
 static void __noreturn orlix_hosted_resume_current_user(struct pt_regs *regs,
 							bool full_stack_window,
 							unsigned long frame_flags)
@@ -356,10 +395,7 @@ static void __noreturn orlix_hosted_resume_current_user(struct pt_regs *regs,
 	orlix_hosted_handle_invalid_resume_pc(regs);
 	orlix_hosted_record_user_event("resume", regs, frame_flags,
 				       full_stack_window);
-	if (full_stack_window)
-		orlix_sync_current_user_mappings(regs);
-	else
-		orlix_sync_current_user_minimal_mappings(regs);
+	orlix_hosted_sync_resume_mappings(regs, full_stack_window);
 	orlix_hosted_save_current_kernel_stack();
 	orlix_hosted_save_trap_frame(&resume_frame, regs, frame_flags);
 	WRITE_ONCE(orlix_hosted_active_user_tls, resume_frame.user_tls);
@@ -390,6 +426,12 @@ static void __noreturn orlix_hosted_handle_user_syscall(struct pt_regs *regs)
 
 void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
 {
+	if (IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI))
+		orlix_tcti_enter_user(regs);
+
+	if (!IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_NATIVE))
+		panic("Orlix: no hosted execution backend configured\n");
+
 	orlix_hosted_resume_current_user(regs, true, 0);
 }
 
