@@ -1502,3 +1502,81 @@ Boundary:
 - No HostAdapter behavior.
 - No Darwin syscall behavior.
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+
+
+### Checkpoint: First Exit Gadget Differential
+
+- Harness-selected gate: `first-gadget-init-001-exit`.
+- Selected command: `make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+- Harness selected this gate because `diff-switch-init-001-exit` and `appstore-safety` were passing and `first-gadget-init-001-exit` was the next eligible non-passing roadmap gate.
+- Implemented bounded no-phone `BACKEND=gadget` handling in the Swift rail for `init_001_exit` only.
+- Candidate backend: `gadget-data-program`.
+- Compared switch-debug reference and gadget candidate state for `gprs.x0`, `gprs.x8`, `sp`, `pc`, `pstate_nzcv`, `tpidr_el0`, `memory_writes`, `exit.kind`, `exit.code`, and `fault_address`.
+- `diff.json` records `mode: switch-vs-gadget`, `candidate_backend: gadget-data-program`, `gadget_dispatch_executed: true`, `production_assembly_executed: false`, and `divergent_fields: []`.
+- Added focused KUnit coverage that the existing data-gadget program executes the `init_001_exit` MOVZ prefix:
+  - `0xd2800ba8` sets `x8 = 93` and advances `pc` to `0x210124`.
+  - `0xd2800540` sets `x0 = 42` and advances `pc` to `0x210128`.
+  - `0xd4000001` remains an SVC boundary and is rejected by gadget lowering.
+- Fixed App Store safety audit object-disassembly scanning to use file-backed command output, avoiding pipe deadlock on real `llvm-objdump -d` output.
+- Verified object-disassembly coverage with repo-local KUnit object `Build/OrlixKernel/kunit/development/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.o`.
+- Safety audit report records `scanned_objects: 1` and no coverage warnings.
+- Updated the autonomous harness status script so `first-gadget-init-001-exit` is recognized from the `switch-vs-gadget` diff artifact and the next eligible gate can advance.
+
+Reports:
+
+- `Build/TCTI/reports/tcti-diff-switch/report.json`
+- `Build/TCTI/diff_switch/init_001_exit/switch-state.json`
+- `Build/TCTI/diff_switch/init_001_exit/candidate-state.json`
+- `Build/TCTI/diff_switch/init_001_exit/diff.json`
+- `Build/TCTI/reports/tcti-appstore-safety-audit/report.json`
+
+Reducer:
+
+- `Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json`
+- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json` replayed expected `fail`, actual `fail`, exit code `2`.
+
+Harness state checkpoint:
+
+- `agent-status` recognizes `first-gadget-init-001-exit` passed.
+- `agent-next` advances to the next certification gate.
+- Release and readiness gates remain ineligible.
+- The next gate selected by the harness was not executed in this checkpoint.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-diff-switch
+rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy sh -c "make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json; rc=$?; echo rc=$rc; exit 0"
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No generated executable memory.
+- No host-executable guest text.
+- No `MAP_JIT`, RWX, or `PROT_EXEC` guest-text path.
+- No host `x18` or `w18`.
+- No simulator gate run.
+- No phone gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- Release and readiness gates remain ineligible for this checkpoint.
