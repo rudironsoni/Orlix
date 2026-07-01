@@ -102,6 +102,7 @@ struct DecodedInstructionReport: Codable {
     let offset: Int?
     let width: Int?
     let effectiveAddress: String?
+    let sysreg: String?
     let reason: String?
 
     init(
@@ -118,6 +119,7 @@ struct DecodedInstructionReport: Codable {
         offset: Int? = nil,
         width: Int? = nil,
         effectiveAddress: String? = nil,
+        sysreg: String? = nil,
         reason: String?
     ) {
         self.pc = pc
@@ -133,6 +135,7 @@ struct DecodedInstructionReport: Codable {
         self.offset = offset
         self.width = width
         self.effectiveAddress = effectiveAddress
+        self.sysreg = sysreg
         self.reason = reason
     }
 
@@ -150,6 +153,7 @@ struct DecodedInstructionReport: Codable {
         case offset
         case width
         case effectiveAddress = "effective_address"
+        case sysreg
         case reason
     }
 }
@@ -732,6 +736,7 @@ func runContract() throws -> Int32 {
     let goldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json")
     let writeGoldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_002_write", "golden.json")
     let stackGoldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_003_stack", "golden.json")
+    let tlsGoldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_004_tls", "golden.json")
     do {
         let validation = try validateInit001Golden(metadataURL: goldenPath, outputRoot: outputRoot)
         artifacts.append(contentsOf: validation.artifacts)
@@ -818,6 +823,25 @@ func runContract() throws -> Int32 {
         }
     } catch {
         failures.append(fail("switch-debug-stack", "\(error)"))
+    }
+
+    do {
+        let result = try validateAndExecuteGoldenCase(
+            caseID: "init_004_tls",
+            metadataURL: tlsGoldenPath,
+            outputRoot: buildPath("contract", "switch_debug_tls")
+        )
+        artifacts.append(contentsOf: result.artifacts)
+        if result.failures.isEmpty,
+           result.execution?.exit?.kind == "guest_exit_syscall",
+           result.execution?.exit?.code == 42 {
+            passedGroups.append("decoded switch-debug executes init_004_tls and captures guest TPIDR_EL0-derived exit(42) without host TLS mutation")
+        } else {
+            failures.append(contentsOf: result.failures)
+            failures.append(fail("switch-debug-tls", "switch-debug did not capture init_004_tls guest TPIDR_EL0-derived exit(42)"))
+        }
+    } catch {
+        failures.append(fail("switch-debug-tls", "\(error)"))
     }
 
     let wrongMetadata = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_wrong_binary_sha.json")
@@ -1173,6 +1197,7 @@ enum A64DecodedInstruction {
     case pcRelativeAddress(raw: UInt32, pc: UInt64, op: String, rd: Int, imm: Int64)
     case addSubImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rd: Int, rn: Int, imm: UInt64, shift: Int)
     case loadStoreUnsignedImmediate(raw: UInt32, pc: UInt64, op: String, rt: Int, rn: Int, offset: Int, width: Int)
+    case systemRegister(raw: UInt32, pc: UInt64, op: String, rt: Int, sysreg: String)
     case svc(raw: UInt32, pc: UInt64, imm: UInt16)
     case unsupported(raw: UInt32, pc: UInt64, reason: String)
 
@@ -1182,6 +1207,7 @@ enum A64DecodedInstruction {
              let .pcRelativeAddress(raw, _, _, _, _),
              let .addSubImmediate(raw, _, _, _, _, _, _, _),
              let .loadStoreUnsignedImmediate(raw, _, _, _, _, _, _),
+             let .systemRegister(raw, _, _, _, _),
              let .svc(raw, _, _),
              let .unsupported(raw, _, _):
             return raw
@@ -1194,6 +1220,7 @@ enum A64DecodedInstruction {
              let .pcRelativeAddress(_, pc, _, _, _),
              let .addSubImmediate(_, pc, _, _, _, _, _, _),
              let .loadStoreUnsignedImmediate(_, pc, _, _, _, _, _),
+             let .systemRegister(_, pc, _, _, _),
              let .svc(_, pc, _),
              let .unsupported(_, pc, _):
             return pc
@@ -1253,6 +1280,20 @@ enum A64DecodedInstruction {
                 shift: nil,
                 offset: offset,
                 width: width,
+                reason: nil
+            )
+        case let .systemRegister(raw, pc, op, rt, sysreg):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "system_register",
+                op: op,
+                sf: 64,
+                rd: nil,
+                rt: rt,
+                imm: nil,
+                shift: nil,
+                sysreg: sysreg,
                 reason: nil
             )
         case let .svc(raw, pc, imm):
@@ -1362,6 +1403,22 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
         )
     }
 
+    if (raw & 0xfff0_0000) == 0xd510_0000 || (raw & 0xfff0_0000) == 0xd530_0000 {
+        let sysreg = UInt16((raw >> 5) & 0xffff)
+        let rt = Int(raw & 0x1f)
+        let isRead = (raw & 0x0020_0000) != 0
+        guard sysreg == 0xde82 else {
+            return .unsupported(raw: raw, pc: pc, reason: String(format: "system register 0x%04x is not implemented", sysreg))
+        }
+        return .systemRegister(
+            raw: raw,
+            pc: pc,
+            op: isRead ? "mrs" : "msr",
+            rt: rt,
+            sysreg: "tpidr_el0"
+        )
+    }
+
     if (raw & 0xffe0_001f) == 0xd400_0001 {
         let imm = UInt16((raw >> 5) & 0xffff)
         guard imm == 0 else {
@@ -1446,6 +1503,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
     var registers = Array(repeating: UInt64(0), count: 31)
     var sp = switchDebugInitialSP
     var stack = SwitchDebugStack()
+    var guestTPIDREL0: UInt64 = 0
     var instructionWords: [UInt32] = []
     var syscalls: [CapturedSyscall] = []
     var capturedExit: CapturedExit?
@@ -1545,6 +1603,28 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                 failures.append(fail("execution-stack-memory", "\(error)"))
                 return (report, failures)
             }
+        case let .systemRegister(_, _, op, rt, sysreg):
+            guard sysreg == "tpidr_el0" else {
+                let report = executionReport(
+                    metadata: metadata,
+                    elf: elf,
+                    expectedEntry: expectedEntry,
+                    instructionsExecuted: instructionsExecuted,
+                    decodedInstructions: decodedInstructions,
+                    instructionWords: instructionWords,
+                    syscalls: syscalls,
+                    capturedExit: capturedExit,
+                    notes: ["switch-debug stopped because only guest TPIDR_EL0 system-register state is supported"]
+                )
+                failures.append(fail("execution-unsupported-instruction", "unsupported system register \(sysreg)"))
+                return (report, failures)
+            }
+            if op == "msr" {
+                guestTPIDREL0 = registers[rt]
+            } else {
+                registers[rt] = guestTPIDREL0
+            }
+            pc += 4
         case .svc:
             let syscallNumber = Int(registers[8])
             let arg0 = Int(registers[0])
@@ -1605,7 +1685,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
-                    notes: ["switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/SVC seed semantics and captures svc #0 as test events without calling host syscalls"]
+                    notes: ["switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/MRS/MSR/SVC seed semantics and captures svc #0 as test events without calling host syscalls", "guest TPIDR_EL0 is switch-debug guest state only; host TPIDR_EL0 is not read or written"]
                 )
                 failures.append(contentsOf: validateCapturedExecution(metadata: metadata, report: report))
                 return (report, failures)
@@ -1680,6 +1760,24 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-exit", "expected captured stack-derived exit(42)"))
         }
     }
+    if metadata.caseID == "init_004_tls" {
+        if report.guestInstructionsExecuted != 6 {
+            failures.append(fail("execution-instruction-count", "expected 6 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 1 else {
+            failures.append(fail("execution-syscalls", "expected one exit syscall, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let exit = report.syscalls[0]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 42 {
+            failures.append(fail("execution-exit", "expected captured guest TPIDR_EL0-derived exit(42)"))
+        }
+        let decoded = report.decodedInstructions
+        if !decoded.contains(where: { $0.instructionClass == "system_register" && $0.op == "msr" && $0.sysreg == "tpidr_el0" }) ||
+            !decoded.contains(where: { $0.instructionClass == "system_register" && $0.op == "mrs" && $0.sysreg == "tpidr_el0" }) {
+            failures.append(fail("execution-tls", "expected decoded MSR/MRS TPIDR_EL0 instructions"))
+        }
+    }
     return failures
 }
 
@@ -1720,7 +1818,7 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     if caseID == "init_001_exit" {
         return try validateAndExecuteInit001(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF execution case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -1738,14 +1836,21 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
             objdumpHeader: objdumpHeader,
             disassembly: disassembly,
             binary: built.binary
-        ) : validateInit003Metadata(
+        ) : (caseID == "init_003_stack" ? validateInit003Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
-        )
+        ) : validateInit004Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        ))
     let execution = try executeSwitchDebug(binary: built.binary, metadata: expected)
     failures.append(contentsOf: execution.failures)
     let executionURL = outputRoot
@@ -1910,6 +2015,38 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "tls-wrong-exit":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_004_tls", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_004_tls_wrong_exit.S"),
+            outputRoot: outputRoot,
+            name: "init_004_tls_wrong_exit"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_004_tls_wrong_exit", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "tls-unsupported-sysreg":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_004_tls", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_004_tls_unsupported_sysreg.S"),
+            outputRoot: outputRoot,
+            name: "init_004_tls_unsupported_sysreg"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_004_tls_unsupported_sysreg", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     default:
         throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
     }
@@ -1929,6 +2066,8 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         "stack-wrong-exit",
         "stack-invalid-memory",
         "stack-unsupported-preindex",
+        "tls-wrong-exit",
+        "tls-unsupported-sysreg",
     ] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
@@ -1937,7 +2076,8 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
                 failures.append(fail("negative-\(fixture)", "negative execution fixture \(fixture) unexpectedly passed"))
             }
             let fixtureCaseID = fixture.hasPrefix("write-") ? "init_002_write" :
-                (fixture.hasPrefix("stack-") ? "init_003_stack" : "init_001_exit")
+                (fixture.hasPrefix("stack-") ? "init_003_stack" :
+                    (fixture.hasPrefix("tls-") ? "init_004_tls" : "init_001_exit"))
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
@@ -2203,6 +2343,79 @@ func validateInit003Metadata(
     return failures
 }
 
+func validateInit004Metadata(
+    _ metadata: GoldenMetadata,
+    sourceHash: String,
+    binaryHash: String,
+    fileOutput: String,
+    objdumpHeader: String,
+    disassembly: String
+) -> [Failure] {
+    var failures: [Failure] = []
+    if metadata.caseID != "init_004_tls" {
+        failures.append(fail("case-id", "golden case id must be init_004_tls"))
+    }
+    if metadata.sourceSHA256 != sourceHash {
+        failures.append(fail("source-sha256", "source hash changed for init_004_tls"))
+    }
+    if metadata.expectedBinarySHA256 != binaryHash {
+        failures.append(fail("binary-sha256", "binary hash changed for init_004_tls; inspect or run make tcti-golden-elf-refresh CASE=init_004_tls"))
+    }
+    if metadata.actualBinarySHA256 != binaryHash {
+        failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_004_tls"))
+    }
+    if metadata.elfType != "ET_EXEC" {
+        failures.append(fail("elf-type", "init_004_tls golden metadata must use ET_EXEC"))
+    }
+    if metadata.machine != "AArch64" {
+        failures.append(fail("elf-machine", "init_004_tls golden metadata must use AArch64"))
+    }
+    if metadata.expectedExitCode != 42 {
+        failures.append(fail("expected-exit", "init_004_tls must expect exit code 42"))
+    }
+    if metadata.expectedSyscalls.count != 1 ||
+        metadata.expectedSyscalls.first?.nr != "exit" ||
+        metadata.expectedSyscalls.first?.code != 42 {
+        failures.append(fail("expected-syscall", "init_004_tls must expect exactly exit(42)"))
+    }
+    if !fileOutput.contains("ELF 64-bit LSB executable") {
+        failures.append(fail("elf-class", "init_004_tls must be ELF64 executable"))
+    }
+    if !fileOutput.contains("ARM aarch64") {
+        failures.append(fail("elf-file-machine", "init_004_tls file output must identify ARM aarch64"))
+    }
+    if !objdumpHeader.contains("file format elf64-littleaarch64") {
+        failures.append(fail("objdump-format", "init_004_tls must disassemble as elf64-littleaarch64"))
+    }
+    if !objdumpHeader.contains("architecture: aarch64") {
+        failures.append(fail("objdump-architecture", "init_004_tls objdump architecture must be aarch64"))
+    }
+    if !objdumpHeader.lowercased().contains("start address: \(expectedEntrypoint(metadata))") {
+        failures.append(fail("entrypoint", "init_004_tls entrypoint does not match \(metadata.entrypoint)"))
+    }
+    let requiredInstructionWords = [
+        "d2800541": "mov x1, #42",
+        "d51bd041": "msr TPIDR_EL0, x1",
+        "d2800000": "mov x0, #0",
+        "d53bd040": "mrs x0, TPIDR_EL0",
+        "d2800ba8": "mov x8, #93",
+        "d4000001": "svc #0",
+    ]
+    for (word, description) in requiredInstructionWords where !disassembly.contains(word) {
+        failures.append(fail("instruction-shape", "init_004_tls disassembly missing \(description) instruction word \(word)"))
+    }
+    if !disassembly.contains("TPIDR_EL0") {
+        failures.append(fail("tls-shape", "init_004_tls disassembly must use TPIDR_EL0"))
+    }
+    if !disassembly.contains("svc\t#0") {
+        failures.append(fail("svc", "init_004_tls disassembly must use svc #0"))
+    }
+    for (key, value) in metadata.forbiddenBehavior where value {
+        failures.append(fail("forbidden-behavior", "init_004_tls golden metadata sets forbidden_behavior.\(key)=true"))
+    }
+    return failures
+}
+
 func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String]) {
     let built = try buildInit001(outputRoot: outputRoot)
     let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataURL))
@@ -2238,7 +2451,7 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
     if caseID == "init_001_exit" {
         return try validateInit001Golden(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -2268,14 +2481,21 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
             objdumpHeader: objdumpHeader,
             disassembly: disassembly,
             binary: built.binary
-        ) : validateInit003Metadata(
+        ) : (caseID == "init_003_stack" ? validateInit003Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
-        )
+        ) : validateInit004Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        ))
     return (failures, [relativePath(built.binary), relativePath(validationURL)])
 }
 
@@ -2292,6 +2512,12 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
         expectedExitCode = 0
         expectedMessage = "hello\n"
     case "init_003_stack":
+        expectedSyscalls = [
+            ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
+        ]
+        expectedExitCode = 42
+        expectedMessage = nil
+    case "init_004_tls":
         expectedSyscalls = [
             ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
         ]
@@ -2371,8 +2597,8 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
     let executeMode = ProcessInfo.processInfo.environment["EXECUTE"] ?? ""
     let negativeExecution = ProcessInfo.processInfo.environment["NEGATIVE_EXECUTION"] ?? ""
-    guard ["init_001_exit", "init_002_write", "init_003_stack"].contains(caseID) else {
-        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit, init_002_write, and init_003_stack are implemented in this rails checkpoint.")
+    guard ["init_001_exit", "init_002_write", "init_003_stack", "init_004_tls"].contains(caseID) else {
+        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit, init_002_write, init_003_stack, and init_004_tls are implemented in this no-phone oracle checkpoint.")
     }
     if refresh && !executeMode.isEmpty {
         throw GateError.usage("EXECUTE is not supported with tcti-golden-elf-refresh")

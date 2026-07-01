@@ -1337,3 +1337,101 @@ All passed. Boundary:
 - No simulator gate run.
 - No physical-device gate run.
 - No custom MCP or `tools/agent` added.
+
+### Checkpoint: TLS Golden ELF Executes In Switch Backend
+
+- Harness-selected gate: `switch-init-004-tls`.
+- Selected command: `make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug`.
+- Why selected: `switch-init-003-stack` passed and `init_004_tls` validation/execution artifacts were missing.
+- Added `init_004_tls` no-libc AArch64 Linux golden ELF fixture.
+- Generated canonical `golden.json` with `make tcti-golden-elf-refresh CASE=init_004_tls`.
+- Exact emitted instruction words:
+  - `0xd2800541` `mov x1, #0x2a`
+  - `0xd51bd041` `msr TPIDR_EL0, x1`
+  - `0xd2800000` `mov x0, #0x0`
+  - `0xd53bd040` `mrs x0, TPIDR_EL0`
+  - `0xd2800ba8` `mov x8, #0x5d`
+  - `0xd4000001` `svc #0`
+- Added decoded switch-debug support only for the TLS fixture subset:
+  - AArch64 system-register transfer decode for `TPIDR_EL0` only.
+  - `MSR TPIDR_EL0, Xt` writes a switch-debug guest-owned `guestTPIDREL0` cell.
+  - `MRS Xt, TPIDR_EL0` reads that guest-owned cell.
+  - Unsupported system registers remain structured unsupported-instruction failures.
+- Guest TLS boundary: switch-debug does not read or write host `TPIDR_EL0`, does not use inline assembly, and does not call Darwin thread/TLS APIs.
+- Added TLS negative fixtures:
+  - wrong guest TLS exit value;
+  - unsupported `TPIDRRO_EL0` system-register read.
+- Added TLS reducer routing so `tls-*` negative fixtures replay under `CASE=init_004_tls`.
+- Updated harness status detection so `switch-init-004-tls` passes only when:
+  - backend is `switch-debug`;
+  - entrypoint was entered;
+  - six guest instructions executed;
+  - decoded instructions include both `system_register` `msr` and `mrs` for `tpidr_el0`;
+  - captured syscall is `exit(42)`.
+
+Reports:
+
+- `Build/TCTI/golden_elf/init_004_tls/validation.json`
+- `Build/TCTI/golden_elf/init_004_tls/execution.json`
+- `Build/TCTI/reports/tcti-golden-elf/report.json`
+- `Build/TCTI/reports/tcti-contract/report.json`
+
+Reducers:
+
+- `Build/TCTI/reproducers/tcti-golden-elf/execution-tls-wrong-exit.json`
+- `Build/TCTI/reproducers/tcti-golden-elf/execution-tls-unsupported-sysreg.json`
+
+Reducer replay:
+
+- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-tls-unsupported-sysreg.json`: expected `fail`, actual `fail`, exit code `2`.
+- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-tls-wrong-exit.json`: expected `fail`, actual `fail`, exit code `2`.
+
+Contract state:
+
+- `tcti-contract` remains `todo` and exits nonzero.
+- New real passing contract group: decoded switch-debug executes `init_004_tls` and captures guest `TPIDR_EL0`-derived `exit(42)` without host TLS mutation.
+- Remaining TODO groups:
+  - gadget ABI and register commit-back execution;
+  - FETCH/READ/WRITE memory execution;
+  - TLB, block-cache, invalidation, and direct-chain execution.
+
+Harness state after checkpoint:
+
+- `agent-status` recognizes `switch-init-004-tls` as passed.
+- `agent-next` advanced to `diff-switch-init-001-exit`.
+- Physical device work remains disallowed.
+- Readiness and release gates remain ineligible.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_004_tls
+rtk proxy make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+```
+
+All pass except `tcti-contract`, which correctly reports `todo` with exit code `2`.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No TCTI production runtime feature implemented.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate run.
+- No physical-device gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No host `TPIDR_EL0` mutation for guest TLS.
