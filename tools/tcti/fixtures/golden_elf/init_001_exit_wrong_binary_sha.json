@@ -1,0 +1,39 @@
+{
+  "actual_binary_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "case_id": "init_001_exit",
+  "compiler_path": "/usr/bin/clang",
+  "compiler_version": "fixture",
+  "elf_type": "ET_EXEC",
+  "entrypoint": "0x0000000000210120",
+  "expected_binary_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "expected_exit_code": 42,
+  "expected_syscalls": [
+    {
+      "code": 42,
+      "nr": "exit"
+    }
+  ],
+  "flags": [
+    "-target",
+    "aarch64-linux-gnu",
+    "-nostdlib",
+    "-static",
+    "-fuse-ld=lld",
+    "-Wl,--build-id=none",
+    "-Wl,-e,_start"
+  ],
+  "forbidden_behavior": {
+    "generated_exec_memory": false,
+    "host_exec_guest_text": false,
+    "host_x18": false,
+    "map_jit": false,
+    "native_ios_api_exposure_to_guest": false,
+    "rwx": false
+  },
+  "generator_command": "fixture",
+  "libc_mode": "no-libc",
+  "linker_path": "/opt/homebrew/bin/ld.lld",
+  "linker_version": "fixture",
+  "machine": "AArch64",
+  "source_sha256": "b03c642881ff3fe1f8397b3191cdf76a3e41467f3dcb2c81cac0f4f995c6b8ac"
+}
