@@ -3211,6 +3211,545 @@ func runDiffSwitch() throws -> Int32 {
     return exitCode(for: status)
 }
 
+enum MemoryAccess: String, Codable {
+    case fetch = "FETCH"
+    case read = "READ"
+    case write = "WRITE"
+}
+
+struct MemoryPermissions: Codable {
+    let read: Bool
+    let write: Bool
+    let execute: Bool
+
+    var text: String {
+        "\(read ? "r" : "-")\(write ? "w" : "-")\(execute ? "x" : "-")"
+    }
+}
+
+struct MemoryPage {
+    var permissions: MemoryPermissions
+    var bytes: [UInt8]
+    var backingID: String
+    var translatedBlock: Bool
+}
+
+struct MemoryAccessResult {
+    let allowed: Bool
+    let bytes: [UInt8]
+    let copiedBytes: Int
+    let faultAddress: UInt64?
+    let reason: String
+}
+
+final class MemoryContractModel {
+    let hostPageSize: Int
+    let guestPageSize = 4096
+    var translationGeneration = 1
+    var codeGeneration = 1
+    private var pages: [UInt64: MemoryPage] = [:]
+
+    init(hostPageSize: Int) {
+        self.hostPageSize = hostPageSize
+    }
+
+    func map(_ base: UInt64, permissions: MemoryPermissions, fill: UInt8, backingID: String, translatedBlock: Bool = false) {
+        pages[base] = MemoryPage(
+            permissions: permissions,
+            bytes: Array(repeating: fill, count: guestPageSize),
+            backingID: backingID,
+            translatedBlock: translatedBlock
+        )
+        translationGeneration += 1
+    }
+
+    func writeSeed(_ bytes: [UInt8], at address: UInt64) {
+        let base = address - (address % UInt64(guestPageSize))
+        let offset = Int(address - base)
+        guard var page = pages[base] else { return }
+        for (index, byte) in bytes.enumerated() where offset + index < page.bytes.count {
+            page.bytes[offset + index] = byte
+        }
+        pages[base] = page
+    }
+
+    func mprotect(_ base: UInt64, permissions: MemoryPermissions) {
+        guard var page = pages[base] else { return }
+        page.permissions = permissions
+        pages[base] = page
+        translationGeneration += 1
+    }
+
+    func unmap(_ base: UInt64) {
+        pages.removeValue(forKey: base)
+        translationGeneration += 1
+    }
+
+    func remap(_ base: UInt64, permissions: MemoryPermissions, fill: UInt8, backingID: String) {
+        pages[base] = MemoryPage(
+            permissions: permissions,
+            bytes: Array(repeating: fill, count: guestPageSize),
+            backingID: backingID,
+            translatedBlock: false
+        )
+        translationGeneration += 1
+    }
+
+    func cowReplace(_ base: UInt64, fill: UInt8, backingID: String) {
+        guard var page = pages[base] else { return }
+        page.bytes = Array(repeating: fill, count: guestPageSize)
+        page.backingID = backingID
+        pages[base] = page
+        translationGeneration += 1
+    }
+
+    func backingID(_ base: UInt64) -> String? {
+        pages[base]?.backingID
+    }
+
+    func translationIsCurrent(_ generation: Int) -> Bool {
+        generation == translationGeneration
+    }
+
+    func translatedBlockIsCurrent(_ base: UInt64, generation: Int) -> Bool {
+        pages[base]?.translatedBlock == true && generation == codeGeneration
+    }
+
+    func access(_ access: MemoryAccess, address: UInt64, length: Int, payload: [UInt8] = []) -> MemoryAccessResult {
+        guard length >= 0 else {
+            return MemoryAccessResult(allowed: false, bytes: [], copiedBytes: 0, faultAddress: address, reason: "negative length")
+        }
+        var chunks: [(base: UInt64, offset: Int, count: Int)] = []
+        var cursor = address
+        var remaining = length
+        while remaining > 0 {
+            let base = cursor - (cursor % UInt64(guestPageSize))
+            let offset = Int(cursor - base)
+            let count = min(remaining, guestPageSize - offset)
+            guard let page = pages[base] else {
+                return MemoryAccessResult(allowed: false, bytes: [], copiedBytes: 0, faultAddress: cursor, reason: "unmapped guest page")
+            }
+            let allowed: Bool
+            switch access {
+            case .fetch:
+                allowed = page.permissions.execute
+            case .read:
+                allowed = page.permissions.read
+            case .write:
+                allowed = page.permissions.write
+            }
+            guard allowed else {
+                return MemoryAccessResult(allowed: false, bytes: [], copiedBytes: 0, faultAddress: cursor, reason: "\(access.rawValue) denied by \(page.permissions.text)")
+            }
+            chunks.append((base, offset, count))
+            remaining -= count
+            cursor += UInt64(count)
+        }
+
+        switch access {
+        case .fetch, .read:
+            var output: [UInt8] = []
+            for chunk in chunks {
+                guard let page = pages[chunk.base] else { continue }
+                output.append(contentsOf: page.bytes[chunk.offset..<(chunk.offset + chunk.count)])
+            }
+            return MemoryAccessResult(allowed: true, bytes: output, copiedBytes: output.count, faultAddress: nil, reason: "ok")
+        case .write:
+            guard payload.count == length else {
+                return MemoryAccessResult(allowed: false, bytes: [], copiedBytes: 0, faultAddress: address, reason: "payload length mismatch")
+            }
+            var payloadOffset = 0
+            var invalidatedCode = false
+            for chunk in chunks {
+                guard var page = pages[chunk.base] else { continue }
+                for index in 0..<chunk.count {
+                    page.bytes[chunk.offset + index] = payload[payloadOffset + index]
+                }
+                if page.translatedBlock {
+                    page.translatedBlock = false
+                    invalidatedCode = true
+                }
+                pages[chunk.base] = page
+                payloadOffset += chunk.count
+            }
+            if invalidatedCode {
+                codeGeneration += 1
+            }
+            return MemoryAccessResult(allowed: true, bytes: [], copiedBytes: length, faultAddress: nil, reason: "ok")
+        }
+    }
+}
+
+struct MemoryFuzzArtifact: Codable {
+    let caseID: String
+    let expectedStatus: String
+    let observedStatus: String
+    let hostPageSize: Int
+    let guestPageSize: Int
+    let access: String
+    let guestAddress: String
+    let length: Int
+    let faultAddress: String?
+    let copiedBytes: Int
+    let translationGenerationBefore: Int
+    let translationGenerationAfter: Int
+    let codeGenerationBefore: Int
+    let codeGenerationAfter: Int
+    let forbiddenBehavior: [String: Bool]
+    let notes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case caseID = "case_id"
+        case expectedStatus = "expected_status"
+        case observedStatus = "observed_status"
+        case hostPageSize = "host_page_size"
+        case guestPageSize = "guest_page_size"
+        case access
+        case guestAddress = "guest_address"
+        case length
+        case faultAddress = "fault_address"
+        case copiedBytes = "copied_bytes"
+        case translationGenerationBefore = "translation_generation_before"
+        case translationGenerationAfter = "translation_generation_after"
+        case codeGenerationBefore = "code_generation_before"
+        case codeGenerationAfter = "code_generation_after"
+        case forbiddenBehavior = "forbidden_behavior"
+        case notes
+    }
+}
+
+func writeMemoryFuzzArtifact(_ artifact: MemoryFuzzArtifact) throws -> String {
+    let url = buildPath("memory_fuzz", artifact.caseID, "result.json")
+    try writeJSON(artifact, to: url)
+    return relativePath(url)
+}
+
+func memoryArtifact(
+    caseID: String,
+    expected: GateStatus,
+    observed: GateStatus,
+    model: MemoryContractModel,
+    access: MemoryAccess,
+    address: UInt64,
+    length: Int,
+    result: MemoryAccessResult,
+    translationBefore: Int,
+    codeBefore: Int,
+    notes: [String]
+) -> MemoryFuzzArtifact {
+    MemoryFuzzArtifact(
+        caseID: caseID,
+        expectedStatus: expected.rawValue,
+        observedStatus: observed.rawValue,
+        hostPageSize: model.hostPageSize,
+        guestPageSize: model.guestPageSize,
+        access: access.rawValue,
+        guestAddress: hexPC(address),
+        length: length,
+        faultAddress: result.faultAddress.map(hexPC),
+        copiedBytes: result.copiedBytes,
+        translationGenerationBefore: translationBefore,
+        translationGenerationAfter: model.translationGeneration,
+        codeGenerationBefore: codeBefore,
+        codeGenerationAfter: model.codeGeneration,
+        forbiddenBehavior: forbiddenDefaults(),
+        notes: notes + [result.reason]
+    )
+}
+
+func memoryNegativeIDs() -> [String] {
+    [
+        "fetch-exec-permission",
+        "read-permission",
+        "write-permission",
+        "host-page-boundary",
+        "generation-stale-backing",
+    ]
+}
+
+func runMemoryNegative(_ id: String) throws -> MemoryFuzzArtifact {
+    let page0: UInt64 = 0x0000_0000_0040_0000
+    let page1 = page0 + 4096
+    let readOnly = MemoryPermissions(read: true, write: false, execute: false)
+    let execOnly = MemoryPermissions(read: false, write: false, execute: true)
+    let readWrite = MemoryPermissions(read: true, write: true, execute: false)
+    let none = MemoryPermissions(read: false, write: false, execute: false)
+
+    switch id {
+    case "fetch-exec-permission":
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readOnly, fill: 0, backingID: "read-only")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.fetch, address: page0, length: 4)
+        return memoryArtifact(caseID: id, expected: .fail, observed: result.allowed ? .pass : .fail, model: model, access: .fetch, address: page0, length: 4, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["negative fixture proves FETCH cannot borrow READ permission"])
+    case "read-permission":
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: execOnly, fill: 0, backingID: "exec-only")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.read, address: page0, length: 4)
+        return memoryArtifact(caseID: id, expected: .fail, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page0, length: 4, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["negative fixture proves READ cannot borrow FETCH permission"])
+    case "write-permission":
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readOnly, fill: 0, backingID: "read-only")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.write, address: page0, length: 1, payload: [0x78])
+        return memoryArtifact(caseID: id, expected: .fail, observed: result.allowed ? .pass : .fail, model: model, access: .write, address: page0, length: 1, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["negative fixture proves WRITE requires write permission"])
+    case "host-page-boundary":
+        let model = MemoryContractModel(hostPageSize: 16384)
+        model.map(page0, permissions: readWrite, fill: 0x61, backingID: "host-page")
+        model.map(page1, permissions: none, fill: 0, backingID: "host-page")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.read, address: page1 - 2, length: 4)
+        return memoryArtifact(caseID: id, expected: .fail, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page1 - 2, length: 4, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["negative fixture proves cross-page access checks every guest page inside a larger host allocation"])
+    case "generation-stale-backing":
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readOnly, fill: 0x6f, backingID: "old")
+        let staleGeneration = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        model.unmap(page0)
+        model.remap(page0, permissions: readOnly, fill: 0x6e, backingID: "new")
+        let staleRejected = !model.translationIsCurrent(staleGeneration) && model.backingID(page0) == "new"
+        let result = MemoryAccessResult(allowed: staleRejected ? false : true, bytes: [], copiedBytes: 0, faultAddress: staleRejected ? page0 : nil, reason: staleRejected ? "stale backing rejected" : "stale backing reused")
+        return memoryArtifact(caseID: id, expected: .fail, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page0, length: 1, result: result, translationBefore: staleGeneration, codeBefore: beforeCode, notes: ["negative fixture proves stale translation generation cannot keep old backing alive"])
+    default:
+        throw GateError.usage("unknown NEGATIVE_MEMORY_FUZZ=\(id)")
+    }
+}
+
+func runMemoryPositiveCases() throws -> (failures: [Failure], artifacts: [String], counters: [String: Int]) {
+    let page0: UInt64 = 0x0000_0000_0040_0000
+    let page1 = page0 + 4096
+    let readOnly = MemoryPermissions(read: true, write: false, execute: false)
+    let readWrite = MemoryPermissions(read: true, write: true, execute: false)
+    let execOnly = MemoryPermissions(read: false, write: false, execute: true)
+    let execWrite = MemoryPermissions(read: true, write: true, execute: true)
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var counters: [String: Int] = [
+        "positive_cases": 0,
+        "host_page_size_variants": 0,
+        "cross_page_cases": 0,
+        "generation_cases": 0,
+    ]
+
+    func record(_ id: String, _ condition: Bool, _ artifact: MemoryFuzzArtifact) throws {
+        counters["positive_cases", default: 0] += 1
+        artifacts.append(try writeMemoryFuzzArtifact(artifact))
+        if !condition {
+            failures.append(fail(id, "memory fuzz positive contract failed"))
+        }
+    }
+
+    for hostSize in [4096, 16384, 65536] {
+        let model = MemoryContractModel(hostPageSize: hostSize)
+        model.map(page0, permissions: readWrite, fill: 0x41, backingID: "host-\(hostSize)")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.read, address: page0 + UInt64(hostSize % 251), length: 3)
+        let artifact = memoryArtifact(caseID: "host-page-size-\(hostSize)", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page0 + UInt64(hostSize % 251), length: 3, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["simulated host page size \(hostSize) with fixed 4096-byte guest pages"])
+        try record("host-page-size-\(hostSize)", result.allowed && result.copiedBytes == 3, artifact)
+        counters["host_page_size_variants", default: 0] += 1
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: execOnly, fill: 0, backingID: "exec")
+        model.writeSeed([0xa8, 0x0b, 0x80, 0xd2], at: page0 + 32)
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.fetch, address: page0 + 32, length: 4)
+        let artifact = memoryArtifact(caseID: "fetch-exec-host-data", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .fetch, address: page0 + 32, length: 4, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["FETCH reads executable guest bytes as host data and does not request host executable mapping"])
+        try record("fetch-exec-host-data", result.allowed && result.bytes == [0xa8, 0x0b, 0x80, 0xd2], artifact)
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readOnly, fill: 0, backingID: "read")
+        model.writeSeed(Array("read".utf8), at: page0 + 16)
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.read, address: page0 + 16, length: 4)
+        let artifact = memoryArtifact(caseID: "read-permission-basic", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page0 + 16, length: 4, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["READ requires read permission only"])
+        try record("read-permission-basic", result.allowed && String(decoding: result.bytes, as: UTF8.self) == "read", artifact)
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readWrite, fill: 0, backingID: "write")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.write, address: page0 + 64, length: 5, payload: Array("write".utf8))
+        let readBack = model.access(.read, address: page0 + 64, length: 5)
+        let artifact = memoryArtifact(caseID: "write-permission-basic", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .write, address: page0 + 64, length: 5, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["WRITE requires write permission and mutates guest bytes only"])
+        try record("write-permission-basic", result.allowed && String(decoding: readBack.bytes, as: UTF8.self) == "write", artifact)
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 16384)
+        model.map(page0, permissions: readWrite, fill: 0x41, backingID: "shared-host")
+        model.map(page1, permissions: readWrite, fill: 0x42, backingID: "shared-host")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.write, address: page0 + 2048, length: 1, payload: [0x5a])
+        let neighbor = model.access(.read, address: page1 + 2048, length: 1)
+        let artifact = memoryArtifact(caseID: "guest-page-offset-and-shared-host", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .write, address: page0 + 2048, length: 1, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["guest page offset and multiple guest pages in one host allocation do not alias adjacent guest bytes"])
+        try record("guest-page-offset-and-shared-host", result.allowed && neighbor.bytes == [0x42], artifact)
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: execOnly, fill: 0, backingID: "exec-a")
+        model.map(page1, permissions: execOnly, fill: 0, backingID: "exec-b")
+        model.writeSeed([0x40, 0x05], at: page1 - 2)
+        model.writeSeed([0x80, 0xd2], at: page1)
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.fetch, address: page1 - 2, length: 4)
+        let artifact = memoryArtifact(caseID: "cross-page-fetch", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .fetch, address: page1 - 2, length: 4, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["cross-page instruction fetch succeeds only when both guest pages permit FETCH"])
+        try record("cross-page-fetch", result.allowed && result.copiedBytes == 4, artifact)
+        counters["cross_page_cases", default: 0] += 1
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readWrite, fill: 0, backingID: "rw-a")
+        model.map(page1, permissions: readWrite, fill: 0, backingID: "rw-b")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let writeResult = model.access(.write, address: page1 - 2, length: 5, payload: Array("hello".utf8))
+        let readResult = model.access(.read, address: page1 - 2, length: 5)
+        let artifact = memoryArtifact(caseID: "cross-page-read-write", expected: .pass, observed: writeResult.allowed ? .pass : .fail, model: model, access: .write, address: page1 - 2, length: 5, result: writeResult, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["cross-page data write and read preflight every guest page"])
+        try record("cross-page-read-write", writeResult.allowed && String(decoding: readResult.bytes, as: UTF8.self) == "hello", artifact)
+        counters["cross_page_cases", default: 0] += 1
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readOnly, fill: 0x72, backingID: "mprotect")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        model.mprotect(page0, permissions: MemoryPermissions(read: false, write: false, execute: false))
+        let denied = model.access(.read, address: page0, length: 1)
+        model.mprotect(page0, permissions: readOnly)
+        let restored = model.access(.read, address: page0, length: 1)
+        let result = MemoryAccessResult(allowed: !model.translationIsCurrent(beforeTranslation) && !denied.allowed && restored.allowed, bytes: restored.bytes, copiedBytes: restored.copiedBytes, faultAddress: denied.faultAddress, reason: "mprotect rechecked")
+        let artifact = memoryArtifact(caseID: "mprotect-transitions", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page0, length: 1, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["mprotect transitions invalidate stale translation generation and recheck permissions"])
+        try record("mprotect-transitions", result.allowed, artifact)
+        counters["generation_cases", default: 0] += 1
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: readOnly, fill: 0x6f, backingID: "old")
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        model.unmap(page0)
+        let fault = model.access(.read, address: page0, length: 1)
+        model.remap(page0, permissions: readOnly, fill: 0x6e, backingID: "new")
+        model.cowReplace(page0, fill: 0x63, backingID: "cow")
+        let current = model.access(.read, address: page0, length: 1)
+        let result = MemoryAccessResult(allowed: !model.translationIsCurrent(beforeTranslation) && !fault.allowed && model.backingID(page0) == "cow" && current.bytes == [0x63], bytes: current.bytes, copiedBytes: current.copiedBytes, faultAddress: fault.faultAddress, reason: "remap and CoW refreshed backing")
+        let artifact = memoryArtifact(caseID: "munmap-remap-cow", expected: .pass, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page0, length: 1, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["munmap/remap and CoW replacement reject stale backing"])
+        try record("munmap-remap-cow", result.allowed, artifact)
+        counters["generation_cases", default: 0] += 1
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        model.map(page0, permissions: execWrite, fill: 0, backingID: "exec-write", translatedBlock: true)
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.write, address: page0, length: 1, payload: [0x78])
+        let invalidated = result.allowed && !model.translatedBlockIsCurrent(page0, generation: beforeCode) && model.codeGeneration == beforeCode + 1
+        let artifact = memoryArtifact(caseID: "store-to-translated-exec-page", expected: .pass, observed: invalidated ? .pass : .fail, model: model, access: .write, address: page0, length: 1, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["store to translated executable page invalidates stale code generation"])
+        try record("store-to-translated-exec-page", invalidated, artifact)
+        counters["generation_cases", default: 0] += 1
+    }
+
+    return (failures, artifacts, counters)
+}
+
+func runMemoryFuzz() throws -> Int32 {
+    let target = "tcti-memory-fuzz"
+    if let negativeID = ProcessInfo.processInfo.environment["NEGATIVE_MEMORY_FUZZ"], !negativeID.isEmpty {
+        guard memoryNegativeIDs().contains(negativeID) else {
+            throw GateError.usage("unknown NEGATIVE_MEMORY_FUZZ=\(negativeID)")
+        }
+        let artifact = try runMemoryNegative(negativeID)
+        let artifactPath = try writeMemoryFuzzArtifact(artifact)
+        let status: GateStatus = .fail
+        let reportURL = try writeReport(report(
+            target: target,
+            status: status,
+            summary: "Replayed negative memory fuzz fixture \(negativeID).",
+            failures: [fail(negativeID, artifact.notes.joined(separator: "; "))],
+            artifacts: [artifactPath],
+            counters: [
+                "cases_total": 1,
+                "negative_cases": 1,
+            ],
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        return exitCode(for: status)
+    }
+
+    var result = try runMemoryPositiveCases()
+    var reducers: [String] = []
+    for negativeID in memoryNegativeIDs() {
+        let artifact = try runMemoryNegative(negativeID)
+        let artifactPath = try writeMemoryFuzzArtifact(artifact)
+        let reducer = try writeReducer(
+            target: target,
+            caseID: negativeID,
+            command: "NEGATIVE_MEMORY_FUZZ=\(negativeID) make tcti-memory-fuzz",
+            reason: artifact.notes.joined(separator: "; "),
+            artifacts: [artifactPath],
+            expectedStatus: .fail
+        )
+        reducers.append(relativePath(reducer))
+    }
+    let passReducer = try writeReducer(
+        target: target,
+        caseID: "memory-fuzz-pass-regression",
+        command: "make tcti-memory-fuzz",
+        reason: "full memory fuzz gate must remain passing",
+        artifacts: result.artifacts,
+        expectedStatus: .pass
+    )
+    reducers.append(relativePath(passReducer))
+    result.artifacts.append(contentsOf: reducers)
+    result.counters["negative_reducers"] = reducers.count - 1
+    result.counters["pass_reducers"] = 1
+
+    let status: GateStatus = result.failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Ran no-phone FETCH/READ/WRITE memory fuzz contracts with deterministic negative reducers.",
+        failures: result.failures,
+        artifacts: result.artifacts,
+        counters: result.counters,
+        coverageWarnings: [
+            "no-phone contract model only; production page backing remains owned by arch/orlix Linux MM helpers",
+            "no simulator, physical device, HostAdapter, Darwin syscall, production assembly, or gadget dispatch executed",
+        ],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    print("reducers:")
+    for reducer in reducers {
+        print("- \(reducer)")
+    }
+    return exitCode(for: status)
+}
+
 func x18TokenRanges(in line: String) -> [Range<String.Index>] {
     let pattern = #"(?<![A-Za-z0-9_])[wx]18(?![A-Za-z0-9_])"#
     guard let regex = try? NSRegularExpression(pattern: pattern) else {
@@ -3364,7 +3903,9 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runContract()
     case "tcti-diff-switch":
         return try runDiffSwitch()
-    case "tcti-memory-fuzz", "tcti-direct-chain-fuzz":
+    case "tcti-memory-fuzz":
+        return try runMemoryFuzz()
+    case "tcti-direct-chain-fuzz":
         return try writeTodo(target: target, summary: "\(target) rail exists, but the real no-phone TCTI test implementation is not complete yet.")
     default:
         throw GateError.usage("unknown TCTI target: \(target)")
