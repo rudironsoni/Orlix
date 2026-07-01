@@ -982,6 +982,50 @@ static void tcti_gadget_program_rejects_svc_lowering(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0UL, word_count);
 }
 
+static void tcti_gadget_program_executes_init001_movz_prefix(struct kunit *test)
+{
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = { 0 };
+	unsigned long fault_address = 0;
+	size_t word_count = 0;
+	int ret;
+
+	regs.pc = 0x210120;
+
+	decoded = tcti_decode_aarch64(0xd2800ba8U);
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program),
+					     &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_ASSERT_EQ(test, TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS,
+			word_count);
+	ret = tcti_execute_gadget_program(NULL, &regs, program, word_count,
+					  &fault_address);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 93ULL, regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0x210124ULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0xd2800540U);
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program),
+					     &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_ASSERT_EQ(test, TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS,
+			word_count);
+	ret = tcti_execute_gadget_program(NULL, &regs, program, word_count,
+					  &fault_address);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 42ULL, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, 0x210128ULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0xd4000001U);
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program),
+					     &word_count);
+	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, ret);
+}
+
 static void tcti_block_cache_returns_cached_program(struct kunit *test)
 {
 	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
@@ -1927,6 +1971,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_program_lowers_hint_as_data_stream),
 	KUNIT_CASE(tcti_gadget_program_executes_extract),
 	KUNIT_CASE(tcti_gadget_program_rejects_svc_lowering),
+	KUNIT_CASE(tcti_gadget_program_executes_init001_movz_prefix),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),
 	KUNIT_CASE(tcti_block_cache_is_bounded),
 	KUNIT_CASE(tcti_block_cache_invalidation_bumps_generation),
