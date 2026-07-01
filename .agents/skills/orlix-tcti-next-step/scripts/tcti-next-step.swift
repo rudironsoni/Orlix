@@ -339,6 +339,19 @@ func structuralCasePass(_ caseID: String) -> (Bool, String, [ReportFact]) {
     }
 }
 
+let structuralGateCases: [String: String] = [
+    "golden-init-001-structural": "init_001_exit",
+    "golden-init-002-write-structural": "init_002_write",
+    "golden-init-003-stack-structural": "init_003_stack",
+    "golden-init-004-tls-structural": "init_004_tls",
+    "golden-init-005-branches-structural": "init_005_branches",
+    "golden-init-006-memory-structural": "init_006_memory",
+    "golden-init-007-mprotect-structural": "init_007_mprotect",
+    "golden-init-008-self-modify-structural": "init_008_self_modify",
+    "golden-init-009-faults-structural": "init_009_faults",
+    "golden-init-010-cpu-model-structural": "init_010_cpu_model",
+]
+
 func syscalls(_ object: [String: Any]) -> [[String: Any]] {
     guard let array = object["syscalls"] as? [Any] else { return [] }
     return array.compactMap { $0 as? [String: Any] }
@@ -555,6 +568,11 @@ func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
 }
 
 func baseGateStatus(_ gate: Gate) -> GateStatus {
+    if let caseID = structuralGateCases[gate.id] {
+        let check = structuralCasePass(caseID)
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    }
+
     switch gate.id {
     case "rails-defconfig-safety":
         return basicReportGate(gate, target: "tcti-plan-consistency")
@@ -564,14 +582,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return basicReportGate(gate, target: "tcti-toolchain-check")
     case "appstore-safety":
         return basicReportGate(gate, target: "tcti-appstore-safety-audit")
-    case "golden-init-001-structural":
-        let check = structuralCasePass("init_001_exit")
-        return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-001-exit":
         let check = switchExit001Pass()
-        return artifactStatus(gate, passed: check.0, reason: check.1)
-    case "golden-init-002-write-structural":
-        let check = structuralCasePass("init_002_write")
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-002-write":
         let check = switchWrite002Pass()

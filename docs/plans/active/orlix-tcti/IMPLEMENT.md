@@ -1708,6 +1708,71 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Branches Golden ELF Structural Gate
+
+- Harness-selected gate: `golden-init-005-branches-structural`.
+- Selected command: `make tcti-golden-elf CASE=init_005_branches`.
+- Why selected: the agent roadmap was corrected to keep no-phone golden/switch-debug corpus work ahead of diff, gadget, and physical gates. After `switch-init-004-tls` passed, the next missing no-phone gate became `golden-init-005-branches-structural`.
+- Added roadmap gates:
+  - `golden-init-005-branches-structural`
+  - `switch-init-005-branches`
+- Updated the next-step status script so structural golden gates map to their case ids through skill-owned roadmap/status logic.
+- Added no-libc AArch64 Linux source:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_005_branches/init_005_branches.S`
+- Added canonical metadata:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_005_branches/golden.json`
+- Structural fixture shape:
+  - `mov x0, #0`
+  - `cbz x0, taken`
+  - untaken path sets `x0=1`
+  - unconditional `b` skips the taken path
+  - taken path sets `x0=42`
+  - `mov x8, #93`
+  - `svc #0`
+- Exact emitted instruction words:
+  - `0xd2800000` `mov x0, #0`
+  - `0xb4000060` `cbz x0, 0x210130`
+  - `0xd2800020` `mov x0, #1`
+  - `0x14000002` `b 0x210134`
+  - `0xd2800540` `mov x0, #42`
+  - `0xd2800ba8` `mov x8, #93`
+  - `0xd4000001` `svc #0`
+- Metadata hashes:
+  - source SHA256 `cb08adf22c77708447b8210881e2001f8473fcd226087af383cfc5611e1fdebb`
+  - binary SHA256 `2a72efc65d627a85f9b88edba2a9e4a52faedffb84f4fdad52fbaabbef7f6ba4`
+- Validation artifacts:
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`
+  - `Build/TCTI/golden_elf/init_005_branches/validation.json`
+- The structural gate passed. The next harness-selected gate is expected to be `switch-init-005-branches`.
+
+Verification:
+
+- `jq empty .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` passed.
+- `swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed.
+- `swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+- `make tcti-golden-elf-refresh CASE=init_005_branches` passed.
+- `make tcti-golden-elf CASE=init_005_branches` passed.
+- `git diff --check` passed.
+- `make agent-harness-check` passed.
+- `make tcti-report-schema-check` passed.
+- `make tcti-appstore-safety-audit` passed.
+
+Boundary:
+
+- Structural-only gate. No branch execution was claimed.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No physical-device gate.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+- No custom MCP.
+- No `tools/agent`.
+
 ### Checkpoint: Physical First-Syscall Gate Blocked By Device DDI Readiness
 
 - Harness-selected gate: `physical-tcti-init-first-syscall`.
