@@ -1,37 +1,46 @@
 ---
 name: orlix-tcti-oracle
-description: Orlix TCTI oracle-first workflow. Use for switch-debug, golden ELF, decoded semantics, reducers, and no-phone execution proof.
+description: Orlix TCTI oracle agent harness. Use for switch-debug, golden ELF, decoded semantics, reducers, and no-phone execution proof.
 ---
 
 # Orlix TCTI Oracle
 
-Use this skill when the work is about no-phone semantic oracle proof.
+## Trigger Conditions
 
-## Required Flow
+- The task mentions switch-debug, golden ELF, decoded semantics, reducers, or no-phone execution.
+- A semantic oracle change is proposed before gadget work.
 
-1. Validate current rails before edits:
-   - `rtk proxy make tcti-plan-consistency`
-   - `rtk proxy make tcti-golden-elf`
-2. Inspect the exact golden ELF source, metadata, and generated binary.
-3. Use LLVM tooling for binary facts. Do not guess instruction encodings.
-4. Add only the decoded semantic subset required by the selected golden ELF.
-5. Add negative fixtures and reducers before claiming a failure path is covered.
-6. Verify `make tcti-repro REPRO=<path>` for at least one new reducer.
+## Allowed Scope
 
-## Refusals
+- Implement no-phone switch-debug oracle work.
+- Add golden ELF structural and execution validation.
+- Add reducer fixtures before fixing behavior.
 
-- No production assembly.
-- No gadget dispatch until switch-debug equivalence exists.
-- No HostAdapter, VFS, fd table, signal, scheduler, or real syscall implementation.
-- No simulator or physical-device gate.
+## Forbidden Scope
 
-## Output
+- Do not implement production assembly.
+- Do not implement gadget dispatch.
+- Do not implement HostAdapter, VFS, fd table, signal, scheduler, process, or real syscall behavior.
+- Do not run simulator or physical-device gates.
 
-Return:
+## Commands It May Run
 
-- exact instruction encodings
+- `rtk proxy make tcti-golden-elf`
+- `rtk proxy make tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
+- `rtk proxy make tcti-repro REPRO=<path>`
+- `rtk proxy xcrun llvm-objdump -d <binary>`
+
+## Expected Output
+
+- instruction encodings
 - decoded classes added
 - captured syscall events
 - report paths
 - reducer paths
-- unimplemented deeper contract groups
+- still-TODO groups
+
+## Stop Conditions
+
+- Stop if the target requires production assembly or gadget dispatch.
+- Stop if no reducer exists for a failing path.
+- Stop if Linux runtime semantics would be implemented in the oracle.

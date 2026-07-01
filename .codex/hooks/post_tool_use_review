@@ -1,40 +1,4 @@
 #!/usr/bin/env sh
 set -eu
-
-payload="$(cat)"
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-
-warn() {
-  printf '%s\n' "ORLIX-TCTI-HOOK-WARN: $*" >&2
-}
-
-if printf '%s' "$payload" | grep -Eq 'tcti-[a-z0-9-]+'; then
-  for target in tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-golden-elf tcti-appstore-safety-audit tcti-contract; do
-    if printf '%s' "$payload" | grep -q "$target"; then
-      report="$root/Build/TCTI/reports/$target/report.json"
-      test -f "$report" || warn "$target ran or was mentioned but $report does not exist."
-    fi
-  done
-fi
-
-if printf '%s' "$payload" | grep -q 'status=evidence'; then
-  if printf '%s' "$payload" | grep -Eq 'passed[=:][[:space:]]*true|status[=:][[:space:]]*pass'; then
-    warn "evidence-mode TCTI/device output must never be treated as pass."
-  fi
-fi
-
-if printf '%s' "$payload" | grep -q 'todo:'; then
-  if printf '%s' "$payload" | grep -Eq 'rc=0|exit code 0|passed: true'; then
-    warn "TODO TCTI targets must exit non-zero and passed=false."
-  fi
-fi
-
-for config in \
-  "$root/OrlixKernel/Sources/ports/orlix/configs/development_defconfig" \
-  "$root/OrlixKernel/Sources/ports/orlix/configs/release_defconfig"; do
-  if test -f "$config"; then
-    if grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' "$config"; then
-      warn "product defconfig safety is unlocked in $(basename "$config")."
-    fi
-  fi
-done
+exec "$root/.agents/skills/orlix-tcti-safety/scripts/post-tool-use-review"

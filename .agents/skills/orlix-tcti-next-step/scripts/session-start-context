@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -eu
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+printf '%s\n' "Orlix TCTI context:"
+printf '%s\n' "- current proof lane: no-phone golden ELF and switch-debug oracle before gadgets or device work"
+printf '%s\n' "- repo-local harness logic lives in .agents/skills; Codex is only an adapter"
+printf '%s\n' "- no custom Orlix MCP is active; MCP is only for external/proven tools"
+printf '%s\n' "- start with: rtk proxy make tcti-plan-consistency && rtk proxy make agent-harness-check"
+if test -f "$root/Build/TCTI/reports/tcti-golden-elf/report.json"; then
+  printf '%s\n' "- latest golden report: Build/TCTI/reports/tcti-golden-elf/report.json"
+fi
