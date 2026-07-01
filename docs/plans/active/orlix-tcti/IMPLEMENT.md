@@ -2,6 +2,55 @@
 
 ## 2026-07-01
 
+### Checkpoint: Memory Golden ELF Structural Gate
+
+- Harness-selected gate implemented: `golden-init-006-memory-structural`.
+- Selected command: `make tcti-golden-elf CASE=init_006_memory`.
+- Added no-libc AArch64 Linux source:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_006_memory/init_006_memory.S`.
+- Added canonical metadata:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_006_memory/golden.json`.
+- Structural fixture shape:
+  - `adr x1, value`.
+  - `ldr x0, [x1]`.
+  - `mov x8, #93`.
+  - `svc #0`.
+  - `value: .quad 42`.
+- Exact emitted instruction words:
+  - `0x10000081` `adr x1, 0x210130 <value>`.
+  - `0xf9400020` `ldr x0, [x1]`.
+  - `0xd2800ba8` `mov x8, #93`.
+  - `0xd4000001` `svc #0`.
+- Exact embedded value bytes:
+  - `2a 00 00 00 00 00 00 00`.
+- Metadata hashes:
+  - source SHA256 `3289121a29348f883200a5f6cb82085b4dec0c4ddf3d60452c935188c0591a56`.
+  - binary SHA256 `ffda09c29871d3ea5546f1c651bfd7256a4d9f8c92f5ab89f3159321168c75fa`.
+- Validation artifacts:
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - `Build/TCTI/golden_elf/init_006_memory/validation.json`.
+- The structural gate passed.
+- Harness result after checkpoint:
+  - `agent-status` reports `golden-init-006-memory-structural` as pass.
+  - `agent-next` selects `switch-init-006-memory`.
+  - `physical_device_allowed=false`.
+
+Boundary:
+
+- Structural-only gate. No `init_006_memory` execution was claimed.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No physical-device gate.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+- No custom MCP.
+- No `tools/agent`.
+
 ### Checkpoint: Branch Switch-Debug Execution And Harness No-Phone Roadmap Guard
 
 - Harness-selected gate implemented: `switch-init-005-branches`.
