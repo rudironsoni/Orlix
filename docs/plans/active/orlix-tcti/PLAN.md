@@ -111,7 +111,7 @@ rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/s
 ```
 
 - Current hook state: compiled and linked in the development KUnit path, not stub-only, but runtime-incomplete and not physical-device proven.
-- Current `development_defconfig` and `release_defconfig` set `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` and `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`; this is premature for product defaults until the gates below pass.
+- Pre-rails `development_defconfig` and `release_defconfig` set `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` and `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`. That was a release-blocking inconsistency, not a runtime milestone. Product defconfigs must stay native-default until the gates below pass.
 
 ## Exact Files To Change
 
@@ -194,8 +194,11 @@ Initial defaults:
 
 - `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y`
 - `CONFIG_ORLIX_HOSTED_EXEC_TCTI=n`
+- `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=n` in product defconfigs
 - `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y` only when TCTI and debug/test configs enable it
 - `CONFIG_ORLIX_TCTI_KUNIT_TEST=y` only in test/debug configs
+
+`make tcti-plan-consistency` must fail if product `development_defconfig` or `release_defconfig` re-enable `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` or `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`, or if they lack `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y`.
 
 Reason for not flipping release default immediately:
 
@@ -668,6 +671,8 @@ Required counters:
 
 Milestone 1 chooses single TCTI runner per `mm`.
 
+Compatibility warning: milestone 1 does not support multi-threaded userspace execution in one `mm`. Do not claim correctness for pthread workloads, dynamic language runtimes, package managers, shell job control, or fork/clone-heavy workloads until this restriction is lifted by the multi-runner rules below.
+
 Rules:
 
 - enforce with a per-mm lock or assertion before entering TCTI
@@ -892,6 +897,7 @@ Do not expand instruction support by guessing broadly.
 No physical-device debugging is allowed until these pass:
 
 - `make tcti-contract`
+- `make tcti-toolchain-check`
 - `make tcti-golden-elf`
 - `make tcti-diff-switch`
 - `make tcti-memory-fuzz`
@@ -907,13 +913,29 @@ Each target must:
 - produce human-readable Markdown only as a secondary artifact under `Build/TCTI/reports/<target>/report.md`
 - fail with a reducer artifact under `Build/TCTI/reproducers/<target>/<case-id>.json`
 - print the exact next command to reproduce the failure, `make tcti-repro REPRO=<path>`
+- use the repository Swift rail driver and Swift/Foundation. Do not add Python for these rails.
+- treat incomplete work as `status=todo`, `passed=false`, and exit non-zero
+
+Allowed report statuses:
+
+- `pass` means `passed=true`, release-gate eligible, readiness-gate eligible.
+- `fail` means `passed=false`.
+- `todo` means `passed=false` and exits non-zero.
+- `skipped` means `passed=false` unless a specific gate explicitly allows it.
+- `error` means `passed=false`.
+- `evidence` means `passed=false`, `autonomous_tests_bypassed=true`, and is never release-gate or readiness-gate eligible.
+
+Release/readiness gates only accept `status=pass`.
 
 Minimum report schema:
 
 ```json
 {
+  "target": "tcti-contract",
   "gate": "tcti-contract",
-  "passed": true,
+  "status": "todo",
+  "passed": false,
+  "summary": "short machine-readable summary",
   "git_sha": "",
   "backend": "tcti",
   "virtual_cpu_model": "orlix-aarch64-v1",
@@ -929,9 +951,20 @@ Minimum report schema:
   },
   "counters": {},
   "failures": [],
-  "artifacts": []
+  "artifacts": [],
+  "release_gate_eligible": false,
+  "readiness_gate_eligible": false,
+  "autonomous_tests_bypassed": false,
+  "bypass_reason": "",
+  "coverage_warnings": []
 }
 ```
+
+`make tcti-report-schema-check` validates:
+
+- schema fixtures that must pass and must fail
+- every `Build/TCTI/reports/**/report.json`
+- top-level runtime JSON sidecars under `Build/Reports/runtime/*.json`
 
 `make tcti-contract` proves:
 
@@ -946,6 +979,17 @@ Minimum report schema:
 - block-cache `code_generation`
 - store-to-translated-page invalidation
 - direct-chain patch/unpatch
+
+`make tcti-toolchain-check` proves the local no-phone toolchain can build static no-libc AArch64 Linux ELF artifacts and records:
+
+- `clang` path and version
+- `ld.lld` path and version
+- `llvm-objdump` availability
+- generated ELF type and header evidence
+- source SHA256
+- binary SHA256
+
+If the local toolchain cannot build the seed ELF, this target must fail or emit `status=todo`. It must not pass.
 
 `make tcti-golden-elf` runs checked-in tiny static AArch64 Linux ELF artifacts:
 
@@ -963,6 +1007,13 @@ Minimum report schema:
 Each corpus item has checked-in source and checked-in golden JSON under `OrlixKernel/Tests/TCTI/golden_elf/`, including:
 
 - binary name
+- generator command
+- compiler path, compiler version, linker path, linker version
+- compiler/linker flags
+- libc or no-libc mode
+- source SHA256
+- expected binary SHA256
+- actual binary SHA256 from the current run
 - expected final registers
 - expected memory changes
 - expected syscalls
@@ -970,6 +1021,8 @@ Each corpus item has checked-in source and checked-in golden JSON under `OrlixKe
 - expected console output
 - expected TCTI counters
 - forbidden behavior expectations
+
+Golden binaries are generated build artifacts unless a later checkpoint explicitly chooses to check them in. The source and golden JSON are canonical. If the generated binary hash differs from golden JSON, `make tcti-golden-elf` fails and prints either the reducer command or `make tcti-golden-elf-refresh CASE=<case-id>` after inspection.
 
 Physical-device gates must consume the same golden artifacts. They must not invent ad hoc device-only proof cases.
 
@@ -993,6 +1046,8 @@ For every generated block, compare:
 - fault address
 
 Do not implement an unrelated switch emulator. It would create a second bug surface.
+
+Anti-drift rule: any semantic helper used by gadget lowering must be callable by the switch backend, or the differential test fails. Do not duplicate instruction semantics between `switch_debug.c` and generated gadgets.
 
 `make tcti-memory-fuzz` covers:
 
@@ -1029,7 +1084,11 @@ Do not implement an unrelated switch emulator. It would create a second bug surf
 - private executable-memory entitlements
 - guest software exposed to native iOS APIs
 
-`make tcti-report-schema-check` validates every TCTI JSON report and fails if a required field is absent, hand-written, or not parseable.
+The x18 scanner must tokenize source/disassembly lines, not comments-only grep. It scans handwritten `.S/.s`, C/H inline asm and templates, generated gadget outputs, generator templates, and compiled TCTI object disassembly. Docs may mention x18. Production TCTI comments should prefer "platform register" if the scanner cannot distinguish comments safely.
+
+If no compiled TCTI objects exist yet, the report may pass with `coverage_warnings` and `scanned_objects=0`. If TCTI object files exist but disassembly cannot be produced, the audit fails.
+
+`make tcti-report-schema-check` validates every TCTI JSON report and runtime JSON sidecar and fails if a required field is absent, hand-written, or not parseable.
 
 ## Failure Reduction
 
@@ -1069,7 +1128,8 @@ rtk proxy make runtime-validation \
 
 The target must:
 
-- refuse to run on a physical iPhone unless the Autonomous Test Contract targets pass or an explicit emergency override is supplied and logged
+- refuse to run on a physical iPhone unless the Autonomous Test Contract targets pass
+- allow emergency evidence collection only with `ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT` and a non-empty `ORLIX_TCTI_DEVICE_OVERRIDE_REASON`
 - build the requested profile
 - auto-discover exactly one connected eligible physical iPhone through `xcrun devicectl --json-output`
 - fail if zero or multiple devices match unless `ORLIX_DEVICE_ID` is supplied
@@ -1081,6 +1141,8 @@ The target must:
 - capture TCTI counters
 - write one JSON report under `REPORT_DIR`
 - write one Markdown report under `REPORT_DIR`
+
+Emergency override reports must use `status=evidence`, `passed=false`, `autonomous_tests_bypassed=true`, `release_gate_eligible=false`, and `readiness_gate_eligible=false`. An override can collect evidence. It cannot produce a passing gate.
 
 TCTI gates:
 
@@ -1367,6 +1429,12 @@ Later phases require explicit App Review/legal strategy before:
 The audit target is the enforcement mechanism. Do not claim App Store safety from intent or guideline citations alone.
 
 ## Tests
+
+Ownership split:
+
+- KUnit owns kernel-bound unit contracts inside `arch/orlix`: syscall handoff, fault boundaries, mm interaction, invalidation hooks, task/thread state, and TCTI ABI invariants.
+- Swift/host tools own golden ELF build metadata, report schema validation, reducer replay, appstore-safety scanning, differential block execution, memory fuzzing, direct-chain fuzzing, and no-phone gate orchestration.
+- XCTest/runtime validation owns app packaging, HostAdapter mediation, simulator wiring, physical-device lifecycle, device logs, and no-forbidden-host-behavior runtime evidence.
 
 KUnit tests under the TCTI area:
 

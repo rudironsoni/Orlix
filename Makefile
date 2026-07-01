@@ -33,7 +33,7 @@ ORLIX_BETA_SIMULATOR_ID ?= 4C88CA42-EA50-463F-B989-7B0560075A9B
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -182,6 +182,9 @@ beta-simulator-gate: beta-prerequisites
 
 runtime-validation: beta-prerequisites
 	@tools/runtime/orlix-runtime-validation.sh
+
+tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro:
+	@swift tools/tcti/orlix-tcti-gate.swift $@
 
 beta-archive: beta-bump-build-number
 	@set -euo pipefail; \
