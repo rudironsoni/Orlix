@@ -11,6 +11,8 @@ Decide whether a TCTI change can advance readiness. This reviewer checks report 
 - product defconfigs
 - active plan and implementation log
 - safety reviewer output
+- `Build/AgentHarness/orlix-tcti/status.json`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
 
 ## Allowed files
 
@@ -28,12 +30,15 @@ Decide whether a TCTI change can advance readiness. This reviewer checks report 
 - `rtk proxy make tcti-plan-consistency`
 - `rtk proxy make tcti-report-schema-check`
 - `rtk proxy make tcti-appstore-safety-audit`
+- `rtk proxy make agent-status AREA=orlix-tcti`
+- `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy make agent-harness-check`
 - `rtk proxy jq '.status,.passed,.release_gate_eligible,.readiness_gate_eligible' Build/TCTI/reports/*/report.json`
 
 ## Required output format
 
 - `Gate reviewed:`
+- `Task envelope reviewed:`
 - `Required reports:`
 - `Eligibility flags:`
 - `Reducer coverage:`

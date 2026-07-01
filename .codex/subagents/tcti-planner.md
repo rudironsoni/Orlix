@@ -10,6 +10,10 @@ Select the next safe Orlix TCTI task from `PLAN.md`, `IMPLEMENT.md`, current rep
 - `docs/plans/active/orlix-tcti/PLAN.md`
 - `docs/plans/active/orlix-tcti/IMPLEMENT.md`
 - `Build/TCTI/reports/**/report.json`
+- `Build/AgentHarness/orlix-tcti/status.json`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
+- `Build/AgentHarness/orlix-tcti/next-task.md`
+- `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`
 - `tools/tcti/orlix-tcti-gate.swift`
 - `Makefile`
 
@@ -29,6 +33,9 @@ Select the next safe Orlix TCTI task from `PLAN.md`, `IMPLEMENT.md`, current rep
 
 - `rtk proxy make tcti-plan-consistency`
 - `rtk proxy make tcti-report-schema-check`
+- `rtk proxy make agent-status AREA=orlix-tcti`
+- `rtk proxy make agent-next AREA=orlix-tcti`
+- `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy make agent-harness-check`
 - `rtk git status --short`
 - `rtk git log -5 --oneline`
@@ -37,6 +44,7 @@ Select the next safe Orlix TCTI task from `PLAN.md`, `IMPLEMENT.md`, current rep
 ## Required output format
 
 - `Next safe task:`
+- `Task envelope reviewed:`
 - `Prerequisites checked:`
 - `Allowed scope:`
 - `Forbidden scope:`

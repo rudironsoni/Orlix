@@ -929,6 +929,36 @@ Boundary:
 - No gadget dispatch was implemented.
 - No simulator gate was run.
 - No physical-device gate was run.
+
+### Checkpoint: Autonomous Next-Task Loop
+
+- Added agent-neutral Make targets:
+  - `make agent-status AREA=orlix-tcti`;
+  - `make agent-next AREA=orlix-tcti`;
+  - `make agent-task-envelope-check AREA=orlix-tcti`.
+- Added skill-owned roadmap data:
+  - `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`.
+- Added skill-local scripts:
+  - `.agents/skills/orlix-tcti-next-step/scripts/status`;
+  - `.agents/skills/orlix-tcti-next-step/scripts/next`;
+  - `.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check`;
+  - shared runner `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`.
+- `agent-status` writes `Build/AgentHarness/orlix-tcti/status.json`.
+- `agent-next` writes:
+  - `Build/AgentHarness/orlix-tcti/next-task.json`;
+  - `Build/AgentHarness/orlix-tcti/next-task.md`.
+- `agent-task-envelope-check` validates that selected gates exist in the roadmap, prerequisites pass, forbidden scope and validation commands are present, physical/device and gadget prerequisites are enforced, custom MCP references are absent, and next-task JSON is machine-parseable.
+- The current repo state selects `switch-init-003-stack` because `init_001_exit` and `init_002_write` structural and switch-debug artifacts are already present and pass, while `init_003_stack` artifacts are missing.
+- Updated TCTI skills, subagents, AGENTS guidance, and harness docs so the standard workflow is status, next, planner review, safety review, allowed-scope implementation, reducer handling, and release-gate review.
+
+Boundary:
+
+- No TCTI runtime feature was implemented.
+- No production TCTI assembly was added.
+- No gadget dispatch was implemented.
+- No simulator gate was run.
+- No physical-device gate was run.
+- No custom MCP or `tools/agent` path was added.
 - No HostAdapter, UIKit, or Darwin syscall path was used.
 - No Linux runtime semantics were implemented.
 - No syscall implementation was added beyond a captured test-harness syscall event.

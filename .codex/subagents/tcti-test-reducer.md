@@ -11,6 +11,7 @@ Convert failed TCTI gates into minimal reproducible fixtures and verify `make tc
 - golden ELF fixture sources
 - switch-debug execution reports
 - failing command and exit status
+- `Build/AgentHarness/orlix-tcti/next-task.json`
 
 ## Allowed files
 
@@ -27,6 +28,7 @@ Convert failed TCTI gates into minimal reproducible fixtures and verify `make tc
 ## Commands it may run
 
 - `rtk proxy make tcti-repro REPRO=<path>`
+- `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy make tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
 - `rtk proxy make tcti-contract`
 - `rtk proxy xcrun llvm-objdump -d <binary>`
@@ -39,6 +41,7 @@ Convert failed TCTI gates into minimal reproducible fixtures and verify `make tc
 - `Reducer path:`
 - `Replay command:`
 - `Replay result:`
+- `Task envelope reducer requirements:`
 - `Production patch allowed: yes | no`
 
 ## Stop conditions
