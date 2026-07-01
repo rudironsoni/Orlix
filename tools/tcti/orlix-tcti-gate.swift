@@ -38,6 +38,7 @@ struct Report: Codable {
     let autonomousTestsBypassed: Bool
     let bypassReason: String
     let coverageWarnings: [String]
+    let execution: ExecutionReport?
 
     enum CodingKeys: String, CodingKey {
         case target
@@ -59,7 +60,42 @@ struct Report: Codable {
         case autonomousTestsBypassed = "autonomous_tests_bypassed"
         case bypassReason = "bypass_reason"
         case coverageWarnings = "coverage_warnings"
+        case execution
     }
+}
+
+struct ExecutionReport: Codable {
+    let backend: String
+    let caseID: String
+    let enteredEntrypoint: Bool
+    let guestInstructionsExecuted: Int
+    let syscalls: [CapturedSyscall]
+    let exit: CapturedExit?
+    let instructionEncodings: [String]
+    let notes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case backend
+        case caseID = "case_id"
+        case enteredEntrypoint = "entered_entrypoint"
+        case guestInstructionsExecuted = "guest_instructions_executed"
+        case syscalls
+        case exit
+        case instructionEncodings = "instruction_encodings"
+        case notes
+    }
+}
+
+struct CapturedSyscall: Codable {
+    let nr: Int
+    let name: String
+    let args: [Int]
+    let captured: Bool
+}
+
+struct CapturedExit: Codable {
+    let kind: String
+    let code: Int
 }
 
 struct Reproducer: Codable {
@@ -253,7 +289,8 @@ func report(
     counters: [String: Int] = [:],
     coverageWarnings: [String] = [],
     autonomousTestsBypassed: Bool = false,
-    bypassReason: String = ""
+    bypassReason: String = "",
+    execution: ExecutionReport? = nil
 ) -> Report {
     Report(
         target: target,
@@ -274,7 +311,8 @@ func report(
         readinessGateEligible: status.gateEligible,
         autonomousTestsBypassed: autonomousTestsBypassed,
         bypassReason: bypassReason,
-        coverageWarnings: coverageWarnings
+        coverageWarnings: coverageWarnings,
+        execution: execution
     )
 }
 
@@ -589,6 +627,30 @@ func runContract() throws -> Int32 {
         failures.append(fail("init-001-golden", "\(error)"))
     }
 
+    do {
+        var executionArtifacts: [String] = []
+        let result = try validateAndExecuteInit001(metadataURL: goldenPath, outputRoot: buildPath("contract", "switch_debug"))
+        artifacts.append(contentsOf: result.artifacts)
+        executionArtifacts.append(contentsOf: result.artifacts)
+        if result.failures.isEmpty,
+           result.execution?.exit?.kind == "guest_exit_syscall",
+           result.execution?.exit?.code == 42 {
+            passedGroups.append("switch-debug executes init_001_exit to captured exit(42)")
+        } else {
+            failures.append(contentsOf: result.failures)
+            failures.append(fail("switch-debug-exit", "switch-debug did not capture init_001_exit exit(42)"))
+        }
+        let negativeFailures = validateNegativeExecutionFixtures(artifacts: &executionArtifacts)
+        artifacts.append(contentsOf: executionArtifacts)
+        if negativeFailures.isEmpty {
+            passedGroups.append("switch-debug negative execution fixtures")
+        } else {
+            failures.append(contentsOf: negativeFailures)
+        }
+    } catch {
+        failures.append(fail("switch-debug-execution", "\(error)"))
+    }
+
     let wrongMetadata = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_wrong_binary_sha.json")
     artifacts.append(relativePath(wrongMetadata))
     do {
@@ -604,7 +666,6 @@ func runContract() throws -> Int32 {
     }
 
     let todoGroups = [
-        "guest instruction execution semantics",
         "gadget ABI and register commit-back execution",
         "FETCH/READ/WRITE memory execution",
         "TLB, block-cache, invalidation, and direct-chain execution",
@@ -774,9 +835,13 @@ func toolchainInfo() throws -> [String: String] {
 
 func buildInit001(outputRoot: URL) throws -> (binary: URL, source: URL, metadata: [String: String]) {
     let source = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "init_001_exit.S")
+    return try buildAarch64NoLibc(source: source, outputRoot: outputRoot, binaryName: "init_001_exit")
+}
+
+func buildAarch64NoLibc(source: URL, outputRoot: URL, binaryName: String) throws -> (binary: URL, source: URL, metadata: [String: String]) {
     let outputDir = outputRoot.appendingPathComponent("init_001_exit", isDirectory: true)
     try ensureDirectory(outputDir)
-    let binary = outputDir.appendingPathComponent("init_001_exit")
+    let binary = outputDir.appendingPathComponent(binaryName)
     let flags = [
         "-target", "aarch64-linux-gnu",
         "-nostdlib",
@@ -803,6 +868,286 @@ func buildInit001(outputRoot: URL) throws -> (binary: URL, source: URL, metadata
             "flags": flags.joined(separator: " "),
         ]
     )
+}
+
+func littleEndianUInt16(_ data: Data, _ offset: Int) throws -> UInt16 {
+    guard offset >= 0 && offset + 2 <= data.count else {
+        throw GateError.commandFailed("ELF read outside file at offset \(offset)")
+    }
+    return UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+}
+
+func littleEndianUInt32(_ data: Data, _ offset: Int) throws -> UInt32 {
+    guard offset >= 0 && offset + 4 <= data.count else {
+        throw GateError.commandFailed("ELF read outside file at offset \(offset)")
+    }
+    return UInt32(data[offset]) |
+        (UInt32(data[offset + 1]) << 8) |
+        (UInt32(data[offset + 2]) << 16) |
+        (UInt32(data[offset + 3]) << 24)
+}
+
+func littleEndianUInt64(_ data: Data, _ offset: Int) throws -> UInt64 {
+    guard offset >= 0 && offset + 8 <= data.count else {
+        throw GateError.commandFailed("ELF read outside file at offset \(offset)")
+    }
+    var value: UInt64 = 0
+    for index in 0..<8 {
+        value |= UInt64(data[offset + index]) << UInt64(index * 8)
+    }
+    return value
+}
+
+struct ElfLoadSegment {
+    let fileOffset: UInt64
+    let virtualAddress: UInt64
+    let fileSize: UInt64
+}
+
+struct TinyElf64Aarch64 {
+    let data: Data
+    let entrypoint: UInt64
+    let segments: [ElfLoadSegment]
+
+    init(binary: URL) throws {
+        let data = try Data(contentsOf: binary)
+        guard data.count >= 64 else {
+            throw GateError.commandFailed("ELF file too small: \(binary.path)")
+        }
+        guard data[0] == 0x7f, data[1] == 0x45, data[2] == 0x4c, data[3] == 0x46 else {
+            throw GateError.commandFailed("not an ELF file: \(binary.path)")
+        }
+        guard data[4] == 2 else {
+            throw GateError.commandFailed("init_001_exit must be ELF64")
+        }
+        guard data[5] == 1 else {
+            throw GateError.commandFailed("init_001_exit must be little-endian ELF")
+        }
+        let type = try littleEndianUInt16(data, 16)
+        let machine = try littleEndianUInt16(data, 18)
+        guard type == 2 else {
+            throw GateError.commandFailed("init_001_exit must be ET_EXEC, found \(type)")
+        }
+        guard machine == 183 else {
+            throw GateError.commandFailed("init_001_exit must be AArch64, found machine \(machine)")
+        }
+        let entrypoint = try littleEndianUInt64(data, 24)
+        let phoff = try littleEndianUInt64(data, 32)
+        let phentsize = Int(try littleEndianUInt16(data, 54))
+        let phnum = Int(try littleEndianUInt16(data, 56))
+        var segments: [ElfLoadSegment] = []
+        for index in 0..<phnum {
+            let offset = Int(phoff) + index * phentsize
+            let programType = try littleEndianUInt32(data, offset)
+            guard programType == 1 else { continue }
+            let fileOffset = try littleEndianUInt64(data, offset + 8)
+            let virtualAddress = try littleEndianUInt64(data, offset + 16)
+            let fileSize = try littleEndianUInt64(data, offset + 32)
+            segments.append(ElfLoadSegment(fileOffset: fileOffset, virtualAddress: virtualAddress, fileSize: fileSize))
+        }
+        guard !segments.isEmpty else {
+            throw GateError.commandFailed("init_001_exit has no PT_LOAD segment")
+        }
+        self.data = data
+        self.entrypoint = entrypoint
+        self.segments = segments
+    }
+
+    func readInstruction(at virtualAddress: UInt64) throws -> UInt32 {
+        for segment in segments {
+            if virtualAddress >= segment.virtualAddress && virtualAddress + 4 <= segment.virtualAddress + segment.fileSize {
+                let fileOffset = Int(segment.fileOffset + (virtualAddress - segment.virtualAddress))
+                return try littleEndianUInt32(data, fileOffset)
+            }
+        }
+        throw GateError.commandFailed(String(format: "no load segment contains guest PC 0x%llx", virtualAddress))
+    }
+}
+
+func parseEntrypoint(_ value: String) throws -> UInt64 {
+    let normalized = value.lowercased().hasPrefix("0x") ? String(value.dropFirst(2)) : value
+    guard let parsed = UInt64(normalized, radix: 16) else {
+        throw GateError.commandFailed("invalid entrypoint \(value)")
+    }
+    return parsed
+}
+
+func hexWord(_ word: UInt32) -> String {
+    String(format: "0x%08x", word)
+}
+
+func executeInit001SwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report: ExecutionReport, failures: [Failure]) {
+    let elf = try TinyElf64Aarch64(binary: binary)
+    let expectedEntry = try parseEntrypoint(metadata.entrypoint)
+    var failures: [Failure] = []
+    if elf.entrypoint != expectedEntry {
+        failures.append(fail("execution-entrypoint", String(format: "entered 0x%llx, expected 0x%llx", elf.entrypoint, expectedEntry)))
+    }
+    var pc = elf.entrypoint
+    var registers = Array(repeating: UInt64(0), count: 31)
+    var instructionWords: [UInt32] = []
+    var syscalls: [CapturedSyscall] = []
+    var capturedExit: CapturedExit?
+    var instructionsExecuted = 0
+
+    for _ in 0..<16 {
+        let word = try elf.readInstruction(at: pc)
+        instructionWords.append(word)
+        instructionsExecuted += 1
+        switch word {
+        case 0xd2800ba8:
+            registers[8] = 93
+            pc += 4
+        case 0xd2800540:
+            registers[0] = 42
+            pc += 4
+        case 0xd4000001:
+            let syscallNumber = Int(registers[8])
+            let arg0 = Int(registers[0])
+            let syscallName = syscallNumber == 93 ? "exit" : "unknown"
+            syscalls.append(CapturedSyscall(nr: syscallNumber, name: syscallName, args: [arg0], captured: true))
+            if syscallNumber == 93 {
+                capturedExit = CapturedExit(kind: "guest_exit_syscall", code: arg0)
+            } else {
+                failures.append(fail("execution-syscall", "expected Linux exit syscall 93, captured \(syscallNumber)"))
+            }
+            let report = ExecutionReport(
+                backend: "switch-debug",
+                caseID: metadata.caseID,
+                enteredEntrypoint: elf.entrypoint == expectedEntry,
+                guestInstructionsExecuted: instructionsExecuted,
+                syscalls: syscalls,
+                exit: capturedExit,
+                instructionEncodings: instructionWords.map(hexWord),
+                notes: ["switch-debug captures svc #0 as a test event and does not call host exit or host syscalls"]
+            )
+            if capturedExit?.code != metadata.expectedExitCode {
+                failures.append(fail("execution-exit-code", "expected guest exit code \(metadata.expectedExitCode), captured \(capturedExit?.code ?? -1)"))
+            }
+            if instructionsExecuted != 3 {
+                failures.append(fail("execution-instruction-count", "expected 3 guest instructions, executed \(instructionsExecuted)"))
+            }
+            return (report, failures)
+        default:
+            let report = ExecutionReport(
+                backend: "switch-debug",
+                caseID: metadata.caseID,
+                enteredEntrypoint: elf.entrypoint == expectedEntry,
+                guestInstructionsExecuted: instructionsExecuted,
+                syscalls: syscalls,
+                exit: capturedExit,
+                instructionEncodings: instructionWords.map(hexWord),
+                notes: ["unsupported instruction stopped the seed switch-debug execution harness"]
+            )
+            failures.append(fail("execution-unsupported-instruction", String(format: "unsupported instruction 0x%08x at guest PC 0x%llx", word, pc)))
+            return (report, failures)
+        }
+    }
+
+    let report = ExecutionReport(
+        backend: "switch-debug",
+        caseID: metadata.caseID,
+        enteredEntrypoint: elf.entrypoint == expectedEntry,
+        guestInstructionsExecuted: instructionsExecuted,
+        syscalls: syscalls,
+        exit: capturedExit,
+        instructionEncodings: instructionWords.map(hexWord),
+        notes: ["instruction limit reached before svc #0"]
+    )
+    failures.append(fail("execution-limit", "switch-debug execution reached instruction limit before svc #0"))
+    return (report, failures)
+}
+
+func buildFixtureBinary(source: URL, outputRoot: URL, name: String) throws -> (binary: URL, source: URL, metadata: [String: String]) {
+    try buildAarch64NoLibc(source: source, outputRoot: outputRoot, binaryName: name)
+}
+
+func validateAndExecuteInit001(metadataURL: URL, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String], execution: ExecutionReport?) {
+    let built = try buildInit001(outputRoot: outputRoot)
+    let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataURL))
+    let sourceHash = try sha256(built.source)
+    let binaryHash = try sha256(built.binary)
+    let fileOutput = built.metadata["file_output"] ?? ""
+    let objdumpHeader = built.metadata["objdump_header"] ?? ""
+    let disassembly = built.metadata["disassembly"] ?? ""
+    var failures = validateInit001Metadata(
+        expected,
+        sourceHash: sourceHash,
+        binaryHash: binaryHash,
+        fileOutput: fileOutput,
+        objdumpHeader: objdumpHeader,
+        disassembly: disassembly
+    )
+    let execution = try executeInit001SwitchDebug(binary: built.binary, metadata: expected)
+    failures.append(contentsOf: execution.failures)
+    let executionURL = outputRoot
+        .appendingPathComponent("init_001_exit", isDirectory: true)
+        .appendingPathComponent("execution.json")
+    try writeJSON(execution.report, to: executionURL)
+    return (failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+}
+
+func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String], execution: ExecutionReport?) {
+    let goldenPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json")
+    let metadata = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: goldenPath))
+    switch fixture {
+    case "wrong-exit":
+        return try validateAndExecuteInit001(
+            metadataURL: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_wrong_expected_exit.json"),
+            outputRoot: outputRoot
+        )
+    case "unsupported":
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_unsupported_before_svc.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_unsupported_before_svc"
+        )
+        let execution = try executeInit001SwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit", isDirectory: true)
+            .appendingPathComponent("unsupported-execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "wrong-syscall":
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_wrong_syscall.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_wrong_syscall"
+        )
+        let execution = try executeInit001SwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit", isDirectory: true)
+            .appendingPathComponent("wrong-syscall-execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    default:
+        throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
+    }
+}
+
+func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
+    var failures: [Failure] = []
+    for fixture in ["wrong-exit", "unsupported", "wrong-syscall"] {
+        do {
+            let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
+            artifacts.append(contentsOf: result.artifacts)
+            if result.failures.isEmpty {
+                failures.append(fail("negative-\(fixture)", "negative execution fixture \(fixture) unexpectedly passed"))
+            }
+            let reducer = try writeReducer(
+                target: "tcti-golden-elf",
+                caseID: "execution-\(fixture)",
+                command: "CASE=init_001_exit EXECUTE=switch-debug NEGATIVE_EXECUTION=\(fixture) make tcti-golden-elf",
+                reason: "negative execution fixture \(fixture) must fail",
+                artifacts: result.artifacts,
+                expectedStatus: .fail
+            )
+            artifacts.append(relativePath(reducer))
+        } catch {
+            failures.append(fail("negative-\(fixture)", "\(error)"))
+        }
+    }
+    return failures
 }
 
 func expectedEntrypoint(_ metadata: GoldenMetadata) -> String {
@@ -978,13 +1323,19 @@ func runToolchainCheck() throws -> Int32 {
 func runGoldenElf(refresh: Bool) throws -> Int32 {
     let target = refresh ? "tcti-golden-elf-refresh" : "tcti-golden-elf"
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
+    let executeMode = ProcessInfo.processInfo.environment["EXECUTE"] ?? ""
+    let negativeExecution = ProcessInfo.processInfo.environment["NEGATIVE_EXECUTION"] ?? ""
     guard caseID == "init_001_exit" else {
         return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit is implemented in this rails checkpoint.")
+    }
+    if refresh && !executeMode.isEmpty {
+        throw GateError.usage("EXECUTE is not supported with tcti-golden-elf-refresh")
     }
     let outputRoot = buildPath("golden_elf")
     let metadataPath = path("OrlixKernel", "Tests", "TCTI", "golden_elf", caseID, "golden.json")
     var artifacts: [String] = []
     var failures: [Failure] = []
+    var executionReport: ExecutionReport?
     do {
         let toolchain = try toolchainInfo()
         if refresh {
@@ -995,6 +1346,22 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
             let metadata = goldenMetadata(actualBinaryHash: binaryHash, sourceHash: sourceHash, toolchain: toolchain)
             try writeJSON(metadata, to: metadataPath)
             artifacts.append(relativePath(metadataPath))
+        } else if executeMode == "switch-debug" && !negativeExecution.isEmpty {
+            let result = try executeNegativeFixture(negativeExecution, outputRoot: buildPath("golden_elf_negative_replay", negativeExecution))
+            artifacts.append(contentsOf: result.artifacts)
+            failures.append(contentsOf: result.failures)
+            executionReport = result.execution
+            if failures.isEmpty {
+                failures.append(fail("negative-execution", "negative execution fixture \(negativeExecution) unexpectedly passed"))
+            }
+        } else if executeMode == "switch-debug" {
+            let result = try validateAndExecuteInit001(metadataURL: metadataPath, outputRoot: outputRoot)
+            artifacts.append(contentsOf: result.artifacts)
+            failures.append(contentsOf: result.failures)
+            executionReport = result.execution
+            failures.append(contentsOf: validateNegativeExecutionFixtures(artifacts: &artifacts))
+        } else if !executeMode.isEmpty {
+            throw GateError.usage("unsupported EXECUTE=\(executeMode)")
         } else {
             let validation = try validateInit001Golden(metadataURL: metadataPath, outputRoot: outputRoot)
             artifacts.append(contentsOf: validation.artifacts)
@@ -1018,9 +1385,12 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: refresh ? "Refreshed \(caseID) golden metadata." : "Built and verified \(caseID) golden ELF.",
+        summary: refresh ? "Refreshed \(caseID) golden metadata." :
+            (executeMode == "switch-debug" ? "Executed \(caseID) through switch-debug and captured guest exit." : "Built and verified \(caseID) golden ELF."),
         failures: failures,
-        artifacts: artifacts
+        artifacts: artifacts,
+        counters: executionReport.map { ["guest_instructions_executed": $0.guestInstructionsExecuted] } ?? [:],
+        execution: executionReport
     ))
     print("\(status.rawValue): \(relativePath(reportURL))")
     return exitCode(for: status)
