@@ -487,6 +487,40 @@ func switchTLS004Pass() -> (Bool, String) {
     }
 }
 
+func switchBranches005Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_005_branches")
+        let exit = object["exit"] as? [String: Any]
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 5
+        let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 42
+        let syscallOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "exit",
+                  intValue(syscall["nr"]) == 93,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  let first = args.first else {
+                return false
+            }
+            return intValue(first) == 42
+        }
+        let decoded = object["decoded_instructions"] as? [Any] ?? []
+        let hasCBZ = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "compare_and_branch_immediate" &&
+                stringValue(instruction["op"]) == "cbz" &&
+                intValue(instruction["rt"]) == 0
+        }
+        if entered && backend && instructionCountOK && exitOK && syscallOK && hasCBZ {
+            return (true, "init_005_branches switch-debug execution captured branch-derived exit(42)")
+        }
+        return (false, "init_005_branches execution artifact does not capture branch-derived exit(42)")
+    } catch {
+        return (false, "missing or malformed init_005_branches execution artifact: \(error)")
+    }
+}
+
 func firstGadgetExit001Pass() -> (Bool, String) {
     let report = reportFact(target: "tcti-diff-switch")
     guard report.exists, report.status == "pass", report.passed else {
@@ -593,6 +627,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-004-tls":
         let check = switchTLS004Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "switch-init-005-branches":
+        let check = switchBranches005Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         let check = diffSwitchExit001Pass()
@@ -792,6 +829,36 @@ func selectedStatus(from statuses: [GateStatus]) -> GateStatus? {
     statuses.first { !$0.passed && $0.prerequisitesSatisfied }
 }
 
+func noPhoneGatesBeforeFirstPhysical(_ statuses: [GateStatus]) -> [GateStatus] {
+    var gates: [GateStatus] = []
+    for status in statuses {
+        if status.physicalDevice {
+            break
+        }
+        if !status.physicalDevice {
+            gates.append(status)
+        }
+    }
+    return gates
+}
+
+func noPhoneGatesPassedBeforeFirstPhysical(_ statuses: [GateStatus]) -> Bool {
+    noPhoneGatesBeforeFirstPhysical(statuses).allSatisfy { $0.passed }
+}
+
+func selectedStatusWithSafety(from statuses: [GateStatus]) -> GateStatus? {
+    let noPhonePassed = noPhoneGatesPassedBeforeFirstPhysical(statuses)
+    return statuses.first { status in
+        guard !status.passed && status.prerequisitesSatisfied else {
+            return false
+        }
+        if status.physicalDevice && !noPhonePassed {
+            return false
+        }
+        return true
+    }
+}
+
 func gitSHA() -> String {
     run("/usr/bin/env", ["git", "rev-parse", "HEAD"]) ?? "unknown"
 }
@@ -808,24 +875,21 @@ func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let data = try encoder.encode(value)
-    let tmp = url.appendingPathExtension("tmp")
-    try data.write(to: tmp, options: [.atomic])
-    if fileManager.fileExists(atPath: url.path) {
-        try fileManager.removeItem(at: url)
-    }
-    try fileManager.moveItem(at: tmp, to: url)
+    try data.write(to: url, options: [.atomic])
 }
 
 func statusDocument() throws -> StatusDocument {
     let roadmap = try loadRoadmap()
     let gateStatuses = statuses(for: roadmap)
     let physicalGate = gateStatuses.first { $0.physicalDevice }
-    let next = selectedStatus(from: gateStatuses)
+    let next = selectedStatusWithSafety(from: gateStatuses)
     let preflightGateIDs = Set(runtimePreflightGates().map(\.id))
     let preflightPassed = gateStatuses
         .filter { preflightGateIDs.contains($0.id) }
         .allSatisfy { $0.passed }
-    let physicalAllowed = physicalGate?.prerequisitesSatisfied == true && preflightPassed
+    let physicalAllowed = physicalGate?.prerequisitesSatisfied == true &&
+        preflightPassed &&
+        noPhoneGatesPassedBeforeFirstPhysical(gateStatuses)
     let releaseEligible = physicalGate?.passed == true
     let readinessEligible = physicalGate?.passed == true
     return StatusDocument(

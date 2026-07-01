@@ -6,7 +6,9 @@
       "id": "rails-defconfig-safety",
       "command": "make tcti-plan-consistency",
       "kind": "rail",
-      "prerequisites": [],
+      "prerequisites": [
+
+      ],
       "allowed_scope": [
         "OrlixKernel/Sources/ports/orlix/configs/**",
         "docs/adr/0022-use-hosted-linux-elf-execution.md",
@@ -489,7 +491,6 @@
         "Stop if the task tries to execute branch semantics before structural metadata passes."
       ]
     },
-
     {
       "id": "switch-init-005-branches",
       "command": "make tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug",
@@ -545,13 +546,557 @@
         "Stop if branch failures are not reduced into no-phone fixtures."
       ]
     },
-
+    {
+      "id": "golden-init-006-memory-structural",
+      "command": "make tcti-golden-elf CASE=init_006_memory",
+      "kind": "golden-elf-structural",
+      "prerequisites": [
+        "switch-init-005-branches"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_006_memory/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not execute guest instructions in a structural-only gate.",
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not broaden memory semantics before structural metadata is real."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_006_memory/validation.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_006_memory",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Metadata drift must produce reducer case id regeneration command."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-debug",
+        "orlix-tcti-safety",
+        "tcti-llvm-inspector",
+        "tcti-safety-reviewer"
+      ],
+      "commit_message_template": "test(tcti): add memory golden elf fixture",
+      "stop_conditions": [
+        "Stop if source hash, binary hash, entrypoint, or expected memory shape diverges.",
+        "Stop if task tries to execute memory semantics before structural metadata passes."
+      ]
+    },
+    {
+      "id": "switch-init-006-memory",
+      "command": "make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug",
+      "kind": "switch-debug-execution",
+      "prerequisites": [
+        "golden-init-006-memory-structural"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_006_memory/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/tcti/fixtures/golden_elf/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement Linux runtime semantics.",
+        "Do not broaden memory semantics beyond exact fixture needs."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_006_memory/execution.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_006_memory",
+        "rtk proxy make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Unsupported memory, semantic, or guest-memory failures must emit replayable reducers."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-oracle",
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-safety",
+        "orlix-tcti-reproducer",
+        "tcti-oracle-engineer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): execute memory elf in switch backend",
+      "stop_conditions": [
+        "Stop if memory execution would require gadget dispatch or production assembly.",
+        "Stop if memory failures are not reduced into no-phone fixtures."
+      ]
+    },
+    {
+      "id": "golden-init-007-mprotect-structural",
+      "command": "make tcti-golden-elf CASE=init_007_mprotect",
+      "kind": "golden-elf-structural",
+      "prerequisites": [
+        "switch-init-006-memory"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_007_mprotect/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not execute guest instructions in a structural-only gate.",
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement mprotect or host executable-memory behavior in the harness."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_007_mprotect/validation.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_007_mprotect",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Metadata drift must produce reducer case id regeneration command."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-debug",
+        "orlix-tcti-safety",
+        "tcti-llvm-inspector",
+        "tcti-safety-reviewer"
+      ],
+      "commit_message_template": "test(tcti): add mprotect golden elf fixture",
+      "stop_conditions": [
+        "Stop if source hash, binary hash, entrypoint, or expected mprotect shape diverges.",
+        "Stop if task tries to execute mprotect semantics before structural metadata passes."
+      ]
+    },
+    {
+      "id": "switch-init-007-mprotect",
+      "command": "make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug",
+      "kind": "switch-debug-execution",
+      "prerequisites": [
+        "golden-init-007-mprotect-structural"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_007_mprotect/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/tcti/fixtures/golden_elf/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement Linux runtime semantics.",
+        "Do not call host mprotect, vm_protect, MAP_JIT, or RWX paths."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_007_mprotect/execution.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_007_mprotect",
+        "rtk proxy make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Unsupported mprotect, semantic, or guest-memory failures must emit replayable reducers."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-oracle",
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-safety",
+        "orlix-tcti-reproducer",
+        "tcti-oracle-engineer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): execute mprotect elf in switch backend",
+      "stop_conditions": [
+        "Stop if mprotect execution would require gadget dispatch or production assembly.",
+        "Stop if failures are not reduced into no-phone fixtures."
+      ]
+    },
+    {
+      "id": "golden-init-008-self-modify-structural",
+      "command": "make tcti-golden-elf CASE=init_008_self_modify",
+      "kind": "golden-elf-structural",
+      "prerequisites": [
+        "switch-init-007-mprotect"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_008_self_modify/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not execute guest instructions in a structural-only gate.",
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement self-modifying execution before structural metadata is real."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_008_self_modify/validation.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_008_self_modify",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Metadata drift must produce reducer case id regeneration command."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-debug",
+        "orlix-tcti-safety",
+        "tcti-llvm-inspector",
+        "tcti-safety-reviewer"
+      ],
+      "commit_message_template": "test(tcti): add self-modify golden elf fixture",
+      "stop_conditions": [
+        "Stop if source hash, binary hash, entrypoint, or expected self-modifying shape diverges.",
+        "Stop if task tries to execute self-modifying semantics before structural metadata passes."
+      ]
+    },
+    {
+      "id": "switch-init-008-self-modify",
+      "command": "make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug",
+      "kind": "switch-debug-execution",
+      "prerequisites": [
+        "golden-init-008-self-modify-structural"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_008_self_modify/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/tcti/fixtures/golden_elf/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement Linux runtime semantics.",
+        "Do not use host-executable guest text or generated executable memory."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_008_self_modify/execution.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_008_self_modify",
+        "rtk proxy make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Unsupported self-modifying-code or invalidation failures must emit replayable reducers."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-oracle",
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-safety",
+        "orlix-tcti-reproducer",
+        "tcti-oracle-engineer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): execute self-modify elf in switch backend",
+      "stop_conditions": [
+        "Stop if execution would require gadget dispatch or production assembly.",
+        "Stop if failures are not reduced into no-phone fixtures."
+      ]
+    },
+    {
+      "id": "golden-init-009-faults-structural",
+      "command": "make tcti-golden-elf CASE=init_009_faults",
+      "kind": "golden-elf-structural",
+      "prerequisites": [
+        "switch-init-008-self-modify"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_009_faults/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not execute guest instructions in a structural-only gate.",
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement signal or process semantics in the harness."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_009_faults/validation.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_009_faults",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Metadata drift must produce reducer case id regeneration command."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-debug",
+        "orlix-tcti-safety",
+        "tcti-llvm-inspector",
+        "tcti-safety-reviewer"
+      ],
+      "commit_message_template": "test(tcti): add faults golden elf fixture",
+      "stop_conditions": [
+        "Stop if source hash, binary hash, entrypoint, or expected fault shape diverges.",
+        "Stop if task tries to execute fault semantics before structural metadata passes."
+      ]
+    },
+    {
+      "id": "switch-init-009-faults",
+      "command": "make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug",
+      "kind": "switch-debug-execution",
+      "prerequisites": [
+        "golden-init-009-faults-structural"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_009_faults/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/tcti/fixtures/golden_elf/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement Linux runtime semantics.",
+        "Do not implement signal, scheduler, process, or VFS behavior in the harness."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_009_faults/execution.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_009_faults",
+        "rtk proxy make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Unsupported fault or guest-memory failures must emit replayable reducers."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-oracle",
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-safety",
+        "orlix-tcti-reproducer",
+        "tcti-oracle-engineer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): execute faults elf in switch backend",
+      "stop_conditions": [
+        "Stop if execution would require gadget dispatch or production assembly.",
+        "Stop if failures are not reduced into no-phone fixtures."
+      ]
+    },
+    {
+      "id": "golden-init-010-cpu-model-structural",
+      "command": "make tcti-golden-elf CASE=init_010_cpu_model",
+      "kind": "golden-elf-structural",
+      "prerequisites": [
+        "switch-init-009-faults"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_010_cpu_model/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not execute guest instructions in a structural-only gate.",
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not expose physical host CPU variability as guest-visible policy."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_010_cpu_model/validation.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_010_cpu_model",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Metadata drift must produce reducer case id regeneration command."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-debug",
+        "orlix-tcti-safety",
+        "tcti-llvm-inspector",
+        "tcti-safety-reviewer"
+      ],
+      "commit_message_template": "test(tcti): add cpu-model golden elf fixture",
+      "stop_conditions": [
+        "Stop if source hash, binary hash, entrypoint, or expected cpu-model shape diverges.",
+        "Stop if task tries to execute CPU-model semantics before structural metadata passes."
+      ]
+    },
+    {
+      "id": "switch-init-010-cpu-model",
+      "command": "make tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug",
+      "kind": "switch-debug-execution",
+      "prerequisites": [
+        "golden-init-010-cpu-model-structural"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_010_cpu_model/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/tcti/fixtures/golden_elf/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement Linux runtime semantics.",
+        "Do not expose physical host CPU variability as guest-visible policy."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_010_cpu_model/execution.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-golden-elf CASE=init_010_cpu_model",
+        "rtk proxy make tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug",
+        "rtk proxy make tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Unsupported CPU-model or sysreg failures must emit replayable reducers."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-oracle",
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-safety",
+        "orlix-tcti-reproducer",
+        "tcti-oracle-engineer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): execute cpu-model elf in switch backend",
+      "stop_conditions": [
+        "Stop if execution would require gadget dispatch or production assembly.",
+        "Stop if failures are not reduced into no-phone fixtures."
+      ]
+    },
     {
       "id": "diff-switch-init-001-exit",
       "command": "make tcti-diff-switch CASE=init_001_exit",
       "kind": "switch-vs-gadget-diff",
       "prerequisites": [
-        "switch-init-005-branches"
+        "switch-init-010-cpu-model"
       ],
       "allowed_scope": [
         "tools/tcti/orlix-tcti-gate.swift",

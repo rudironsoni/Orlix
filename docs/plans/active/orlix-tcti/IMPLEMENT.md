@@ -2,6 +2,67 @@
 
 ## 2026-07-01
 
+### Checkpoint: Branch Switch-Debug Execution And Harness No-Phone Roadmap Guard
+
+- Harness-selected gate implemented: `switch-init-005-branches`.
+- Selected command: `make tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug`.
+- Added decoded switch-debug branch support in `tools/tcti/orlix-tcti-gate.swift`:
+  - compare-and-branch immediate decode for 64-bit `CBZ` only.
+  - unconditional branch immediate decode for `B`.
+  - branch PC update semantics for the branch fixture path.
+- Decoder predicates:
+  - `CBZ/CBNZ`: `(raw & 0x7e00_0000) == 0x3400_0000`.
+  - `B`: `(raw & 0xfc00_0000) == 0x1400_0000`.
+- Scope kept deliberately narrow:
+  - `CBNZ` is rejected as unsupported.
+  - W-register compare-and-branch variants are rejected as unsupported.
+  - no `BL`, `BR`, `RET`, conditional branch, `TBZ/TBNZ`, or broad branch model was added.
+- Added negative execution fixture:
+  - `tools/tcti/fixtures/golden_elf/init_005_branches_unsupported_cbnz.S`.
+- Reducer:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-branches-unsupported-cbnz.json`.
+- Reducer replay:
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-branches-unsupported-cbnz.json` produced expected `fail`, actual `fail`, replay exit code `2`.
+- Execution report:
+  - `Build/TCTI/golden_elf/init_005_branches/execution.json`.
+- Captured execution:
+  - backend `switch-debug`.
+  - case `init_005_branches`.
+  - entered entrypoint.
+  - executed 5 guest instructions through the taken `CBZ` path.
+  - captured Linux `exit(42)` as a test-harness syscall event.
+- Exact taken-path instruction words:
+  - `0xd2800000` `mov x0, #0`.
+  - `0xb4000060` `cbz x0, 0x210130`.
+  - `0xd2800540` `mov x0, #42`.
+  - `0xd2800ba8` `mov x8, #93`.
+  - `0xd4000001` `svc #0`.
+- Corrected the next-step harness after worker review found over-advance to physical work:
+  - added roadmap gates through `init_010_cpu_model` before diff, gadget, or physical work.
+  - moved `diff-switch-init-001-exit` behind `switch-init-010-cpu-model`.
+  - made JSON status writes atomic without remove-and-move races under parallel harness calls.
+  - made physical selection require all no-phone gates before the first physical gate to pass.
+- Harness result after correction:
+  - `agent-status` reports `physical_device_allowed=false`.
+  - `agent-next` selects `golden-init-006-memory-structural`.
+  - `agent-task-envelope-check` passes for `golden-init-006-memory-structural`.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate run.
+- No physical-device gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+- Full TCTI remains incomplete.
+
 ### Checkpoint: Executable-Proof Plan Tightening
 
 - Updated `docs/plans/active/orlix-tcti/PLAN.md` so the next TCTI checkpoint cannot be completed by documentation alone.
