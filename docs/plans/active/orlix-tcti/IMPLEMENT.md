@@ -1101,52 +1101,39 @@ Boundary:
 - No fd table, VFS, process, signal, scheduler, or real syscall behavior was implemented.
 - Write and exit are captured test-harness syscall events only.
 
-### Checkpoint: Codex TCTI Agent Harness
+### Checkpoint: Agent Harness Cleanup
 
-- Added repo-scoped Codex configuration for TCTI orchestration:
-  - `.codex/config.toml` now declares TCTI subagent roles.
-  - `.codex/config.toml` now declares MCP entries for OpenAI developer docs, Context7, LLDB, and the local Orlix TCTI MCP.
-  - user-local secrets and machine-specific MCP enablement stay outside the repo.
-- Added TCTI lifecycle hook scripts:
-  - `.codex/hooks/pre_tool_use_policy`
-  - `.codex/hooks/post_tool_use_review`
-  - `.codex/hooks/session_start_context`
-  - `.codex/hooks/stop_guard`
-  - `.codex/hooks.json` wires these into the existing hook lifecycle.
-- Added TCTI subagent role packets:
-  - `.codex/subagents/tcti-planner.md`
-  - `.codex/subagents/tcti-oracle-engineer.md`
-  - `.codex/subagents/tcti-llvm-inspector.md`
-  - `.codex/subagents/tcti-safety-reviewer.md`
-  - `.codex/subagents/tcti-test-reducer.md`
-  - `.codex/subagents/tcti-gadget-reviewer.md`
-  - `.codex/subagents/tcti-release-gate-reviewer.md`
-- Added repo-scoped TCTI skills:
-  - `.agents/skills/orlix-tcti-next-step/SKILL.md`
-  - `.agents/skills/orlix-tcti-oracle/SKILL.md`
-  - `.agents/skills/orlix-tcti-safety/SKILL.md`
-  - `.agents/skills/orlix-tcti-debug/SKILL.md`
-  - each skill includes `agents/openai.yaml` dependencies for the relevant subagents and MCP servers.
-- Added local MCP skeletons and docs:
-  - `tools/mcp/orlix-tcti-mcp/`
-  - `tools/mcp/orlix-llvm-mcp-wrapper/`
-  - `docs/harness/ORLIX_TCTI_CODEX_HARNESS.md`
-- The Orlix TCTI MCP exposes only domain tools:
-  - `tcti_status`
-  - `tcti_next`
-  - `tcti_report_read`
-  - `tcti_reproducer_read`
-  - `tcti_golden_list`
-  - `tcti_golden_validate`
-  - `tcti_safety_audit`
-  - `tcti_plan_consistency`
-- Added Codex harness check targets:
-  - `make codex-harness-check`
-  - `make codex-hooks-check`
-  - `make codex-skills-check`
-  - `make codex-subagents-check`
-  - `make codex-mcp-check`
-- Updated `AGENTS.md` so future TCTI work routes through the Orlix TCTI Codex harness, planner, safety reviewer, and no-phone gates before direct implementation.
+- Removed the homemade Orlix TCTI MCP implementation.
+- Removed the repo-local LLDB MCP wrapper. LLDB MCP is now documented as an external tool configured by the user or environment.
+- Removed the generic harness checker from `tools/`; reusable harness scripts now live inside skills.
+- Replaced Codex-canonical harness wording with an agent-neutral model:
+  - repo-local workflow logic lives in `.agents/skills/`;
+  - skill scripts live in `.agents/skills/<skill-name>/scripts/`;
+  - `.codex/` is only the Codex adapter;
+  - MCP is reserved for external, proven tools.
+- Added replacement TCTI skills for the former fake MCP surfaces:
+  - `orlix-tcti-status`;
+  - `orlix-tcti-report-reader`;
+  - `orlix-tcti-reproducer`;
+  - `orlix-tcti-golden-elf`;
+  - `orlix-tcti-plan-consistency`.
+- Normalized existing TCTI skills:
+  - `orlix-tcti-next-step`;
+  - `orlix-tcti-oracle`;
+  - `orlix-tcti-safety`;
+  - `orlix-tcti-debug`.
+- Moved hook policy logic into skill-local scripts and left `.codex/hooks/` as thin adapters.
+- Added agent-neutral harness docs:
+  - `docs/harness/ORLIX_TCTI_AGENT_HARNESS.md`;
+  - `docs/harness/MCP_POLICY.md`;
+  - `docs/harness/future/ORLIX_TCTI_MCP_DEFERRED.md`.
+- Added canonical agent-neutral Make targets:
+  - `make agent-harness-check`;
+  - `make agent-hooks-check`;
+  - `make agent-skills-check`;
+  - `make agent-subagents-check`;
+  - `make agent-mcp-check`.
+- Removed Codex-specific Make target aliases. The harness exposes `agent-*` targets only.
 
 Evidence:
 
@@ -1158,14 +1145,18 @@ rtk proxy make tcti-toolchain-check
 rtk proxy make tcti-golden-elf
 rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
 rtk proxy make tcti-appstore-safety-audit
-rtk proxy make codex-harness-check
-rtk proxy make codex-hooks-check
-rtk proxy make codex-skills-check
-rtk proxy make codex-subagents-check
-rtk proxy make codex-mcp-check
+rtk proxy make agent-harness-check
+rtk proxy make agent-hooks-check
+rtk proxy make agent-skills-check
+rtk proxy make agent-subagents-check
+rtk proxy make agent-mcp-check
 ```
 
-All passed.
+All commands passed.
+
+Alias removal check: a rejected-target-name scan across `.codex`, `.agents`, `AGENTS.md`, `Makefile`, `docs`, and `tools` produced no matches.
+
+Kernel sanity:
 
 ```sh
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development

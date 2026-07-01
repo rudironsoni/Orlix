@@ -29,7 +29,7 @@ Select the next safe Orlix TCTI task from `PLAN.md`, `IMPLEMENT.md`, current rep
 
 - `rtk proxy make tcti-plan-consistency`
 - `rtk proxy make tcti-report-schema-check`
-- `rtk proxy make codex-harness-check`
+- `rtk proxy make agent-harness-check`
 - `rtk git status --short`
 - `rtk git log -5 --oneline`
 - `rtk grep ...`

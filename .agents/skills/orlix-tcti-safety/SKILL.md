@@ -1,33 +1,48 @@
 ---
 name: orlix-tcti-safety
-description: Orlix TCTI safety review. Use for App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, generated tree, or physical-device preflight questions.
+description: Orlix TCTI safety agent harness. Use for App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, generated-tree, or physical-device preflight checks.
 ---
 
 # Orlix TCTI Safety
 
-Use this skill before reviewing or changing any TCTI safety boundary.
+## Trigger Conditions
 
-## Required Flow
+- A task mentions App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, generated tree, or device preflight.
+- TCTI runtime, gadget, or physical-device work is proposed.
+- A TCTI change is being reviewed for readiness.
 
-1. Run:
-   - `rtk proxy make tcti-appstore-safety-audit`
-   - `rtk proxy make tcti-plan-consistency`
-2. Inspect product defconfigs for TCTI/default debug switch.
-3. Search source and generated outputs for `x18`, `w18`, `MAP_JIT`, `RWX`, `PROT_EXEC`, and `vm_protect`.
-4. Confirm HostAdapter does not own instruction decoding, syscall dispatch, VFS, fd tables, signal, process, or CPU feature policy.
+## Allowed Scope
 
-## Refusals
+- Run TCTI safety checks and plan consistency.
+- Inspect product defconfigs, source diffs, generated-tree references, and TCTI reports.
+- Block unsafe commands through skill-local hook scripts.
 
-- Reject product paths that host-execute guest ELF text.
-- Reject generated executable memory, MAP_JIT, RWX, or private executable-memory entitlements.
-- Reject physical-device TCTI work without autonomous preflight reports or explicit evidence mode.
-- Reject changes under generated Linux trees.
+## Forbidden Scope
 
-## Output
+- Do not implement feature code.
+- Do not flip product defconfigs to TCTI.
+- Do not host-execute guest ELF text.
+- Do not approve evidence mode as pass.
 
-Return findings first, then:
+## Commands It May Run
 
+- `rtk proxy make tcti-appstore-safety-audit`
+- `rtk proxy make tcti-plan-consistency`
+- `rtk proxy make agent-mcp-check`
+- `rtk grep -n "x18\\|w18\\|MAP_JIT\\|RWX\\|PROT_EXEC\\|vm_protect"`
+
+## Expected Output
+
+- findings first
+- forbidden behavior state
 - reports reviewed
 - defconfig state
-- forbidden behavior state
+- generated-tree state
 - decision: `pass`, `fail`, or `evidence-only`
+
+## Stop Conditions
+
+- Stop on JIT, MAP_JIT, RWX, generated executable memory, host executable guest text, or forbidden x18/w18.
+- Stop on HostAdapter-owned Linux semantics.
+- Stop if product defconfigs default to TCTI before gates pass.
+- Stop if physical device work bypasses runtime-validation preflight.

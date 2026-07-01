@@ -1,0 +1,65 @@
+#!/usr/bin/env sh
+set -eu
+
+payload="$(cat)"
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+warn() {
+  printf '%s\n' "ORLIX-TCTI-HOOK-WARN: $*" >&2
+}
+
+block() {
+  printf '%s\n' "ORLIX-TCTI-HOOK-BLOCK: $*" >&2
+  exit 2
+}
+
+has_pass_report() {
+  target="$1"
+  report="$root/Build/TCTI/reports/$target/report.json"
+  test -f "$report" && grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$report"
+}
+
+autonomous_preflight_passed() {
+  has_pass_report tcti-plan-consistency &&
+    has_pass_report tcti-report-schema-check &&
+    has_pass_report tcti-toolchain-check &&
+    has_pass_report tcti-golden-elf &&
+    has_pass_report tcti-appstore-safety-audit
+}
+
+case "$payload" in
+  *Build/OrlixKernel/src/linux-*|*Build/OrlixKernel/upstream/linux-*)
+    if printf '%s' "$payload" | grep -Eq 'apply_patch|sed[[:space:]].*-i|perl[[:space:]].*-i|>[[:space:]]*Build/OrlixKernel|>>[[:space:]]*Build/OrlixKernel|git[[:space:]].*(checkout|restore|reset|clean|apply|am)'; then
+      block "generated Linux trees are read-only. Move fixes to durable Orlix overlay inputs."
+    fi
+    ;;
+esac
+
+if printf '%s' "$payload" | grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' &&
+   printf '%s' "$payload" | grep -Eq 'development_defconfig|release_defconfig'; then
+  block "product defconfigs must not default to TCTI/debug-switch before autonomous and physical gates pass."
+fi
+
+if printf '%s' "$payload" | grep -Eq 'MAP_JIT|JIT|RWX|PROT_EXEC|vm_protect.*EXECUTE|prot_exec' &&
+   printf '%s' "$payload" | grep -Eq 'OrlixKernel/Sources|OrlixHostAdapter/Sources|OrlixOS|project.yml'; then
+  block "JIT, RWX, MAP_JIT, or host executable guest-text behavior is forbidden in product paths."
+fi
+
+if printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos|platform=iOS|generic/platform=iOS|ios-deploy|devicectl'; then
+  if printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos' && ! autonomous_preflight_passed; then
+    block "physical TCTI gates require passing no-phone reports before device work."
+  fi
+  if ! printf '%s' "$payload" | grep -Eq 'runtime-validation|beta-archive|ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT|ORLIX_RUNTIME_PREFLIGHT_ONLY=1'; then
+    block "direct device work must go through runtime-validation or explicit evidence-mode preflight."
+  fi
+fi
+
+if printf '%s' "$payload" | grep -Eq 'xcodebuild' &&
+   printf '%s' "$payload" | grep -Eq 'iphoneos|generic/platform=iOS|platform=iOS,' &&
+   ! printf '%s' "$payload" | grep -Eq 'runtime-validation|beta-archive|beta-export-archive|beta-upload'; then
+  block "device-oriented xcodebuild invocations must use sanctioned runtime-validation or beta release flow."
+fi
+
+if printf '%s' "$payload" | grep -Eiq 'fix everything|fix all|make .*all.*(tcti|runtime)|just run the device|skip.*tcti-(next|status)'; then
+  warn "broad TCTI work should start with status/plan inspection and planner plus safety reviewer."
+fi

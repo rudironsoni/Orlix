@@ -1,7 +1,7 @@
+# Codex adapter for Orlix.
+# Repo-local workflow logic belongs in .agents/skills, not in custom MCP servers.
+# User secrets and machine-local MCP credentials belong in ~/.codex/config.toml.
 
-# Orlix beta archive and simulator validation need unsandboxed execution.
-# Xcode/SwiftPM package resolution invokes Apple's sandbox-exec and fails inside
-# Codex workspace sandboxing before the project build can start.
 sandbox_mode = "danger-full-access"
 approval_policy = "never"
 
@@ -46,25 +46,8 @@ tool_timeout_sec = 60
 env_http_headers = { "CONTEXT7_API_KEY" = "CONTEXT7_API_KEY" }
 
 [mcp_servers.lldb]
-command = "tools/mcp/orlix-llvm-mcp-wrapper/lldb-mcp-wrapper.sh"
+command = "lldb-mcp"
 enabled = false
 required = false
 enabled_tools = ["lldb_command"]
 tool_timeout_sec = 60
-
-[mcp_servers.orlix-tcti]
-command = "tools/mcp/orlix-tcti-mcp/orlix-tcti-mcp"
-cwd = "."
-enabled = false
-required = false
-enabled_tools = [
-  "tcti_status",
-  "tcti_next",
-  "tcti_report_read",
-  "tcti_reproducer_read",
-  "tcti_golden_list",
-  "tcti_golden_validate",
-  "tcti_safety_audit",
-  "tcti_plan_consistency",
-]
-tool_timeout_sec = 120

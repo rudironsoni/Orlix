@@ -3,7 +3,8 @@ dependencies:
     - .codex/subagents/tcti-llvm-inspector.md
   mcp_servers:
     - lldb
-    - orlix-tcti
+    - context7
+    - openaiDeveloperDocs
   commands:
     - xcrun llvm-objdump
     - xcrun llvm-readelf

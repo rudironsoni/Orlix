@@ -1,34 +1,4 @@
 #!/usr/bin/env sh
 set -eu
-
-payload="$(cat)"
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-
-warn() {
-  printf '%s\n' "ORLIX-TCTI-HOOK-WARN: $*" >&2
-}
-
-changed="$(git -C "$root" diff --name-only 2>/dev/null || true)"
-staged="$(git -C "$root" diff --cached --name-only 2>/dev/null || true)"
-all_changed="$(printf '%s\n%s\n' "$changed" "$staged" | sed '/^$/d' | sort -u)"
-
-if test -n "$all_changed"; then
-  printf '%s' "$payload" | grep -q 'git diff --check' || warn "files changed but final summary does not mention git diff --check."
-fi
-
-if printf '%s\n' "$all_changed" | grep -Eq '(^tools/tcti/|^OrlixKernel/Tests/TCTI/|^docs/plans/active/orlix-tcti/)'; then
-  printf '%s' "$payload" | grep -Eq 'tcti-plan-consistency|tcti-golden-elf|tcti-appstore-safety-audit' ||
-    warn "TCTI files changed but final summary does not mention relevant TCTI gates."
-fi
-
-if printf '%s\n' "$all_changed" | grep -Eq '(^\.codex/|^\.agents/skills/|^AGENTS.md|^tools/mcp/|^tools/codex-harness-check\.sh)'; then
-  printf '%s' "$payload" | grep -Eq 'codex-harness-check|codex-hooks-check|codex-skills-check|codex-subagents-check|codex-mcp-check' ||
-    warn "harness files changed but final summary does not mention Codex harness checks."
-fi
-
-if printf '%s' "$payload" | grep -Eiq '\bpass(ed|es|ing)?\b|green|complete|completed'; then
-  if printf '%s' "$payload" | grep -Eq 'tcti-|codex-'; then
-    printf '%s' "$payload" | grep -Eq 'Build/TCTI/reports|report\.json|codex-harness-check' ||
-      warn "pass claim mentions TCTI/Codex harness but no report JSON or harness-check evidence is cited."
-  fi
-fi
+exec "$root/.agents/skills/orlix-tcti-next-step/scripts/stop-guard"

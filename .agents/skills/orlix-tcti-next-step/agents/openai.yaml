@@ -6,9 +6,8 @@ dependencies:
     - .codex/subagents/tcti-llvm-inspector.md
     - .codex/subagents/tcti-test-reducer.md
   mcp_servers:
-    - orlix-tcti
     - openaiDeveloperDocs
     - context7
   commands:
+    - make agent-harness-check
     - make tcti-plan-consistency
-    - make codex-harness-check

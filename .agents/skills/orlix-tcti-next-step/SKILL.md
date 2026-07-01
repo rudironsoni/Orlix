@@ -1,41 +1,49 @@
 ---
 name: orlix-tcti-next-step
-description: Orlix TCTI next-step harness. Use when the user says continue TCTI work, run the harness, what next, pick the next safe task, or coordinate TCTI subagents.
+description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, running the harness, choosing what is next, or coordinating planner and safety review.
 ---
 
 # Orlix TCTI Next Step
 
-Use this skill before implementing new TCTI work.
+## Trigger Conditions
 
-## Required Flow
+- The user asks to continue TCTI work.
+- The user says "run the harness" or asks "what next".
+- A TCTI implementation task is proposed without a clear gate.
 
-1. Read `AGENTS.md`, `docs/plans/active/orlix-tcti/PLAN.md`, and `docs/plans/active/orlix-tcti/IMPLEMENT.md`.
-2. Run or inspect:
-   - `rtk proxy make tcti-plan-consistency`
-   - `rtk proxy make codex-harness-check`
-   - latest `Build/TCTI/reports/**/report.json`
-3. Spawn or simulate these roles when subagent tooling is available:
-   - `tcti-planner`
-   - `tcti-safety-reviewer`
-   - one relevant implementation role such as `tcti-oracle-engineer`, `tcti-llvm-inspector`, or `tcti-test-reducer`
-4. Choose one next gate and one implementation surface.
-5. Do not code until the gate, scope, and forbidden work are explicit.
+## Allowed Scope
 
-## Refusals
+- Read `AGENTS.md`, `PLAN.md`, `IMPLEMENT.md`, and TCTI reports.
+- Run agent-neutral harness checks and TCTI no-phone status checks.
+- Spawn or simulate planner, safety reviewer, LLVM inspector, oracle engineer, or reducer roles.
+- Produce the next safe task and its verification gates.
 
-- Do not implement production TCTI assembly.
-- Do not implement gadget dispatch.
-- Do not run simulator or physical-device gates unless the preflight permits it.
-- Do not expand Linux runtime semantics.
-- Do not bypass planner and safety reviewer for TCTI changes.
+## Forbidden Scope
 
-## Output
+- Do not implement TCTI runtime features directly.
+- Do not run simulator or physical-device gates.
+- Do not add production assembly or gadget dispatch.
+- Do not bypass planner and safety reviewer for TCTI work.
 
-Return:
+## Commands It May Run
 
-- `Selected gate`
-- `Subagents used`
-- `Allowed files`
-- `Forbidden files`
-- `Commands to run`
-- `Stop condition`
+- `rtk proxy make agent-harness-check`
+- `rtk proxy make tcti-plan-consistency`
+- `rtk proxy make tcti-report-schema-check`
+- `rtk proxy make tcti-golden-elf`
+- `rtk git status --short`
+
+## Expected Output
+
+- selected next gate
+- subagents used
+- allowed files
+- forbidden files
+- commands to run
+- stop condition
+
+## Stop Conditions
+
+- Stop if `agent-harness-check` fails.
+- Stop if `tcti-plan-consistency` fails.
+- Stop if the next task needs device, simulator, production assembly, or gadget work before no-phone prerequisites pass.

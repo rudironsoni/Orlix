@@ -33,7 +33,7 @@ ORLIX_BETA_SIMULATOR_ID ?= 4C88CA42-EA50-463F-B989-7B0560075A9B
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro codex-harness-check codex-hooks-check codex-skills-check codex-subagents-check codex-mcp-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -186,20 +186,20 @@ runtime-validation: beta-prerequisites
 tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro:
 	@swift tools/tcti/orlix-tcti-gate.swift $@
 
-codex-harness-check:
-	@tools/codex-harness-check.sh all
+agent-harness-check:
+	@.agents/skills/orlix-tcti-next-step/scripts/harness-check all
 
-codex-hooks-check:
-	@tools/codex-harness-check.sh hooks
+agent-hooks-check:
+	@.agents/skills/orlix-tcti-next-step/scripts/harness-check hooks
 
-codex-skills-check:
-	@tools/codex-harness-check.sh skills
+agent-skills-check:
+	@.agents/skills/orlix-tcti-next-step/scripts/harness-check skills
 
-codex-subagents-check:
-	@tools/codex-harness-check.sh subagents
+agent-subagents-check:
+	@.agents/skills/orlix-tcti-next-step/scripts/harness-check subagents
 
-codex-mcp-check:
-	@tools/codex-harness-check.sh mcp
+agent-mcp-check:
+	@.agents/skills/orlix-tcti-next-step/scripts/harness-check mcp
 
 beta-archive: beta-bump-build-number
 	@set -euo pipefail; \

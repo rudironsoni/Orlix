@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -eu
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+reports="$root/Build/TCTI/reports"
+if test ! -d "$reports"; then
+  printf '%s\n' '{"reports":[],"missing":"Build/TCTI/reports"}'
+  exit 0
+fi
+find "$reports" -name report.json -print | sort | while IFS= read -r report; do
+  target="$(basename "$(dirname "$report")")"
+  status="$(jq -r '.status // "missing"' "$report" 2>/dev/null || printf 'malformed')"
+  passed="$(jq -r '.passed // false' "$report" 2>/dev/null || printf 'false')"
+  printf '%s\t%s\tpassed=%s\t%s\n' "$target" "$status" "$passed" "${report#$root/}"
+done
