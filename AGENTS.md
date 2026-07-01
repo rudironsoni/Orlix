@@ -69,6 +69,21 @@ Use Codex-native surfaces deliberately:
 
 `rtk` only shrinks command output. Harness rules and hooks must treat `rtk <command>` as equivalent to `<command>` for approval and block decisions.
 
+### Orlix TCTI Codex Harness
+
+For TCTI work, use the Orlix TCTI Codex harness before direct implementation:
+
+- Use `.agents/skills/orlix-tcti-next-step/SKILL.md` when asked to continue TCTI work, run the harness, or choose what is next.
+- Use `.agents/skills/orlix-tcti-oracle/SKILL.md` for switch-debug, golden ELF, decoded semantics, reducer, and no-phone execution work.
+- Use `.agents/skills/orlix-tcti-safety/SKILL.md` for App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, generated-tree, or physical-device preflight questions.
+- Use `.agents/skills/orlix-tcti-debug/SKILL.md` for LLDB, disassembly, ELF, Mach-O, crash, instruction encoding, objdump, readelf, symbol, section, or relocation work.
+- Spawn or simulate the `.codex/subagents/` planner, safety reviewer, LLVM inspector, oracle engineer, test reducer, gadget reviewer, and release-gate reviewer as the TCTI task requires.
+- Do not implement TCTI features directly without planner and safety reviewer scope.
+- Do not run physical device TCTI work unless runtime-validation preflight permits it or evidence mode is explicitly requested and reported as non-passing.
+- Do not add production TCTI assembly or gadget dispatch until switch-debug oracle coverage exists for the target and safety reports pass.
+- Use MCP tools for binary/debug inspection where available. The repo-local Orlix TCTI MCP must remain domain-specific and must not expose arbitrary shell execution.
+- Run `make codex-harness-check` after changing `.codex`, `.agents/skills`, `AGENTS.md`, or `tools/mcp`.
+
 ## Proof Rules
 
 Define success criteria before implementation and verify them before claiming completion.

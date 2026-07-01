@@ -33,7 +33,7 @@ ORLIX_BETA_SIMULATOR_ID ?= 4C88CA42-EA50-463F-B989-7B0560075A9B
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro codex-harness-check codex-hooks-check codex-skills-check codex-subagents-check codex-mcp-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -185,6 +185,21 @@ runtime-validation: beta-prerequisites
 
 tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-appstore-safety-audit tcti-repro:
 	@swift tools/tcti/orlix-tcti-gate.swift $@
+
+codex-harness-check:
+	@tools/codex-harness-check.sh all
+
+codex-hooks-check:
+	@tools/codex-harness-check.sh hooks
+
+codex-skills-check:
+	@tools/codex-harness-check.sh skills
+
+codex-subagents-check:
+	@tools/codex-harness-check.sh subagents
+
+codex-mcp-check:
+	@tools/codex-harness-check.sh mcp
 
 beta-archive: beta-bump-build-number
 	@set -euo pipefail; \
