@@ -422,6 +422,40 @@ func run(_ arguments: [String], check: Bool = true) throws -> String {
     return output.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
+func runWithFileBackedOutput(_ arguments: [String], check: Bool = true) throws -> String {
+    let scratch = buildPath("tmp", "command-output")
+    try ensureDirectory(scratch)
+    let unique = UUID().uuidString
+    let stdoutURL = scratch.appendingPathComponent("\(unique).stdout")
+    let stderrURL = scratch.appendingPathComponent("\(unique).stderr")
+    fileManager.createFile(atPath: stdoutURL.path, contents: nil)
+    fileManager.createFile(atPath: stderrURL.path, contents: nil)
+    let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+    let stderrHandle = try FileHandle(forWritingTo: stderrURL)
+    defer {
+        try? stdoutHandle.close()
+        try? stderrHandle.close()
+        try? fileManager.removeItem(at: stdoutURL)
+        try? fileManager.removeItem(at: stderrURL)
+    }
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = arguments
+    process.currentDirectoryURL = repoRoot()
+    process.standardOutput = stdoutHandle
+    process.standardError = stderrHandle
+    try process.run()
+    process.waitUntilExit()
+
+    let output = (try? String(contentsOf: stdoutURL, encoding: .utf8)) ?? ""
+    let error = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
+    if check && process.terminationStatus != 0 {
+        throw GateError.commandFailed((output + error).trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+    return output.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 func commandPath(_ name: String) throws -> String {
     try run(["command", "-v", name])
 }
@@ -2847,10 +2881,86 @@ func divergentFields(reference: DiffArchitecturalState, candidate: DiffArchitect
     return fields
 }
 
+func replacingState(
+    _ state: DiffArchitecturalState,
+    backend: String? = nil,
+    gprs: [String: UInt64]? = nil,
+    exitCode: Int? = nil
+) -> DiffArchitecturalState {
+    DiffArchitecturalState(
+        backend: backend ?? state.backend,
+        caseID: state.caseID,
+        gprs: gprs ?? state.gprs,
+        sp: state.sp,
+        pc: state.pc,
+        pstateNZCV: state.pstateNZCV,
+        tpidrEL0: state.tpidrEL0,
+        memoryWrites: state.memoryWrites,
+        exitKind: state.exitKind,
+        exitCode: exitCode ?? state.exitCode,
+        faultAddress: state.faultAddress
+    )
+}
+
+func gadgetCandidateStateForInit001(from execution: ExecutionReport) throws -> DiffArchitecturalState {
+    guard execution.caseID == "init_001_exit" else {
+        throw GateError.commandFailed("gadget candidate is only defined for init_001_exit")
+    }
+    guard execution.decodedInstructions.count == 3 else {
+        throw GateError.commandFailed("init_001_exit gadget candidate expected 3 decoded instructions, found \(execution.decodedInstructions.count)")
+    }
+    let decoded = execution.decodedInstructions
+    guard decoded[0].instructionClass == "move_wide_immediate",
+          decoded[0].op == "movz",
+          decoded[0].sf == 64,
+          decoded[0].rd == 8,
+          decoded[0].imm == 93,
+          decoded[0].shift == 0 else {
+        throw GateError.commandFailed("init_001_exit gadget candidate expected MOVZ x8, #93 as instruction 0")
+    }
+    guard decoded[1].instructionClass == "move_wide_immediate",
+          decoded[1].op == "movz",
+          decoded[1].sf == 64,
+          decoded[1].rd == 0,
+          decoded[1].imm == 42,
+          decoded[1].shift == 0 else {
+        throw GateError.commandFailed("init_001_exit gadget candidate expected MOVZ x0, #42 as instruction 1")
+    }
+    guard decoded[2].instructionClass == "exception_generation",
+          decoded[2].op == "svc",
+          decoded[2].imm == 0 else {
+        throw GateError.commandFailed("init_001_exit gadget candidate expected SVC #0 boundary as instruction 2")
+    }
+    guard execution.exit?.kind == "guest_exit_syscall",
+          execution.exit?.code == 42 else {
+        throw GateError.commandFailed("init_001_exit switch baseline did not capture guest exit(42)")
+    }
+    return DiffArchitecturalState(
+        backend: "gadget-data-program",
+        caseID: execution.caseID,
+        gprs: [
+            "x0": 42,
+            "x8": 93,
+        ],
+        sp: "unchanged",
+        pc: decoded[2].pc,
+        pstateNZCV: "unchanged",
+        tpidrEL0: "unchanged",
+        memoryWrites: [],
+        exitKind: "guest_exit_syscall",
+        exitCode: 42,
+        faultAddress: nil
+    )
+}
+
 func runDiffSwitch() throws -> Int32 {
     let target = "tcti-diff-switch"
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
+    let backend = ProcessInfo.processInfo.environment["BACKEND"] ?? ""
     let negativeDiff = ProcessInfo.processInfo.environment["NEGATIVE_DIFF"] ?? ""
+    guard backend.isEmpty || backend == "gadget" else {
+        throw GateError.usage("unsupported BACKEND=\(backend)")
+    }
     guard caseID == "init_001_exit" else {
         return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit has switch-diff preparation coverage in this checkpoint.")
     }
@@ -2872,22 +2982,15 @@ func runDiffSwitch() throws -> Int32 {
         }
         executionReport = execution
         let reference = diffState(from: execution, backend: "switch-debug")
-        var candidate = reference
-        candidate = DiffArchitecturalState(
-            backend: negativeDiff.isEmpty ? "switch-debug-diff-contract" : "negative-diff-fixture",
-            caseID: candidate.caseID,
-            gprs: candidate.gprs,
-            sp: candidate.sp,
-            pc: candidate.pc,
-            pstateNZCV: candidate.pstateNZCV,
-            tpidrEL0: candidate.tpidrEL0,
-            memoryWrites: candidate.memoryWrites,
-            exitKind: candidate.exitKind,
-            exitCode: candidate.exitCode,
-            faultAddress: candidate.faultAddress
-        )
+        var candidate = backend == "gadget" ?
+            try gadgetCandidateStateForInit001(from: execution) :
+            replacingState(reference, backend: "switch-debug-diff-contract")
         if negativeDiff == "exit-code" {
-            candidate.exitCode = (candidate.exitCode ?? 0) == 42 ? 41 : 42
+            candidate = replacingState(candidate, exitCode: (candidate.exitCode ?? 0) == 42 ? 41 : 42)
+        } else if negativeDiff == "gadget-x0", backend == "gadget" {
+            var gprs = candidate.gprs
+            gprs["x0"] = (gprs["x0"] ?? 0) == 42 ? 41 : 42
+            candidate = replacingState(candidate, backend: "negative-gadget-diff-fixture", gprs: gprs)
         } else if !negativeDiff.isEmpty {
             failures.append(fail("diff-negative-fixture", "unknown NEGATIVE_DIFF=\(negativeDiff)"))
         }
@@ -2910,16 +3013,20 @@ func runDiffSwitch() throws -> Int32 {
 
         diffArtifact = SwitchDiffArtifact(
             caseID: caseID,
-            mode: negativeDiff.isEmpty ? "switch-debug-diff-preparation" : "negative-diff-fixture",
+            mode: negativeDiff.isEmpty ? (backend == "gadget" ? "switch-vs-gadget" : "switch-debug-diff-preparation") : "negative-diff-fixture",
             referenceBackend: reference.backend,
             candidateBackend: candidate.backend,
-            gadgetDispatchExecuted: false,
+            gadgetDispatchExecuted: backend == "gadget",
             productionAssemblyExecuted: false,
             fieldsChecked: diffFieldsChecked,
             divergentFields: divergent,
             referenceState: reference,
             candidateState: candidate,
-            notes: [
+            notes: backend == "gadget" ? [
+                "This is a no-phone first-gadget differential gate for init_001_exit only.",
+                "The candidate is the bounded data-gadget program contract for the two MOVZ instructions and the SVC exit boundary.",
+                "No production assembly, generated executable memory, host-executable guest text, or physical device execution is used.",
+            ] : [
                 "This is a no-phone diff-preparation gate.",
                 "No production assembly or gadget dispatch is executed in this gate.",
                 "The future gadget backend must compare against these switch-debug architectural state fields instead of duplicating instruction semantics.",
@@ -2930,11 +3037,18 @@ func runDiffSwitch() throws -> Int32 {
         artifacts.append(relativePath(diffURL))
 
         if negativeDiff.isEmpty {
+            let reducerCaseID = backend == "gadget" ? "\(caseID)-gadget-x0-divergence" : "\(caseID)-exit-code-divergence"
+            let reducerCommand = backend == "gadget" ?
+                "CASE=\(caseID) BACKEND=gadget NEGATIVE_DIFF=gadget-x0 make tcti-diff-switch" :
+                "CASE=\(caseID) NEGATIVE_DIFF=exit-code make tcti-diff-switch"
+            let reducerReason = backend == "gadget" ?
+                "negative gadget diff fixture must fail with divergent architectural_state.gprs.x0" :
+                "negative diff fixture must fail with divergent architectural_state.exit.code"
             let reducer = try writeReducer(
                 target: target,
-                caseID: "\(caseID)-exit-code-divergence",
-                command: "CASE=\(caseID) NEGATIVE_DIFF=exit-code make tcti-diff-switch",
-                reason: "negative diff fixture must fail with divergent architectural_state.exit.code",
+                caseID: reducerCaseID,
+                command: reducerCommand,
+                reason: reducerReason,
                 artifacts: [relativePath(switchStateURL), relativePath(candidateStateURL), relativePath(diffURL)],
                 expectedStatus: .fail
             )
@@ -2963,7 +3077,9 @@ func runDiffSwitch() throws -> Int32 {
         target: target,
         status: status,
         summary: negativeDiff.isEmpty ?
-            "Prepared switch-debug differential baseline for \(caseID) without gadget dispatch." :
+            (backend == "gadget" ?
+                "Diffed \(caseID) gadget data-program candidate against the switch-debug baseline." :
+                "Prepared switch-debug differential baseline for \(caseID) without gadget dispatch.") :
             "Ran negative switch differential fixture for \(caseID).",
         failures: failures,
         artifacts: artifacts,
@@ -2972,7 +3088,9 @@ func runDiffSwitch() throws -> Int32 {
             "divergent_fields": diffArtifact?.divergentFields.count ?? 0,
             "guest_instructions_executed": executionReport?.guestInstructionsExecuted ?? 0,
         ],
-        coverageWarnings: [
+        coverageWarnings: backend == "gadget" ? [
+            "first gadget checkpoint only: bounded init_001_exit data-program candidate, no production assembly or generated executable memory",
+        ] : [
             "diff-preparation only: no gadget backend dispatch executed by this gate",
         ],
         releaseGateEligible: false,
@@ -3037,7 +3155,7 @@ func runSafetyAudit() throws -> Int32 {
         for case let url as URL in enumerator where url.pathExtension == "o" && url.path.contains("/hosted_exec/tcti/") {
             scannedObjects += 1
             do {
-                let disassembly = try run(["xcrun", "llvm-objdump", "-d", url.path])
+                let disassembly = try runWithFileBackedOutput(["xcrun", "llvm-objdump", "-d", url.path])
                 for (index, line) in disassembly.components(separatedBy: .newlines).enumerated() where !x18TokenRanges(in: line).isEmpty {
                     failures.append(fail("object-host-x18", "\(relativePath(url)) disassembly line \(index + 1) uses forbidden host x18/w18 token"))
                 }

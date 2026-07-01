@@ -474,6 +474,28 @@ func switchTLS004Pass() -> (Bool, String) {
     }
 }
 
+func firstGadgetExit001Pass() -> (Bool, String) {
+    let report = reportFact(target: "tcti-diff-switch")
+    guard report.exists, report.status == "pass", report.passed else {
+        return (false, "tcti-diff-switch report is not passing for first gadget gate")
+    }
+    let diffURL = root.appendingPathComponent("Build/TCTI/diff_switch/init_001_exit/diff.json")
+    do {
+        let object = try loadJSONObject(diffURL)
+        let divergent = object["divergent_fields"] as? [Any] ?? []
+        let modeOK = stringValue(object["mode"]) == "switch-vs-gadget"
+        let candidateOK = stringValue(object["candidate_backend"]) == "gadget-data-program"
+        let gadgetOK = boolValue(object["gadget_dispatch_executed"])
+        let assemblyOK = !boolValue(object["production_assembly_executed"])
+        if modeOK && candidateOK && gadgetOK && assemblyOK && divergent.isEmpty {
+            return (true, "init_001_exit gadget data-program diff matches switch-debug with zero divergent fields")
+        }
+        return (false, "init_001_exit gadget diff artifact is not a passing switch-vs-gadget data-program diff")
+    } catch {
+        return (false, "missing or malformed init_001_exit gadget diff artifact: \(error)")
+    }
+}
+
 func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
     let report = reportFact(target: target)
     let state = report.status
@@ -527,7 +549,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
     case "diff-switch-init-001-exit":
         return basicReportGate(gate, target: "tcti-diff-switch")
     case "first-gadget-init-001-exit":
-        return missingGate(gate, reason: "first gadget gate is not implemented and must wait for switch-vs-gadget diff prerequisites")
+        let check = firstGadgetExit001Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
     case "physical-tcti-init-first-syscall":
         return missingGate(gate, reason: "physical first-syscall gate is not allowed until all no-phone prerequisites pass")
     default:
