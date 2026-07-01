@@ -434,6 +434,46 @@ func switchStack003Pass() -> (Bool, String) {
     }
 }
 
+func switchTLS004Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_004_tls")
+        let exit = object["exit"] as? [String: Any]
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 6
+        let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 42
+        let syscallOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "exit",
+                  intValue(syscall["nr"]) == 93,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  let first = args.first else {
+                return false
+            }
+            return intValue(first) == 42
+        }
+        let decoded = object["decoded_instructions"] as? [Any] ?? []
+        let hasMSR = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "system_register" &&
+                stringValue(instruction["op"]) == "msr" &&
+                stringValue(instruction["sysreg"]) == "tpidr_el0"
+        }
+        let hasMRS = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "system_register" &&
+                stringValue(instruction["op"]) == "mrs" &&
+                stringValue(instruction["sysreg"]) == "tpidr_el0"
+        }
+        if entered && backend && instructionCountOK && exitOK && syscallOK && hasMSR && hasMRS {
+            return (true, "init_004_tls switch-debug execution captured guest TPIDR_EL0-derived exit(42)")
+        }
+        return (false, "init_004_tls execution artifact does not capture guest TPIDR_EL0-derived exit(42)")
+    } catch {
+        return (false, "missing or malformed init_004_tls execution artifact: \(error)")
+    }
+}
+
 func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
     let report = reportFact(target: target)
     let state = report.status
@@ -482,7 +522,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         let check = switchStack003Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-004-tls":
-        return missingGate(gate, reason: "init_004_tls golden and switch-debug execution artifacts are not present")
+        let check = switchTLS004Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         return basicReportGate(gate, target: "tcti-diff-switch")
     case "first-gadget-init-001-exit":
