@@ -1220,3 +1220,20 @@ Boundary:
 - No gadget dispatch was implemented.
 - No simulator gate was run.
 - No physical-device gate was run.
+
+### Checkpoint: PLAN Captures Autonomous Agent Loop
+
+- Updated `PLAN.md` so the latest agent harness is a required part of the TCTI execution plan.
+- Added `agent-status`, `agent-next`, and `agent-task-envelope-check` to success criteria and the autonomous test contract.
+- Recorded `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` as the skill-owned roadmap source, not an MCP.
+- Recorded generated artifacts:
+  - `Build/AgentHarness/orlix-tcti/status.json`
+  - `Build/AgentHarness/orlix-tcti/next-task.json`
+  - `Build/AgentHarness/orlix-tcti/next-task.md`
+- Recorded current selected gate: `switch-init-003-stack`.
+- Boundary:
+  - No TCTI runtime feature implemented.
+  - No production assembly.
+  - No gadget dispatch.
+  - No simulator or physical-device gate.
+  - No custom MCP or `tools/agent` added.

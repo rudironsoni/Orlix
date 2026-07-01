@@ -21,8 +21,84 @@ TCTI only executes guest AArch64 EL0 instructions until Linux needs control agai
 - TCTI does not decode Linux syscall policy, model Linux processes, or own VFS/fd/signal/wait/exec semantics.
 - Guest ELF text remains host data. No guest ELF text path requests `vm_protect(... EXECUTE ...)`, guest-text `mmap(... PROT_EXEC ...)`, JIT, MAP_JIT, RWX, or generated executable memory.
 - The plan cannot be marked complete by documentation alone. It requires local no-phone test targets, machine-readable JSON reports, checked-in golden artifacts, reducer artifacts, and static audits before simulator or physical-device debugging.
+- The repo can select the next eligible TCTI gate without a human naming it. `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, and `make agent-task-envelope-check AREA=orlix-tcti` must produce and validate a machine-readable next-task envelope from current reports and the skill-owned roadmap.
 - Physical iPhone gate proves static `/init` reaches real `svc #0`, enters `orlix_syscall_dispatch`, writes one Linux console line, and emits HostAdapter console mirror evidence.
 - Performance claims include exact workload, device, build configuration, command, baseline, counters, wall-clock result, JSON report, and Markdown report.
+
+## Agent Harness Autonomy
+
+TCTI work must start from the agent-neutral harness, not from a one-off prompt that names the next gate.
+
+Canonical entry points:
+
+- `make agent-status AREA=orlix-tcti`
+- `make agent-next AREA=orlix-tcti`
+- `make agent-task-envelope-check AREA=orlix-tcti`
+
+These targets delegate only to skill-local scripts under:
+
+- `.agents/skills/orlix-tcti-next-step/scripts/status`
+- `.agents/skills/orlix-tcti-next-step/scripts/next`
+- `.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check`
+- `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`
+
+The roadmap is repo-local skill reference data, not an MCP server:
+
+- `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`
+
+The harness writes:
+
+- `Build/AgentHarness/orlix-tcti/status.json`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
+- `Build/AgentHarness/orlix-tcti/next-task.md`
+
+The next-task envelope is the implementation scope contract. It must include:
+
+- selected gate id
+- selected gate command
+- prerequisite gates and report paths
+- why the gate was selected
+- allowed scope
+- forbidden scope
+- required validation commands
+- expected report paths
+- reducer requirements
+- required subagents or skills
+- commit message
+- stop conditions
+
+The envelope validator must fail if:
+
+- selected gate is not present in the roadmap
+- prerequisites are not satisfied
+- forbidden scope is empty
+- validation commands are missing
+- expected report paths are missing
+- a physical-device gate is selected while no-phone gates are incomplete
+- a gadget gate is selected before switch-debug oracle coverage exists
+- custom Orlix MCP is referenced
+- `tools/agent` is referenced or exists
+- scripts live outside `.agents/skills/<skill-name>/scripts/`
+- JSON is not machine-parseable
+
+Standard autonomous workflow:
+
+1. `orlix-tcti-next-step` runs `agent-status` and `agent-next`.
+2. `tcti-planner` reviews the task envelope.
+3. `tcti-safety-reviewer` reviews forbidden scope.
+4. The relevant implementer subagent works only inside allowed scope.
+5. `tcti-test-reducer` handles failures before production changes.
+6. `tcti-release-gate-reviewer` confirms whether the checkpoint advances readiness.
+
+Current roadmap state after the latest no-phone proofs:
+
+- `switch-init-001-exit` is satisfied by `Build/TCTI/golden_elf/init_001_exit/execution.json`.
+- `switch-init-002-write` is satisfied by `Build/TCTI/golden_elf/init_002_write/execution.json`.
+- The current next eligible gate is `switch-init-003-stack`.
+- Physical-device gates remain blocked because no-phone and gadget prerequisites are incomplete.
+- Gadget gates remain blocked because switch-debug and differential prerequisites are incomplete.
+
+No custom Orlix MCP may be introduced for these workflows. Repo-local workflow logic belongs in `.agents/skills`; `.codex` is only an adapter; MCP is reserved for external/proven tools such as LLDB MCP, Context7, OpenAI Docs MCP, or externally configured issue-tracker and GitHub MCP.
 
 ## Physical Evidence Being Corrected
 
@@ -94,6 +170,20 @@ Generated-tree policy:
 - `OrlixHostAdapter/Sources/OrlixHostAdapter/terminal/console.c`
 - `OrlixHostAdapter/Sources/OrlixHostAdapter/boot/progress.c`
 - `Makefile`
+- `.agents/skills/orlix-tcti-next-step/SKILL.md`
+- `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`
+- `.agents/skills/orlix-tcti-next-step/scripts/status`
+- `.agents/skills/orlix-tcti-next-step/scripts/next`
+- `.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check`
+- `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`
+- `.codex/subagents/tcti-planner.md`
+- `.codex/subagents/tcti-safety-reviewer.md`
+- `.codex/subagents/tcti-oracle-engineer.md`
+- `.codex/subagents/tcti-test-reducer.md`
+- `.codex/subagents/tcti-release-gate-reviewer.md`
+- `Build/AgentHarness/orlix-tcti/status.json`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
+- `Build/AgentHarness/orlix-tcti/next-task.md`
 
 ## Current-State Audit
 
@@ -927,6 +1017,14 @@ Allowed report statuses:
 
 Release/readiness gates only accept `status=pass`.
 
+No TCTI implementation patch may begin by requiring the human to name a gate. The agent must first run:
+
+- `make agent-status AREA=orlix-tcti`
+- `make agent-next AREA=orlix-tcti`
+- `make agent-task-envelope-check AREA=orlix-tcti`
+
+The selected task envelope controls scope, forbidden work, validation commands, report paths, reducer requirements, subagents, and commit message for the next checkpoint.
+
 Minimum report schema:
 
 ```json
@@ -1437,8 +1535,14 @@ The audit target is the enforcement mechanism. Do not claim App Store safety fro
 Ownership split:
 
 - KUnit owns kernel-bound unit contracts inside `arch/orlix`: syscall handoff, fault boundaries, mm interaction, invalidation hooks, task/thread state, and TCTI ABI invariants.
-- Swift/host tools own golden ELF build metadata, report schema validation, reducer replay, appstore-safety scanning, differential block execution, memory fuzzing, direct-chain fuzzing, and no-phone gate orchestration.
+- Swift/host tools own golden ELF build metadata, report schema validation, reducer replay, appstore-safety scanning, differential block execution, memory fuzzing, direct-chain fuzzing, agent status, next-task selection, task-envelope validation, and no-phone gate orchestration.
 - XCTest/runtime validation owns app packaging, HostAdapter mediation, simulator wiring, physical-device lifecycle, device logs, and no-forbidden-host-behavior runtime evidence.
+
+Agent harness checks:
+
+- `make agent-status AREA=orlix-tcti` writes status JSON and prints pass, fail, todo, and missing state per roadmap gate.
+- `make agent-next AREA=orlix-tcti` writes next-task JSON and Markdown.
+- `make agent-task-envelope-check AREA=orlix-tcti` validates roadmap membership, prerequisites, forbidden scope, validation commands, expected report paths, no custom MCP, no `tools/agent`, and physical/gadget blocking rules.
 
 KUnit tests under the TCTI area:
 
@@ -1604,23 +1708,30 @@ Any future copied source requires:
 2. Correct build defaults so product profiles do not silently default to an unproved TCTI backend.
 3. Fix syscall handoff semantics so current `orlix_syscall_dispatch()` owns exit-to-user work for this path.
 4. Add autonomous test targets and JSON/reducer report contracts before physical-device work.
-5. Add TPIDR_EL0 transition audit and tests separating guest TLS from host TLS.
-6. Add host `x18/w18` static and object-disassembly audit.
-7. Add single-runner-per-mm enforcement for milestone 1.
-8. Add safe `FETCH/READ/WRITE` user-page backing API and pinned TLB lifetime.
-9. Add decoder and first instruction semantic helpers.
-10. Add block cache with `code_generation` and page-index invalidation.
-11. Add TLB with `translation_generation` and host-page-size fuzzing.
-12. Add assembly entry/dispatch and first hot gadgets.
-13. Add same-page direct chaining and `make tcti-direct-chain-fuzz`.
-14. Add hot-register mapping counters and compare mappings A/B/C/D.
-15. Add runtime-validation gate with JSON and Markdown reports.
-16. Expand instructions only from `orlix-a64-opprofile` traces and focused tests.
-17. Add cross-page chaining, then atomics/exclusives, then NEON/SIMD, then crypto only after benchmark evidence justifies each expansion.
+5. Add the agent-neutral autonomous next-task loop:
+   - roadmap: `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`
+   - status: `make agent-status AREA=orlix-tcti`
+   - selection: `make agent-next AREA=orlix-tcti`
+   - validation: `make agent-task-envelope-check AREA=orlix-tcti`
+6. For every future checkpoint, implement only the selected envelope scope. Do not jump to assembly, gadgets, simulator, or device work unless envelope prerequisites allow it.
+7. Continue the current no-phone selected gate, `switch-init-003-stack`, before TLS, differential testing, gadget, or physical-device work.
+8. Add TPIDR_EL0 transition audit and tests separating guest TLS from host TLS.
+9. Add host `x18/w18` static and object-disassembly audit.
+10. Add single-runner-per-mm enforcement for milestone 1.
+11. Add safe `FETCH/READ/WRITE` user-page backing API and pinned TLB lifetime.
+12. Add decoder and first instruction semantic helpers only from selected golden ELF envelopes.
+13. Add block cache with `code_generation` and page-index invalidation.
+14. Add TLB with `translation_generation` and host-page-size fuzzing.
+15. Add assembly entry/dispatch and first hot gadgets only after switch-debug oracle coverage and differential prerequisites pass.
+16. Add same-page direct chaining and `make tcti-direct-chain-fuzz`.
+17. Add hot-register mapping counters and compare mappings A/B/C/D.
+18. Add runtime-validation gate with JSON and Markdown reports.
+19. Expand instructions only from `orlix-a64-opprofile` traces and focused tests.
+20. Add cross-page chaining, then atomics/exclusives, then NEON/SIMD, then crypto only after benchmark evidence justifies each expansion.
 
 ## Current Checkpoint Scope
 
-The first implementation checkpoint is intentionally narrow:
+The current harness checkpoint remains no-phone and harness-first:
 
 - active plan and reference review
 - ADR 0022 correction
@@ -1631,6 +1742,11 @@ The first implementation checkpoint is intentionally narrow:
 - user-page API stub
 - existing hosted-exec selection hook audit
 - autonomous test target contract
+- agent-neutral autonomous next-task loop
+- skill-owned roadmap data
+- generated status and next-task envelope artifacts
+- `agent-status`, `agent-next`, and `agent-task-envelope-check` Make targets
+- current next gate selected as `switch-init-003-stack`
 - syscall handoff correction
 - TPIDR_EL0, x18, virtual CPU, App Store safety, and concurrency guardrails
 
