@@ -1708,6 +1708,41 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Physical First-Syscall Gate Blocked By Device DDI Readiness
+
+- Harness-selected gate: `physical-tcti-init-first-syscall`.
+- Selected command: `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- `agent-status` and `agent-next` selected the physical first-syscall gate because all no-phone prerequisites were current and passing at `0b1c74953535051285b4d879c439a6fed4ac7de1`.
+- Read-only planner, safety, release-gate, and reducer lanes reviewed the envelope. They allowed the physical certification run, but release/readiness remained blocked until a non-override passing runtime JSON exists.
+- First runtime attempt produced `Build/Reports/runtime/tcti-init-first-syscall-20260701T223106Z-14097.json` and failed before install or guest execution because `xcodebuild` could not use the physical destination: Xcode reported that the developer disk image could not be mounted on `RRJ-iPhone-15-Pro-Max`.
+- Device discovery showed the iPhone was paired, physical, Developer Mode enabled, and iOS, but `ddiServicesAvailable=false`.
+- Updated `tools/runtime/orlix-runtime-validation.sh` to keep the CoreDevice identifier used by `devicectl` separate from the hardware UDID used by `xcodebuild`.
+- Updated `tools/runtime/orlix-runtime-validation.sh` to fail before kernel/app build when a discovered physical iPhone reports unavailable developer disk image services.
+- Rerunning the selected gate failed fast with `Build/Reports/runtime/tcti-init-first-syscall-20260701T224306Z-62528.json`.
+- The fast-fail report is explicit: `status=fail`, `passed=false`, `autonomous_tests_bypassed=false`, readiness/release eligibility false, and summary says the physical iPhone is not ready for Xcode device builds because developer disk image services are unavailable.
+- `devices.txt` for the fast-fail run recorded CoreDevice id `7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`, Xcode UDID `00008130-001E74A11193803A`, `ddiServicesAvailable=false`, and device name `RRJ-iPhone-15-Pro-Max`.
+
+Verification:
+
+- `bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+- `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall` failed fast as expected with report `Build/Reports/runtime/tcti-init-first-syscall-20260701T224306Z-62528.md`.
+
+Boundary:
+
+- Physical gate did not pass.
+- No runtime TCTI semantics were changed.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No emergency override or evidence-mode pass.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- No custom MCP.
+- No `tools/agent`.
+- Next action is to make the physical device/Xcode DDI service available, then rerun the harness-selected physical gate.
+
 ### Checkpoint: No-Phone Direct-Chain Fuzz Gate
 
 - Harness-selected gate: `tcti-direct-chain-fuzz`.

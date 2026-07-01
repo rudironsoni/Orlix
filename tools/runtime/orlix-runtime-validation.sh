@@ -22,6 +22,8 @@ tcti_evidence_mode=0
 
 devices_json=""
 device_name=""
+device_xcode_id=""
+device_ddi_available=""
 app_path=""
 
 mkdir -p "$report_dir"
@@ -215,8 +217,13 @@ for device in devices:
     identifier = device.get("identifier")
     if not isinstance(identifier, str) or not identifier:
         continue
+    udid = hardware.get("udid")
+    if not isinstance(udid, str) or not udid:
+        continue
+    ddi_available = properties.get("ddiServicesAvailable")
+    ddi_text = "true" if ddi_available is True else "false"
     name = properties.get("name") or hardware.get("marketingName") or product_type
-    print(f"{identifier} {name}")
+    print(f"{identifier}\t{udid}\t{ddi_text}\t{name}")
 PY
 }
 
@@ -258,6 +265,7 @@ PY
 
 select_device() {
 	if [ -n "$device_id" ]; then
+		device_xcode_id="$device_id"
 		return
 	fi
 
@@ -278,8 +286,10 @@ select_device() {
 		die "Multiple eligible physical iPhones were discovered. Set \`ORLIX_DEVICE_ID\`."
 	fi
 
-	device_id="$(sed -n '1s/ .*$//p' "$discovered_txt")"
-	device_name="$(sed -n '1s/^[^ ]* //p' "$discovered_txt")"
+	IFS=$'\t' read -r device_id device_xcode_id device_ddi_available device_name <"$discovered_txt"
+	if [ "$device_ddi_available" != "true" ]; then
+		die "Physical iPhone \`${device_name:-$device_id}\` is not ready for Xcode device builds because developer disk image services are unavailable. Connect, unlock, trust the device, and let Xcode mount the developer disk image before rerunning runtime validation."
+	fi
 }
 
 select_simulator() {
@@ -343,7 +353,8 @@ build_kernel_for_gate() {
 build_app_for_target() {
 	local build_settings=(ORLIX_PROFILE="$profile")
 	local signing_settings=()
-	local xcode_destination="platform=iOS,id=$device_id"
+	local xcode_destination_id="${device_xcode_id:-$device_id}"
+	local xcode_destination="platform=iOS,id=$xcode_destination_id"
 
 	if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
 		xcode_destination="platform=iOS Simulator,id=$device_id"
