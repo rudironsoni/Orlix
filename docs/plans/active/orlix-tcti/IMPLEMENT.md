@@ -1028,3 +1028,75 @@ Boundary:
 - No Linux runtime semantics were implemented.
 - No syscall implementation was added beyond a captured test-harness syscall event.
 - This is only decoded seed ELF switch-debug no-phone execution proof.
+
+### Checkpoint: Write ELF Switch-Debug Execution
+
+- Added the second golden ELF fixture:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_002_write/init_002_write.S`
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_002_write/golden.json`
+- `init_002_write` is no-libc AArch64 Linux assembly:
+  - load `x0 = 1`
+  - compute `x1 = &msg` with `adr`
+  - load `x2 = 6`
+  - load `x8 = 64`
+  - `svc #0`
+  - load `x0 = 0`
+  - load `x8 = 93`
+  - `svc #0`
+  - `msg` bytes are `hello\n`
+- Exact emitted instruction encodings:
+  - `0xd2800020`: `mov x0, #1`
+  - `0x100000e1`: `adr x1, msg`
+  - `0xd28000c2`: `mov x2, #6`
+  - `0xd2800808`: `mov x8, #64`
+  - `0xd4000001`: `svc #0`
+  - `0xd2800000`: `mov x0, #0`
+  - `0xd2800ba8`: `mov x8, #93`
+  - `0xd4000001`: `svc #0`
+- Extended the Swift no-phone switch-debug rail only for the emitted subset:
+  - MOVZ 64-bit, `hw=0`
+  - ADR to an X register, signed 21-bit immediate
+  - SVC `#0`
+- Added PT_LOAD file-backed byte reads to the tiny ELF harness so write capture can read the guest buffer without host-executing guest text or calling host syscalls.
+- `make tcti-golden-elf CASE=init_002_write` now verifies:
+  - source SHA256
+  - binary SHA256
+  - ELF64 AArch64 executable shape
+  - entrypoint
+  - expected syscall shape
+  - emitted instruction words
+  - `hello\n` message bytes in file-backed PT_LOAD guest memory
+- `make tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug` captures:
+  - `write(1, "hello\n", 6)`
+  - `exit(0)`
+- Added write-specific negative execution fixtures:
+  - `tools/tcti/fixtures/golden_elf/init_002_write_wrong_length.S`
+  - `tools/tcti/fixtures/golden_elf/init_002_write_invalid_buffer.S`
+  - `tools/tcti/fixtures/golden_elf/init_002_write_unsupported_adrp.S`
+- Write negative reducer paths:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-write-wrong-length.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-write-invalid-buffer.json`
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-write-unsupported-adrp.json`
+- `tcti-contract` now reports another real passing group:
+  - decoded switch-debug executes `init_002_write` and captures `write(1, "hello\n", 6), exit(0)`
+- `tcti-contract` still exits non-zero with `status=todo` because deeper groups remain TODO:
+  - gadget ABI and register commit-back execution
+  - `FETCH`/`READ`/`WRITE` memory execution
+  - TLB, block-cache, invalidation, and direct-chain execution
+
+Report paths:
+
+- `Build/TCTI/reports/tcti-golden-elf/report.json`
+- `Build/TCTI/golden_elf/init_002_write/execution.json`
+- `Build/TCTI/reports/tcti-contract/report.json`
+
+Boundary:
+
+- No production TCTI assembly was added.
+- No gadget dispatch was implemented.
+- No simulator gate was run.
+- No physical-device gate was run.
+- No HostAdapter, UIKit, or Darwin syscall path was used.
+- No Linux runtime semantics were implemented.
+- No fd table, VFS, process, signal, scheduler, or real syscall behavior was implemented.
+- Write and exit are captured test-harness syscall events only.
