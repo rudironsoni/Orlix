@@ -694,6 +694,89 @@ rtk proxy make tcti-golden-elf
 rtk proxy make tcti-appstore-safety-audit
 ```
 
+### Checkpoint: No-Phone Memory Fuzz Gate
+
+- Harness-selected gate: `tcti-memory-fuzz`.
+- Selected command: `make tcti-memory-fuzz`.
+- Why selected: `agent-status` reported `tcti-contract=pass` and selected `tcti-memory-fuzz` as the next eligible runtime-preflight gate. Physical device, release, and readiness gates remained ineligible.
+- Implemented the gate as a no-phone Swift/Foundation contract model in `tools/tcti/orlix-tcti-gate.swift`.
+- Positive contracts covered:
+  - `FETCH` requires execute permission and reads guest text as host data.
+  - `READ` requires read permission.
+  - `WRITE` requires write permission and mutates only modeled guest bytes.
+  - simulated host page sizes 4 KiB, 16 KiB, and 64 KiB with fixed 4 KiB guest pages.
+  - guest-page offset inside a larger host allocation.
+  - multiple guest pages sharing one host allocation without adjacent-page bleed.
+  - cross-page instruction fetch.
+  - cross-page data read/write with every guest page preflighted before mutation.
+  - mprotect permission transitions invalidate stale translation generation.
+  - munmap/remap and CoW replacement reject stale backing.
+  - write to a translated executable page invalidates stale code generation.
+- Negative reducers added:
+  - `Build/TCTI/reproducers/tcti-memory-fuzz/fetch-exec-permission.json`
+  - `Build/TCTI/reproducers/tcti-memory-fuzz/read-permission.json`
+  - `Build/TCTI/reproducers/tcti-memory-fuzz/write-permission.json`
+  - `Build/TCTI/reproducers/tcti-memory-fuzz/host-page-boundary.json`
+  - `Build/TCTI/reproducers/tcti-memory-fuzz/generation-stale-backing.json`
+  - `Build/TCTI/reproducers/tcti-memory-fuzz/memory-fuzz-pass-regression.json`
+- Report path:
+  - `Build/TCTI/reports/tcti-memory-fuzz/report.json`
+- Per-case artifacts:
+  - `Build/TCTI/memory_fuzz/*/result.json`
+
+Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make tcti-memory-fuzz
+```
+
+Full checkpoint verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make agent-harness-check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-contract
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-memory-fuzz
+rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/memory-fuzz-pass-regression.json
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/fetch-exec-permission.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Results:
+
+- All commands above exited 0 except the expected negative reducer replay wrapper, which reported `rc=2` from the replayed failing fixture and exited 0.
+- Development and release KUnit passed. Both printed the existing `__alloc_size` redefinition warning.
+- `agent-status` advanced the next eligible gate to `tcti-direct-chain-fuzz`.
+- `agent-next` wrote `Build/AgentHarness/orlix-tcti/next-task.json` and `Build/AgentHarness/orlix-tcti/next-task.md` for `tcti-direct-chain-fuzz`.
+- `agent-task-envelope-check` passed for the `tcti-direct-chain-fuzz` envelope.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate run.
+- No physical-device gate run.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- Release and physical-device readiness remain ineligible.
+
 All five passed and wrote reports under `Build/TCTI/reports/`.
 
 ```sh
