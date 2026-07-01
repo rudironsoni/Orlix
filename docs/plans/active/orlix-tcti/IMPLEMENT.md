@@ -1237,3 +1237,19 @@ Boundary:
   - No gadget dispatch.
   - No simulator or physical-device gate.
   - No custom MCP or `tools/agent` added.
+
+### Correction: Full TCTI Remains Incomplete
+
+- Corrected `PLAN.md` after an agent treated the scoped plan-documentation checkpoint as if the full TCTI objective were complete.
+- Added an explicit completion claim boundary:
+  - docs, harness rails, no-phone seed proofs, and next-task envelope validation are partial progress only;
+  - full TCTI remains incomplete while the selected gate is still a no-phone switch-debug gate;
+  - full TCTI remains incomplete while release/readiness gates are ineligible;
+  - full TCTI completion requires the final reports listed in `PLAN.md`.
+- Strengthened the current checkpoint language so `switch-init-003-stack` is sequencing proof only, not a TCTI completion claim.
+- Boundary:
+  - No TCTI runtime feature implemented.
+  - No production assembly.
+  - No gadget dispatch.
+  - No app-hosted gate run.
+  - No custom MCP or `tools/agent` added.
