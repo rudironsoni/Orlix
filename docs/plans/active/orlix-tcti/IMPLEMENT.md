@@ -2,6 +2,49 @@
 
 ## 2026-07-02
 
+### Checkpoint: Current-Head Physical Gate Still Blocked By Device DDI Readiness
+
+- Harness-selected gate remained `physical-tcti-init-first-syscall`.
+- Selected command remained `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Parallel agent lanes used for this checkpoint:
+  - `tcti-planner` reviewed the selected envelope and confirmed no no-phone gate remains eligible before the physical gate.
+  - `tcti-safety-reviewer` found stale no-phone report evidence, so the no-phone reports were refreshed at current `HEAD` before rerunning the physical gate.
+  - `tcti-test-reducer` reviewed the latest physical failure and confirmed no no-phone reducer is appropriate because the run failed before app or TCTI execution.
+- Refreshed current-head no-phone reports:
+  - `Build/TCTI/reports/tcti-plan-consistency/report.json`.
+  - `Build/TCTI/reports/tcti-report-schema-check/report.json`.
+  - `Build/TCTI/reports/tcti-toolchain-check/report.json`.
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - `Build/TCTI/reports/tcti-appstore-safety-audit/report.json`.
+- Each refreshed report recorded git SHA `2e3d112dbab744aa2fd51d5744d2847d1e81f190` and `status=pass`.
+- Agent harness after refresh still selected `physical-tcti-init-first-syscall`:
+  - `Build/AgentHarness/orlix-tcti/status.json`.
+  - `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - `Build/AgentHarness/orlix-tcti/next-task.md`.
+- Current selected physical gate retry:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T021252Z-61011.md`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T021252Z-61011.json`.
+- Result:
+  - status `fail`.
+  - passed `false`.
+  - readiness gate eligible `false`.
+  - release gate eligible `false`.
+  - failure occurred during physical device discovery/readiness before kernel build, app build, install, launch, `/init`, TCTI execution, `svc #0`, or `orlix_syscall_dispatch`.
+- Blocker remained physical iPhone developer disk image readiness:
+  - device `RRJ-iPhone-15-Pro-Max`.
+  - CoreDevice identifier `7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`.
+  - summary says developer disk image services unavailable.
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly added.
+  - No gadget dispatch added.
+  - No simulator gate run.
+  - No direct physical-device command outside `runtime-validation`.
+  - No HostAdapter behavior added.
+  - No Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No product defconfig flip.
+
 ### Checkpoint: Safety Harness Physical-Report Review Tightening
 
 - Harness-selected gate remained `physical-tcti-init-first-syscall`.
