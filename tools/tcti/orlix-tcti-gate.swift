@@ -5496,6 +5496,18 @@ func forbiddenSourcePatterns() throws -> [ForbiddenSourcePattern] {
             message: "requests host executable permissions for guest text"
         ),
         ForbiddenSourcePattern(
+            id: "host-exec-shadow-user-page",
+            field: "host_exec_guest_text",
+            pattern: #"(?i)(VM_PROT_EXECUTE|PROT_EXEC|executable)[^;\n]*(shadow[_ -]?user|user[_ -]?page|segment_protection)|(?:shadow[_ -]?user|user[_ -]?page|segment_protection)[^;\n]*(VM_PROT_EXECUTE|PROT_EXEC|executable)"#,
+            message: "requests host executable permissions for hosted guest user pages"
+        ),
+        ForbiddenSourcePattern(
+            id: "hostadapter-linux-trap-semantics",
+            field: "native_ios_api_exposure_to_guest",
+            pattern: #"(?i)(OrlixHostTranslateLinuxSyscalls|OrlixHostUserTrapIsLinuxSyscall|ORLIX_HOST_USER_TRAP_SYSCALL|ORLIX_HOST_USER_TRAP_TLS_WRITE)"#,
+            message: "keeps Linux syscall or TLS trap semantics in HostAdapter product code"
+        ),
+        ForbiddenSourcePattern(
             id: "native-ios-api-exposure",
             field: "native_ios_api_exposure_to_guest",
             pattern: #"(?i)(guest|linux)[A-Za-z0-9_ -]*(UIKit|CoreFoundation|Foundation|Darwin|HostAdapter)"#,
@@ -5528,6 +5540,8 @@ func runSafetyAudit() throws -> Int32 {
         path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "include", "asm", "tcti.h"),
         path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_user_page.c"),
         path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_invalidate.c"),
+        path("OrlixHostAdapter", "Sources", "OrlixHostAdapter", "memory"),
+        path("OrlixHostAdapter", "Sources", "OrlixHostAdapter", "runtime"),
     ]
     let sourceExtensions = ["S", "s", "c", "h"]
     var failures: [Failure] = []
