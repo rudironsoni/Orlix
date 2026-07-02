@@ -1188,7 +1188,7 @@
       "physical_device": false,
       "gadget": true,
       "required_validation_commands": [
-        "rtk proxy make tcti-diff-switch",
+        "rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget",
         "rtk proxy make tcti-appstore-safety-audit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
