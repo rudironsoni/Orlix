@@ -1831,6 +1831,76 @@ rtk proxy make tcti-golden-elf CASE=init_007_mprotect
   - No Darwin syscall behavior.
   - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
   - No product defconfig flip.
+
+### Checkpoint: Switch-Debug Executes `init_007_mprotect`
+
+- Harness-selected gate: `switch-init-007-mprotect`.
+- Selected command: `make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug`.
+- Why selected: `golden-init-007-mprotect-structural` passed and the next roadmap gate was the no-phone switch-debug execution proof for the same case.
+- Added switch-debug semantic behavior:
+  - capture guest Linux syscall `226` as `mprotect`;
+  - record args `[page_address, 4096, 1]`;
+  - continue execution after the non-exit captured syscall;
+  - stop on the later captured guest `exit(0)`;
+  - do not call host `mprotect`, `vm_protect`, Darwin syscalls, `MAP_JIT`, RWX, or any executable-memory path.
+- Expected captured syscalls:
+  - `mprotect("0x0000000000212000", 4096, 1)`;
+  - `exit(0)`.
+- Execution report:
+  - `Build/TCTI/golden_elf/init_007_mprotect/execution.json`.
+- Reducers:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-mprotect-wrong-prot.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-mprotect-exec-prot.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-mprotect-wrong-syscall.json`.
+- Replayed reducer:
+
+```text
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-mprotect-exec-prot.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+```text
+expected status: fail
+actual replay status: fail
+actual replay exit code: 2
+rc=2
+```
+
+- Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug
+```
+
+- Harness follow-up:
+  - `agent-status` originally did not recognize `switch-init-007-mprotect` as pass even after the execution report existed.
+  - Added the skill-local status recognizer for `init_007_mprotect` execution so the harness validates captured `mprotect(PROT_READ)` plus `exit(0)` and advances to `golden-init-008-self-modify-structural`.
+  - Verified:
+
+```text
+rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+```
+
+  - New selected gate after this checkpoint: `golden-init-008-self-modify-structural`.
+
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No simulator gate run.
+  - No phone gate run.
+  - No HostAdapter behavior.
+  - No Darwin syscall behavior.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No host `mprotect`, `vm_protect`, `MAP_JIT`, RWX, generated executable memory, or host-executable guest text added.
+  - No product defconfig flip.
 - The next gate selected by the harness was not executed in this checkpoint.
 
 Verification:
