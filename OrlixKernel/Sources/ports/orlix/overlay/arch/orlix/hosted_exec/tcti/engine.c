@@ -5,17 +5,48 @@
 #include <linux/sched/task_stack.h>
 #include <linux/signal.h>
 #include <linux/smp.h>
+#include <linux/string.h>
 #include <asm/hosted_exec.h>
 #include <asm/ptrace.h>
 #include <asm/signal.h>
 #include <asm/tcti.h>
-#include <internal/asm/host_trap.h>
 
 #include "block_cache.h"
 #include "decode_aarch64.h"
 #include "engine.h"
 #include "gadget_program.h"
 #include "report.h"
+
+static enum tcti_access
+tcti_fault_access_for_decoded(const struct tcti_decoded_instruction *decoded)
+{
+	if (!decoded)
+		return TCTI_ACCESS_FETCH;
+
+	switch (decoded->decode_class) {
+	case TCTI_DECODE_LOAD_STORE_PAIR:
+	case TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE:
+	case TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:
+	case TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
+	case TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
+		return decoded->load ? TCTI_ACCESS_READ : TCTI_ACCESS_WRITE;
+	default:
+		return TCTI_ACCESS_FETCH;
+	}
+}
+
+static enum tcti_access
+tcti_fault_access_for_program(const struct tcti_gadget_word *program,
+			      size_t word_count)
+{
+	struct tcti_decoded_instruction decoded;
+
+	if (!program || word_count <= TCTI_DECODED_INSTRUCTION_WORDS)
+		return TCTI_ACCESS_FETCH;
+
+	memcpy(&decoded, &program[1], sizeof(decoded));
+	return tcti_fault_access_for_decoded(&decoded);
+}
 
 struct tcti_result tcti_resume_user(struct task_struct *task,
 				    struct pt_regs *regs,
@@ -43,6 +74,10 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 		code_generation = tcti_code_generation(mm);
 		block = tcti_block_cache_lookup(mm, block_pc, code_generation);
 		if (block) {
+			enum tcti_access block_fault_access;
+
+			block_fault_access = tcti_fault_access_for_program(
+				block->program, block->program_words);
 			ret = tcti_execute_gadget_program(mm, regs, block->program,
 							  block->program_words,
 							  &fault_address);
@@ -54,6 +89,7 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 				result.reason = TCTI_EXIT_USER_FAULT;
 				result.status = ret;
 				result.fault_address = fault_address;
+				result.fault_access = block_fault_access;
 				result.pc = regs->pc;
 				return result;
 			}
@@ -69,6 +105,7 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 			result.reason = TCTI_EXIT_USER_FAULT;
 			result.status = ret;
 			result.fault_address = regs->pc;
+			result.fault_access = TCTI_ACCESS_FETCH;
 			result.pc = regs->pc;
 			return result;
 		}
@@ -113,6 +150,7 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 			result.reason = TCTI_EXIT_USER_FAULT;
 			result.status = ret;
 			result.fault_address = fault_address;
+			result.fault_access = tcti_fault_access_for_decoded(&decoded);
 			result.pc = regs->pc;
 			result.instruction = instruction;
 			return result;
@@ -145,8 +183,8 @@ static bool orlix_tcti_handle_user_fault(struct pt_regs *regs,
 	if (!result)
 		return false;
 
-	if (!orlix_handle_host_user_fault(regs, result->fault_address,
-					  ORLIX_HOST_USER_FAULT_EXEC)) {
+	if (!tcti_handle_user_fault(regs, result->fault_address,
+				    result->fault_access)) {
 		orlix_exit_to_user_mode_work(regs);
 		return true;
 	}

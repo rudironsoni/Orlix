@@ -346,17 +346,28 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    AARCH64_LOAD_STORE_PAIR_PATTERN) {
 		u8 opc = (instruction >> 30) & 0x3U;
 		u8 mode = (instruction >> 23) & 0x3U;
+		bool simd_fp = instruction & BIT(26);
 		u8 scale;
 
-		if (mode == 0 || (opc != 0 && opc != 2))
+		if (mode == 0)
 			return decoded;
 
-		scale = opc == 2 ? 3 : 2;
+		if (simd_fp) {
+			if (opc != 1)
+				return decoded;
+			scale = 3;
+		} else {
+			if (opc != 0 && opc != 2)
+				return decoded;
+			scale = opc == 2 ? 3 : 2;
+		}
+
 		decoded.decode_class = TCTI_DECODE_LOAD_STORE_PAIR;
 		decoded.rt = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rt2 = (instruction >> 10) & 0x1fU;
 		decoded.load = instruction & BIT(22);
+		decoded.simd_fp = simd_fp;
 		decoded.access_size = BIT(scale);
 		decoded.result_size = decoded.access_size;
 		decoded.memory_offset =

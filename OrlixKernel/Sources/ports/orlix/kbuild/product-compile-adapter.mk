@@ -415,8 +415,8 @@ adapter_root="$(ORLIX_PRODUCT_ADAPTER_ROOT)"; \
 	host_tool_dir="$$adapter_root/host-tools"; \
 	mkdir -p "$$host_tool_dir"; \
 	hostcc="$${hostcc:-cc}"; \
-	"$$hostcc" "$$linux_root/drivers/tty/vt/conmakehash.c" -o "$$host_tool_dir/conmakehash"; \
-	"$$host_tool_dir/conmakehash" "$$linux_root/drivers/tty/vt/cp437.uni" > "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c"; \
+	( unset IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET XROS_DEPLOYMENT_TARGET PLATFORM_NAME EFFECTIVE_PLATFORM_NAME ARCHS CURRENT_ARCH VALID_ARCHS DYLD_ROOT_PATH DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH DYLD_FALLBACK_LIBRARY_PATH DYLD_FALLBACK_FRAMEWORK_PATH; "$$hostcc" "$$linux_root/drivers/tty/vt/conmakehash.c" -o "$$host_tool_dir/conmakehash" ); \
+	( unset IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET XROS_DEPLOYMENT_TARGET PLATFORM_NAME EFFECTIVE_PLATFORM_NAME ARCHS CURRENT_ARCH VALID_ARCHS DYLD_ROOT_PATH DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH DYLD_FALLBACK_LIBRARY_PATH DYLD_FALLBACK_FRAMEWORK_PATH; "$$host_tool_dir/conmakehash" "$$linux_root/drivers/tty/vt/cp437.uni" ) > "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c"; \
 	[ -s "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c" ] || { echo "failed to generate Linux VT console map table" >&2; exit 1; }; \
 	cp "$$linux_root/mm/page_alloc.c" "$$adapter_root/source/mm/page_alloc.c"; \
 	cp "$$linux_root/mm/internal.h" "$$adapter_root/source/mm/internal.h"; \

@@ -347,6 +347,20 @@ static void tcti_decode_recognizes_load_store_pair_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 16LL, decoded.memory_offset);
 	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
 			decoded.memory_index_mode);
+
+	decoded = tcti_decode_aarch64(0x6d0123e9U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rt2);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
+			decoded.memory_index_mode);
 }
 
 static void tcti_decode_recognizes_load_store_unsigned_class(struct kunit *test)

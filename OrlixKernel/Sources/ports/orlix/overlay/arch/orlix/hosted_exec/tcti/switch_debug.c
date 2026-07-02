@@ -16,6 +16,24 @@
 
 static bool tcti_condition_passed(const struct pt_regs *regs, u8 condition);
 
+static enum tcti_access
+tcti_fault_access_for_decoded(const struct tcti_decoded_instruction *decoded)
+{
+	if (!decoded)
+		return TCTI_ACCESS_FETCH;
+
+	switch (decoded->decode_class) {
+	case TCTI_DECODE_LOAD_STORE_PAIR:
+	case TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE:
+	case TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:
+	case TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
+	case TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
+		return decoded->load ? TCTI_ACCESS_READ : TCTI_ACCESS_WRITE;
+	default:
+		return TCTI_ACCESS_FETCH;
+	}
+}
+
 static u64 tcti_read_add_sub_immediate_source(const struct pt_regs *regs,
 					      const struct tcti_decoded_instruction *decoded)
 {
@@ -780,6 +798,37 @@ static int tcti_load_integer(struct mm_struct *mm, unsigned long address,
 	}
 }
 
+static int tcti_store_simd_fp(struct mm_struct *mm, unsigned long address,
+			      u8 reg, u8 access_size)
+{
+	u8 buffer[sizeof(u64)];
+
+	if (access_size != sizeof(u64))
+		return -EOPNOTSUPP;
+
+	put_unaligned_le64(current->thread.user_simd[reg * 2], buffer);
+	return tcti_write_user_data(mm, address, buffer, access_size);
+}
+
+static int tcti_load_simd_fp(struct mm_struct *mm, unsigned long address,
+			     u8 reg, u8 access_size)
+{
+	u8 buffer[sizeof(u64)] = {};
+	int ret;
+
+	if (access_size != sizeof(u64))
+		return -EOPNOTSUPP;
+
+	ret = tcti_read_user_data(mm, address, buffer, access_size);
+	if (ret)
+		return ret;
+
+	current->thread.user_simd[reg * 2] = get_unaligned_le64(buffer);
+	current->thread.user_simd[reg * 2 + 1] = 0;
+	current->thread.user_simd_valid = 1;
+	return 0;
+}
+
 static u64 tcti_extend_loaded_integer(u64 value,
 				      const struct tcti_decoded_instruction *decoded)
 {
@@ -837,29 +886,55 @@ static int tcti_execute_load_store_pair(struct mm_struct *mm,
 		*fault_address = address;
 
 	if (decoded->load) {
-		ret = tcti_load_integer(mm, address, decoded->access_size, &first);
-		if (ret)
-			return ret;
-		ret = tcti_load_integer(mm, address + decoded->access_size,
-					decoded->access_size, &second);
-		if (ret)
-			return ret;
-		tcti_write_gpr_or_zero(regs, decoded->rt,
-				       decoded->access_size, first);
-		tcti_write_gpr_or_zero(regs, decoded->rt2,
-				       decoded->access_size, second);
+		if (decoded->simd_fp) {
+			ret = tcti_load_simd_fp(mm, address, decoded->rt,
+						decoded->access_size);
+			if (ret)
+				return ret;
+			ret = tcti_load_simd_fp(mm, address + decoded->access_size,
+						decoded->rt2,
+						decoded->access_size);
+			if (ret)
+				return ret;
+		} else {
+			ret = tcti_load_integer(mm, address, decoded->access_size,
+						&first);
+			if (ret)
+				return ret;
+			ret = tcti_load_integer(mm, address + decoded->access_size,
+						decoded->access_size, &second);
+			if (ret)
+				return ret;
+			tcti_write_gpr_or_zero(regs, decoded->rt,
+					       decoded->access_size, first);
+			tcti_write_gpr_or_zero(regs, decoded->rt2,
+					       decoded->access_size, second);
+		}
 	} else {
-		first = tcti_read_gpr_or_zero(regs, decoded->rt,
-					      decoded->access_size);
-		second = tcti_read_gpr_or_zero(regs, decoded->rt2,
-					       decoded->access_size);
-		ret = tcti_store_integer(mm, address, decoded->access_size, first);
-		if (ret)
-			return ret;
-		ret = tcti_store_integer(mm, address + decoded->access_size,
-					 decoded->access_size, second);
-		if (ret)
-			return ret;
+		if (decoded->simd_fp) {
+			ret = tcti_store_simd_fp(mm, address, decoded->rt,
+						 decoded->access_size);
+			if (ret)
+				return ret;
+			ret = tcti_store_simd_fp(mm, address + decoded->access_size,
+						 decoded->rt2,
+						 decoded->access_size);
+			if (ret)
+				return ret;
+		} else {
+			first = tcti_read_gpr_or_zero(regs, decoded->rt,
+						      decoded->access_size);
+			second = tcti_read_gpr_or_zero(regs, decoded->rt2,
+						       decoded->access_size);
+			ret = tcti_store_integer(mm, address, decoded->access_size,
+						 first);
+			if (ret)
+				return ret;
+			ret = tcti_store_integer(mm, address + decoded->access_size,
+						 decoded->access_size, second);
+			if (ret)
+				return ret;
+		}
 	}
 
 	tcti_apply_memory_writeback(regs, decoded);
@@ -1176,6 +1251,7 @@ struct tcti_result tcti_switch_debug_resume_user(struct task_struct *task,
 			result.reason = TCTI_EXIT_USER_FAULT;
 			result.status = ret;
 			result.fault_address = regs->pc;
+			result.fault_access = TCTI_ACCESS_FETCH;
 			result.pc = regs->pc;
 			return result;
 		}
@@ -1199,6 +1275,7 @@ struct tcti_result tcti_switch_debug_resume_user(struct task_struct *task,
 			result.reason = TCTI_EXIT_USER_FAULT;
 			result.status = ret;
 			result.fault_address = fault_address;
+			result.fault_access = tcti_fault_access_for_decoded(&decoded);
 			result.pc = regs->pc;
 			result.instruction = instruction;
 			return result;

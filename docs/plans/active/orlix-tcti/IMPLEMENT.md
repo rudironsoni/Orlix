@@ -2936,6 +2936,93 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Simulator First Syscall Reaches TCTI
+
+- Harness-selected gate: `physical-tcti-init-first-syscall`.
+- Human runtime constraint for this checkpoint: do not run the physical device gate; use only the already-booted `Orlix-iPhone-15-Pro-Max` simulator, UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+- Diagnostic command:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall`
+- Result:
+  - `status=pass`;
+  - `passed=true`;
+  - `profile=tcti_runtime`;
+  - `destination=iphonesimulator`;
+  - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`;
+  - `release_gate_eligible=false`;
+  - `readiness_gate_eligible=false`.
+- Runtime marker captured:
+  - `Orlix TCTI: svc #0 task=init pid=1 pc=0x79d6ab1e6a80 syscall=178 x0=0xb2 x1=0x79d6ab1e54b4 x2=0x0 x3=0x0 x4=0x0 x5=0x0`
+- Report path:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T124435Z-42167.json`
+- Artifact paths:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T124435Z-42167.md`
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T124435Z-42167.artifacts/tcti-first-syscall.txt`
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T124435Z-42167.artifacts/simulator-unified.log`
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T124435Z-42167.artifacts/host-exec-violations.txt`
+- `host-exec-violations.txt` is empty for this run.
+
+Implementation details:
+
+- Added a TCTI-owned Linux MM fault-in helper:
+  - `tcti_handle_user_fault(struct pt_regs *regs, unsigned long address, enum tcti_access access)`.
+- TCTI user faults now carry access class in `struct tcti_result`:
+  - `TCTI_ACCESS_FETCH`;
+  - `TCTI_ACCESS_READ`;
+  - `TCTI_ACCESS_WRITE`.
+- TCTI fetch faults now fault in executable Linux user pages through `handle_mm_fault()` and retry TCTI without calling native hosted mapping synchronization.
+- TCTI does not call `orlix_sync_current_user_fault_window()` for guest instruction fetch.
+- Runtime validation now captures bounded simulator unified logs into `simulator-unified.log` and uses that sanctioned artifact to find `Orlix TCTI: svc #0`.
+- Simulator runtime passes remain diagnostic only; runtime JSON no longer marks `iphonesimulator` passes as release/readiness eligible.
+- Added minimal decoded support for the observed `/init` prologue instruction:
+  - raw instruction: `0x6d0123e9`;
+  - disassembly: `stp d9, d8, [sp, #0x10]`;
+  - decoder class: `TCTI_DECODE_LOAD_STORE_PAIR`;
+  - `simd_fp=true`;
+  - `access_size=8`;
+  - `memory_index_mode=TCTI_MEMORY_INDEX_SIGNED_OFFSET`.
+- Switch-debug/TCTI semantics now support D-register FP/SIMD pair loads and stores through the existing TCTI memory read/write path.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-appstore-safety-audit
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
+```
+
+Results:
+
+- All commands above exited 0.
+- The only booted simulator during the final runtime check was `Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D)`.
+- `agent-next` still selects `physical-tcti-init-first-syscall`; this checkpoint does not satisfy that physical certification gate.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No new gadget dispatch.
+- No physical-device gate run.
+- No HostAdapter Linux behavior.
+- No Darwin syscall guest side effect.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added outside Linux.
+- No generated executable memory.
+- No host-executable guest text.
+- No `MAP_JIT`, RWX, or `vm_protect(... EXECUTE ...)` guest text path.
+- No product defconfig flip.
+- Simulator proof does not make release/readiness eligible.
+
 ### Checkpoint: TCTI Runtime-Proof Kernel Profile
 
 - Harness-selected gate: `physical-tcti-init-first-syscall`.

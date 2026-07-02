@@ -65,7 +65,8 @@ asmlinkage void orlix_ret_from_fork_user(struct pt_regs *regs)
 		do_exit(0);
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
-	orlix_sync_current_user_mappings(regs);
+	if (!IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI))
+		orlix_sync_current_user_mappings(regs);
 	orlix_hosted_enter_user(regs);
 #endif
 	panic("Orlix: user return requires hosted entry support\n");

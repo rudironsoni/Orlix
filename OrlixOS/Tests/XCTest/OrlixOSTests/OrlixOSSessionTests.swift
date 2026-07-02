@@ -6543,20 +6543,27 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         XCTAssertFalse(rootfsMakefile.contains("Documents"))
     }
 
-    func testPayloadBundleIsResolvedFromOrlixOSTargetMetadata() throws {
-        let payloadURL = try XCTUnwrap(OrlixOSPayload.bundleURL)
-        let profile = try XCTUnwrap(OrlixOSPayload.selectedBootProfile)
-        let kernelCommandLine = try XCTUnwrap(OrlixOSPayload.kernelCommandLine)
+	func testPayloadBundleIsResolvedFromOrlixOSTargetMetadata() throws {
+		let payloadURL = try XCTUnwrap(OrlixOSPayload.bundleURL)
+		let profile = try XCTUnwrap(OrlixOSPayload.selectedBootProfile)
+		let kernelCommandLine = try XCTUnwrap(OrlixOSPayload.kernelCommandLine)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: payloadURL.path))
         XCTAssertTrue(profile == .release || profile == .development)
         XCTAssertTrue(kernelCommandLine.contains("console=ttyS0"))
-        XCTAssertTrue(kernelCommandLine.contains("console=hvc0"))
-    }
+		XCTAssertTrue(kernelCommandLine.contains("console=hvc0"))
+	}
 
-    func testRootImageDescriptorsComeFromOrlixOSTargetMetadata() throws {
-        let productRootIdentifier = try XCTUnwrap(
-            OrlixOSPayload.productRootImageIdentifier
+	func testTCTIRuntimePayloadUsesDevelopmentBootProfile() {
+		XCTAssertEqual(
+			OrlixOSPayload.bootProfile(forPayloadProfile: "tcti_runtime"),
+			.development
+		)
+	}
+
+	func testRootImageDescriptorsComeFromOrlixOSTargetMetadata() throws {
+		let productRootIdentifier = try XCTUnwrap(
+			OrlixOSPayload.productRootImageIdentifier
         )
         let descriptors = OrlixOSPayload.rootImageDescriptors
 
