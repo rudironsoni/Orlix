@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-profile="${PROFILE:-development}"
 gate="${GATE:-tcti-init-first-syscall}"
+profile="${PROFILE:-}"
+if [ -z "$profile" ]; then
+	case "$gate" in
+	tcti-*) profile="tcti_runtime" ;;
+	*) profile="development" ;;
+	esac
+fi
 destination="${DESTINATION:-iphoneos}"
 configuration="${CONFIGURATION:-Debug}"
 scheme="${ORLIX_SCHEME:-Orlix}"
@@ -19,6 +25,7 @@ runtime_preflight_only="${ORLIX_RUNTIME_PREFLIGHT_ONLY:-}"
 tcti_device_override="${ORLIX_TCTI_DEVICE_OVERRIDE:-}"
 tcti_device_override_reason="${ORLIX_TCTI_DEVICE_OVERRIDE_REASON:-${ORLIX_TCTI_DEVICE_OVERRIDE_REASON_TEXT:-}}"
 tcti_evidence_mode=0
+build_root="${ORLIX_BUILD_ROOT:-}"
 
 devices_json=""
 device_name=""
@@ -36,6 +43,15 @@ report="$report_dir/${gate}-$(date -u +%Y%m%dT%H%M%SZ)-$$.md"
 json_report="${report%.md}.json"
 artifact_dir="${report%.md}.artifacts"
 mkdir -p "$artifact_dir"
+
+if [ -z "$build_root" ]; then
+	external_root="$(external-ssd-root 2>/dev/null || true)"
+	if [ -n "$external_root" ]; then
+		build_root="$external_root/Xcode/OrlixSystem/Build"
+	else
+		build_root="$PWD/Build"
+	fi
+fi
 
 die() {
 	local message="$1"
@@ -427,9 +443,29 @@ build_kernel_for_gate() {
 
 	make -f OrlixKernel/Makefile __kernel-archive \
 		PROFILE="$profile" \
+		ORLIX_BUILD_ROOT="$build_root" \
 		ORLIX_KERNEL_ARCHIVE_PLATFORMS="$platform" \
 		>"$artifact_dir/kernel-build.log" 2>&1 ||
 		die "TCTI kernel archive build failed."
+}
+
+assert_tcti_kernel_config() {
+	local config="$build_root/OrlixKernel/build/$profile/.config"
+
+	case "$gate" in
+	tcti-*) ;;
+	*) return ;;
+	esac
+
+	if [ ! -s "$config" ]; then
+		die "TCTI runtime gate could not inspect kernel config at \`$config\`."
+	fi
+	if ! grep -Fxq "CONFIG_ORLIX_HOSTED_EXEC_TCTI=y" "$config"; then
+		die "TCTI runtime gate requires CONFIG_ORLIX_HOSTED_EXEC_TCTI=y in \`$config\`."
+	fi
+	if grep -Fxq "CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y" "$config"; then
+		die "TCTI runtime gate must not use CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y in \`$config\`."
+	fi
 }
 
 build_app_for_target() {
@@ -456,7 +492,7 @@ build_app_for_target() {
 		>"$artifact_dir/xcodegen.log" 2>&1 ||
 		die "xcodegen failed."
 
-	ORLIX_PROFILE="$profile" xcodebuild \
+	ORLIX_BUILD_ROOT="$build_root" ORLIX_PROFILE="$profile" xcodebuild \
 		-project Orlix.xcodeproj \
 		-scheme "$scheme" \
 		-configuration "$configuration" \
@@ -467,7 +503,7 @@ build_app_for_target() {
 		>"$artifact_dir/xcodebuild.log" 2>&1 ||
 		die "xcodebuild failed."
 
-	ORLIX_PROFILE="$profile" xcodebuild \
+	ORLIX_BUILD_ROOT="$build_root" ORLIX_PROFILE="$profile" xcodebuild \
 		-project Orlix.xcodeproj \
 		-scheme "$scheme" \
 		-configuration "$configuration" \
@@ -773,6 +809,7 @@ main() {
 
 	select_target
 	build_kernel_for_gate
+	assert_tcti_kernel_config
 	build_app_for_target
 	install_app "$app_path"
 	capture_launch

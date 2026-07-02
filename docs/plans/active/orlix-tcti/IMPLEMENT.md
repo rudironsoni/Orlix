@@ -2936,6 +2936,75 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: TCTI Runtime-Proof Kernel Profile
+
+- Harness-selected gate: `physical-tcti-init-first-syscall`.
+- Selected command: `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Why selected: all no-phone TCTI prerequisites in the agent status report were passing, so the first missing roadmap gate was physical first-syscall certification.
+- Fixed a real gate correctness gap before rerunning the physical gate: TCTI runtime validation now defaults `tcti-*` gates to the non-product `tcti_runtime` kernel profile instead of the product `development` profile.
+- Added `OrlixKernel/Sources/ports/orlix/configs/tcti_runtime_defconfig` with `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` and `CONFIG_ORLIX_HOSTED_EXEC_NATIVE` unset.
+- Added `tcti_runtime` to `ORLIX_PROFILES` so the kernel archive build can produce a TCTI-enabled proof profile without flipping product `development` or `release` defaults.
+- Updated runtime validation to assert that TCTI runtime gates inspect a generated `.config` with TCTI enabled and native hosted execution disabled before app build/install/launch can proceed.
+- Built the physical-platform archive successfully:
+  - `Build/OrlixKernel/tcti_runtime/iphoneos/OrlixKernel.a`
+  - `Build/OrlixKernel/tcti_runtime/linux-object-manifest.txt`
+- Generated config evidence:
+  - `# CONFIG_ORLIX_HOSTED_EXEC_NATIVE is not set`
+  - `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y`
+  - `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`
+- Runtime-validation report:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T105238Z-62387.json`
+  - `status=fail`
+  - `passed=false`
+  - `profile=tcti_runtime`
+  - `release_gate_eligible=false`
+  - `readiness_gate_eligible=false`
+  - failure occurred before app build/install/launch because the physical iPhone developer disk image services were unavailable.
+- Device blocker:
+  - device name: `RRJ-iPhone-15-Pro-Max`
+  - CoreDevice id: `7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`
+  - Xcode device id: `00008130-001E74A11193803A`
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile __kernel-archive PROFILE=tcti_runtime ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphoneos
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall
+```
+
+Results:
+
+- Static, harness, no-phone TCTI, toolchain, schema, and App Store safety checks passed.
+- `tcti_runtime` `iphoneos` kernel archive built successfully.
+- Physical runtime validation failed before TCTI execution because the device DDI service was unavailable.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No new gadget dispatch.
+- No generated executable memory.
+- No host-executable guest text.
+- No simulator gate run in this checkpoint.
+- Physical gate did not pass.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+
 ### Correction: init_006_memory Reducer Replay Set
 
 - Correct reducer lane result for harness-selected gate `switch-init-006-memory`.
