@@ -522,8 +522,8 @@ func switchBranches005Pass() -> (Bool, String) {
 }
 
 func switchMemory006Pass() -> (Bool, String) {
- do {
- let object = try executionObject("init_006_memory")
+    do {
+        let object = try executionObject("init_006_memory")
  let exit = object["exit"] as? [String: Any]
  let entered = boolValue(object["entered_entrypoint"])
  let backend = stringValue(object["backend"]) == "switch-debug"
@@ -555,8 +555,54 @@ func switchMemory006Pass() -> (Bool, String) {
  }
  return (false, "init_006_memory execution artifact does not show file-backed memory-derived exit(42)")
  } catch {
- return (false, "missing malformed init_006_memory execution artifact: \(error)")
- }
+        return (false, "missing malformed init_006_memory execution artifact: \(error)")
+    }
+}
+
+func switchMprotect007Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_007_mprotect")
+        let exit = object["exit"] as? [String: Any]
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 8
+        let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 0
+        let mprotectOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "mprotect",
+                  intValue(syscall["nr"]) == 226,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  args.count >= 3
+            else {
+                return false
+            }
+            return stringValue(args[0]) == "0x0000000000212000" &&
+                intValue(args[1]) == 4096 &&
+                intValue(args[2]) == 1
+        }
+        let exitSyscallOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "exit",
+                  intValue(syscall["nr"]) == 93,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  let first = args.first
+            else {
+                return false
+            }
+            return intValue(first) == 0
+        }
+        let notes = object["notes"] as? [Any] ?? []
+        let captureOnlyNote = notes.contains { item in
+            guard let note = item as? String else { return false }
+            return note.contains("no host mprotect") && note.contains("permission side effect")
+        }
+        if entered && backend && instructionCountOK && exitOK && mprotectOK && exitSyscallOK && captureOnlyNote {
+            return (true, "init_007_mprotect switch-debug execution captured mprotect(PROT_READ) and exit(0) without host permission side effects")
+        }
+        return (false, "init_007_mprotect execution artifact does not capture mprotect(PROT_READ) then exit(0)")
+    } catch {
+        return (false, "missing malformed init_007_mprotect execution artifact: \(error)")
+    }
 }
 
 func firstGadgetExit001Pass() -> (Bool, String) {
@@ -671,6 +717,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-006-memory":
         let check = switchMemory006Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "switch-init-007-mprotect":
+        let check = switchMprotect007Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         let check = diffSwitchExit001Pass()
