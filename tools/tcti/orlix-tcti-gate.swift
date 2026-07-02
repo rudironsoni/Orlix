@@ -2603,6 +2603,20 @@ func expectedEntrypoint(_ metadata: GoldenMetadata) -> String {
     metadata.entrypoint.lowercased()
 }
 
+func actualEntrypoint(from objdumpHeader: String) -> String {
+    for line in objdumpHeader.split(separator: "\n") {
+        let lowercased = line.lowercased()
+        guard let range = lowercased.range(of: "start address:") else {
+            continue
+        }
+        let value = lowercased[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("0x") {
+            return value
+        }
+    }
+    return "0x0000000000210120"
+}
+
 func validateInit001Metadata(
     _ metadata: GoldenMetadata,
     sourceHash: String,
@@ -3072,6 +3086,81 @@ func validateInit006Metadata(
     return failures
 }
 
+func validateInit007Metadata(
+    _ metadata: GoldenMetadata,
+    sourceHash: String,
+    binaryHash: String,
+    fileOutput: String,
+    objdumpHeader: String,
+    disassembly: String
+) -> [Failure] {
+    var failures: [Failure] = []
+    if metadata.caseID != "init_007_mprotect" {
+        failures.append(fail("case-id", "golden case id must be init_007_mprotect"))
+    }
+    if metadata.sourceSHA256 != sourceHash {
+        failures.append(fail("source-sha256", "source hash changed for init_007_mprotect"))
+    }
+    if metadata.expectedBinarySHA256 != binaryHash {
+        failures.append(fail("binary-sha256", "binary hash changed for init_007_mprotect; inspect or run make tcti-golden-elf-refresh CASE=init_007_mprotect"))
+    }
+    if metadata.actualBinarySHA256 != binaryHash {
+        failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_007_mprotect"))
+    }
+    if metadata.elfType != "ET_EXEC" {
+        failures.append(fail("elf-type", "init_007_mprotect golden metadata must use ET_EXEC"))
+    }
+    if metadata.machine != "AArch64" {
+        failures.append(fail("elf-machine", "init_007_mprotect golden metadata must use AArch64"))
+    }
+    if metadata.expectedExitCode != 0 {
+        failures.append(fail("expected-exit", "init_007_mprotect must expect exit code 0"))
+    }
+    if metadata.expectedSyscalls.count != 2 ||
+        metadata.expectedSyscalls.first?.nr != "mprotect" ||
+        metadata.expectedSyscalls.last?.nr != "exit" ||
+        metadata.expectedSyscalls.last?.code != 0 {
+        failures.append(fail("expected-syscall", "init_007_mprotect must expect mprotect(...), exit(0)"))
+    }
+    if !fileOutput.contains("ELF 64-bit LSB executable") {
+        failures.append(fail("elf-class", "init_007_mprotect must be ELF64 executable"))
+    }
+    if !fileOutput.contains("ARM aarch64") {
+        failures.append(fail("elf-file-machine", "init_007_mprotect file output must identify ARM aarch64"))
+    }
+    if !objdumpHeader.contains("file format elf64-littleaarch64") {
+        failures.append(fail("objdump-format", "init_007_mprotect must disassemble as elf64-littleaarch64"))
+    }
+    if !objdumpHeader.contains("architecture: aarch64") {
+        failures.append(fail("objdump-architecture", "init_007_mprotect objdump architecture must be aarch64"))
+    }
+    if !objdumpHeader.lowercased().contains("start address: \(expectedEntrypoint(metadata))") {
+        failures.append(fail("entrypoint", "init_007_mprotect entrypoint does not match \(metadata.entrypoint)"))
+    }
+    let requiredInstructionWords = [
+        "d2820001": "mov x1, #4096",
+        "d2800022": "mov x2, #1",
+        "d2801c48": "mov x8, #226",
+        "d2800000": "mov x0, #0",
+        "d2800ba8": "mov x8, #93",
+        "d4000001": "svc #0",
+    ]
+    for (word, description) in requiredInstructionWords where !disassembly.contains(word) {
+        failures.append(fail("instruction-shape", "init_007_mprotect disassembly missing \(description) instruction word \(word)"))
+    }
+    if !disassembly.contains("adr\tx0") || !disassembly.contains("<page>") {
+        failures.append(fail("address-shape", "init_007_mprotect must use ADR to address page"))
+    }
+    let svcCount = disassembly.components(separatedBy: "svc\t#0").count - 1
+    if svcCount != 2 {
+        failures.append(fail("svc", "init_007_mprotect disassembly must contain exactly two svc #0 instructions"))
+    }
+    for (key, value) in metadata.forbiddenBehavior where value {
+        failures.append(fail("forbidden-behavior", "init_007_mprotect golden metadata sets forbidden_behavior.\(key)=true"))
+    }
+    return failures
+}
+
 func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String]) {
     let built = try buildInit001(outputRoot: outputRoot)
     let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataURL))
@@ -3107,7 +3196,7 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
     if caseID == "init_001_exit" {
         return try validateInit001Golden(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -3177,13 +3266,22 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
         )
+    case "init_007_mprotect":
+        failures = validateInit007Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        )
     default:
         failures = [fail("case-id", "unsupported golden ELF case \(caseID)")]
     }
     return (failures, [relativePath(built.binary), relativePath(validationURL)])
 }
 
-func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String, toolchain: [String: String]) -> GoldenMetadata {
+func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String, entrypoint: String, toolchain: [String: String]) -> GoldenMetadata {
     let expectedSyscalls: [ExpectedSyscall]
     let expectedExitCode: Int
     let expectedMessage: String?
@@ -3206,6 +3304,13 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
             ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
         ]
         expectedExitCode = 42
+        expectedMessage = nil
+    case "init_007_mprotect":
+        expectedSyscalls = [
+            ExpectedSyscall(nr: "mprotect", code: nil, fd: nil, len: nil, bytes: nil),
+            ExpectedSyscall(nr: "exit", code: 0, fd: nil, len: nil, bytes: nil),
+        ]
+        expectedExitCode = 0
         expectedMessage = nil
     default:
         expectedSyscalls = [
@@ -3231,7 +3336,7 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
         ],
         libcMode: "no-libc",
         elfType: "ET_EXEC",
-        entrypoint: "0x0000000000210120",
+        entrypoint: entrypoint,
         machine: "AArch64",
         expectedSyscalls: expectedSyscalls,
         expectedExitCode: expectedExitCode,
@@ -3281,8 +3386,8 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
     let executeMode = ProcessInfo.processInfo.environment["EXECUTE"] ?? ""
     let negativeExecution = ProcessInfo.processInfo.environment["NEGATIVE_EXECUTION"] ?? ""
-    guard ["init_001_exit", "init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory"].contains(caseID) else {
-        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit through init_006_memory are implemented in this no-phone oracle checkpoint.")
+    guard ["init_001_exit", "init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect"].contains(caseID) else {
+        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit through init_007_mprotect are implemented in this no-phone oracle checkpoint.")
     }
     if refresh && !executeMode.isEmpty {
         throw GateError.usage("EXECUTE is not supported with tcti-golden-elf-refresh")
@@ -3299,7 +3404,8 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
             artifacts.append(relativePath(built.binary))
             let sourceHash = try sha256(built.source)
             let binaryHash = try sha256(built.binary)
-            let metadata = goldenMetadata(caseID: caseID, actualBinaryHash: binaryHash, sourceHash: sourceHash, toolchain: toolchain)
+            let entrypoint = actualEntrypoint(from: built.metadata["objdump_header"] ?? "")
+            let metadata = goldenMetadata(caseID: caseID, actualBinaryHash: binaryHash, sourceHash: sourceHash, entrypoint: entrypoint, toolchain: toolchain)
             try writeJSON(metadata, to: metadataPath)
             artifacts.append(relativePath(metadataPath))
         } else if executeMode == "switch-debug" && !negativeExecution.isEmpty {
