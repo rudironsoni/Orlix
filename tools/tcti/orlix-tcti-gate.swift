@@ -182,6 +182,22 @@ enum JSONValue: Codable {
     }
 }
 
+func jsonInt(_ value: JSONValue?) -> Int? {
+    guard let value else { return nil }
+    if case let .int(number) = value {
+        return number
+    }
+    return nil
+}
+
+func jsonString(_ value: JSONValue?) -> String? {
+    guard let value else { return nil }
+    if case let .string(string) = value {
+        return string
+    }
+    return nil
+}
+
 struct CapturedSyscall: Codable {
     let nr: Int
     let name: String
@@ -2025,6 +2041,14 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
             } else if syscallNumber == 93 {
                 syscalls.append(CapturedSyscall(nr: syscallNumber, name: "exit", args: [.int(arg0)], captured: true))
                 capturedExit = CapturedExit(kind: "guest_exit_syscall", code: arg0)
+            } else if syscallNumber == 226 {
+                syscalls.append(CapturedSyscall(
+                    nr: syscallNumber,
+                    name: "mprotect",
+                    args: [.string(hexPC(registers[0])), .int(Int(registers[1])), .int(Int(registers[2]))],
+                    captured: true
+                ))
+                pc += 4
             } else {
                 failures.append(fail("execution-syscall", "expected Linux exit syscall 93, captured \(syscallNumber)"))
                 let report = executionReport(
@@ -2050,7 +2074,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
-                    notes: ["switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/MRS/MSR/SVC seed semantics and captures svc #0 as test events without calling host syscalls", "guest TPIDR_EL0 is switch-debug guest state only; host TPIDR_EL0 is not read or written"]
+                    notes: ["switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/MRS/MSR/SVC seed semantics and captures svc #0 as test events without calling host syscalls", "guest mprotect is captured as a test event only; no host mprotect, vm_protect, MAP_JIT, RWX, or permission side effect is performed", "guest TPIDR_EL0 is switch-debug guest state only; host TPIDR_EL0 is not read or written"]
                 )
                 failures.append(contentsOf: validateCapturedExecution(metadata: metadata, report: report))
                 return (report, failures)
@@ -2185,6 +2209,31 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-memory", "expected decoded LDR x0, [x1] from file-backed PT_LOAD address 0x210130"))
         }
     }
+    if metadata.caseID == "init_007_mprotect" {
+        if report.guestInstructionsExecuted != 8 {
+            failures.append(fail("execution-instruction-count", "expected 8 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 2 else {
+            failures.append(fail("execution-syscalls", "expected mprotect and exit syscalls, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let mprotect = report.syscalls[0]
+        if mprotect.nr != 226 ||
+            mprotect.name != "mprotect" ||
+            jsonString(mprotect.args.indices.contains(0) ? mprotect.args[0] : nil) != "0x0000000000212000" ||
+            jsonInt(mprotect.args.indices.contains(1) ? mprotect.args[1] : nil) != 4096 ||
+            jsonInt(mprotect.args.indices.contains(2) ? mprotect.args[2] : nil) != 1 {
+            failures.append(fail("execution-mprotect", "expected captured mprotect(0x0000000000212000, 4096, PROT_READ)"))
+        }
+        let exit = report.syscalls[1]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 0 {
+            failures.append(fail("execution-exit", "expected captured exit(0) after mprotect"))
+        }
+        let decoded = report.decodedInstructions
+        if !decoded.contains(where: { $0.instructionClass == "pc_relative_address" && $0.op == "adr" && $0.rd == 0 && $0.imm == 4096 }) {
+            failures.append(fail("execution-address", "expected decoded ADR x0 to page at +4096"))
+        }
+    }
     return failures
 }
 
@@ -2225,7 +2274,7 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     if caseID == "init_001_exit" {
         return try validateAndExecuteInit001(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF execution case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -2276,6 +2325,15 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
         )
     case "init_006_memory":
         failures = validateInit006Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        )
+    case "init_007_mprotect":
+        failures = validateInit007Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
@@ -2546,6 +2604,54 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "mprotect-wrong-prot":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_007_mprotect", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_007_mprotect_wrong_prot.S"),
+            outputRoot: outputRoot,
+            name: "init_007_mprotect_wrong_prot"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_007_mprotect_wrong_prot", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "mprotect-exec-prot":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_007_mprotect", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_007_mprotect_exec_prot.S"),
+            outputRoot: outputRoot,
+            name: "init_007_mprotect_exec_prot"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_007_mprotect_exec_prot", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "mprotect-wrong-syscall":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_007_mprotect", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_007_mprotect_wrong_syscall.S"),
+            outputRoot: outputRoot,
+            name: "init_007_mprotect_wrong_syscall"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_007_mprotect_wrong_syscall", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     default:
         throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
     }
@@ -2571,6 +2677,9 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         "memory-invalid-read",
         "memory-unsupported-ldur",
         "memory-unsupported-store",
+        "mprotect-wrong-prot",
+        "mprotect-exec-prot",
+        "mprotect-wrong-syscall",
     ] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
@@ -2582,7 +2691,8 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
             (fixture.hasPrefix("stack-") ? "init_003_stack" :
             (fixture.hasPrefix("tls-") ? "init_004_tls" :
             (fixture.hasPrefix("branches-") ? "init_005_branches" :
-            (fixture.hasPrefix("memory-") ? "init_006_memory" : "init_001_exit"))))
+            (fixture.hasPrefix("memory-") ? "init_006_memory" :
+            (fixture.hasPrefix("mprotect-") ? "init_007_mprotect" : "init_001_exit")))))
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
