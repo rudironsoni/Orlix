@@ -1289,17 +1289,28 @@ func buildInit001(outputRoot: URL) throws -> (binary: URL, source: URL, metadata
 
 func buildGoldenCase(_ caseID: String, outputRoot: URL) throws -> (binary: URL, source: URL, metadata: [String: String]) {
     let source = path("OrlixKernel", "Tests", "TCTI", "golden_elf", caseID, "\(caseID).S")
+    if caseID == "init_011_static_pie_got_byte_load" {
+        return try buildAarch64StaticPieNoLibc(source: source, outputRoot: outputRoot, binaryName: caseID)
+    }
     return try buildAarch64NoLibc(source: source, outputRoot: outputRoot, binaryName: caseID)
 }
 
 func buildAarch64NoLibc(source: URL, outputRoot: URL, binaryName: String) throws -> (binary: URL, source: URL, metadata: [String: String]) {
+    try buildAarch64NoLibc(source: source, outputRoot: outputRoot, binaryName: binaryName, extraFlags: ["-static"])
+}
+
+func buildAarch64StaticPieNoLibc(source: URL, outputRoot: URL, binaryName: String) throws -> (binary: URL, source: URL, metadata: [String: String]) {
+    try buildAarch64NoLibc(source: source, outputRoot: outputRoot, binaryName: binaryName, extraFlags: ["-static-pie", "-Wl,--no-relax"])
+}
+
+func buildAarch64NoLibc(source: URL, outputRoot: URL, binaryName: String, extraFlags: [String]) throws -> (binary: URL, source: URL, metadata: [String: String]) {
     let outputDir = outputRoot.appendingPathComponent(binaryName, isDirectory: true)
     try ensureDirectory(outputDir)
     let binary = outputDir.appendingPathComponent(binaryName)
     let flags = [
         "-target", "aarch64-linux-gnu",
         "-nostdlib",
-        "-static",
+    ] + extraFlags + [
         "-fuse-ld=lld",
         "-Wl,--build-id=none",
         "-Wl,-e,_start",
@@ -1358,10 +1369,28 @@ struct ElfLoadSegment {
     let fileSize: UInt64
 }
 
+func fileOffsetForVirtualAddress(_ virtualAddress: UInt64, length: UInt64, segments: [ElfLoadSegment]) throws -> Int {
+    for segment in segments {
+        if virtualAddress >= segment.virtualAddress && virtualAddress + length <= segment.virtualAddress + segment.fileSize {
+            return Int(segment.fileOffset + (virtualAddress - segment.virtualAddress))
+        }
+    }
+    throw GateError.commandFailed(String(format: "no load segment contains guest address 0x%llx length %llu", virtualAddress, length))
+}
+
+func littleEndianBytes(_ value: UInt64) -> Data {
+    var bytes = Data(repeating: 0, count: 8)
+    for index in 0..<8 {
+        bytes[index] = UInt8((value >> UInt64(index * 8)) & 0xff)
+    }
+    return bytes
+}
+
 struct TinyElf64Aarch64 {
     let data: Data
     let entrypoint: UInt64
     let segments: [ElfLoadSegment]
+    let relativeRelocations: [UInt64: UInt64]
 
     init(binary: URL) throws {
         let data = try Data(contentsOf: binary)
@@ -1379,32 +1408,75 @@ struct TinyElf64Aarch64 {
         }
         let type = try littleEndianUInt16(data, 16)
         let machine = try littleEndianUInt16(data, 18)
-        guard type == 2 else {
-            throw GateError.commandFailed("init_001_exit must be ET_EXEC, found \(type)")
+        guard type == 2 || type == 3 else {
+            throw GateError.commandFailed("golden ELF must be ET_EXEC or ET_DYN, found \(type)")
         }
         guard machine == 183 else {
-            throw GateError.commandFailed("init_001_exit must be AArch64, found machine \(machine)")
+            throw GateError.commandFailed("golden ELF must be AArch64, found machine \(machine)")
         }
         let entrypoint = try littleEndianUInt64(data, 24)
         let phoff = try littleEndianUInt64(data, 32)
         let phentsize = Int(try littleEndianUInt16(data, 54))
         let phnum = Int(try littleEndianUInt16(data, 56))
         var segments: [ElfLoadSegment] = []
+        var dynamicSegments: [ElfLoadSegment] = []
         for index in 0..<phnum {
             let offset = Int(phoff) + index * phentsize
             let programType = try littleEndianUInt32(data, offset)
-            guard programType == 1 else { continue }
+            guard programType == 1 || programType == 2 else { continue }
             let fileOffset = try littleEndianUInt64(data, offset + 8)
             let virtualAddress = try littleEndianUInt64(data, offset + 16)
             let fileSize = try littleEndianUInt64(data, offset + 32)
-            segments.append(ElfLoadSegment(fileOffset: fileOffset, virtualAddress: virtualAddress, fileSize: fileSize))
+            if programType == 1 {
+                segments.append(ElfLoadSegment(fileOffset: fileOffset, virtualAddress: virtualAddress, fileSize: fileSize))
+            } else {
+                dynamicSegments.append(ElfLoadSegment(fileOffset: fileOffset, virtualAddress: virtualAddress, fileSize: fileSize))
+            }
         }
         guard !segments.isEmpty else {
-            throw GateError.commandFailed("init_001_exit has no PT_LOAD segment")
+            throw GateError.commandFailed("golden ELF has no PT_LOAD segment")
+        }
+        var relaVirtualAddress: UInt64?
+        var relaSize: UInt64 = 0
+        var relaEntrySize: UInt64 = 24
+        for segment in dynamicSegments {
+            let entries = Int(segment.fileSize / 16)
+            for index in 0..<entries {
+                let offset = Int(segment.fileOffset) + index * 16
+                let tag = Int64(bitPattern: try littleEndianUInt64(data, offset))
+                let value = try littleEndianUInt64(data, offset + 8)
+                if tag == 0 {
+                    break
+                } else if tag == 7 {
+                    relaVirtualAddress = value
+                } else if tag == 8 {
+                    relaSize = value
+                } else if tag == 9 {
+                    relaEntrySize = value
+                }
+            }
+        }
+        var relativeRelocations: [UInt64: UInt64] = [:]
+        if let relaVirtualAddress, relaSize > 0, relaEntrySize >= 24 {
+            let relaFileOffset = try fileOffsetForVirtualAddress(relaVirtualAddress, length: relaSize, segments: segments)
+            let count = Int(relaSize / relaEntrySize)
+            for index in 0..<count {
+                let offset = relaFileOffset + index * Int(relaEntrySize)
+                let relocationOffset = try littleEndianUInt64(data, offset)
+                let relocationInfo = try littleEndianUInt64(data, offset + 8)
+                let relocationType = UInt32(relocationInfo & 0xffff_ffff)
+                let addend = try littleEndianUInt64(data, offset + 16)
+                if relocationType == 1027 {
+                    relativeRelocations[relocationOffset] = addend
+                } else {
+                    throw GateError.commandFailed("unsupported ET_DYN RELA relocation type \(relocationType)")
+                }
+            }
         }
         self.data = data
         self.entrypoint = entrypoint
         self.segments = segments
+        self.relativeRelocations = relativeRelocations
     }
 
     func readInstruction(at virtualAddress: UInt64) throws -> UInt32 {
@@ -1420,6 +1492,9 @@ struct TinyElf64Aarch64 {
     func readBytes(at virtualAddress: UInt64, length: Int) throws -> Data {
         guard length >= 0 else {
             throw GateError.commandFailed("negative guest memory read length \(length)")
+        }
+        if length == 8, let relocated = relativeRelocations[virtualAddress] {
+            return littleEndianBytes(relocated)
         }
         let endAddress = virtualAddress + UInt64(length)
         for segment in segments {
@@ -1638,12 +1713,13 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
         return .moveWideImmediate(raw: raw, pc: pc, op: "movz", sf: 64, rd: rd, imm: imm16, shift: 0)
     }
 
-    if (raw & 0x9f00_0000) == 0x1000_0000 {
+    if (raw & 0x1f00_0000) == 0x1000_0000 {
         let immlo = UInt64((raw >> 29) & 0x3)
         let immhi = UInt64((raw >> 5) & 0x7ffff)
         let rd = Int(raw & 0x1f)
         let imm = signExtend((immhi << 2) | immlo, bitCount: 21)
-        return .pcRelativeAddress(raw: raw, pc: pc, op: "adr", rd: rd, imm: imm)
+        let pageRelative = (raw & 0x8000_0000) != 0
+        return .pcRelativeAddress(raw: raw, pc: pc, op: pageRelative ? "adrp" : "adr", rd: rd, imm: pageRelative ? imm << 12 : imm)
     }
 
     if (raw & 0x1f00_0000) == 0x1100_0000 {
@@ -1689,6 +1765,21 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
             rn: rn,
             offset: imm12 * 8,
             width: 64
+        )
+    }
+
+    if (raw & 0xffc0_0000) == 0x3940_0000 {
+        let imm12 = Int((raw >> 10) & 0xfff)
+        let rn = Int((raw >> 5) & 0x1f)
+        let rt = Int(raw & 0x1f)
+        return .loadStoreUnsignedImmediate(
+            raw: raw,
+            pc: pc,
+            op: "ldrb",
+            rt: rt,
+            rn: rn,
+            offset: imm12,
+            width: 8
         )
     }
 
@@ -1836,8 +1927,9 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
         case let .moveWideImmediate(_, _, _, _, rd, imm, shift):
             registers[rd] = imm << UInt64(shift)
             pc += 4
-        case let .pcRelativeAddress(_, instructionPC, _, rd, imm):
-            let address = Int64(bitPattern: instructionPC) + imm
+        case let .pcRelativeAddress(_, instructionPC, op, rd, imm):
+            let base = op == "adrp" ? instructionPC & ~0xfff : instructionPC
+            let address = Int64(bitPattern: base) + imm
             guard address >= 0 else {
                 let report = executionReport(
                     metadata: metadata,
@@ -1850,12 +1942,29 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     capturedExit: capturedExit,
                     capturedFault: capturedFault,
                     memoryWrites: memoryWrites,
-                    notes: ["ADR computed a negative guest address and stopped the switch-debug harness"]
+                    notes: ["PC-relative address computation produced a negative guest address and stopped the switch-debug harness"]
                 )
-                failures.append(fail("execution-address", "ADR computed negative guest address \(address)"))
+                failures.append(fail("execution-address", "\(op.uppercased()) computed negative guest address \(address)"))
                 return (report, failures)
             }
-            registers[rd] = UInt64(address)
+            let effectiveAddress = UInt64(address)
+            decodedInstructions[decodedInstructions.count - 1] = DecodedInstructionReport(
+                pc: decoded.report.pc,
+                raw: decoded.report.raw,
+                instructionClass: decoded.report.instructionClass,
+                op: decoded.report.op,
+                sf: decoded.report.sf,
+                rd: decoded.report.rd,
+                rn: decoded.report.rn,
+                rt: decoded.report.rt,
+                imm: decoded.report.imm,
+                shift: decoded.report.shift,
+                offset: decoded.report.offset,
+                width: decoded.report.width,
+                effectiveAddress: hexPC(effectiveAddress),
+                reason: decoded.report.reason
+            )
+            registers[rd] = effectiveAddress
             pc += 4
         case let .addSubImmediate(_, _, op, _, rd, rn, imm, _):
             let source = rn == 31 ? sp : registers[rn]
@@ -1866,7 +1975,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                 registers[rd] = value
             }
             pc += 4
-        case let .loadStoreUnsignedImmediate(_, _, op, rt, rn, offset, _):
+        case let .loadStoreUnsignedImmediate(_, _, op, rt, rn, offset, width):
             if rn != 31 {
                 let address = registers[rn] + UInt64(offset)
                 decodedInstructions[decodedInstructions.count - 1] = DecodedInstructionReport(
@@ -1887,8 +1996,11 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                 )
                 do {
                     if op == "ldr" {
-                        let bytes = try elf.readBytes(at: address, length: 8)
+                        let bytes = try elf.readBytes(at: address, length: width / 8)
                         registers[rt] = try littleEndianUInt64(bytes, 0)
+                    } else if op == "ldrb" {
+                        let bytes = try elf.readBytes(at: address, length: 1)
+                        registers[rt] = UInt64(bytes[0])
                     } else if op == "str" {
                         _ = try elf.readBytes(at: address, length: 8)
                         memoryWrites.append(CapturedMemoryWrite(
@@ -2420,6 +2532,49 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-cpu-model", "expected switch-debug to capture virtual CPU model payload orlix-aarch64-v1"))
         }
     }
+    if metadata.caseID == "init_011_static_pie_got_byte_load" {
+        if report.guestInstructionsExecuted != 5 {
+            failures.append(fail("execution-instruction-count", "expected 5 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 1 else {
+            failures.append(fail("execution-syscalls", "expected one exit syscall, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let exit = report.syscalls[0]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 42 {
+            failures.append(fail("execution-exit", "expected captured GOT-byte-derived exit(42)"))
+        }
+        let decoded = report.decodedInstructions
+        if !decoded.contains(where: {
+            $0.instructionClass == "pc_relative_address" &&
+            $0.op == "adrp" &&
+            $0.rd == 8 &&
+            $0.effectiveAddress == "0x0000000000021000"
+        }) {
+            failures.append(fail("execution-adrp", "expected decoded ADRP x8 to architectural 4K page 0x21000"))
+        }
+        if !decoded.contains(where: {
+            $0.instructionClass == "load_store_unsigned_immediate" &&
+            $0.op == "ldr" &&
+            $0.rt == 8 &&
+            $0.rn == 8 &&
+            $0.offset == 216 &&
+            $0.width == 64 &&
+            $0.effectiveAddress == "0x00000000000210d8"
+        }) {
+            failures.append(fail("execution-got-load", "expected decoded LDR x8, [x8, #0xd8] from relocated GOT slot 0x210d8"))
+        }
+        if !decoded.contains(where: {
+            $0.instructionClass == "load_store_unsigned_immediate" &&
+            $0.op == "ldrb" &&
+            $0.rt == 0 &&
+            $0.rn == 8 &&
+            $0.width == 8 &&
+            $0.effectiveAddress == "0x0000000000001000"
+        }) {
+            failures.append(fail("execution-byte-load", "expected decoded LDRB w0, [x8] from relocated payload byte 0x1000"))
+        }
+    }
     return failures
 }
 
@@ -2460,7 +2615,7 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     if caseID == "init_001_exit" {
         return try validateAndExecuteInit001(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model", "init_011_static_pie_got_byte_load"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF execution case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -2547,6 +2702,16 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
         )
     case "init_010_cpu_model":
         failures = validateInit010Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly,
+            binary: built.binary
+        )
+    case "init_011_static_pie_got_byte_load":
+        failures = validateInit011Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
@@ -3824,6 +3989,84 @@ func validateInit010Metadata(
     return failures
 }
 
+func validateInit011Metadata(
+    _ metadata: GoldenMetadata,
+    sourceHash: String,
+    binaryHash: String,
+    fileOutput: String,
+    objdumpHeader: String,
+    disassembly: String,
+    binary: URL
+) -> [Failure] {
+    var failures: [Failure] = []
+    if metadata.caseID != "init_011_static_pie_got_byte_load" {
+        failures.append(fail("case-id", "golden case id must be init_011_static_pie_got_byte_load"))
+    }
+    if metadata.sourceSHA256 != sourceHash {
+        failures.append(fail("source-sha256", "source hash changed for init_011_static_pie_got_byte_load"))
+    }
+    if metadata.expectedBinarySHA256 != binaryHash {
+        failures.append(fail("binary-sha256", "binary hash changed for init_011_static_pie_got_byte_load; inspect or run make tcti-golden-elf-refresh CASE=init_011_static_pie_got_byte_load"))
+    }
+    if metadata.actualBinarySHA256 != binaryHash {
+        failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_011_static_pie_got_byte_load"))
+    }
+    if metadata.elfType != "ET_DYN" {
+        failures.append(fail("elf-type", "init_011_static_pie_got_byte_load golden metadata must use ET_DYN static PIE"))
+    }
+    if metadata.machine != "AArch64" {
+        failures.append(fail("elf-machine", "init_011_static_pie_got_byte_load golden metadata must use AArch64"))
+    }
+    if metadata.expectedExitCode != 42 {
+        failures.append(fail("expected-exit", "init_011_static_pie_got_byte_load must expect exit code 42"))
+    }
+    if metadata.expectedSyscalls.count != 1 ||
+        metadata.expectedSyscalls.first?.nr != "exit" ||
+        metadata.expectedSyscalls.first?.code != 42 {
+        failures.append(fail("expected-syscall", "init_011_static_pie_got_byte_load must expect exactly exit(42)"))
+    }
+    if !fileOutput.contains("ELF 64-bit LSB") {
+        failures.append(fail("elf-class", "init_011_static_pie_got_byte_load must be ELF64"))
+    }
+    if !fileOutput.contains("ARM aarch64") {
+        failures.append(fail("elf-file-machine", "init_011_static_pie_got_byte_load file output must identify ARM aarch64"))
+    }
+    if !objdumpHeader.contains("file format elf64-littleaarch64") {
+        failures.append(fail("objdump-format", "init_011_static_pie_got_byte_load must disassemble as elf64-littleaarch64"))
+    }
+    if !objdumpHeader.contains("architecture: aarch64") {
+        failures.append(fail("objdump-architecture", "init_011_static_pie_got_byte_load objdump architecture must be aarch64"))
+    }
+    if !objdumpHeader.lowercased().contains("start address: \(expectedEntrypoint(metadata))") {
+        failures.append(fail("entrypoint", "init_011_static_pie_got_byte_load entrypoint does not match \(metadata.entrypoint)"))
+    }
+    let requiredSnippets = [
+        "adrp\tx8": "ADRP x8 to GOT-like slot page",
+        "ldr\tx8, [x8, #0xd8]": "LDR x8 from GOT-like slot offset",
+        "ldrb\tw0, [x8]": "LDRB w0 from pointer loaded out of GOT-like slot",
+        "mov\tx8, #0x5d": "MOV x8, #93",
+        "svc\t#0": "SVC #0",
+    ]
+    for (snippet, description) in requiredSnippets where !disassembly.contains(snippet) {
+        failures.append(fail("instruction-shape", "init_011_static_pie_got_byte_load disassembly missing \(description)"))
+    }
+    do {
+        let elf = try TinyElf64Aarch64(binary: binary)
+        let pointerBytes = try elf.readBytes(at: 0x210d8, length: 8)
+        let pointer = try littleEndianUInt64(pointerBytes, 0)
+        let payload = try elf.readBytes(at: pointer, length: 1)
+        if pointer != 0x1000 || payload.first != 42 {
+            failures.append(fail("got-byte-load-shape", String(format: "expected relocated GOT slot 0x210d8 -> 0x1000 byte 42, got pointer 0x%llx byte %@", pointer, payload.first.map(String.init) ?? "<nil>")))
+        }
+    } catch {
+        failures.append(fail("got-byte-load-shape", "\(error)"))
+    }
+    for (key, value) in metadata.forbiddenBehavior where value {
+        failures.append(fail("forbidden-behavior", "init_011_static_pie_got_byte_load golden metadata sets forbidden_behavior.\(key)=true"))
+    }
+    return failures
+}
+
 func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String]) {
     let built = try buildInit001(outputRoot: outputRoot)
     let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataURL))
@@ -3859,7 +4102,7 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
     if caseID == "init_001_exit" {
         return try validateInit001Golden(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model", "init_011_static_pie_got_byte_load"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -3966,6 +4209,16 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
             disassembly: disassembly,
             binary: built.binary
         )
+    case "init_011_static_pie_got_byte_load":
+        failures = validateInit011Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly,
+            binary: built.binary
+        )
     default:
         failures = [fail("case-id", "unsupported golden ELF case \(caseID)")]
     }
@@ -4019,6 +4272,12 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
         ]
         expectedExitCode = 0
         expectedMessage = nil
+    case "init_011_static_pie_got_byte_load":
+        expectedSyscalls = [
+            ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
+        ]
+        expectedExitCode = 42
+        expectedMessage = nil
     default:
         expectedSyscalls = [
             ExpectedSyscall(nr: "exit", code: 42, fd: nil, len: nil, bytes: nil),
@@ -4036,13 +4295,17 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
         compilerVersion: toolchain["clang_version"] ?? "",
         linkerPath: toolchain["linker_path"] ?? "",
         linkerVersion: toolchain["linker_version"] ?? "",
-        flags: [
+        flags: caseID == "init_011_static_pie_got_byte_load" ? [
+            "-target", "aarch64-linux-gnu",
+            "-nostdlib", "-static-pie", "-Wl,--no-relax", "-fuse-ld=lld",
+            "-Wl,--build-id=none", "-Wl,-e,_start",
+        ] : [
             "-target", "aarch64-linux-gnu",
             "-nostdlib", "-static", "-fuse-ld=lld",
             "-Wl,--build-id=none", "-Wl,-e,_start",
         ],
         libcMode: "no-libc",
-        elfType: "ET_EXEC",
+        elfType: caseID == "init_011_static_pie_got_byte_load" ? "ET_DYN" : "ET_EXEC",
         entrypoint: entrypoint,
         machine: "AArch64",
         expectedSyscalls: expectedSyscalls,
@@ -4093,8 +4356,8 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
     let executeMode = ProcessInfo.processInfo.environment["EXECUTE"] ?? ""
     let negativeExecution = ProcessInfo.processInfo.environment["NEGATIVE_EXECUTION"] ?? ""
-    guard ["init_001_exit", "init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model"].contains(caseID) else {
-        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit through init_010_cpu_model are implemented in this no-phone oracle checkpoint.")
+    guard ["init_001_exit", "init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model", "init_011_static_pie_got_byte_load"].contains(caseID) else {
+        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit through init_011_static_pie_got_byte_load are implemented in this no-phone oracle checkpoint.")
     }
     if refresh && !executeMode.isEmpty {
         throw GateError.usage("EXECUTE is not supported with tcti-golden-elf-refresh")
@@ -4104,6 +4367,7 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     var artifacts: [String] = []
     var failures: [Failure] = []
     var executionReport: ExecutionReport?
+    var focusedPassArtifacts: [String] = []
     do {
         let toolchain = try toolchainInfo()
         if refresh {
@@ -4126,6 +4390,7 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
         } else if executeMode == "switch-debug" {
             let result = try validateAndExecuteGoldenCase(caseID: caseID, metadataURL: metadataPath, outputRoot: outputRoot)
             artifacts.append(contentsOf: result.artifacts)
+            focusedPassArtifacts = result.artifacts
             failures.append(contentsOf: result.failures)
             executionReport = result.execution
             failures.append(contentsOf: validateNegativeExecutionFixtures(artifacts: &artifacts))
@@ -4148,13 +4413,36 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
             replayCommand += " NEGATIVE_EXECUTION=\(negativeExecution)"
         }
         replayCommand += " make \(target)"
+        let reducerCaseID = caseID == "init_011_static_pie_got_byte_load" &&
+            executeMode == "switch-debug" &&
+            negativeExecution.isEmpty ? "\(caseID)-switch-debug-failure" : caseID
         let reducer = try writeReducer(
             target: target,
-            caseID: caseID,
+            caseID: reducerCaseID,
             command: replayCommand,
             reason: failures.map(\.message).joined(separator: "; "),
             artifacts: artifacts,
             expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+    } else if caseID == "init_003_stack" && executeMode == "switch-debug" && negativeExecution.isEmpty {
+        let reducer = try writeReducer(
+            target: target,
+            caseID: "init_003_stack-switch-debug-pass-regression",
+            command: "CASE=init_003_stack EXECUTE=switch-debug make \(target)",
+            reason: "init_003_stack switch-debug pass regression: stack STR/LDR execution must continue to exit(42)",
+            artifacts: focusedPassArtifacts,
+            expectedStatus: .pass
+        )
+        artifacts.append(relativePath(reducer))
+    } else if caseID == "init_011_static_pie_got_byte_load" && executeMode == "switch-debug" && negativeExecution.isEmpty {
+        let reducer = try writeReducer(
+            target: target,
+            caseID: "init_011_static_pie_got_byte_load-switch-debug-pass-regression",
+            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug make \(target)",
+            reason: "init_011_static_pie_got_byte_load switch-debug pass regression: ADRP/GOT pointer LDR/LDRB execution must continue to exit(42)",
+            artifacts: focusedPassArtifacts,
+            expectedStatus: .pass
         )
         artifacts.append(relativePath(reducer))
     }

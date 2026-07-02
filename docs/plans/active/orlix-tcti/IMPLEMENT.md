@@ -2,6 +2,102 @@
 
 ## 2026-07-02
 
+### Checkpoint: Static PIE GOT Byte Load Golden Case
+
+- Operator-scoped no-phone case: `init_011_static_pie_got_byte_load`.
+- Added no-libc static PIE source:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_011_static_pie_got_byte_load/init_011_static_pie_got_byte_load.S`.
+- Added canonical metadata:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_011_static_pie_got_byte_load/golden.json`.
+- Fixture shape:
+  - emits `ADRP x8` using the architectural 4 KiB page base.
+  - emits GOT relocation form `LDR x8, [x8, #0xd8]`.
+  - applies static PIE `R_AARCH64_RELATIVE` relocation in the no-phone oracle at load base zero.
+  - emits `LDRB w0, [x8]` from relocated payload byte `42`.
+  - exits through Linux `exit(42)`.
+- Exact switch-debug instruction words:
+  - `0x90000088` `adrp x8, 0x21000`.
+  - `0xf9406d08` `ldr x8, [x8, #0xd8]`.
+  - `0x39400100` `ldrb w0, [x8]`.
+  - `0xd2800ba8` `mov x8, #93`.
+  - `0xd4000001` `svc #0`.
+- Execution proof:
+  - `Build/TCTI/golden_elf/init_011_static_pie_got_byte_load/execution.json`.
+  - `guest_instructions_executed=5`.
+  - decoded `ADRP` effective address `0x0000000000021000`.
+  - decoded `LDR` effective address `0x00000000000210d8`.
+  - decoded `LDRB` effective address `0x0000000000001000`.
+  - captured syscall `exit(42)`.
+- Reducer coverage:
+  - `Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json`.
+  - replay report `Build/TCTI/reports/tcti-repro/report.json`.
+  - expected `pass`, actual `pass`, replay exit code `0`.
+- Harness routing:
+  - added `golden-init-011-static-pie-got-byte-load-structural` to `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`.
+  - added `switch-init-011-static-pie-got-byte-load` to `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`.
+  - made `diff-switch-init-001-exit` depend on `switch-init-011-static-pie-got-byte-load`.
+  - added the `init_011` structural and switch-debug pass predicates to `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`.
+  - after the `init_011` reports passed, `agent-next` advanced to `physical-tcti-init-first-syscall`.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy make agent-harness-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-golden-elf-refresh CASE=init_011_static_pie_got_byte_load
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-golden-elf CASE=init_011_static_pie_got_byte_load
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug
+rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json
+rtk proxy make tcti-appstore-safety-audit
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Simulator diagnostic:
+
+```text
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-storage-doctor
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
+```
+
+Simulator report:
+
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T171109Z-52982.json`.
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T171109Z-52982.md`.
+- `status=pass`.
+- `passed=true`.
+- `destination=iphonesimulator`.
+- `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+- `release_gate_eligible=false`.
+- `readiness_gate_eligible=false`.
+- forbidden behavior fields all false.
+- Only `Orlix-iPhone-15-Pro-Max` was booted during the simulator diagnostic.
+- The first simulator attempt failed before launch because `xcodegen` could not find `USER`; rerun with `USER=rudironsoni LOGNAME=rudironsoni` passed.
+
+Boundary:
+
+- No physical-device gate run.
+- Simulator run was diagnostic only and did not satisfy physical or release readiness.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No HostAdapter Linux behavior added.
+- No Darwin syscall guest side effect added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- No checkpoint-scoped `.serena/project.yml` edit; the pre-existing unrelated dirty `.serena/project.yml` file was left unstaged.
+
 ### Checkpoint: SIMD/FP Q/D Load-Store Uses Guest SIMD State
 
 - Harness-selected gate remains `physical-tcti-init-first-syscall`.

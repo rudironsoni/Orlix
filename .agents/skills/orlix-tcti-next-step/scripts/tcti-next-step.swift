@@ -350,6 +350,7 @@ let structuralGateCases: [String: String] = [
     "golden-init-008-self-modify-structural": "init_008_self_modify",
     "golden-init-009-faults-structural": "init_009_faults",
     "golden-init-010-cpu-model-structural": "init_010_cpu_model",
+    "golden-init-011-static-pie-got-byte-load-structural": "init_011_static_pie_got_byte_load",
 ]
 
 func syscalls(_ object: [String: Any]) -> [[String: Any]] {
@@ -725,6 +726,61 @@ func switchCPUModel010Pass() -> (Bool, String) {
     }
 }
 
+func switchStaticPIEGOTByte011Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_011_static_pie_got_byte_load")
+        let exit = object["exit"] as? [String: Any]
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 5
+        let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 42
+        let syscallOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "exit",
+                  intValue(syscall["nr"]) == 93,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  let first = args.first
+            else {
+                return false
+            }
+            return intValue(first) == 42
+        }
+        let decoded = object["decoded_instructions"] as? [Any] ?? []
+        let hasADRP = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "pc_relative_address" &&
+                stringValue(instruction["op"]) == "adrp" &&
+                intValue(instruction["rd"]) == 8 &&
+                stringValue(instruction["effective_address"]) == "0x0000000000021000"
+        }
+        let hasGOTLoad = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "load_store_unsigned_immediate" &&
+                stringValue(instruction["op"]) == "ldr" &&
+                intValue(instruction["rt"]) == 8 &&
+                intValue(instruction["rn"]) == 8 &&
+                intValue(instruction["offset"]) == 216 &&
+                intValue(instruction["width"]) == 64 &&
+                stringValue(instruction["effective_address"]) == "0x00000000000210d8"
+        }
+        let hasByteLoad = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "load_store_unsigned_immediate" &&
+                stringValue(instruction["op"]) == "ldrb" &&
+                intValue(instruction["rt"]) == 0 &&
+                intValue(instruction["rn"]) == 8 &&
+                intValue(instruction["width"]) == 8 &&
+                stringValue(instruction["effective_address"]) == "0x0000000000001000"
+        }
+        if entered && backend && instructionCountOK && exitOK && syscallOK && hasADRP && hasGOTLoad && hasByteLoad {
+            return (true, "init_011_static_pie_got_byte_load switch-debug captured static PIE GOT byte-derived exit(42)")
+        }
+        return (false, "init_011_static_pie_got_byte_load execution artifact does not capture static PIE GOT byte-derived exit(42)")
+    } catch {
+        return (false, "missing malformed init_011_static_pie_got_byte_load execution artifact: \(error)")
+    }
+}
+
 func firstGadgetExit001Pass() -> (Bool, String) {
     let report = reportFact(target: "tcti-diff-switch")
     guard report.exists, report.status == "pass", report.passed else {
@@ -849,6 +905,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-010-cpu-model":
         let check = switchCPUModel010Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "switch-init-011-static-pie-got-byte-load":
+        let check = switchStaticPIEGOTByte011Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         let check = diffSwitchExit001Pass()
