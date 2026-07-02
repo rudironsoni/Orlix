@@ -1956,6 +1956,78 @@ rtk proxy make tcti-golden-elf CASE=init_008_self_modify
   - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
   - No generated executable memory or host-executable guest text added.
   - No product defconfig flip.
+
+### Checkpoint: Switch-Debug Executes `init_008_self_modify`
+
+- Harness-selected gate: `switch-init-008-self-modify`.
+- Selected command: `make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug`.
+- Why selected: `golden-init-008-self-modify-structural` passed and the harness advanced to the next switch-debug execution proof for the same case.
+- Added switch-debug semantic behavior:
+  - capture register-based 64-bit `STR` to file-backed guest `PT_LOAD` bytes as a test-harness memory-write event;
+  - verify the target address is backed by readable ELF bytes before recording the write;
+  - continue execution after the captured memory write;
+  - stop on the later captured guest `exit(0)`;
+  - do not mutate host executable mappings;
+  - do not execute modified guest bytes;
+  - do not add generated executable memory, host-executable guest text, or invalidation semantics.
+- Expected captured memory write:
+  - address: `0x0000000000210138`;
+  - width: `64`;
+  - value: `0x000000000000002a`;
+  - captured: `true`.
+- Expected captured syscall:
+  - `exit(0)`.
+- Execution report:
+  - `Build/TCTI/golden_elf/init_008_self_modify/execution.json`.
+- Reducers:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-self-modify-wrong-value.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-self-modify-invalid-write.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-self-modify-unsupported-branch.json`.
+- Replayed reducer:
+
+```text
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-self-modify-invalid-write.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+```text
+expected status: fail
+actual replay status: fail
+actual replay exit code: 2
+rc=2
+```
+
+- Harness follow-up:
+  - Added the skill-local status recognizer for `switch-init-008-self-modify`.
+  - The recognizer requires switch-debug backend, entered entrypoint, 6 guest instructions, captured patch-slot write, decoded `STR x0, [x1]`, and captured `exit(0)`.
+  - After recognition, `agent-next` selected `golden-init-009-faults-structural`.
+- Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
+rtk proxy make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+```
+
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No simulator gate run.
+  - No phone gate run.
+  - No HostAdapter behavior.
+  - No Darwin syscall behavior.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No generated executable memory.
+  - No host-executable guest text.
+  - No execution of modified guest bytes.
+  - No block invalidation semantics.
+  - No product defconfig flip.
 - The next gate selected by the harness was not executed in this checkpoint.
 
 Verification:
