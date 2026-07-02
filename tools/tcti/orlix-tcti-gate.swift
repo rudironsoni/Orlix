@@ -3649,6 +3649,84 @@ func validateInit009Metadata(
     return failures
 }
 
+func validateInit010Metadata(
+    _ metadata: GoldenMetadata,
+    sourceHash: String,
+    binaryHash: String,
+    fileOutput: String,
+    objdumpHeader: String,
+    disassembly: String,
+    binary: URL
+) -> [Failure] {
+    var failures: [Failure] = []
+    if metadata.caseID != "init_010_cpu_model" {
+        failures.append(fail("case-id", "golden case id must be init_010_cpu_model"))
+    }
+    if metadata.sourceSHA256 != sourceHash {
+        failures.append(fail("source-sha256", "source hash changed for init_010_cpu_model"))
+    }
+    if metadata.expectedBinarySHA256 != binaryHash {
+        failures.append(fail("binary-sha256", "binary hash changed for init_010_cpu_model; inspect or run make tcti-golden-elf-refresh CASE=init_010_cpu_model"))
+    }
+    if metadata.actualBinarySHA256 != binaryHash {
+        failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_010_cpu_model"))
+    }
+    if metadata.elfType != "ET_EXEC" {
+        failures.append(fail("elf-type", "init_010_cpu_model golden metadata must use ET_EXEC"))
+    }
+    if metadata.machine != "AArch64" {
+        failures.append(fail("elf-machine", "init_010_cpu_model golden metadata must use AArch64"))
+    }
+    if metadata.expectedExitCode != 0 {
+        failures.append(fail("expected-exit", "init_010_cpu_model must expect exit code 0"))
+    }
+    if metadata.expectedSyscalls.count != 1 ||
+        metadata.expectedSyscalls.first?.nr != "exit" ||
+        metadata.expectedSyscalls.first?.code != 0 {
+        failures.append(fail("expected-syscall", "init_010_cpu_model must expect exactly exit(0)"))
+    }
+    if !fileOutput.contains("ELF 64-bit LSB executable") {
+        failures.append(fail("elf-class", "init_010_cpu_model must be ELF64 executable"))
+    }
+    if !fileOutput.contains("ARM aarch64") {
+        failures.append(fail("elf-file-machine", "init_010_cpu_model file output must identify ARM aarch64"))
+    }
+    if !objdumpHeader.contains("file format elf64-littleaarch64") {
+        failures.append(fail("objdump-format", "init_010_cpu_model must disassemble as elf64-littleaarch64"))
+    }
+    if !objdumpHeader.contains("architecture: aarch64") {
+        failures.append(fail("objdump-architecture", "init_010_cpu_model objdump architecture must be aarch64"))
+    }
+    if !objdumpHeader.lowercased().contains("start address: \(expectedEntrypoint(metadata))") {
+        failures.append(fail("entrypoint", "init_010_cpu_model entrypoint does not match \(metadata.entrypoint)"))
+    }
+    let requiredInstructionWords = [
+        "10000081": "adr x1, cpu_model",
+        "d2800000": "mov x0, #0",
+        "d2800ba8": "mov x8, #93",
+        "d4000001": "svc #0",
+    ]
+    for (word, description) in requiredInstructionWords where !disassembly.contains(word) {
+        failures.append(fail("instruction-shape", "init_010_cpu_model disassembly missing \(description) instruction word \(word)"))
+    }
+    if !disassembly.contains("adr\tx1") || !disassembly.contains("<cpu_model>") {
+        failures.append(fail("cpu-model-address", "init_010_cpu_model must use ADR to address the fixed virtual CPU model string"))
+    }
+    do {
+        let elf = try TinyElf64Aarch64(binary: binary)
+        let bytes = try elf.readBytes(at: 0x210130, length: 17)
+        if String(data: bytes, encoding: .utf8) != "orlix-aarch64-v1\n" {
+            failures.append(fail("cpu-model-bytes", "init_010_cpu_model must embed orlix-aarch64-v1 newline"))
+        }
+    } catch {
+        failures.append(fail("cpu-model-bytes", "\(error)"))
+    }
+    for (key, value) in metadata.forbiddenBehavior where value {
+        failures.append(fail("forbidden-behavior", "init_010_cpu_model golden metadata sets forbidden_behavior.\(key)=true"))
+    }
+    return failures
+}
+
 func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failures: [Failure], artifacts: [String]) {
     let built = try buildInit001(outputRoot: outputRoot)
     let expected = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: metadataURL))
@@ -3684,7 +3762,7 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
     if caseID == "init_001_exit" {
         return try validateInit001Golden(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -3781,6 +3859,16 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
         )
+    case "init_010_cpu_model":
+        failures = validateInit010Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly,
+            binary: built.binary
+        )
     default:
         failures = [fail("case-id", "unsupported golden ELF case \(caseID)")]
     }
@@ -3826,6 +3914,12 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
         expectedMessage = nil
     case "init_009_faults":
         expectedSyscalls = []
+        expectedExitCode = 0
+        expectedMessage = nil
+    case "init_010_cpu_model":
+        expectedSyscalls = [
+            ExpectedSyscall(nr: "exit", code: 0, fd: nil, len: nil, bytes: nil),
+        ]
         expectedExitCode = 0
         expectedMessage = nil
     default:
@@ -3902,8 +3996,8 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
     let executeMode = ProcessInfo.processInfo.environment["EXECUTE"] ?? ""
     let negativeExecution = ProcessInfo.processInfo.environment["NEGATIVE_EXECUTION"] ?? ""
-    guard ["init_001_exit", "init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults"].contains(caseID) else {
-        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit through init_009_faults are implemented in this no-phone oracle checkpoint.")
+    guard ["init_001_exit", "init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model"].contains(caseID) else {
+        return try writeTodo(target: target, caseID: caseID, summary: "Only init_001_exit through init_010_cpu_model are implemented in this no-phone oracle checkpoint.")
     }
     if refresh && !executeMode.isEmpty {
         throw GateError.usage("EXECUTE is not supported with tcti-golden-elf-refresh")

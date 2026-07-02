@@ -1,5 +1,54 @@
 # IMPLEMENT.md
 
+## 2026-07-02
+
+### Checkpoint: CPU Model Golden ELF Structural Gate
+
+- Harness-selected gate implemented: `golden-init-010-cpu-model-structural`.
+- Selected command: `make tcti-golden-elf CASE=init_010_cpu_model`.
+- Added no-libc AArch64 Linux source:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_010_cpu_model/init_010_cpu_model.S`.
+- Added canonical metadata:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_010_cpu_model/golden.json`.
+- Added structural validation wiring in:
+  - `tools/tcti/orlix-tcti-gate.swift`.
+- Structural fixture shape:
+  - `adr x1, cpu_model`.
+  - `mov x0, #0`.
+  - `mov x8, #93`.
+  - `svc #0`.
+  - `cpu_model: .ascii "orlix-aarch64-v1\n"`.
+- Exact emitted instruction words:
+  - `0x10000081` `adr x1, 0x210130 <cpu_model>`.
+  - `0xd2800000` `mov x0, #0`.
+  - `0xd2800ba8` `mov x8, #93`.
+  - `0xd4000001` `svc #0`.
+- Metadata hashes:
+  - source SHA256 `745e1961f862ad6f3188fcf9376e42bc5d4dfd5e47dfd8f06a107403f66dc7c6`.
+  - binary SHA256 `c92ceaccd651fa209b16975c48049bf97b085da5578f06da3eed75ef16bd8621`.
+- Validation artifacts:
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - `Build/TCTI/golden_elf/init_010_cpu_model/validation.json`.
+- The structural gate passed.
+
+Boundary:
+
+- Structural-only gate. No `init_010_cpu_model` execution was claimed.
+- No switch execution was implemented.
+- No `CTR_EL0`, `DCZID_EL0`, auxv, or `/proc/cpuinfo` execution semantics were added.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No physical-device gate.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+- No custom MCP.
+- No `tools/agent`.
+
 ## 2026-07-01
 
 ### Checkpoint: Memory Golden ELF Structural Gate
