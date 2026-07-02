@@ -951,6 +951,67 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
     )
 }
 
+func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "missing iphonesimulator runtime-validation report for tcti-simulator-stability",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenClear = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ].allSatisfy { !boolValue(forbidden[$0]) }
+    let reportOK = report.status == "pass" &&
+        report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(object["backend"]) == "tcti" &&
+        stringValue(object["profile"]) == "tcti_runtime" &&
+        !boolValue(object["preflight_only"]) &&
+        !boolValue(object["autonomous_tests_bypassed"]) &&
+        forbiddenClear
+    let reason: String
+    if reportOK {
+        reason = "iphonesimulator runtime-validation report \(report.path) passed with no fatal simulator TCTI runtime errors"
+    } else if report.gitSHA != gitSHA() {
+        reason = "latest iphonesimulator stability report \(report.path) is stale for current HEAD"
+    } else {
+        reason = "latest iphonesimulator stability report \(report.path) is not a valid non-preflight TCTI pass"
+    }
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: report.status,
+        passed: reportOK,
+        reason: reason,
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
 func baseGateStatus(_ gate: Gate) -> GateStatus {
     if let caseID = structuralGateCases[gate.id] {
         let check = structuralCasePass(caseID)
@@ -1013,6 +1074,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return basicReportGate(gate, target: "tcti-direct-chain-fuzz")
     case "simulator-tcti-init-first-syscall":
         return simulatorFirstSyscallPass(gate)
+    case "simulator-tcti-runtime-stability":
+        return simulatorStabilityPass(gate)
     case "physical-tcti-init-first-syscall":
         return missingGate(gate, reason: "physical first-syscall gate is not allowed until no-phone and simulator prerequisites pass")
     default:
@@ -1201,6 +1264,60 @@ func runtimePreflightGates() -> [Gate] {
             stopConditions: [
                 "Stop if no-phone reports are missing, todo, evidence, or fail.",
                 "Stop if simulator runtime-validation uses preflight-only or emergency override evidence.",
+                "Stop if a simulator pass is claimed as physical, release, or readiness eligibility.",
+            ]
+        ),
+        Gate(
+            id: "simulator-tcti-runtime-stability",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability",
+            kind: "simulator-runtime",
+            prerequisites: ["simulator-tcti-init-first-syscall"],
+            allowedScope: [
+                "tools/runtime/orlix-runtime-validation.sh",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not treat first-syscall marker evidence as simulator stability.",
+                "Do not patch simulator logs directly without reducing TCTI behavior into a no-phone fixture.",
+                "Do not add production assembly or gadget dispatch unless a later selected gate allows it.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
+            ],
+            expectedReportPaths: [
+                "Build/Reports/runtime/tcti-simulator-stability-*.json",
+                "Build/TCTI/reports/tcti-plan-consistency/report.json",
+                "Build/TCTI/reports/tcti-report-schema-check/report.json",
+                "Build/TCTI/reports/tcti-golden-elf/report.json",
+                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-plan-consistency",
+                "rtk proxy make tcti-report-schema-check",
+                "rtk proxy make tcti-golden-elf",
+                "rtk proxy make tcti-appstore-safety-audit",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability",
+            ],
+            reducerRequirements: [
+                "Any simulator fatal runtime error must be reduced into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
+                "The stability report must include the fatal log artifact when the gate fails.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "orlix-tcti-reproducer",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): require simulator runtime stability gate",
+            stopConditions: [
+                "Stop if the simulator captures Kernel panic, Attempted to kill init, Attempted kill init, user fault, BUG, Oops, SIGSEGV, fatal error, or crash.",
+                "Stop if the failure cannot be reduced before implementation.",
                 "Stop if a simulator pass is claimed as physical, release, or readiness eligibility.",
             ]
         ),

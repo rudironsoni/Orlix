@@ -1328,6 +1328,7 @@
       "prerequisites": [
         "first-gadget-init-001-exit",
         "simulator-tcti-init-first-syscall",
+        "simulator-tcti-runtime-stability",
         "appstore-safety",
         "report-schema"
       ],

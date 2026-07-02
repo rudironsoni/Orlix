@@ -2,6 +2,94 @@
 
 ## 2026-07-02
 
+### Checkpoint: Simulator Stability Gate Blocks Phone
+
+- User constraint:
+  - TCTI must advance without the phone first.
+  - The simulator is mandatory.
+  - The only allowed simulator is `Orlix-iPhone-15-Pro-Max` with UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - Physical-device validation remains blocked until the simulator build runs without fatal TCTI runtime errors.
+- Harness fix:
+  - Added generated gate `simulator-tcti-runtime-stability`.
+  - The simulator stability gate command is:
+    - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability`.
+  - The gate requires the earlier `simulator-tcti-init-first-syscall` report to pass first.
+  - The phone gate now explicitly depends on both:
+    - `simulator-tcti-init-first-syscall`.
+    - `simulator-tcti-runtime-stability`.
+  - Direct physical `runtime-validation` preflight now also requires a current passing simulator stability JSON report before non-override device work can proceed.
+  - The stability gate allowed scope is intentionally narrow:
+    - `tools/runtime/orlix-runtime-validation.sh`.
+    - `docs/plans/active/orlix-tcti/IMPLEMENT.md`.
+  - Production TCTI files are not allowed by this gate. The simulator failure must first be reduced into a no-phone fixture before production patching.
+- Runtime validation behavior:
+  - `tcti-simulator-stability` is simulator-only.
+  - It requires the captured `Orlix TCTI: svc #0` marker.
+  - It fails if captured logs contain fatal post-launch TCTI runtime evidence:
+    - `Kernel panic`.
+    - `Attempted to kill init`.
+    - `Attempted kill init`.
+    - `Orlix TCTI: user fault`.
+    - `panic - not syncing`.
+    - `BUG:`.
+    - `Oops`.
+    - `SIGSEGV`.
+    - `fatal error`.
+    - `crash`.
+
+Simulator stability validation:
+
+```text
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability
+```
+
+- Result: failed as intended.
+- Report:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T181746Z-80916.json`.
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T181746Z-80916.md`.
+- Fatal artifact:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T181746Z-80916.artifacts/tcti-simulator-fatal-runtime.txt`.
+- Fatal facts captured:
+  - `Orlix TCTI: user fault task=init pid=1 pc=0x3a2b51e3a1f4 lr=0x3a2b51e39ffc sp=0x3a2b6184f800 addr=0x0 access=1 si=1`.
+  - `Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b`.
+
+Current rerun after the direct-preflight and artifact-reporting patch:
+
+- Report:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T183541Z-11257.json`.
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T183541Z-11257.md`.
+- Machine-readable artifacts now include:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T183541Z-11257.artifacts/tcti-first-syscall.txt`.
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T183541Z-11257.artifacts/tcti-simulator-fatal-runtime.txt`.
+- Current fatal facts captured:
+  - `Orlix TCTI: svc #0 task=init pid=1 pc=0x2765630a6a80 syscall=178 x0=0xb2 x1=0x2765630a54b4 x2=0x0 x3=0x0 x4=0x0 x5=0x0`.
+  - `Orlix TCTI: user fault task=init pid=1 pc=0x2765630ba1f4 lr=0x2765630b9ffc sp=0x2765728af800 addr=0x0 access=1 si=1`.
+  - `Kernel panic - not syncing: Attempted kill init! exitcode=0x0000000b`.
+- The updated JSON report includes artifact paths instead of an empty `artifacts` array.
+- The fatal matcher now covers both `Attempted to kill init` and `Attempted kill init`.
+
+Harness behavior after the failing stability report:
+
+- `agent-status` keeps `physical_device_allowed=false`.
+- `agent-next` selects `simulator-tcti-runtime-stability`.
+- `agent-task-envelope-check` validates the machine-readable envelope.
+- The next implementation checkpoint must reduce the simulator user-fault/panic into a no-phone TCTI fixture or reproducer before production TCTI changes.
+
+Boundary:
+
+- No physical-device gate was run.
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No HostAdapter Linux behavior added.
+- No Darwin syscall guest side effect added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- No production TCTI runtime fix was made in this checkpoint.
+
 ### Checkpoint: Simulator Gate Is Mandatory Before Phone Gate
 
 - User constraint:
