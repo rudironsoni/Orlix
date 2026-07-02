@@ -2028,6 +2028,60 @@ rtk proxy make agent-task-envelope-check AREA=orlix-tcti
   - No execution of modified guest bytes.
   - No block invalidation semantics.
   - No product defconfig flip.
+
+### Checkpoint: Structural Golden `init_009_faults`
+
+- Harness-selected gate: `golden-init-009-faults-structural`.
+- Selected command: `make tcti-golden-elf CASE=init_009_faults`.
+- Why selected: `switch-init-008-self-modify` passed and the harness advanced to the next structural no-phone golden ELF gate.
+- Added fixture:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_009_faults/init_009_faults.S`.
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_009_faults/golden.json`.
+- Structural intent:
+  - no-libc AArch64 Linux ELF;
+  - set `x1 = 0`;
+  - structurally attempt `ldr x0, [x1]` from guest address zero;
+  - include an unreachable `exit(1)` tail only to keep deterministic ELF shape;
+  - do not execute guest instructions in this checkpoint;
+  - do not implement signal, process, scheduler, or Linux fault delivery semantics.
+- Emitted entrypoint:
+  - `0x0000000000210120`.
+- Emitted instruction encodings:
+  - `0xd2800001`: `mov x1, #0`.
+  - `0xf9400020`: `ldr x0, [x1]`.
+  - `0xd2800020`: `mov x0, #1`.
+  - `0xd2800ba8`: `mov x8, #93`.
+  - `0xd4000001`: `svc #0`.
+- Validator updates:
+  - accepts `init_009_faults` in structural `tcti-golden-elf`;
+  - verifies source hash, binary hash, ELF64 AArch64 executable shape, entrypoint, empty expected syscall list, invalid-load instruction shape, and all forbidden behavior flags false;
+  - keeps `init_009_faults` out of any runtime, signal, process, or physical-device behavior.
+- Reports:
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - `Build/TCTI/golden_elf/init_009_faults/validation.json`.
+- Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make tcti-golden-elf-refresh CASE=init_009_faults
+rtk proxy make tcti-golden-elf CASE=init_009_faults
+```
+
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No TCTI runtime feature implemented.
+  - No switch-debug execution for `init_009_faults`.
+  - No signal, process, scheduler, VFS, fd table, or Linux runtime semantics added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No simulator gate run.
+  - No phone gate run.
+  - No HostAdapter behavior.
+  - No Darwin syscall behavior.
+  - No generated executable memory.
+  - No host-executable guest text.
+  - No product defconfig flip.
 - The next gate selected by the harness was not executed in this checkpoint.
 
 Verification:
