@@ -1901,6 +1901,61 @@ rtk proxy make agent-task-envelope-check AREA=orlix-tcti
   - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
   - No host `mprotect`, `vm_protect`, `MAP_JIT`, RWX, generated executable memory, or host-executable guest text added.
   - No product defconfig flip.
+
+### Checkpoint: Structural Golden `init_008_self_modify`
+
+- Harness-selected gate: `golden-init-008-self-modify-structural`.
+- Selected command: `make tcti-golden-elf CASE=init_008_self_modify`.
+- Why selected: `switch-init-007-mprotect` passed and the harness advanced to the next structural no-phone golden ELF gate.
+- Added fixture:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_008_self_modify/init_008_self_modify.S`.
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_008_self_modify/golden.json`.
+- Structural intent:
+  - no-libc AArch64 Linux ELF;
+  - compute a PC-relative address to `patch_slot` in `.text`;
+  - store `42` into that text-backed slot;
+  - exit with `exit(0)`;
+  - do not execute modified code;
+  - do not implement self-modifying execution semantics.
+- Emitted entrypoint:
+  - `0x0000000000210120`.
+- Emitted instruction encodings:
+  - `0x100000c1`: `adr x1, 0x210138 <patch_slot>`.
+  - `0xd2800540`: `mov x0, #42`.
+  - `0xf9000020`: `str x0, [x1]`.
+  - `0xd2800000`: `mov x0, #0`.
+  - `0xd2800ba8`: `mov x8, #93`.
+  - `0xd4000001`: `svc #0`.
+- Validator updates:
+  - accepts `init_008_self_modify` in structural `tcti-golden-elf`;
+  - verifies source hash, binary hash, ELF64 AArch64 executable shape, entrypoint, expected `exit(0)` metadata, ADR-to-`patch_slot`, store-to-`patch_slot`, required instruction words, and all forbidden behavior flags false;
+  - keeps `init_008_self_modify` out of the switch-debug execution allow-list for this structural checkpoint.
+- Reports:
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - `Build/TCTI/golden_elf/init_008_self_modify/validation.json`.
+- Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make tcti-golden-elf-refresh CASE=init_008_self_modify
+rtk proxy make tcti-golden-elf CASE=init_008_self_modify
+```
+
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No TCTI runtime feature implemented.
+  - No switch-debug execution for `init_008_self_modify`.
+  - No self-modifying execution semantics.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No simulator gate run.
+  - No phone gate run.
+  - No HostAdapter behavior.
+  - No Darwin syscall behavior.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No generated executable memory or host-executable guest text added.
+  - No product defconfig flip.
 - The next gate selected by the harness was not executed in this checkpoint.
 
 Verification:
