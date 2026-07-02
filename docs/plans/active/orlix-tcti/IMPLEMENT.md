@@ -2,6 +2,52 @@
 
 ## 2026-07-02
 
+### Checkpoint: Physical First-Syscall Gate Still Blocked By Device DDI Readiness After Safety Fix
+
+- Harness-selected gate: `physical-tcti-init-first-syscall`.
+- Selected command: `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Why selected: after `c3f870bc57646e5e72fbbc9078b96508ab8a30de`, all no-phone and App Store safety prerequisites were passing and `agent-status` reported `physical_device_allowed=true`.
+- Runtime report:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T053620Z-98123.json`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T053620Z-98123.md`.
+- Result:
+  - status `fail`.
+  - passed `false`.
+  - readiness gate eligible `false`.
+  - release gate eligible `false`.
+  - failure occurred during physical device readiness before kernel build, app build, install, launch, `/init`, TCTI execution, `svc #0`, or `orlix_syscall_dispatch`.
+- Device selected by runtime validation:
+  - `RRJ-iPhone-15-Pro-Max`.
+  - CoreDevice identifier `7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`.
+- Blocker:
+  - Developer disk image services are unavailable for the physical iPhone.
+  - The runtime report instructs the operator to connect, unlock, trust the device, and let Xcode mount the developer disk image before rerunning runtime validation.
+- Report forbidden behavior fields stayed false:
+  - `host_exec_guest_text=false`.
+  - `native_ios_api_exposure_to_guest=false`.
+  - `map_jit=false`.
+  - `rwx=false`.
+  - `generated_exec_memory=false`.
+  - `host_x18=false`.
+
+Boundary:
+
+- Physical TCTI gate did not pass.
+- No app or TCTI runtime evidence was captured.
+- No no-phone reducer was added because the failure happened before app/TCTI execution and is device readiness, not TCTI behavior.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No simulator gate run.
+- No direct device command outside `runtime-validation`.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added as a guest side effect.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- No custom MCP added.
+- No `tools/agent` added.
+
 ### Checkpoint: HostAdapter Native Path Quarantined From App Store Safety Gate
 
 - Harness-selected gate: `appstore-safety`.
