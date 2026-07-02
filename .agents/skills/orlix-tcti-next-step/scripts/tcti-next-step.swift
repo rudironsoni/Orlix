@@ -653,6 +653,37 @@ func switchSelfModify008Pass() -> (Bool, String) {
     }
 }
 
+func switchFaults009Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_009_faults")
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 2
+        let fault = object["fault"] as? [String: Any]
+        let faultOK = stringValue(fault?["kind"]) == "guest_memory_fault" &&
+            stringValue(fault?["address"]) == "0x0000000000000000" &&
+            stringValue(fault?["access"]) == "read" &&
+            boolValue(fault?["captured"])
+        let noSyscall = syscalls(object).isEmpty
+        let noExit = object["exit"] == nil
+        let decoded = object["decoded_instructions"] as? [Any] ?? []
+        let hasFaultingLoad = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "load_store_unsigned_immediate" &&
+                stringValue(instruction["op"]) == "ldr" &&
+                intValue(instruction["rt"]) == 0 &&
+                intValue(instruction["rn"]) == 1 &&
+                stringValue(instruction["effective_address"]) == "0x0000000000000000"
+        }
+        if entered && backend && instructionCountOK && faultOK && noSyscall && noExit && hasFaultingLoad {
+            return (true, "init_009_faults switch-debug captured read fault at guest address 0x0 before syscall")
+        }
+        return (false, "init_009_faults execution artifact does not capture the expected guest memory fault")
+    } catch {
+        return (false, "missing malformed init_009_faults execution artifact: \(error)")
+    }
+}
+
 func firstGadgetExit001Pass() -> (Bool, String) {
     let report = reportFact(target: "tcti-diff-switch")
     guard report.exists, report.status == "pass", report.passed else {
@@ -771,6 +802,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-008-self-modify":
         let check = switchSelfModify008Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "switch-init-009-faults":
+        let check = switchFaults009Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         let check = diffSwitchExit001Pass()
