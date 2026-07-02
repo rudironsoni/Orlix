@@ -2,6 +2,116 @@
 
 ## 2026-07-02
 
+### Checkpoint: Runtime Preflight Is Evidence-Only And First Gadget Parity Is In KUnit
+
+- Harness-selected gate remains `physical-tcti-init-first-syscall`.
+- Physical runtime execution is still blocked until the iPhone developer disk image service is available.
+- Safety review found that `ORLIX_RUNTIME_PREFLIGHT_ONLY=1` could write a physical-gate-shaped report with `status=pass`, `passed=true`, `release_gate_eligible=true`, and `readiness_gate_eligible=true` without installing, launching, or executing the app.
+- Fixed `tools/runtime/orlix-runtime-validation.sh` so preflight-only mode now writes:
+  - `status=evidence`.
+  - `passed=false`.
+  - `preflight_only=true`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+- The preflight command still exits zero when preflight checks pass, but its report cannot satisfy the runtime certification gate.
+- Fixed `tools/tcti/orlix-tcti-gate.swift` reducer replay reporting:
+  - `make tcti-repro` now writes a fresh `Build/TCTI/reports/tcti-repro/report.json`.
+  - Expected-fail reducers produce a passing replay report when actual replay status matches expected status.
+  - The report records `expected_status`, `actual_replay_status`, and `counters.replay_exit_code`.
+  - `tcti-repro` remains ineligible for release/readiness promotion.
+- Added product KUnit oracle-parity coverage for the first gadget path:
+  - `tcti_gadget_program_matches_switch_debug_init001_movz_prefix`.
+  - The test decodes the `init_001_exit` MOVZ prefix.
+  - It executes each decoded instruction through `tcti_switch_debug_execute_decoded()`.
+  - It lowers and executes the same decoded instruction through `tcti_lower_decoded_instruction()` and `tcti_execute_gadget_program()`.
+  - It compares `x0`, `x8`, `sp`, `pc`, and NZCV state after each instruction.
+  - Final candidate state is `x0=42`, `x8=93`, `pc=0x210128`.
+- This is product-tree test coverage for the first no-phone gadget proof. It is not a physical runtime pass.
+
+Verification:
+
+```text
+rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy git diff --check
+rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json
+rtk proxy jq '{target, status, passed, expected_status, actual_replay_status, counters, failures}' Build/TCTI/reports/tcti-repro/report.json
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_RUNTIME_PREFLIGHT_ONLY=1 REPORT_DIR=/tmp/orlix-runtime-validation-preflight-selected PROFILE=development DESTINATION=iphoneos GATE=tcti-init-first-syscall make runtime-validation
+rtk proxy jq '{status, passed, preflight_only, release_gate_eligible, readiness_gate_eligible, destination, selected_device_id, failure_context, summary}' /tmp/orlix-runtime-validation-preflight-selected/tcti-init-first-syscall-20260702T090717Z-98402.json
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make agent-harness-check
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly added.
+- No new gadget dispatch implementation added.
+- No simulator gate run.
+- No physical-device gate run.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added as a guest side effect.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- Release and readiness remain ineligible until the physical runtime gate produces a real passing report.
+
+### Checkpoint: Runtime Reports Include Manager Triage Evidence
+
+- Ownership lane: runtime-validation evidence only.
+- Changed only `tools/runtime/orlix-runtime-validation.sh`.
+- Runtime JSON reports now include:
+  - `destination`.
+  - `configuration`.
+  - `scheme`.
+  - `bundle_id`.
+  - `profile`.
+  - `artifact_dir`.
+  - `selected_device_id`.
+  - `selected_device_name`.
+  - `selected_xcode_device_id`.
+  - `failure_context`.
+- Runtime Markdown reports now include the same destination/configuration/scheme/bundle/device/artifact directory context in the report header.
+- Simulator install failures now record failure context before preserving the existing fail path:
+  - stage `simulator-install`.
+  - install command exit status.
+  - install timeout seconds.
+  - whether `install.stdout` is empty.
+  - whether `install.stderr` is empty.
+- Pass/fail/evidence semantics were not changed.
+- No direct device commands were added outside `runtime-validation`.
+- No TCTI gate Swift, HostAdapter, kernel runtime, defconfig, generated tree, `.serena`, or MCP files were changed.
+
+Verification:
+
+```text
+rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_RUNTIME_PREFLIGHT_ONLY=1 REPORT_DIR=/tmp/orlix-runtime-validation-preflight PROFILE=development DESTINATION=iphoneos GATE=tcti-init-first-syscall make runtime-validation
+rtk proxy jq '{status, passed, destination, configuration, scheme, bundle_id, artifact_dir, selected_device_id, selected_device_name, selected_xcode_device_id, failure_context, profile}' /tmp/orlix-runtime-validation-preflight/tcti-init-first-syscall-20260702T085152Z-71500.json
+rtk proxy sed -n '1,40p' /tmp/orlix-runtime-validation-preflight/tcti-init-first-syscall-20260702T085152Z-71500.md
+rtk proxy git diff --check -- tools/runtime/orlix-runtime-validation.sh
+```
+
+Preflight-only report:
+
+- `/tmp/orlix-runtime-validation-preflight/tcti-init-first-syscall-20260702T085152Z-71500.json`.
+- `/tmp/orlix-runtime-validation-preflight/tcti-init-first-syscall-20260702T085152Z-71500.md`.
+
+Boundary:
+
+- This is report evidence plumbing only.
+- It does not prove physical TCTI runtime readiness.
+- It does not prove simulator install or launch readiness.
+- It does not satisfy the physical first-syscall gate.
+
 ### Checkpoint: First Gadget Exit Diff Passes And Physical Gate Reaches DDI Blocker
 
 - Harness-selected gate after fresh no-phone validation: `first-gadget-init-001-exit`.
