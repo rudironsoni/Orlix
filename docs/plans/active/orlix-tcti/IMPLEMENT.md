@@ -72,8 +72,9 @@ rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/
 
 Simulator report:
 
-- `Build/Reports/runtime/tcti-init-first-syscall-20260702T171109Z-52982.json`.
-- `Build/Reports/runtime/tcti-init-first-syscall-20260702T171109Z-52982.md`.
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T172340Z-70550.json`.
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T172340Z-70550.md`.
+- `git_sha=08d2653939fa50427b38a6f06831e40a5d6f90f5`.
 - `status=pass`.
 - `passed=true`.
 - `destination=iphonesimulator`.
