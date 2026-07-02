@@ -2,6 +2,65 @@
 
 ## 2026-07-02
 
+### Checkpoint: Simulator First Syscall Gate Certified
+
+- Harness-selected gate:
+  - `simulator-tcti-init-first-syscall`.
+- Selected command:
+  - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall`.
+- Why selected:
+  - The harness reported `simulator-tcti-init-first-syscall` as the next stale or missing current-HEAD simulator runtime gate.
+  - The prerequisite `tcti-direct-chain-fuzz` was already passing.
+- Simulator used:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - `xcrun simctl list devices booted` showed only this simulator booted before the gate.
+- Result:
+  - Gate passed at git SHA `60ce939c2f15b27581b13a75f47e9b255bec4068`.
+  - `preflight_only=false`.
+  - `autonomous_tests_bypassed=false`.
+  - `readiness_gate_eligible=false`.
+  - `release_gate_eligible=false`.
+- Reports:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T193236Z-11635.json`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T193236Z-11635.md`.
+  - Artifact directory:
+    - `Build/Reports/runtime/tcti-init-first-syscall-20260702T193236Z-11635.artifacts`.
+- Forbidden behavior fields remained false:
+  - `generated_exec_memory=false`.
+  - `host_exec_guest_text=false`.
+  - `host_x18=false`.
+  - `map_jit=false`.
+  - `native_ios_api_exposure_to_guest=false`.
+  - `rwx=false`.
+- Boundary:
+  - This checkpoint certifies the first simulator TCTI syscall marker only.
+  - It does not certify simulator runtime stability.
+  - It does not permit physical-device validation.
+  - It does not make release or readiness gates eligible.
+  - It did not change production TCTI runtime code.
+
+Verification:
+
+```text
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make agent-harness-check
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
+```
+
+Results:
+
+- All commands above exited 0.
+- `agent-task-envelope-check` continued to validate the current first-syscall envelope before status regeneration.
+- Full TCTI remains incomplete. The harness must select the next eligible gate before any further implementation.
+
 ### Checkpoint: No-Phone Reducer For Simulator Null User Fault
 
 - Harness-selected gate before this checkpoint:
