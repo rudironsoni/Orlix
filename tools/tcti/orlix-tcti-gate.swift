@@ -2150,6 +2150,24 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                 return (report, failures)
             }
             if capturedExit != nil {
+                var notes = [
+                    "switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/MRS/MSR/SVC seed semantics and captures svc #0 as test events without calling host syscalls",
+                    "guest mprotect is captured as a test event only; no host mprotect, vm_protect, MAP_JIT, RWX, or permission side effect is performed",
+                    "guest TPIDR_EL0 is switch-debug guest state only; host TPIDR_EL0 is not read or written",
+                ]
+                if metadata.caseID == "init_010_cpu_model" {
+                    do {
+                        let modelBytes = try elf.readBytes(at: registers[1], length: 17)
+                        let model = String(data: modelBytes, encoding: .utf8)
+                        if model == "orlix-aarch64-v1\n" {
+                            notes.append("virtual CPU model payload orlix-aarch64-v1 captured from file-backed PT_LOAD bytes via ADR x1")
+                        } else {
+                            failures.append(fail("execution-cpu-model", "expected virtual CPU model payload orlix-aarch64-v1 newline, captured \(model ?? "<non-utf8>")"))
+                        }
+                    } catch {
+                        failures.append(fail("execution-cpu-model", "\(error)"))
+                    }
+                }
                 let report = executionReport(
                     metadata: metadata,
                     elf: elf,
@@ -2161,7 +2179,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     capturedExit: capturedExit,
                     capturedFault: capturedFault,
                     memoryWrites: memoryWrites,
-                    notes: ["switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/MRS/MSR/SVC seed semantics and captures svc #0 as test events without calling host syscalls", "guest mprotect is captured as a test event only; no host mprotect, vm_protect, MAP_JIT, RWX, or permission side effect is performed", "guest TPIDR_EL0 is switch-debug guest state only; host TPIDR_EL0 is not read or written"]
+                    notes: notes
                 )
                 failures.append(contentsOf: validateCapturedExecution(metadata: metadata, report: report))
                 return (report, failures)
@@ -2368,6 +2386,27 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-self-modify-decode", "expected decoded STR x0, [x1] to patch_slot"))
         }
     }
+    if metadata.caseID == "init_010_cpu_model" {
+        if report.guestInstructionsExecuted != 4 {
+            failures.append(fail("execution-instruction-count", "expected 4 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 1 else {
+            failures.append(fail("execution-syscalls", "expected one exit syscall, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let exit = report.syscalls[0]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 0 {
+            failures.append(fail("execution-exit", "expected captured exit(0) after CPU-model payload check"))
+        }
+        let decoded = report.decodedInstructions
+        if !decoded.contains(where: { $0.instructionClass == "pc_relative_address" && $0.op == "adr" && $0.rd == 1 && $0.imm == 16 }) {
+            failures.append(fail("execution-cpu-model-address", "expected decoded ADR x1 to cpu_model payload"))
+        }
+        let hasModelNote = report.notes.contains { $0.contains("virtual CPU model payload orlix-aarch64-v1") }
+        if !hasModelNote {
+            failures.append(fail("execution-cpu-model", "expected switch-debug to capture virtual CPU model payload orlix-aarch64-v1"))
+        }
+    }
     return failures
 }
 
@@ -2408,7 +2447,7 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     if caseID == "init_001_exit" {
         return try validateAndExecuteInit001(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify", "init_009_faults", "init_010_cpu_model"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF execution case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -2492,6 +2531,16 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
             fileOutput: fileOutput,
             objdumpHeader: objdumpHeader,
             disassembly: disassembly
+        )
+    case "init_010_cpu_model":
+        failures = validateInit010Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly,
+            binary: built.binary
         )
     default:
         failures = [fail("case-id", "unsupported golden ELF execution case \(caseID)")]
@@ -2884,6 +2933,38 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "cpu-model-wrong-model":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_010_cpu_model", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_010_cpu_model_wrong_model.S"),
+            outputRoot: outputRoot,
+            name: "init_010_cpu_model_wrong_model"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_010_cpu_model_wrong_model", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "cpu-model-unsupported-ctr-el0":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_010_cpu_model", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_010_cpu_model_unsupported_ctr_el0.S"),
+            outputRoot: outputRoot,
+            name: "init_010_cpu_model_unsupported_ctr_el0"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_010_cpu_model_unsupported_ctr_el0", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     default:
         throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
     }
@@ -2917,6 +2998,8 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         "self-modify-unsupported-branch",
         "faults-wrong-address",
         "faults-missing-fault",
+        "cpu-model-wrong-model",
+        "cpu-model-unsupported-ctr-el0",
     ] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
@@ -2930,8 +3013,9 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
             (fixture.hasPrefix("branches-") ? "init_005_branches" :
             (fixture.hasPrefix("memory-") ? "init_006_memory" :
             (fixture.hasPrefix("mprotect-") ? "init_007_mprotect" :
-            (fixture.hasPrefix("self-modify-") ? "init_008_self_modify" :
-            (fixture.hasPrefix("faults-") ? "init_009_faults" : "init_001_exit")))))))
+                            (fixture.hasPrefix("self-modify-") ? "init_008_self_modify" :
+                                (fixture.hasPrefix("faults-") ? "init_009_faults" :
+                                    (fixture.hasPrefix("cpu-model-") ? "init_010_cpu_model" : "init_001_exit"))))))))
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
