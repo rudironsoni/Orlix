@@ -2,6 +2,90 @@
 
 ## 2026-07-02
 
+### Checkpoint: Simulator Gate Is Mandatory Before Phone Gate
+
+- User constraint:
+  - TCTI must advance without the phone first.
+  - Simulator validation is mandatory.
+  - Phone validation is not allowed until the simulator build is working.
+- Harness fix:
+  - Added generated gate `simulator-tcti-init-first-syscall` to the TCTI next-step selector.
+  - The simulator gate command is:
+    - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall`.
+  - The simulator gate requires a matching runtime JSON report with:
+    - `destination=iphonesimulator`.
+    - `gate=tcti-init-first-syscall`.
+    - `status=pass`.
+    - `passed=true`.
+    - `backend=tcti`.
+    - `profile=tcti_runtime`.
+    - `preflight_only=false`.
+    - `autonomous_tests_bypassed=false`.
+    - all `forbidden_behavior` fields false.
+  - The simulator report must match current `HEAD`; stale simulator evidence does not satisfy the gate.
+  - Added `simulator-tcti-init-first-syscall` to the phone gate prerequisites in `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`.
+
+Harness behavior before simulator run:
+
+- `agent-status` selected `simulator-tcti-init-first-syscall`.
+- `physical_device_allowed=false`.
+- `agent-task-envelope-check` validated the simulator task envelope.
+
+Simulator validation:
+
+```text
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
+```
+
+- Only booted simulator:
+  - `Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D)`.
+- Simulator runtime report:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T175712Z-55382.json`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T175712Z-55382.md`.
+- Report facts:
+  - `git_sha=4247f46d383401a31614bc1d1df6cf3be273bed0`.
+  - `destination=iphonesimulator`.
+  - `gate=tcti-init-first-syscall`.
+  - `status=pass`.
+  - `passed=true`.
+  - `backend=tcti`.
+  - `profile=tcti_runtime`.
+  - `preflight_only=false`.
+  - `autonomous_tests_bypassed=false`.
+  - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+  - forbidden behavior fields all false.
+
+Harness behavior after simulator run:
+
+- `agent-status` accepted `simulator-tcti-init-first-syscall` as `pass`.
+- `agent-next` generated the later phone task only after the simulator prerequisite was satisfied.
+- `Build/AgentHarness/orlix-tcti/next-task.json` now includes `simulator-tcti-init-first-syscall` in `prerequisite_gates` with `state=pass`.
+
+Subagent review:
+
+- `tcti-planner` agreed with the correction:
+  - no-phone chain first.
+  - `simulator-tcti-init-first-syscall` after `tcti-direct-chain-fuzz`.
+  - phone gate depends on simulator gate.
+- `tcti-safety-reviewer` blocked the stale phone envelope before the simulator run and required the simulator JSON facts above before any later phone task can be selected.
+
+Boundary:
+
+- No phone validation was run in this checkpoint.
+- No custom MCP added.
+- No `tools/agent` added.
+- No TCTI runtime feature code changed.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No HostAdapter Linux behavior added.
+- No Darwin syscall guest side effect added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+
 ### Checkpoint: Required Simulator Pass, Physical Gate Still Blocked
 
 - Harness-selected gate: `physical-tcti-init-first-syscall`.
