@@ -2,6 +2,50 @@
 
 ## 2026-07-02
 
+### Checkpoint: CPU Model Switch-Debug Execution Gate
+
+- Harness-selected gate implemented: `switch-init-010-cpu-model`.
+- Selected command: `make tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug`.
+- The switch-debug harness now executes `init_010_cpu_model` and captures:
+  - fixed virtual CPU model payload `orlix-aarch64-v1\n` from file-backed PT_LOAD bytes via decoded `ADR x1`.
+  - `exit(0)` as a captured test-harness syscall event.
+- Exact decoded instruction stream:
+  - `0x10000081` `adr x1, 0x210130 <cpu_model>`.
+  - `0xd2800000` `mov x0, #0`.
+  - `0xd2800ba8` `mov x8, #93`.
+  - `0xd4000001` `svc #0`.
+- Execution artifacts:
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - `Build/TCTI/golden_elf/init_010_cpu_model/execution.json`.
+- Added negative fixtures:
+  - `tools/tcti/fixtures/golden_elf/init_010_cpu_model_wrong_model.S`.
+  - `tools/tcti/fixtures/golden_elf/init_010_cpu_model_unsupported_ctr_el0.S`.
+- Generated reducers:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-cpu-model-wrong-model.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-cpu-model-unsupported-ctr-el0.json`.
+- Replayed reducer:
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-cpu-model-unsupported-ctr-el0.json`.
+  - expected status `fail`.
+  - actual replay status `fail`.
+  - actual replay exit code `2`.
+
+Boundary:
+
+- No host CPU feature value was exposed to guest policy.
+- No `CTR_EL0`, `DCZID_EL0`, auxv, `/proc/cpuinfo`, `AT_HWCAP`, or `AT_HWCAP2` implementation was added.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No simulator gate.
+- No physical-device gate.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+- No custom MCP.
+- No `tools/agent`.
+
 ### Checkpoint: CPU Model Golden ELF Structural Gate
 
 - Harness-selected gate implemented: `golden-init-010-cpu-model-structural`.

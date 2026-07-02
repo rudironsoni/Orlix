@@ -684,6 +684,47 @@ func switchFaults009Pass() -> (Bool, String) {
     }
 }
 
+func switchCPUModel010Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_010_cpu_model")
+        let exit = object["exit"] as? [String: Any]
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 4
+        let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 0
+        let syscallOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "exit",
+                  intValue(syscall["nr"]) == 93,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  let first = args.first
+            else {
+                return false
+            }
+            return intValue(first) == 0
+        }
+        let decoded = object["decoded_instructions"] as? [Any] ?? []
+        let hasADR = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "pc_relative_address" &&
+                stringValue(instruction["op"]) == "adr" &&
+                intValue(instruction["rd"]) == 1 &&
+                intValue(instruction["imm"]) == 16
+        }
+        let notes = object["notes"] as? [Any] ?? []
+        let hasModelNote = notes.contains { item in
+            guard let note = item as? String else { return false }
+            return note.contains("virtual CPU model payload orlix-aarch64-v1")
+        }
+        if entered && backend && instructionCountOK && exitOK && syscallOK && hasADR && hasModelNote {
+            return (true, "init_010_cpu_model switch-debug captured fixed virtual CPU model payload and exit(0)")
+        }
+        return (false, "init_010_cpu_model execution artifact does not capture fixed virtual CPU model payload plus exit(0)")
+    } catch {
+        return (false, "missing malformed init_010_cpu_model execution artifact: \(error)")
+    }
+}
+
 func firstGadgetExit001Pass() -> (Bool, String) {
     let report = reportFact(target: "tcti-diff-switch")
     guard report.exists, report.status == "pass", report.passed else {
@@ -805,6 +846,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-009-faults":
         let check = switchFaults009Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "switch-init-010-cpu-model":
+        let check = switchCPUModel010Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         let check = diffSwitchExit001Pass()
