@@ -2,6 +2,102 @@
 
 ## 2026-07-02
 
+### Checkpoint: No-Phone Reducer For Simulator Null User Fault
+
+- Harness-selected gate before this checkpoint:
+  - `simulator-tcti-runtime-stability`.
+- Safety finding:
+  - The selected simulator stability envelope required fatal simulator runtime errors to be reduced before production patching.
+  - The harness did not yet expose that reduction as its own selectable gate.
+- Harness fix:
+  - Added no-phone generated gate `no-phone-tcti-simulator-user-fault-reducer`.
+  - Added Make target `tcti-simulator-user-fault-reducer`.
+  - `simulator-tcti-runtime-stability` now depends on the reducer gate.
+  - The reducer gate command is:
+    - `make tcti-simulator-user-fault-reducer`.
+  - The reducer gate stays no-phone and does not permit production TCTI assembly, gadget dispatch, HostAdapter Linux behavior, generated-tree edits, product defconfig flips, simulator reruns, or phone work.
+- Reducer behavior:
+  - Reuses the existing `init_011_static_pie_got_byte_load` static PIE golden ELF.
+  - Positive switch-debug still applies the `R_AARCH64_RELATIVE` GOT relocation and exits `42`.
+  - Negative mode `NEGATIVE_EXECUTION=static-pie-got-unrelocated-byte-load` disables relative relocation application only for this reducer.
+  - The negative mode also guards the null page so the unrelocated GOT slot causes `LDRB` to capture a read fault at `0x0` instead of reading ELF header bytes.
+  - This models the simulator fatal signature:
+    - `Orlix TCTI: user fault ... addr=0x0 access=1`.
+    - `Kernel panic - not syncing: Attempted to kill init!`.
+- Reports:
+  - `Build/TCTI/reports/tcti-simulator-user-fault-reducer/report.json`.
+  - `Build/TCTI/simulator_user_fault_reducer/positive/init_011_static_pie_got_byte_load/execution.json`.
+  - `Build/TCTI/simulator_user_fault_reducer/negative/init_011_static_pie_got_byte_load/static-pie-got-unrelocated-byte-load-execution.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
+- Reducer replay:
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
+  - Expected status: `fail`.
+  - Actual replay status: `fail`.
+  - Replay report: `Build/TCTI/reports/tcti-repro/report.json`.
+- Harness state after reducer:
+  - `agent-status` reports `no-phone-tcti-simulator-user-fault-reducer` as passing.
+  - `agent-next` advances back to `simulator-tcti-runtime-stability`.
+  - `physical_device_allowed=false`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+- Simulator rerun:
+  - Command used the only allowed simulator, `Orlix-iPhone-15-Pro-Max` with UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - `xcrun simctl list devices booted` showed only that simulator booted.
+  - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability` still failed.
+  - Report:
+    - `Build/Reports/runtime/tcti-simulator-stability-20260702T192124Z-89441.json`.
+    - `Build/Reports/runtime/tcti-simulator-stability-20260702T192124Z-89441.md`.
+  - Fatal facts:
+    - `Orlix TCTI: svc #0 task=init pid=1 pc=0x74ab63c86a80 syscall=178 x0=0xb2 x1=0x74ab63c854b4 x2=0x0 x3=0x0 x4=0x0 x5=0x0`.
+    - `Orlix TCTI: user fault task=init pid=1 pc=0x74ab63c9a1f4 lr=0x74ab63c99ffc sp=0x74ab73c3f800 addr=0x0 access=1 si=1`.
+    - `Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b`.
+  - Forbidden behavior fields remained false:
+    - `generated_exec_memory=false`.
+    - `host_exec_guest_text=false`.
+    - `host_x18=false`.
+    - `map_jit=false`.
+    - `native_ios_api_exposure_to_guest=false`.
+    - `rwx=false`.
+- Next implementation checkpoint:
+  - Fix the production TCTI memory or relocation behavior that makes the simulator path reach the same null user fault.
+  - Do not rerun the same stability gate as a pass claim until the reducer-derived fix exists.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy swift .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift status
+rtk proxy make agent-harness-check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug
+rtk proxy make tcti-simulator-user-fault-reducer
+rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability
+```
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No phone gate run.
+- No HostAdapter Linux behavior added.
+- No Darwin syscall guest side effect added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- Simulator stability is still failing and full TCTI remains incomplete.
+
 ### Checkpoint: Simulator Stability Gate Blocks Phone
 
 - User constraint:

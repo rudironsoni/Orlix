@@ -1391,8 +1391,14 @@ struct TinyElf64Aarch64 {
     let entrypoint: UInt64
     let segments: [ElfLoadSegment]
     let relativeRelocations: [UInt64: UInt64]
+    let applyRelativeRelocations: Bool
+    let guardNullPageReads: Bool
 
-    init(binary: URL) throws {
+    init(
+        binary: URL,
+        applyRelativeRelocations: Bool = true,
+        guardNullPageReads: Bool = false
+    ) throws {
         let data = try Data(contentsOf: binary)
         guard data.count >= 64 else {
             throw GateError.commandFailed("ELF file too small: \(binary.path)")
@@ -1477,6 +1483,8 @@ struct TinyElf64Aarch64 {
         self.entrypoint = entrypoint
         self.segments = segments
         self.relativeRelocations = relativeRelocations
+        self.applyRelativeRelocations = applyRelativeRelocations
+        self.guardNullPageReads = guardNullPageReads
     }
 
     func readInstruction(at virtualAddress: UInt64) throws -> UInt32 {
@@ -1493,8 +1501,11 @@ struct TinyElf64Aarch64 {
         guard length >= 0 else {
             throw GateError.commandFailed("negative guest memory read length \(length)")
         }
-        if length == 8, let relocated = relativeRelocations[virtualAddress] {
+        if applyRelativeRelocations, length == 8, let relocated = relativeRelocations[virtualAddress] {
             return littleEndianBytes(relocated)
+        }
+        if guardNullPageReads, virtualAddress < 4096 {
+            throw GateError.commandFailed(String(format: "guest null-page read fault: address=0x%llx length=%d", virtualAddress, length))
         }
         let endAddress = virtualAddress + UInt64(length)
         for segment in segments {
@@ -1897,8 +1908,17 @@ struct SwitchDebugStack {
     }
 }
 
-func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report: ExecutionReport, failures: [Failure]) {
-    let elf = try TinyElf64Aarch64(binary: binary)
+func executeSwitchDebug(
+    binary: URL,
+    metadata: GoldenMetadata,
+    applyRelativeRelocations: Bool = true,
+    guardNullPageReads: Bool = false
+) throws -> (report: ExecutionReport, failures: [Failure]) {
+    let elf = try TinyElf64Aarch64(
+        binary: binary,
+        applyRelativeRelocations: applyRelativeRelocations,
+        guardNullPageReads: guardNullPageReads
+    )
     let expectedEntry = try parseEntrypoint(metadata.entrypoint)
     var failures: [Failure] = []
     if elf.entrypoint != expectedEntry {
@@ -2837,6 +2857,23 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
         let executionURL = outputRoot
             .appendingPathComponent("init_002_write_unsupported_adrp", isDirectory: true)
             .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "static-pie-got-unrelocated-byte-load":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_011_static_pie_got_byte_load", "golden.json"))
+        )
+        let built = try buildGoldenCase("init_011_static_pie_got_byte_load", outputRoot: outputRoot)
+        let execution = try executeSwitchDebug(
+            binary: built.binary,
+            metadata: metadata,
+            applyRelativeRelocations: false,
+            guardNullPageReads: true
+        )
+        let executionURL = outputRoot
+            .appendingPathComponent("init_011_static_pie_got_byte_load", isDirectory: true)
+            .appendingPathComponent("static-pie-got-unrelocated-byte-load-execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     case "stack-wrong-exit":
@@ -4351,6 +4388,150 @@ func runToolchainCheck() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func stringField(_ object: [String: Any], _ key: String) -> String {
+    object[key] as? String ?? ""
+}
+
+func boolField(_ object: [String: Any], _ key: String) -> Bool {
+    object[key] as? Bool ?? false
+}
+
+func latestRuntimeValidationReport(gate gateName: String, destination: String) -> (url: URL, object: [String: Any])? {
+    let runtimeRoot = path("Build", "Reports", "runtime")
+    guard let entries = try? fileManager.contentsOfDirectory(at: runtimeRoot, includingPropertiesForKeys: nil) else {
+        return nil
+    }
+    let candidates = entries
+        .filter { $0.lastPathComponent.hasPrefix("\(gateName)-") && $0.pathExtension == "json" }
+        .sorted { $0.lastPathComponent > $1.lastPathComponent }
+    for candidate in candidates {
+        guard let object = try? loadJSON(candidate) as? [String: Any],
+              stringField(object, "gate") == gateName,
+              stringField(object, "destination") == destination
+        else {
+            continue
+        }
+        return (candidate, object)
+    }
+    return nil
+}
+
+func readRelativeArtifact(_ relativeArtifact: String) throws -> String {
+    let repoRelative = URL(fileURLWithPath: relativeArtifact, relativeTo: repoRoot()).standardizedFileURL
+    if fileManager.fileExists(atPath: repoRelative.path) {
+        return try readText(repoRelative)
+    }
+    let runtimeRelative = path("Build", "Reports", "runtime").appendingPathComponent(relativeArtifact)
+    return try readText(runtimeRelative)
+}
+
+func runSimulatorUserFaultReducer() throws -> Int32 {
+    let target = "tcti-simulator-user-fault-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = latestRuntimeValidationReport(
+        gate: "tcti-simulator-stability",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report to reduce"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No simulator stability failure report was available to reduce.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let simulatorObject = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let simulatorArtifacts = (simulatorObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: simulatorArtifacts)
+    let firstSyscallPath = simulatorArtifacts.first { $0.hasSuffix("tcti-first-syscall.txt") }
+    let fatalPath = simulatorArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }
+    let firstSyscallText = try firstSyscallPath.map(readRelativeArtifact) ?? ""
+    let fatalText = try fatalPath.map(readRelativeArtifact) ?? ""
+
+    if stringField(simulatorObject, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    }
+    if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
+    }
+    if !firstSyscallText.contains("Orlix TCTI: svc #0") {
+        failures.append(fail("simulator-first-syscall", "simulator report did not capture the first TCTI svc #0 marker"))
+    }
+    if !fatalText.contains("Orlix TCTI: user fault") ||
+        !fatalText.contains("addr=0x0") ||
+        !(fatalText.contains("Attempted to kill init") || fatalText.contains("Attempted kill init")) {
+        failures.append(fail("simulator-fatal-signature", "simulator fatal artifact does not contain the null user fault and init-kill panic signature"))
+    }
+
+    let metadataURL = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_011_static_pie_got_byte_load", "golden.json")
+    do {
+        let positive = try validateAndExecuteGoldenCase(
+            caseID: "init_011_static_pie_got_byte_load",
+            metadataURL: metadataURL,
+            outputRoot: buildPath("simulator_user_fault_reducer", "positive")
+        )
+        artifacts.append(contentsOf: positive.artifacts)
+        failures.append(contentsOf: positive.failures)
+
+        let negative = try executeNegativeFixture(
+            "static-pie-got-unrelocated-byte-load",
+            outputRoot: buildPath("simulator_user_fault_reducer", "negative")
+        )
+        artifacts.append(contentsOf: negative.artifacts)
+        guard let execution = negative.execution else {
+            failures.append(fail("negative-execution", "unrelocated static PIE GOT negative fixture did not write execution report"))
+            throw GateError.commandFailed("missing unrelocated static PIE GOT negative execution report")
+        }
+        if negative.failures.isEmpty {
+            failures.append(fail("negative-execution", "unrelocated static PIE GOT byte-load fixture unexpectedly passed"))
+        }
+        if execution.guestInstructionsExecuted != 3 ||
+            Array(execution.instructionEncodings.prefix(3)) != ["0x90000088", "0xf9406d08", "0x39400100"] ||
+            execution.fault?.kind != "guest_memory_fault" ||
+            execution.fault?.address != "0x0000000000000000" ||
+            execution.fault?.access != "read" ||
+            execution.fault?.captured != true ||
+            execution.exit != nil ||
+            !execution.syscalls.isEmpty {
+            failures.append(fail("negative-execution-shape", "expected unrelocated static PIE GOT byte-load to stop on captured read fault at 0x0 before any syscall"))
+        }
+        let reducer = try writeReducer(
+            target: "tcti-golden-elf",
+            caseID: "execution-static-pie-got-unrelocated-byte-load",
+            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug NEGATIVE_EXECUTION=static-pie-got-unrelocated-byte-load make tcti-golden-elf",
+            reason: "static PIE GOT byte load must fault when the R_AARCH64_RELATIVE GOT slot remains unrelocated and LDRB reads from 0x0",
+            artifacts: negative.artifacts,
+            expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+    } catch {
+        failures.append(fail("simulator-user-fault-reducer", "\(error)"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced the simulator TCTI null user fault into an unrelocated static PIE GOT byte-load no-phone switch-debug fixture.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
 func runGoldenElf(refresh: Bool) throws -> Int32 {
     let target = refresh ? "tcti-golden-elf-refresh" : "tcti-golden-elf"
     let caseID = ProcessInfo.processInfo.environment["CASE"] ?? "init_001_exit"
@@ -4413,9 +4594,14 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
             replayCommand += " NEGATIVE_EXECUTION=\(negativeExecution)"
         }
         replayCommand += " make \(target)"
-        let reducerCaseID = caseID == "init_011_static_pie_got_byte_load" &&
-            executeMode == "switch-debug" &&
-            negativeExecution.isEmpty ? "\(caseID)-switch-debug-failure" : caseID
+        let reducerCaseID: String
+        if !negativeExecution.isEmpty {
+            reducerCaseID = "execution-\(negativeExecution)"
+        } else if caseID == "init_011_static_pie_got_byte_load" && executeMode == "switch-debug" {
+            reducerCaseID = "\(caseID)-switch-debug-failure"
+        } else {
+            reducerCaseID = caseID
+        }
         let reducer = try writeReducer(
             target: target,
             caseID: reducerCaseID,
@@ -6140,6 +6326,8 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runMemoryFuzz()
     case "tcti-direct-chain-fuzz":
         return try runDirectChainFuzz()
+    case "tcti-simulator-user-fault-reducer":
+        return try runSimulatorUserFaultReducer()
     default:
         throw GateError.usage("unknown TCTI target: \(target)")
     }
