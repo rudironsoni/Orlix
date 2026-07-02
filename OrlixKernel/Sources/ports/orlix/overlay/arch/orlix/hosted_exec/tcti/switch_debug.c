@@ -801,31 +801,58 @@ static int tcti_load_integer(struct mm_struct *mm, unsigned long address,
 static int tcti_store_simd_fp(struct mm_struct *mm, unsigned long address,
 			      u8 reg, u8 access_size)
 {
-	u8 buffer[sizeof(u64)];
+	u8 buffer[2 * sizeof(u64)];
 
-	if (access_size != sizeof(u64))
+	if (access_size != sizeof(u64) && access_size != 2 * sizeof(u64))
 		return -EOPNOTSUPP;
 
 	put_unaligned_le64(current->thread.user_simd[reg * 2], buffer);
+	if (access_size == 2 * sizeof(u64))
+		put_unaligned_le64(current->thread.user_simd[reg * 2 + 1],
+				   buffer + sizeof(u64));
 	return tcti_write_user_data(mm, address, buffer, access_size);
 }
 
-static int tcti_load_simd_fp(struct mm_struct *mm, unsigned long address,
-			     u8 reg, u8 access_size)
+static void tcti_write_simd_fp_register(u8 reg, u8 access_size, u64 low,
+					u64 high)
 {
-	u8 buffer[sizeof(u64)] = {};
+	current->thread.user_simd[reg * 2] = low;
+	current->thread.user_simd[reg * 2 + 1] =
+		access_size == 2 * sizeof(u64) ? high : 0;
+	current->thread.user_simd_valid = 1;
+}
+
+static int tcti_read_simd_fp(struct mm_struct *mm, unsigned long address,
+			     u8 access_size, u64 *low, u64 *high)
+{
+	u8 buffer[2 * sizeof(u64)] = {};
 	int ret;
 
-	if (access_size != sizeof(u64))
+	if (access_size != sizeof(u64) && access_size != 2 * sizeof(u64))
 		return -EOPNOTSUPP;
 
 	ret = tcti_read_user_data(mm, address, buffer, access_size);
 	if (ret)
 		return ret;
 
-	current->thread.user_simd[reg * 2] = get_unaligned_le64(buffer);
-	current->thread.user_simd[reg * 2 + 1] = 0;
-	current->thread.user_simd_valid = 1;
+	*low = get_unaligned_le64(buffer);
+	*high = access_size == 2 * sizeof(u64) ?
+			get_unaligned_le64(buffer + sizeof(u64)) : 0;
+	return 0;
+}
+
+static int tcti_load_simd_fp(struct mm_struct *mm, unsigned long address,
+			     u8 reg, u8 access_size)
+{
+	u64 low;
+	u64 high;
+	int ret;
+
+	ret = tcti_read_simd_fp(mm, address, access_size, &low, &high);
+	if (ret)
+		return ret;
+
+	tcti_write_simd_fp_register(reg, access_size, low, high);
 	return 0;
 }
 
@@ -887,15 +914,28 @@ static int tcti_execute_load_store_pair(struct mm_struct *mm,
 
 	if (decoded->load) {
 		if (decoded->simd_fp) {
-			ret = tcti_load_simd_fp(mm, address, decoded->rt,
-						decoded->access_size);
+			u64 first_low;
+			u64 first_high;
+			u64 second_low;
+			u64 second_high;
+
+			ret = tcti_read_simd_fp(mm, address,
+						decoded->access_size,
+						&first_low, &first_high);
 			if (ret)
 				return ret;
-			ret = tcti_load_simd_fp(mm, address + decoded->access_size,
-						decoded->rt2,
-						decoded->access_size);
+			ret = tcti_read_simd_fp(mm,
+						address + decoded->access_size,
+						decoded->access_size,
+						&second_low, &second_high);
 			if (ret)
 				return ret;
+			tcti_write_simd_fp_register(decoded->rt,
+						    decoded->access_size,
+						    first_low, first_high);
+			tcti_write_simd_fp_register(decoded->rt2,
+						    decoded->access_size,
+						    second_low, second_high);
 		} else {
 			ret = tcti_load_integer(mm, address, decoded->access_size,
 						&first);
@@ -957,6 +997,16 @@ static int tcti_execute_load_store_immediate(struct mm_struct *mm,
 		*fault_address = address;
 
 	if (decoded->load) {
+		if (decoded->simd_fp) {
+			ret = tcti_load_simd_fp(mm, address, decoded->rt,
+						decoded->access_size);
+			if (ret)
+				return ret;
+			tcti_apply_memory_writeback(regs, decoded);
+			regs->pc += sizeof(u32);
+			return 0;
+		}
+
 		ret = tcti_load_integer(mm, address, decoded->access_size, &value);
 		if (ret)
 			return ret;
@@ -964,6 +1014,16 @@ static int tcti_execute_load_store_immediate(struct mm_struct *mm,
 		tcti_write_gpr_or_zero(regs, decoded->rt,
 				       decoded->result_size, value);
 	} else {
+		if (decoded->simd_fp) {
+			ret = tcti_store_simd_fp(mm, address, decoded->rt,
+						 decoded->access_size);
+			if (ret)
+				return ret;
+			tcti_apply_memory_writeback(regs, decoded);
+			regs->pc += sizeof(u32);
+			return 0;
+		}
+
 		value = tcti_read_gpr_or_zero(regs, decoded->rt,
 					      decoded->access_size);
 		ret = tcti_store_integer(mm, address, decoded->access_size, value);
