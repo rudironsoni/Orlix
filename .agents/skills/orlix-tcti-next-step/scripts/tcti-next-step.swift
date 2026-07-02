@@ -861,6 +861,96 @@ func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
     )
 }
 
+func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportFact, [String: Any])? {
+    let runtimeURL = root.appendingPathComponent("Build/Reports/runtime", isDirectory: true)
+    guard let entries = try? fileManager.contentsOfDirectory(at: runtimeURL, includingPropertiesForKeys: nil) else {
+        return nil
+    }
+    let candidates = entries
+        .filter { $0.lastPathComponent.hasPrefix("\(gateName)-") && $0.pathExtension == "json" }
+        .sorted { $0.lastPathComponent > $1.lastPathComponent }
+    for url in candidates {
+        guard let object = try? loadJSONObject(url),
+              stringValue(object["gate"]) == gateName,
+              stringValue(object["destination"]) == destination
+        else {
+            continue
+        }
+        let fact = ReportFact(
+            path: relativePath(url),
+            exists: true,
+            status: stringValue(object["status"]) ?? "malformed",
+            passed: boolValue(object["passed"]),
+            releaseGateEligible: boolValue(object["release_gate_eligible"]),
+            readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
+            gitSHA: stringValue(object["git_sha"])
+        )
+        return (fact, object)
+    }
+    return nil
+}
+
+func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-init-first-syscall", destination: "iphonesimulator") else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "missing iphonesimulator runtime-validation report for tcti-init-first-syscall",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenClear = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ].allSatisfy { !boolValue(forbidden[$0]) }
+    let reportOK = report.status == "pass" &&
+        report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(object["backend"]) == "tcti" &&
+        stringValue(object["profile"]) == "tcti_runtime" &&
+        !boolValue(object["preflight_only"]) &&
+        !boolValue(object["autonomous_tests_bypassed"]) &&
+        forbiddenClear
+    let reason: String
+    if reportOK {
+        reason = "iphonesimulator runtime-validation report \(report.path) passed with tcti runtime profile and forbidden behavior false"
+    } else if report.gitSHA != gitSHA() {
+        reason = "latest iphonesimulator runtime-validation report \(report.path) is stale for current HEAD"
+    } else {
+        reason = "latest iphonesimulator runtime-validation report \(report.path) is not a valid non-preflight TCTI pass"
+    }
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: report.status,
+        passed: reportOK,
+        reason: reason,
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
 func baseGateStatus(_ gate: Gate) -> GateStatus {
     if let caseID = structuralGateCases[gate.id] {
         let check = structuralCasePass(caseID)
@@ -921,8 +1011,10 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return basicReportGate(gate, target: "tcti-memory-fuzz")
     case "tcti-direct-chain-fuzz":
         return basicReportGate(gate, target: "tcti-direct-chain-fuzz")
+    case "simulator-tcti-init-first-syscall":
+        return simulatorFirstSyscallPass(gate)
     case "physical-tcti-init-first-syscall":
-        return missingGate(gate, reason: "physical first-syscall gate is not allowed until all no-phone prerequisites pass")
+        return missingGate(gate, reason: "physical first-syscall gate is not allowed until no-phone and simulator prerequisites pass")
     default:
         return missingGate(gate, reason: "unknown roadmap gate")
     }
@@ -1058,6 +1150,58 @@ func runtimePreflightGates() -> [Gate] {
             stopConditions: [
                 "Stop if direct chaining would require production assembly before its selected gate.",
                 "Stop if the failure cannot be reduced before implementation.",
+            ]
+        ),
+        Gate(
+            id: "simulator-tcti-init-first-syscall",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
+            kind: "simulator-runtime",
+            prerequisites: ["tcti-direct-chain-fuzz"],
+            allowedScope: [
+                "tools/runtime/orlix-runtime-validation.sh",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not treat simulator evidence as release or physical readiness.",
+                "Do not use emergency override or preflight-only evidence as pass.",
+                "Do not patch simulator logs directly without reducing TCTI behavior into a no-phone fixture.",
+            ],
+            expectedReportPaths: [
+                "Build/Reports/runtime/tcti-init-first-syscall-*.json",
+                "Build/TCTI/reports/tcti-plan-consistency/report.json",
+                "Build/TCTI/reports/tcti-report-schema-check/report.json",
+                "Build/TCTI/reports/tcti-golden-elf/report.json",
+                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-plan-consistency",
+                "rtk proxy make tcti-report-schema-check",
+                "rtk proxy make tcti-golden-elf",
+                "rtk proxy make tcti-appstore-safety-audit",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
+            ],
+            reducerRequirements: [
+                "Any simulator failure after app launch must be reduced into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
+                "Environment or simulator boot failures must be reported as infrastructure blockers, not TCTI passes.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): certify first simulator syscall gate",
+            stopConditions: [
+                "Stop if no-phone reports are missing, todo, evidence, or fail.",
+                "Stop if simulator runtime-validation uses preflight-only or emergency override evidence.",
+                "Stop if a simulator pass is claimed as physical, release, or readiness eligibility.",
             ]
         ),
     ]

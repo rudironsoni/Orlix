@@ -1327,6 +1327,7 @@
       "kind": "physical-device",
       "prerequisites": [
         "first-gadget-init-001-exit",
+        "simulator-tcti-init-first-syscall",
         "appstore-safety",
         "report-schema"
       ],
