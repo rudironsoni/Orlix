@@ -2,6 +2,55 @@
 
 ## 2026-07-02
 
+### Checkpoint: App Store Safety Audit Covers HostAdapter Native Path
+
+- Harness-selected work initially advanced through `first-gadget-init-001-exit` after stale no-phone reports were refreshed at `54d02b769a1a568e35ce1bafa0531da4bed7cb5f`.
+- Refreshed no-phone reports:
+  - `Build/TCTI/reports/tcti-diff-switch/report.json`.
+  - `Build/TCTI/reports/tcti-contract/report.json`.
+  - `Build/TCTI/reports/tcti-memory-fuzz/report.json`.
+  - `Build/TCTI/reports/tcti-direct-chain-fuzz/report.json`.
+- Executed harness-selected no-phone gadget gate:
+  - `make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+  - `Build/TCTI/reports/tcti-diff-switch/report.json`.
+  - `Build/TCTI/diff_switch/init_001_exit/diff.json`.
+- The first gadget diff now proves:
+  - mode `switch-vs-gadget`.
+  - candidate backend `gadget-data-program`.
+  - `gadget_dispatch_executed=true`.
+  - `production_assembly_executed=false`.
+  - divergent fields empty.
+  - `x0=42`, `x8=93`, `pc=0x0000000000210128`, and `exit_code=42` match the switch-debug baseline.
+- Safety review found the App Store safety audit was too narrow because it scanned TCTI kernel sources but did not scan HostAdapter memory/runtime product sources.
+- Updated `tools/tcti/orlix-tcti-gate.swift` so `tcti-appstore-safety-audit` also scans HostAdapter memory and runtime source directories.
+- Added scanner patterns for:
+  - host-executable hosted guest user page mappings.
+  - HostAdapter-owned Linux syscall and TLS trap semantics.
+- Current safety report:
+  - `Build/TCTI/reports/tcti-appstore-safety-audit/report.json`.
+  - status `fail`.
+  - passed `false`.
+  - `forbidden_behavior.host_exec_guest_text=true`.
+  - `forbidden_behavior.native_ios_api_exposure_to_guest=true`.
+  - scanned 31 source/template files and 1 object file.
+- Representative failures now report the existing native hosted-exec path:
+  - HostAdapter memory code still translates Linux syscall instructions and grants host executable permissions to hosted guest user pages.
+  - HostAdapter runtime trap code still classifies and dispatches Linux syscall and TLS traps.
+- Harness result after the audit correction:
+  - `agent-status` reports `physical_device_allowed=false`.
+  - `agent-next` selects `appstore-safety`.
+  - `agent-task-envelope-check` passes for `appstore-safety`.
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly added.
+  - No gadget dispatch beyond the existing no-phone data-program candidate for `init_001_exit`.
+  - No simulator gate run.
+  - No physical-device gate accepted as passing.
+  - No HostAdapter behavior changed.
+  - No Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No product defconfig flip.
+
 ### Checkpoint: Current-Head Physical Gate Still Blocked By Device DDI Readiness
 
 - Harness-selected gate remained `physical-tcti-init-first-syscall`.
