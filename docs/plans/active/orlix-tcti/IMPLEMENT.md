@@ -2,6 +2,85 @@
 
 ## 2026-07-02
 
+### Checkpoint: Required Simulator Pass, Physical Gate Still Blocked
+
+- Harness-selected gate: `physical-tcti-init-first-syscall`.
+- Selected command:
+  - `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Harness state:
+  - `Build/AgentHarness/orlix-tcti/status.json`.
+  - `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - `next_eligible_gate=physical-tcti-init-first-syscall`.
+  - `physical_device_allowed=true`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+- Planner and safety review:
+  - `tcti-planner` confirmed the selected gate and prerequisites are valid, but the physical gate remains blocked by device readiness.
+  - `tcti-safety-reviewer` passed the exact simulator and physical `runtime-validation` commands, and blocked any claim that the physical gate is passing.
+
+Simulator validation:
+
+```text
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
+```
+
+- report:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T174003Z-30548.json`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T174003Z-30548.md`.
+- result:
+  - `destination=iphonesimulator`.
+  - `status=pass`.
+  - `passed=true`.
+  - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+  - forbidden behavior fields remained false.
+- simulator constraint:
+  - Only `Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D)` was booted.
+  - No other simulator was started.
+
+Selected physical validation:
+
+```text
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall
+```
+
+- report:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T174136Z-37086.json`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T174136Z-37086.md`.
+- result:
+  - `destination=iphoneos`.
+  - `status=failed`.
+  - `passed=false`.
+  - `selected_device_name=RRJ-iPhone-15-Pro-Max`.
+  - `selected_xcode_device_id=00008130-001E74A11193803A`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+  - forbidden behavior fields remained false.
+- failure summary:
+  - The physical iPhone is not ready for Xcode device builds because developer disk image services are unavailable.
+  - `xcrun xctrace list devices` lists `RRJ-iPhone-15-Pro-Max (27.0) (00008130-001E74A11193803A)` under `Devices Offline`.
+
+Boundary:
+
+- Simulator pass is side validation only. It does not satisfy the selected `iphoneos` physical gate.
+- Physical gate was attempted only through `runtime-validation`.
+- No direct device bypass was used.
+- No emergency override was used.
+- No pass was claimed from the physical report.
+- No TCTI runtime code was changed in this checkpoint.
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No HostAdapter Linux behavior added.
+- No Darwin syscall guest side effect added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- No reducer was created because the physical gate failed before app install/runtime execution and before any TCTI behavior was exercised.
+
 ### Checkpoint: Physical First-Syscall Gate Blocked By Device Readiness
 
 - Harness-selected gate: `physical-tcti-init-first-syscall`.
