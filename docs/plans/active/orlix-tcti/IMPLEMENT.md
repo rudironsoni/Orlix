@@ -2,6 +2,46 @@
 
 ## 2026-07-02
 
+### Checkpoint: Physical First-Syscall Gate Attempt Blocked By DDI Readiness
+
+- Harness-selected gate attempted: `physical-tcti-init-first-syscall`.
+- Selected command: `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Actual command included the previously recorded development team:
+  - `ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L`.
+- Runtime report:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T011640Z-58655.md`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T011640Z-58655.json`.
+- Result:
+  - status `fail`.
+  - passed `false`.
+  - failure occurred during physical device discovery/readiness before kernel build, app build, install, launch, or TCTI execution.
+- Device selected by the runtime harness:
+  - `RRJ-iPhone-15-Pro-Max`.
+  - device identifier `7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`.
+  - hardware UDID `00008130-001E74A11193803A`.
+  - `developerModeStatus=enabled`.
+  - `ddiServicesAvailable=false`.
+- Blocker:
+  - Xcode developer disk image services are unavailable for the physical iPhone.
+  - The report directs the operator to connect, unlock, trust the device, and let Xcode mount the developer disk image before rerunning runtime validation.
+
+Boundary:
+
+- No TCTI physical runtime evidence was captured.
+- No kernel build, app build, install, launch, or `/init` execution happened in this failed attempt.
+- No phone log was used to patch production behavior.
+- No no-phone reducer was needed because the failure is device readiness, not TCTI behavior.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No HostAdapter behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory.
+- No host-executable guest text.
+- No product defconfig flip.
+- No custom MCP.
+- No `tools/agent`.
+
 ### Checkpoint: CPU Model Switch-Debug Execution Gate
 
 - Harness-selected gate implemented: `switch-init-010-cpu-model`.
