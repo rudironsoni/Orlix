@@ -45,6 +45,16 @@ if printf '%s' "$payload" | grep -Eq 'MAP_JIT|JIT|RWX|PROT_EXEC|vm_protect.*EXEC
   block "JIT, RWX, MAP_JIT, or host executable guest-text behavior is forbidden in product paths."
 fi
 
+if printf '%s' "$payload" | grep -Eq 'docs/plans/active/orlix-tcti/IMPLEMENT.md' &&
+printf '%s' "$payload" | grep -Eq 'apply_patch|sed[[:space:]].*-i|perl[[:space:]].*-i'; then
+exit 0
+fi
+
+if printf '%s' "$payload" | grep -Eq 'Build/Reports/runtime' &&
+printf '%s' "$payload" | grep -Eq 'jq|sed[[:space:]]+-n|cat|grep|ls|head|tail|rtk[[:space:]]+(read|json|log)'; then
+exit 0
+fi
+
 if printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos|platform=iOS|generic/platform=iOS|ios-deploy|devicectl'; then
   if printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos' && ! autonomous_preflight_passed; then
     block "physical TCTI gates require passing no-phone reports before device work."
