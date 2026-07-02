@@ -163,7 +163,7 @@ write_json_report() {
 	local bypass_reason="$5"
 	local release_eligible="false"
 	local readiness_eligible="false"
-	if [ "$status" = "pass" ]; then
+	if [ "$status" = "pass" ] && [ "$destination" = "iphoneos" ]; then
 		release_eligible="true"
 		readiness_eligible="true"
 	fi
@@ -729,13 +729,31 @@ capture_launch() {
 	local launch_pid
 	set +e
 	if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
+		local launch_status
 		touch "$artifact_dir/launch.json" "$artifact_dir/launch.log"
-		xcrun simctl launch \
+		run_command_with_timeout "$capture_seconds" \
+			"$artifact_dir/launch-console.log" \
+			"$artifact_dir/launch.stderr" \
+			xcrun simctl launch \
 			--terminate-running-process \
 			--console \
 			"$device_id" \
-			"$bundle_id" \
-			>"$artifact_dir/launch-console.log" 2>"$artifact_dir/launch.stderr" &
+			"$bundle_id"
+		launch_status=$?
+		set -e
+		if [ "$launch_status" -ne 0 ] && [ "$launch_status" -ne 124 ]; then
+			failure_stage="simulator-launch"
+			failure_exit_status="$launch_status"
+			die "Launching Orlix on simulator failed."
+		fi
+		xcrun simctl spawn "$device_id" log show \
+			--last "$((capture_seconds + 60))s" \
+			--info \
+			--style compact \
+			--predicate 'subsystem == "com.rudironsoni.Orlix"' \
+			>"$artifact_dir/simulator-unified.log" \
+			2>"$artifact_dir/simulator-unified.stderr" || true
+		return
 	else
 		xcrun devicectl --timeout "$((capture_seconds + 15))" \
 			--json-output "$artifact_dir/launch.json" \
@@ -759,7 +777,8 @@ capture_launch() {
 
 assert_no_host_exec_guest_text() {
 	if grep -E -i 'guest.*(PROT_EXEC|EXECUTE)|attempted_prot=.*EXEC|vm_protect.*EXEC|mmap.*PROT_EXEC' \
-		"$artifact_dir"/launch*.log "$artifact_dir"/launch*.stderr "$artifact_dir"/xcodebuild.log \
+		"$artifact_dir"/launch*.log "$artifact_dir"/launch*.stderr \
+		"$artifact_dir"/simulator-unified.log "$artifact_dir"/xcodebuild.log \
 		>"$artifact_dir/host-exec-violations.txt" 2>/dev/null; then
 		die "Gate observed a host executable mapping request while running guest text."
 	fi
@@ -768,15 +787,24 @@ assert_no_host_exec_guest_text() {
 assert_gate_markers() {
 	case "$gate" in
 	tcti-init-first-syscall)
-		grep -F 'Orlix TCTI: svc #0' "$artifact_dir/launch-console.log" "$artifact_dir/launch.log" \
-			>"$artifact_dir/tcti-first-syscall.txt" 2>/dev/null ||
+		grep -F 'Orlix TCTI: svc #0' \
+			"$artifact_dir/launch-console.log" \
+			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-unified.log" \
+			>"$artifact_dir/tcti-first-syscall.txt" 2>/dev/null || {
+			failure_stage="tcti-first-syscall-marker"
 			die "No TCTI \`svc #0\` marker was captured from \`$destination\`."
+		}
 		;;
 	tcti-init-console-write)
 		grep -E 'linux-console|Orlix TCTI: svc #0|ORLIX|Linux version' \
-			"$artifact_dir/launch-console.log" "$artifact_dir/launch.log" \
-			>"$artifact_dir/tcti-console-write.txt" 2>/dev/null ||
+			"$artifact_dir/launch-console.log" \
+			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-unified.log" \
+			>"$artifact_dir/tcti-console-write.txt" 2>/dev/null || {
+			failure_stage="tcti-console-write-marker"
 			die "No Linux console or TCTI console marker was captured from \`$destination\`."
+		}
 		;;
 	*)
 		die "Gate \`$gate\` has discovery/build/install/launch plumbing, but its pass markers are not implemented yet."

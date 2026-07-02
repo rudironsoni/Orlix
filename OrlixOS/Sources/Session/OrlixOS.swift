@@ -377,10 +377,14 @@ enum OrlixOSPayload {
             return nil
         }
 
+        return bootProfile(forPayloadProfile: profile)
+    }
+
+    static func bootProfile(forPayloadProfile profile: String) -> OrlixBootProfile? {
         switch profile {
         case "release":
             return .release
-        case "development":
+        case "development", "tcti_runtime":
             return .development
         default:
             return nil

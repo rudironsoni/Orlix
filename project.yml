@@ -74,7 +74,7 @@ targets:
           profile="${ORLIX_PROFILE:-release}"
           platform="${PLATFORM_NAME:?}"
           build_root="${ORLIX_BUILD_ROOT:-}"
-          if [ -z "$build_root" ] || [ "$build_root" = "$SRCROOT/Build" ]; then
+          if [ -z "$build_root" ]; then
               external_root="$(external-ssd-root 2>/dev/null || true)"
               if [ -n "$external_root" ]; then
                   build_root="$external_root/Xcode/OrlixSystem/Build"
@@ -181,7 +181,7 @@ targets:
           set -eu
           export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           build_root="${ORLIX_BUILD_ROOT:-}"
-          if [ -z "$build_root" ] || [ "$build_root" = "$SRCROOT/Build" ]; then
+          if [ -z "$build_root" ]; then
               external_root="$(external-ssd-root 2>/dev/null || true)"
               if [ -n "$external_root" ]; then
                   build_root="$external_root/Xcode/OrlixSystem/Build"

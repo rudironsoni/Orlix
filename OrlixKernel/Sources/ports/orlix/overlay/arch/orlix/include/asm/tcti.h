@@ -19,18 +19,19 @@ enum tcti_exit_reason {
 	TCTI_EXIT_TASK_EXIT,
 };
 
-struct tcti_result {
-	enum tcti_exit_reason reason;
-	long status;
-	unsigned long fault_address;
-	unsigned long pc;
-	u32 instruction;
-};
-
 enum tcti_access {
 	TCTI_ACCESS_FETCH,
 	TCTI_ACCESS_READ,
 	TCTI_ACCESS_WRITE,
+};
+
+struct tcti_result {
+	enum tcti_exit_reason reason;
+	long status;
+	unsigned long fault_address;
+	enum tcti_access fault_access;
+	unsigned long pc;
+	u32 instruction;
 };
 
 struct tcti_user_page {
@@ -59,6 +60,8 @@ int tcti_read_user_data(struct mm_struct *mm, unsigned long user_va,
 			void *buffer, size_t size);
 int tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 			 const void *buffer, size_t size);
+int tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
+			   enum tcti_access access);
 void tcti_invalidate_mm(struct mm_struct *mm);
 
 #endif /* _ASM_ORLIX_TCTI_H */
