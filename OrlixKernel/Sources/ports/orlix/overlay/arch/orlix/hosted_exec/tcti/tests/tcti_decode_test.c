@@ -567,6 +567,20 @@ static void tcti_decode_recognizes_load_store_register_offset_class(struct kunit
 	KUNIT_EXPECT_EQ(test, 8U, decoded.rt);
 	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
 	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0xf8286920U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_FALSE(test, decoded.sign_extend_load);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.offset_extend);
+	KUNIT_EXPECT_FALSE(test, decoded.offset_shift);
 }
 
 static void tcti_decode_recognizes_logical_shifted_register_class(struct kunit *test)
@@ -1512,7 +1526,7 @@ static void tcti_switch_executes_pc_relative_address_variants(struct kunit *test
 	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
 
 	KUNIT_EXPECT_EQ(test, 0, ret);
-	KUNIT_EXPECT_EQ(test, 0x706a869000ULL, regs.regs[1]);
+	KUNIT_EXPECT_EQ(test, 0x706a86a000ULL, regs.regs[1]);
 	KUNIT_EXPECT_EQ(test, 0x706a8654b4ULL, regs.pc);
 
 	decoded = tcti_decode_aarch64(0x10ffffe2U);
@@ -1521,6 +1535,16 @@ static void tcti_switch_executes_pc_relative_address_variants(struct kunit *test
 	KUNIT_EXPECT_EQ(test, 0, ret);
 	KUNIT_EXPECT_EQ(test, 0x706a8654b0ULL, regs.regs[2]);
 	KUNIT_EXPECT_EQ(test, 0x706a8654b8ULL, regs.pc);
+
+	regs = (struct pt_regs) {};
+	regs.pc = 0x62548a56a1e8ULL;
+
+	decoded = tcti_decode_aarch64(0xb00000c8U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x62548a583000ULL, regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0x62548a56a1ecULL, regs.pc);
 }
 
 static void tcti_switch_executes_unconditional_branch_immediate(struct kunit *test)

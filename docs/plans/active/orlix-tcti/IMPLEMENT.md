@@ -3021,6 +3021,81 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Simulator First-Syscall Path Survives Static-PIE ADRP
+
+- Harness-selected gate remains `physical-tcti-init-first-syscall`, but current operator scope required simulator-first validation only.
+- Simulator used: `Orlix-iPhone-15-Pro-Max` (`C47ED88D-0D0A-420D-8C78-D4C1D34A276D`).
+- Only that simulator was booted before the runtime run.
+- Diagnosed the post-marker simulator panic after the first TCTI syscall marker:
+  - previous fault address: `0x97ffb62f39083fff`;
+  - faulting guest PC offset: `0x2a1f4`;
+  - faulting instruction sequence:
+    - `0xb00000c8` `adrp x8, 0x43000`;
+    - `0xaa0003f3` `mov x19, x0`;
+    - `0xf941b108` `ldr x8, [x8, #0x360]`;
+    - `0x39400108` `ldrb w8, [x8]`;
+  - bad value bytes came from `/init` file offset `0x21360`, guest VMA `0x31360`;
+  - correct GOT slot was guest VMA `0x43360`, file offset `0x23360`, relocation `R_AARCH64_RELATIVE +0x550a8`.
+- Root cause:
+  - switch-debug TCTI executed ADRP with the kernel `PAGE_MASK`;
+  - OrlixKernel uses 16 KiB pages, but AArch64 ADRP is architecturally based on a 4 KiB page;
+  - the old calculation selected `0x41000 + 0x360`, which aliases the observed text bytes;
+  - the fixed calculation uses a 4 KiB ADRP mask and selects `0x43000 + 0x360`.
+- Added KUnit coverage for:
+  - architectural 4 KiB ADRP page-base behavior on a 16 KiB-kernel build;
+  - exact crash ADRP instruction `0xb00000c8`, producing `0x62548a583000`;
+  - relocation-path register-offset store decode for `0xf8286920` (`str x0, [x9, x8]`).
+- Added no-phone memory-fuzz coverage for the same fault shape:
+  - positive case `vma-offset-alias-got-read`;
+  - negative reducer `vma-offset-alias-broken-offset-selector`;
+  - `vma_alias_cases=1`.
+
+Reports:
+
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T144818Z-20954.json`
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T144818Z-20954.md`
+- `Build/TCTI/reports/tcti-memory-fuzz/report.json`
+- `Build/TCTI/memory_fuzz/vma-offset-alias-got-read/result.json`
+
+Reducers:
+
+- `Build/TCTI/reproducers/tcti-memory-fuzz/vma-offset-alias-broken-offset-selector.json`
+
+Reducer replay:
+
+- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/vma-offset-alias-broken-offset-selector.json`: expected `fail`, actual `fail`, exit code `0`.
+
+Validation:
+
+- `git diff --check`: pass.
+- `make agent-harness-check`: pass.
+- `make agent-task-envelope-check AREA=orlix-tcti`: pass.
+- `make tcti-plan-consistency`: pass.
+- `make tcti-report-schema-check`: pass.
+- `make tcti-toolchain-check`: pass.
+- `make tcti-golden-elf`: pass.
+- `make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`: pass.
+- `make tcti-memory-fuzz`: pass.
+- `make tcti-appstore-safety-audit`: pass.
+- `make -f OrlixKernel/Makefile kunit PROFILE=development`: pass.
+- `make -f OrlixKernel/Makefile kunit PROFILE=release`: pass.
+- `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall`: pass on `Orlix-iPhone-15-Pro-Max`.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly.
+- No gadget dispatch.
+- No generated executable memory.
+- No host-executable guest text.
+- No HostAdapter Linux behavior.
+- No Darwin syscall behavior.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No physical-device gate run.
+- No product defconfig flip.
+- Simulator result is evidence-only: release and readiness gates remain ineligible.
+
 ### Checkpoint: Simulator TCTI Clears SIMD MOVI Zero Blocker
 
 - Harness state: `agent-next` still selects `physical-tcti-init-first-syscall`, but active user constraint allows only simulator runtime validation on `Orlix-iPhone-15-Pro-Max` UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
