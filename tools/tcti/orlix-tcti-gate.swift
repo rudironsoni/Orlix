@@ -4759,6 +4759,7 @@ func memoryNegativeIDs() -> [String] {
         "write-permission",
         "host-page-boundary",
         "generation-stale-backing",
+        "vma-offset-alias-broken-offset-selector",
     ]
 }
 
@@ -4810,9 +4811,52 @@ func runMemoryNegative(_ id: String) throws -> MemoryFuzzArtifact {
         let staleRejected = !model.translationIsCurrent(staleGeneration) && model.backingID(page0) == "new"
         let result = MemoryAccessResult(allowed: staleRejected ? false : true, bytes: [], copiedBytes: 0, faultAddress: staleRejected ? page0 : nil, reason: staleRejected ? "stale backing rejected" : "stale backing reused")
         return memoryArtifact(caseID: id, expected: .fail, observed: result.allowed ? .pass : .fail, model: model, access: .read, address: page0, length: 1, result: result, translationBefore: staleGeneration, codeBefore: beforeCode, notes: ["negative fixture proves stale translation generation cannot keep old backing alive"])
+    case "vma-offset-alias-broken-offset-selector":
+        let model = MemoryContractModel(hostPageSize: 4096)
+        let executablePage: UInt64 = 0x0000_0000_0003_1000
+        let gotPage: UInt64 = 0x0000_0000_0004_3000
+        let aliasOffset: UInt64 = 0x360
+        let executableAliasValue: UInt64 = 0x97ff_b62f_3908_3fff
+        let gotValue: UInt64 = 0x0000_0000_0005_50a8
+        model.map(executablePage, permissions: MemoryPermissions(read: true, write: false, execute: true), fill: 0, backingID: "file-offset-0x21360-text")
+        model.map(gotPage, permissions: readOnly, fill: 0, backingID: "file-offset-0x43360-got")
+        model.writeSeed(littleEndianBytes(executableAliasValue), at: executablePage + aliasOffset)
+        model.writeSeed(littleEndianBytes(gotValue), at: gotPage + aliasOffset)
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let read = model.access(.read, address: gotPage + aliasOffset, length: 8)
+        let actual = read.bytes.count == 8 ? (try? littleEndianUInt64(Data(read.bytes), 0)) : nil
+        let offsetOnlyActual = executableAliasValue
+        let result = MemoryAccessResult(
+            allowed: false,
+            bytes: littleEndianBytes(offsetOnlyActual),
+            copiedBytes: 8,
+            faultAddress: gotPage + aliasOffset,
+            reason: "offset-only guest memory selector would read executable VMA bytes for the GOT VMA"
+        )
+        return memoryArtifact(
+            caseID: id,
+            expected: .fail,
+            observed: result.allowed ? .pass : .fail,
+            model: model,
+            access: .read,
+            address: gotPage + aliasOffset,
+            length: 8,
+            result: result,
+            translationBefore: beforeTranslation,
+            codeBefore: beforeCode,
+            notes: [
+                "negative fixture models the simulator symptom where GOT guest VMA 0x43360 reads executable VMA 0x31360 bytes",
+                String(format: "correct VMA-keyed read observed 0x%016llx; broken offset-only read would observe 0x%016llx; expected GOT value 0x%016llx", actual ?? 0, offsetOnlyActual, gotValue)
+            ]
+        )
     default:
         throw GateError.usage("unknown NEGATIVE_MEMORY_FUZZ=\(id)")
     }
+}
+
+func littleEndianBytes(_ value: UInt64) -> [UInt8] {
+    (0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xff) }
 }
 
 func runMemoryPositiveCases() throws -> (failures: [Failure], artifacts: [String], counters: [String: Int]) {
@@ -4829,6 +4873,7 @@ func runMemoryPositiveCases() throws -> (failures: [Failure], artifacts: [String
         "host_page_size_variants": 0,
         "cross_page_cases": 0,
         "generation_cases": 0,
+        "vma_alias_cases": 0,
     ]
 
     func record(_ id: String, _ condition: Bool, _ artifact: MemoryFuzzArtifact) throws {
@@ -4963,6 +5008,45 @@ func runMemoryPositiveCases() throws -> (failures: [Failure], artifacts: [String
         let artifact = memoryArtifact(caseID: "store-to-translated-exec-page", expected: .pass, observed: invalidated ? .pass : .fail, model: model, access: .write, address: page0, length: 1, result: result, translationBefore: beforeTranslation, codeBefore: beforeCode, notes: ["store to translated executable page invalidates stale code generation"])
         try record("store-to-translated-exec-page", invalidated, artifact)
         counters["generation_cases", default: 0] += 1
+    }
+
+    do {
+        let model = MemoryContractModel(hostPageSize: 4096)
+        let executablePage: UInt64 = 0x0000_0000_0003_1000
+        let gotPage: UInt64 = 0x0000_0000_0004_3000
+        let aliasOffset: UInt64 = 0x360
+        let executableAliasValue: UInt64 = 0x97ff_b62f_3908_3fff
+        let gotValue: UInt64 = 0x0000_0000_0005_50a8
+        model.map(executablePage, permissions: MemoryPermissions(read: true, write: false, execute: true), fill: 0, backingID: "file-offset-0x21360-text")
+        model.map(gotPage, permissions: readOnly, fill: 0, backingID: "file-offset-0x43360-got")
+        model.writeSeed(littleEndianBytes(executableAliasValue), at: executablePage + aliasOffset)
+        model.writeSeed(littleEndianBytes(gotValue), at: gotPage + aliasOffset)
+        let beforeTranslation = model.translationGeneration
+        let beforeCode = model.codeGeneration
+        let result = model.access(.read, address: gotPage + aliasOffset, length: 8)
+        let actual = result.bytes.count == 8 ? (try? littleEndianUInt64(Data(result.bytes), 0)) : nil
+        let artifact = memoryArtifact(
+            caseID: "vma-offset-alias-got-read",
+            expected: .pass,
+            observed: result.allowed ? .pass : .fail,
+            model: model,
+            access: .read,
+            address: gotPage + aliasOffset,
+            length: 8,
+            result: result,
+            translationBefore: beforeTranslation,
+            codeBefore: beforeCode,
+            notes: [
+                "GOT guest VMA 0x43360 and executable guest VMA 0x31360 share offset 0x360 but must not alias",
+                String(format: "expected GOT value 0x%016llx; executable alias value 0x%016llx; observed 0x%016llx", gotValue, executableAliasValue, actual ?? 0)
+            ]
+        )
+        try record(
+            "vma-offset-alias-got-read",
+            result.allowed && actual == gotValue && actual != executableAliasValue,
+            artifact
+        )
+        counters["vma_alias_cases", default: 0] += 1
     }
 
     return (failures, artifacts, counters)

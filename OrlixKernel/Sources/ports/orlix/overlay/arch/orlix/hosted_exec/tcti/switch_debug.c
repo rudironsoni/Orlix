@@ -14,6 +14,8 @@
 #include "semantics.h"
 #include "switch_debug.h"
 
+#define AARCH64_ADRP_PAGE_MASK (~0xfffULL)
+
 static bool tcti_condition_passed(const struct pt_regs *regs, u8 condition);
 
 static enum tcti_access
@@ -1198,7 +1200,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case TCTI_DECODE_PC_RELATIVE_ADDRESS:
 		if (decoded->rd != 31) {
 			u64 base = decoded->page_relative ?
-				   (regs->pc & PAGE_MASK) : regs->pc;
+				   (regs->pc & AARCH64_ADRP_PAGE_MASK) :
+				   regs->pc;
 
 			regs->regs[decoded->rd] =
 				base + decoded->pc_relative_imm;
