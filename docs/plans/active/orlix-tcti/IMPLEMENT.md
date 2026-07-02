@@ -13,12 +13,15 @@
   - `Build/Reports/runtime/tcti-init-first-syscall-20260702T011640Z-58655.json`.
   - `Build/Reports/runtime/tcti-init-first-syscall-20260702T012504Z-74816.md`.
   - `Build/Reports/runtime/tcti-init-first-syscall-20260702T012504Z-74816.json`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T013920Z-99581.md`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T013920Z-99581.json`.
 - Result:
   - status `fail`.
   - passed `false`.
   - readiness gate eligible `false`.
   - release gate eligible `false`.
   - failure occurred during physical device discovery/readiness before kernel build, app build, install, launch, `/init`, or TCTI execution.
+  - latest retry report was generated at git SHA `f29405e13d53198b156ee711d3fdeb84842f9b1c` with the same DDI-readiness classification.
 - Device selected by runtime harness:
   - `RRJ-iPhone-15-Pro-Max`.
   - device identifier `7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`.
@@ -32,6 +35,7 @@
   - Planner confirmed the harness selection is legitimate but not a runtime pass.
   - Safety review found product defconfigs and App Store safety rails still clean, with the physical result classified evidence-only.
   - Reducer review classified the failure as device readiness, not TCTI behavior. No no-phone reducer is appropriate unless a later run reaches app/TCTI execution and fails there.
+  - Follow-up reducer/readiness review confirmed the `20260702T013920Z-99581` report still does not advance readiness or require a no-phone reducer.
 
 Boundary:
 
