@@ -5455,6 +5455,72 @@ func scanSourceForX18(_ url: URL) -> [Failure] {
     return failures
 }
 
+struct ForbiddenSourcePattern {
+    let id: String
+    let field: String
+    let regex: NSRegularExpression
+    let message: String
+
+    init(id: String, field: String, pattern: String, message: String) throws {
+        self.id = id
+        self.field = field
+        self.regex = try NSRegularExpression(pattern: pattern)
+        self.message = message
+    }
+}
+
+func forbiddenSourcePatterns() throws -> [ForbiddenSourcePattern] {
+    try [
+        ForbiddenSourcePattern(
+            id: "map-jit",
+            field: "map_jit",
+            pattern: #"(?<![A-Za-z0-9_])MAP_JIT(?![A-Za-z0-9_])"#,
+            message: "mentions forbidden MAP_JIT token"
+        ),
+        ForbiddenSourcePattern(
+            id: "generated-exec-memory",
+            field: "generated_exec_memory",
+            pattern: #"mmap\s*\([^;\n]*(PROT_EXEC|VM_PROT_EXECUTE)"#,
+            message: "requests generated executable memory"
+        ),
+        ForbiddenSourcePattern(
+            id: "rwx",
+            field: "rwx",
+            pattern: #"(PROT_READ\s*\|[^;\n]*PROT_WRITE\s*\|[^;\n]*PROT_EXEC)|(VM_PROT_READ\s*\|[^;\n]*VM_PROT_WRITE\s*\|[^;\n]*VM_PROT_EXECUTE)"#,
+            message: "requests RWX memory permissions"
+        ),
+        ForbiddenSourcePattern(
+            id: "host-exec-guest-text",
+            field: "host_exec_guest_text",
+            pattern: #"(?i)guest[_ -]?text[^;\n]*(PROT_EXEC|VM_PROT_EXECUTE)|(?:PROT_EXEC|VM_PROT_EXECUTE)[^;\n]*guest[_ -]?text"#,
+            message: "requests host executable permissions for guest text"
+        ),
+        ForbiddenSourcePattern(
+            id: "native-ios-api-exposure",
+            field: "native_ios_api_exposure_to_guest",
+            pattern: #"(?i)(guest|linux)[A-Za-z0-9_ -]*(UIKit|CoreFoundation|Foundation|Darwin|HostAdapter)"#,
+            message: "appears to expose native iOS or HostAdapter API surface to guest Linux"
+        ),
+    ]
+}
+
+func scanSourceForForbiddenBehavior(_ url: URL, patterns: [ForbiddenSourcePattern]) -> (failures: [Failure], flags: [String: Bool]) {
+    guard let text = try? readText(url) else {
+        return ([fail("scan", "could not read \(relativePath(url))")], [:])
+    }
+    var failures: [Failure] = []
+    var flags: [String: Bool] = [:]
+    let lines = text.components(separatedBy: .newlines)
+    for (index, line) in lines.enumerated() {
+        let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
+        for pattern in patterns where pattern.regex.firstMatch(in: line, range: nsRange) != nil {
+            flags[pattern.field] = true
+            failures.append(fail(pattern.id, "\(relativePath(url)):\(index + 1) \(pattern.message)"))
+        }
+    }
+    return (failures, flags)
+}
+
 func runSafetyAudit() throws -> Int32 {
     let target = "tcti-appstore-safety-audit"
     let productionRoots = [
@@ -5468,6 +5534,8 @@ func runSafetyAudit() throws -> Int32 {
     var scannedFiles = 0
     var scannedObjects = 0
     var warnings: [String] = []
+    let forbiddenPatterns = try forbiddenSourcePatterns()
+    var forbiddenFlags = forbiddenDefaults()
 
     for root in productionRoots {
         var isDirectory: ObjCBool = false
@@ -5477,10 +5545,20 @@ func runSafetyAudit() throws -> Int32 {
             for case let url as URL in enumerator where sourceExtensions.contains(url.pathExtension) {
                 scannedFiles += 1
                 failures.append(contentsOf: scanSourceForX18(url))
+                let scan = scanSourceForForbiddenBehavior(url, patterns: forbiddenPatterns)
+                failures.append(contentsOf: scan.failures)
+                for (field, value) in scan.flags where value {
+                    forbiddenFlags[field] = true
+                }
             }
         } else if sourceExtensions.contains(root.pathExtension) {
             scannedFiles += 1
             failures.append(contentsOf: scanSourceForX18(root))
+            let scan = scanSourceForForbiddenBehavior(root, patterns: forbiddenPatterns)
+            failures.append(contentsOf: scan.failures)
+            for (field, value) in scan.flags where value {
+                forbiddenFlags[field] = true
+            }
         }
     }
 
@@ -5506,6 +5584,19 @@ func runSafetyAudit() throws -> Int32 {
     if scanSourceForX18(fixture).isEmpty {
         failures.append(fail("x18-fixture", "x18 forbidden fixture did not trigger scanner"))
     }
+    let appStoreFixture = path("tools", "tcti", "fixtures", "appstore_safety", "forbidden_exec.c")
+    let appStoreFixtureScan = scanSourceForForbiddenBehavior(appStoreFixture, patterns: forbiddenPatterns)
+    let expectedFixtureFields = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+    for field in expectedFixtureFields where appStoreFixtureScan.flags[field] != true {
+        failures.append(fail("appstore-fixture-\(field)", "App Store safety fixture did not trigger \(field) scanner"))
+    }
+    forbiddenFlags["host_x18"] = !failures.filter { $0.id.contains("x18") }.isEmpty
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
     let reportURL = try writeReport(report(
@@ -5513,7 +5604,7 @@ func runSafetyAudit() throws -> Int32 {
         status: status,
         summary: "Scanned \(scannedFiles) TCTI source/template file(s) and \(scannedObjects) object file(s).",
         failures: failures,
-        forbiddenBehavior: forbiddenDefaults(hostX18: !failures.filter { $0.id.contains("x18") }.isEmpty),
+        forbiddenBehavior: forbiddenFlags,
         counters: [
             "scanned_source_files": scannedFiles,
             "scanned_objects": scannedObjects,

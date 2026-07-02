@@ -2,6 +2,53 @@
 
 ## 2026-07-02
 
+### Checkpoint: Safety Harness Physical-Report Review Tightening
+
+- Harness-selected gate remained `physical-tcti-init-first-syscall`.
+- Latest selected physical gate retry:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T015016Z-22911.md`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T015016Z-22911.json`.
+  - status `fail`.
+  - passed `false`.
+  - failure still occurred during physical device discovery/readiness before kernel build, app build, install, launch, `/init`, or TCTI execution.
+  - blocker remained `ddiServicesAvailable=false` for `RRJ-iPhone-15-Pro-Max`.
+- Safety review found the previous report-read hook exception could return before later device-policy checks on mixed payloads.
+- Updated `.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy` so:
+  - report-only runtime artifact reads remain allowed.
+  - `IMPLEMENT.md` log updates remain allowed.
+  - mixed payloads that include device-oriented commands still reach the physical-device policy checks.
+- Safety review also found non-x18 App Store forbidden-behavior fields were defaulted rather than scanner-backed.
+- Updated `tools/tcti/orlix-tcti-gate.swift` App Store safety audit so production TCTI sources are scanned for:
+  - `MAP_JIT`.
+  - generated executable memory requests.
+  - RWX permission requests.
+  - host executable guest-text requests.
+  - native iOS or HostAdapter API exposure to guest Linux.
+- Added negative scanner fixture:
+  - `tools/tcti/fixtures/appstore_safety/forbidden_exec.c`.
+- Refreshed stale autonomous reports at current `HEAD`:
+  - `Build/TCTI/reports/tcti-contract/report.json`.
+  - `Build/TCTI/reports/tcti-diff-switch/report.json`.
+  - `Build/TCTI/reports/tcti-memory-fuzz/report.json`.
+  - `Build/TCTI/reports/tcti-direct-chain-fuzz/report.json`.
+  - `Build/TCTI/reports/tcti-repro/report.json`.
+
+Boundary:
+
+- No TCTI physical runtime evidence was captured.
+- No no-phone reducer was added for the DDI-readiness failure because it is not TCTI behavior.
+- No production TCTI assembly was added.
+- No gadget dispatch was added.
+- No simulator gate was run.
+- No HostAdapter behavior was added.
+- No Darwin syscall behavior was added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics were added.
+- No generated executable memory was added.
+- No host-executable guest text was added.
+- No product defconfig was flipped.
+- No custom MCP was added.
+- No `tools/agent` directory was added.
+
 ### Checkpoint: Physical First-Syscall Gate Attempt Blocked By DDI Readiness
 
 - Harness-selected gate attempted: `physical-tcti-init-first-syscall`.
