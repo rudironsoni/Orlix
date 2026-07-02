@@ -909,6 +909,30 @@ static void tcti_decode_recognizes_load_store_exclusive_class(struct kunit *test
 	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
 }
 
+static void tcti_decode_recognizes_simd_movi_2d_zero(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x6f00e400U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0ULL, decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f00e41fU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rd);
+
+	decoded = tcti_decode_aarch64(0x6f00e420U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+}
+
 static void tcti_switch_executes_hint_as_noop(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -2030,6 +2054,62 @@ static void tcti_switch_fails_store_exclusive_without_reservation(struct kunit *
 	KUNIT_EXPECT_EQ(test, 0x8304ULL, regs.pc);
 }
 
+#if defined(ORLIX_APP_HOSTED_BOOT)
+static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 0x123456789abcdef0ULL;
+	current->thread.user_simd[1] = 0xfedcba9876543210ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8400;
+
+	decoded = tcti_decode_aarch64(0x6f00e400U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8404ULL, regs.pc);
+}
+
+static void tcti_gadget_program_executes_simd_movi_2d_zero(struct kunit *test)
+{
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	unsigned long fault_address = 0;
+	size_t word_count = 0;
+	int ret;
+
+	current->thread.user_simd[0] = 0x123456789abcdef0ULL;
+	current->thread.user_simd[1] = 0xfedcba9876543210ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8500;
+
+	decoded = tcti_decode_aarch64(0x6f00e400U);
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program),
+					     &word_count);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS,
+			word_count);
+
+	ret = tcti_execute_gadget_program(NULL, &regs, program, word_count,
+					  &fault_address);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8504ULL, regs.pc);
+}
+#endif
+
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_svc_zero),
 	KUNIT_CASE(tcti_decode_rejects_unknown_instruction),
@@ -2058,9 +2138,13 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_system_register_class),
 	KUNIT_CASE(tcti_decode_recognizes_exclusive_monitor_clear),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_exclusive_class),
+	KUNIT_CASE(tcti_decode_recognizes_simd_movi_2d_zero),
 	KUNIT_CASE(tcti_gadget_program_lowers_hint_as_data_stream),
 	KUNIT_CASE(tcti_gadget_program_executes_extract),
 	KUNIT_CASE(tcti_gadget_program_rejects_svc_lowering),
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	KUNIT_CASE(tcti_gadget_program_executes_simd_movi_2d_zero),
+#endif
 	KUNIT_CASE(tcti_gadget_program_executes_init001_movz_prefix),
 	KUNIT_CASE(tcti_gadget_program_matches_switch_debug_init001_movz_prefix),
 	KUNIT_CASE(tcti_syscall_handoff_uses_guest_x8_and_advances_pc),
@@ -2091,6 +2175,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_system_registers),
 	KUNIT_CASE(tcti_switch_executes_exclusive_monitor_clear),
 	KUNIT_CASE(tcti_switch_fails_store_exclusive_without_reservation),
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	KUNIT_CASE(tcti_switch_executes_simd_movi_2d_zero),
+#endif
 	{}
 };
 
