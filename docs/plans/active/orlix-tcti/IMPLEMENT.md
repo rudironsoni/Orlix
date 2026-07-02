@@ -1775,6 +1775,62 @@ Harness state checkpoint:
 - `agent-status` recognizes `first-gadget-init-001-exit` passed.
 - `agent-next` advances to the next certification gate.
 - Release and readiness gates remain ineligible.
+
+### Checkpoint: Structural Golden `init_007_mprotect`
+
+- Harness-selected gate: `golden-init-007-mprotect-structural`.
+- Selected command: `make tcti-golden-elf CASE=init_007_mprotect`.
+- Why selected: all earlier no-phone golden structural and switch-debug gates through `switch-init-006-memory` were passing, making the next missing ready gate the structural `mprotect` fixture.
+- Added fixture:
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_007_mprotect/init_007_mprotect.S`.
+  - `OrlixKernel/Tests/TCTI/golden_elf/init_007_mprotect/golden.json`.
+- Structural intent:
+  - no-libc AArch64 Linux ELF;
+  - descriptive syscall shape only: `mprotect(page, 4096, PROT_READ)` then `exit(0)`;
+  - no switch-debug execution for this gate;
+  - no Linux `mprotect` semantics;
+  - no host `mprotect`, `vm_protect`, `MAP_JIT`, RWX, or executable-memory behavior.
+- Emitted entrypoint:
+  - `0x0000000000211000`.
+- Emitted instruction encodings:
+  - `0x10008000`: `adr x0, 0x212000 <page>`.
+  - `0xd2820001`: `mov x1, #4096`.
+  - `0xd2800022`: `mov x2, #1`.
+  - `0xd2801c48`: `mov x8, #226`.
+  - `0xd4000001`: `svc #0`.
+  - `0xd2800000`: `mov x0, #0`.
+  - `0xd2800ba8`: `mov x8, #93`.
+  - `0xd4000001`: `svc #0`.
+- Validator updates:
+  - accepts `init_007_mprotect` in structural `tcti-golden-elf`;
+  - verifies source hash, binary hash, ELF64 AArch64 executable shape, entrypoint, `mprotect`/`exit(0)` expected syscall metadata, ADR-to-`page`, required instruction words, two `svc #0` instructions, and all forbidden behavior flags false;
+  - derives refreshed metadata entrypoint from `llvm-objdump -f` output so aligned fixtures do not inherit the older default entrypoint.
+- Reports:
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`.
+  - `Build/TCTI/golden_elf/init_007_mprotect/validation.json`.
+- Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make tcti-golden-elf-refresh CASE=init_007_mprotect
+rtk proxy make tcti-golden-elf CASE=init_007_mprotect
+```
+
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No TCTI runtime feature implemented.
+  - No switch-debug execution for `init_007_mprotect`.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No generated executable memory.
+  - No host-executable guest text.
+  - No simulator gate run.
+  - No phone gate run.
+  - No HostAdapter behavior.
+  - No Darwin syscall behavior.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No product defconfig flip.
 - The next gate selected by the harness was not executed in this checkpoint.
 
 Verification:
