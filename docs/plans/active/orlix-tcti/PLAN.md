@@ -22,6 +22,7 @@ TCTI only executes guest AArch64 EL0 instructions until Linux needs control agai
 - Guest ELF text remains host data. No guest ELF text path requests `vm_protect(... EXECUTE ...)`, guest-text `mmap(... PROT_EXEC ...)`, JIT, MAP_JIT, RWX, or generated executable memory.
 - Neither this plan nor the full TCTI objective can be marked complete by documentation, harness rails, or no-phone seed proofs alone. Completion requires local no-phone test targets, machine-readable JSON reports, checked-in golden artifacts, reducer artifacts, static audits, gadget readiness where required, and physical-device runtime evidence.
 - The repo can select the next eligible TCTI gate without a human naming it. `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, and `make agent-task-envelope-check AREA=orlix-tcti` must produce and validate a machine-readable next-task envelope from current reports and the skill-owned roadmap.
+- Simulator validation is mandatory before physical iPhone validation. The simulator must run on the dedicated `Orlix-iPhone-15-Pro-Max` simulator and must prove both the first TCTI `svc #0` marker and post-launch TCTI runtime stability, with no kernel panic, init death, user fault, BUG, Oops, SIGSEGV, fatal error, or crash marker in the captured logs. Direct physical `runtime-validation` preflight must enforce the same simulator-stability prerequisite, not only the agent-next selector.
 - Physical iPhone gate proves static `/init` reaches real `svc #0`, enters `orlix_syscall_dispatch`, writes one Linux console line, and emits HostAdapter console mirror evidence.
 - Performance claims include exact workload, device, build configuration, command, baseline, counters, wall-clock result, JSON report, and Markdown report.
 
@@ -38,6 +39,7 @@ Agents may mark only the exact scoped checkpoint they just verified. They must n
 - release or readiness eligibility is false
 - any required TCTI report is missing, `todo`, `fail`, `error`, `skipped`, or `evidence`
 - gadget prerequisites are incomplete for a gadget or physical-device claim
+- simulator `tcti-init-first-syscall` or `tcti-simulator-stability` has not produced a current passing `DESTINATION=iphonesimulator` JSON report
 - `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall` has not produced a passing JSON report
 - the physical-device report does not prove real `/init` reaches `svc #0`, enters `orlix_syscall_dispatch`, writes a Linux console line, and has all forbidden-behavior fields false
 
@@ -108,14 +110,14 @@ Standard autonomous workflow:
 5. `tcti-test-reducer` handles failures before production changes.
 6. `tcti-release-gate-reviewer` confirms whether the checkpoint advances readiness.
 
-Current roadmap state after the latest no-phone proofs:
+Current roadmap state after the latest no-phone proofs and simulator policy correction:
 
-- `switch-init-001-exit` is satisfied by `Build/TCTI/golden_elf/init_001_exit/execution.json`.
-- `switch-init-002-write` is satisfied by `Build/TCTI/golden_elf/init_002_write/execution.json`.
-- The current next eligible gate is `switch-init-003-stack`.
-- Physical-device gates remain blocked because no-phone and gadget prerequisites are incomplete.
-- Gadget gates remain blocked because switch-debug and differential prerequisites are incomplete.
-- This status is proof of sequencing only. It is not a completion claim for TCTI.
+- The no-phone and simulator prerequisites already proven by reports remain prerequisites, not final completion.
+- `simulator-tcti-init-first-syscall` proves only that the simulator build reaches the first TCTI `svc #0` marker.
+- `simulator-tcti-runtime-stability` is mandatory after the first-syscall marker and before any phone gate. It fails on fatal post-launch TCTI runtime evidence and emits the fatal log artifact for reduction.
+- Physical-device gates remain blocked while simulator stability fails or is missing, even if the first-syscall marker report passes.
+- Gadget and production TCTI work remain blocked unless the selected harness envelope explicitly allows them.
+- This status is proof of sequencing only. It is not a completion claim for TCTI, product readiness, or physical-device support.
 
 No custom Orlix MCP may be introduced for these workflows. Repo-local workflow logic belongs in `.agents/skills`; `.codex` is only an adapter; MCP is reserved for external/proven tools such as LLDB MCP, Context7, OpenAI Docs MCP, or externally configured issue-tracker and GitHub MCP.
 
@@ -1268,6 +1270,7 @@ Emergency override reports must use `status=evidence`, `passed=false`, `autonomo
 TCTI gates:
 
 - `tcti-init-first-syscall`
+- `tcti-simulator-stability`, simulator-only, must fail if the first TCTI syscall marker is followed by fatal runtime evidence such as kernel panic, init death including both `Attempted to kill init` and `Attempted kill init`, user fault, BUG, Oops, SIGSEGV, fatal error, or crash.
 - `tcti-init-console-write`
 - `tcti-static-busybox-start`
 - `tcti-dynamic-loader-start`

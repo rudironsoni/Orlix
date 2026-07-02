@@ -138,6 +138,26 @@ json_string_or_null() {
 	fi
 }
 
+json_artifacts_array() {
+	if ! compgen -G "$artifact_dir/*" >/dev/null; then
+		printf '[]'
+		return
+	fi
+	local first="true"
+	local path
+	printf '['
+	for path in "$artifact_dir"/*; do
+		[ -f "$path" ] || continue
+		if [ "$first" = "true" ]; then
+			first="false"
+		else
+			printf ', '
+		fi
+		printf '"%s"' "$(json_escape "$(artifact_rel "$path")")"
+	done
+	printf ']'
+}
+
 failure_context_json() {
 	if [ -z "$failure_stage" ]; then
 		printf 'null'
@@ -175,6 +195,7 @@ write_json_report() {
 	local escaped_destination
 	local escaped_profile
 	local escaped_scheme
+	local artifacts_json
 	local failure_context
 	local preflight_only="false"
 	if [ -n "$runtime_preflight_only" ]; then
@@ -188,10 +209,11 @@ write_json_report() {
 	escaped_destination="$(json_escape "$destination")"
 	escaped_profile="$(json_escape "$profile")"
 	escaped_scheme="$(json_escape "$scheme")"
+	artifacts_json="$(json_artifacts_array)"
 	failure_context="$(failure_context_json)"
 	cat >"$json_report.tmp" <<JSON
 {
-  "artifacts": [],
+  "artifacts": $artifacts_json,
   "artifact_dir": "$escaped_artifact_dir",
   "autonomous_tests_bypassed": $bypassed,
   "backend": "tcti",
@@ -260,9 +282,42 @@ autonomous_tcti_reports_passed() {
 	return 0
 }
 
+latest_simulator_stability_report() {
+	local latest=""
+	local path
+	for path in "$report_dir"/tcti-simulator-stability-*.json; do
+		[ -e "$path" ] || continue
+		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
+			latest="$path"
+		fi
+	done
+	[ -n "$latest" ] || return 1
+	printf '%s\n' "$latest"
+}
+
+simulator_tcti_stability_report_passed() {
+	local path
+	path="$(latest_simulator_stability_report)" || return 1
+	local current_sha
+	current_sha="$(git rev-parse HEAD 2>/dev/null || true)"
+	[ -n "$current_sha" ] || return 1
+	report_has_passed "$path" || return 1
+	grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$path" || return 1
+	grep -q '"destination"[[:space:]]*:[[:space:]]*"iphonesimulator"' "$path" || return 1
+	grep -Eq '"(gate|target)"[[:space:]]*:[[:space:]]*"tcti-simulator-stability"' "$path" || return 1
+	grep -q '"backend"[[:space:]]*:[[:space:]]*"tcti"' "$path" || return 1
+	grep -q '"profile"[[:space:]]*:[[:space:]]*"tcti_runtime"' "$path" || return 1
+	grep -q '"preflight_only"[[:space:]]*:[[:space:]]*false' "$path" || return 1
+	grep -q '"autonomous_tests_bypassed"[[:space:]]*:[[:space:]]*false' "$path" || return 1
+	for key in generated_exec_memory host_exec_guest_text host_x18 map_jit native_ios_api_exposure_to_guest rwx; do
+		grep -q "\"$key\"[[:space:]]*:[[:space:]]*false" "$path" || return 1
+	done
+	return 0
+}
+
 physical_tcti_preflight() {
 	is_tcti_physical_gate || return 0
-	if autonomous_tcti_reports_passed; then
+	if autonomous_tcti_reports_passed && simulator_tcti_stability_report_passed; then
 		return 0
 	fi
 	if [ "$tcti_device_override" = "I_ACCEPT_DEVICE_DEBUG_DEBT" ]; then
@@ -271,12 +326,12 @@ physical_tcti_preflight() {
 		tcti_evidence_mode=1
 		return 0
 	fi
-	die "Physical TCTI gates require passing autonomous TCTI reports before device work. Set ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT and ORLIX_TCTI_DEVICE_OVERRIDE_REASON only for evidence collection."
+	die "Physical TCTI gates require passing autonomous TCTI reports and a current passing simulator stability report before device work. Set ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT and ORLIX_TCTI_DEVICE_OVERRIDE_REASON only for evidence collection."
 }
 
 validate_gate() {
 	case "$gate" in
-	tcti-init-first-syscall|tcti-init-console-write|tcti-static-busybox-start|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
+	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
 		;;
 	*)
 		die "Unknown runtime validation gate \`$gate\`."
@@ -784,6 +839,21 @@ assert_no_host_exec_guest_text() {
 	fi
 }
 
+assert_no_simulator_fatal_runtime() {
+	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
+		die "Gate \`$gate\` is simulator-only."
+	fi
+	if grep -E -i 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|crash' \
+		"$artifact_dir"/launch-console.log \
+		"$artifact_dir"/launch.log \
+		"$artifact_dir"/simulator-unified.log \
+		>"$artifact_dir/tcti-simulator-fatal-runtime.txt" 2>/dev/null; then
+		failure_stage="tcti-simulator-stability"
+		die "Simulator TCTI runtime captured a fatal post-launch error."
+	fi
+	touch "$artifact_dir/tcti-simulator-fatal-runtime.txt"
+}
+
 assert_gate_markers() {
 	case "$gate" in
 	tcti-init-first-syscall)
@@ -795,6 +865,17 @@ assert_gate_markers() {
 			failure_stage="tcti-first-syscall-marker"
 			die "No TCTI \`svc #0\` marker was captured from \`$destination\`."
 		}
+		;;
+	tcti-simulator-stability)
+		grep -F 'Orlix TCTI: svc #0' \
+			"$artifact_dir/launch-console.log" \
+			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-unified.log" \
+			>"$artifact_dir/tcti-first-syscall.txt" 2>/dev/null || {
+			failure_stage="tcti-first-syscall-marker"
+			die "No TCTI \`svc #0\` marker was captured from \`$destination\`."
+		}
+		assert_no_simulator_fatal_runtime
 		;;
 	tcti-init-console-write)
 		grep -E 'linux-console|Orlix TCTI: svc #0|ORLIX|Linux version' \
