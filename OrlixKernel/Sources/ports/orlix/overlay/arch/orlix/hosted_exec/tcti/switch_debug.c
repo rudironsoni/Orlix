@@ -1107,6 +1107,19 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 	return 0;
 }
 
+static int tcti_execute_simd_modified_immediate(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	if (decoded->logical_immediate)
+		return -EOPNOTSUPP;
+
+	current->thread.user_simd[decoded->rd * 2] = 0;
+	current->thread.user_simd[decoded->rd * 2 + 1] = 0;
+	current->thread.user_simd_valid = 1;
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 int tcti_execute_decoded_semantics(struct mm_struct *mm,
 				   struct pt_regs *regs,
 				   const struct tcti_decoded_instruction *decoded,
@@ -1214,6 +1227,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
 		return tcti_execute_load_store_exclusive(mm, regs, decoded,
 							 fault_address);
+	case TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE:
+		return tcti_execute_simd_modified_immediate(regs, decoded);
 	default:
 		return -EOPNOTSUPP;
 	}

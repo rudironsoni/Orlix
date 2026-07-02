@@ -2936,6 +2936,69 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Simulator TCTI Clears SIMD MOVI Zero Blocker
+
+- Harness state: `agent-next` still selects `physical-tcti-init-first-syscall`, but active user constraint allows only simulator runtime validation on `Orlix-iPhone-15-Pro-Max` UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+- Implemented trace-driven TCTI runtime slice for the next observed simulator blocker after first `svc #0`.
+- Previous simulator blocker:
+  - `Orlix TCTI: unsupported instruction task=init pid=1 pc=0x79d6ab1f2f2c insn=0x6f00e400 ...`
+  - Disassembly: `movi v0.2d, #0000000000000000`.
+- Decoder change:
+  - Added `TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE`.
+  - Added narrow mask/predicate for only the observed `movi vN.2d, #0` class:
+    - mask `0xffffffe0`
+    - pattern `0x6f00e400`
+  - `0x6f00e420` remains unsupported, proving nonzero modified immediates are not broadened by this checkpoint.
+- Semantics change:
+  - switch/data-program semantics zero both stored D lanes for the decoded SIMD register.
+  - no FP arithmetic, vector arithmetic, host executable guest text, JIT, or production assembly added.
+- Runtime validation:
+  - command:
+    - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall`
+  - report:
+    - `Build/Reports/runtime/tcti-init-first-syscall-20260702T131130Z-83995.json`
+    - `Build/Reports/runtime/tcti-init-first-syscall-20260702T131130Z-83995.md`
+  - artifact:
+    - `Build/Reports/runtime/tcti-init-first-syscall-20260702T131130Z-83995.artifacts/simulator-unified.log`
+  - result:
+    - `status=pass`
+    - `passed=true`
+    - `destination=iphonesimulator`
+    - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`
+    - `release_gate_eligible=false`
+    - `readiness_gate_eligible=false`
+    - forbidden behavior all false.
+- Evidence:
+  - old `insn=0x6f00e400` unsupported-instruction marker is gone from the new simulator log.
+  - first TCTI syscall marker is still captured:
+    - `Orlix TCTI: svc #0 task=init pid=1 pc=0xb3daeb76a80 syscall=178 x0=0xb2 x1=0xb3daeb754b4 x2=0x0 x3=0x0 x4=0x0 x5=0x0`
+  - next concrete runtime blocker is now a user fault:
+    - `Orlix TCTI: user fault task=init pid=1 pc=0xb3daeb8a1f4 lr=0xb3daeb89ffc sp=0xb3dbe787800 addr=0x97ffb62f39083fff access=1 si=1`
+    - kernel panics because init receives SIGSEGV: `exitcode=0x0000000b`.
+- Verification:
+  - `rtk proxy git diff --check`
+  - `rtk proxy make agent-harness-check`
+  - `rtk proxy make agent-mcp-check`
+  - `rtk proxy make tcti-plan-consistency`
+  - `rtk proxy make tcti-toolchain-check`
+  - `rtk proxy make tcti-report-schema-check`
+  - `rtk proxy make tcti-golden-elf`
+  - `rtk proxy make tcti-appstore-safety-audit`
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development`
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release`
+- Boundary:
+  - No physical-device gate run.
+  - No simulator other than `Orlix-iPhone-15-Pro-Max` used.
+  - No production TCTI assembly.
+  - No broad gadget dispatch.
+  - No HostAdapter behavior.
+  - No Darwin syscall behavior.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No product defconfig flip.
+  - No custom MCP.
+  - No `tools/agent`.
+  - TCTI remains incomplete. Next work is trace-driven investigation of the new TCTI user fault.
+
 ### Checkpoint: Simulator First Syscall Reaches TCTI
 
 - Harness-selected gate: `physical-tcti-init-first-syscall`.

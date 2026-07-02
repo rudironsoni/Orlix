@@ -60,6 +60,8 @@
 #define AARCH64_CLREX 0xd5033f5fU
 #define AARCH64_LOAD_STORE_EXCLUSIVE_MASK 0x3f007c00U
 #define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08007c00U
+#define AARCH64_SIMD_MOVI_2D_ZERO_MASK 0xffffffe0U
+#define AARCH64_SIMD_MOVI_2D_ZERO_PATTERN 0x6f00e400U
 #define AARCH64_SYSTEM_REGISTER_MASK 0xfff00000U
 #define AARCH64_MRS_PATTERN 0xd5300000U
 #define AARCH64_MSR_PATTERN 0xd5100000U
@@ -686,6 +688,17 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.exclusive = !ordered_nonexclusive;
 		decoded.acquire = load && (instruction & BIT(15));
 		decoded.release = !load && (instruction & BIT(15));
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_MOVI_2D_ZERO_MASK) ==
+	    AARCH64_SIMD_MOVI_2D_ZERO_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.logical_immediate = 0;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u64);
+		decoded.simd_fp = true;
 		return decoded;
 	}
 
