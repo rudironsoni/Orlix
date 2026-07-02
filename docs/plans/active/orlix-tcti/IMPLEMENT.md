@@ -2082,6 +2082,76 @@ rtk proxy make tcti-golden-elf CASE=init_009_faults
   - No generated executable memory.
   - No host-executable guest text.
   - No product defconfig flip.
+
+### Checkpoint: Switch-Debug Executes `init_009_faults`
+
+- Harness-selected gate: `switch-init-009-faults`.
+- Selected command: `make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug`.
+- Why selected: `golden-init-009-faults-structural` passed and the harness advanced to the next switch-debug execution proof for the same case.
+- Added switch-debug semantic behavior:
+  - capture failed file-backed guest memory reads as a structured `guest_memory_fault`;
+  - stop before syscall or guest exit when the fault is captured;
+  - do not deliver Linux signals;
+  - do not implement process, scheduler, VFS, fd table, or Linux runtime semantics.
+- Expected captured fault:
+  - kind: `guest_memory_fault`;
+  - address: `0x0000000000000000`;
+  - access: `read`;
+  - captured: `true`.
+- Expected execution shape:
+  - `guest_instructions_executed = 2`;
+  - decoded `LDR x0, [x1]` effective address `0x0000000000000000`;
+  - no captured syscalls;
+  - no captured guest exit.
+- Execution report:
+  - `Build/TCTI/golden_elf/init_009_faults/execution.json`.
+- Reducers:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-faults-wrong-address.json`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-faults-missing-fault.json`.
+- Replayed reducer:
+
+```text
+rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-faults-wrong-address.json; rc=$?; echo rc=$rc; exit 0'
+```
+
+Result:
+
+```text
+expected status: fail
+actual replay status: fail
+actual replay exit code: 2
+rc=2
+```
+
+- Harness follow-up:
+  - Added the skill-local status recognizer for `switch-init-009-faults`.
+  - The recognizer requires switch-debug backend, entered entrypoint, 2 guest instructions, captured read fault at guest address zero, no syscall, no exit, and decoded faulting LDR.
+  - After recognition, `agent-next` selected `golden-init-010-cpu-model-structural`.
+- Evidence so far:
+
+```text
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
+rtk proxy make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+```
+
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No Linux signal delivery semantics.
+  - No process, scheduler, VFS, fd table, or Linux runtime semantics added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No simulator gate run.
+  - No phone gate run.
+  - No HostAdapter behavior.
+  - No Darwin syscall behavior.
+  - No generated executable memory.
+  - No host-executable guest text.
+  - No product defconfig flip.
 - The next gate selected by the harness was not executed in this checkpoint.
 
 Verification:
