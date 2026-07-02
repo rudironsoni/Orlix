@@ -2,6 +2,56 @@
 
 ## 2026-07-02
 
+### Checkpoint: Simulator First-Syscall Gate Fails Before Launch During Install
+
+- User-directed diagnostic: test the TCTI first-syscall gate on the simulator before retrying the physical iPhone gate.
+- Harness-selected gate remains `physical-tcti-init-first-syscall`.
+- Physical selected command remains `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Simulator diagnostic command run:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" HOMEBREW_NO_AUTO_UPDATE=1 ORLIX_SIMULATOR_ID=C60BB34E-99F0-401E-AACF-ED599B7F2AC3 PROFILE=development DESTINATION=iphonesimulator GATE=tcti-init-first-syscall REPORT_DIR=Build/Reports/runtime-simulator make runtime-validation`.
+- Simulator selected:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `C60BB34E-99F0-401E-AACF-ED599B7F2AC3`.
+  - Runtime `iOS 26.5`.
+  - State `Booted`.
+- Runtime report:
+  - `Build/Reports/runtime-simulator/tcti-init-first-syscall-20260702T070728Z-48274.json`.
+  - `Build/Reports/runtime-simulator/tcti-init-first-syscall-20260702T070728Z-48274.md`.
+- Result:
+  - status `fail`.
+  - passed `false`.
+  - readiness gate eligible `false`.
+  - release gate eligible `false`.
+  - failure occurred during simulator install before launch, `/init`, TCTI execution, `svc #0`, marker capture, or `orlix_syscall_dispatch`.
+- Artifact evidence:
+  - kernel archive built far enough for the script to produce `kernel-build.log`.
+  - Xcode project generation and app build produced `xcodegen.log`, `xcodebuild.log`, `build-settings.json`, and `app-path.txt`.
+  - simulator boot was already complete and `bootstatus` was skipped as booted.
+  - `install.stdout` and `install.stderr` were empty at failure.
+  - no `launch-console.log`, `launch.stderr`, or `tcti-first-syscall.txt` was produced.
+- Environment preflight:
+  - `xcode-storage-doctor` reported the CoreSimulator device sparsebundle mounted correctly.
+  - `xcode-storage-doctor` also reported `CoreSimulator Caches is not mounted at /Library/Developer/CoreSimulator/Caches`.
+  - The previously documented `ExternalSSDProof` UDID `4B85E297-7A59-45BD-A94B-189238EC48FA` was not a valid simulator on this machine at the time of the run.
+
+Boundary:
+
+- This simulator result does not satisfy the physical `tcti-init-first-syscall` gate.
+- This simulator result does not advance release or readiness eligibility.
+- No TCTI runtime behavior was reached.
+- No no-phone reducer was added because the failure happened before app/TCTI execution and before a TCTI behavioral signal.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No physical device command was run for this checkpoint.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added as a guest side effect.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- No custom MCP added.
+- No `tools/agent` added.
+
 ### Checkpoint: Physical First-Syscall Gate Still Blocked By Device DDI Readiness After Safety Fix
 
 - Harness-selected gate: `physical-tcti-init-first-syscall`.
