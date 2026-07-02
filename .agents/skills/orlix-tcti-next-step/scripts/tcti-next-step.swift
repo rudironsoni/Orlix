@@ -1074,6 +1074,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return basicReportGate(gate, target: "tcti-direct-chain-fuzz")
     case "simulator-tcti-init-first-syscall":
         return simulatorFirstSyscallPass(gate)
+    case "no-phone-tcti-simulator-user-fault-reducer":
+        return basicReportGate(gate, target: "tcti-simulator-user-fault-reducer")
     case "simulator-tcti-runtime-stability":
         return simulatorStabilityPass(gate)
     case "physical-tcti-init-first-syscall":
@@ -1268,10 +1270,66 @@ func runtimePreflightGates() -> [Gate] {
             ]
         ),
         Gate(
+            id: "no-phone-tcti-simulator-user-fault-reducer",
+            command: "make tcti-simulator-user-fault-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["simulator-tcti-init-first-syscall"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                "Makefile",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run phone gates.",
+                "Do not add production TCTI assembly.",
+                "Do not add gadget dispatch.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
+                "Do not edit generated upstream or build trees.",
+                "Do not flip product defconfigs.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-simulator-user-fault-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json",
+                "Build/TCTI/reports/tcti-repro/report.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-plan-consistency",
+                "rtk proxy make tcti-report-schema-check",
+                "rtk proxy make tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
+                "rtk proxy make tcti-simulator-user-fault-reducer",
+                "rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json",
+                "rtk proxy make tcti-appstore-safety-audit",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            ],
+            reducerRequirements: [
+                "A current failing simulator stability report must contain the null user fault and init-kill panic signature.",
+                "The no-phone reducer must replay through make tcti-repro before production TCTI patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-safety",
+                "orlix-tcti-reproducer",
+                "orlix-tcti-golden-elf",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): add simulator fault got reducer",
+            stopConditions: [
+                "Stop if the current simulator stability report is stale or missing the fatal signature.",
+                "Stop if the no-phone reducer cannot replay.",
+                "Stop if production TCTI code would be required before the reducer exists.",
+            ]
+        ),
+        Gate(
             id: "simulator-tcti-runtime-stability",
             command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability",
             kind: "simulator-runtime",
-            prerequisites: ["simulator-tcti-init-first-syscall"],
+            prerequisites: ["no-phone-tcti-simulator-user-fault-reducer"],
             allowedScope: [
                 "tools/runtime/orlix-runtime-validation.sh",
                 "docs/plans/active/orlix-tcti/IMPLEMENT.md",
