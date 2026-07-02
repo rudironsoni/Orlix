@@ -605,6 +605,54 @@ func switchMprotect007Pass() -> (Bool, String) {
     }
 }
 
+func memoryWrites(_ object: [String: Any]) -> [[String: Any]] {
+    guard let array = object["memory_writes"] as? [Any] else { return [] }
+    return array.compactMap { $0 as? [String: Any] }
+}
+
+func switchSelfModify008Pass() -> (Bool, String) {
+    do {
+        let object = try executionObject("init_008_self_modify")
+        let exit = object["exit"] as? [String: Any]
+        let entered = boolValue(object["entered_entrypoint"])
+        let backend = stringValue(object["backend"]) == "switch-debug"
+        let instructionCountOK = intValue(object["guest_instructions_executed"]) == 6
+        let exitOK = stringValue(exit?["kind"]) == "guest_exit_syscall" && intValue(exit?["code"]) == 0
+        let syscallOK = syscalls(object).contains { syscall in
+            guard stringValue(syscall["name"]) == "exit",
+                  intValue(syscall["nr"]) == 93,
+                  boolValue(syscall["captured"]),
+                  let args = syscall["args"] as? [Any],
+                  let first = args.first
+            else {
+                return false
+            }
+            return intValue(first) == 0
+        }
+        let writeOK = memoryWrites(object).contains { write in
+            stringValue(write["address"]) == "0x0000000000210138" &&
+                intValue(write["width"]) == 64 &&
+                stringValue(write["value"]) == "0x000000000000002a" &&
+                boolValue(write["captured"])
+        }
+        let decoded = object["decoded_instructions"] as? [Any] ?? []
+        let hasSTR = decoded.contains { item in
+            guard let instruction = item as? [String: Any] else { return false }
+            return stringValue(instruction["class"]) == "load_store_unsigned_immediate" &&
+                stringValue(instruction["op"]) == "str" &&
+                intValue(instruction["rt"]) == 0 &&
+                intValue(instruction["rn"]) == 1 &&
+                stringValue(instruction["effective_address"]) == "0x0000000000210138"
+        }
+        if entered && backend && instructionCountOK && exitOK && syscallOK && writeOK && hasSTR {
+            return (true, "init_008_self_modify switch-debug captured file-backed patch_slot write and exit(0)")
+        }
+        return (false, "init_008_self_modify execution artifact does not capture patch_slot write plus exit(0)")
+    } catch {
+        return (false, "missing malformed init_008_self_modify execution artifact: \(error)")
+    }
+}
+
 func firstGadgetExit001Pass() -> (Bool, String) {
     let report = reportFact(target: "tcti-diff-switch")
     guard report.exists, report.status == "pass", report.passed else {
@@ -720,6 +768,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "switch-init-007-mprotect":
         let check = switchMprotect007Pass()
+        return artifactStatus(gate, passed: check.0, reason: check.1)
+    case "switch-init-008-self-modify":
+        let check = switchSelfModify008Pass()
         return artifactStatus(gate, passed: check.0, reason: check.1)
     case "diff-switch-init-001-exit":
         let check = diffSwitchExit001Pass()

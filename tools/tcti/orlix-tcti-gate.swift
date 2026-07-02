@@ -73,6 +73,7 @@ struct ExecutionReport: Codable {
     let syscalls: [CapturedSyscall]
     let exit: CapturedExit?
     let instructionEncodings: [String]
+    let memoryWrites: [CapturedMemoryWrite]
     let notes: [String]
 
     enum CodingKeys: String, CodingKey {
@@ -84,7 +85,22 @@ struct ExecutionReport: Codable {
         case syscalls
         case exit
         case instructionEncodings = "instruction_encodings"
+        case memoryWrites = "memory_writes"
         case notes
+    }
+}
+
+struct CapturedMemoryWrite: Codable {
+    let address: String
+    let width: Int
+    let value: String
+    let captured: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case address
+        case width
+        case value
+        case captured
     }
 }
 
@@ -1711,6 +1727,7 @@ func executionReport(
     instructionWords: [UInt32],
     syscalls: [CapturedSyscall],
     capturedExit: CapturedExit?,
+    memoryWrites: [CapturedMemoryWrite],
     notes: [String]
 ) -> ExecutionReport {
     ExecutionReport(
@@ -1722,6 +1739,7 @@ func executionReport(
         syscalls: syscalls,
         exit: capturedExit,
         instructionEncodings: instructionWords.map(hexWord),
+        memoryWrites: memoryWrites,
         notes: notes
     )
 }
@@ -1779,6 +1797,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
     var instructionWords: [UInt32] = []
     var syscalls: [CapturedSyscall] = []
     var capturedExit: CapturedExit?
+    var memoryWrites: [CapturedMemoryWrite] = []
     var decodedInstructions: [DecodedInstructionReport] = []
     var instructionsExecuted = 0
 
@@ -1804,6 +1823,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["ADR computed a negative guest address and stopped the switch-debug harness"]
                 )
                 failures.append(fail("execution-address", "ADR computed negative guest address \(address)"))
@@ -1821,7 +1841,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
             }
             pc += 4
         case let .loadStoreUnsignedImmediate(_, _, op, rt, rn, offset, _):
-            if rn != 31 && op == "ldr" {
+            if rn != 31 {
                 let address = registers[rn] + UInt64(offset)
                 decodedInstructions[decodedInstructions.count - 1] = DecodedInstructionReport(
                     pc: decoded.report.pc,
@@ -1840,8 +1860,33 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     reason: decoded.report.reason
                 )
                 do {
-                    let bytes = try elf.readBytes(at: address, length: 8)
-                    registers[rt] = try littleEndianUInt64(bytes, 0)
+                    if op == "ldr" {
+                        let bytes = try elf.readBytes(at: address, length: 8)
+                        registers[rt] = try littleEndianUInt64(bytes, 0)
+                    } else if op == "str" {
+                        _ = try elf.readBytes(at: address, length: 8)
+                        memoryWrites.append(CapturedMemoryWrite(
+                            address: hexPC(address),
+                            width: 64,
+                            value: String(format: "0x%016llx", registers[rt]),
+                            captured: true
+                        ))
+                    } else {
+                        let report = executionReport(
+                            metadata: metadata,
+                            elf: elf,
+                            expectedEntry: expectedEntry,
+                            instructionsExecuted: instructionsExecuted,
+                            decodedInstructions: decodedInstructions,
+                            instructionWords: instructionWords,
+                            syscalls: syscalls,
+                            capturedExit: capturedExit,
+                            memoryWrites: memoryWrites,
+                            notes: ["switch-debug stopped because only register-based LDR/STR are supported"]
+                        )
+                        failures.append(fail("execution-unsupported-instruction", "unsupported register-based load/store op \(op)"))
+                        return (report, failures)
+                    }
                     pc += 4
                 } catch {
                     let report = executionReport(
@@ -1853,9 +1898,10 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                         instructionWords: instructionWords,
                         syscalls: syscalls,
                         capturedExit: capturedExit,
-                        notes: ["switch-debug stopped on file-backed PT_LOAD memory-read failure"]
+                        memoryWrites: memoryWrites,
+                        notes: ["switch-debug stopped on file-backed PT_LOAD memory access failure"]
                     )
-                    failures.append(fail("execution-memory-read", "\(error)"))
+                    failures.append(fail(op == "str" ? "execution-memory-write" : "execution-memory-read", "\(error)"))
                     return (report, failures)
                 }
                 continue
@@ -1870,6 +1916,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["switch-debug memory fixture stopped because only register-based LDR and SP-based load/store are supported"]
                 )
                 failures.append(fail("execution-unsupported-instruction", "load/store unsigned immediate is only implemented for register-based LDR and SP base in this no-phone fixture"))
@@ -1909,6 +1956,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["switch-debug stopped on bounded stack-memory failure"]
                 )
                 failures.append(fail("execution-stack-memory", "\(error)"))
@@ -1925,6 +1973,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["switch-debug stopped because only guest TPIDR_EL0 system-register state is supported"]
                 )
                 failures.append(fail("execution-unsupported-instruction", "unsupported system register \(sysreg)"))
@@ -1947,6 +1996,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["switch-debug branch fixture stopped because only CBZ is supported"]
                 )
                 failures.append(fail("execution-unsupported-instruction", "unsupported compare-and-branch op \(op)"))
@@ -1964,6 +2014,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                         instructionWords: instructionWords,
                         syscalls: syscalls,
                         capturedExit: capturedExit,
+                        memoryWrites: memoryWrites,
                         notes: ["switch-debug branch fixture stopped because CBZ computed a negative PC"]
                     )
                     failures.append(fail("execution-branch-target", "CBZ computed negative guest PC \(targetPC)"))
@@ -1984,6 +2035,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["switch-debug branch fixture stopped because only B is supported"]
                 )
                 failures.append(fail("execution-unsupported-instruction", "unsupported unconditional branch op \(op)"))
@@ -2000,6 +2052,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["switch-debug branch fixture stopped because B computed a negative PC"]
                 )
                 failures.append(fail("execution-branch-target", "B computed negative guest PC \(targetPC)"))
@@ -2032,6 +2085,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                         instructionWords: instructionWords,
                         syscalls: syscalls,
                         capturedExit: capturedExit,
+                        memoryWrites: memoryWrites,
                         notes: ["switch-debug stopped after a captured write syscall memory-read failure"]
                     )
                     failures.append(fail("execution-memory-read", "\(error)"))
@@ -2060,6 +2114,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["unsupported syscall number stopped the switch-debug execution harness"]
                 )
                 return (report, failures)
@@ -2074,6 +2129,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                     instructionWords: instructionWords,
                     syscalls: syscalls,
                     capturedExit: capturedExit,
+                    memoryWrites: memoryWrites,
                     notes: ["switch-debug executes decoded MOVZ/ADR/ADD/SUB/LDR/STR/MRS/MSR/SVC seed semantics and captures svc #0 as test events without calling host syscalls", "guest mprotect is captured as a test event only; no host mprotect, vm_protect, MAP_JIT, RWX, or permission side effect is performed", "guest TPIDR_EL0 is switch-debug guest state only; host TPIDR_EL0 is not read or written"]
                 )
                 failures.append(contentsOf: validateCapturedExecution(metadata: metadata, report: report))
@@ -2089,6 +2145,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
                 instructionWords: instructionWords,
                 syscalls: syscalls,
                 capturedExit: capturedExit,
+                memoryWrites: memoryWrites,
                 notes: ["unsupported decoded instruction stopped the seed switch-debug execution harness"]
             )
             failures.append(fail("execution-unsupported-instruction", "\(reason): \(hexWord(raw)) at guest PC \(hexPC(pc))"))
@@ -2105,6 +2162,7 @@ func executeSwitchDebug(binary: URL, metadata: GoldenMetadata) throws -> (report
         instructionWords: instructionWords,
         syscalls: syscalls,
         capturedExit: capturedExit,
+        memoryWrites: memoryWrites,
         notes: ["instruction limit reached before svc #0"]
     )
     failures.append(fail("execution-limit", "switch-debug execution reached instruction limit before svc #0"))
@@ -2234,6 +2292,30 @@ func validateCapturedExecution(metadata: GoldenMetadata, report: ExecutionReport
             failures.append(fail("execution-address", "expected decoded ADR x0 to page at +4096"))
         }
     }
+    if metadata.caseID == "init_008_self_modify" {
+        if report.guestInstructionsExecuted != 6 {
+            failures.append(fail("execution-instruction-count", "expected 6 guest instructions, executed \(report.guestInstructionsExecuted)"))
+        }
+        guard report.syscalls.count == 1 else {
+            failures.append(fail("execution-syscalls", "expected one exit syscall, captured \(report.syscalls.count)"))
+            return failures
+        }
+        let exit = report.syscalls[0]
+        if exit.nr != 93 || exit.name != "exit" || report.exit?.code != 0 {
+            failures.append(fail("execution-exit", "expected captured exit(0) after self-modifying write"))
+        }
+        if report.memoryWrites.count != 1 ||
+            report.memoryWrites.first?.address != "0x0000000000210138" ||
+            report.memoryWrites.first?.width != 64 ||
+            report.memoryWrites.first?.value != "0x000000000000002a" ||
+            report.memoryWrites.first?.captured != true {
+            failures.append(fail("execution-self-modify-write", "expected captured 64-bit write of 42 to patch_slot at 0x210138"))
+        }
+        let decoded = report.decodedInstructions
+        if !decoded.contains(where: { $0.instructionClass == "load_store_unsigned_immediate" && $0.op == "str" && $0.rt == 0 && $0.rn == 1 && $0.effectiveAddress == "0x0000000000210138" }) {
+            failures.append(fail("execution-self-modify-decode", "expected decoded STR x0, [x1] to patch_slot"))
+        }
+    }
     return failures
 }
 
@@ -2274,7 +2356,7 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
     if caseID == "init_001_exit" {
         return try validateAndExecuteInit001(metadataURL: metadataURL, outputRoot: outputRoot)
     }
-    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect"].contains(caseID) else {
+    guard ["init_002_write", "init_003_stack", "init_004_tls", "init_005_branches", "init_006_memory", "init_007_mprotect", "init_008_self_modify"].contains(caseID) else {
         throw GateError.usage("unsupported golden ELF execution case \(caseID)")
     }
     let built = try buildGoldenCase(caseID, outputRoot: outputRoot)
@@ -2334,6 +2416,15 @@ func validateAndExecuteGoldenCase(caseID: String, metadataURL: URL, outputRoot: 
         )
     case "init_007_mprotect":
         failures = validateInit007Metadata(
+            expected,
+            sourceHash: sourceHash,
+            binaryHash: binaryHash,
+            fileOutput: fileOutput,
+            objdumpHeader: objdumpHeader,
+            disassembly: disassembly
+        )
+    case "init_008_self_modify":
+        failures = validateInit008Metadata(
             expected,
             sourceHash: sourceHash,
             binaryHash: binaryHash,
@@ -2652,6 +2743,54 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "self-modify-wrong-value":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_008_self_modify", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_008_self_modify_wrong_value.S"),
+            outputRoot: outputRoot,
+            name: "init_008_self_modify_wrong_value"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_008_self_modify_wrong_value", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "self-modify-invalid-write":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_008_self_modify", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_008_self_modify_invalid_write.S"),
+            outputRoot: outputRoot,
+            name: "init_008_self_modify_invalid_write"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_008_self_modify_invalid_write", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "self-modify-unsupported-branch":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_008_self_modify", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_008_self_modify_unsupported_branch.S"),
+            outputRoot: outputRoot,
+            name: "init_008_self_modify_unsupported_branch"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_008_self_modify_unsupported_branch", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     default:
         throw GateError.usage("unknown NEGATIVE_EXECUTION=\(fixture)")
     }
@@ -2680,6 +2819,9 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
         "mprotect-wrong-prot",
         "mprotect-exec-prot",
         "mprotect-wrong-syscall",
+        "self-modify-wrong-value",
+        "self-modify-invalid-write",
+        "self-modify-unsupported-branch",
     ] {
         do {
             let result = try executeNegativeFixture(fixture, outputRoot: buildPath("golden_elf_negative", fixture))
@@ -2692,7 +2834,8 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
             (fixture.hasPrefix("tls-") ? "init_004_tls" :
             (fixture.hasPrefix("branches-") ? "init_005_branches" :
             (fixture.hasPrefix("memory-") ? "init_006_memory" :
-            (fixture.hasPrefix("mprotect-") ? "init_007_mprotect" : "init_001_exit")))))
+            (fixture.hasPrefix("mprotect-") ? "init_007_mprotect" :
+            (fixture.hasPrefix("self-modify-") ? "init_008_self_modify" : "init_001_exit"))))))
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
