@@ -361,6 +361,34 @@ static void tcti_decode_recognizes_load_store_pair_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 16LL, decoded.memory_offset);
 	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
 			decoded.memory_index_mode);
+
+	decoded = tcti_decode_aarch64(0xad400901U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rt2);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 0LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
+			decoded.memory_index_mode);
+
+	decoded = tcti_decode_aarch64(0xad0103e2U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt2);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 32LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
+			decoded.memory_index_mode);
 }
 
 static void tcti_decode_recognizes_load_store_unsigned_class(struct kunit *test)
@@ -396,6 +424,39 @@ static void tcti_decode_recognizes_load_store_unsigned_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
 	KUNIT_EXPECT_EQ(test, 1U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, 0x1c1LL, decoded.memory_offset);
+
+	decoded = tcti_decode_aarch64(0x3dc00100U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 0LL, decoded.memory_offset);
+
+	decoded = tcti_decode_aarch64(0x3d8007e1U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16LL, decoded.memory_offset);
+
+	decoded = tcti_decode_aarch64(0xfd005beaU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 10U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 176LL, decoded.memory_offset);
 }
 
 static void tcti_decode_recognizes_load_store_signed_immediate_class(struct kunit *test)
@@ -445,6 +506,28 @@ static void tcti_decode_recognizes_load_store_signed_immediate_class(struct kuni
 	KUNIT_EXPECT_EQ(test, 29U, decoded.rn);
 	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, -48LL, decoded.memory_offset);
+
+	decoded = tcti_decode_aarch64(0x3c9a03a0U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 29U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, -96LL, decoded.memory_offset);
+
+	decoded = tcti_decode_aarch64(0x3cc383e0U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 56LL, decoded.memory_offset);
 }
 
 static void tcti_decode_recognizes_load_store_register_offset_class(struct kunit *test)

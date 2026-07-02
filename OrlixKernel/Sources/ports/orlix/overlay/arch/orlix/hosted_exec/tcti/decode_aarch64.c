@@ -355,9 +355,9 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			return decoded;
 
 		if (simd_fp) {
-			if (opc != 1)
+			if (opc != 1 && opc != 2)
 				return decoded;
-			scale = 3;
+			scale = opc == 2 ? 4 : 3;
 		} else {
 			if (opc != 0 && opc != 2)
 				return decoded;
@@ -385,6 +385,35 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    AARCH64_LOAD_STORE_UNSIGNED_IMM_PATTERN) {
 		u8 size = (instruction >> 30) & 0x3U;
 		u8 opc = (instruction >> 22) & 0x3U;
+		bool simd_fp = instruction & BIT(26);
+		u8 scale = size;
+
+		if (simd_fp) {
+			if (size == 3 && opc <= 1) {
+				decoded.load = opc == 1;
+				decoded.access_size = sizeof(u64);
+				decoded.result_size = sizeof(u64);
+				scale = 3;
+			} else if (size == 0 && opc >= 2) {
+				decoded.load = opc == 3;
+				decoded.access_size = 2 * sizeof(u64);
+				decoded.result_size = 2 * sizeof(u64);
+				scale = 4;
+			} else {
+				return decoded;
+			}
+
+			decoded.decode_class =
+				TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE;
+			decoded.rt = instruction & 0x1fU;
+			decoded.rn = (instruction >> 5) & 0x1fU;
+			decoded.simd_fp = true;
+			decoded.memory_offset =
+				((instruction >> 10) & 0xfffU) << scale;
+			decoded.memory_index_mode =
+				TCTI_MEMORY_INDEX_SIGNED_OFFSET;
+			return decoded;
+		}
 
 		if (!tcti_decode_load_store_variant(size, opc, &decoded.load,
 						    &decoded.sign_extend_load,
@@ -406,9 +435,39 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		u8 size = (instruction >> 30) & 0x3U;
 		u8 opc = (instruction >> 22) & 0x3U;
 		u8 mode = (instruction >> 10) & 0x3U;
+		bool simd_fp = instruction & BIT(26);
 
-		if (mode == 2 ||
-		    !tcti_decode_load_store_variant(size, opc, &decoded.load,
+		if (mode == 2)
+			return decoded;
+
+		if (simd_fp) {
+			if (size == 3 && opc <= 1) {
+				decoded.load = opc == 1;
+				decoded.access_size = sizeof(u64);
+				decoded.result_size = sizeof(u64);
+			} else if (size == 0 && opc >= 2) {
+				decoded.load = opc == 3;
+				decoded.access_size = 2 * sizeof(u64);
+				decoded.result_size = 2 * sizeof(u64);
+			} else {
+				return decoded;
+			}
+
+			decoded.decode_class =
+				TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE;
+			decoded.rt = instruction & 0x1fU;
+			decoded.rn = (instruction >> 5) & 0x1fU;
+			decoded.simd_fp = true;
+			decoded.memory_offset =
+				sign_extend64((instruction >> 12) & 0x1ffU, 8);
+			decoded.memory_index_mode =
+				mode == 0 ? TCTI_MEMORY_INDEX_SIGNED_OFFSET :
+				mode == 1 ? TCTI_MEMORY_INDEX_POST :
+					    TCTI_MEMORY_INDEX_PRE;
+			return decoded;
+		}
+
+		if (!tcti_decode_load_store_variant(size, opc, &decoded.load,
 						   &decoded.sign_extend_load,
 						   &decoded.access_size,
 						   &decoded.result_size))

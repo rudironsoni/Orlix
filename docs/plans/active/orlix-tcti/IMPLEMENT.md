@@ -2,6 +2,91 @@
 
 ## 2026-07-02
 
+### Checkpoint: SIMD/FP Q/D Load-Store Uses Guest SIMD State
+
+- Harness-selected gate remains `physical-tcti-init-first-syscall`.
+- Per operator constraint, validation was run only on the `Orlix-iPhone-15-Pro-Max` simulator:
+  - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - No physical-device gate was run.
+- Fixed the TCTI decoded execution path for SIMD/FP load-store instructions emitted by the current `/init` payload:
+  - `0xad400901` `ldp q1, q2, [x8]`.
+  - `0xad0103e2` `stp q2, q0, [sp, #0x20]`.
+  - `0x3dc00100` `ldr q0, [x8]`.
+  - `0x3d8007e1` `str q1, [sp, #0x10]`.
+  - `0xfd005bea` `str d10, [sp, #0xb0]`.
+  - `0x3c9a03a0` `stur q0, [x29, #-0x60]`.
+  - `0x3cc383e0` `ldur q0, [sp, #0x38]`.
+- Decoder changes:
+  - SIMD/FP load-store pair now supports the narrow D and Q pair forms required by `/init`.
+  - SIMD/FP unsigned immediate load-store now supports the required D and Q forms.
+  - SIMD/FP signed immediate load-store now supports the required D and Q forms.
+- Execution changes:
+  - SIMD/FP D accesses move 8 bytes through `current->thread.user_simd`.
+  - SIMD/FP Q accesses move 16 bytes through `current->thread.user_simd`.
+  - D loads clear the upper stored SIMD lane.
+  - Q loads/stores preserve both stored SIMD lanes.
+  - Pair loads stage both SIMD/FP memory reads before committing register state, so a second-element fault cannot partially mutate guest SIMD state.
+- Added KUnit decode coverage for the exact emitted D/Q load-store instruction words above.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy make agent-harness-check
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-appstore-safety-audit
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
+```
+
+Simulator runtime report:
+
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T141223Z-30088.json`.
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T141223Z-30088.md`.
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T141223Z-30088.artifacts/simulator-unified.log`.
+
+Result:
+
+- The simulator gate still captures the first TCTI syscall marker:
+  - `status=pass`.
+  - `passed=true`.
+  - `destination=iphonesimulator`.
+  - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+- This report remains simulator-only:
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+- The later runtime blocker is not fixed:
+  - `pc=0x62548a56a1f4`.
+  - guest VMA `0x2a1f4`.
+  - instruction `0x39400108`, `ldrb w8, [x8]`.
+  - fault address `0x97ffb62f39083fff`.
+  - panic `Attempted to kill init! exitcode=0x0000000b`.
+- Disassembly shows the faulting scalar load follows:
+  - `0x2a1e8`: `adrp x8, 0x43000`.
+  - `0x2a1f0`: `ldr x8, [x8, #0x360]`.
+  - `0x2a1f4`: `ldrb w8, [x8]`.
+- The GOT slot at `0x43360` has `R_AARCH64_RELATIVE *ABS*+0x550a8`; the next investigation must determine why the guest value read from that slot is invalid.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly added.
+- No new gadget dispatch implementation added.
+- No simulator other than `Orlix-iPhone-15-Pro-Max` used.
+- No physical-device gate run.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added as a guest side effect.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+
 ### Checkpoint: TCTI Syscall Handoff Has Product KUnit Coverage
 
 - Added a narrow TCTI syscall handoff helper:
