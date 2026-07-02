@@ -1105,23 +1105,6 @@ static bool OrlixHostKernelRequiresShadowMapping(unsigned long target_address,
            ((unsigned long)source_page & (page_size - 1UL)) != 0;
 }
 
-static void OrlixHostTranslateLinuxSyscalls(void *target_page,
-                                            unsigned long length)
-{
-    uint32_t *insns = (uint32_t *)target_page;
-    unsigned long count = length / sizeof(*insns);
-
-    for (unsigned long index = 0; index < count; index++) {
-        if (insns[index] == ORLIX_HOST_AARCH64_SVC0_INSN) {
-            insns[index] = ORLIX_HOST_AARCH64_SYSCALL_BRK_INSN;
-        } else if ((insns[index] & ORLIX_HOST_AARCH64_MSR_TPIDR_EL0_MASK) ==
-                   ORLIX_HOST_AARCH64_MSR_TPIDR_EL0) {
-            insns[index] = ORLIX_HOST_AARCH64_TLS_WRITE_BRK_BASE |
-                           (insns[index] & 0x1fU);
-        }
-    }
-}
-
 static int OrlixHostMapShadowUserPages(unsigned long target_address,
                                        const void *source_page,
                                        unsigned long length,
@@ -1206,10 +1189,8 @@ static int OrlixHostMapShadowUserPages(unsigned long target_address,
     memcpy((void *)(mapping->target_address + offset),
            source_page,
            (size_t)length);
-    if (executable && translate_executable) {
-        OrlixHostTranslateLinuxSyscalls((void *)(mapping->target_address + offset),
-                                        length);
-    }
+    (void)translate_executable;
+
     if (executable) {
         OrlixHostInvalidateInstructionCache(mapping->target_address + offset,
                                             length);
@@ -1571,13 +1552,12 @@ __attribute__((visibility("hidden"))) int orlix_host_user_map_page(
 {
     vm_prot_t protection = VM_PROT_READ;
 
+    if (executable) {
+        return -1;
+    }
     if (writable) {
         protection |= VM_PROT_WRITE;
     }
-    if (executable) {
-        protection |= VM_PROT_EXECUTE;
-    }
-
     unsigned long active_tls = OrlixHostEnterHostTls();
     int result;
 
@@ -1630,13 +1610,12 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_page(
     unsigned long active_tls;
     int result;
 
+    if (executable) {
+        return -1;
+    }
     if (writable) {
         protection |= VM_PROT_WRITE;
     }
-    if (executable) {
-        protection |= VM_PROT_EXECUTE;
-    }
-
     active_tls = OrlixHostEnterHostTls();
     result = OrlixHostMapShadowUserPages(target_address,
                                          source_page,
@@ -1694,10 +1673,6 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
     if (writable) {
         protection |= VM_PROT_WRITE;
     }
-    if (executable) {
-        protection |= VM_PROT_EXECUTE;
-    }
-
     active_tls = OrlixHostEnterHostTls();
     mapping = OrlixHostUserFindMapping(target_address,
                                        length,
@@ -1764,11 +1739,10 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
                input->source_page,
                (size_t)input->length);
         if (input->executable) {
-            OrlixHostTranslateLinuxSyscalls(
-                (void *)(mapping->target_address + offset),
-                input->length);
-            OrlixHostInvalidateInstructionCache(
-                mapping->target_address + offset, input->length);
+            OrlixHostUserUnmapMappedRange(mapping->target_address,
+                                          mapping->length);
+            OrlixHostLeaveHostTls(active_tls);
+            return -1;
         }
 
         segment = malloc(sizeof(*segment));
@@ -1812,10 +1786,6 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
         if (input->writable) {
             segment_protection |= VM_PROT_WRITE;
         }
-        if (input->executable) {
-            segment_protection |= VM_PROT_EXECUTE;
-        }
-
         status = vm_protect(mach_task_self(),
                             (vm_address_t)input->target_address,
                             (vm_size_t)input->length,

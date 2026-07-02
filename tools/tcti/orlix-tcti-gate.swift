@@ -5613,11 +5613,36 @@ func runSafetyAudit() throws -> Int32 {
     forbiddenFlags["host_x18"] = !failures.filter { $0.id.contains("x18") }.isEmpty
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
+    var artifacts: [String] = []
+    if status == .pass {
+        let reducer = try writeReducer(
+            target: target,
+            caseID: "appstore-safety-pass-regression",
+            command: "make \(target)",
+            reason: "App Store safety audit must keep all forbidden_behavior fields false.",
+            artifacts: ["Build/TCTI/reports/\(target)/report.json"],
+            expectedStatus: .pass
+        )
+        artifacts.append(relativePath(reducer))
+    } else {
+        for field in forbiddenFlags.keys.sorted() where forbiddenFlags[field] == true {
+            let reducer = try writeReducer(
+                target: target,
+                caseID: field.replacingOccurrences(of: "_", with: "-"),
+                command: "make \(target)",
+                reason: "App Store safety audit reported forbidden_behavior.\(field)=true.",
+                artifacts: ["Build/TCTI/reports/\(target)/report.json"],
+                expectedStatus: .fail
+            )
+            artifacts.append(relativePath(reducer))
+        }
+    }
     let reportURL = try writeReport(report(
         target: target,
         status: status,
         summary: "Scanned \(scannedFiles) TCTI source/template file(s) and \(scannedObjects) object file(s).",
         failures: failures,
+        artifacts: artifacts,
         forbiddenBehavior: forbiddenFlags,
         counters: [
             "scanned_source_files": scannedFiles,

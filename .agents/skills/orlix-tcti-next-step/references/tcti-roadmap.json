@@ -131,12 +131,23 @@
       "allowed_scope": [
         "tools/tcti/orlix-tcti-gate.swift",
         "tools/tcti/fixtures/x18_forbidden/**",
+        "OrlixHostAdapter/Sources/OrlixHostAdapter/memory/**",
+        "OrlixHostAdapter/Sources/OrlixHostAdapter/runtime/**",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/hosted_exec.c",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/Kconfig",
+        "OrlixKernel/Sources/ports/orlix/configs/**",
+        "project.yml",
         "docs/plans/active/orlix-tcti/IMPLEMENT.md"
       ],
       "forbidden_scope": [
+        "Do not hide current HostAdapter native findings with ignorelists or weakened scanner patterns.",
+        "Do not claim product safety while native hosted execution remains product-selected.",
+        "Do not move Linux syscall, TLS, VFS, fd-table, process, signal, or scheduler semantics into HostAdapter.",
         "Do not allow host x18 or w18 in TCTI product assembly or generated gadgets.",
         "Do not allow MAP_JIT, RWX, generated executable memory, or host-executable guest text.",
-        "Do not expose guest software to native iOS APIs."
+        "Do not expose guest software to native iOS APIs.",
+        "Do not flip product defconfigs to CONFIG_ORLIX_HOSTED_EXEC_TCTI=y before the product-default gates pass.",
+        "Do not edit generated Linux build trees."
       ],
       "expected_report_paths": [
         "Build/TCTI/reports/tcti-appstore-safety-audit/report.json"
@@ -145,19 +156,40 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-report-schema-check",
         "rtk proxy make tcti-appstore-safety-audit",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
-        "Safety failures must identify the exact source, generated, or object-disassembly path."
+        "Safety failures must identify the exact source, generated, or object-disassembly path.",
+        "Every failing forbidden_behavior family must produce at least one replayable reducer under Build/TCTI/reproducers/tcti-appstore-safety-audit/.",
+        "The appstore-safety report artifacts array must include every generated reducer path.",
+        "Each safety reducer must replay through make tcti-repro REPRO=<path> and record target, case_id, command, expected_status, reason, and artifacts.",
+        "Each safety failure must include structured scanner metadata: scanner id, forbidden_behavior field, source kind, path, line or disassembly line, and matched pattern id.",
+        "The report must include a scan manifest covering production roots, scanned source count, object-disassembly paths, object count, and coverage warnings.",
+        "A passing appstore-safety report must be generated at current HEAD and must not rely on stale git_sha evidence.",
+        "HostAdapter native-exec remediation failures must keep a replayable tcti-appstore-safety-audit report with forbidden_behavior fields.",
+        "If compiled product artifacts still contain forbidden native hosted-exec symbols, the report must name the object or source path."
       ],
       "required_subagents_or_skills": [
         "orlix-tcti-safety",
-        "tcti-safety-reviewer"
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-release-gate-reviewer"
       ],
-      "commit_message_template": "test(tcti): harden app store safety audit",
+      "commit_message_template": "test(tcti): gate native hostadapter exec from safety path",
       "stop_conditions": [
-        "Stop on any forbidden executable-memory or x18 finding."
+        "Stop on any forbidden executable-memory or x18 finding.",
+        "Stop on any HostAdapter Linux trap semantics or native iOS exposure finding.",
+        "Stop if the remediation requires product defconfigs to default to TCTI.",
+        "Stop if the remediation would delete unrelated HostAdapter boot, memory mapping, terminal, or observability plumbing.",
+        "Stop if the selected change cannot preserve native hosted execution behind an explicit non-product debug or test boundary."
       ]
     },
     {

@@ -2,6 +2,104 @@
 
 ## 2026-07-02
 
+### Checkpoint: HostAdapter Native Path Quarantined From App Store Safety Gate
+
+- Harness-selected gate: `appstore-safety`.
+- Selected command: `make tcti-appstore-safety-audit`.
+- Why selected: the prior safety audit correctly failed on HostAdapter native hosted-exec behavior after the audit expanded to HostAdapter memory/runtime product sources.
+- Parallel review lanes:
+  - `tcti-planner` confirmed the original scanner-only envelope could not remediate the product failure.
+  - `tcti-safety-reviewer` confirmed the failure was real and blocking, not evidence-only.
+  - `tcti-test-reducer` found the safety gate needed replayable reducer artifacts.
+- Updated the skill-owned roadmap for `appstore-safety` so the envelope authorizes bounded product-boundary remediation:
+  - HostAdapter memory/runtime quarantine work.
+  - `hosted_exec.c`, Kconfig/config policy, `project.yml`, audit tooling, and `IMPLEMENT.md`.
+  - Explicitly forbids scanner ignorelists, product TCTI defconfig flips, moving Linux semantics into HostAdapter, generated-tree edits, simulator gates, physical gates, production assembly, and new gadget dispatch.
+- Quarantined the native HostAdapter user-execution path:
+  - Removed HostAdapter-side guest Linux syscall/TLS instruction translation from `kernel_mapping.c`.
+  - Made HostAdapter guest user page mapping and refresh fail closed when the input page is executable.
+  - Left the trusted syscall-gate executable helper unchanged; this checkpoint removes host-executable guest pages, not trusted kernel-owned trampoline mechanics.
+  - Removed HostAdapter runtime classification of Linux syscall and TLS write instruction traps.
+  - HostAdapter still handles private host trap mechanics and memory faults, but no longer owns Linux syscall/TLS instruction semantics for product safety.
+- Strengthened `tcti-appstore-safety-audit` reducer evidence:
+  - Passing audits now write `Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json`.
+  - Failing audits now write one reducer per true `forbidden_behavior` family.
+  - The safety report artifacts array includes generated reducer paths.
+
+Reports:
+
+- `Build/TCTI/reports/tcti-appstore-safety-audit/report.json`.
+- `Build/AgentHarness/orlix-tcti/status.json`.
+- `Build/AgentHarness/orlix-tcti/next-task.json`.
+- `Build/AgentHarness/orlix-tcti/next-task.md`.
+
+Reducer:
+
+- `Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json`.
+- Replay result: `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json` produced expected status `pass`, actual status `pass`, exit code `0`.
+
+Fresh safety report state:
+
+- git SHA `b84ca4a4e0e6aa452657d472c7fc535e4b79ca34`.
+- status `pass`.
+- passed `true`.
+- release/readiness eligible `true`.
+- `forbidden_behavior.host_exec_guest_text=false`.
+- `forbidden_behavior.native_ios_api_exposure_to_guest=false`.
+- `forbidden_behavior.map_jit=false`.
+- `forbidden_behavior.rwx=false`.
+- `forbidden_behavior.generated_exec_memory=false`.
+- `forbidden_behavior.host_x18=false`.
+
+Harness result after checkpoint:
+
+- `agent-status` reports `physical_device_allowed=true`.
+- `agent-next` selects `physical-tcti-init-first-syscall`.
+- `agent-task-envelope-check` passes for `physical-tcti-init-first-syscall`.
+- Release/readiness remain false because the physical runtime report is still missing.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy make agent-harness-check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-toolchain-check
+rtk proxy make tcti-golden-elf
+rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy clang -fsyntax-only -DORLIX_APP_HOSTED_BOOT=1 -IOrlixHostAdapter/Sources -IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include OrlixHostAdapter/Sources/OrlixHostAdapter/memory/kernel_mapping.c
+rtk proxy clang -fsyntax-only -Wno-implicit-function-declaration -DORLIX_APP_HOSTED_BOOT=1 -IOrlixHostAdapter/Sources -IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include OrlixHostAdapter/Sources/OrlixHostAdapter/runtime/trap.c
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
+```
+
+Validation note:
+
+- A direct generic iOS `xcodebuild` build was not run because the TCTI pre-tool hook blocks direct device-oriented `xcodebuild` invocations outside `runtime-validation` or explicit evidence-mode preflight.
+- Local syntax checks covered the two touched HostAdapter C files.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly added.
+- No new gadget dispatch added.
+- No simulator gate run.
+- No physical-device gate run in this checkpoint.
+- No HostAdapter Linux syscall/TLS/VFS/fd/process/signal/scheduler semantics added.
+- No Darwin syscall behavior added as a guest side effect.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- Native hosted execution is intentionally quarantined from product safety; the next harness-selected gate is the physical first-syscall runtime certification.
+
 ### Checkpoint: App Store Safety Audit Covers HostAdapter Native Path
 
 - Harness-selected work initially advanced through `first-gadget-init-001-exit` after stale no-phone reports were refreshed at `54d02b769a1a568e35ce1bafa0531da4bed7cb5f`.
