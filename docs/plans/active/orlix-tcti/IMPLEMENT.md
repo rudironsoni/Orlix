@@ -2,6 +2,77 @@
 
 ## 2026-07-02
 
+### Checkpoint: First Gadget Exit Diff Passes And Physical Gate Reaches DDI Blocker
+
+- Harness-selected gate after fresh no-phone validation: `first-gadget-init-001-exit`.
+- Selected command:
+  - `make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+- Roadmap correction:
+  - Updated `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` so the selected first-gadget gate validates with `rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+  - The prior validation command `rtk proxy make tcti-diff-switch` rewrote `Build/TCTI/diff_switch/init_001_exit/diff.json` back to switch-debug baseline mode, which made the first-gadget pass artifact disappear from harness status.
+- Gadget diff report:
+  - `Build/TCTI/reports/tcti-diff-switch/report.json`.
+  - status `pass`.
+  - passed `true`.
+  - summary `Diffed init_001_exit gadget data-program candidate against the switch-debug baseline.`
+- Gadget diff artifact:
+  - `Build/TCTI/diff_switch/init_001_exit/diff.json`.
+  - mode `switch-vs-gadget`.
+  - reference backend `switch-debug`.
+  - candidate backend `gadget-data-program`.
+  - gadget dispatch executed `true`.
+  - production assembly executed `false`.
+  - divergent fields `[]`.
+  - checked fields include GPRs, SP, PC, PSTATE/NZCV, TPIDR_EL0, memory writes, exit kind/code, and fault address.
+- Negative reducer replay:
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json`.
+  - Replayed the expected negative gadget x0 divergence.
+  - Expected status `fail`.
+  - Actual replay status `fail`.
+  - Exit code `2`, as expected for the negative target replay.
+  - The replay did not refresh `Build/TCTI/reports/tcti-repro/report.json`; that stale report remains a separate harness hygiene issue and must not be counted as green.
+- After restoring the passing gadget diff, the harness advanced to:
+  - selected gate `physical-tcti-init-first-syscall`.
+  - selected command `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+  - `physical_device_allowed=true`.
+  - `readiness_gate_eligible=false`.
+  - `release_gate_eligible=false`.
+- Physical runtime command run:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" PROFILE=development DESTINATION=iphoneos GATE=tcti-init-first-syscall make runtime-validation`.
+- Physical runtime report:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T074351Z-21044.json`.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260702T074351Z-21044.md`.
+- Physical runtime result:
+  - status `fail`.
+  - passed `false`.
+  - readiness gate eligible `false`.
+  - release gate eligible `false`.
+  - failure occurred during physical device readiness before kernel build, app build, install, launch, `/init`, TCTI execution, `svc #0`, or `orlix_syscall_dispatch`.
+- Device selected by runtime validation:
+  - `RRJ-iPhone-15-Pro-Max`.
+  - CoreDevice identifier `7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`.
+- Blocker:
+  - Developer disk image services are unavailable for the physical iPhone.
+  - Runtime validation instructs the operator to connect, unlock, trust the device, and let Xcode mount the developer disk image before rerunning.
+
+Boundary:
+
+- First no-phone gadget diff for `init_001_exit` now passes against switch-debug.
+- Physical TCTI gate still does not pass.
+- No `/init`, physical `svc #0`, `orlix_syscall_dispatch`, Linux console, or HostAdapter console mirror evidence was captured.
+- No production TCTI assembly added.
+- No broad gadget dispatch added beyond the bounded no-phone `init_001_exit` data-program diff proof.
+- No simulator success claimed.
+- No physical success claimed.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added as a guest side effect.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+- No custom MCP added.
+- No `tools/agent` added.
+
 ### Checkpoint: Simulator First-Syscall Gate Fails Before Launch During Install
 
 - User-directed diagnostic: test the TCTI first-syscall gate on the simulator before retrying the physical iPhone gate.
