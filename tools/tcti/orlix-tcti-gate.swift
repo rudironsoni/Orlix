@@ -38,6 +38,8 @@ struct Report: Codable {
     let autonomousTestsBypassed: Bool
     let bypassReason: String
     let coverageWarnings: [String]
+    let expectedStatus: String?
+    let actualReplayStatus: String?
     let execution: ExecutionReport?
 
     enum CodingKeys: String, CodingKey {
@@ -60,6 +62,8 @@ struct Report: Codable {
         case autonomousTestsBypassed = "autonomous_tests_bypassed"
         case bypassReason = "bypass_reason"
         case coverageWarnings = "coverage_warnings"
+        case expectedStatus = "expected_status"
+        case actualReplayStatus = "actual_replay_status"
         case execution
     }
 }
@@ -541,6 +545,8 @@ func report(
     readinessGateEligible: Bool? = nil,
     autonomousTestsBypassed: Bool = false,
     bypassReason: String = "",
+    expectedStatus: String? = nil,
+    actualReplayStatus: String? = nil,
     execution: ExecutionReport? = nil
 ) -> Report {
     Report(
@@ -563,6 +569,8 @@ func report(
         autonomousTestsBypassed: autonomousTestsBypassed,
         bypassReason: bypassReason,
         coverageWarnings: coverageWarnings,
+        expectedStatus: expectedStatus,
+        actualReplayStatus: actualReplayStatus,
         execution: execution
     )
 }
@@ -728,6 +736,11 @@ func validateReportObject(_ object: Any) -> [String] {
         }
         if (dictionary["bypass_reason"] as? String ?? "").isEmpty {
             errors.append("status=evidence requires bypass_reason")
+        }
+    }
+    for key in ["expected_status", "actual_replay_status"] {
+        if let value = dictionary[key], !(value is String) {
+            errors.append("field \(key) must be string")
         }
     }
     let forbiddenKeys = [
@@ -5691,11 +5704,44 @@ func runRepro() throws -> Int32 {
     }
     print("actual replay status: \(actualStatus)")
     print("actual replay exit code: \(process.terminationStatus)")
+
+    let expectedMatches = payload.expectedStatus.map { $0 == actualStatus }
+    let replaySucceeded = expectedMatches ?? (process.terminationStatus == 0)
+    let reproStatus: GateStatus = replaySucceeded ? .pass : .fail
+    let failures: [Failure]
     if let expected = payload.expectedStatus, expected != actualStatus {
-        fputs("reproducer expected status \(expected), got \(actualStatus)\n", stderr)
-        return 1
+        failures = [fail("status-mismatch", "reproducer expected status \(expected), got \(actualStatus)")]
+    } else if payload.expectedStatus == nil && process.terminationStatus != 0 {
+        failures = [fail("replay-exit", "replay command exited \(process.terminationStatus) without expected_status")]
+    } else {
+        failures = []
     }
-    return process.terminationStatus
+    var artifacts: [String] = []
+    var seenArtifacts: Set<String> = []
+    for artifact in [relativePath(url), relativePath(reportURL)] + payload.artifacts {
+        if seenArtifacts.insert(artifact).inserted {
+            artifacts.append(artifact)
+        }
+    }
+    let reproReportURL = try writeReport(report(
+        target: "tcti-repro",
+        status: reproStatus,
+        summary: "Replayed reducer \(payload.caseID) for \(payload.target).",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "replay_exit_code": Int(process.terminationStatus),
+        ],
+        releaseGateEligible: false,
+        readinessGateEligible: false,
+        expectedStatus: payload.expectedStatus,
+        actualReplayStatus: actualStatus
+    ))
+    print("replay report: \(relativePath(reproReportURL))")
+    if let failure = failures.first {
+        fputs("\(failure.message)\n", stderr)
+    }
+    return exitCode(for: reproStatus)
 }
 
 func dispatch(_ target: String) throws -> Int32 {

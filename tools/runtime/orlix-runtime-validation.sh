@@ -25,6 +25,11 @@ device_name=""
 device_xcode_id=""
 device_ddi_available=""
 app_path=""
+failure_stage=""
+failure_exit_status=""
+failure_timeout_seconds=""
+failure_stdout_empty=""
+failure_stderr_empty=""
 
 mkdir -p "$report_dir"
 report="$report_dir/${gate}-$(date -u +%Y%m%dT%H%M%SZ)-$$.md"
@@ -61,15 +66,37 @@ write_report() {
 		printf -- '- scheme: `%s`\n' "$scheme"
 		printf -- '- bundle id: `%s`\n' "$bundle_id"
 		printf -- '- device: `%s`\n' "${device_id:-auto}"
+		printf -- '- selected device id: `%s`\n' "${device_id:-unknown}"
 		if [ -n "$device_name" ]; then
 			printf -- '- device name: `%s`\n' "$device_name"
 		fi
+		if [ -n "$device_xcode_id" ]; then
+			printf -- '- selected xcode device id: `%s`\n' "$device_xcode_id"
+		fi
+		printf -- '- artifact dir: `%s`\n' "$artifact_dir"
 		printf -- '- capture seconds: `%s`\n' "$capture_seconds"
 		if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
 			printf -- '- simulator boot timeout seconds: `%s`\n' "$simulator_boot_timeout_seconds"
 		fi
 		printf -- '- status: `%s`\n\n' "$status"
 		printf '## Result\n\n%s\n\n' "$message"
+		if [ -n "$failure_stage" ]; then
+			printf '## Failure Context\n\n'
+			printf -- '- stage: `%s`\n' "$failure_stage"
+			if [ -n "$failure_exit_status" ]; then
+				printf -- '- exit status: `%s`\n' "$failure_exit_status"
+			fi
+			if [ -n "$failure_timeout_seconds" ]; then
+				printf -- '- timeout seconds: `%s`\n' "$failure_timeout_seconds"
+			fi
+			if [ -n "$failure_stdout_empty" ]; then
+				printf -- '- install stdout empty: `%s`\n' "$failure_stdout_empty"
+			fi
+			if [ -n "$failure_stderr_empty" ]; then
+				printf -- '- install stderr empty: `%s`\n' "$failure_stderr_empty"
+			fi
+			printf '\n'
+		fi
 		printf '## Artifacts\n\n'
 		if compgen -G "$artifact_dir/*" >/dev/null; then
 			for path in "$artifact_dir"/*; do
@@ -86,6 +113,32 @@ json_escape() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+json_string_or_null() {
+	local value="$1"
+	if [ -n "$value" ]; then
+		printf '"%s"' "$(json_escape "$value")"
+	else
+		printf 'null'
+	fi
+}
+
+failure_context_json() {
+	if [ -z "$failure_stage" ]; then
+		printf 'null'
+		return
+	fi
+
+	cat <<JSON
+{
+    "stage": $(json_string_or_null "$failure_stage"),
+    "exit_status": $(json_string_or_null "$failure_exit_status"),
+    "timeout_seconds": $(json_string_or_null "$failure_timeout_seconds"),
+    "install_stdout_empty": $(json_string_or_null "$failure_stdout_empty"),
+    "install_stderr_empty": $(json_string_or_null "$failure_stderr_empty")
+  }
+JSON
+}
+
 write_json_report() {
 	local status="$1"
 	local passed="$2"
@@ -100,16 +153,39 @@ write_json_report() {
 	fi
 	local escaped_message
 	local escaped_reason
+	local escaped_artifact_dir
+	local escaped_bundle_id
+	local escaped_configuration
+	local escaped_destination
+	local escaped_profile
+	local escaped_scheme
+	local failure_context
+	local preflight_only="false"
+	if [ -n "$runtime_preflight_only" ]; then
+		preflight_only="true"
+	fi
 	escaped_message="$(json_escape "$message")"
 	escaped_reason="$(json_escape "$bypass_reason")"
+	escaped_artifact_dir="$(json_escape "$artifact_dir")"
+	escaped_bundle_id="$(json_escape "$bundle_id")"
+	escaped_configuration="$(json_escape "$configuration")"
+	escaped_destination="$(json_escape "$destination")"
+	escaped_profile="$(json_escape "$profile")"
+	escaped_scheme="$(json_escape "$scheme")"
+	failure_context="$(failure_context_json)"
 	cat >"$json_report.tmp" <<JSON
 {
   "artifacts": [],
+  "artifact_dir": "$escaped_artifact_dir",
   "autonomous_tests_bypassed": $bypassed,
   "backend": "tcti",
   "bypass_reason": "$escaped_reason",
+  "bundle_id": "$escaped_bundle_id",
+  "configuration": "$escaped_configuration",
   "counters": {},
   "coverage_warnings": [],
+  "destination": "$escaped_destination",
+  "failure_context": $failure_context,
   "failures": [],
   "forbidden_behavior": {
     "generated_exec_memory": false,
@@ -124,8 +200,14 @@ write_json_report() {
   "guest_page_size": 4096,
   "host_page_size": $(getconf PAGESIZE),
   "passed": $passed,
+  "preflight_only": $preflight_only,
+  "profile": "$escaped_profile",
   "readiness_gate_eligible": $readiness_eligible,
   "release_gate_eligible": $release_eligible,
+  "scheme": "$escaped_scheme",
+  "selected_device_id": $(json_string_or_null "$device_id"),
+  "selected_device_name": $(json_string_or_null "$device_name"),
+  "selected_xcode_device_id": $(json_string_or_null "$device_xcode_id"),
   "status": "$status",
   "summary": "$escaped_message",
   "target": "$gate",
@@ -570,11 +652,31 @@ PY
 			xcrun simctl terminate "$device_id" "$bundle_id" || true
 		run_command_with_timeout 10 /dev/null /dev/null \
 			xcrun simctl uninstall "$device_id" "$bundle_id" || true
-		run_command_with_timeout 120 \
+		local install_timeout_seconds=120
+		local install_status
+		set +e
+		run_command_with_timeout "$install_timeout_seconds" \
 			"$artifact_dir/install.stdout" \
 			"$artifact_dir/install.stderr" \
-			xcrun simctl install "$device_id" "$app_path" ||
+			xcrun simctl install "$device_id" "$app_path"
+		install_status=$?
+		set -e
+		if [ "$install_status" -ne 0 ]; then
+			failure_stage="simulator-install"
+			failure_exit_status="$install_status"
+			failure_timeout_seconds="$install_timeout_seconds"
+			if [ -s "$artifact_dir/install.stdout" ]; then
+				failure_stdout_empty="false"
+			else
+				failure_stdout_empty="true"
+			fi
+			if [ -s "$artifact_dir/install.stderr" ]; then
+				failure_stderr_empty="false"
+			else
+				failure_stderr_empty="true"
+			fi
 			die "Installing Orlix on the simulator failed."
+		fi
 		touch "$artifact_dir/install.json" "$artifact_dir/install.log"
 		return
 	fi
@@ -657,9 +759,9 @@ main() {
 			printf 'runtime validation evidence-only preflight, report: %s\n' "$report" >&2
 			exit 1
 		fi
-		write_json_report "pass" "true" "Runtime validation preflight passed." "false" ""
-		write_report "passed" "Runtime validation preflight passed."
-		printf 'runtime validation preflight passed, report: %s\n' "$report"
+		write_json_report "evidence" "false" "Runtime validation preflight passed; no runtime gate was executed." "false" ""
+		write_report "evidence" "Runtime validation preflight passed. No runtime gate was executed."
+		printf 'runtime validation preflight passed without executing gate, report: %s\n' "$report"
 		exit 0
 	fi
 

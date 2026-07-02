@@ -1026,6 +1026,62 @@ static void tcti_gadget_program_executes_init001_movz_prefix(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, ret);
 }
 
+static void tcti_gadget_program_matches_switch_debug_init001_movz_prefix(struct kunit *test)
+{
+	u32 instructions[] = {
+		0xd2800ba8U,
+		0xd2800540U,
+	};
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct pt_regs reference = { 0 };
+	struct pt_regs candidate = { 0 };
+	unsigned long fault_address = 0;
+	size_t word_count = 0;
+	int i;
+
+	reference.pc = 0x210120;
+	candidate.pc = 0x210120;
+
+	for (i = 0; i < ARRAY_SIZE(instructions); i++) {
+		struct tcti_decoded_instruction decoded;
+		u64 reference_nzcv;
+		u64 candidate_nzcv;
+		int ret;
+
+		decoded = tcti_decode_aarch64(instructions[i]);
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &reference,
+							&decoded, NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+
+		ret = tcti_lower_decoded_instruction(&decoded, program,
+						     ARRAY_SIZE(program),
+						     &word_count);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_ASSERT_EQ(test, TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS,
+				word_count);
+
+		ret = tcti_execute_gadget_program(NULL, &candidate, program,
+						  word_count, &fault_address);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+
+		reference_nzcv = reference.pstate & (PSR_N_BIT | PSR_Z_BIT |
+						     PSR_C_BIT | PSR_V_BIT);
+		candidate_nzcv = candidate.pstate & (PSR_N_BIT | PSR_Z_BIT |
+						     PSR_C_BIT | PSR_V_BIT);
+
+		KUNIT_EXPECT_EQ(test, reference.regs[0], candidate.regs[0]);
+		KUNIT_EXPECT_EQ(test, reference.regs[8], candidate.regs[8]);
+		KUNIT_EXPECT_EQ(test, reference.sp, candidate.sp);
+		KUNIT_EXPECT_EQ(test, reference.pc, candidate.pc);
+		KUNIT_EXPECT_EQ(test, reference_nzcv, candidate_nzcv);
+	}
+
+	KUNIT_EXPECT_EQ(test, 42ULL, candidate.regs[0]);
+	KUNIT_EXPECT_EQ(test, 93ULL, candidate.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0x210128ULL, candidate.pc);
+}
+
 static void tcti_block_cache_returns_cached_program(struct kunit *test)
 {
 	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
@@ -1972,6 +2028,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_program_executes_extract),
 	KUNIT_CASE(tcti_gadget_program_rejects_svc_lowering),
 	KUNIT_CASE(tcti_gadget_program_executes_init001_movz_prefix),
+	KUNIT_CASE(tcti_gadget_program_matches_switch_debug_init001_movz_prefix),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),
 	KUNIT_CASE(tcti_block_cache_is_bounded),
 	KUNIT_CASE(tcti_block_cache_invalidation_bumps_generation),
