@@ -2,6 +2,46 @@
 
 ## 2026-07-02
 
+### Checkpoint: TCTI Syscall Handoff Has Product KUnit Coverage
+
+- Added a narrow TCTI syscall handoff helper:
+  - `tcti_prepare_syscall_handoff(struct pt_regs *regs)`.
+- The existing runtime path still calls `orlix_syscall_dispatch(regs)` through `orlix_tcti_handle_syscall()`.
+- The helper only prepares Linux syscall entry state:
+  - `orig_x0 = regs[0]`.
+  - `syscallno = regs[8]`.
+  - `pc += 4`.
+- Added product KUnit coverage:
+  - `tcti_syscall_handoff_uses_guest_x8_and_advances_pc`.
+  - It proves guest `x8=93`, `x0=42`, and `pc=svc` become Linux `syscallno=93`, `orig_x0=42`, and `pc=svc+4`.
+  - It also proves the guest argument registers remain intact before Linux dispatch.
+- This advances the real TCTI execution boundary between decoded guest `svc #0` and the existing Linux syscall dispatcher.
+- It does not implement new syscall semantics.
+
+Verification:
+
+```text
+rtk proxy git diff --check
+rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-appstore-safety-audit
+rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
+```
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production TCTI assembly added.
+- No new gadget dispatch implementation added.
+- No simulator gate run.
+- No physical-device gate run.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added as a guest side effect.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No generated executable memory added.
+- No host-executable guest text added.
+- No product defconfig flip.
+
 ### Checkpoint: Runtime Preflight Is Evidence-Only And First Gadget Parity Is In KUnit
 
 - Harness-selected gate remains `physical-tcti-init-first-syscall`.

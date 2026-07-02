@@ -4,4 +4,6 @@
 
 #include <asm/tcti.h>
 
+void tcti_prepare_syscall_handoff(struct pt_regs *regs);
+
 #endif /* ORLIX_TCTI_ENGINE_H */

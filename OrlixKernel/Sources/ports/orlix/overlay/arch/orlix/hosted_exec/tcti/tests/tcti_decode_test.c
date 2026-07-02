@@ -4,6 +4,7 @@
 
 #include "../block_cache.h"
 #include "../decode_aarch64.h"
+#include "../engine.h"
 #include "../gadget_program.h"
 #include "../switch_debug.h"
 #include "../tlb.h"
@@ -1082,6 +1083,25 @@ static void tcti_gadget_program_matches_switch_debug_init001_movz_prefix(struct 
 	KUNIT_EXPECT_EQ(test, 0x210128ULL, candidate.pc);
 }
 
+static void tcti_syscall_handoff_uses_guest_x8_and_advances_pc(struct kunit *test)
+{
+	struct pt_regs regs = { 0 };
+
+	regs.regs[0] = 42;
+	regs.regs[8] = 93;
+	regs.orig_x0 = 0xffff;
+	regs.syscallno = NO_SYSCALL;
+	regs.pc = 0x210128;
+
+	tcti_prepare_syscall_handoff(&regs);
+
+	KUNIT_EXPECT_EQ(test, 42ULL, regs.orig_x0);
+	KUNIT_EXPECT_EQ(test, 93, regs.syscallno);
+	KUNIT_EXPECT_EQ(test, 42ULL, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, 93ULL, regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0x21012cULL, regs.pc);
+}
+
 static void tcti_block_cache_returns_cached_program(struct kunit *test)
 {
 	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
@@ -2029,6 +2049,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_program_rejects_svc_lowering),
 	KUNIT_CASE(tcti_gadget_program_executes_init001_movz_prefix),
 	KUNIT_CASE(tcti_gadget_program_matches_switch_debug_init001_movz_prefix),
+	KUNIT_CASE(tcti_syscall_handoff_uses_guest_x8_and_advances_pc),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),
 	KUNIT_CASE(tcti_block_cache_is_bounded),
 	KUNIT_CASE(tcti_block_cache_invalidation_bumps_generation),

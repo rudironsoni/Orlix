@@ -13,6 +13,7 @@
 
 #include "block_cache.h"
 #include "decode_aarch64.h"
+#include "engine.h"
 #include "gadget_program.h"
 #include "report.h"
 
@@ -125,12 +126,16 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 	}
 }
 
-static void orlix_tcti_handle_syscall(struct pt_regs *regs)
+void tcti_prepare_syscall_handoff(struct pt_regs *regs)
 {
 	regs->orig_x0 = regs->regs[0];
 	regs->syscallno = regs->regs[8];
 	regs->pc += sizeof(u32);
+}
 
+static void orlix_tcti_handle_syscall(struct pt_regs *regs)
+{
+	tcti_prepare_syscall_handoff(regs);
 	orlix_syscall_dispatch(regs);
 }
 
