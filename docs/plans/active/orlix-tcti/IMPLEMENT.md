@@ -2,6 +2,62 @@
 
 ## 2026-07-02
 
+### Checkpoint: Physical First-Syscall Gate Blocked By Device Readiness
+
+- Harness-selected gate: `physical-tcti-init-first-syscall`.
+- Selected command:
+  - `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Harness envelope:
+  - `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - `physical_device=true`.
+  - prerequisites `first-gadget-init-001-exit`, `appstore-safety`, and `report-schema` were `pass`.
+- Physical validation was run through the selected `runtime-validation` path, not by a direct device command.
+
+Physical runtime report:
+
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T173331Z-18841.json`.
+- `Build/Reports/runtime/tcti-init-first-syscall-20260702T173331Z-18841.md`.
+- `destination=iphoneos`.
+- `status=fail`.
+- `passed=false`.
+- `release_gate_eligible=false`.
+- `readiness_gate_eligible=false`.
+- selected physical device:
+  - `selected_device_name=RRJ-iPhone-15-Pro-Max`.
+  - `selected_xcode_device_id=00008130-001E74A11193803A`.
+- failure summary:
+  - physical iPhone is not ready for Xcode device builds because developer disk image services are unavailable.
+  - device must be connected, unlocked, trusted, and have the developer disk image mounted by Xcode before rerunning runtime validation.
+- forbidden behavior fields remained false:
+  - `generated_exec_memory=false`.
+  - `host_exec_guest_text=false`.
+  - `host_x18=false`.
+  - `map_jit=false`.
+  - `native_ios_api_exposure_to_guest=false`.
+  - `rwx=false`.
+
+Device inspection:
+
+```text
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun xctrace list devices
+```
+
+Observed:
+
+- `RRJ-iPhone-15-Pro-Max (27.0) (00008130-001E74A11193803A)` was listed under `Devices Offline`.
+- `Orlix-iPhone-15-Pro-Max Simulator (26.5) (C47ED88D-0D0A-420D-8C78-D4C1D34A276D)` remained the only booted simulator.
+
+Boundary:
+
+- No direct physical-device command bypassed runtime-validation.
+- No emergency override was used.
+- No pass was claimed from this physical report.
+- No production TCTI assembly was added.
+- No gadget dispatch was added.
+- No HostAdapter Linux behavior was added.
+- No product defconfig was flipped.
+- No reducer was created because the gate failed before app install/runtime execution and before any TCTI behavior was exercised. This is an external device-readiness blocker, not a guest execution failure.
+
 ### Checkpoint: Static PIE GOT Byte Load Golden Case
 
 - Operator-scoped no-phone case: `init_011_static_pie_got_byte_load`.
