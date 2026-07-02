@@ -14,7 +14,7 @@ LINUX_REMOTE ?= https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
 ORLIX_HEADERS_INSTALL_JOBS ?= 1
 
 PROFILE ?= release
-ORLIX_PROFILES := release development
+ORLIX_PROFILES := release development tcti_runtime
 
 type ?= kunit
 libc ?= orlixmlibc
