@@ -42,11 +42,24 @@ void tcti_report_syscall(struct task_struct *task, struct pt_regs *regs,
 		regs ? (unsigned long long)regs->regs[4] : 0,
 		regs ? (unsigned long long)regs->regs[5] : 0,
 		regs ? (unsigned long long)regs->regs[30] : 0,
+			regs ? (unsigned long long)regs->sp : 0);
+}
+
+void tcti_report_syscall_return(struct task_struct *task, struct pt_regs *regs,
+				unsigned long nr, unsigned long pc)
+{
+	pr_info("Orlix TCTI: syscall return task=%s pid=%d pc=%#lx syscall=%lu ret=%#llx signed_ret=%lld sp=%#llx\n",
+		task ? task->comm : "<none>",
+		task ? task_pid_nr(task) : -1,
+		pc,
+		nr,
+		regs ? (unsigned long long)regs->regs[0] : 0,
+		regs ? (long long)regs->regs[0] : 0,
 		regs ? (unsigned long long)regs->sp : 0);
 }
 
 void tcti_report_exit(struct task_struct *task, struct pt_regs *regs,
-		      const struct tcti_result *result)
+			      const struct tcti_result *result)
 {
 	pr_info("Orlix TCTI: exit task=%s pid=%d reason=%d status=%ld pc=%#lx fault=%#lx insn=%#x x0=%#llx x1=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x12=%#llx x13=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x29=%#llx x30=%#llx sp=%#llx pstate=%#llx\n",
 		task ? task->comm : "<none>",

@@ -356,9 +356,11 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 		if (ret) {
 			ret = tcti_fault_in_user_page(mm, current_va, access);
 			if (!ret) {
-				ret = tcti_sync_faulted_user_window(current_va);
-				if (ret)
-					return ret;
+				if (access == TCTI_ACCESS_WRITE) {
+					ret = tcti_sync_faulted_user_window(current_va);
+					if (ret)
+						return ret;
+				}
 				continue;
 			}
 		}

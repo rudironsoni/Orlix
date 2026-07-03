@@ -6,9 +6,7 @@
       "id": "rails-defconfig-safety",
       "command": "make tcti-gate TARGET=tcti-plan-consistency",
       "kind": "rail",
-      "prerequisites": [
-
-      ],
+      "prerequisites": [],
       "allowed_scope": [
         "OrlixKernel/Sources/ports/orlix/configs/**",
         "docs/adr/0022-use-hosted-linux-elf-execution.md",
@@ -1117,134 +1115,134 @@
         "tcti-oracle-engineer",
         "tcti-test-reducer"
       ],
-    "commit_message_template": "test(tcti): execute cpu-model elf in switch backend",
-    "stop_conditions": [
-      "Stop if execution would require gadget dispatch or production assembly.",
-      "Stop if failures are not reduced into no-phone fixtures."
-    ]
-  },
-  {
-    "id": "golden-init-011-static-pie-got-byte-load-structural",
-    "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
-    "kind": "golden-elf-structural",
-    "prerequisites": [
-      "switch-init-010-cpu-model"
-    ],
-    "allowed_scope": [
-      "OrlixKernel/Tests/TCTI/golden_elf/init_011_static_pie_got_byte_load/**",
-      "tools/tcti/orlix-tcti-gate.swift",
-      "docs/plans/active/orlix-tcti/IMPLEMENT.md"
-    ],
-    "forbidden_scope": [
-      "Do not execute guest instructions in structural-only gate.",
-      "Do not add production TCTI assembly.",
-      "Do not add gadget dispatch.",
-      "Do not run simulator or physical-device gates.",
-      "Do not implement a broad ELF dynamic loader."
-    ],
-    "expected_report_paths": [
-      "Build/TCTI/reports/tcti-golden-elf/report.json",
-      "Build/TCTI/golden_elf/init_011_static_pie_got_byte_load/validation.json"
-    ],
-    "readiness_eligible": false,
-    "physical_device": false,
-    "gadget": false,
-    "required_validation_commands": [
-      "rtk proxy git diff --check",
-      "rtk proxy make agent-harness-check",
-      "rtk proxy make agent-status AREA=orlix-tcti",
-      "rtk proxy make agent-next AREA=orlix-tcti",
-      "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-      "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-      "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-      "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
-      "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
-    ],
-    "reducer_requirements": [
-      "Static PIE metadata drift must produce a reducer with relocation, GOT slot, and regeneration facts."
-    ],
-    "required_subagents_or_skills": [
-      "orlix-tcti-golden-elf",
-      "orlix-tcti-debug",
-      "orlix-tcti-safety",
-      "tcti-llvm-inspector",
-      "tcti-safety-reviewer"
-    ],
-    "commit_message_template": "test(tcti): add static pie got byte golden elf",
-    "stop_conditions": [
-      "Stop if the fixture requires relocation types beyond R_AARCH64_RELATIVE.",
-      "Stop if structural validation would require production runtime code."
-    ]
-  },
-  {
-    "id": "switch-init-011-static-pie-got-byte-load",
-    "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
-    "kind": "switch-debug-execution",
-    "prerequisites": [
-      "golden-init-011-static-pie-got-byte-load-structural"
-    ],
-    "allowed_scope": [
-      "OrlixKernel/Tests/TCTI/golden_elf/init_011_static_pie_got_byte_load/**",
-      "tools/tcti/orlix-tcti-gate.swift",
-      "tools/tcti/fixtures/golden_elf/**",
-      "docs/plans/active/orlix-tcti/IMPLEMENT.md"
-    ],
-    "forbidden_scope": [
-      "Do not add production TCTI assembly.",
-      "Do not add gadget dispatch.",
-      "Do not run simulator or physical-device gates.",
-      "Do not implement Linux runtime semantics.",
-      "Do not implement a broad ELF dynamic loader.",
-      "Do not support relocation classes beyond the selected static PIE R_AARCH64_RELATIVE shape."
-    ],
-    "expected_report_paths": [
-      "Build/TCTI/reports/tcti-golden-elf/report.json",
-      "Build/TCTI/golden_elf/init_011_static_pie_got_byte_load/execution.json",
-      "Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json"
-    ],
-    "readiness_eligible": false,
-    "physical_device": false,
-    "gadget": false,
-    "required_validation_commands": [
-      "rtk proxy git diff --check",
-      "rtk proxy make agent-harness-check",
-      "rtk proxy make agent-status AREA=orlix-tcti",
-      "rtk proxy make agent-next AREA=orlix-tcti",
-      "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-      "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-      "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-      "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
-      "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
-      "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json",
-      "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
-    ],
-    "reducer_requirements": [
-      "Unsupported relocation, GOT read, LDRB read, and exit-value failures must emit replayable reducers."
-    ],
-    "required_subagents_or_skills": [
-      "orlix-tcti-oracle",
-      "orlix-tcti-golden-elf",
-      "orlix-tcti-debug",
-      "orlix-tcti-safety",
-      "orlix-tcti-reproducer",
-      "tcti-oracle-engineer",
-      "tcti-llvm-inspector",
-      "tcti-test-reducer"
-    ],
-    "commit_message_template": "test(tcti): execute static pie got byte elf in switch backend",
-    "stop_conditions": [
-      "Stop if execution requires production assembly or gadget dispatch.",
-      "Stop if failures are not reduced into no-phone fixtures.",
-      "Stop if additional relocation or dynamic-loader behavior is required."
-    ]
-  },
-  {
-    "id": "diff-switch-init-001-exit",
+      "commit_message_template": "test(tcti): execute cpu-model elf in switch backend",
+      "stop_conditions": [
+        "Stop if execution would require gadget dispatch or production assembly.",
+        "Stop if failures are not reduced into no-phone fixtures."
+      ]
+    },
+    {
+      "id": "golden-init-011-static-pie-got-byte-load-structural",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
+      "kind": "golden-elf-structural",
+      "prerequisites": [
+        "switch-init-010-cpu-model"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_011_static_pie_got_byte_load/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not execute guest instructions in structural-only gate.",
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement a broad ELF dynamic loader."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_011_static_pie_got_byte_load/validation.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Static PIE metadata drift must produce a reducer with relocation, GOT slot, and regeneration facts."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-debug",
+        "orlix-tcti-safety",
+        "tcti-llvm-inspector",
+        "tcti-safety-reviewer"
+      ],
+      "commit_message_template": "test(tcti): add static pie got byte golden elf",
+      "stop_conditions": [
+        "Stop if the fixture requires relocation types beyond R_AARCH64_RELATIVE.",
+        "Stop if structural validation would require production runtime code."
+      ]
+    },
+    {
+      "id": "switch-init-011-static-pie-got-byte-load",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
+      "kind": "switch-debug-execution",
+      "prerequisites": [
+        "golden-init-011-static-pie-got-byte-load-structural"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Tests/TCTI/golden_elf/init_011_static_pie_got_byte_load/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/tcti/fixtures/golden_elf/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not add production TCTI assembly.",
+        "Do not add gadget dispatch.",
+        "Do not run simulator or physical-device gates.",
+        "Do not implement Linux runtime semantics.",
+        "Do not implement a broad ELF dynamic loader.",
+        "Do not support relocation classes beyond the selected static PIE R_AARCH64_RELATIVE shape."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-golden-elf/report.json",
+        "Build/TCTI/golden_elf/init_011_static_pie_got_byte_load/execution.json",
+        "Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "Unsupported relocation, GOT read, LDRB read, and exit-value failures must emit replayable reducers."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-oracle",
+        "orlix-tcti-golden-elf",
+        "orlix-tcti-debug",
+        "orlix-tcti-safety",
+        "orlix-tcti-reproducer",
+        "tcti-oracle-engineer",
+        "tcti-llvm-inspector",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): execute static pie got byte elf in switch backend",
+      "stop_conditions": [
+        "Stop if execution requires production assembly or gadget dispatch.",
+        "Stop if failures are not reduced into no-phone fixtures.",
+        "Stop if additional relocation or dynamic-loader behavior is required."
+      ]
+    },
+    {
+      "id": "diff-switch-init-001-exit",
       "command": "make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit",
-    "kind": "switch-vs-gadget-diff",
-    "prerequisites": [
-      "switch-init-011-static-pie-got-byte-load"
-    ],
+      "kind": "switch-vs-gadget-diff",
+      "prerequisites": [
+        "switch-init-011-static-pie-got-byte-load"
+      ],
       "allowed_scope": [
         "tools/tcti/orlix-tcti-gate.swift",
         "tools/tcti/fixtures/**",
@@ -1331,6 +1329,13 @@
         "simulator-tcti-runtime-stability",
         "simulator-tcti-linux-console-usability",
         "simulator-tcti-static-busybox-start",
+        "simulator-tcti-static-busybox-shell-command",
+        "simulator-tcti-full-shell-usability",
+        "simulator-tcti-package-behavior",
+        "simulator-tcti-dynamic-loader-support",
+        "simulator-tcti-signals",
+        "simulator-tcti-vfs-completeness",
+        "simulator-tcti-full-linux-runtime-readiness",
         "appstore-safety",
         "report-schema"
       ],
@@ -1340,7 +1345,7 @@
       ],
       "forbidden_scope": [
         "Do not run physical-device gates while no-phone gates are incomplete.",
-        "Do not run physical-device gates until current simulator first-syscall, stability, and Linux console usability, and static BusyBox start reports pass on Orlix-iPhone-15-Pro-Max.",
+        "Do not run physical-device gates until current simulator first-syscall, stability, Linux console usability, static BusyBox start, static BusyBox command, full shell usability, package behavior, dynamic loader support, signal behavior, VFS completeness, and full Linux runtime readiness reports pass on Orlix-iPhone-15-Pro-Max.",
         "Do not use emergency override to produce a passing gate.",
         "Do not patch from phone logs without reducing into a no-phone fixture."
       ],
@@ -1352,7 +1357,14 @@
         "Build/TCTI/reports/tcti-plan-consistency/report.json",
         "Build/TCTI/reports/tcti-report-schema-check/report.json",
         "Build/TCTI/reports/tcti-golden-elf/report.json",
-        "Build/TCTI/reports/tcti-appstore-safety-audit/report.json"
+        "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
+        "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
+        "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+        "Build/Reports/runtime/tcti-package-behavior-*.json",
+        "Build/Reports/runtime/tcti-dynamic-loader-support-*.json",
+        "Build/Reports/runtime/tcti-signals-*.json",
+        "Build/Reports/runtime/tcti-vfs-completeness-*.json",
+        "Build/Reports/runtime/tcti-full-linux-runtime-readiness-*.json"
       ],
       "readiness_eligible": true,
       "physical_device": true,
@@ -1363,7 +1375,15 @@
         "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
         "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max","rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-shell-usability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-package-behavior ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-dynamic-loader-support ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-signals ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-vfs-completeness ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-linux-runtime-readiness ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
         "rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall"
       ],
       "reducer_requirements": [
@@ -1377,7 +1397,7 @@
       "commit_message_template": "test(tcti): certify first physical syscall gate",
       "stop_conditions": [
         "Stop if any autonomous no-phone report is missing, todo, evidence, or fail.",
-        "Stop if current simulator first-syscall, stability, or Linux console usability, or static BusyBox start reports are missing or fail.",
+        "Stop if any current simulator proof report for first-syscall, stability, console usability, static BusyBox start, static BusyBox command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, or full Linux runtime readiness is missing or fails.",
         "Stop if emergency override is used and a pass is claimed."
       ]
     }

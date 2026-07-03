@@ -2,6 +2,63 @@
 
 ## 2026-07-03
 
+### Checkpoint: Static BusyBox Starts In Pinned Simulator
+
+- Harness-selected gate:
+  - First selected: `simulator-tcti-static-busybox-start`.
+  - The failed simulator report remained the blocker until the no-phone SIGABRT reducer and user-data fault retry fix gate passed.
+  - Added a narrow diagnostic gate, `tcti-busybox-syscall-return-trace`, so future BusyBox simulator failures preserve shell syscall return evidence in runtime JSON.
+- TCTI runtime change:
+  - `tcti_copy_user_data()` now faults in Linux user pages for TCTI reads and retries the kernel-backed read without refreshing the hosted user window.
+  - TCTI writes still preserve the hosted mapping refresh after kernel-backed writes.
+  - `orlix_tcti_handle_syscall()` now reports syscall return values after `orlix_syscall_dispatch()` for simulator/runtime diagnosis only.
+  - No syscall semantics, HostAdapter behavior, Darwin guest syscall side effects, VFS, fd table, scheduler, signal, or process runtime behavior was added.
+- Reports:
+  - User-data fix gate:
+    - `Build/TCTI/reports/tcti-user-data-window-refresh-fix/report.json`.
+    - `status=pass`, `passed=true`.
+  - BusyBox syscall return trace gate:
+    - `Build/TCTI/reports/tcti-busybox-syscall-return-trace/report.json`.
+    - `status=pass`, `passed=true`.
+  - Simulator BusyBox gate:
+    - `Build/Reports/runtime/tcti-static-busybox-start-20260703T185358Z-7490.json`.
+    - `status=pass`, `passed=true`.
+    - `destination=iphonesimulator`.
+    - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+    - `selected_device_name=Orlix-iPhone-15-Pro-Max`.
+    - `simulator_booted_count=1`.
+    - `simulator_single_booted=true`.
+    - `backend=tcti`.
+    - `profile=tcti_runtime`.
+  - Runtime event facts:
+    - `tcti_runtime_events.static_pie_image.task=sh`.
+    - `tcti_runtime_events.static_pie_image.pid=33`.
+    - `tcti_runtime_events.signaled_process.signal=null`.
+    - `tcti_runtime_events.fatal_user_fault.addr=null`.
+    - `tcti_runtime_events.last_sh_syscall_return.syscall=64`.
+    - `tcti_runtime_events.last_sh_syscall_return.signed_ret=8`.
+  - Forbidden behavior:
+    - `generated_exec_memory=false`.
+    - `host_exec_guest_text=false`.
+    - `host_x18=false`.
+    - `map_jit=false`.
+    - `native_ios_api_exposure_to_guest=false`.
+    - `rwx=false`.
+- Current harness state:
+  - `make agent-status AREA=orlix-tcti` must be rerun after this checkpoint so the next gate is selected from fresh report state.
+  - Physical-device work remains forbidden unless the harness-selected preflight explicitly allows it.
+- Boundary:
+  - No phone gate was run.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter Linux behavior was added.
+  - No Darwin syscall guest side effect was added.
+  - No VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics were added.
+  - No generated Linux or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - Full TCTI and full Linux usability remain incomplete.
+
 ### Checkpoint: Static BusyBox SIGABRT Reduced Before Phone Work
 
 - Harness-selected gate:
@@ -4166,6 +4223,83 @@ Boundary:
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
+
+### Checkpoint: Simulator-First Physical Gate Block Hardened
+
+- Harness-selected gate: `simulator-tcti-static-busybox-shell-command`.
+- Selected command:
+  `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Why selected: the harness reported `simulator-tcti-static-busybox-start=pass`, but `simulator-tcti-static-busybox-shell-command` was not passing, so no later simulator, readiness, release, or physical-device gate is eligible.
+- Harness updates:
+  - `physical-tcti-init-first-syscall` now requires the full simulator ladder before phone/device work: `simulator-tcti-static-busybox-shell-command`, `simulator-tcti-full-shell-usability`, `simulator-tcti-package-behavior`, `simulator-tcti-dynamic-loader-support`, `simulator-tcti-signals`, `simulator-tcti-vfs-completeness`, and `simulator-tcti-full-linux-runtime-readiness`.
+  - Runtime validation now has explicit pinned-simulator marker gates for full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+  - Marker validation reads the exact expected artifact file instead of accepting marker text from broad logs or the kernel command line.
+- Simulator result:
+  - Fresh report: `Build/Reports/runtime/tcti-static-busybox-shell-command-20260703T194255Z-26113.json`.
+  - Status: `fail`.
+  - Pinned simulator proof: `Orlix-iPhone-15-Pro-Max`, UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`, booted simulator count `1`.
+  - Marker artifact contained `ORLIX-TCTI-BUSYBOX-USABLE`.
+  - Gate still failed because `tcti_runtime_events.signaled_process.signal=4` for the `sh` task after the marker.
+- Reducers:
+  - Existing shell-command SIGABRT reducer replayed:
+    `Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-shell-command-sigabrt-pass-regression.json`.
+  - New shell-command SIGILL-after-marker reducer:
+    `Build/TCTI/reproducers/tcti-post-busybox-shell-command-sigill-reducer/post-busybox-shell-command-sigill-after-marker-pass-regression.json`.
+  - Reducer reports:
+    `Build/TCTI/reports/tcti-post-busybox-sigabrt-reducer/report.json`,
+    `Build/TCTI/reports/tcti-post-busybox-shell-command-sigill-reducer/report.json`,
+    and `Build/TCTI/reports/tcti-repro/report.json`.
+- Current readiness:
+  - Full shell usability is not proven.
+  - Package behavior is not proven.
+  - Dynamic loader support is not proven.
+  - Signals are not proven.
+  - VFS completeness is not proven.
+  - Full Linux runtime readiness is not proven.
+  - Physical phone/device TCTI gates remain blocked.
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No host-executable guest text.
+  - No simulator other than `Orlix-iPhone-15-Pro-Max` used.
+  - No physical phone/device gate run.
+  - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+  - No generated-tree edit.
+  - No product defconfig flip.
+
+### Checkpoint: No-Phone MOVI 4S Fix And Next Simulator Blocker
+
+- Harness-selected gate remained `simulator-tcti-static-busybox-shell-command`.
+- Simulator evidence reduced:
+  - Report: `Build/Reports/runtime/tcti-static-busybox-shell-command-20260703T194255Z-26113.json`.
+  - Unsupported instruction after marker: `0x4f020420`.
+  - Disassembly: `movi.4s v0, #0x41`.
+  - Runtime symptom: `orlix-init: process signaled pid=32 signal=4`.
+- Implemented no-phone semantic subset:
+  - Decoder mask: `0xffffffe0`.
+  - Decoder pattern: `0x4f020420`.
+  - Semantic value: `0x0000004100000041` written to both 64-bit halves of the SIMD register.
+  - No broader SIMD immediate family was enabled.
+- Files:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c`
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c`
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_simd_movi_4s_0x41.S`
+  - `tools/tcti/orlix-tcti-gate.swift`
+- Reports and reducers:
+  - `Build/TCTI/reports/tcti-simd-movi-4s-0x41-fix/report.json`
+  - `Build/TCTI/reproducers/tcti-simd-movi-4s-0x41-fix/simd-movi-4s-0x41-pass-regression.json`
+  - Reducer replay passed through `make tcti-gate TARGET=tcti-repro`.
+- Simulator rerun:
+  - Report: `Build/Reports/runtime/tcti-static-busybox-shell-command-20260703T195508Z-43884.json`.
+  - Status: `fail`.
+  - Pinned simulator proof remained valid: `Orlix-iPhone-15-Pro-Max`, UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`, booted simulator count `1`.
+  - New blocker: `tcti_runtime_events.fatal_user_fault.task=init`, `pc=0x7ab25971ab08`, `addr=0x7ab2599fff20`, `access=1`, before `static_pie_image` for `sh`.
+- Current readiness remains blocked:
+  - Static BusyBox shell command is not passing.
+  - Full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness are not proven.
+  - Physical phone/device TCTI gates remain blocked.
 
 ### Checkpoint: Generic TCTI Gate Interface And Current Simulator Blocker
 
