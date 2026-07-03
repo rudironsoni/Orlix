@@ -251,6 +251,7 @@ let nextTaskURL = outputRoot.appendingPathComponent("next-task.json")
 let nextTaskMarkdownURL = outputRoot.appendingPathComponent("next-task.md")
 let requiredSimulatorID = "C47ED88D-0D0A-420D-8C78-D4C1D34A276D"
 let requiredSimulatorName = "Orlix-iPhone-15-Pro-Max"
+let physicalOptInBlockedGateID = "blocked-physical-device-opt-in-required"
 
 func relativePath(_ url: URL) -> String {
     let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
@@ -2867,6 +2868,17 @@ func simulatorRuntimeGateIsSelectable(_ statuses: [GateStatus]) -> Bool {
     simulatorRuntimeGates(statuses).contains { !$0.passed && $0.prerequisitesSatisfied }
 }
 
+func physicalDeviceExplicitlyAllowed() -> Bool {
+    let environment = ProcessInfo.processInfo.environment
+    for key in ["ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE", "ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED"] {
+        let value = environment[key]?.lowercased() ?? ""
+        if ["1", "true", "yes"].contains(value) {
+            return true
+        }
+    }
+    return false
+}
+
 func gateUsesRequiredSimulator(_ gate: Gate) -> Bool {
     gate.kind == "simulator-runtime" ||
         gate.command.contains("DESTINATION=iphonesimulator") ||
@@ -2876,11 +2888,12 @@ func gateUsesRequiredSimulator(_ gate: Gate) -> Bool {
 func selectedStatusWithSafety(from statuses: [GateStatus]) -> GateStatus? {
     let noPhonePassed = noPhoneGatesPassedBeforeFirstPhysical(statuses)
     let simulatorPassed = simulatorRuntimeGatesComplete(statuses)
+    let physicalAllowed = physicalDeviceExplicitlyAllowed()
     return statuses.first { status in
         guard !status.passed && status.prerequisitesSatisfied else {
             return false
         }
-        if status.physicalDevice && (!noPhonePassed || !simulatorPassed) {
+        if status.physicalDevice && (!physicalAllowed || !noPhonePassed || !simulatorPassed) {
             return false
         }
         return true
@@ -2918,7 +2931,8 @@ func statusDocument() throws -> StatusDocument {
     let physicalAllowed = physicalGate?.prerequisitesSatisfied == true &&
         preflightPassed &&
         simulatorRuntimeGatesComplete(gateStatuses) &&
-        noPhoneGatesPassedBeforeFirstPhysical(gateStatuses)
+        noPhoneGatesPassedBeforeFirstPhysical(gateStatuses) &&
+        physicalDeviceExplicitlyAllowed()
     let releaseEligible = physicalGate?.passed == true
     let readinessEligible = physicalGate?.passed == true
     return StatusDocument(
@@ -2968,9 +2982,15 @@ func writeStatus(printHuman: Bool) throws -> StatusDocument {
 
 func envelope(from status: StatusDocument) throws -> TaskEnvelope {
     let roadmap = try loadRoadmap()
-    guard let selectedID = status.nextEligibleGate,
-          let gate = roadmapGatesWithRuntimePreflight(roadmap).first(where: { $0.id == selectedID }) else {
+    let gates = roadmapGatesWithRuntimePreflight(roadmap)
+    guard let selectedID = status.nextEligibleGate else {
+        if let blocked = blockedPhysicalOptInEnvelope(from: status, roadmap: roadmap, gates: gates) {
+            return blocked
+        }
         throw HarnessError.invalid("no next eligible gate found")
+    }
+    guard let gate = gates.first(where: { $0.id == selectedID }) else {
+        throw HarnessError.invalid("selected gate \(selectedID) does not exist in roadmap")
     }
     let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })
     let prerequisites = gate.prerequisites.map { prereqID in
@@ -3008,6 +3028,85 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         requiredSimulatorName: status.requiredSimulatorName,
         physicalDevice: gate.physicalDevice,
         gadget: gate.gadget,
+        nextTaskJSONPath: relativePath(nextTaskURL),
+        nextTaskMarkdownPath: relativePath(nextTaskMarkdownURL)
+    )
+}
+
+func blockedPhysicalOptInEnvelope(from status: StatusDocument, roadmap: Roadmap, gates: [Gate]) -> TaskEnvelope? {
+    guard status.physicalDeviceAllowed == false else {
+        return nil
+    }
+    guard let blockedStatus = status.gates.first(where: { $0.physicalDevice && !$0.passed && $0.prerequisitesSatisfied }) else {
+        return nil
+    }
+    guard let blockedGate = gates.first(where: { $0.id == blockedStatus.id }) else {
+        return nil
+    }
+    let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })
+    let prerequisites = blockedGate.prerequisites.map { prereqID in
+        let fact = byID[prereqID]
+        return PrerequisiteFact(
+            id: prereqID,
+            state: fact?.state ?? "missing",
+            reportPaths: fact?.reportPaths ?? []
+        )
+    }
+    return TaskEnvelope(
+        area: roadmap.area,
+        generatedAt: timestamp(),
+        gitSHA: status.gitSHA,
+        roadmapPath: relativePath(roadmapURL),
+        selectedGateID: physicalOptInBlockedGateID,
+        selectedGateCommand: "no-op: set ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 only after explicit human approval",
+        selectedGateKind: "blocked",
+        prerequisiteGates: prerequisites,
+        whySelected: "All prerequisites for \(blockedGate.id) are satisfied, but physical-device gates require explicit opt-in. Set ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 or ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1 only after human approval.",
+        allowedScope: [
+            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+            ".agents/skills/orlix-tcti-next-step/SKILL.md"
+        ],
+        forbiddenScope: [
+            "Do not run physical-device gates without explicit human approval and ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 or ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1.",
+            "Do not treat simulator or no-phone reports as physical-device readiness.",
+            "Do not add custom MCP, tools/agent, production assembly, gadget dispatch, HostAdapter behavior, or Linux runtime semantics for this blocked state."
+        ],
+        requiredValidationCommands: [
+            "rtk proxy make agent-harness-check",
+            "rtk proxy make agent-status AREA=orlix-tcti",
+            "rtk proxy make agent-next AREA=orlix-tcti",
+            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+        ],
+        expectedReportPaths: [
+            relativePath(statusURL),
+            relativePath(nextTaskURL),
+            relativePath(nextTaskMarkdownURL)
+        ],
+        reducerRequirements: [
+            "No reducer is required for the blocked physical opt-in envelope because no runtime gate executed."
+        ],
+        requiredSubagentsOrSkills: [
+            "tcti-planner",
+            "tcti-safety-reviewer",
+            "tcti-release-gate-reviewer",
+            "orlix-tcti-next-step",
+            "orlix-tcti-safety"
+        ],
+        commitMessage: "chore(tcti): require explicit physical gate opt-in",
+        stopConditions: [
+            "Stop if a physical-device command would run without explicit human approval.",
+            "Stop if agent-next selects a physical-device gate while physical_device_allowed is false.",
+            "Stop if the blocked envelope is missing machine-readable JSON or Markdown."
+        ],
+        simulatorAllowed: status.simulatorAllowed,
+        simulatorRequiredBeforePhysical: status.simulatorRequiredBeforePhysical,
+        simulatorGatesComplete: status.simulatorGatesComplete,
+        selectedGateUsesSimulator: false,
+        requiredSimulatorID: status.requiredSimulatorID,
+        requiredSimulatorName: status.requiredSimulatorName,
+        physicalDevice: false,
+        gadget: false,
         nextTaskJSONPath: relativePath(nextTaskURL),
         nextTaskMarkdownPath: relativePath(nextTaskMarkdownURL)
     )
@@ -3097,6 +3196,33 @@ func validateEnvelope() throws {
     let task = try JSONDecoder().decode(TaskEnvelope.self, from: data)
     guard task.area == "orlix-tcti" else {
         throw HarnessError.invalid("next-task area must be orlix-tcti")
+    }
+    if task.selectedGateID == physicalOptInBlockedGateID {
+        let status = try statusDocument()
+        guard status.nextEligibleGate == nil else {
+            throw HarnessError.invalid("blocked physical opt-in envelope is invalid while another gate is eligible")
+        }
+        guard status.physicalDeviceAllowed == false else {
+            throw HarnessError.invalid("blocked physical opt-in envelope is invalid when physical_device_allowed is true")
+        }
+        guard status.gates.contains(where: { $0.physicalDevice && !$0.passed && $0.prerequisitesSatisfied }) else {
+            throw HarnessError.invalid("blocked physical opt-in envelope requires a blocked physical-device gate with satisfied prerequisites")
+        }
+        if task.forbiddenScope.isEmpty {
+            throw HarnessError.invalid("forbidden scope must be non-empty")
+        }
+        if task.requiredValidationCommands.isEmpty {
+            throw HarnessError.invalid("validation commands must be present")
+        }
+        if task.expectedReportPaths.isEmpty {
+            throw HarnessError.invalid("expected report paths must be present")
+        }
+        if task.physicalDevice {
+            throw HarnessError.invalid("blocked physical opt-in envelope must not be marked physical_device")
+        }
+        print("pass: \(relativePath(nextTaskURL))")
+        print("selected_gate: \(task.selectedGateID)")
+        return
     }
     guard let gate = roadmapGatesWithRuntimePreflight(roadmap).first(where: { $0.id == task.selectedGateID }) else {
         throw HarnessError.invalid("selected gate \(task.selectedGateID) does not exist in roadmap")
