@@ -8,6 +8,8 @@ void tcti_report_unsupported(struct task_struct *task, struct pt_regs *regs,
 			      const struct tcti_result *result);
 void tcti_report_syscall(struct task_struct *task, struct pt_regs *regs,
 			 const struct tcti_result *result);
+void tcti_report_syscall_return(struct task_struct *task, struct pt_regs *regs,
+				unsigned long nr, unsigned long pc);
 void tcti_report_exit(struct task_struct *task, struct pt_regs *regs,
 		      const struct tcti_result *result);
 

@@ -1951,10 +1951,14 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
 		return .simdVectorLogicalImmediate(raw: raw, pc: pc, op: "orr", rd: rd, imm: 0x0000003000000030, width: 128)
 	}
 
-	if (raw & 0xffff_ffe0) == 0x4f06_e7e0 {
-		let rd = Int(raw & 0x1f)
-		return .simdModifiedImmediate(raw: raw, pc: pc, op: "movi", rd: rd, imm: 0xdfdfdfdfdfdfdfdf, width: 128)
-	}
+            if (raw & 0xffff_ffe0) == 0x4f06_e7e0 {
+                let rd = Int(raw & 0x1f)
+                return .simdModifiedImmediate(raw: raw, pc: pc, op: "movi", rd: rd, imm: 0xdfdfdfdfdfdfdfdf, width: 128)
+            }
+            if (raw & 0xffff_ffe0) == 0x4f02_0420 {
+                let rd = Int(raw & 0x1f)
+                return .simdModifiedImmediate(raw: raw, pc: pc, op: "movi", rd: rd, imm: 0x0000004100000041, width: 128)
+            }
 
 	if (raw & 0x7e00_0000) == 0x3400_0000 {
         let sf = Int((raw >> 31) & 0x1)
@@ -3167,8 +3171,24 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("init_001_exit_simd_movi_16b", isDirectory: true)
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
-        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
-    case "simd-and-16b":
+			return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+        case "simd-movi-4s-0x41":
+            let metadata = try decoder.decode(
+                GoldenMetadata.self,
+                from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+            )
+            let built = try buildFixtureBinary(
+                source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_movi_4s_0x41.S"),
+                outputRoot: outputRoot,
+                name: "init_001_exit_simd_movi_4s_0x41"
+            )
+            let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+            let executionURL = outputRoot
+                .appendingPathComponent("init_001_exit_simd_movi_4s_0x41", isDirectory: true)
+                .appendingPathComponent("execution.json")
+            try writeJSON(execution.report, to: executionURL)
+            return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+		case "simd-and-16b":
         let metadata = try decoder.decode(
             GoldenMetadata.self,
             from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
@@ -4783,9 +4803,9 @@ func latestRuntimeValidationReport(gate gateName: String, destination: String) -
 }
 
 func selectedRuntimeValidationReport(gate gateName: String, destination: String) -> (url: URL, object: [String: Any])? {
-	if let reportPath = ProcessInfo.processInfo.environment["TCTI_SIMULATOR_REPORT"], !reportPath.isEmpty {
-		let url = URL(fileURLWithPath: reportPath, relativeTo: repoRoot()).standardizedFileURL
-		guard
+    if let reportPath = ProcessInfo.processInfo.environment["TCTI_SIMULATOR_REPORT"], !reportPath.isEmpty {
+        let url = URL(fileURLWithPath: reportPath, relativeTo: repoRoot()).standardizedFileURL
+        guard
 			let object = try? loadJSON(url) as? [String: Any],
 			stringField(object, "gate") == gateName,
 			stringField(object, "destination") == destination
@@ -4793,8 +4813,28 @@ func selectedRuntimeValidationReport(gate gateName: String, destination: String)
 			return nil
 		}
 		return (url, object)
-	}
-	return latestRuntimeValidationReport(gate: gateName, destination: destination)
+    }
+    return latestRuntimeValidationReport(gate: gateName, destination: destination)
+}
+
+func selectedRuntimeValidationReport(gates gateNames: [String], destination: String) -> (url: URL, object: [String: Any])? {
+    if let reportPath = ProcessInfo.processInfo.environment["TCTI_SIMULATOR_REPORT"], !reportPath.isEmpty {
+        let url = URL(fileURLWithPath: reportPath, relativeTo: repoRoot()).standardizedFileURL
+        guard
+            let object = try? loadJSON(url) as? [String: Any],
+            gateNames.contains(stringField(object, "gate")),
+            stringField(object, "destination") == destination
+        else {
+            return nil
+        }
+        return (url, object)
+    }
+    for gateName in gateNames {
+        if let report = latestRuntimeValidationReport(gate: gateName, destination: destination) {
+            return report
+        }
+    }
+    return nil
 }
 
 func runtimeValidationReports(gate gateName: String, destination: String) -> [(url: URL, object: [String: Any])] {
@@ -8920,6 +8960,109 @@ func runSIMDMOVI16BFix() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runSIMDMOVI4S0x41Fix() throws -> Int32 {
+    let target = "tcti-simd-movi-4s-0x41-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let simulatorReports = runtimeValidationReports(
+        gate: "tcti-static-busybox-shell-command",
+        destination: "iphonesimulator"
+    )
+    let simulatorEvidenceMatched = simulatorReports.contains { report in
+        var reportArtifacts: [String] = []
+        let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+        let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+            simulatorText.contains("insn=0x4f020420") &&
+            simulatorText.contains("orlix-init: process signaled") &&
+            simulatorText.contains("signal=4") &&
+            simulatorText.contains("ORLIX-TCTI-BUSYBOX-USABLE")
+        if matched {
+            artifacts.append(contentsOf: reportArtifacts)
+        }
+        return matched
+    }
+    if !simulatorEvidenceMatched {
+        failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains MOVI v0.4s instruction 0x4f020420 with post-marker SIGILL evidence"))
+    }
+    if let latestSimulatorReport = simulatorReports.first {
+        _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+    }
+
+    let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
+    let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+    let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_movi_4s_0x41.S")
+    let decode = try String(contentsOf: decodeURL, encoding: .utf8)
+    let switchDebug = try String(contentsOf: switchURL, encoding: .utf8)
+    let tests = try String(contentsOf: testURL, encoding: .utf8)
+    let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
+
+    artifacts.append(contentsOf: [relativePath(decodeURL), relativePath(switchURL), relativePath(testURL), relativePath(fixtureURL)])
+
+    if !decode.contains("AARCH64_SIMD_MOVI_4S_0X41_PATTERN 0x4f020420U") ||
+        !decode.contains("0x0000004100000041ULL") {
+        failures.append(fail("decode-marker", "missing exact SIMD MOVI vN.4s #0x41 decoder marker"))
+    }
+    if !switchDebug.contains("decoded->result_size > sizeof(u64) ? decoded->logical_immediate : 0") {
+        failures.append(fail("semantic-marker", "missing SIMD modified-immediate 128-bit second-lane semantic write"))
+    }
+    if !tests.contains("0x4f020420U") ||
+        !tests.contains("0x0000004100000041ULL") {
+        failures.append(fail("kunit-regression", "missing KUnit coverage for MOVI v0.4s #0x41"))
+    }
+    if !fixture.contains(".inst 0x4f020420") {
+        failures.append(fail("no-phone-fixture", "missing no-phone switch-debug fixture for MOVI v0.4s #0x41"))
+    }
+
+    do {
+        let result = try executeNegativeFixture(
+            "simd-movi-4s-0x41",
+            outputRoot: buildPath("simd_movi_4s_0x41_fix", "positive")
+        )
+        artifacts.append(contentsOf: result.artifacts)
+        guard let execution = result.execution else {
+            failures.append(fail("execution", "SIMD MOVI 4S fixture did not write execution report"))
+            throw GateError.commandFailed("missing SIMD MOVI 4S execution report")
+        }
+        if execution.instructionEncodings.first != "0x4f020420" ||
+            execution.decodedInstructions.first?.instructionClass != "simd_modified_immediate" ||
+            execution.exit?.code != 42 ||
+            !execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+            failures.append(fail("execution-shape", "expected decoded SIMD MOVI 4S fixture to continue to captured exit(42)"))
+        }
+        if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
+            failures.append(fail("execution-unsupported-instruction", "SIMD MOVI 4S fixture still stops as unsupported"))
+        }
+    } catch {
+        failures.append(fail("execution", "\(error)"))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "simd-movi-4s-0x41-pass-regression",
+        command: "make tcti-gate TARGET=\(target)",
+        reason: "The simulator reached MOVI v0.4s, #0x41 after the BusyBox marker; support only the emitted Advanced SIMD 4S modified-immediate subset.",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Bound simulator unsupported 0x4f020420 to exact SIMD MOVI v0.4s, #0x41 semantic subset.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
 func runSIMDSTRSFix() throws -> Int32 {
     let target = "tcti-simd-str-s-fix"
     var failures: [Failure] = []
@@ -9326,14 +9469,17 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
     var artifacts: [String] = []
 
     guard let simulatorReport = selectedRuntimeValidationReport(
-        gate: "tcti-static-busybox-start",
+        gates: [
+            "tcti-static-busybox-start",
+            "tcti-static-busybox-shell-command",
+        ],
         destination: "iphonesimulator"
     ) else {
-        failures.append(fail("simulator-report", "missing iphonesimulator tcti-static-busybox-start report"))
+        failures.append(fail("simulator-report", "missing iphonesimulator static BusyBox SIGABRT report"))
         let reportURL = try writeReport(report(
             target: target,
             status: .fail,
-            summary: "No simulator static BusyBox start failure report was available for the SIGABRT reducer.",
+            summary: "No simulator static BusyBox SIGABRT failure report was available for the reducer.",
             failures: failures,
             artifacts: artifacts,
             releaseGateEligible: false,
@@ -9357,14 +9503,14 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
     let signaledPID = intField(signal, "pid")
 
     if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator static BusyBox start report is stale for current HEAD"))
+        failures.append(fail("simulator-report-stale", "selected simulator static BusyBox SIGABRT report is stale for current HEAD"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
-        failures.append(fail("simulator-report-status", "SIGABRT reducer requires the current simulator static BusyBox start failure report"))
+        failures.append(fail("simulator-report-status", "SIGABRT reducer requires a current simulator static BusyBox failure report"))
     }
     if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
-        stringField(object, "simulator_booted_count") != "1" ||
+        intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
         failures.append(fail("simulator-scope", "reducer requires a current pinned Orlix-iPhone-15-Pro-Max simulator report"))
     }
@@ -9374,16 +9520,27 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
     if intField(signal, "signal") != 6 || signaledPID == nil || staticPID != signaledPID {
         failures.append(fail("sigabrt-sh", "simulator evidence must tie SIGABRT signal=6 to the static BusyBox shell pid"))
     }
-    if !text.contains("Orlix TCTI: static PIE image task=sh") ||
-        !text.contains("syscall=134") ||
-        !text.contains("syscall=129") ||
-        !text.contains("syscall=139 x0=0x6") {
-        failures.append(fail("sigabrt-syscall-shape", "simulator artifacts must show sh reached rt_sigaction, kill(SIGABRT), and rt_sigreturn shape before signal=6"))
+    let gate = stringField(object, "gate")
+    let busyBoxStartSIGABRT = gate == "tcti-static-busybox-start" &&
+        text.contains("Orlix TCTI: static PIE image task=sh") &&
+        text.contains("syscall=134") &&
+        text.contains("syscall=129") &&
+        text.contains("syscall=139 x0=0x6")
+    let busyBoxShellCommandSIGABRT = gate == "tcti-static-busybox-shell-command" &&
+        text.contains("Orlix TCTI: static PIE image task=sh") &&
+        text.contains("syscall=172 ret=0x21 signed_ret=33") &&
+        text.contains("syscall=129 x0=0x21 x1=0x6 x2=0x6") &&
+        text.contains("orlix-init: process signaled pid=33 signal=6")
+    if !busyBoxStartSIGABRT && !busyBoxShellCommandSIGABRT {
+        failures.append(fail("sigabrt-syscall-shape", "simulator artifacts must show a known static BusyBox SIGABRT shape before signal=6"))
     }
 
+    let reducerCaseID = gate == "tcti-static-busybox-shell-command"
+        ? "post-busybox-shell-command-sigabrt-pass-regression"
+        : "post-busybox-sigabrt-pass-regression"
     let reducer = try writeReducer(
         target: target,
-        caseID: "post-busybox-sigabrt-pass-regression",
+        caseID: reducerCaseID,
         command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
         reason: "The pinned simulator reaches static BusyBox /bin/sh under TCTI and then the shell exits via SIGABRT signal=6; reduce that report-backed failure before production TCTI patching.",
         artifacts: artifacts,
@@ -9403,6 +9560,206 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
         readinessGateEligible: false
     ))
     print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostBusyBoxShellCommandSIGILLReducer() throws -> Int32 {
+    let target = "tcti-post-busybox-shell-command-sigill-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gates: ["tcti-static-busybox-shell-command"],
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator static BusyBox shell-command SIGILL report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No simulator static BusyBox shell-command SIGILL failure report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let text = reportArtifacts
+        .compactMap { try? readRelativeArtifact($0) }
+        .joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
+    let staticPID = intField(staticPIE, "pid")
+    let signaledPID = intField(signal, "pid")
+    let markerArtifact = reportArtifacts.first { $0.hasSuffix("tcti-static-busybox-shell-command.txt") }
+    let markerText = markerArtifact.flatMap { try? readRelativeArtifact($0) } ?? ""
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected simulator static BusyBox shell-command SIGILL report is stale for current HEAD"))
+    }
+    if stringField(object, "status") != "fail" || boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "SIGILL reducer requires a current simulator static BusyBox shell-command failure report"))
+    }
+    if stringField(object, "gate") != "tcti-static-busybox-shell-command" {
+        failures.append(fail("simulator-report-gate", "SIGILL reducer must use the static BusyBox shell-command gate report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires a current pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    if stringField(staticPIE, "task") != "sh" || staticPID == nil {
+        failures.append(fail("static-pie-sh", "simulator evidence must show static PIE image task=sh before the SIGILL"))
+    }
+    if intField(signal, "signal") != 4 || signaledPID == nil || staticPID != signaledPID {
+        failures.append(fail("sigill-sh", "simulator evidence must tie signal=4 to the static BusyBox shell pid"))
+    }
+    if stringField(lastReturn, "task") != "sh" ||
+        intField(lastReturn, "pid") != staticPID ||
+        intField(lastReturn, "syscall") != 64 ||
+        stringField(lastReturn, "ret") != "0x19" ||
+        intField(lastReturn, "signed_ret") != 25 {
+        failures.append(fail("post-marker-write-return", "simulator JSON must show sh write syscall return before signal=4"))
+    }
+    if !markerText.contains("ORLIX-TCTI-BUSYBOX-USABLE") ||
+        !text.contains("Orlix TCTI: static PIE image task=sh") ||
+        !text.contains("Orlix TCTI: syscall return task=sh") ||
+        !text.contains("syscall=64 ret=0x19 signed_ret=25") ||
+        !text.contains("orlix-init: process signaled") ||
+        !text.contains("signal=4") {
+        failures.append(fail("sigill-after-marker-shape", "simulator artifacts must show BusyBox marker output, write return, then signal=4"))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-busybox-shell-command-sigill-after-marker-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "The pinned simulator reaches the static BusyBox shell command marker under TCTI, then the shell receives signal=4; reduce that report-backed failure before production TCTI patching.",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced the pinned simulator static BusyBox shell-command SIGILL-after-marker failure to report-backed no-phone evidence.",
+        failures: failures,
+        artifacts: artifacts,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runUserDataWindowRefreshFix() throws -> Int32 {
+    let target = "tcti-user-data-window-refresh-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let reducerReportURL = buildPath("reports", "tcti-post-busybox-sigabrt-reducer", "report.json")
+    if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
+        artifacts.append(relativePath(reducerReportURL))
+        if stringField(reducerReport, "git_sha") != gitSha() ||
+            stringField(reducerReport, "status") != "pass" ||
+            !boolField(reducerReport, "passed") {
+            failures.append(fail("reducer-report", "post-BusyBox SIGABRT reducer report is missing, stale, or not passing"))
+        }
+    } else {
+        failures.append(fail("reducer-report", "missing tcti-post-busybox-sigabrt-reducer report"))
+    }
+
+    let userPageURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_user_page.c")
+    let userPage = try readText(userPageURL)
+    artifacts.append(relativePath(userPageURL))
+    if !userPage.contains("if (access == TCTI_ACCESS_WRITE) {\n\t\t\t\t\tret = tcti_sync_faulted_user_window(current_va);") {
+        failures.append(fail("read-window-refresh", "TCTI faulted data reads must retry from Linux page backing without calling hosted user-window sync"))
+    }
+    if !userPage.contains("orlix_refresh_current_user_mapping_page_from_kernel") {
+        failures.append(fail("write-coherency", "TCTI writes must retain hosted mapping refresh after kernel-backed writes"))
+    }
+    if userPage.contains("MAP_JIT") ||
+        userPage.contains("VM_PROT_EXECUTE") ||
+        userPage.contains("PROT_EXEC") ||
+        userPage.contains("HostAdapter") {
+        failures.append(fail("forbidden-scope", "user data window refresh fix must not add HostAdapter, JIT, or executable mapping behavior"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Checked reducer-backed TCTI user-data fault retry fix keeps reads off hosted executable-window refresh while preserving write refresh.",
+        failures: failures,
+        artifacts: artifacts,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runBusyBoxSyscallReturnTrace() throws -> Int32 {
+    let target = "tcti-busybox-syscall-return-trace"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let engineURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let reportURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "report.c")
+    let reportHeaderURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "report.h")
+    let runtimeURL = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let engine = try readText(engineURL)
+    let reportText = try readText(reportURL)
+    let reportHeader = try readText(reportHeaderURL)
+    let runtime = try readText(runtimeURL)
+
+    artifacts.append(contentsOf: [
+        relativePath(engineURL),
+        relativePath(reportURL),
+        relativePath(reportHeaderURL),
+        relativePath(runtimeURL),
+    ])
+
+    if !engine.contains("tcti_report_syscall_return(current, regs, nr, pc);") {
+        failures.append(fail("syscall-return-call", "TCTI syscall handoff must report syscall return values after orlix_syscall_dispatch"))
+    }
+    if !reportHeader.contains("tcti_report_syscall_return") ||
+        !reportText.contains("Orlix TCTI: syscall return task=%s") ||
+        !reportText.contains("signed_ret=%lld") {
+        failures.append(fail("syscall-return-report", "TCTI report layer must expose syscall return and signed return values"))
+    }
+    if !runtime.contains("last_sh_syscall_return") ||
+        !runtime.contains("Orlix TCTI: syscall return task=sh") {
+        failures.append(fail("runtime-json", "runtime-validation JSON must preserve BusyBox shell syscall return evidence"))
+    }
+    for forbidden in ["MAP_JIT", "VM_PROT_EXECUTE", "PROT_EXEC", "HostAdapter"] {
+        if engine.contains(forbidden) || reportText.contains(forbidden) {
+            failures.append(fail("forbidden-scope", "syscall return trace must not add \(forbidden) behavior"))
+        }
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let gateReportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Checked TCTI BusyBox syscall return tracing and runtime JSON extraction.",
+        failures: failures,
+        artifacts: artifacts,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(gateReportURL))")
     return exitCode(for: status)
 }
 
@@ -9429,6 +9786,7 @@ let tctiTargets = [
     "tcti-add-sub-shifted-xzr-fix",
     "tcti-simd-movi-2s-fix",
     "tcti-simd-movi-16b-fix",
+    "tcti-simd-movi-4s-0x41-fix",
     "tcti-simd-str-s-fix",
     "tcti-simd-dup-2d-fix",
     "tcti-simd-and-16b-fix",
@@ -9444,6 +9802,9 @@ let tctiTargets = [
     "tcti-post-pie-sh-entry-fetch-fault-reducer",
     "tcti-post-bash-mmap-read-fault-reducer",
     "tcti-post-busybox-sigabrt-reducer",
+    "tcti-post-busybox-shell-command-sigill-reducer",
+    "tcti-user-data-window-refresh-fix",
+    "tcti-busybox-syscall-return-trace",
 ]
 
 func dispatch(_ target: String) throws -> Int32 {
@@ -9492,6 +9853,8 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runSIMDMOVI2SFix()
     case "tcti-simd-movi-16b-fix":
         return try runSIMDMOVI16BFix()
+    case "tcti-simd-movi-4s-0x41-fix":
+        return try runSIMDMOVI4S0x41Fix()
     case "tcti-simd-str-s-fix":
         return try runSIMDSTRSFix()
     case "tcti-simd-dup-2d-fix":
@@ -9522,6 +9885,12 @@ case "tcti-post-exec-sh-fetch-fault-reducer":
 		return try runPostBashMmapReadFaultReducer()
     case "tcti-post-busybox-sigabrt-reducer":
         return try runPostBusyBoxSIGABRTReducer()
+    case "tcti-post-busybox-shell-command-sigill-reducer":
+        return try runPostBusyBoxShellCommandSIGILLReducer()
+    case "tcti-user-data-window-refresh-fix":
+        return try runUserDataWindowRefreshFix()
+    case "tcti-busybox-syscall-return-trace":
+        return try runBusyBoxSyscallReturnTrace()
 	default:
 		throw GateError.usage("unknown TCTI target: \(target)")
 	}

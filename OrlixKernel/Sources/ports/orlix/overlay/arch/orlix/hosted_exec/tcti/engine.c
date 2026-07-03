@@ -512,8 +512,12 @@ bool tcti_prepare_successful_execve_return(struct pt_regs *regs)
 
 static void orlix_tcti_handle_syscall(struct pt_regs *regs)
 {
+	unsigned long nr = regs->regs[8];
+	unsigned long pc = regs->pc;
+
 	tcti_prepare_syscall_handoff(regs);
 	orlix_syscall_dispatch(regs);
+	tcti_report_syscall_return(current, regs, nr, pc);
 }
 
 static void

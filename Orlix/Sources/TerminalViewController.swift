@@ -412,9 +412,12 @@ struct OrlixLaunchConfiguration {
     static let environmentIDDefaultsKey = "Orlix.environmentID"
     static let runArgumentsArgument = "--orlix-run"
     static let runArgumentsDefaultsKey = "Orlix.runArguments"
+    static let kernelCommandLineAppendArgument = "--orlix-kernel-command-line-append"
+    static let kernelCommandLineAppendDefaultsKey = "Orlix.kernelCommandLineAppend"
 
     let environmentID: String?
     let runArguments: [String]?
+    let kernelCommandLineAppend: String?
 
     static func current(
         arguments: [String] = ProcessInfo.processInfo.arguments,
@@ -424,7 +427,9 @@ struct OrlixLaunchConfiguration {
             environmentID: environmentID(from: arguments)
                 ?? defaults.string(forKey: environmentIDDefaultsKey),
             runArguments: runArguments(from: arguments)
-                ?? defaults.stringArray(forKey: runArgumentsDefaultsKey)
+                ?? defaults.stringArray(forKey: runArgumentsDefaultsKey),
+            kernelCommandLineAppend: kernelCommandLineAppend(from: arguments)
+                ?? defaults.string(forKey: kernelCommandLineAppendDefaultsKey)
         )
     }
 
@@ -438,8 +443,15 @@ struct OrlixLaunchConfiguration {
             if let environmentID, !environmentID.isEmpty {
                 return try OrlixLinuxSession(environmentID: environmentID)
             }
+            let kernelCommandLine = Self.appending(
+                kernelCommandLineAppend,
+                to: OrlixOSDistribution.bundledKernelCommandLine
+            )
             return OrlixLinuxSession(
-                bootConfig: OrlixBootConfig(profile: Self.defaultBootProfile())
+                bootConfig: OrlixBootConfig(
+                    profile: Self.defaultBootProfile(),
+                    kernelCommandLine: kernelCommandLine
+                )
             )
         }
     }
@@ -499,6 +511,35 @@ struct OrlixLaunchConfiguration {
             index = arguments.index(after: index)
         }
         return nil
+    }
+
+    private static func kernelCommandLineAppend(from arguments: [String]) -> String? {
+        var index = arguments.startIndex
+        while index < arguments.endIndex {
+            let argument = arguments[index]
+            if argument == kernelCommandLineAppendArgument {
+                let valueIndex = arguments.index(after: index)
+                guard valueIndex < arguments.endIndex else { return nil }
+                return arguments[valueIndex]
+            }
+            let prefix = kernelCommandLineAppendArgument + "="
+            if argument.hasPrefix(prefix) {
+                let value = String(argument.dropFirst(prefix.count))
+                return value.isEmpty ? nil : value
+            }
+            index = arguments.index(after: index)
+        }
+        return nil
+    }
+
+    private static func appending(_ suffix: String?, to commandLine: String?) -> String? {
+        guard let suffix, !suffix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return commandLine
+        }
+        guard let commandLine, !commandLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return suffix
+        }
+        return commandLine + " " + suffix
     }
 
     private static func defaultBootProfile() -> OrlixBootProfile {

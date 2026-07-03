@@ -1092,6 +1092,17 @@ static void tcti_decode_recognizes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 
+	decoded = tcti_decode_aarch64(0x4f020420U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0x0000004100000041ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
 	decoded = tcti_decode_aarch64(0x6f00e41fU);
 
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
@@ -2419,6 +2430,21 @@ static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
 			current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x840cULL, regs.pc);
+
+	current->thread.user_simd[0] = 0;
+	current->thread.user_simd[1] = 0;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x4f020420U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0000004100000041ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x0000004100000041ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8410ULL, regs.pc);
 }
 
 static void tcti_switch_executes_simd_dup_2d_gpr(struct kunit *test)
