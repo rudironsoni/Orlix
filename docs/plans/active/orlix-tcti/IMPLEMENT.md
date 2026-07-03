@@ -2,6 +2,87 @@
 
 ## 2026-07-03
 
+### Checkpoint: Static PIE Gate Passed And Legacy Reducer Replays Through Dispatcher
+
+- Harness-selected sequence:
+  - `simulator-tcti-init-first-syscall` because simulator reports were stale after `410bf832940270607b73799d360a48c73ad228b7`.
+  - `tcti-static-pie-relocation-fix` after the simulator first-syscall report refreshed.
+  - `blocked-physical-device-opt-in-required` after no-phone and simulator prerequisites passed and no explicit physical-device opt-in was present.
+- Why selected:
+  - The agent harness requires current simulator evidence before it can evaluate post-simulator TCTI gates.
+  - The static PIE relocation gate initially failed only because the latest simulator stability report was stale relative to the current HEAD.
+  - After refreshing simulator stability on the pinned simulator, `tcti-static-pie-relocation-fix` passed.
+  - The next remaining roadmap step is physical-device certification, but `physical_device_allowed=false`, so the harness emitted the blocked physical opt-in envelope instead of selecting phone work.
+- Simulator proof:
+  - Pinned simulator:
+    - `Orlix-iPhone-15-Pro-Max`.
+    - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - Fresh first-syscall report:
+    - `Build/Reports/runtime/tcti-init-first-syscall-20260703T144615Z-53604.json`.
+    - `git_sha=410bf832940270607b73799d360a48c73ad228b7`.
+    - `status=pass`, `passed=true`, `destination=iphonesimulator`, `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`, `simulator_single_booted=true`, `preflight_only=false`, `autonomous_tests_bypassed=false`.
+    - `release_gate_eligible=false`, `readiness_gate_eligible=false`.
+  - Fresh simulator stability report:
+    - `Build/Reports/runtime/tcti-simulator-stability-20260703T144932Z-70171.json`.
+    - `git_sha=410bf832940270607b73799d360a48c73ad228b7`.
+    - `status=pass`, `passed=true`, `destination=iphonesimulator`, `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`, `simulator_single_booted=true`, `failures=[]`, `coverage_warnings=[]`.
+    - `release_gate_eligible=false`, `readiness_gate_eligible=false`.
+- Static PIE proof:
+  - Report:
+    - `Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json`.
+    - `git_sha=410bf832940270607b73799d360a48c73ad228b7`.
+    - `status=pass`, `passed=true`, `failures=[]`.
+    - `release_gate_eligible=false`, `readiness_gate_eligible=false`.
+- Reducer replay compatibility:
+  - Updated `tools/tcti/orlix-tcti-gate.swift` so `tcti-repro` normalizes legacy reducer commands that reference retired direct make targets:
+    - `make tcti-golden-elf-refresh` becomes `make tcti-gate TARGET=tcti-golden-elf-refresh`.
+    - `make tcti-golden-elf` becomes `make tcti-gate TARGET=tcti-golden-elf`.
+    - `make tcti-repro` becomes `make tcti-gate TARGET=tcti-repro`.
+  - This preserves the single generic dispatcher model instead of restoring one Make target per TCTI function.
+  - Replayed reducer:
+    - `Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
+  - Replay report:
+    - `Build/TCTI/reports/tcti-repro/report.json`.
+    - `status=pass`, `passed=true`, `expected_status=fail`, `actual_replay_status=fail`, `failures=[]`.
+- Harness state after the checkpoint:
+  - Status JSON:
+    - `Build/AgentHarness/orlix-tcti/status.json`.
+  - Next-task JSON:
+    - `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - Next-task Markdown:
+    - `Build/AgentHarness/orlix-tcti/next-task.md`.
+  - `agent-status` reported `simulator_gates_complete=true`, `physical_device_allowed=false`, `release_gate_eligible=false`, `readiness_gate_eligible=false`, and `next_eligible_gate=none`.
+  - `agent-next` selected `blocked-physical-device-opt-in-required`.
+- Verification:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-static-pie-relocation-fix` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for the blocked physical opt-in envelope.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-toolchain-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development` passed.
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release` passed after rerunning serially. The first parallel attempt collided on the upstream Linux checkout `shallow.lock` while the development profile was still running.
+- Boundary:
+  - No physical-device gate was run in this checkpoint.
+  - No TCTI runtime feature was implemented in this checkpoint.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No HostAdapter Linux behavior.
+  - No Darwin syscall guest side effect.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added outside Linux ownership.
+  - No generated Linux or build tree edits.
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No product defconfig flip.
+  - Full TCTI remains incomplete.
+
 ### Checkpoint: Simulator Proof Refreshed And Physical Gate Requires Explicit Opt-In
 
 - Harness-selected state:
