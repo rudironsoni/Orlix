@@ -454,9 +454,22 @@ latest_simulator_console_usability_report() {
 	printf '%s\n' "$latest"
 }
 
-simulator_tcti_stability_report_passed() {
+latest_simulator_static_busybox_report() {
+	local latest=""
 	local path
-	path="$(latest_simulator_stability_report)" || return 1
+	for path in "$report_dir"/tcti-static-busybox-start-*.json; do
+		[ -e "$path" ] || continue
+		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
+			latest="$path"
+		fi
+	done
+	[ -n "$latest" ] || return 1
+	printf '%s\n' "$latest"
+}
+
+simulator_tcti_report_passed() {
+	local path="$1"
+	local expected_gate="$2"
 	local current_sha
 	current_sha="$(git rev-parse HEAD 2>/dev/null || true)"
 	[ -n "$current_sha" ] || return 1
@@ -467,7 +480,7 @@ simulator_tcti_stability_report_passed() {
 	grep -q "\"selected_device_name\"[[:space:]]*:[[:space:]]*\"$required_simulator_name\"" "$path" || return 1
 	grep -q '"simulator_booted_count"[[:space:]]*:[[:space:]]*"1"' "$path" || return 1
 	grep -q '"simulator_single_booted"[[:space:]]*:[[:space:]]*true' "$path" || return 1
-	grep -Eq '"(gate|target)"[[:space:]]*:[[:space:]]*"tcti-simulator-stability"' "$path" || return 1
+	grep -Eq "\"(gate|target)\"[[:space:]]*:[[:space:]]*\"$expected_gate\"" "$path" || return 1
 	grep -q '"backend"[[:space:]]*:[[:space:]]*"tcti"' "$path" || return 1
 	grep -q '"profile"[[:space:]]*:[[:space:]]*"tcti_runtime"' "$path" || return 1
 	grep -q '"preflight_only"[[:space:]]*:[[:space:]]*false' "$path" || return 1
@@ -478,28 +491,24 @@ simulator_tcti_stability_report_passed() {
 	return 0
 }
 
+simulator_tcti_stability_report_passed() {
+	local path
+	path="$(latest_simulator_stability_report)" || return 1
+	simulator_tcti_report_passed "$path" "tcti-simulator-stability"
+}
+
 simulator_tcti_console_usability_report_passed() {
 	local path
 	path="$(latest_simulator_console_usability_report)" || return 1
-	local current_sha
-	current_sha="$(git rev-parse HEAD 2>/dev/null || true)"
-	[ -n "$current_sha" ] || return 1
-	report_has_passed "$path" || return 1
-	grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$path" || return 1
-	grep -q '"destination"[[:space:]]*:[[:space:]]*"iphonesimulator"' "$path" || return 1
-	grep -q "\"selected_device_id\"[[:space:]]*:[[:space:]]*\"$required_simulator_id\"" "$path" || return 1
-	grep -q "\"selected_device_name\"[[:space:]]*:[[:space:]]*\"$required_simulator_name\"" "$path" || return 1
-	grep -q '"simulator_booted_count"[[:space:]]*:[[:space:]]*"1"' "$path" || return 1
-	grep -q '"simulator_single_booted"[[:space:]]*:[[:space:]]*true' "$path" || return 1
-	grep -Eq '"(gate|target)"[[:space:]]*:[[:space:]]*"tcti-init-console-write"' "$path" || return 1
-	grep -q '"backend"[[:space:]]*:[[:space:]]*"tcti"' "$path" || return 1
-	grep -q '"profile"[[:space:]]*:[[:space:]]*"tcti_runtime"' "$path" || return 1
-	grep -q '"preflight_only"[[:space:]]*:[[:space:]]*false' "$path" || return 1
-	grep -q '"autonomous_tests_bypassed"[[:space:]]*:[[:space:]]*false' "$path" || return 1
+	simulator_tcti_report_passed "$path" "tcti-init-console-write" || return 1
 	grep -q 'tcti-console-write.txt' "$path" || return 1
-	for key in generated_exec_memory host_exec_guest_text host_x18 map_jit native_ios_api_exposure_to_guest rwx; do
-		grep -q "\"$key\"[[:space:]]*:[[:space:]]*false" "$path" || return 1
-	done
+	return 0
+}
+
+simulator_tcti_static_busybox_report_passed() {
+	local path
+	path="$(latest_simulator_static_busybox_report)" || return 1
+	simulator_tcti_report_passed "$path" "tcti-static-busybox-start"
 	return 0
 }
 
@@ -507,10 +516,11 @@ physical_tcti_preflight() {
 	is_tcti_physical_gate || return 0
 	if autonomous_tcti_reports_passed &&
 		simulator_tcti_stability_report_passed &&
-		simulator_tcti_console_usability_report_passed; then
+		simulator_tcti_console_usability_report_passed &&
+		simulator_tcti_static_busybox_report_passed; then
 		return 0
 	fi
-	die "Physical TCTI gates require passing autonomous TCTI reports plus current passing simulator stability and simulator Linux console usability reports before device work."
+	die "Physical TCTI gates require passing autonomous TCTI reports plus current passing simulator stability, simulator Linux console usability, and simulator static BusyBox start reports before device work."
 }
 
 validate_gate() {
@@ -1250,6 +1260,27 @@ assert_gate_markers() {
 			failure_stage="tcti-console-write-marker"
 			die "No Linux console or TCTI console marker was captured from \`$destination\`."
 		}
+		;;
+	tcti-static-busybox-start)
+		grep -F 'Orlix TCTI: svc #0' \
+			"$artifact_dir/launch-console.log" \
+			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-terminal-output.txt" \
+			"$artifact_dir/simulator-unified.log" \
+			>"$artifact_dir/tcti-first-syscall.txt" 2>/dev/null || {
+			failure_stage="tcti-first-syscall-marker"
+			die "No TCTI \`svc #0\` marker was captured from \`$destination\`."
+		}
+		grep -E 'Orlix TCTI: static PIE image task=sh pid=[0-9]+|Orlix TCTI: svc #0 task=sh pid=[0-9]+' \
+			"$artifact_dir/launch-console.log" \
+			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-terminal-output.txt" \
+			"$artifact_dir/simulator-unified.log" \
+			>"$artifact_dir/tcti-static-busybox-start.txt" 2>/dev/null || {
+			failure_stage="tcti-static-busybox-start-marker"
+			die "No static BusyBox shell TCTI start marker was captured from \`$destination\`."
+		}
+		assert_no_simulator_fatal_runtime
 		;;
 	*)
 		die "Gate \`$gate\` has discovery/build/install/launch plumbing, but its pass markers are not implemented yet."

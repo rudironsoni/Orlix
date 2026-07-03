@@ -1224,6 +1224,170 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
     )
 }
 
+func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator") else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "missing iphonesimulator runtime-validation report for tcti-static-busybox-start",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenClear = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ].allSatisfy { !boolValue(forbidden[$0]) }
+    let runtimeEvents = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let signaledProcess = runtimeEvents["signaled_process"] as? [String: Any] ?? [:]
+    let signaledProcessClear = intValue(signaledProcess["signal"]) == nil
+    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+    let busyBoxArtifactPath = artifacts.first { $0.hasSuffix("tcti-static-busybox-start.txt") }
+    let busyBoxArtifactHasContent = busyBoxArtifactPath.flatMap { artifact -> Bool? in
+        let directURL = root.appendingPathComponent(artifact)
+        let runtimeRelativeURL = root
+            .appendingPathComponent("Build/Reports/runtime", isDirectory: true)
+            .appendingPathComponent(artifact)
+        let url = fileManager.fileExists(atPath: directURL.path) ? directURL : runtimeRelativeURL
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return false
+        }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    } ?? false
+    let reportOK = report.status == "pass" &&
+        report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(object["selected_device_id"]) == requiredSimulatorID &&
+        stringValue(object["selected_device_name"]) == requiredSimulatorName &&
+        intValue(object["simulator_booted_count"]) == 1 &&
+        boolValue(object["simulator_single_booted"]) &&
+        stringValue(object["backend"]) == "tcti" &&
+        stringValue(object["profile"]) == "tcti_runtime" &&
+        !boolValue(object["preflight_only"]) &&
+        !boolValue(object["autonomous_tests_bypassed"]) &&
+        forbiddenClear &&
+        signaledProcessClear &&
+        busyBoxArtifactHasContent
+    let reason: String
+    if reportOK {
+        reason = "iphonesimulator runtime-validation report \(report.path) passed static BusyBox start gate on \(requiredSimulatorName)"
+    } else if report.gitSHA != gitSHA() {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) is stale for current HEAD"
+    } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
+        stringValue(object["selected_device_name"]) != requiredSimulatorName {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
+    } else if intValue(object["simulator_booted_count"]) != 1 || !boolValue(object["simulator_single_booted"]) {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) does not prove exactly one booted required simulator"
+    } else if !signaledProcessClear {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) recorded a signaled process"
+    } else if !busyBoxArtifactHasContent {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) does not include a non-empty tcti-static-busybox-start marker artifact"
+    } else {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) is not a valid non-preflight TCTI pass"
+    }
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: report.status,
+        passed: reportOK,
+        reason: reason,
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-busybox-sigabrt-reducer")
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA() {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "post-BusyBox SIGABRT reducer report \(reducerReport.path) passed",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator") else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: true,
+            reason: "no static BusyBox simulator failure report exists yet",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let signaledProcess = events["signaled_process"] as? [String: Any] ?? [:]
+    let staticPID = intValue(staticPIE["pid"])
+    let signaledPID = intValue(signaledProcess["pid"])
+    let matchesCurrentSIGABRT = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(staticPIE["task"]) == "sh" &&
+        staticPID != nil &&
+        staticPID == signaledPID &&
+        intValue(signaledProcess["signal"]) == 6
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: matchesCurrentSIGABRT ? "ready" : "not_needed",
+        passed: !matchesCurrentSIGABRT,
+        reason: matchesCurrentSIGABRT
+            ? "current static BusyBox simulator report \(report.path) records sh SIGABRT signal=6 and needs a no-phone reducer"
+            : "latest static BusyBox simulator report does not match the sh SIGABRT reducer signature",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
 func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
     guard let (stabilityReport, stabilityObject) = latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") else {
         return missingGate(gate, reason: "missing current simulator stability failure report for static PIE relocation fix")
@@ -1429,10 +1593,14 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         )
     case "no-phone-tcti-post-bash-mmap-read-fault-reducer":
         return basicReportGate(gate, target: "tcti-post-bash-mmap-read-fault-reducer")
+    case "no-phone-tcti-post-busybox-sigabrt-reducer":
+        return postBusyBoxSIGABRTReducerPass(gate)
     case "simulator-tcti-runtime-stability":
         return simulatorStabilityPass(gate)
     case "simulator-tcti-linux-console-usability":
         return simulatorConsoleUsabilityPass(gate)
+    case "simulator-tcti-static-busybox-start":
+        return simulatorStaticBusyBoxStartPass(gate)
     case "physical-tcti-init-first-syscall":
         return missingGate(gate, reason: "physical first-syscall gate is not allowed until no-phone and simulator prerequisites pass")
     default:
@@ -2947,6 +3115,127 @@ func runtimePreflightGates() -> [Gate] {
                 "Stop if the simulator console marker artifact is missing or empty.",
                 "Stop if more than the pinned simulator is booted.",
                 "Stop if the gate is used to claim full Linux usability, shell readiness, release readiness, or physical-device readiness.",
+            ]
+        ),
+        Gate(
+            id: "no-phone-tcti-post-busybox-sigabrt-reducer",
+            command: "make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["simulator-tcti-linux-console-usability"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run phone gates.",
+                "Do not run simulator gates while reducing this failure.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Only bind the current pinned simulator static BusyBox SIGABRT report to a replayable no-phone reducer.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-busybox-sigabrt-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json",
+                "Build/Reports/runtime/tcti-static-busybox-start-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            ],
+            reducerRequirements: [
+                "The latest static BusyBox simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
+                "The simulator report must show static PIE image task=sh and signaled_process.signal=6 for the same pid.",
+                "The reducer must replay without running simulator or phone gates.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-safety",
+                "orlix-tcti-debug",
+                "tcti-test-reducer",
+                "tcti-safety-reviewer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce static busybox sigabrt",
+            stopConditions: [
+                "Stop if no current static BusyBox simulator SIGABRT report exists.",
+                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
+                "Stop if production TCTI code would be required before the reducer exists.",
+            ]
+        ),
+        Gate(
+            id: "simulator-tcti-static-busybox-start",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+            kind: "simulator-runtime",
+            prerequisites: ["simulator-tcti-linux-console-usability"],
+            allowedScope: [
+                "tools/runtime/orlix-runtime-validation.sh",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+                "docs/plans/active/orlix-tcti/PLAN.md",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run phone gates.",
+                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
+                "Do not allow more than one simulator to be booted while this gate runs.",
+                "Do not claim full Linux usability, release readiness, or phone readiness from this gate.",
+                "Do not add production assembly or gadget dispatch.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not edit generated Linux or build trees.",
+            ],
+            expectedReportPaths: [
+                "Build/Reports/runtime/tcti-static-busybox-start-*.json",
+                "Build/Reports/runtime/tcti-init-console-write-*.json",
+                "Build/Reports/runtime/tcti-simulator-stability-*.json",
+                "Build/TCTI/reports/tcti-plan-consistency/report.json",
+                "Build/TCTI/reports/tcti-report-schema-check/report.json",
+                "Build/TCTI/reports/tcti-golden-elf/report.json",
+                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+                "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+            ],
+            reducerRequirements: [
+                "If static BusyBox start fails because of a TCTI runtime fault, reduce it into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
+                "The report must be current for HEAD, run on the pinned simulator, and keep all forbidden-behavior fields false.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "orlix-tcti-reproducer",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): require simulator static busybox start before phone",
+            stopConditions: [
+                "Stop if the static BusyBox start report is missing or not current for HEAD.",
+                "Stop if more than the pinned simulator is booted.",
+                "Stop if the gate is used to claim full Linux usability, release readiness, or phone readiness.",
             ]
         ),
     ]

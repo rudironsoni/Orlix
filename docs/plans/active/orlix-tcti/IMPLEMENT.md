@@ -2,6 +2,63 @@
 
 ## 2026-07-03
 
+### Checkpoint: Static BusyBox SIGABRT Reduced Before Phone Work
+
+- Harness-selected gate:
+  - First selected: `simulator-tcti-static-busybox-start`.
+  - The selected pinned-simulator command ran on `Orlix-iPhone-15-Pro-Max` (`C47ED88D-0D0A-420D-8C78-D4C1D34A276D`) with exactly one booted simulator.
+  - Result: failed, not accepted as a pass.
+- Simulator evidence:
+  - Report:
+    - `Build/Reports/runtime/tcti-static-busybox-start-20260703T180317Z-32208.json`.
+    - `status=fail`, `passed=false`.
+    - `destination=iphonesimulator`.
+    - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+    - `selected_device_name=Orlix-iPhone-15-Pro-Max`.
+    - `simulator_single_booted=true`.
+  - The report proves static BusyBox `/bin/sh` reached TCTI:
+    - `tcti_runtime_events.static_pie_image.task=sh`.
+    - `tcti_runtime_events.static_pie_image.pid=33`.
+  - The failure is still real:
+    - `tcti_runtime_events.signaled_process.pid=33`.
+    - `tcti_runtime_events.signaled_process.signal=6`.
+    - Fatal artifact: `Build/Reports/runtime/tcti-static-busybox-start-20260703T180317Z-32208.artifacts/tcti-simulator-fatal-runtime.txt`.
+  - The gate now requires the non-empty marker artifact:
+    - `Build/Reports/runtime/tcti-static-busybox-start-20260703T180317Z-32208.artifacts/tcti-static-busybox-start.txt`.
+- Reducer:
+  - The harness selected `no-phone-tcti-post-busybox-sigabrt-reducer` after the failed simulator report.
+  - Reducer report:
+    - `Build/TCTI/reports/tcti-post-busybox-sigabrt-reducer/report.json`.
+    - `status=pass`, `passed=true`.
+  - Reducer artifact:
+    - `Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json`.
+  - Replay:
+    - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json`.
+    - `Build/TCTI/reports/tcti-repro/report.json`.
+    - `status=pass`, `expected_status=pass`, `actual_replay_status=pass`.
+    - The replayed reducer command is report-backed by `Build/Reports/runtime/tcti-static-busybox-start-20260703T180317Z-32208.json`.
+- Harness changes:
+  - Added `tcti-static-busybox-start` marker enforcement to `tools/runtime/orlix-runtime-validation.sh`.
+  - Added `simulator-tcti-static-busybox-start` to the autonomous runtime preflight path.
+  - Added `no-phone-tcti-post-busybox-sigabrt-reducer` so this simulator failure is reduced before any production TCTI patching.
+  - Updated the physical first-syscall roadmap requirements so phone work remains blocked until static BusyBox simulator start passes.
+- Current harness state:
+  - `make agent-status AREA=orlix-tcti` reports `simulator_gates_complete=false`.
+  - `make agent-status AREA=orlix-tcti` reports `physical_device_allowed=false`.
+  - `make agent-status AREA=orlix-tcti` reports `release_gate_eligible=false` and `readiness_gate_eligible=false`.
+  - `make agent-next AREA=orlix-tcti` returns to `simulator-tcti-static-busybox-start` because the reducer exists but the simulator gate still fails.
+- Boundary:
+  - No phone gate was run.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter Linux behavior was added.
+  - No Darwin syscall guest side effect was added.
+  - No VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics were added.
+  - No generated Linux or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - Full TCTI and simulator Linux usability remain incomplete.
+
 ### Checkpoint: Static PIE Relocation Gate Advances Past GOT Null Read
 
 - Harness-selected gate:
