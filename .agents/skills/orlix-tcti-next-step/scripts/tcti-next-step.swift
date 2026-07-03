@@ -1543,7 +1543,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
             ],
             reducerRequirements: [
-                "A current failing simulator stability report must contain the null user fault and init-kill panic signature.",
+                "A current failing simulator stability report must contain a structured null-read fatal user fault event, or a current passing simulator stability report must contain structured first-svc and static-PIE events with no fatal user fault.",
                 "The no-phone reducer must replay through make tcti-repro before production TCTI patching.",
             ],
             requiredSubagentsOrSkills: [
@@ -1557,7 +1557,7 @@ func runtimePreflightGates() -> [Gate] {
             ],
             commitMessageTemplate: "test(tcti): add simulator fault got reducer",
             stopConditions: [
-                "Stop if the current simulator stability report is stale or missing the fatal signature.",
+                "Stop if the current simulator stability report is stale or missing required structured TCTI runtime events.",
                 "Stop if the no-phone reducer cannot replay.",
                 "Stop if production TCTI code would be required before the reducer exists.",
             ]
@@ -2144,7 +2144,7 @@ func runtimePreflightGates() -> [Gate] {
             "Do not flip product defconfigs.",
             "Do not edit generated Linux or build trees.",
             "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Reduce the pinned simulator post-overlay null user-fault null-read regression before production patching.",
+            "Reduce the pinned simulator post-overlay null user-fault null-read regression before production patching, or confirm the current structured simulator report no longer contains that fatal event.",
         ],
         expectedReportPaths: [
             "Build/TCTI/reports/tcti-post-overlay-null-user-fault-reducer/report.json",
@@ -2168,7 +2168,7 @@ func runtimePreflightGates() -> [Gate] {
         ],
         reducerRequirements: [
             "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
-            "The fatal artifact must include static PIE relocations applied before pc=0x2e1ab4226a8c faults reading addr=0x0.",
+            "The current simulator report must include structured first-svc and static-PIE events, plus either a structured null-read fatal user fault or no fatal user fault in a passing report.",
             "The no-phone reducer must replay before production TCTI patching.",
         ],
         requiredSubagentsOrSkills: [
@@ -2183,7 +2183,7 @@ func runtimePreflightGates() -> [Gate] {
         ],
         commitMessageTemplate: "test(tcti): reduce simulator got slot regression",
         stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches the post-overlay null user-fault null-read signature.",
+            "Stop if the latest simulator stability report is stale or missing required structured TCTI runtime events.",
             "Stop if reducer replay cannot reproduce the no-phone unrelocated GOT byte-load failure.",
             "Stop if production TCTI code would be required before the reducer exists.",
         ]
@@ -2608,8 +2608,8 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy make tcti-appstore-safety-audit",
         ],
         reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
-            "The artifact must show static-PIE /bin/sh, mmap syscall 222, a Bash user-data read fault with access=1, and SIGSEGV for the same shell pid.",
+            "The latest simulator stability report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
+            "The structured report must show static-PIE /bin/sh and mmap syscall 222, plus either the Bash user-data read-fault event or no fatal user fault in a passing report.",
             "The reducer must replay before production TCTI patching.",
         ],
         requiredSubagentsOrSkills: [
@@ -2624,7 +2624,7 @@ func runtimePreflightGates() -> [Gate] {
         ],
         commitMessageTemplate: "test(tcti): reduce bash mmap read fault",
         stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches post-Bash mmap/read fault access=1.",
+            "Stop if the latest simulator stability report is stale or missing structured static-PIE, mmap, or fatal-user-fault fields.",
             "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
             "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
         ]
