@@ -1,5 +1,70 @@
 # IMPLEMENT.md
 
+## 2026-07-03
+
+### Checkpoint: Simulator Stability After Post-Bash Mmap Read Fault
+
+- Harness-selected gate:
+  - `simulator-tcti-runtime-stability`.
+- Selected command:
+  - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Why selected:
+  - `agent-status` reported all no-phone and first simulator prerequisites passing.
+  - The latest current simulator stability evidence still failed with a post-`mmap(222)` `/bin/sh` TCTI read fault.
+  - `agent-next` selected `simulator-tcti-runtime-stability`.
+- Reducer evidence:
+  - `Build/TCTI/reports/tcti-post-bash-mmap-read-fault-reducer/report.json`.
+  - `Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
+  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json` exited 0.
+- Root cause evidence:
+  - The failing report was `Build/Reports/runtime/tcti-simulator-stability-20260703T085507Z-30348.json`.
+  - Its structured runtime event showed `task=sh`, `pid=32`, `faultPC=0x27387c6a8c64`, `faultAddress=0x27387c87ff20`, `access=1`, `si=1`, after `mmap(222)` with `addr=0`, `len=0x80000`, `prot=0x3`, `flags=0x22`.
+  - Binary inspection found the report ELF entry and the extracted current Bash artifact differ by `0xc000`; after normalizing that delta, the fault site is `mrs x8, TPIDR_EL0` followed by `ldur w20, [x8, #-0x60]`.
+  - The fault address matches `TPIDR_EL0 - 0x60`.
+- Implementation:
+  - Updated `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c`.
+  - After `tcti_copy_user_data()` successfully faults in a missing guest READ or WRITE page, it now synchronizes the hosted fault window with `orlix_sync_current_user_fault_window(address, 0)` before retrying the direct TCTI copy.
+  - This keeps Linux MM authoritative and does not add HostAdapter Linux behavior or Linux runtime semantics to TCTI.
+- Simulator proof before commit:
+  - Only booted simulator:
+    - `Orlix-iPhone-15-Pro-Max`.
+    - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - Passing report:
+    - `Build/Reports/runtime/tcti-simulator-stability-20260703T091423Z-85985.json`.
+    - `Build/Reports/runtime/tcti-simulator-stability-20260703T091423Z-85985.md`.
+  - Report facts:
+    - `status=pass`.
+    - `passed=true`.
+    - `destination=iphonesimulator`.
+    - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+    - `simulator_single_booted=true`.
+    - `failures=[]`.
+    - `coverage_warnings=[]`.
+    - `fatal_user_fault` fields are null.
+  - `agent-status` then advanced the next eligible gate to `physical-tcti-init-first-syscall`.
+- Verification before commit:
+  - `rtk proxy git diff --check`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`.
+  - `rtk proxy make tcti-post-bash-mmap-read-fault-reducer`.
+  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development`.
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" HOMEBREW_NO_AUTO_UPDATE=1 make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No physical-device gate run.
+  - No HostAdapter Linux behavior.
+  - No Darwin syscall guest side effect.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added outside Linux ownership.
+  - No generated Linux or build tree edits.
+  - No generated executable memory.
+  - No host-executable guest text.
+  - No product defconfig flip.
+  - Full TCTI remains incomplete.
+
 ## 2026-07-02
 
 ### Checkpoint: Simulator First Syscall Gate Certified
