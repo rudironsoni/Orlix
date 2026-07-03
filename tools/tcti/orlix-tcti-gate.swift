@@ -8563,9 +8563,13 @@ func runRepro() throws -> Int32 {
     }
     print("expected status: \(payload.expectedStatus ?? "unknown")")
     print("reason: \(payload.reason)")
+    let replayCommand = normalizedReproCommand(payload.command)
+    if replayCommand != payload.command {
+        print("normalized command: \(replayCommand)")
+    }
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/bash")
-    process.arguments = ["-lc", payload.command]
+    process.arguments = ["-lc", replayCommand]
 	process.currentDirectoryURL = URL(fileURLWithPath: payload.workingDirectory)
 	try process.run()
 	process.waitUntilExit()
@@ -8617,6 +8621,22 @@ func runRepro() throws -> Int32 {
         fputs("\(failure.message)\n", stderr)
     }
     return exitCode(for: reproStatus)
+}
+
+func normalizedReproCommand(_ command: String) -> String {
+    command
+        .replacingOccurrences(
+            of: "make tcti-golden-elf-refresh",
+            with: "make tcti-gate TARGET=tcti-golden-elf-refresh"
+        )
+        .replacingOccurrences(
+            of: "make tcti-golden-elf",
+            with: "make tcti-gate TARGET=tcti-golden-elf"
+        )
+        .replacingOccurrences(
+            of: "make tcti-repro",
+            with: "make tcti-gate TARGET=tcti-repro"
+        )
 }
 
 func runAddSubShiftedXZRFix() throws -> Int32 {
