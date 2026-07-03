@@ -833,6 +833,10 @@ build_app_for_target() {
 		signing_settings+=(PROVISIONING_PROFILE_SPECIFIER="$provisioning_profile_specifier")
 	fi
 
+	if [ -z "${USER:-}" ] && [ -n "${LOGNAME:-}" ]; then
+		export USER="$LOGNAME"
+	fi
+
 	xcodegen generate --spec project.yml \
 		>"$artifact_dir/xcodegen.log" 2>&1 ||
 		die "xcodegen failed."

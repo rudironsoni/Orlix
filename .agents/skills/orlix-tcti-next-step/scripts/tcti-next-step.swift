@@ -101,6 +101,11 @@ struct StatusDocument: Codable {
     let gitSHA: String
     let roadmapPath: String
     let gates: [GateStatus]
+    let simulatorAllowed: Bool
+    let simulatorRequiredBeforePhysical: Bool
+    let simulatorGatesComplete: Bool
+    let requiredSimulatorID: String
+    let requiredSimulatorName: String
     let physicalDeviceAllowed: Bool
     let releaseGateEligible: Bool
     let readinessGateEligible: Bool
@@ -113,6 +118,11 @@ struct StatusDocument: Codable {
         case gitSHA = "git_sha"
         case roadmapPath = "roadmap_path"
         case gates
+        case simulatorAllowed = "simulator_allowed"
+        case simulatorRequiredBeforePhysical = "simulator_required_before_physical"
+        case simulatorGatesComplete = "simulator_gates_complete"
+        case requiredSimulatorID = "required_simulator_id"
+        case requiredSimulatorName = "required_simulator_name"
         case physicalDeviceAllowed = "physical_device_allowed"
         case releaseGateEligible = "release_gate_eligible"
         case readinessGateEligible = "readiness_gate_eligible"
@@ -151,6 +161,12 @@ struct TaskEnvelope: Codable {
     let requiredSubagentsOrSkills: [String]
     let commitMessage: String
     let stopConditions: [String]
+    let simulatorAllowed: Bool
+    let simulatorRequiredBeforePhysical: Bool
+    let simulatorGatesComplete: Bool
+    let selectedGateUsesSimulator: Bool
+    let requiredSimulatorID: String
+    let requiredSimulatorName: String
     let physicalDevice: Bool
     let gadget: Bool
     let nextTaskJSONPath: String
@@ -174,6 +190,12 @@ struct TaskEnvelope: Codable {
         case requiredSubagentsOrSkills = "required_subagents_or_skills"
         case commitMessage = "commit_message"
         case stopConditions = "stop_conditions"
+        case simulatorAllowed = "simulator_allowed"
+        case simulatorRequiredBeforePhysical = "simulator_required_before_physical"
+        case simulatorGatesComplete = "simulator_gates_complete"
+        case selectedGateUsesSimulator = "selected_gate_uses_simulator"
+        case requiredSimulatorID = "required_simulator_id"
+        case requiredSimulatorName = "required_simulator_name"
         case physicalDevice = "physical_device"
         case gadget
         case nextTaskJSONPath = "next_task_json_path"
@@ -2759,13 +2781,33 @@ func noPhoneGatesPassedBeforeFirstPhysical(_ statuses: [GateStatus]) -> Bool {
     noPhoneGatesBeforeFirstPhysical(statuses).allSatisfy { $0.passed }
 }
 
+func simulatorRuntimeGates(_ statuses: [GateStatus]) -> [GateStatus] {
+    statuses.filter { $0.kind == "simulator-runtime" }
+}
+
+func simulatorRuntimeGatesComplete(_ statuses: [GateStatus]) -> Bool {
+    let simulatorGates = simulatorRuntimeGates(statuses)
+    return !simulatorGates.isEmpty && simulatorGates.allSatisfy { $0.passed }
+}
+
+func simulatorRuntimeGateIsSelectable(_ statuses: [GateStatus]) -> Bool {
+    simulatorRuntimeGates(statuses).contains { !$0.passed && $0.prerequisitesSatisfied }
+}
+
+func gateUsesRequiredSimulator(_ gate: Gate) -> Bool {
+    gate.kind == "simulator-runtime" ||
+        gate.command.contains("DESTINATION=iphonesimulator") ||
+        gate.command.contains("ORLIX_SIMULATOR_ID=")
+}
+
 func selectedStatusWithSafety(from statuses: [GateStatus]) -> GateStatus? {
     let noPhonePassed = noPhoneGatesPassedBeforeFirstPhysical(statuses)
+    let simulatorPassed = simulatorRuntimeGatesComplete(statuses)
     return statuses.first { status in
         guard !status.passed && status.prerequisitesSatisfied else {
             return false
         }
-        if status.physicalDevice && !noPhonePassed {
+        if status.physicalDevice && (!noPhonePassed || !simulatorPassed) {
             return false
         }
         return true
@@ -2802,6 +2844,7 @@ func statusDocument() throws -> StatusDocument {
         .allSatisfy { $0.passed }
     let physicalAllowed = physicalGate?.prerequisitesSatisfied == true &&
         preflightPassed &&
+        simulatorRuntimeGatesComplete(gateStatuses) &&
         noPhoneGatesPassedBeforeFirstPhysical(gateStatuses)
     let releaseEligible = physicalGate?.passed == true
     let readinessEligible = physicalGate?.passed == true
@@ -2811,6 +2854,11 @@ func statusDocument() throws -> StatusDocument {
         gitSHA: gitSHA(),
         roadmapPath: relativePath(roadmapURL),
         gates: gateStatuses,
+        simulatorAllowed: simulatorRuntimeGateIsSelectable(gateStatuses) || simulatorRuntimeGatesComplete(gateStatuses),
+        simulatorRequiredBeforePhysical: true,
+        simulatorGatesComplete: simulatorRuntimeGatesComplete(gateStatuses),
+        requiredSimulatorID: requiredSimulatorID,
+        requiredSimulatorName: requiredSimulatorName,
         physicalDeviceAllowed: physicalAllowed,
         releaseGateEligible: releaseEligible,
         readinessGateEligible: readinessEligible,
@@ -2829,6 +2877,10 @@ func writeStatus(printHuman: Bool) throws -> StatusDocument {
     if printHuman {
         print("Orlix TCTI agent status")
         print("status_json: \(relativePath(statusURL))")
+        print("simulator_allowed: \(status.simulatorAllowed)")
+        print("simulator_required_before_physical: \(status.simulatorRequiredBeforePhysical)")
+        print("simulator_gates_complete: \(status.simulatorGatesComplete)")
+        print("required_simulator: \(status.requiredSimulatorName) (\(status.requiredSimulatorID))")
         print("physical_device_allowed: \(status.physicalDeviceAllowed)")
         print("release_gate_eligible: \(status.releaseGateEligible)")
         print("readiness_gate_eligible: \(status.readinessGateEligible)")
@@ -2875,6 +2927,12 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         requiredSubagentsOrSkills: gate.requiredSubagentsOrSkills,
         commitMessage: gate.commitMessageTemplate,
         stopConditions: gate.stopConditions,
+        simulatorAllowed: status.simulatorAllowed,
+        simulatorRequiredBeforePhysical: status.simulatorRequiredBeforePhysical,
+        simulatorGatesComplete: status.simulatorGatesComplete,
+        selectedGateUsesSimulator: gateUsesRequiredSimulator(gate),
+        requiredSimulatorID: status.requiredSimulatorID,
+        requiredSimulatorName: status.requiredSimulatorName,
         physicalDevice: gate.physicalDevice,
         gadget: gate.gadget,
         nextTaskJSONPath: relativePath(nextTaskURL),
@@ -2895,6 +2953,13 @@ func markdown(for envelope: TaskEnvelope) -> String {
     Command: `\(envelope.selectedGateCommand)`
 
     Why selected: \(envelope.whySelected)
+
+    ## Simulator Gate
+    - simulator_allowed: \(envelope.simulatorAllowed)
+    - simulator_required_before_physical: \(envelope.simulatorRequiredBeforePhysical)
+    - simulator_gates_complete: \(envelope.simulatorGatesComplete)
+    - selected_gate_uses_simulator: \(envelope.selectedGateUsesSimulator)
+    - required_simulator: \(envelope.requiredSimulatorName) (\(envelope.requiredSimulatorID))
 
     ## Prerequisites
     \(prereqs.isEmpty ? "- none" : prereqs)
@@ -2979,8 +3044,28 @@ func validateEnvelope() throws {
     if task.expectedReportPaths.isEmpty {
         throw HarnessError.invalid("expected report paths must be present")
     }
+    if task.simulatorRequiredBeforePhysical != true {
+        throw HarnessError.invalid("simulator_required_before_physical must be true for Orlix TCTI")
+    }
+    if gate.kind == "simulator-runtime" {
+        guard task.selectedGateUsesSimulator else {
+            throw HarnessError.invalid("simulator-runtime gate must be marked selected_gate_uses_simulator")
+        }
+        guard task.selectedGateCommand.contains("DESTINATION=iphonesimulator"),
+              task.selectedGateCommand.contains("ORLIX_SIMULATOR_ID=\(requiredSimulatorID)"),
+              task.selectedGateCommand.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID)"),
+              task.selectedGateCommand.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)") else {
+            throw HarnessError.invalid("simulator-runtime gate must target required simulator \(requiredSimulatorName) (\(requiredSimulatorID))")
+        }
+        if task.physicalDevice {
+            throw HarnessError.invalid("simulator-runtime gate must not be marked physical_device")
+        }
+    }
     if task.physicalDevice && !status.physicalDeviceAllowed {
-        throw HarnessError.invalid("physical-device gate selected while no-phone gates are incomplete")
+        throw HarnessError.invalid("physical-device gate selected before no-phone and required simulator gates are complete")
+    }
+    if task.physicalDevice && !status.simulatorGatesComplete {
+        throw HarnessError.invalid("physical-device gate selected before required simulator gates are complete")
     }
     if task.gadget {
         guard byID["switch-init-001-exit"]?.passed == true,
