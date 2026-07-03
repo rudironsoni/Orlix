@@ -19,6 +19,7 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - Run agent-neutral harness checks and TCTI no-phone status checks.
 - Generate `Build/AgentHarness/orlix-tcti/status.json`.
 - Generate `Build/AgentHarness/orlix-tcti/next-task.json` and `Build/AgentHarness/orlix-tcti/next-task.md`.
+- Expose simulator eligibility explicitly, including the pinned simulator ID/name and whether simulator gates are complete.
 - Spawn or simulate planner, safety reviewer, LLVM inspector, oracle engineer, reducer, and release-gate reviewer roles.
 - Produce the next safe task, scope, forbidden work, verification gates, reducer requirements, and commit message.
 
@@ -65,3 +66,4 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - Stop if `tcti-plan-consistency` fails.
 - Stop if the next task needs production assembly or gadget work before no-phone prerequisites pass.
 - Stop if a physical-device gate is selected before the pinned simulator stability gate passes.
+- Stop if a simulator-runtime gate does not target the pinned Orlix-iPhone-15-Pro-Max simulator.

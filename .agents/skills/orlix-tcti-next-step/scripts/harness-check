@@ -82,6 +82,14 @@ check_skills() {
     test -x "$root/.agents/skills/orlix-tcti-next-step/scripts/$script" ||
       fail ".agents/skills/orlix-tcti-next-step/scripts/$script is not executable"
   done
+  grep -q 'simulator_allowed' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must expose simulator_allowed"
+  grep -q 'simulator_required_before_physical' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must expose simulator_required_before_physical"
+  grep -q 'simulator_gates_complete' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must expose simulator_gates_complete"
+  grep -q 'ORLIX_TCTI_REQUIRED_SIMULATOR_ID' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "task-envelope check must require the pinned simulator"
 }
 
 check_mcp() {
