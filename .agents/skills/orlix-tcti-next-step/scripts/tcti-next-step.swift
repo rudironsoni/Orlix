@@ -1133,6 +1133,90 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
     )
 }
 
+func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-init-console-write", destination: "iphonesimulator") else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "missing iphonesimulator runtime-validation report for tcti-init-console-write",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenClear = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ].allSatisfy { !boolValue(forbidden[$0]) }
+    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+    let consoleArtifactPath = artifacts.first { $0.hasSuffix("tcti-console-write.txt") }
+    let consoleArtifactHasContent = consoleArtifactPath.flatMap { artifact -> Bool? in
+        let directURL = root.appendingPathComponent(artifact)
+        let runtimeRelativeURL = root
+            .appendingPathComponent("Build/Reports/runtime", isDirectory: true)
+            .appendingPathComponent(artifact)
+        let url = fileManager.fileExists(atPath: directURL.path) ? directURL : runtimeRelativeURL
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    } ?? false
+    let reportOK = report.status == "pass" &&
+        report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(object["selected_device_id"]) == requiredSimulatorID &&
+        stringValue(object["selected_device_name"]) == requiredSimulatorName &&
+        intValue(object["simulator_booted_count"]) == 1 &&
+        boolValue(object["simulator_single_booted"]) &&
+        stringValue(object["backend"]) == "tcti" &&
+        stringValue(object["profile"]) == "tcti_runtime" &&
+        !boolValue(object["preflight_only"]) &&
+        !boolValue(object["autonomous_tests_bypassed"]) &&
+        forbiddenClear &&
+        consoleArtifactHasContent
+    let reason: String
+    if reportOK {
+        reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with Linux console usability marker artifact \(consoleArtifactPath ?? "unknown")"
+    } else if report.gitSHA != gitSHA() {
+        reason = "latest iphonesimulator console usability report \(report.path) is stale for current HEAD"
+    } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
+        stringValue(object["selected_device_name"]) != requiredSimulatorName {
+        reason = "latest iphonesimulator console usability report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
+    } else if intValue(object["simulator_booted_count"]) != 1 || !boolValue(object["simulator_single_booted"]) {
+        reason = "latest iphonesimulator console usability report \(report.path) does not prove exactly one booted required simulator"
+    } else if !consoleArtifactHasContent {
+        reason = "latest iphonesimulator console usability report \(report.path) is missing a non-empty tcti-console-write marker artifact"
+    } else {
+        reason = "latest iphonesimulator console usability report \(report.path) is not a valid non-preflight TCTI pass"
+    }
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: report.status,
+        passed: reportOK,
+        reason: reason,
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
 func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
     guard let (stabilityReport, stabilityObject) = latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") else {
         return missingGate(gate, reason: "missing current simulator stability failure report for static PIE relocation fix")
@@ -1335,6 +1419,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return basicReportGate(gate, target: "tcti-post-bash-mmap-read-fault-reducer")
     case "simulator-tcti-runtime-stability":
         return simulatorStabilityPass(gate)
+    case "simulator-tcti-linux-console-usability":
+        return simulatorConsoleUsabilityPass(gate)
     case "physical-tcti-init-first-syscall":
         return missingGate(gate, reason: "physical first-syscall gate is not allowed until no-phone and simulator prerequisites pass")
     default:
@@ -2789,6 +2875,66 @@ func runtimePreflightGates() -> [Gate] {
                 "Stop if the simulator captures Kernel panic, Attempted to kill init, Attempted kill init, user fault, BUG, Oops, SIGSEGV, fatal error, or crash.",
                 "Stop if the failure cannot be reduced before implementation.",
                 "Stop if a simulator pass is claimed as physical, release, or readiness eligibility.",
+            ]
+        ),
+        Gate(
+            id: "simulator-tcti-linux-console-usability",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+            kind: "simulator-runtime",
+            prerequisites: ["simulator-tcti-runtime-stability"],
+            allowedScope: [
+                "tools/runtime/orlix-runtime-validation.sh",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+                "docs/plans/active/orlix-tcti/PLAN.md",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
+                "Do not allow more than one simulator to be booted while this gate runs.",
+                "Do not claim full Linux usability, shell readiness, release readiness, or physical readiness from this marker.",
+                "Do not add production assembly or gadget dispatch.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
+                "Do not edit generated Linux or build trees.",
+            ],
+            expectedReportPaths: [
+                "Build/Reports/runtime/tcti-init-console-write-*.json",
+                "Build/Reports/runtime/tcti-simulator-stability-*.json",
+                "Build/TCTI/reports/tcti-plan-consistency/report.json",
+                "Build/TCTI/reports/tcti-report-schema-check/report.json",
+                "Build/TCTI/reports/tcti-golden-elf/report.json",
+                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+                "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+            ],
+            reducerRequirements: [
+                "If the simulator console marker fails because of a TCTI runtime fault, reduce it into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
+                "The report must include a non-empty tcti-console-write marker artifact and all forbidden-behavior fields false.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "orlix-tcti-reproducer",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): require simulator console usability before phone",
+            stopConditions: [
+                "Stop if the simulator console marker artifact is missing or empty.",
+                "Stop if more than the pinned simulator is booted.",
+                "Stop if the gate is used to claim full Linux usability, shell readiness, release readiness, or physical-device readiness.",
             ]
         ),
     ]
