@@ -2,6 +2,59 @@
 
 ## 2026-07-03
 
+### Checkpoint: Physical First-Syscall Gate Still Blocked By Device DDI
+
+- Harness-selected gate:
+  - `physical-tcti-init-first-syscall`.
+- Selected command:
+  - `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall`.
+- Why selected:
+  - After refreshing the current-HEAD simulator first-syscall and simulator stability reports on `Orlix-iPhone-15-Pro-Max`, the harness reported `physical_device_allowed=true`.
+  - `agent-next` selected the physical first-syscall gate.
+  - `agent-task-envelope-check` passed for the physical first-syscall envelope.
+- Simulator prerequisite refresh:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260703T094852Z-93913.json` passed.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260703T095214Z-99564.json` passed.
+  - The only booted simulator before these gates was `Orlix-iPhone-15-Pro-Max` with UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+- Physical result:
+  - Report: `Build/Reports/runtime/tcti-init-first-syscall-20260703T095435Z-4244.json`.
+  - Markdown: `Build/Reports/runtime/tcti-init-first-syscall-20260703T095435Z-4244.md`.
+  - `status=fail`.
+  - `passed=false`.
+  - `destination=iphoneos`.
+  - `selected_device_name=RRJ-iPhone-15-Pro-Max`.
+  - `selected_device_id=7F8A1701-D612-5A9C-AAE7-8FD0AD77306C`.
+  - `selected_xcode_device_id=00008130-001E74A11193803A`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+- Device blocker:
+  - `devices.json` shows `developerModeStatus=enabled` for `RRJ-iPhone-15-Pro-Max`.
+  - `devices.json` shows `ddiServicesAvailable=false`.
+  - The gate failed before app build, install, launch, and before any TCTI guest execution.
+  - No reducer was created because this is Xcode/device developer-disk-image readiness, not a guest execution failure.
+- Forbidden behavior fields in the physical failure report remained false:
+  - `generated_exec_memory=false`.
+  - `host_exec_guest_text=false`.
+  - `host_x18=false`.
+  - `map_jit=false`.
+  - `native_ios_api_exposure_to_guest=false`.
+  - `rwx=false`.
+- Boundary:
+  - Physical gate did not pass.
+  - No production TCTI code was changed for this device readiness failure.
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No HostAdapter Linux behavior.
+  - No Darwin syscall guest side effect.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added outside Linux ownership.
+  - No generated Linux or build tree edits.
+  - No generated executable memory.
+  - No host-executable guest text.
+  - No product defconfig flip.
+  - Full TCTI remains incomplete.
+
 ### Checkpoint: Historical Simulator Reducers Accept Fixed Structured State
 
 - Harness-selected sequence:
