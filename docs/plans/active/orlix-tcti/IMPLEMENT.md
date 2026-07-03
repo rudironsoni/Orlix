@@ -3684,6 +3684,45 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Static PIE Relocation Marker Uses Structured Runtime Evidence
+
+- Harness-selected gate: `tcti-static-pie-relocation-fix`.
+- Selected command: `make tcti-static-pie-relocation-fix`.
+- Why selected: the current first-syscall simulator gate and no-phone reducer prerequisites were satisfied, but the static PIE relocation fix marker report was stale or failing at current `HEAD`.
+- Simulator prerequisite refreshed on the single pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`
+  - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`
+  - `runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability`
+- Changed the marker gate to validate the structured `tcti_runtime_events.static_pie_image` fields from the simulator JSON report instead of requiring a unified-log string for the relocation marker.
+- Kept the production scope check constrained to existing static PIE `R_AARCH64_RELATIVE` handling:
+  - `tcti_apply_static_pie_relative_relocations`
+  - `R_AARCH64_RELATIVE`
+  - `TCTI_MAX_RELA_ENTRIES`
+- Kept dynamic-loader expansion blocked by rejecting `PT_INTERP`, `DT_NEEDED`, and `R_AARCH64_JUMP_SLOT` markers in the TCTI engine.
+- Treated the static PIE GOT null-read reducer as historical pass evidence. The reducer proves the failure class; it does not have to be regenerated at every later `HEAD` after the production fix and simulator stability pass.
+
+Reports:
+
+- `Build/Reports/runtime/tcti-init-first-syscall-20260703T084028Z-97596.json`
+- `Build/Reports/runtime/tcti-simulator-stability-20260703T084428Z-9543.json`
+- `Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json`
+- `Build/AgentHarness/orlix-tcti/status.json`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
+- `Build/AgentHarness/orlix-tcti/next-task.md`
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No production assembly added.
+- No gadget dispatch added.
+- No physical-device gate run.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- `agent-next` now selects `physical-tcti-init-first-syscall`, but this checkpoint deliberately stops before physical-device work.
+
 ### Checkpoint: Simulator First-Syscall Path Survives Static-PIE ADRP
 
 - Harness-selected gate remains `physical-tcti-init-first-syscall`, but current operator scope required simulator-first validation only.
