@@ -2,6 +2,67 @@
 
 ## 2026-07-03
 
+### Checkpoint: Simulator Console Usability Required Before Phone Gates
+
+- Reason for change:
+  - The harness previously reached the physical-device opt-in boundary after simulator first-syscall and simulator stability reports passed.
+  - That was too weak for the intended simulator-first policy. First syscall plus stability is not proof that Linux is usable in the simulator.
+  - The physical-device path now requires a third simulator gate, `simulator-tcti-linux-console-usability`, before phone work can become eligible.
+- Harness changes:
+  - Added `simulator-tcti-linux-console-usability` to the TCTI next-step runtime preflight sequence.
+  - The gate runs:
+    - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+  - Updated the physical first-syscall roadmap entry so it depends on:
+    - `simulator-tcti-init-first-syscall`.
+    - `simulator-tcti-runtime-stability`.
+    - `simulator-tcti-linux-console-usability`.
+  - Updated `tools/runtime/orlix-runtime-validation.sh` so physical TCTI preflight also requires a current passing simulator `tcti-init-console-write` report, not only simulator stability.
+  - Updated `agent-harness-check` so the console-usability requirement cannot be silently removed from the next-step script.
+- Simulator proof:
+  - Only booted simulator before the gate:
+    - `Orlix-iPhone-15-Pro-Max`.
+    - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - Fresh console-usability report:
+    - `Build/Reports/runtime/tcti-init-console-write-20260703T162220Z-50373.json`.
+    - `Build/Reports/runtime/tcti-init-console-write-20260703T162220Z-50373.md`.
+    - `git_sha=f115557a86cafce65fc820afcd3ec8f3ae45de65`.
+    - `status=pass`, `passed=true`, `destination=iphonesimulator`.
+    - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+    - `selected_device_name=Orlix-iPhone-15-Pro-Max`.
+    - `simulator_single_booted=true`.
+    - `preflight_only=false`.
+    - `autonomous_tests_bypassed=false`.
+    - `release_gate_eligible=false`.
+    - `readiness_gate_eligible=false`.
+    - Marker artifact: `tcti-init-console-write-20260703T162220Z-50373.artifacts/tcti-console-write.txt`.
+  - Forbidden behavior fields remained false:
+    - `generated_exec_memory=false`.
+    - `host_exec_guest_text=false`.
+    - `host_x18=false`.
+    - `map_jit=false`.
+    - `native_ios_api_exposure_to_guest=false`.
+    - `rwx=false`.
+- Harness state after the gate:
+  - `make agent-status AREA=orlix-tcti` reports `simulator_gates_complete=true`.
+  - `make agent-status AREA=orlix-tcti` reports `physical_device_allowed=false`.
+  - `make agent-status AREA=orlix-tcti` reports `release_gate_eligible=false` and `readiness_gate_eligible=false`.
+  - `make agent-next AREA=orlix-tcti` selects `blocked-physical-device-opt-in-required`, not a phone command.
+- Boundary:
+  - This is still not a full Linux usability claim.
+  - This gate proves only that the simulator TCTI path produced the required console marker report after first-syscall and stability prerequisites.
+  - No physical-device gate was run.
+  - No TCTI runtime feature was implemented in this checkpoint.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No HostAdapter Linux behavior.
+  - No Darwin syscall guest side effect.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added outside Linux ownership.
+  - No generated Linux or build tree edits.
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No product defconfig flip.
+  - Full TCTI remains incomplete.
+
 ### Checkpoint: Static PIE Gate Passed And Legacy Reducer Replays Through Dispatcher
 
 - Harness-selected sequence:

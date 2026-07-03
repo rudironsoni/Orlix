@@ -66,5 +66,6 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - Stop if `tcti-plan-consistency` fails.
 - Stop if the next task needs production assembly or gadget work before no-phone prerequisites pass.
 - Stop if a physical-device gate is selected before the pinned simulator stability gate passes.
+- Stop if a physical-device gate is selected before the pinned simulator Linux console usability gate passes.
 - Stop if a physical-device gate is selected without explicit `ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1` or `ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1`.
 - Stop if a simulator-runtime gate does not target the pinned Orlix-iPhone-15-Pro-Max simulator.

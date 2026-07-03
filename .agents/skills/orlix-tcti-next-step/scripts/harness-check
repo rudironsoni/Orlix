@@ -88,6 +88,10 @@ check_skills() {
     fail "next-step status must expose simulator_required_before_physical"
   grep -q 'simulator_gates_complete' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "next-step status must expose simulator_gates_complete"
+  grep -q 'simulator-tcti-linux-console-usability' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must require simulator Linux console usability before physical gates"
+  grep -q 'tcti-init-console-write' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime validation must expose tcti-init-console-write for simulator usability"
   grep -q 'ORLIX_TCTI_REQUIRED_SIMULATOR_ID' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "task-envelope check must require the pinned simulator"
 }

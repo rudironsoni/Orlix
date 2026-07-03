@@ -1329,6 +1329,7 @@
         "first-gadget-init-001-exit",
         "simulator-tcti-init-first-syscall",
         "simulator-tcti-runtime-stability",
+        "simulator-tcti-linux-console-usability",
         "appstore-safety",
         "report-schema"
       ],
@@ -1338,11 +1339,14 @@
       ],
       "forbidden_scope": [
         "Do not run physical-device gates while no-phone gates are incomplete.",
+        "Do not run physical-device gates until current simulator first-syscall, stability, and Linux console usability reports pass on Orlix-iPhone-15-Pro-Max.",
         "Do not use emergency override to produce a passing gate.",
         "Do not patch from phone logs without reducing into a no-phone fixture."
       ],
       "expected_report_paths": [
         "Build/Reports/runtime/tcti-init-first-syscall-*.json",
+        "Build/Reports/runtime/tcti-simulator-stability-*.json",
+        "Build/Reports/runtime/tcti-init-console-write-*.json",
         "Build/TCTI/reports/tcti-plan-consistency/report.json",
         "Build/TCTI/reports/tcti-report-schema-check/report.json",
         "Build/TCTI/reports/tcti-golden-elf/report.json",
@@ -1357,6 +1361,7 @@
         "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
         "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
         "rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall"
       ],
       "reducer_requirements": [
@@ -1370,6 +1375,7 @@
       "commit_message_template": "test(tcti): certify first physical syscall gate",
       "stop_conditions": [
         "Stop if any autonomous no-phone report is missing, todo, evidence, or fail.",
+        "Stop if current simulator first-syscall, stability, or Linux console usability reports are missing or fail.",
         "Stop if emergency override is used and a pass is claimed."
       ]
     }
