@@ -128,6 +128,7 @@ struct DecodedInstructionReport: Codable {
     let rm: Int?
     let rt: Int?
     let imm: Int?
+    let immHex: String?
     let shift: Int?
     let offset: Int?
     let width: Int?
@@ -149,6 +150,7 @@ struct DecodedInstructionReport: Codable {
         rm: Int? = nil,
         rt: Int? = nil,
         imm: Int?,
+        immHex: String? = nil,
         shift: Int?,
         offset: Int? = nil,
         width: Int? = nil,
@@ -169,6 +171,7 @@ struct DecodedInstructionReport: Codable {
         self.rm = rm
         self.rt = rt
         self.imm = imm
+        self.immHex = immHex
         self.shift = shift
         self.offset = offset
         self.width = width
@@ -191,6 +194,7 @@ struct DecodedInstructionReport: Codable {
         case rm
         case rt
         case imm
+        case immHex = "imm_hex"
         case shift
         case offset
         case width
@@ -679,7 +683,7 @@ func writeTodo(target: String, caseID: String = "todo", summary: String) throws 
         artifacts: [relativePath(reducer)]
     ))
     print("TCTI target is TODO and intentionally failed: \(relativePath(reportURL))")
-    print("reproduce with: make tcti-repro REPRO=\(relativePath(reducer))")
+    print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
     return 1
 }
 
@@ -926,7 +930,7 @@ func validateFirstGadgetContract(artifacts: inout [String]) -> [Failure] {
         let reducer = try writeReducer(
             target: "tcti-diff-switch",
             caseID: "gadget-abi-init-001-exit-x0-divergence",
-            command: "CASE=init_001_exit BACKEND=gadget NEGATIVE_DIFF=gadget-x0 make tcti-diff-switch",
+            command: "CASE=init_001_exit BACKEND=gadget NEGATIVE_DIFF=gadget-x0 make tcti-gate TARGET=tcti-diff-switch",
             reason: "contract reducer for gadget register commit-back mismatch",
             artifacts: reducerArtifacts,
             expectedStatus: .fail
@@ -1136,7 +1140,7 @@ func runContract() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: failures.isEmpty ? "contract-pass-regression" : "contract-failure",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: failures.isEmpty ?
             "contract regression reducer: all tcti-contract groups should remain pass" :
             failures.map(\.message).joined(separator: "; "),
@@ -1168,7 +1172,7 @@ func runContract() throws -> Int32 {
     for group in delegatedGroups {
         print("- \(group)")
     }
-    print("reproduce with: make tcti-repro REPRO=\(relativePath(reducer))")
+    print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
     return exitCode(for: status)
 }
 
@@ -1565,6 +1569,7 @@ enum A64DecodedInstruction {
 	case simdVectorElementMove(raw: UInt32, pc: UInt64, rd: Int, rn: Int, width: Int, sourceIndex: Int, destinationIndex: Int)
 	case simdVectorLogical(raw: UInt32, pc: UInt64, op: String, rd: Int, rn: Int, rm: Int, width: Int)
 	case simdVectorLogicalImmediate(raw: UInt32, pc: UInt64, op: String, rd: Int, imm: UInt64, width: Int)
+    case simdModifiedImmediate(raw: UInt32, pc: UInt64, op: String, rd: Int, imm: UInt64, width: Int)
 	case compareAndBranchImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rt: Int, offset: Int64)
 	case unconditionalBranchImmediate(raw: UInt32, pc: UInt64, op: String, offset: Int64)
 	case svc(raw: UInt32, pc: UInt64, imm: UInt16)
@@ -1580,6 +1585,7 @@ enum A64DecodedInstruction {
 			     let .simdVectorElementMove(raw, _, _, _, _, _, _),
 		     let .simdVectorLogical(raw, _, _, _, _, _, _),
 		     let .simdVectorLogicalImmediate(raw, _, _, _, _, _),
+             let .simdModifiedImmediate(raw, _, _, _, _, _),
 		     let .compareAndBranchImmediate(raw, _, _, _, _, _),
 		     let .unconditionalBranchImmediate(raw, _, _, _),
 		     let .svc(raw, _, _),
@@ -1598,6 +1604,7 @@ enum A64DecodedInstruction {
 			     let .simdVectorElementMove(_, pc, _, _, _, _, _),
 		     let .simdVectorLogical(_, pc, _, _, _, _, _),
 		     let .simdVectorLogicalImmediate(_, pc, _, _, _, _),
+             let .simdModifiedImmediate(_, pc, _, _, _, _),
 		     let .compareAndBranchImmediate(_, pc, _, _, _, _),
 		     let .unconditionalBranchImmediate(_, pc, _, _),
 		     let .svc(_, pc, _),
@@ -1716,6 +1723,20 @@ enum A64DecodedInstruction {
                 sf: nil,
                 rd: rd,
                 imm: Int(imm),
+                shift: nil,
+                width: width,
+                reason: nil
+            )
+        case let .simdModifiedImmediate(raw, pc, op, rd, imm, width):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "simd_modified_immediate",
+                op: op,
+                sf: nil,
+                rd: rd,
+                imm: nil,
+                immHex: String(format: "0x%016llx", imm),
                 shift: nil,
                 width: width,
                 reason: nil
@@ -1928,6 +1949,11 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
 	if (raw & 0xffff_ffe0) == 0x4f01_1600 {
 		let rd = Int(raw & 0x1f)
 		return .simdVectorLogicalImmediate(raw: raw, pc: pc, op: "orr", rd: rd, imm: 0x0000003000000030, width: 128)
+	}
+
+	if (raw & 0xffff_ffe0) == 0x4f06_e7e0 {
+		let rd = Int(raw & 0x1f)
+		return .simdModifiedImmediate(raw: raw, pc: pc, op: "movi", rd: rd, imm: 0xdfdfdfdfdfdfdfdf, width: 128)
 	}
 
 	if (raw & 0x7e00_0000) == 0x3400_0000 {
@@ -2423,11 +2449,32 @@ func executeSwitchDebug(
 			)
 			failures.append(fail("execution-unsupported-instruction", "unsupported SIMD vector logical immediate op=\(op) width=\(width)"))
 			return (report, failures)
-		}
-		simdRegisters[rd * 2] |= imm
-		simdRegisters[rd * 2 + 1] |= imm
-		pc += 4
-    case .svc:
+	        }
+	        simdRegisters[rd * 2] |= imm
+	        simdRegisters[rd * 2 + 1] |= imm
+	        pc += 4
+        case let .simdModifiedImmediate(_, _, op, rd, imm, width):
+            guard op == "movi" && width == 128 else {
+                let report = executionReport(
+                    metadata: metadata,
+                    elf: elf,
+                    expectedEntry: expectedEntry,
+                    instructionsExecuted: instructionsExecuted,
+                    decodedInstructions: decodedInstructions,
+                    instructionWords: instructionWords,
+                    syscalls: syscalls,
+                    capturedExit: capturedExit,
+                    capturedFault: capturedFault,
+                    memoryWrites: memoryWrites,
+                    notes: ["switch-debug SIMD modified-immediate support is limited to MOVI vN.16b, #0xdf"]
+                )
+                failures.append(fail("execution-unsupported-instruction", "unsupported SIMD modified-immediate op=\(op) width=\(width)"))
+                return (report, failures)
+            }
+            simdRegisters[rd * 2] = imm
+            simdRegisters[rd * 2 + 1] = imm
+            pc += 4
+        case .svc:
 			let syscallNumber = Int(registers[8])
             let arg0 = Int(registers[0])
             if syscallNumber == 64 {
@@ -3105,6 +3152,22 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "simd-movi-16b":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_movi_16b.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_simd_movi_16b"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit_simd_movi_16b", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     case "simd-and-16b":
         let metadata = try decoder.decode(
             GoldenMetadata.self,
@@ -3527,7 +3590,7 @@ func validateNegativeExecutionFixtures(artifacts: inout [String]) -> [Failure] {
             let reducer = try writeReducer(
                 target: "tcti-golden-elf",
                 caseID: "execution-\(fixture)",
-                command: "CASE=\(fixtureCaseID) EXECUTE=switch-debug NEGATIVE_EXECUTION=\(fixture) make tcti-golden-elf",
+                command: "CASE=\(fixtureCaseID) EXECUTE=switch-debug NEGATIVE_EXECUTION=\(fixture) make tcti-gate TARGET=tcti-golden-elf",
                 reason: "negative execution fixture \(fixture) must fail",
                 artifacts: result.artifacts,
                 expectedStatus: .fail
@@ -3574,7 +3637,7 @@ func validateInit001Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_001_exit"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_001_exit; inspect or run make tcti-golden-elf-refresh CASE=init_001_exit"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_001_exit; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_001_exit"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_001_exit"))
@@ -3648,7 +3711,7 @@ func validateInit002Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_002_write"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_002_write; inspect or run make tcti-golden-elf-refresh CASE=init_002_write"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_002_write; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_002_write"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_002_write"))
@@ -3741,7 +3804,7 @@ func validateInit003Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_003_stack"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_003_stack; inspect or run make tcti-golden-elf-refresh CASE=init_003_stack"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_003_stack; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_003_stack"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_003_stack"))
@@ -3819,7 +3882,7 @@ func validateInit004Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_004_tls"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_004_tls; inspect or run make tcti-golden-elf-refresh CASE=init_004_tls"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_004_tls; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_004_tls"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_004_tls"))
@@ -3892,7 +3955,7 @@ func validateInit005Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_005_branches"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_005_branches; inspect or run make tcti-golden-elf-refresh CASE=init_005_branches"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_005_branches; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_005_branches"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_005_branches"))
@@ -3966,7 +4029,7 @@ func validateInit006Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_006_memory"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_006_memory; inspect or run make tcti-golden-elf-refresh CASE=init_006_memory"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_006_memory; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_006_memory"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_006_memory"))
@@ -4043,7 +4106,7 @@ func validateInit007Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_007_mprotect"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_007_mprotect; inspect or run make tcti-golden-elf-refresh CASE=init_007_mprotect"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_007_mprotect; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_007_mprotect"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_007_mprotect"))
@@ -4118,7 +4181,7 @@ func validateInit008Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_008_self_modify"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_008_self_modify; inspect or run make tcti-golden-elf-refresh CASE=init_008_self_modify"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_008_self_modify; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_008_self_modify"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_008_self_modify"))
@@ -4190,7 +4253,7 @@ func validateInit009Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_009_faults"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_009_faults; inspect or run make tcti-golden-elf-refresh CASE=init_009_faults"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_009_faults; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_009_faults"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_009_faults"))
@@ -4258,7 +4321,7 @@ func validateInit010Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_010_cpu_model"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_010_cpu_model; inspect or run make tcti-golden-elf-refresh CASE=init_010_cpu_model"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_010_cpu_model; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_010_cpu_model"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_010_cpu_model"))
@@ -4336,7 +4399,7 @@ func validateInit011Metadata(
         failures.append(fail("source-sha256", "source hash changed for init_011_static_pie_got_byte_load"))
     }
     if metadata.expectedBinarySHA256 != binaryHash {
-        failures.append(fail("binary-sha256", "binary hash changed for init_011_static_pie_got_byte_load; inspect or run make tcti-golden-elf-refresh CASE=init_011_static_pie_got_byte_load"))
+        failures.append(fail("binary-sha256", "binary hash changed for init_011_static_pie_got_byte_load; inspect or run make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_011_static_pie_got_byte_load"))
     }
     if metadata.actualBinarySHA256 != binaryHash {
         failures.append(fail("actual-binary-sha256", "golden actual binary hash no longer matches generated binary for init_011_static_pie_got_byte_load"))
@@ -4617,7 +4680,7 @@ func goldenMetadata(caseID: String, actualBinaryHash: String, sourceHash: String
     }
     return GoldenMetadata(
         caseID: caseID,
-        generatorCommand: "make tcti-golden-elf-refresh CASE=\(caseID)",
+        generatorCommand: "make tcti-gate TARGET=tcti-golden-elf-refresh CASE=\(caseID)",
         sourceSHA256: sourceHash,
         expectedBinarySHA256: actualBinaryHash,
         actualBinarySHA256: actualBinaryHash,
@@ -4663,7 +4726,7 @@ func runToolchainCheck() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: "toolchain",
-            command: "make tcti-toolchain-check",
+            command: "make tcti-gate TARGET=tcti-toolchain-check",
             reason: "\(error)"
         )
         artifacts.append(relativePath(reducer))
@@ -4732,6 +4795,35 @@ func selectedRuntimeValidationReport(gate gateName: String, destination: String)
 		return (url, object)
 	}
 	return latestRuntimeValidationReport(gate: gateName, destination: destination)
+}
+
+func runtimeValidationReports(gate gateName: String, destination: String) -> [(url: URL, object: [String: Any])] {
+	let runtimeRoot = path("Build", "Reports", "runtime")
+	guard let entries = try? fileManager.contentsOfDirectory(at: runtimeRoot, includingPropertiesForKeys: nil) else {
+		return []
+	}
+	return entries
+		.filter { $0.lastPathComponent.hasPrefix("\(gateName)-") && $0.pathExtension == "json" }
+		.sorted { $0.lastPathComponent > $1.lastPathComponent }
+		.compactMap { candidate in
+			guard let object = try? loadJSON(candidate) as? [String: Any],
+			      stringField(object, "gate") == gateName,
+			      stringField(object, "destination") == destination
+			else {
+				return nil
+			}
+			return (candidate, object)
+		}
+}
+
+func runtimeReportText(_ report: (url: URL, object: [String: Any]), artifacts: inout [String]) -> String {
+	artifacts.append(relativePath(report.url))
+	let reportArtifacts = (report.object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+	artifacts.append(contentsOf: reportArtifacts)
+	let unifiedText = (try? reportArtifacts.first { $0.hasSuffix("simulator-unified.log") }.map(readRelativeArtifact)) ?? ""
+	let terminalText = (try? reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact)) ?? ""
+	let fatalText = (try? reportArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact)) ?? ""
+	return [unifiedText, terminalText, fatalText].joined(separator: "\n")
 }
 
 func latestBRKTrapSimulatorReport() throws -> (url: URL, object: [String: Any], artifacts: [String], text: String)? {
@@ -4912,7 +5004,7 @@ func runSimulatorUserFaultReducer() throws -> Int32 {
         let reducer = try writeReducer(
             target: "tcti-golden-elf",
             caseID: "execution-static-pie-got-unrelocated-byte-load",
-            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug NEGATIVE_EXECUTION=static-pie-got-unrelocated-byte-load make tcti-golden-elf",
+            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug NEGATIVE_EXECUTION=static-pie-got-unrelocated-byte-load make tcti-gate TARGET=tcti-golden-elf",
             reason: "static PIE GOT byte load must fault when the R_AARCH64_RELATIVE GOT slot remains unrelocated and LDRB reads from 0x0",
             artifacts: negative.artifacts,
             expectedStatus: .fail
@@ -5134,7 +5226,7 @@ func runPostOverlayNullUserFaultReducer() throws -> Int32 {
 		let reducer = try writeReducer(
             target: "tcti-golden-elf",
             caseID: "execution-static-pie-got-relocation-invisible-byte-load",
-            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug NEGATIVE_EXECUTION=static-pie-got-relocation-invisible-byte-load make tcti-golden-elf",
+            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug NEGATIVE_EXECUTION=static-pie-got-relocation-invisible-byte-load make tcti-gate TARGET=tcti-golden-elf",
             reason: "latest pinned simulator stability failure reaches root overlay readiness and logs static PIE relocations, but a later GOT byte load still observes a null slot and faults at addr=0x0",
             artifacts: negative.artifacts + [relativePath(simulatorReport.url)],
             expectedStatus: .fail
@@ -6150,7 +6242,7 @@ func runSIMDSelfMoveReducer() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: "execution-simd-self-move-unsupported",
-            command: "make tcti-simd-self-move-reducer",
+            command: "make tcti-gate TARGET=tcti-simd-self-move-reducer",
             reason: "simulator TCTI stability stops on unsupported AArch64 SIMD lane self-move 0x6e144401; reducer accepts the pre-fix unsupported shape or post-fix decoded lane-copy shape",
             artifacts: result.artifacts,
             expectedStatus: .pass
@@ -6334,7 +6426,7 @@ func runSIMDSLaneMoveReducer() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: "execution-simd-s-lane-move-unsupported",
-            command: "make tcti-simd-s-lane-move-reducer",
+            command: "make tcti-gate TARGET=tcti-simd-s-lane-move-reducer",
             reason: "simulator TCTI stability stops on unsupported AArch64 SIMD lane move 0x6e144401, mov v1.s[2], v0.s[2]; reducer accepts the pre-fix unsupported shape or post-fix decoded lane-move shape",
             artifacts: result.artifacts,
             expectedStatus: .pass
@@ -6426,7 +6518,7 @@ func runBRKTrapReducer() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: "execution-brk-trap-unsupported",
-            command: "make tcti-brk-trap-reducer",
+            command: "make tcti-gate TARGET=tcti-brk-trap-reducer",
             reason: "simulator TCTI stability reaches mmap syscall 222 and then stops on unsupported AArch64 BRK trap 0xd4200020",
             artifacts: result.artifacts,
             expectedStatus: .pass
@@ -7142,8 +7234,8 @@ func runDiffSwitch() throws -> Int32 {
         if negativeDiff.isEmpty {
             let reducerCaseID = backend == "gadget" ? "\(caseID)-gadget-x0-divergence" : "\(caseID)-exit-code-divergence"
             let reducerCommand = backend == "gadget" ?
-                "CASE=\(caseID) BACKEND=gadget NEGATIVE_DIFF=gadget-x0 make tcti-diff-switch" :
-                "CASE=\(caseID) NEGATIVE_DIFF=exit-code make tcti-diff-switch"
+                "CASE=\(caseID) BACKEND=gadget NEGATIVE_DIFF=gadget-x0 make tcti-gate TARGET=tcti-diff-switch" :
+                "CASE=\(caseID) NEGATIVE_DIFF=exit-code make tcti-gate TARGET=tcti-diff-switch"
             let reducerReason = backend == "gadget" ?
                 "negative gadget diff fixture must fail with divergent architectural_state.gprs.x0" :
                 "negative diff fixture must fail with divergent architectural_state.exit.code"
@@ -7167,7 +7259,7 @@ func runDiffSwitch() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: caseID,
-            command: "CASE=\(caseID) make tcti-diff-switch",
+            command: "CASE=\(caseID) make tcti-gate TARGET=tcti-diff-switch",
             reason: failures.map(\.message).joined(separator: "; "),
             artifacts: artifacts,
             expectedStatus: .fail
@@ -7784,7 +7876,7 @@ func runMemoryFuzz() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: negativeID,
-            command: "NEGATIVE_MEMORY_FUZZ=\(negativeID) make tcti-memory-fuzz",
+            command: "NEGATIVE_MEMORY_FUZZ=\(negativeID) make tcti-gate TARGET=tcti-memory-fuzz",
             reason: artifact.notes.joined(separator: "; "),
             artifacts: [artifactPath],
             expectedStatus: .fail
@@ -7794,7 +7886,7 @@ func runMemoryFuzz() throws -> Int32 {
     let passReducer = try writeReducer(
         target: target,
         caseID: "memory-fuzz-pass-regression",
-        command: "make tcti-memory-fuzz",
+        command: "make tcti-gate TARGET=tcti-memory-fuzz",
         reason: "full memory fuzz gate must remain passing",
         artifacts: result.artifacts,
         expectedStatus: .pass
@@ -8187,7 +8279,7 @@ func runDirectChainFuzz() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: negativeID,
-            command: "NEGATIVE_DIRECT_CHAIN_FUZZ=\(negativeID) make tcti-direct-chain-fuzz",
+            command: "NEGATIVE_DIRECT_CHAIN_FUZZ=\(negativeID) make tcti-gate TARGET=tcti-direct-chain-fuzz",
             reason: artifact.notes.joined(separator: "; "),
             artifacts: [artifactPath],
             expectedStatus: .fail
@@ -8197,7 +8289,7 @@ func runDirectChainFuzz() throws -> Int32 {
     let passReducer = try writeReducer(
         target: target,
         caseID: "direct-chain-fuzz-pass-regression",
-        command: "make tcti-direct-chain-fuzz",
+        command: "make tcti-gate TARGET=tcti-direct-chain-fuzz",
         reason: "full direct-chain fuzz gate must remain passing",
         artifacts: result.artifacts,
         expectedStatus: .pass
@@ -8695,6 +8787,108 @@ func runSIMDMOVI2SFix() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runSIMDMOVI16BFix() throws -> Int32 {
+    let target = "tcti-simd-movi-16b-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let simulatorReports = runtimeValidationReports(
+        gate: "tcti-simulator-stability",
+        destination: "iphonesimulator"
+    )
+    let simulatorEvidenceMatched = simulatorReports.contains { report in
+        var reportArtifacts: [String] = []
+        let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+        let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+            simulatorText.contains("insn=0x4f06e7e0") &&
+            simulatorText.contains("orlix-init: process signaled") &&
+            simulatorText.contains("signal=4")
+        if matched {
+            artifacts.append(contentsOf: reportArtifacts)
+        }
+        return matched
+    }
+    if !simulatorEvidenceMatched {
+        failures.append(fail("simulator-unsupported-signature", "no recorded simulator stability report contains MOVI v0.16b instruction 0x4f06e7e0 with SIGILL evidence"))
+    }
+    if let latestSimulatorReport = simulatorReports.first {
+        _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+    }
+
+    let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
+    let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+    let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_movi_16b.S")
+    let decode = try String(contentsOf: decodeURL, encoding: .utf8)
+    let switchDebug = try String(contentsOf: switchURL, encoding: .utf8)
+    let tests = try String(contentsOf: testURL, encoding: .utf8)
+    let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
+
+    artifacts.append(contentsOf: [relativePath(decodeURL), relativePath(switchURL), relativePath(testURL), relativePath(fixtureURL)])
+
+    if !decode.contains("AARCH64_SIMD_MOVI_16B_0XDF_PATTERN 0x4f06e7e0U") ||
+        !decode.contains("0xdfdfdfdfdfdfdfdfULL") {
+        failures.append(fail("decode-marker", "missing exact SIMD MOVI vN.16b #0xdf decoder marker"))
+    }
+    if !switchDebug.contains("decoded->result_size > sizeof(u64) ? decoded->logical_immediate : 0") {
+        failures.append(fail("semantic-marker", "missing SIMD modified-immediate 128-bit second-lane semantic write"))
+    }
+    if !tests.contains("0x4f06e7e0U") ||
+        !tests.contains("0xdfdfdfdfdfdfdfdfULL") {
+        failures.append(fail("kunit-regression", "missing KUnit coverage for MOVI v0.16b #0xdf"))
+    }
+    if !fixture.contains(".inst 0x4f06e7e0") {
+        failures.append(fail("no-phone-fixture", "missing no-phone switch-debug fixture for MOVI v0.16b #0xdf"))
+    }
+
+    do {
+        let result = try executeNegativeFixture(
+            "simd-movi-16b",
+            outputRoot: buildPath("simd_movi_16b_fix", "positive")
+        )
+        artifacts.append(contentsOf: result.artifacts)
+        guard let execution = result.execution else {
+            failures.append(fail("execution", "SIMD MOVI 16B fixture did not write execution report"))
+            throw GateError.commandFailed("missing SIMD MOVI 16B execution report")
+        }
+        if execution.instructionEncodings.first != "0x4f06e7e0" ||
+            execution.decodedInstructions.first?.instructionClass != "simd_modified_immediate" ||
+            execution.exit?.code != 42 ||
+            !execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+            failures.append(fail("execution-shape", "expected decoded SIMD MOVI 16B fixture to continue to captured exit(42)"))
+        }
+        if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
+            failures.append(fail("execution-unsupported-instruction", "SIMD MOVI 16B fixture still stops as unsupported"))
+        }
+    } catch {
+        failures.append(fail("execution", "\(error)"))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "simd-movi-16b-pass-regression",
+        command: "make tcti-gate TARGET=\(target)",
+        reason: "The simulator reached MOVI v0.16b, #0xdf; support only the emitted Advanced SIMD 16-byte modified-immediate subset.",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Bound simulator unsupported 0x4f06e7e0 to the exact SIMD MOVI v0.16b, #0xdf semantic subset.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
 func runSIMDSTRSFix() throws -> Int32 {
     let target = "tcti-simd-str-s-fix"
     var failures: [Failure] = []
@@ -9095,6 +9289,45 @@ func runSIMDORR4SFix() throws -> Int32 {
     return exitCode(for: status)
 }
 
+let tctiTargets = [
+    "tcti-plan-consistency",
+    "tcti-report-schema-check",
+    "tcti-toolchain-check",
+    "tcti-golden-elf",
+    "tcti-golden-elf-refresh",
+    "tcti-appstore-safety-audit",
+    "tcti-repro",
+    "tcti-contract",
+    "tcti-diff-switch",
+    "tcti-memory-fuzz",
+    "tcti-direct-chain-fuzz",
+    "tcti-simulator-user-fault-reducer",
+    "tcti-static-pie-relocation-fix",
+    "tcti-simd-self-move-reducer",
+    "tcti-simd-self-move-fix",
+    "tcti-simd-s-lane-move-reducer",
+    "tcti-brk-trap-reducer",
+    "tcti-brk-trap-root-cause",
+    "tcti-brk-guard-got-reducer",
+    "tcti-add-sub-shifted-xzr-fix",
+    "tcti-simd-movi-2s-fix",
+    "tcti-simd-movi-16b-fix",
+    "tcti-simd-str-s-fix",
+    "tcti-simd-dup-2d-fix",
+    "tcti-simd-and-16b-fix",
+    "tcti-simd-orr-4s-fix",
+    "tcti-post-overlay-null-user-fault-reducer",
+    "tcti-post-overlay-null-user-fault-fix",
+    "tcti-ldrsw-sign-extension-reducer",
+    "tcti-ldrsw-sign-extension-fix",
+    "tcti-clone-zero-pc-reducer",
+    "tcti-clone-zero-pc-fix",
+    "tcti-post-setsid-tls-fault-reducer",
+    "tcti-post-exec-sh-fetch-fault-reducer",
+    "tcti-post-pie-sh-entry-fetch-fault-reducer",
+    "tcti-post-bash-mmap-read-fault-reducer",
+]
+
 func dispatch(_ target: String) throws -> Int32 {
     switch target {
     case "tcti-plan-consistency":
@@ -9139,6 +9372,8 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runAddSubShiftedXZRFix()
     case "tcti-simd-movi-2s-fix":
         return try runSIMDMOVI2SFix()
+    case "tcti-simd-movi-16b-fix":
+        return try runSIMDMOVI16BFix()
     case "tcti-simd-str-s-fix":
         return try runSIMDSTRSFix()
     case "tcti-simd-dup-2d-fix":
@@ -9175,8 +9410,14 @@ case "tcti-post-exec-sh-fetch-fault-reducer":
 func main() -> Int32 {
     let args = CommandLine.arguments.dropFirst()
     guard let target = args.first else {
-        fputs("usage: orlix-tcti-gate.swift <target>\n", stderr)
+        fputs("usage: orlix-tcti-gate.swift <target>|--list\n", stderr)
         return 2
+    }
+    if target == "--list" {
+        for candidate in tctiTargets {
+            print(candidate)
+        }
+        return 0
     }
     do {
         return try dispatch(target)
@@ -9185,7 +9426,7 @@ func main() -> Int32 {
         let reducer = try? writeReducer(
             target: targetName,
             caseID: "error",
-            command: "make \(targetName)",
+            command: "make tcti-gate TARGET=\(targetName)",
             reason: "\(error)"
         )
         let reportURL = try? writeReport(report(

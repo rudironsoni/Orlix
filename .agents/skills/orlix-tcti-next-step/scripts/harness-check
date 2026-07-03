@@ -127,6 +127,10 @@ check_layout() {
   for target in agent-status agent-next agent-task-envelope-check; do
     grep -q "^$target:" "$root/Makefile" || fail "Makefile lacks $target"
   done
+  grep -q '^tcti-gate:' "$root/Makefile" || fail "Makefile lacks generic tcti-gate target"
+  grep -q '^tcti-gate-list:' "$root/Makefile" || fail "Makefile lacks tcti-gate-list target"
+  ! grep -Eq '^tcti-[a-z0-9-]+([[:space:]]+tcti-[a-z0-9-]+)+:' "$root/Makefile" ||
+    fail "Makefile must not expose one TCTI Make target per gate; use tcti-gate TARGET=<gate>"
   ! find "$root/AGENTS.md" "$root/docs/harness" "$root/.agents/skills" -type f \
     ! -path '*/scripts/*' \
     -print0 | xargs -0 grep -E "${codex_prefix}harness-check|${codex_prefix}hooks-check|${codex_prefix}skills-check|${codex_prefix}subagents-check|${codex_prefix}mcp-check" >/dev/null 2>&1 ||

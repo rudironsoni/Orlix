@@ -27,9 +27,9 @@ Decide whether a TCTI change can advance readiness. This reviewer checks report 
 
 ## Commands it may run
 
-- `rtk proxy make tcti-plan-consistency`
-- `rtk proxy make tcti-report-schema-check`
-- `rtk proxy make tcti-appstore-safety-audit`
+- `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
+- `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`
+- `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`
 - `rtk proxy make agent-status AREA=orlix-tcti`
 - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy make agent-harness-check`

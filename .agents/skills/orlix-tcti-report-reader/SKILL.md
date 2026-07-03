@@ -25,7 +25,7 @@ description: Orlix TCTI report-reader agent harness. Use to read report JSON, va
 
 ## Commands It May Run
 
-- `rtk proxy make tcti-report-schema-check`
+- `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`
 - `rtk proxy .agents/skills/orlix-tcti-report-reader/scripts/read-report <target>`
 - `rtk proxy jq ... Build/TCTI/reports/<target>/report.json`
 

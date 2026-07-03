@@ -1179,7 +1179,8 @@ static int tcti_execute_simd_modified_immediate(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
 	current->thread.user_simd[decoded->rd * 2] = decoded->logical_immediate;
-	current->thread.user_simd[decoded->rd * 2 + 1] = 0;
+	current->thread.user_simd[decoded->rd * 2 + 1] =
+		decoded->result_size > sizeof(u64) ? decoded->logical_immediate : 0;
 	current->thread.user_simd_valid = 1;
 	regs->pc += sizeof(u32);
 	return 0;

@@ -26,9 +26,9 @@ description: Orlix TCTI golden ELF agent harness. Use for golden ELF listing, va
 
 ## Commands It May Run
 
-- `rtk proxy make tcti-golden-elf`
-- `rtk proxy make tcti-golden-elf CASE=<case>`
-- `rtk proxy make tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=<case>`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
 - `rtk proxy .agents/skills/orlix-tcti-golden-elf/scripts/golden-elf list`
 
 ## Expected Output

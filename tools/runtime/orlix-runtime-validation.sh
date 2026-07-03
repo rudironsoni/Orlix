@@ -1163,7 +1163,7 @@ assert_no_simulator_fatal_runtime() {
 	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
 		die "Gate \`$gate\` is simulator-only."
 	fi
-	if grep -E 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|Fatal error|crash|Crash|orlix-init: process signaled .* signal=11|orlix-init: shell exit status=.*139' \
+	if grep -E 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|Fatal error|crash|Crash|orlix-init: process signaled .* signal=[0-9]+|orlix-init: shell exit status=.*[1-9][0-9]*' \
 		"$artifact_dir"/launch-console.log \
 		"$artifact_dir"/launch.log \
 		"$artifact_dir"/simulator-terminal-output.txt \

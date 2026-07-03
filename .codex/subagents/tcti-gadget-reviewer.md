@@ -26,9 +26,9 @@ Review later-stage gadget ABI, gadget dispatch, and switch-vs-gadget differentia
 
 ## Commands it may run
 
-- `rtk proxy make tcti-diff-switch`
-- `rtk proxy make tcti-appstore-safety-audit`
-- `rtk proxy make tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
+- `rtk proxy make tcti-gate TARGET=tcti-diff-switch`
+- `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
 - `rtk grep -n "x18\\|w18" OrlixKernel/Sources tools`
 - `rtk git diff`
 

@@ -38,9 +38,9 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - `rtk proxy make agent-next AREA=orlix-tcti`
 - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy make agent-harness-check`
-- `rtk proxy make tcti-plan-consistency`
-- `rtk proxy make tcti-report-schema-check`
-- `rtk proxy make tcti-golden-elf`
+- `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
+- `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf`
 - `rtk git status --short`
 
 ## Expected Output

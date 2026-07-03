@@ -4,7 +4,7 @@
   "gates": [
     {
       "id": "rails-defconfig-safety",
-      "command": "make tcti-plan-consistency",
+      "command": "make tcti-gate TARGET=tcti-plan-consistency",
       "kind": "rail",
       "prerequisites": [
 
@@ -27,7 +27,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -46,7 +46,7 @@
     },
     {
       "id": "report-schema",
-      "command": "make tcti-report-schema-check",
+      "command": "make tcti-gate TARGET=tcti-report-schema-check",
       "kind": "rail",
       "prerequisites": [
         "rails-defconfig-safety"
@@ -67,7 +67,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -85,7 +85,7 @@
     },
     {
       "id": "toolchain",
-      "command": "make tcti-toolchain-check",
+      "command": "make tcti-gate TARGET=tcti-toolchain-check",
       "kind": "rail",
       "prerequisites": [
         "report-schema"
@@ -106,7 +106,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-toolchain-check",
+        "rtk proxy make tcti-gate TARGET=tcti-toolchain-check",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -123,7 +123,7 @@
     },
     {
       "id": "appstore-safety",
-      "command": "make tcti-appstore-safety-audit",
+      "command": "make tcti-gate TARGET=tcti-appstore-safety-audit",
       "kind": "safety",
       "prerequisites": [
         "toolchain"
@@ -159,9 +159,9 @@
         "rtk proxy git diff --check",
         "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
         "rtk proxy make agent-harness-check",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-appstore-safety-audit",
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
@@ -170,7 +170,7 @@
         "Safety failures must identify the exact source, generated, or object-disassembly path.",
         "Every failing forbidden_behavior family must produce at least one replayable reducer under Build/TCTI/reproducers/tcti-appstore-safety-audit/.",
         "The appstore-safety report artifacts array must include every generated reducer path.",
-        "Each safety reducer must replay through make tcti-repro REPRO=<path> and record target, case_id, command, expected_status, reason, and artifacts.",
+        "Each safety reducer must replay through make tcti-gate TARGET=tcti-repro REPRO=<path> and record target, case_id, command, expected_status, reason, and artifacts.",
         "Each safety failure must include structured scanner metadata: scanner id, forbidden_behavior field, source kind, path, line or disassembly line, and matched pattern id.",
         "The report must include a scan manifest covering production roots, scanned source count, object-disassembly paths, object count, and coverage warnings.",
         "A passing appstore-safety report must be generated at current HEAD and must not rely on stale git_sha evidence.",
@@ -194,7 +194,7 @@
     },
     {
       "id": "golden-init-001-structural",
-      "command": "make tcti-golden-elf CASE=init_001_exit",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "appstore-safety"
@@ -216,7 +216,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-golden-elf CASE=init_001_exit",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -233,7 +233,7 @@
     },
     {
       "id": "switch-init-001-exit",
-      "command": "make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-001-structural"
@@ -257,7 +257,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -276,7 +276,7 @@
     },
     {
       "id": "golden-init-002-write-structural",
-      "command": "make tcti-golden-elf CASE=init_002_write",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "switch-init-001-exit"
@@ -298,7 +298,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-golden-elf CASE=init_002_write",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -315,7 +315,7 @@
     },
     {
       "id": "switch-init-002-write",
-      "command": "make tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-002-write-structural"
@@ -339,7 +339,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -358,7 +358,7 @@
     },
     {
       "id": "switch-init-003-stack",
-      "command": "make tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "switch-init-002-write"
@@ -391,19 +391,19 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf",
-        "rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug",
-        "rtk proxy make tcti-golden-elf CASE=init_003_stack",
-        "rtk proxy make tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit",
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_003_stack",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
         "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release"
       ],
       "reducer_requirements": [
         "Every unsupported instruction or guest-memory fault must produce a reducer before production changes.",
-        "At least one new stack-specific reducer must replay through make tcti-repro."
+        "At least one new stack-specific reducer must replay through make tcti-gate TARGET=tcti-repro."
       ],
       "required_subagents_or_skills": [
         "orlix-tcti-next-step",
@@ -426,7 +426,7 @@
     },
     {
       "id": "switch-init-004-tls",
-      "command": "make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "switch-init-003-stack"
@@ -451,9 +451,9 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-golden-elf CASE=init_004_tls",
-        "rtk proxy make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_004_tls",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -472,7 +472,7 @@
     },
     {
       "id": "golden-init-005-branches-structural",
-      "command": "make tcti-golden-elf CASE=init_005_branches",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "switch-init-004-tls"
@@ -502,10 +502,10 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_005_branches",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Metadata drift must produce reducer case id regeneration command."
@@ -525,7 +525,7 @@
     },
     {
       "id": "switch-init-005-branches",
-      "command": "make tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-005-branches-structural"
@@ -556,10 +556,10 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Unsupported branch or PC update failures must emit replayable reducers."
@@ -580,7 +580,7 @@
     },
     {
       "id": "golden-init-006-memory-structural",
-      "command": "make tcti-golden-elf CASE=init_006_memory",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "switch-init-005-branches"
@@ -610,10 +610,10 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_006_memory",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Metadata drift must produce reducer case id regeneration command."
@@ -633,7 +633,7 @@
     },
     {
       "id": "switch-init-006-memory",
-      "command": "make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-006-memory-structural"
@@ -664,11 +664,11 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_006_memory",
-        "rtk proxy make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Unsupported memory, semantic, or guest-memory failures must emit replayable reducers."
@@ -689,7 +689,7 @@
     },
     {
       "id": "golden-init-007-mprotect-structural",
-      "command": "make tcti-golden-elf CASE=init_007_mprotect",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "switch-init-006-memory"
@@ -719,10 +719,10 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_007_mprotect",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Metadata drift must produce reducer case id regeneration command."
@@ -742,7 +742,7 @@
     },
     {
       "id": "switch-init-007-mprotect",
-      "command": "make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-007-mprotect-structural"
@@ -773,11 +773,11 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_007_mprotect",
-        "rtk proxy make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Unsupported mprotect, semantic, or guest-memory failures must emit replayable reducers."
@@ -798,7 +798,7 @@
     },
     {
       "id": "golden-init-008-self-modify-structural",
-      "command": "make tcti-golden-elf CASE=init_008_self_modify",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "switch-init-007-mprotect"
@@ -828,10 +828,10 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_008_self_modify",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Metadata drift must produce reducer case id regeneration command."
@@ -851,7 +851,7 @@
     },
     {
       "id": "switch-init-008-self-modify",
-      "command": "make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-008-self-modify-structural"
@@ -882,11 +882,11 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_008_self_modify",
-        "rtk proxy make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Unsupported self-modifying-code or invalidation failures must emit replayable reducers."
@@ -907,7 +907,7 @@
     },
     {
       "id": "golden-init-009-faults-structural",
-      "command": "make tcti-golden-elf CASE=init_009_faults",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "switch-init-008-self-modify"
@@ -937,10 +937,10 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_009_faults",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Metadata drift must produce reducer case id regeneration command."
@@ -960,7 +960,7 @@
     },
     {
       "id": "switch-init-009-faults",
-      "command": "make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-009-faults-structural"
@@ -991,11 +991,11 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_009_faults",
-        "rtk proxy make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Unsupported fault or guest-memory failures must emit replayable reducers."
@@ -1016,7 +1016,7 @@
     },
     {
       "id": "golden-init-010-cpu-model-structural",
-      "command": "make tcti-golden-elf CASE=init_010_cpu_model",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model",
       "kind": "golden-elf-structural",
       "prerequisites": [
         "switch-init-009-faults"
@@ -1046,10 +1046,10 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_010_cpu_model",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Metadata drift must produce reducer case id regeneration command."
@@ -1069,7 +1069,7 @@
     },
     {
       "id": "switch-init-010-cpu-model",
-      "command": "make tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug",
+      "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug",
       "kind": "switch-debug-execution",
       "prerequisites": [
         "golden-init-010-cpu-model-structural"
@@ -1100,11 +1100,11 @@
         "rtk proxy make agent-status AREA=orlix-tcti",
         "rtk proxy make agent-next AREA=orlix-tcti",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf CASE=init_010_cpu_model",
-        "rtk proxy make tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug",
-        "rtk proxy make tcti-appstore-safety-audit"
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
       ],
       "reducer_requirements": [
         "Unsupported CPU-model or sysreg failures must emit replayable reducers."
@@ -1125,7 +1125,7 @@
   },
   {
     "id": "golden-init-011-static-pie-got-byte-load-structural",
-    "command": "make tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
+    "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
     "kind": "golden-elf-structural",
     "prerequisites": [
       "switch-init-010-cpu-model"
@@ -1155,10 +1155,10 @@
       "rtk proxy make agent-status AREA=orlix-tcti",
       "rtk proxy make agent-next AREA=orlix-tcti",
       "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-      "rtk proxy make tcti-plan-consistency",
-      "rtk proxy make tcti-report-schema-check",
-      "rtk proxy make tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
-      "rtk proxy make tcti-appstore-safety-audit"
+      "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+      "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+      "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
+      "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
     ],
     "reducer_requirements": [
       "Static PIE metadata drift must produce a reducer with relocation, GOT slot, and regeneration facts."
@@ -1178,7 +1178,7 @@
   },
   {
     "id": "switch-init-011-static-pie-got-byte-load",
-    "command": "make tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
+    "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
     "kind": "switch-debug-execution",
     "prerequisites": [
       "golden-init-011-static-pie-got-byte-load-structural"
@@ -1211,12 +1211,12 @@
       "rtk proxy make agent-status AREA=orlix-tcti",
       "rtk proxy make agent-next AREA=orlix-tcti",
       "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-      "rtk proxy make tcti-plan-consistency",
-      "rtk proxy make tcti-report-schema-check",
-      "rtk proxy make tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
-      "rtk proxy make tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
-      "rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json",
-      "rtk proxy make tcti-appstore-safety-audit"
+      "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+      "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+      "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load",
+      "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
+      "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json",
+      "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
     ],
     "reducer_requirements": [
       "Unsupported relocation, GOT read, LDRB read, and exit-value failures must emit replayable reducers."
@@ -1240,7 +1240,7 @@
   },
   {
     "id": "diff-switch-init-001-exit",
-      "command": "make tcti-diff-switch CASE=init_001_exit",
+      "command": "make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit",
     "kind": "switch-vs-gadget-diff",
     "prerequisites": [
       "switch-init-011-static-pie-got-byte-load"
@@ -1261,7 +1261,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-diff-switch",
+        "rtk proxy make tcti-gate TARGET=tcti-diff-switch",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -1279,7 +1279,7 @@
     },
     {
       "id": "first-gadget-init-001-exit",
-      "command": "make tcti-diff-switch CASE=init_001_exit BACKEND=gadget",
+      "command": "make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget",
       "kind": "gadget",
       "prerequisites": [
         "diff-switch-init-001-exit",
@@ -1303,8 +1303,8 @@
       "physical_device": false,
       "gadget": true,
       "required_validation_commands": [
-        "rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget",
-        "rtk proxy make tcti-appstore-safety-audit",
+        "rtk proxy make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
       ],
       "reducer_requirements": [
@@ -1352,10 +1352,10 @@
       "physical_device": true,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make tcti-plan-consistency",
-        "rtk proxy make tcti-report-schema-check",
-        "rtk proxy make tcti-golden-elf",
-        "rtk proxy make tcti-appstore-safety-audit",
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
         "rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall"
       ],

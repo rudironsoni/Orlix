@@ -33,7 +33,7 @@ ORLIX_BETA_SIMULATOR_ID ?= C47ED88D-0D0A-420D-8C78-D4C1D34A276D
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-simulator-user-fault-reducer tcti-static-pie-relocation-fix tcti-simd-self-move-reducer tcti-simd-self-move-fix tcti-simd-s-lane-move-reducer tcti-brk-trap-reducer tcti-brk-trap-root-cause tcti-brk-guard-got-reducer tcti-add-sub-shifted-xzr-fix tcti-simd-movi-2s-fix tcti-simd-str-s-fix tcti-simd-dup-2d-fix tcti-post-overlay-null-user-fault-reducer tcti-post-overlay-null-user-fault-fix tcti-ldrsw-sign-extension-reducer tcti-ldrsw-sign-extension-fix tcti-clone-zero-pc-reducer tcti-clone-zero-pc-fix tcti-post-setsid-tls-fault-reducer tcti-post-exec-sh-fetch-fault-reducer tcti-post-pie-sh-entry-fetch-fault-reducer tcti-post-bash-mmap-read-fault-reducer tcti-appstore-safety-audit tcti-repro agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -183,8 +183,12 @@ beta-simulator-gate: beta-prerequisites
 runtime-validation: beta-prerequisites
 	@tools/runtime/orlix-runtime-validation.sh
 
-tcti-plan-consistency tcti-report-schema-check tcti-toolchain-check tcti-contract tcti-golden-elf tcti-golden-elf-refresh tcti-diff-switch tcti-memory-fuzz tcti-direct-chain-fuzz tcti-simulator-user-fault-reducer tcti-static-pie-relocation-fix tcti-simd-self-move-reducer tcti-simd-self-move-fix tcti-simd-s-lane-move-reducer tcti-brk-trap-reducer tcti-brk-trap-root-cause tcti-brk-guard-got-reducer tcti-add-sub-shifted-xzr-fix tcti-simd-movi-2s-fix tcti-simd-str-s-fix tcti-simd-dup-2d-fix tcti-simd-and-16b-fix tcti-simd-orr-4s-fix tcti-post-overlay-null-user-fault-reducer tcti-post-overlay-null-user-fault-fix tcti-ldrsw-sign-extension-reducer tcti-ldrsw-sign-extension-fix tcti-clone-zero-pc-reducer tcti-clone-zero-pc-fix tcti-post-setsid-tls-fault-reducer tcti-post-exec-sh-fetch-fault-reducer tcti-post-pie-sh-entry-fetch-fault-reducer tcti-post-bash-mmap-read-fault-reducer tcti-appstore-safety-audit tcti-repro:
-	@swift tools/tcti/orlix-tcti-gate.swift $@
+tcti-gate:
+	@test -n "$(TARGET)" || { echo "TARGET is required. Run: make tcti-gate-list" >&2; exit 2; }
+	@swift tools/tcti/orlix-tcti-gate.swift "$(TARGET)"
+
+tcti-gate-list:
+	@swift tools/tcti/orlix-tcti-gate.swift --list
 
 agent-harness-check:
 	@.agents/skills/orlix-tcti-next-step/scripts/harness-check all

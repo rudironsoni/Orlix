@@ -8,11 +8,11 @@ case "$cmd" in
     ;;
   validate)
     case_id="${2:?case id required}"
-    exec make tcti-golden-elf CASE="$case_id"
+    exec make tcti-gate TARGET=tcti-golden-elf CASE="$case_id"
     ;;
   execute)
     case_id="${2:?case id required}"
-    exec make tcti-golden-elf CASE="$case_id" EXECUTE=switch-debug
+    exec make tcti-gate TARGET=tcti-golden-elf CASE="$case_id" EXECUTE=switch-debug
     ;;
   *)
     printf '%s\n' "usage: $0 [list|validate <case>|execute <case>]" >&2

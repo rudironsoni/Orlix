@@ -28,8 +28,8 @@ Review Orlix TCTI changes for App Store constraints, host `x18/w18`, JIT/MAP_JIT
 
 ## Commands it may run
 
-- `rtk proxy make tcti-appstore-safety-audit`
-- `rtk proxy make tcti-plan-consistency`
+- `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`
+- `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
 - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy make agent-harness-check`
 - `rtk grep -n "x18\\|w18\\|MAP_JIT\\|RWX\\|PROT_EXEC\\|vm_protect"`
