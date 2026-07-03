@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
 set -eu
 repro="${1:?reducer path required}"
-exec make tcti-repro REPRO="$repro"
+exec make tcti-gate TARGET=tcti-repro REPRO="$repro"

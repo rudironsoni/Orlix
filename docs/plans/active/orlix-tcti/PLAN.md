@@ -309,7 +309,7 @@ Initial defaults:
 - `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y` only when TCTI and debug/test configs enable it
 - `CONFIG_ORLIX_TCTI_KUNIT_TEST=y` only in test/debug configs
 
-`make tcti-plan-consistency` must fail if product `development_defconfig` or `release_defconfig` re-enable `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` or `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`, or if they lack `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y`.
+`make tcti-gate TARGET=tcti-plan-consistency` must fail if product `development_defconfig` or `release_defconfig` re-enable `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` or `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`, or if they lack `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y`.
 
 Reason for not flipping release default immediately:
 
@@ -318,10 +318,10 @@ Reason for not flipping release default immediately:
 
 Development default may flip only after:
 
-- `make tcti-contract` passes
-- `make tcti-golden-elf` passes
-- `make tcti-diff-switch` passes
-- `make tcti-appstore-safety-audit` passes
+- `make tcti-gate TARGET=tcti-contract` passes
+- `make tcti-gate TARGET=tcti-golden-elf` passes
+- `make tcti-gate TARGET=tcti-diff-switch` passes
+- `make tcti-gate TARGET=tcti-appstore-safety-audit` passes
 - physical `tcti-init-first-syscall` passes
 
 Release default may flip only after:
@@ -1007,14 +1007,14 @@ Do not expand instruction support by guessing broadly.
 
 No physical-device debugging is allowed until these pass:
 
-- `make tcti-contract`
-- `make tcti-toolchain-check`
-- `make tcti-golden-elf`
-- `make tcti-diff-switch`
-- `make tcti-memory-fuzz`
-- `make tcti-direct-chain-fuzz`
-- `make tcti-appstore-safety-audit`
-- `make tcti-report-schema-check`
+- `make tcti-gate TARGET=tcti-contract`
+- `make tcti-gate TARGET=tcti-toolchain-check`
+- `make tcti-gate TARGET=tcti-golden-elf`
+- `make tcti-gate TARGET=tcti-diff-switch`
+- `make tcti-gate TARGET=tcti-memory-fuzz`
+- `make tcti-gate TARGET=tcti-direct-chain-fuzz`
+- `make tcti-gate TARGET=tcti-appstore-safety-audit`
+- `make tcti-gate TARGET=tcti-report-schema-check`
 
 Each target must:
 
@@ -1023,7 +1023,7 @@ Each target must:
 - produce machine-readable JSON under `Build/TCTI/reports/<target>/report.json`
 - produce human-readable Markdown only as a secondary artifact under `Build/TCTI/reports/<target>/report.md`
 - fail with a reducer artifact under `Build/TCTI/reproducers/<target>/<case-id>.json`
-- print the exact next command to reproduce the failure, `make tcti-repro REPRO=<path>`
+- print the exact next command to reproduce the failure, `make tcti-gate TARGET=tcti-repro REPRO=<path>`
 - use the repository Swift rail driver and Swift/Foundation. Do not add Python for these rails.
 - treat incomplete work as `status=todo`, `passed=false`, and exit non-zero
 
@@ -1079,13 +1079,13 @@ Minimum report schema:
 }
 ```
 
-`make tcti-report-schema-check` validates:
+`make tcti-gate TARGET=tcti-report-schema-check` validates:
 
 - schema fixtures that must pass and must fail
 - every `Build/TCTI/reports/**/report.json`
 - top-level runtime JSON sidecars under `Build/Reports/runtime/*.json`
 
-`make tcti-contract` proves:
+`make tcti-gate TARGET=tcti-contract` proves:
 
 - decoder
 - gadget ABI
@@ -1099,7 +1099,7 @@ Minimum report schema:
 - store-to-translated-page invalidation
 - direct-chain patch/unpatch
 
-`make tcti-toolchain-check` proves the local no-phone toolchain can build static no-libc AArch64 Linux ELF artifacts and records:
+`make tcti-gate TARGET=tcti-toolchain-check` proves the local no-phone toolchain can build static no-libc AArch64 Linux ELF artifacts and records:
 
 - `clang` path and version
 - `ld.lld` path and version
@@ -1110,7 +1110,7 @@ Minimum report schema:
 
 If the local toolchain cannot build the seed ELF, this target must fail or emit `status=todo`. It must not pass.
 
-`make tcti-golden-elf` runs checked-in tiny static AArch64 Linux ELF artifacts:
+`make tcti-gate TARGET=tcti-golden-elf` runs checked-in tiny static AArch64 Linux ELF artifacts:
 
 - `init_001_exit`
 - `init_002_write`
@@ -1141,15 +1141,15 @@ Each corpus item has checked-in source and checked-in golden JSON under `OrlixKe
 - expected TCTI counters
 - forbidden behavior expectations
 
-Golden binaries are generated build artifacts unless a later checkpoint explicitly chooses to check them in. The source and golden JSON are canonical. If the generated binary hash differs from golden JSON, `make tcti-golden-elf` fails and prints either the reducer command or `make tcti-golden-elf-refresh CASE=<case-id>` after inspection.
+Golden binaries are generated build artifacts unless a later checkpoint explicitly chooses to check them in. The source and golden JSON are canonical. If the generated binary hash differs from golden JSON, `make tcti-gate TARGET=tcti-golden-elf` fails and prints either the reducer command or `make tcti-gate TARGET=tcti-golden-elf-refresh CASE=<case-id>` after inspection.
 
-`make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` is the first no-phone execution proof. It may decode and execute only the seed `init_001_exit` MOVZ/SVC subset through the Swift rail's switch-debug harness and capture the guest `exit(42)` syscall event. It must not dispatch by exact full instruction word, host-execute guest code, call real host exit, call Darwin syscalls, implement Linux runtime semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
+`make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` is the first no-phone execution proof. It may decode and execute only the seed `init_001_exit` MOVZ/SVC subset through the Swift rail's switch-debug harness and capture the guest `exit(42)` syscall event. It must not dispatch by exact full instruction word, host-execute guest code, call real host exit, call Darwin syscalls, implement Linux runtime semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
 
-`make tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug` is the second no-phone execution proof. It may decode and execute only the emitted `init_002_write` subset: MOVZ 64-bit `hw=0`, ADR to an X register, and SVC `#0`. It may capture test-harness syscall events for `write(1, "hello\n", 6)` and `exit(0)`. The write capture may read bytes only from file-backed PT_LOAD guest memory. It must not write to host stdout, call Darwin `write`, implement fd tables, implement VFS, implement Linux process or signal semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
+`make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug` is the second no-phone execution proof. It may decode and execute only the emitted `init_002_write` subset: MOVZ 64-bit `hw=0`, ADR to an X register, and SVC `#0`. It may capture test-harness syscall events for `write(1, "hello\n", 6)` and `exit(0)`. The write capture may read bytes only from file-backed PT_LOAD guest memory. It must not write to host stdout, call Darwin `write`, implement fd tables, implement VFS, implement Linux process or signal semantics, use HostAdapter, run UIKit, run simulator gates, run physical-device gates, add production assembly, or implement gadget dispatch.
 
 Physical-device gates must consume the same golden artifacts. They must not invent ad hoc device-only proof cases.
 
-`make tcti-diff-switch` compares the debug switch backend against the gadget backend:
+`make tcti-gate TARGET=tcti-diff-switch` compares the debug switch backend against the gadget backend:
 
 - same decoder
 - same memory model
@@ -1172,7 +1172,7 @@ Do not implement an unrelated switch emulator. It would create a second bug surf
 
 Anti-drift rule: any semantic helper used by gadget lowering must be callable by the switch backend, or the differential test fails. Do not duplicate instruction semantics between `switch_debug.c` and generated gadgets.
 
-`make tcti-memory-fuzz` covers:
+`make tcti-gate TARGET=tcti-memory-fuzz` covers:
 
 - simulated host page sizes: 4 KiB, 16 KiB, 64 KiB
 - fixed Linux guest page size
@@ -1187,7 +1187,7 @@ Anti-drift rule: any semantic helper used by gadget lowering must be callable by
 - stale TLB generation
 - stale `code_generation`
 
-`make tcti-direct-chain-fuzz` covers:
+`make tcti-gate TARGET=tcti-direct-chain-fuzz` covers:
 
 - source outgoing patch slots
 - target incoming patch slots
@@ -1196,7 +1196,7 @@ Anti-drift rule: any semantic helper used by gadget lowering must be callable by
 - no jump into freed targets
 - same-page chaining before cross-page chaining
 
-`make tcti-appstore-safety-audit` fails on:
+`make tcti-gate TARGET=tcti-appstore-safety-audit` fails on:
 
 - host `x18/w18` in TCTI assembly, generated gadgets, inline asm, or compiled TCTI object disassembly
 - guest ELF text mapped host-executable
@@ -1211,7 +1211,7 @@ The x18 scanner must tokenize source/disassembly lines, not comments-only grep. 
 
 If no compiled TCTI objects exist yet, the report may pass with `coverage_warnings` and `scanned_objects=0`. If TCTI object files exist but disassembly cannot be produced, the audit fails.
 
-`make tcti-report-schema-check` validates every TCTI JSON report and runtime JSON sidecar and fails if a required field is absent, hand-written, or not parseable.
+`make tcti-gate TARGET=tcti-report-schema-check` validates every TCTI JSON report and runtime JSON sidecar and fails if a required field is absent, hand-written, or not parseable.
 
 ## Failure Reduction
 
@@ -1675,14 +1675,14 @@ Migration accountability:
 
 | Fork feature | Orlix equivalent | Copied? | Proof |
 | --- | --- | --- | --- |
-| generation-stamped TLB | `arch/orlix` TCTI TLB | no | `make tcti-memory-fuzz` generation tests |
+| generation-stamped TLB | `arch/orlix` TCTI TLB | no | `make tcti-gate TARGET=tcti-memory-fuzz` generation tests |
 | separate translation/code generations | `tcti_mm_cache` generations | no | self-modifying executable-page invalidation test |
-| data-only gadget stream | Orlix gadget program | no | `make tcti-diff-switch` |
+| data-only gadget stream | Orlix gadget program | no | `make tcti-gate TARGET=tcti-diff-switch` |
 | `tcti_entry_block(gadgets, cpu)` shape | `tcti_entry_block(program, cpu, tlb)` | no | gadget ABI contract test |
 | generated gadget tables | Orlix generator | no | deterministic generator audit |
-| `x0-x12` hot mapping | benchmark candidate A only | no | `make tcti-benchmark` mapping comparison |
+| `x0-x12` hot mapping | benchmark candidate A only | no | `make tcti-gate TARGET=tcti-benchmark` mapping comparison |
 | READ/FETCH conflation | split FETCH/READ/WRITE | no | permission contract tests |
-| O(n) invalidation | page-index invalidation | no | `make tcti-direct-chain-fuzz` and invalidation tests |
+| O(n) invalidation | page-index invalidation | no | `make tcti-gate TARGET=tcti-direct-chain-fuzz` and invalidation tests |
 | SIGSEGV recovery | deferred beyond milestone 1 | no | safe pinned TLB tests |
 
 Secondary references read for comparison:
@@ -1745,7 +1745,7 @@ Any future copied source requires:
 13. Add block cache with `code_generation` and page-index invalidation.
 14. Add TLB with `translation_generation` and host-page-size fuzzing.
 15. Add assembly entry/dispatch and first hot gadgets only after switch-debug oracle coverage and differential prerequisites pass.
-16. Add same-page direct chaining and `make tcti-direct-chain-fuzz`.
+16. Add same-page direct chaining and `make tcti-gate TARGET=tcti-direct-chain-fuzz`.
 17. Add hot-register mapping counters and compare mappings A/B/C/D.
 18. Add runtime-validation gate with JSON and Markdown reports.
 19. Expand instructions only from `orlix-a64-opprofile` traces and focused tests.

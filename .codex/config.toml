@@ -22,7 +22,7 @@ description = "Orlix TCTI LLVM inspector: reports exact ELF, Mach-O, disassembly
 description = "Orlix TCTI safety reviewer: checks App Store constraints, x18, JIT/MAP_JIT/RWX/prot_exec, HostAdapter boundaries, defconfigs, and generated-tree policy. See .codex/subagents/tcti-safety-reviewer.md."
 
 [agents."tcti-test-reducer"]
-description = "Orlix TCTI test reducer: converts failed gates into minimal fixtures and verifies make tcti-repro before production patches. See .codex/subagents/tcti-test-reducer.md."
+description = "Orlix TCTI test reducer: converts failed gates into minimal fixtures and verifies make tcti-gate TARGET=tcti-repro before production patches. See .codex/subagents/tcti-test-reducer.md."
 
 [agents."tcti-gadget-reviewer"]
 description = "Orlix TCTI gadget reviewer: later-stage reviewer for gadget ABI and switch-vs-gadget differential tests; refuses until switch-debug oracle and safety audits cover the target. See .codex/subagents/tcti-gadget-reviewer.md."

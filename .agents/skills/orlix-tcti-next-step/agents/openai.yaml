@@ -10,4 +10,4 @@ dependencies:
     - context7
   commands:
     - make agent-harness-check
-    - make tcti-plan-consistency
+    - make tcti-gate TARGET=tcti-plan-consistency

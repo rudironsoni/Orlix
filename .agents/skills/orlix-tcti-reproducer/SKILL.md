@@ -14,7 +14,7 @@ description: Orlix TCTI reproducer agent harness. Use to read reducer artifacts,
 ## Allowed Scope
 
 - Read reducers under `Build/TCTI/reproducers`.
-- Replay reducers through `make tcti-repro`.
+- Replay reducers through `make tcti-gate TARGET=tcti-repro`.
 - Report expected versus actual status.
 
 ## Forbidden Scope
@@ -25,7 +25,7 @@ description: Orlix TCTI reproducer agent harness. Use to read reducer artifacts,
 
 ## Commands It May Run
 
-- `rtk proxy make tcti-repro REPRO=<path>`
+- `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=<path>`
 - `rtk proxy .agents/skills/orlix-tcti-reproducer/scripts/replay <path>`
 
 ## Expected Output

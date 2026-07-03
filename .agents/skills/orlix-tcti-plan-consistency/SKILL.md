@@ -24,7 +24,7 @@ description: Orlix TCTI plan-consistency agent harness. Use for ADR, PLAN, IMPLE
 
 ## Commands It May Run
 
-- `rtk proxy make tcti-plan-consistency`
+- `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
 - `rtk proxy .agents/skills/orlix-tcti-plan-consistency/scripts/plan-consistency`
 
 ## Expected Output

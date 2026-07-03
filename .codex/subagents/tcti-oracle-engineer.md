@@ -33,11 +33,11 @@ Implement no-phone TCTI semantic-oracle work: switch-debug execution, golden ELF
 
 ## Commands it may run
 
-- `rtk proxy make tcti-golden-elf`
-- `rtk proxy make tcti-golden-elf CASE=<case>`
-- `rtk proxy make tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
-- `rtk proxy make tcti-contract`
-- `rtk proxy make tcti-repro REPRO=<path>`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=<case>`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
+- `rtk proxy make tcti-gate TARGET=tcti-contract`
+- `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=<path>`
 - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
 - `rtk proxy xcrun llvm-objdump -d <binary>`
 - `rtk proxy file <binary>`

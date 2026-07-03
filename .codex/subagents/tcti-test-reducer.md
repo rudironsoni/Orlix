@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Convert failed TCTI gates into minimal reproducible fixtures and verify `make tcti-repro` before production behavior is patched.
+Convert failed TCTI gates into minimal reproducible fixtures and verify `make tcti-gate TARGET=tcti-repro` before production behavior is patched.
 
 ## Inputs
 
@@ -27,10 +27,10 @@ Convert failed TCTI gates into minimal reproducible fixtures and verify `make tc
 
 ## Commands it may run
 
-- `rtk proxy make tcti-repro REPRO=<path>`
+- `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=<path>`
 - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
-- `rtk proxy make tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
-- `rtk proxy make tcti-contract`
+- `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=<case> EXECUTE=switch-debug`
+- `rtk proxy make tcti-gate TARGET=tcti-contract`
 - `rtk proxy xcrun llvm-objdump -d <binary>`
 - `rtk proxy shasum -a 256 <path>`
 
@@ -48,4 +48,4 @@ Convert failed TCTI gates into minimal reproducible fixtures and verify `make tc
 
 - Stop if a failure cannot be reproduced locally.
 - Stop if a reducer does not include a command.
-- Stop if `make tcti-repro` does not replay the expected status.
+- Stop if `make tcti-gate TARGET=tcti-repro` does not replay the expected status.

@@ -88,22 +88,22 @@
 - Verification:
   - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`.
   - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`.
-  - `rtk proxy make tcti-simulator-user-fault-reducer`.
-  - `rtk proxy make tcti-post-overlay-null-user-fault-reducer`.
-  - `rtk proxy make tcti-post-bash-mmap-read-fault-reducer`.
-  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
-  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json`.
-  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-simulator-user-fault-reducer`.
+  - `rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-reducer`.
+  - `rtk proxy make tcti-gate TARGET=tcti-post-bash-mmap-read-fault-reducer`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
   - `rtk proxy git diff --check`.
   - `rtk proxy make agent-harness-check`.
   - `rtk proxy make agent-status AREA=orlix-tcti`.
   - `rtk proxy make agent-next AREA=orlix-tcti`.
   - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`.
-  - `rtk proxy make tcti-plan-consistency`.
-  - `rtk proxy make tcti-report-schema-check`.
-  - `rtk proxy make tcti-toolchain-check`.
-  - `rtk proxy make tcti-golden-elf`.
-  - `rtk proxy make tcti-appstore-safety-audit`.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`.
+  - `rtk proxy make tcti-gate TARGET=tcti-toolchain-check`.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf`.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`.
 - Boundary:
   - No custom MCP added.
   - No `tools/agent` added.
@@ -133,7 +133,7 @@
 - Reducer evidence:
   - `Build/TCTI/reports/tcti-post-bash-mmap-read-fault-reducer/report.json`.
   - `Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json` exited 0.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json` exited 0.
 - Root cause evidence:
   - The failing report was `Build/Reports/runtime/tcti-simulator-stability-20260703T085507Z-30348.json`.
   - Its structured runtime event showed `task=sh`, `pid=32`, `faultPC=0x27387c6a8c64`, `faultAddress=0x27387c87ff20`, `access=1`, `si=1`, after `mmap(222)` with `addr=0`, `len=0x80000`, `prot=0x3`, `flags=0x22`.
@@ -163,8 +163,8 @@
 - Verification before commit:
   - `rtk proxy git diff --check`.
   - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`.
-  - `rtk proxy make tcti-post-bash-mmap-read-fault-reducer`.
-  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-post-bash-mmap-read-fault-reducer`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
   - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development`.
   - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release`.
   - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" HOMEBREW_NO_AUTO_UPDATE=1 make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
@@ -226,12 +226,12 @@
 Verification:
 
 ```text
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk proxy make agent-harness-check
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
 rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted
@@ -256,7 +256,7 @@ Results:
   - Added Make target `tcti-simulator-user-fault-reducer`.
   - `simulator-tcti-runtime-stability` now depends on the reducer gate.
   - The reducer gate command is:
-    - `make tcti-simulator-user-fault-reducer`.
+    - `make tcti-gate TARGET=tcti-simulator-user-fault-reducer`.
   - The reducer gate stays no-phone and does not permit production TCTI assembly, gadget dispatch, HostAdapter Linux behavior, generated-tree edits, product defconfig flips, simulator reruns, or phone work.
 - Reducer behavior:
   - Reuses the existing `init_011_static_pie_got_byte_load` static PIE golden ELF.
@@ -272,7 +272,7 @@ Results:
   - `Build/TCTI/simulator_user_fault_reducer/negative/init_011_static_pie_got_byte_load/static-pie-got-unrelocated-byte-load-execution.json`.
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
 - Reducer replay:
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
   - Expected status: `fail`.
   - Actual replay status: `fail`.
   - Replay report: `Build/TCTI/reports/tcti-repro/report.json`.
@@ -311,13 +311,13 @@ rtk proxy git diff --check
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy swift .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift status
 rtk proxy make agent-harness-check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug
-rtk proxy make tcti-simulator-user-fault-reducer
-rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-simulator-user-fault-reducer
+rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
@@ -692,17 +692,17 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
-rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-golden-elf-refresh CASE=init_011_static_pie_got_byte_load
-rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-golden-elf CASE=init_011_static_pie_got_byte_load
-rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug
-rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_011_static_pie_got_byte_load
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release
 ```
@@ -776,11 +776,11 @@ Verification:
 rtk proxy git diff --check
 rtk proxy make agent-harness-check
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
 rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
@@ -849,8 +849,8 @@ Verification:
 
 ```text
 rtk proxy git diff --check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
 ```
 
@@ -882,7 +882,7 @@ Boundary:
   - `readiness_gate_eligible=false`.
 - The preflight command still exits zero when preflight checks pass, but its report cannot satisfy the runtime certification gate.
 - Fixed `tools/tcti/orlix-tcti-gate.swift` reducer replay reporting:
-  - `make tcti-repro` now writes a fresh `Build/TCTI/reports/tcti-repro/report.json`.
+  - `make tcti-gate TARGET=tcti-repro` now writes a fresh `Build/TCTI/reports/tcti-repro/report.json`.
   - Expected-fail reducers produce a passing replay report when actual replay status matches expected status.
   - The report records `expected_status`, `actual_replay_status`, and `counters.replay_exit_code`.
   - `tcti-repro` remains ineligible for release/readiness promotion.
@@ -901,14 +901,14 @@ Verification:
 rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy git diff --check
-rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json
+rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json
 rtk proxy jq '{target, status, passed, expected_status, actual_replay_status, counters, failures}' Build/TCTI/reports/tcti-repro/report.json
 rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_RUNTIME_PREFLIGHT_ONLY=1 REPORT_DIR=/tmp/orlix-runtime-validation-preflight-selected PROFILE=development DESTINATION=iphoneos GATE=tcti-init-first-syscall make runtime-validation
 rtk proxy jq '{status, passed, preflight_only, release_gate_eligible, readiness_gate_eligible, destination, selected_device_id, failure_context, summary}' /tmp/orlix-runtime-validation-preflight-selected/tcti-init-first-syscall-20260702T090717Z-98402.json
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
 rtk proxy make agent-harness-check
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
@@ -983,10 +983,10 @@ Boundary:
 
 - Harness-selected gate after fresh no-phone validation: `first-gadget-init-001-exit`.
 - Selected command:
-  - `make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+  - `make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
 - Roadmap correction:
-  - Updated `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` so the selected first-gadget gate validates with `rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
-  - The prior validation command `rtk proxy make tcti-diff-switch` rewrote `Build/TCTI/diff_switch/init_001_exit/diff.json` back to switch-debug baseline mode, which made the first-gadget pass artifact disappear from harness status.
+  - Updated `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` so the selected first-gadget gate validates with `rtk proxy make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+  - The prior validation command `rtk proxy make tcti-gate TARGET=tcti-diff-switch` rewrote `Build/TCTI/diff_switch/init_001_exit/diff.json` back to switch-debug baseline mode, which made the first-gadget pass artifact disappear from harness status.
 - Gadget diff report:
   - `Build/TCTI/reports/tcti-diff-switch/report.json`.
   - status `pass`.
@@ -1002,7 +1002,7 @@ Boundary:
   - divergent fields `[]`.
   - checked fields include GPRs, SP, PC, PSTATE/NZCV, TPIDR_EL0, memory writes, exit kind/code, and fault address.
 - Negative reducer replay:
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json`.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json`.
   - Replayed the expected negative gadget x0 divergence.
   - Expected status `fail`.
   - Actual replay status `fail`.
@@ -1149,7 +1149,7 @@ Boundary:
 ### Checkpoint: HostAdapter Native Path Quarantined From App Store Safety Gate
 
 - Harness-selected gate: `appstore-safety`.
-- Selected command: `make tcti-appstore-safety-audit`.
+- Selected command: `make tcti-gate TARGET=tcti-appstore-safety-audit`.
 - Why selected: the prior safety audit correctly failed on HostAdapter native hosted-exec behavior after the audit expanded to HostAdapter memory/runtime product sources.
 - Parallel review lanes:
   - `tcti-planner` confirmed the original scanner-only envelope could not remediate the product failure.
@@ -1180,7 +1180,7 @@ Reports:
 Reducer:
 
 - `Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json`.
-- Replay result: `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json` produced expected status `pass`, actual status `pass`, exit code `0`.
+- Replay result: `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json` produced expected status `pass`, actual status `pass`, exit code `0`.
 
 Fresh safety report state:
 
@@ -1208,13 +1208,13 @@ Verification:
 rtk proxy git diff --check
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy make agent-harness-check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-appstore-safety-audit/appstore-safety-pass-regression.json
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
@@ -1253,7 +1253,7 @@ Boundary:
   - `Build/TCTI/reports/tcti-memory-fuzz/report.json`.
   - `Build/TCTI/reports/tcti-direct-chain-fuzz/report.json`.
 - Executed harness-selected no-phone gadget gate:
-  - `make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+  - `make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
   - `Build/TCTI/reports/tcti-diff-switch/report.json`.
   - `Build/TCTI/diff_switch/init_001_exit/diff.json`.
 - The first gadget diff now proves:
@@ -1438,7 +1438,7 @@ Boundary:
 ### Checkpoint: CPU Model Switch-Debug Execution Gate
 
 - Harness-selected gate implemented: `switch-init-010-cpu-model`.
-- Selected command: `make tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model EXECUTE=switch-debug`.
 - The switch-debug harness now executes `init_010_cpu_model` and captures:
   - fixed virtual CPU model payload `orlix-aarch64-v1\n` from file-backed PT_LOAD bytes via decoded `ADR x1`.
   - `exit(0)` as a captured test-harness syscall event.
@@ -1457,7 +1457,7 @@ Boundary:
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-cpu-model-wrong-model.json`.
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-cpu-model-unsupported-ctr-el0.json`.
 - Replayed reducer:
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-cpu-model-unsupported-ctr-el0.json`.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-cpu-model-unsupported-ctr-el0.json`.
   - expected status `fail`.
   - actual replay status `fail`.
   - actual replay exit code `2`.
@@ -1482,7 +1482,7 @@ Boundary:
 ### Checkpoint: CPU Model Golden ELF Structural Gate
 
 - Harness-selected gate implemented: `golden-init-010-cpu-model-structural`.
-- Selected command: `make tcti-golden-elf CASE=init_010_cpu_model`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model`.
 - Added no-libc AArch64 Linux source:
   - `OrlixKernel/Tests/TCTI/golden_elf/init_010_cpu_model/init_010_cpu_model.S`.
 - Added canonical metadata:
@@ -1531,7 +1531,7 @@ Boundary:
 ### Checkpoint: Memory Golden ELF Structural Gate
 
 - Harness-selected gate implemented: `golden-init-006-memory-structural`.
-- Selected command: `make tcti-golden-elf CASE=init_006_memory`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory`.
 - Added no-libc AArch64 Linux source:
   - `OrlixKernel/Tests/TCTI/golden_elf/init_006_memory/init_006_memory.S`.
 - Added canonical metadata:
@@ -1580,7 +1580,7 @@ Boundary:
 ### Checkpoint: Memory Switch-Debug Execution Gate
 
 - Harness-selected gate implemented: `switch-init-006-memory`.
-- Selected command: `make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug`.
 - Why selected: `agent-next` selected the first non-passing roadmap gate after `golden-init-006-memory-structural` passed.
 - Added narrow decoded switch-debug semantics for the existing `init_006_memory` fixture:
   - `ADR x1, value` computes `x1 = pc + imm`.
@@ -1602,7 +1602,7 @@ Boundary:
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json`.
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-unsupported-store.json`.
 - Replayed reducer:
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json` produced expected `fail`, actual `fail`, replay exit code `2`.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json` produced expected `fail`, actual `fail`, replay exit code `2`.
 
 Boundary:
 
@@ -1622,7 +1622,7 @@ Boundary:
 ### Checkpoint: Branch Switch-Debug Execution And Harness No-Phone Roadmap Guard
 
 - Harness-selected gate implemented: `switch-init-005-branches`.
-- Selected command: `make tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches EXECUTE=switch-debug`.
 - Added decoded switch-debug branch support in `tools/tcti/orlix-tcti-gate.swift`:
   - compare-and-branch immediate decode for 64-bit `CBZ` only.
   - unconditional branch immediate decode for `B`.
@@ -1639,7 +1639,7 @@ Boundary:
 - Reducer:
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-branches-unsupported-cbnz.json`.
 - Reducer replay:
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-branches-unsupported-cbnz.json` produced expected `fail`, actual `fail`, replay exit code `2`.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-branches-unsupported-cbnz.json` produced expected `fail`, actual `fail`, replay exit code `2`.
 - Execution report:
   - `Build/TCTI/golden_elf/init_005_branches/execution.json`.
 - Captured execution:
@@ -1693,13 +1693,13 @@ Boundary:
   - TCTI must return to its loop without invoking exit-to-user work again after calling the current helper.
   - added a required test for no double-run of exit-to-user work.
 - Added executable proof obligations:
-  - `make tcti-contract`
-  - `make tcti-golden-elf`
-  - `make tcti-diff-switch`
-  - `make tcti-memory-fuzz`
-  - `make tcti-direct-chain-fuzz`
-  - `make tcti-appstore-safety-audit`
-  - `make tcti-report-schema-check`
+  - `make tcti-gate TARGET=tcti-contract`
+  - `make tcti-gate TARGET=tcti-golden-elf`
+  - `make tcti-gate TARGET=tcti-diff-switch`
+  - `make tcti-gate TARGET=tcti-memory-fuzz`
+  - `make tcti-gate TARGET=tcti-direct-chain-fuzz`
+  - `make tcti-gate TARGET=tcti-appstore-safety-audit`
+  - `make tcti-gate TARGET=tcti-report-schema-check`
 - Added JSON-first report contracts, reducer artifact requirements, and failure-reduction rules before physical-device debugging.
 - Added hard guardrails for:
   - host `x18/w18` token and object-disassembly audit
@@ -2316,17 +2316,17 @@ Boundary:
   - both keep `CONFIG_ORLIX_HOSTED_EXEC_TCTI` unset
   - both no longer enable `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`
 - Added top-level Make targets routed through a Swift rail driver:
-  - `make tcti-plan-consistency`
-  - `make tcti-report-schema-check`
-  - `make tcti-toolchain-check`
-  - `make tcti-contract`
-  - `make tcti-golden-elf`
-  - `make tcti-golden-elf-refresh`
-  - `make tcti-diff-switch`
-  - `make tcti-memory-fuzz`
-  - `make tcti-direct-chain-fuzz`
-  - `make tcti-appstore-safety-audit`
-  - `make tcti-repro`
+  - `make tcti-gate TARGET=tcti-plan-consistency`
+  - `make tcti-gate TARGET=tcti-report-schema-check`
+  - `make tcti-gate TARGET=tcti-toolchain-check`
+  - `make tcti-gate TARGET=tcti-contract`
+  - `make tcti-gate TARGET=tcti-golden-elf`
+  - `make tcti-gate TARGET=tcti-golden-elf-refresh`
+  - `make tcti-gate TARGET=tcti-diff-switch`
+  - `make tcti-gate TARGET=tcti-memory-fuzz`
+  - `make tcti-gate TARGET=tcti-direct-chain-fuzz`
+  - `make tcti-gate TARGET=tcti-appstore-safety-audit`
+  - `make tcti-gate TARGET=tcti-repro`
 - Added `tools/tcti/orlix-tcti-gate.swift`.
   - Uses Swift/Foundation for the repo rails.
   - Does not add Python tooling for this checkpoint.
@@ -2365,17 +2365,17 @@ Boundary:
 Evidence:
 
 ```sh
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 ```
 
 ### Checkpoint: No-Phone Memory Fuzz Gate
 
 - Harness-selected gate: `tcti-memory-fuzz`.
-- Selected command: `make tcti-memory-fuzz`.
+- Selected command: `make tcti-gate TARGET=tcti-memory-fuzz`.
 - Why selected: `agent-status` reported `tcti-contract=pass` and selected `tcti-memory-fuzz` as the next eligible runtime-preflight gate. Physical device, release, and readiness gates remained ineligible.
 - Implemented the gate as a no-phone Swift/Foundation contract model in `tools/tcti/orlix-tcti-gate.swift`.
 - Positive contracts covered:
@@ -2406,7 +2406,7 @@ Evidence so far:
 
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
-rtk proxy make tcti-memory-fuzz
+rtk proxy make tcti-gate TARGET=tcti-memory-fuzz
 ```
 
 Full checkpoint verification:
@@ -2415,17 +2415,17 @@ Full checkpoint verification:
 rtk proxy git diff --check
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy make agent-harness-check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
-rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy make tcti-contract
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-memory-fuzz
-rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/memory-fuzz-pass-regression.json
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/fetch-exec-permission.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-contract
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-memory-fuzz
+rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/memory-fuzz-pass-regression.json
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/fetch-exec-permission.json; rc=$?; echo rc=$rc; exit 0'
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
@@ -2458,16 +2458,16 @@ Boundary:
 All five passed and wrote reports under `Build/TCTI/reports/`.
 
 ```sh
-rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-contract; rc=$?; echo rc=$rc; exit 0'
 ```
 
 `tcti-contract` emitted `status=todo`, wrote `Build/TCTI/reports/tcti-contract/report.json`, wrote `Build/TCTI/reproducers/tcti-contract/todo.json`, and exited non-zero through Make (`rc=2`).
 
 ```sh
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/todo.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/todo.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
-The reducer replayed `make tcti-contract` and exited non-zero through Make (`rc=2`).
+The reducer replayed `make tcti-gate TARGET=tcti-contract` and exited non-zero through Make (`rc=2`).
 
 ```sh
 rtk proxy sh -c 'ORLIX_RUNTIME_PREFLIGHT_ONLY=1 DESTINATION=iphoneos GATE=tcti-init-first-syscall tools/runtime/orlix-runtime-validation.sh; rc=$?; echo rc=$rc; exit 0'
@@ -2496,7 +2496,7 @@ Boundary:
 
 ### Checkpoint: Seed Golden ELF Contract Validation
 
-- Turned `make tcti-contract` from a pure TODO rail into a partial real no-phone contract rail.
+- Turned `make tcti-gate TARGET=tcti-contract` from a pure TODO rail into a partial real no-phone contract rail.
 - `tcti-contract` still exits non-zero with `status=todo` because deeper CPU execution contract groups are intentionally not implemented yet.
 - Real contract groups now passing:
   - report schema status representation for `pass`, `fail`, `todo`, `skipped`, `error`, and `evidence`
@@ -2510,7 +2510,7 @@ Boundary:
   - gadget ABI and register commit-back execution
   - `FETCH`/`READ`/`WRITE` memory execution
   - TLB, block-cache, invalidation, and direct-chain execution
-- Strengthened `make tcti-golden-elf` for `init_001_exit`.
+- Strengthened `make tcti-gate TARGET=tcti-golden-elf` for `init_001_exit`.
   - Builds the seed no-libc AArch64 Linux ELF.
   - Verifies source SHA256.
   - Verifies binary SHA256 against `golden.json`.
@@ -2522,7 +2522,7 @@ Boundary:
     - `svc #0`
 - Added negative golden metadata fixture:
   - `tools/tcti/fixtures/golden_elf/init_001_exit_wrong_binary_sha.json`
-- Strengthened `make tcti-repro REPRO=<path>` output.
+- Strengthened `make tcti-gate TARGET=tcti-repro REPRO=<path>` output.
   - Prints target.
   - Prints case id.
   - Prints original command.
@@ -2542,17 +2542,17 @@ Evidence:
 
 ```sh
 rtk proxy git diff --check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 ```
 
 All passed.
 
 ```sh
-rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-contract; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -2563,12 +2563,12 @@ Result:
 - Make exited non-zero with `rc=2`.
 
 ```sh
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/todo.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/todo.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
 
-- reducer replayed `make tcti-contract`.
+- reducer replayed `make tcti-gate TARGET=tcti-contract`.
 - expected status was `todo`.
 - actual replay status was `todo`.
 - actual replay exit code was `2`.
@@ -2598,7 +2598,7 @@ Boundary:
 
 ### Checkpoint: Seed ELF Switch-Debug Execution
 
-- Added `make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`.
+- Added `make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`.
 - The execution mode validates the existing seed golden metadata before execution:
   - source SHA256
   - binary SHA256
@@ -2646,18 +2646,18 @@ Evidence:
 
 ```sh
 rtk proxy git diff --check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
 ```
 
 All passed.
 
 ```sh
-rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-contract; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -2667,7 +2667,7 @@ Result:
 - Make exited non-zero with `rc=2`
 
 ```sh
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-wrong-syscall.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-wrong-syscall.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -2728,7 +2728,7 @@ Boundary:
 ### Checkpoint: Decoded Seed ELF Switch Semantics
 
 - Replaced exact full-word switch execution with a tiny decoded AArch64 semantic layer for the seed ELF.
-- `make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` still captures guest `exit(42)`.
+- `make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` still captures guest `exit(42)`.
 - Execution now decodes instructions into `decoded_instructions` before switch-debug semantics run.
 - MOVZ decoder mask and fields:
   - class predicate: `(raw & 0x1f80_0000) == 0x1280_0000`
@@ -2771,18 +2771,18 @@ Evidence:
 
 ```sh
 rtk proxy git diff --check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
 ```
 
 All passed.
 
 ```sh
-rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-contract; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -2792,7 +2792,7 @@ Result:
 - Make exited non-zero with `rc=2`
 
 ```sh
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-unsupported-svc-immediate.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-unsupported-svc-immediate.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -2849,7 +2849,7 @@ Boundary:
   - ADR to an X register, signed 21-bit immediate
   - SVC `#0`
 - Added PT_LOAD file-backed byte reads to the tiny ELF harness so write capture can read the guest buffer without host-executing guest text or calling host syscalls.
-- `make tcti-golden-elf CASE=init_002_write` now verifies:
+- `make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write` now verifies:
   - source SHA256
   - binary SHA256
   - ELF64 AArch64 executable shape
@@ -2857,7 +2857,7 @@ Boundary:
   - expected syscall shape
   - emitted instruction words
   - `hello\n` message bytes in file-backed PT_LOAD guest memory
-- `make tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug` captures:
+- `make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write EXECUTE=switch-debug` captures:
   - `write(1, "hello\n", 6)`
   - `exit(0)`
 - Added write-specific negative execution fixtures:
@@ -2930,12 +2930,12 @@ Evidence:
 
 ```sh
 rtk proxy git diff --check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk proxy make agent-harness-check
 rtk proxy make agent-hooks-check
 rtk proxy make agent-skills-check
@@ -3018,10 +3018,10 @@ Boundary:
 ### Checkpoint: Stack Golden ELF Executes In Switch Backend
 
 - Harness-selected gate: `switch-init-003-stack`.
-- Selected command: `make tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug`.
 - Why selected: `switch-init-002-write` was pass and `init_003_stack` validation/execution artifacts were missing.
 - Added `init_003_stack` no-libc AArch64 Linux golden ELF fixture.
-- Generated canonical `golden.json` with `make tcti-golden-elf-refresh CASE=init_003_stack`.
+- Generated canonical `golden.json` with `make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_003_stack`.
 - Exact emitted instruction words:
   - `0x910003e0` `mov x0, sp`
   - `0xd10043ff` `sub sp, sp, #0x10`
@@ -3050,8 +3050,8 @@ Boundary:
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-stack-invalid-memory.json`
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-stack-unsupported-preindex.json`
 - Replayed reducers:
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-stack-invalid-memory.json`: expected `fail`, actual `fail`, nonzero replay exit.
-  - `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-stack-unsupported-preindex.json`: expected `fail`, actual `fail`, nonzero replay exit.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-stack-invalid-memory.json`: expected `fail`, actual `fail`, nonzero replay exit.
+  - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-stack-unsupported-preindex.json`: expected `fail`, actual `fail`, nonzero replay exit.
 - `tcti-contract` now lists real passing group:
   - decoded switch-debug executes `init_003_stack` and captures stack-derived `exit(42)`.
 - `tcti-contract` intentionally remains `todo` for:
@@ -3077,7 +3077,7 @@ Boundary:
   - captured syscall is `exit(42)`.
 - After the fix, the harness selected the next eligible gate:
   - `switch-init-004-tls`
-  - command `make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug`
+  - command `make tcti-gate TARGET=tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug`
 
 Evidence:
 
@@ -3087,7 +3087,7 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
 ```
 
 All passed. Boundary:
@@ -3102,10 +3102,10 @@ All passed. Boundary:
 ### Checkpoint: TLS Golden ELF Executes In Switch Backend
 
 - Harness-selected gate: `switch-init-004-tls`.
-- Selected command: `make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug`.
 - Why selected: `switch-init-003-stack` passed and `init_004_tls` validation/execution artifacts were missing.
 - Added `init_004_tls` no-libc AArch64 Linux golden ELF fixture.
-- Generated canonical `golden.json` with `make tcti-golden-elf-refresh CASE=init_004_tls`.
+- Generated canonical `golden.json` with `make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_004_tls`.
 - Exact emitted instruction words:
   - `0xd2800541` `mov x1, #0x2a`
   - `0xd51bd041` `msr TPIDR_EL0, x1`
@@ -3144,8 +3144,8 @@ Reducers:
 
 Reducer replay:
 
-- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-tls-unsupported-sysreg.json`: expected `fail`, actual `fail`, exit code `2`.
-- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-tls-wrong-exit.json`: expected `fail`, actual `fail`, exit code `2`.
+- `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-tls-unsupported-sysreg.json`: expected `fail`, actual `fail`, exit code `2`.
+- `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-tls-wrong-exit.json`: expected `fail`, actual `fail`, exit code `2`.
 
 Contract state:
 
@@ -3171,14 +3171,14 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_004_tls
-rtk proxy make tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy sh -c 'make tcti-contract; rc=$?; echo rc=$rc; exit 0'
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_004_tls
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_004_tls EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-contract; rc=$?; echo rc=$rc; exit 0'
 ```
 
 All pass except `tcti-contract`, which correctly reports `todo` with exit code `2`.
@@ -3200,7 +3200,7 @@ Boundary:
 ### Checkpoint: Switch Differential Gate For Exit ELF
 
 - Harness-selected gate: `diff-switch-init-001-exit`.
-- Selected command: `make tcti-diff-switch CASE=init_001_exit`.
+- Selected command: `make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit`.
 - Why selected: `switch-init-004-tls` passed and `tcti-diff-switch` was the first non-passing roadmap gate with prerequisites satisfied.
 - Implemented a Swift harness diff-preparation rail for `CASE=init_001_exit`.
 - Scope stayed inside `tools/tcti/orlix-tcti-gate.swift` and `docs/plans/active/orlix-tcti/IMPLEMENT.md`.
@@ -3222,7 +3222,7 @@ Reducer:
 
 Reducer replay:
 
-- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-exit-code-divergence.json`: expected `fail`, actual `fail`, exit code `2`.
+- `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-exit-code-divergence.json`: expected `fail`, actual `fail`, exit code `2`.
 
 Harness state after checkpoint:
 
@@ -3239,14 +3239,14 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
-rtk proxy make tcti-diff-switch
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-exit-code-divergence.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-diff-switch
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-exit-code-divergence.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
 All passed except the reducer replay command, which correctly returned `rc=2` for expected `fail`.
@@ -3268,7 +3268,7 @@ Boundary:
 ### Checkpoint: First Exit Gadget Differential
 
 - Harness-selected gate: `first-gadget-init-001-exit`.
-- Selected command: `make tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
+- Selected command: `make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget`.
 - Harness selected this gate because `diff-switch-init-001-exit` and `appstore-safety` were passing and `first-gadget-init-001-exit` was the next eligible non-passing roadmap gate.
 - Implemented bounded no-phone `BACKEND=gadget` handling in the Swift rail for `init_001_exit` only.
 - Candidate backend: `gadget-data-program`.
@@ -3294,7 +3294,7 @@ Reports:
 Reducer:
 
 - `Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json`
-- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json` replayed expected `fail`, actual `fail`, exit code `2`.
+- `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json` replayed expected `fail`, actual `fail`, exit code `2`.
 
 Harness state checkpoint:
 
@@ -3314,7 +3314,7 @@ Harness state checkpoint:
   - Added `tcti-post-bash-mmap-read-fault-reducer`.
   - Report: `Build/TCTI/reports/tcti-post-bash-mmap-read-fault-reducer/report.json`.
   - Reducer: `Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
-  - Replay: `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json` exited `0`.
+  - Replay: `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json` exited `0`.
 - Runtime fix:
   - `tcti_handle_user_fault()` now synchronizes the hosted user fault window after Linux faults in a valid TCTI user page.
   - This keeps Linux MM as the authority and only refreshes the host-visible mapping window before TCTI retries the instruction.
@@ -3346,12 +3346,12 @@ Harness state checkpoint:
   - `rtk proxy make agent-status AREA=orlix-tcti`: pass, simulator stability pass recorded.
   - `rtk proxy make agent-next AREA=orlix-tcti`: pass, next selected gate is physical first-syscall.
   - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: pass.
-  - `rtk proxy make tcti-plan-consistency`: pass.
-  - `rtk proxy make tcti-report-schema-check`: pass.
-  - `rtk proxy make tcti-toolchain-check`: pass.
-  - `rtk proxy make tcti-golden-elf`: pass.
-  - `rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`: pass.
-  - `rtk proxy make tcti-appstore-safety-audit`: pass.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: pass.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: pass.
+  - `rtk proxy make tcti-gate TARGET=tcti-toolchain-check`: pass.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf`: pass.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`: pass.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`: pass.
   - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development`: pass.
   - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release`: pass.
 
@@ -3409,7 +3409,7 @@ Boundary:
 ### Checkpoint: Structural Golden `init_007_mprotect`
 
 - Harness-selected gate: `golden-init-007-mprotect-structural`.
-- Selected command: `make tcti-golden-elf CASE=init_007_mprotect`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect`.
 - Why selected: all earlier no-phone golden structural and switch-debug gates through `switch-init-006-memory` were passing, making the next missing ready gate the structural `mprotect` fixture.
 - Added fixture:
   - `OrlixKernel/Tests/TCTI/golden_elf/init_007_mprotect/init_007_mprotect.S`.
@@ -3442,8 +3442,8 @@ Boundary:
 
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
-rtk proxy make tcti-golden-elf-refresh CASE=init_007_mprotect
-rtk proxy make tcti-golden-elf CASE=init_007_mprotect
+rtk proxy make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_007_mprotect
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect
 ```
 
 - Boundary:
@@ -3465,7 +3465,7 @@ rtk proxy make tcti-golden-elf CASE=init_007_mprotect
 ### Checkpoint: Switch-Debug Executes `init_007_mprotect`
 
 - Harness-selected gate: `switch-init-007-mprotect`.
-- Selected command: `make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug`.
 - Why selected: `golden-init-007-mprotect-structural` passed and the next roadmap gate was the no-phone switch-debug execution proof for the same case.
 - Added switch-debug semantic behavior:
   - capture guest Linux syscall `226` as `mprotect`;
@@ -3485,7 +3485,7 @@ rtk proxy make tcti-golden-elf CASE=init_007_mprotect
 - Replayed reducer:
 
 ```text
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-mprotect-exec-prot.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-mprotect-exec-prot.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -3501,7 +3501,7 @@ rc=2
 
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
-rtk proxy make tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect EXECUTE=switch-debug
 ```
 
 - Harness follow-up:
@@ -3535,7 +3535,7 @@ rtk proxy make agent-task-envelope-check AREA=orlix-tcti
 ### Checkpoint: Structural Golden `init_008_self_modify`
 
 - Harness-selected gate: `golden-init-008-self-modify-structural`.
-- Selected command: `make tcti-golden-elf CASE=init_008_self_modify`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify`.
 - Why selected: `switch-init-007-mprotect` passed and the harness advanced to the next structural no-phone golden ELF gate.
 - Added fixture:
   - `OrlixKernel/Tests/TCTI/golden_elf/init_008_self_modify/init_008_self_modify.S`.
@@ -3567,8 +3567,8 @@ rtk proxy make agent-task-envelope-check AREA=orlix-tcti
 
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
-rtk proxy make tcti-golden-elf-refresh CASE=init_008_self_modify
-rtk proxy make tcti-golden-elf CASE=init_008_self_modify
+rtk proxy make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_008_self_modify
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify
 ```
 
 - Boundary:
@@ -3590,7 +3590,7 @@ rtk proxy make tcti-golden-elf CASE=init_008_self_modify
 ### Checkpoint: Switch-Debug Executes `init_008_self_modify`
 
 - Harness-selected gate: `switch-init-008-self-modify`.
-- Selected command: `make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug`.
 - Why selected: `golden-init-008-self-modify-structural` passed and the harness advanced to the next switch-debug execution proof for the same case.
 - Added switch-debug semantic behavior:
   - capture register-based 64-bit `STR` to file-backed guest `PT_LOAD` bytes as a test-harness memory-write event;
@@ -3616,7 +3616,7 @@ rtk proxy make tcti-golden-elf CASE=init_008_self_modify
 - Replayed reducer:
 
 ```text
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-self-modify-invalid-write.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-self-modify-invalid-write.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -3637,7 +3637,7 @@ rc=2
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
-rtk proxy make tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify EXECUTE=switch-debug
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
@@ -3662,7 +3662,7 @@ rtk proxy make agent-task-envelope-check AREA=orlix-tcti
 ### Checkpoint: Structural Golden `init_009_faults`
 
 - Harness-selected gate: `golden-init-009-faults-structural`.
-- Selected command: `make tcti-golden-elf CASE=init_009_faults`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults`.
 - Why selected: `switch-init-008-self-modify` passed and the harness advanced to the next structural no-phone golden ELF gate.
 - Added fixture:
   - `OrlixKernel/Tests/TCTI/golden_elf/init_009_faults/init_009_faults.S`.
@@ -3693,8 +3693,8 @@ rtk proxy make agent-task-envelope-check AREA=orlix-tcti
 
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
-rtk proxy make tcti-golden-elf-refresh CASE=init_009_faults
-rtk proxy make tcti-golden-elf CASE=init_009_faults
+rtk proxy make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_009_faults
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults
 ```
 
 - Boundary:
@@ -3716,7 +3716,7 @@ rtk proxy make tcti-golden-elf CASE=init_009_faults
 ### Checkpoint: Switch-Debug Executes `init_009_faults`
 
 - Harness-selected gate: `switch-init-009-faults`.
-- Selected command: `make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug`.
 - Why selected: `golden-init-009-faults-structural` passed and the harness advanced to the next switch-debug execution proof for the same case.
 - Added switch-debug semantic behavior:
   - capture failed file-backed guest memory reads as a structured `guest_memory_fault`;
@@ -3741,7 +3741,7 @@ rtk proxy make tcti-golden-elf CASE=init_009_faults
 - Replayed reducer:
 
 ```text
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-faults-wrong-address.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-faults-wrong-address.json; rc=$?; echo rc=$rc; exit 0'
 ```
 
 Result:
@@ -3762,7 +3762,7 @@ rc=2
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
-rtk proxy make tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults EXECUTE=switch-debug
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
@@ -3792,15 +3792,15 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
-rtk proxy make tcti-diff-switch
-rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy sh -c "make tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json; rc=$?; echo rc=$rc; exit 0"
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-diff-switch
+rtk proxy make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy sh -c "make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-diff-switch/init_001_exit-gadget-x0-divergence.json; rc=$?; echo rc=$rc; exit 0"
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release
@@ -3848,8 +3848,8 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
 ```
 
 Boundary:
@@ -3867,10 +3867,114 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Generic TCTI Gate Interface And Current Simulator Blocker
+
+- Harness interface changed to one generic TCTI gate dispatcher:
+  - `make tcti-gate TARGET=<gate>`
+  - `make tcti-gate-list`
+- The Makefile no longer exposes one Make target per TCTI gate.
+- Active harness docs, skills, subagent prompts, and roadmap command envelopes now use `make tcti-gate TARGET=...` for TCTI gate execution.
+- Harness enforcement now fails if the Makefile reintroduces a one-target-per-gate TCTI fanout.
+- `make tcti-gate-list` lists the supported TCTI gate IDs for agents and humans.
+
+No-phone MOVI 16B checkpoint:
+
+- Gate: `tcti-simd-movi-16b-fix`
+- Command: `make tcti-gate TARGET=tcti-simd-movi-16b-fix`
+- Original simulator evidence:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260703T105406Z-27160.json`
+  - Unsupported instruction: `0x4f06e7e0`
+  - Decoded as `movi.16b v0, #0xdf`
+  - Associated signal: SIGILL, `signal=4`
+- No-phone fixture:
+  - `tools/tcti/fixtures/golden_elf/init_001_exit_simd_movi_16b.S`
+- Execution report:
+  - `Build/TCTI/simd_movi_16b_fix/positive/init_001_exit_simd_movi_16b/execution.json`
+- Reducer:
+  - `Build/TCTI/reproducers/tcti-simd-movi-16b-fix/simd-movi-16b-pass-regression.json`
+- Gate report:
+  - `Build/TCTI/reports/tcti-simd-movi-16b-fix/report.json`
+- The gate now validates recorded simulator evidence plus the no-phone regression, instead of requiring the latest simulator run to keep failing at the already-reduced MOVI instruction.
+
+Current harness-selected runtime blocker:
+
+- `agent-next` selects `simulator-tcti-runtime-stability`.
+- Selected command:
+
+```text
+make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max
+```
+
+- Latest simulator report:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260703T112917Z-26978.json`
+- Result:
+  - `status=fail`
+  - `summary=Simulator TCTI runtime captured a fatal post-launch error.`
+  - selected simulator: `Orlix-iPhone-15-Pro-Max`
+  - selected simulator UDID: `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`
+  - `simulator_single_booted=true`
+  - `tcti_runtime_events.first_svc.syscall=178`
+  - `tcti_runtime_events.static_pie_image.task=sh`
+  - `tcti_runtime_events.signaled_process.pid=33`
+  - `tcti_runtime_events.signaled_process.signal=6`
+- Fatal artifact:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260703T112917Z-26978.artifacts/tcti-simulator-fatal-runtime.txt`
+
+Next work:
+
+- Reduce the current simulator `sh` SIGABRT (`signal=6`) into a no-phone reducer before production patching.
+- Keep physical-device gates blocked until simulator stability passes.
+
+Verification in this checkpoint:
+
+```text
+rtk proxy git diff --check
+rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
+rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift
+rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh
+rtk proxy make tcti-gate-list
+rtk proxy make agent-harness-check
+rtk proxy make agent-hooks-check
+rtk proxy make agent-skills-check
+rtk proxy make agent-subagents-check
+rtk proxy make agent-mcp-check
+rtk proxy make agent-status AREA=orlix-tcti
+rtk proxy make agent-next AREA=orlix-tcti
+rtk proxy make agent-task-envelope-check AREA=orlix-tcti
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-simd-movi-16b-fix
+rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-movi-16b-fix/simd-movi-16b-pass-regression.json
+rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" HOMEBREW_NO_AUTO_UPDATE=1 make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max
+```
+
+Results:
+
+- Generic harness and no-phone gates above passed.
+- Simulator stability gate failed with structured report `Build/Reports/runtime/tcti-simulator-stability-20260703T112917Z-26978.json`.
+- Only `Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D)` was booted during the simulator check.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No physical-device gate run.
+- No production TCTI assembly.
+- No gadget dispatch added.
+- No HostAdapter behavior added.
+- No Darwin syscall behavior added.
+- No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
+- No product defconfig flip.
+- Release and readiness gates remain ineligible until simulator stability passes.
+
 ### Checkpoint: Static PIE Relocation Marker Uses Structured Runtime Evidence
 
 - Harness-selected gate: `tcti-static-pie-relocation-fix`.
-- Selected command: `make tcti-static-pie-relocation-fix`.
+- Selected command: `make tcti-gate TARGET=tcti-static-pie-relocation-fix`.
 - Why selected: the current first-syscall simulator gate and no-phone reducer prerequisites were satisfied, but the static PIE relocation fix marker report was stale or failing at current `HEAD`.
 - Simulator prerequisite refreshed on the single pinned simulator:
   - `Orlix-iPhone-15-Pro-Max`
@@ -3948,20 +4052,20 @@ Reducers:
 
 Reducer replay:
 
-- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/vma-offset-alias-broken-offset-selector.json`: expected `fail`, actual `fail`, exit code `0`.
+- `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-memory-fuzz/vma-offset-alias-broken-offset-selector.json`: expected `fail`, actual `fail`, exit code `0`.
 
 Validation:
 
 - `git diff --check`: pass.
 - `make agent-harness-check`: pass.
 - `make agent-task-envelope-check AREA=orlix-tcti`: pass.
-- `make tcti-plan-consistency`: pass.
-- `make tcti-report-schema-check`: pass.
-- `make tcti-toolchain-check`: pass.
-- `make tcti-golden-elf`: pass.
-- `make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`: pass.
-- `make tcti-memory-fuzz`: pass.
-- `make tcti-appstore-safety-audit`: pass.
+- `make tcti-gate TARGET=tcti-plan-consistency`: pass.
+- `make tcti-gate TARGET=tcti-report-schema-check`: pass.
+- `make tcti-gate TARGET=tcti-toolchain-check`: pass.
+- `make tcti-gate TARGET=tcti-golden-elf`: pass.
+- `make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`: pass.
+- `make tcti-gate TARGET=tcti-memory-fuzz`: pass.
+- `make tcti-gate TARGET=tcti-appstore-safety-audit`: pass.
 - `make -f OrlixKernel/Makefile kunit PROFILE=development`: pass.
 - `make -f OrlixKernel/Makefile kunit PROFILE=release`: pass.
 - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall`: pass on `Orlix-iPhone-15-Pro-Max`.
@@ -4024,11 +4128,11 @@ Boundary:
   - `rtk proxy git diff --check`
   - `rtk proxy make agent-harness-check`
   - `rtk proxy make agent-mcp-check`
-  - `rtk proxy make tcti-plan-consistency`
-  - `rtk proxy make tcti-toolchain-check`
-  - `rtk proxy make tcti-report-schema-check`
-  - `rtk proxy make tcti-golden-elf`
-  - `rtk proxy make tcti-appstore-safety-audit`
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
+  - `rtk proxy make tcti-gate TARGET=tcti-toolchain-check`
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf`
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`
   - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development`
   - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release`
 - Boundary:
@@ -4099,11 +4203,11 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=development
 rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile kunit PROFILE=release
 rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall
@@ -4169,12 +4273,12 @@ rtk proxy make agent-harness-check
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
-rtk proxy make tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
 rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make -f OrlixKernel/Makefile __kernel-archive PROFILE=tcti_runtime ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphoneos
 rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_BUILD_ROOT="$PWD/Build" make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall
 ```
@@ -4225,7 +4329,7 @@ Boundary:
 
 - Reducer lane for harness-selected gate: `switch-init-006-memory`.
 - Positive switch-debug execution was run after the oracle rail update and passed:
-  - `make tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug`.
+  - `make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory EXECUTE=switch-debug`.
   - report: `Build/TCTI/reports/tcti-golden-elf/report.json`.
   - execution artifact: `Build/TCTI/golden_elf/init_006_memory/execution.json`.
 - Smallest replayed negative fixture set for the memory gate:
@@ -4238,12 +4342,12 @@ Boundary:
   - `tools/tcti/fixtures/golden_elf/init_006_memory_unsupported_store.S`.
 - Verified reducer replay:
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-invalid-read.json`.
-  - original command: `CASE=init_006_memory EXECUTE=switch-debug NEGATIVE_EXECUTION=memory-invalid-read make tcti-golden-elf`.
+  - original command: `CASE=init_006_memory EXECUTE=switch-debug NEGATIVE_EXECUTION=memory-invalid-read make tcti-gate TARGET=tcti-golden-elf`.
   - expected `fail`, actual `fail`, replay exit code `2`.
   - failure id: `execution-memory-read`.
   - reason: guest memory read outside file-backed `PT_LOAD` at address `0x0`, length `8`.
   - `Build/TCTI/reproducers/tcti-golden-elf/execution-memory-unsupported-store.json`.
-  - original command: `CASE=init_006_memory EXECUTE=switch-debug NEGATIVE_EXECUTION=memory-unsupported-store make tcti-golden-elf`.
+  - original command: `CASE=init_006_memory EXECUTE=switch-debug NEGATIVE_EXECUTION=memory-unsupported-store make tcti-gate TARGET=tcti-golden-elf`.
   - expected `fail`, actual `fail`, replay exit code `2`.
   - failure id: `execution-unsupported-instruction`.
   - reason: file-backed `STR` remains unsupported in the seed switch-debug memory fixture.
@@ -4278,7 +4382,7 @@ Boundary:
 ### Checkpoint: Branches Golden ELF Structural Gate
 
 - Harness-selected gate: `golden-init-005-branches-structural`.
-- Selected command: `make tcti-golden-elf CASE=init_005_branches`.
+- Selected command: `make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches`.
 - Why selected: the agent roadmap was corrected to keep no-phone golden/switch-debug corpus work ahead of diff, gadget, and physical gates. After `switch-init-004-tls` passed, the next missing no-phone gate became `golden-init-005-branches-structural`.
 - Added roadmap gates:
   - `golden-init-005-branches-structural`
@@ -4317,12 +4421,12 @@ Verification:
 - `jq empty .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` passed.
 - `swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed.
 - `swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
-- `make tcti-golden-elf-refresh CASE=init_005_branches` passed.
-- `make tcti-golden-elf CASE=init_005_branches` passed.
+- `make tcti-gate TARGET=tcti-golden-elf-refresh CASE=init_005_branches` passed.
+- `make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches` passed.
 - `git diff --check` passed.
 - `make agent-harness-check` passed.
-- `make tcti-report-schema-check` passed.
-- `make tcti-appstore-safety-audit` passed.
+- `make tcti-gate TARGET=tcti-report-schema-check` passed.
+- `make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
 
 Boundary:
 
@@ -4378,7 +4482,7 @@ Boundary:
 ### Checkpoint: No-Phone Direct-Chain Fuzz Gate
 
 - Harness-selected gate: `tcti-direct-chain-fuzz`.
-- Selected command: `make tcti-direct-chain-fuzz`.
+- Selected command: `make tcti-gate TARGET=tcti-direct-chain-fuzz`.
 - Why selected: `tcti-memory-fuzz` passed and the harness selected the next runtime-preflight gate. Physical device, release, and readiness gates remained ineligible before this checkpoint.
 - Implemented the gate as a no-phone Swift/Foundation data-structure contract in `tools/tcti/orlix-tcti-gate.swift`.
 - Positive contracts covered:
@@ -4403,7 +4507,7 @@ Evidence so far:
 
 ```text
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
-rtk proxy make tcti-direct-chain-fuzz
+rtk proxy make tcti-gate TARGET=tcti-direct-chain-fuzz
 ```
 
 Full checkpoint verification:
@@ -4412,16 +4516,16 @@ Full checkpoint verification:
 rtk proxy git diff --check
 rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift
 rtk proxy make agent-harness-check
-rtk proxy make tcti-plan-consistency
-rtk proxy make tcti-toolchain-check
-rtk proxy make tcti-golden-elf
-rtk proxy make tcti-diff-switch CASE=init_001_exit BACKEND=gadget
-rtk proxy make tcti-appstore-safety-audit
-rtk proxy make tcti-contract
-rtk proxy make tcti-report-schema-check
-rtk proxy make tcti-direct-chain-fuzz
-rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-direct-chain-fuzz/direct-chain-fuzz-pass-regression.json
-rtk proxy sh -c 'make tcti-repro REPRO=Build/TCTI/reproducers/tcti-direct-chain-fuzz/stale-target-after-retire.json; rc=$?; echo rc=$rc; exit 0'
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+rtk proxy make tcti-gate TARGET=tcti-toolchain-check
+rtk proxy make tcti-gate TARGET=tcti-golden-elf
+rtk proxy make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit BACKEND=gadget
+rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit
+rtk proxy make tcti-gate TARGET=tcti-contract
+rtk proxy make tcti-gate TARGET=tcti-report-schema-check
+rtk proxy make tcti-gate TARGET=tcti-direct-chain-fuzz
+rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-direct-chain-fuzz/direct-chain-fuzz-pass-regression.json
+rtk proxy sh -c 'make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-direct-chain-fuzz/stale-target-after-retire.json; rc=$?; echo rc=$rc; exit 0'
 rtk proxy make agent-status AREA=orlix-tcti
 rtk proxy make agent-next AREA=orlix-tcti
 rtk proxy make agent-task-envelope-check AREA=orlix-tcti
@@ -4453,7 +4557,7 @@ Boundary:
 ### Checkpoint: No-Phone Contract Gate Passes
 
 - Harness-selected gate: `tcti-contract`.
-- Selected command: `make tcti-contract`.
+- Selected command: `make tcti-gate TARGET=tcti-contract`.
 - Why selected: `first-gadget-init-001-exit` passed and `tcti-contract` was the first non-passing runtime-preflight roadmap gate.
 - Implemented the smallest missing contract group:
   - gadget data-program ABI and `x0`/`x8` register commit-back for `init_001_exit`.
@@ -4486,7 +4590,7 @@ Reducers:
 
 Reducer replay:
 
-- `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/contract-pass-regression.json`: expected `pass`, actual `pass`, exit code `0`.
+- `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-contract/contract-pass-regression.json`: expected `pass`, actual `pass`, exit code `0`.
 
 Harness state:
 

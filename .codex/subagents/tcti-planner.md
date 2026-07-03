@@ -31,8 +31,8 @@ Select the next safe Orlix TCTI task from `PLAN.md`, `IMPLEMENT.md`, current rep
 
 ## Commands it may run
 
-- `rtk proxy make tcti-plan-consistency`
-- `rtk proxy make tcti-report-schema-check`
+- `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
+- `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`
 - `rtk proxy make agent-status AREA=orlix-tcti`
 - `rtk proxy make agent-next AREA=orlix-tcti`
 - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
