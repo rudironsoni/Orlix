@@ -2,6 +2,76 @@
 
 ## 2026-07-03
 
+### Checkpoint: Simulator Proof Refreshed And Physical Gate Requires Explicit Opt-In
+
+- Harness-selected state:
+  - `blocked-physical-device-opt-in-required`.
+- Selected command:
+  - `no-op: set ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 only after explicit human approval`.
+- Why selected:
+  - Current no-phone prerequisites, simulator first-syscall, simulator runtime stability, App Store safety, and report schema gates are passing at `d15a910f266844adcf79d3bb1ca6695d3673ccc5`.
+  - The first missing roadmap gate is the physical first-syscall certification gate.
+  - Simulator completion is required before phone work, but it is not permission to run a phone gate.
+  - `agent-status` now reports `physical_device_allowed=false` unless `ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1` or `ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1` is explicitly present.
+- Implementation:
+  - Updated `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` so physical-device gates are not selected without explicit opt-in.
+  - Added a machine-readable blocked envelope for the state where the only remaining eligible gate is physical-device work and opt-in is absent.
+  - Updated `.agents/skills/orlix-tcti-next-step/SKILL.md` with the explicit physical opt-in stop condition.
+- Simulator proof:
+  - Only booted simulator before and after the gates:
+    - `Orlix-iPhone-15-Pro-Max`.
+    - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - Fresh first-syscall report:
+    - `Build/Reports/runtime/tcti-init-first-syscall-20260703T142113Z-94196.json`.
+    - `Build/Reports/runtime/tcti-init-first-syscall-20260703T142113Z-94196.md`.
+    - `status=pass`, `passed=true`, `destination=iphonesimulator`, `simulator_single_booted=true`, `preflight_only=false`, `autonomous_tests_bypassed=false`.
+  - Fresh simulator stability report:
+    - `Build/Reports/runtime/tcti-simulator-stability-20260703T143856Z-42565.json`.
+    - `Build/Reports/runtime/tcti-simulator-stability-20260703T143856Z-42565.md`.
+    - `status=pass`, `passed=true`, `destination=iphonesimulator`, `simulator_single_booted=true`, `failures=[]`, `coverage_warnings=[]`.
+  - Both reports kept forbidden behavior fields false:
+    - `generated_exec_memory=false`.
+    - `host_exec_guest_text=false`.
+    - `host_x18=false`.
+    - `map_jit=false`.
+    - `native_ios_api_exposure_to_guest=false`.
+    - `rwx=false`.
+- Reports:
+  - Status JSON: `Build/AgentHarness/orlix-tcti/status.json`.
+  - Next-task JSON: `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - Next-task Markdown: `Build/AgentHarness/orlix-tcti/next-task.md`.
+  - `next-task.json` selected `blocked-physical-device-opt-in-required`.
+  - `next-task.json` did not select `physical-tcti-init-first-syscall`.
+- Verification:
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed and reported `physical_device_allowed=false`, `simulator_gates_complete=true`, `release_gate_eligible=false`, and `readiness_gate_eligible=false`.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed and selected `blocked-physical-device-opt-in-required`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for the blocked envelope.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-toolchain-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted` showed only `Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D)`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" HOMEBREW_NO_AUTO_UPDATE=1 USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" HOMEBREW_NO_AUTO_UPDATE=1 USER=rudironsoni LOGNAME=rudironsoni ORLIX_BUILD_ROOT="$PWD/Build" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` passed.
+- Boundary:
+  - No physical-device gate was run.
+  - No TCTI runtime feature was implemented in this checkpoint.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No HostAdapter Linux behavior.
+  - No Darwin syscall guest side effect.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added outside Linux ownership.
+  - No generated Linux or build tree edits.
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No product defconfig flip.
+  - Full TCTI remains incomplete.
+
 ### Checkpoint: Physical First-Syscall Gate Still Blocked By Device DDI
 
 - Harness-selected gate:
