@@ -1736,7 +1736,7 @@ Any future copied source requires:
    - selection: `make agent-next AREA=orlix-tcti`
    - validation: `make agent-task-envelope-check AREA=orlix-tcti`
 6. For every future checkpoint, implement only the selected envelope scope. Do not jump to assembly, gadgets, simulator, or device work unless envelope prerequisites allow it.
-7. Continue the current no-phone selected gate, `switch-init-003-stack`, before TLS, differential testing, gadget, or physical-device work.
+7. Continue the harness-selected gate. The current selected gate is `simulator-tcti-runtime-stability`, because no-phone oracle and simulator first-syscall prerequisites are already proven and the latest simulator stability report still fails after `clone(SIGCHLD)` with a TCTI fetch at `pc=0`.
 8. Add TPIDR_EL0 transition audit and tests separating guest TLS from host TLS.
 9. Add host `x18/w18` static and object-disassembly audit.
 10. Add single-runner-per-mm enforcement for milestone 1.
@@ -1753,27 +1753,18 @@ Any future copied source requires:
 
 ## Current Checkpoint Scope
 
-The current harness checkpoint remains no-phone and harness-first:
+The current harness checkpoint is simulator-first and reducer-backed:
 
-- active plan and reference review
-- ADR 0022 correction
-- Kconfig/build source visibility
-- TCTI public arch interface
-- debug switch backend stub
-- block cache and TLB structure headers
-- user-page API stub
-- existing hosted-exec selection hook audit
-- autonomous test target contract
-- agent-neutral autonomous next-task loop
-- skill-owned roadmap data
-- generated status and next-task envelope artifacts
-- `agent-status`, `agent-next`, and `agent-task-envelope-check` Make targets
-- current next gate selected as `switch-init-003-stack`
-- syscall handoff correction
-- TPIDR_EL0, x18, virtual CPU, App Store safety, and concurrency guardrails
+- no-phone golden ELF and switch-debug oracle prerequisites have advanced past the early seed gates
+- simulator first-syscall evidence exists for the pinned `Orlix-iPhone-15-Pro-Max` simulator
+- physical-device work remains blocked while `simulator-tcti-runtime-stability` fails
+- the current simulator failure is reduced as clone/post-syscall return-frame preservation, not as an unreduced phone log
+- current scoped production edits are allowed only when they are tied to the reducer-backed simulator stability envelope
+- current next gate selected as `simulator-tcti-runtime-stability`
+- forbidden scope still blocks physical-device gates, production assembly, broad gadget expansion, HostAdapter Linux behavior, Darwin syscall behavior, Linux runtime semantics outside upstream Linux ownership, generated-tree edits, product defconfig flips, host-executable guest text, MAP_JIT, RWX, and generated executable memory
 
-This checkpoint is not runtime-ready. It is not a performance claim. It is not a physical-device proof.
-It is not the full TCTI goal. It must remain open until the completion claim boundary above is satisfied by reports and physical-device evidence.
+This checkpoint is not release-ready. It is not a performance claim. It is not a physical-device proof.
+It is not the full TCTI goal. It must remain open until the completion claim boundary above is satisfied by reports, simulator stability, physical-device evidence, and release/readiness eligibility.
 
 ## Final Architecture Sentence
 

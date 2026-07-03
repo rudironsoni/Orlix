@@ -1,4 +1,4 @@
-$(ORLIXOS_INIT_BINARY): $(ORLIXOS_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_INIT_BINARY): $(ORLIXOS_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/rootfs.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -8,14 +8,16 @@ $(ORLIXOS_INIT_BINARY): $(ORLIXOS_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixml
 	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_CC)" >/dev/null 2>&1 || { echo "clang is required to build Orlix init; set ORLIXOS_CC=/path/to/clang" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package Orlix init; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_OBJDUMP)" >/dev/null 2>&1 || { echo "llvm-objdump is required to inspect Orlix init; set ORLIXOS_OBJDUMP=/path/to/llvm-objdump" >&2; exit 1; }; \
 	mkdir -p "$(dir $(ORLIXOS_INIT_BINARY))"; \
-	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_INIT_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_INIT_BINARY)"; \
+	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_INIT_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_INIT_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_INIT_BINARY)"; \
 	file "$(ORLIXOS_INIT_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_INIT_BINARY)" >&2; exit 1; }; \
+	"$(ORLIXOS_OBJDUMP)" -p "$(ORLIXOS_INIT_BINARY)" | awk '/^[[:space:]]*LOAD[[:space:]]/ && $$0 !~ /align 2\*\*14/ { print "Orlix init PT_LOAD is not 16 KiB aligned: " $$0 > "/dev/stderr"; bad=1 } END { exit bad }'; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\nprogram=init\ntransport=/dev/hvc0\nterminal=devpts-pty\nshell=/bin/sh\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/init.stamp"; \
 	echo "built OrlixOS first-stage init: $(ORLIXOS_INIT_BINARY)"
 
-$(ORLIXOS_ROOT_INIT_BINARY): $(ORLIXOS_ROOT_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_ROOT_INIT_BINARY): $(ORLIXOS_ROOT_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/rootfs.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -25,10 +27,12 @@ $(ORLIXOS_ROOT_INIT_BINARY): $(ORLIXOS_ROOT_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT
 	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_CC)" >/dev/null 2>&1 || { echo "clang is required to build Orlix root init; set ORLIXOS_CC=/path/to/clang" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package Orlix root init; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_OBJDUMP)" >/dev/null 2>&1 || { echo "llvm-objdump is required to inspect Orlix root init; set ORLIXOS_OBJDUMP=/path/to/llvm-objdump" >&2; exit 1; }; \
 	mkdir -p "$(dir $(ORLIXOS_ROOT_INIT_BINARY))"; \
-	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_ROOT_INIT_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_ROOT_INIT_BINARY)"; \
+	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_ROOT_INIT_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_ROOT_INIT_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_ROOT_INIT_BINARY)"; \
 	file "$(ORLIXOS_ROOT_INIT_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_ROOT_INIT_BINARY)" >&2; exit 1; }; \
+	"$(ORLIXOS_OBJDUMP)" -p "$(ORLIXOS_ROOT_INIT_BINARY)" | awk '/^[[:space:]]*LOAD[[:space:]]/ && $$0 !~ /align 2\*\*14/ { print "Orlix root init PT_LOAD is not 16 KiB aligned: " $$0 > "/dev/stderr"; bad=1 } END { exit bad }'; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\nprogram=rootinit\nroot_mode=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_PROFILE_ROOT_MODE)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/rootinit.stamp"; \
 	echo "built OrlixOS root initramfs init: $(ORLIXOS_ROOT_INIT_BINARY)"
 

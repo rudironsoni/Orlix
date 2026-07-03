@@ -6,11 +6,13 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/mm.h>
 #include <linux/panic.h>
 #include <linux/stddef.h>
 #include <asm/hosted_exec.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
+#include <asm/tcti.h>
 #include <asm/tlbflush.h>
 
 struct task_struct *orlix_current_task = &init_task;
@@ -81,6 +83,11 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	regs->syscallno = NO_SYSCALL;
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	flush_tlb_mm(current->mm);
+#if IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	tcti_invalidate_mm(current->mm);
+#endif
+	if (current->mm)
+		current->mm->context.orlix_tcti_static_pie_base = 0;
 	current->thread.user_tls = 0;
 	memset(current->thread.user_simd, 0, sizeof(current->thread.user_simd));
 	current->thread.user_fpsr = 0;

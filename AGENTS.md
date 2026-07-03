@@ -86,6 +86,7 @@ For TCTI work, use the Orlix TCTI agent harness before direct implementation:
 - Spawn or simulate `.codex/subagents/` planner, safety reviewer, LLVM inspector, oracle engineer, test reducer, gadget reviewer, and release-gate reviewer as the TCTI task requires.
 - Do not implement TCTI features directly without planner and safety reviewer scope.
 - Do not run physical device TCTI work unless runtime-validation preflight permits it or evidence mode is explicitly requested and reported as non-passing.
+- TCTI simulator runtime validation is mandatory before physical-device TCTI work. Use only the harness-selected pinned simulator gate and do not treat a no-phone pass as permission to use a phone.
 - Do not add production TCTI assembly or gadget dispatch until switch-debug oracle coverage exists for the target and safety reports pass.
 - Run `make agent-harness-check` after changing `.codex`, `.agents/skills`, `AGENTS.md`, or `docs/harness`.
 
@@ -214,7 +215,7 @@ xcodebuild \
   -project Orlix.xcodeproj \
   -scheme "OrlixKernel Conformance" \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' \
+  -destination 'platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D' \
   test
 ```
 
@@ -234,25 +235,27 @@ The wrapper enforces those to external SSD-backed locations.
 If you pass your own `-derivedDataPath`, the wrapper may remove or override it.
 That is expected.
 
-### Preferred Simulator Destination
+### Required Simulator Destination
 
-The currently known-good simulator is:
+The required simulator for Orlix TCTI and app-hosted simulator validation is:
 
 ```text
-ExternalSSDProof
-UDID: 4B85E297-7A59-45BD-A94B-189238EC48FA
+Orlix-iPhone-15-Pro-Max
+UDID: C47ED88D-0D0A-420D-8C78-D4C1D34A276D
 Runtime: iOS 26.5
 ```
 
-Prefer this destination for Xcode tests unless the task explicitly requires a
-fresh simulator:
+Use this destination for Xcode tests unless the task explicitly requires a
+non-TCTI fresh simulator:
 
 ```text
--destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA'
+-destination 'platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D'
 ```
 
-This simulator is booted and has already completed the expensive first-boot data
-migration.
+This simulator is expected to be the only booted simulator while TCTI or
+runtime-validation gates run. If another simulator is booted, shut it down
+before running the gate. Do not run TCTI simulator gates on any simulator other
+than `Orlix-iPhone-15-Pro-Max`.
 
 Do not prefer name-based destinations if a UDID is known. Name-based
 destinations can become ambiguous after agents create additional simulators.
@@ -260,7 +263,7 @@ destinations can become ambiguous after agents create additional simulators.
 Prefer:
 
 ```text
--destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA'
+-destination 'platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D'
 ```
 
 Over:
@@ -469,7 +472,7 @@ Check environment first:
 
 ```sh
 xcode-storage-doctor
-xcrun simctl bootstatus 4B85E297-7A59-45BD-A94B-189238EC48FA -b
+xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b
 xcrun simctl list devices available
 ```
 
@@ -496,7 +499,7 @@ then XCTest attached successfully. Failures after that are project/test
 behavior, not the external storage migration.
 
 The environment has already proven that hosted XCTest can attach and execute
-against the booted iPhone 17 simulator.
+against the booted Orlix-iPhone-15-Pro-Max simulator.
 
 ### Result Bundles And Build Products
 
@@ -579,13 +582,13 @@ export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 xcode-storage-doctor
 
-xcrun simctl bootstatus 4B85E297-7A59-45BD-A94B-189238EC48FA -b
+xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b
 
 xcodebuild \
   -project Orlix.xcodeproj \
   -scheme "OrlixTestRunner Tests" \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,id=4B85E297-7A59-45BD-A94B-189238EC48FA' \
+  -destination 'platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D' \
   -only-testing:OrlixTestRunnerTests \
   test
 ```

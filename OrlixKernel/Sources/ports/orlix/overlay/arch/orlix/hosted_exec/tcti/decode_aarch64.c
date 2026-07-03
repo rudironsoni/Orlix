@@ -62,6 +62,16 @@
 #define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08007c00U
 #define AARCH64_SIMD_MOVI_2D_ZERO_MASK 0xffffffe0U
 #define AARCH64_SIMD_MOVI_2D_ZERO_PATTERN 0x6f00e400U
+#define AARCH64_SIMD_MOVI_2S_0X100_MASK 0xffffffe0U
+#define AARCH64_SIMD_MOVI_2S_0X100_PATTERN 0x0f002420U
+#define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_MASK 0xffe08400U
+#define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_PATTERN 0x6e000400U
+#define AARCH64_SIMD_DUP_2D_GPR_MASK 0xfffffc00U
+#define AARCH64_SIMD_DUP_2D_GPR_PATTERN 0x4e080c00U
+#define AARCH64_SIMD_AND_16B_MASK 0xff20fc00U
+#define AARCH64_SIMD_AND_16B_PATTERN 0x4e201c00U
+#define AARCH64_SIMD_ORR_4S_0X30_MASK 0xffffffe0U
+#define AARCH64_SIMD_ORR_4S_0X30_PATTERN 0x4f011600U
 #define AARCH64_SYSTEM_REGISTER_MASK 0xfff00000U
 #define AARCH64_MRS_PATTERN 0xd5300000U
 #define AARCH64_MSR_PATTERN 0xd5100000U
@@ -93,13 +103,13 @@ static bool tcti_decode_load_store_variant(u8 size, u8 opc, bool *load,
 		if (size == 3)
 			return false;
 		*sign_extend_load = true;
-		*result_size = sizeof(u32);
+		*result_size = sizeof(u64);
 		return true;
 	case 3:
 		if (size >= 2)
 			return false;
 		*sign_extend_load = true;
-		*result_size = sizeof(u64);
+		*result_size = sizeof(u32);
 		return true;
 	default:
 		return false;
@@ -389,7 +399,12 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		u8 scale = size;
 
 		if (simd_fp) {
-			if (size == 3 && opc <= 1) {
+			if (size == 2 && opc <= 1) {
+				decoded.load = opc == 1;
+				decoded.access_size = sizeof(u32);
+				decoded.result_size = sizeof(u32);
+				scale = 2;
+			} else if (size == 3 && opc <= 1) {
 				decoded.load = opc == 1;
 				decoded.access_size = sizeof(u64);
 				decoded.result_size = sizeof(u64);
@@ -758,6 +773,74 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.access_size = sizeof(u64);
 		decoded.result_size = sizeof(u64);
 		decoded.simd_fp = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_MOVI_2S_0X100_MASK) ==
+	    AARCH64_SIMD_MOVI_2S_0X100_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.logical_immediate = 0x0000010000000100ULL;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u64);
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_VECTOR_ELEMENT_MOVE_MASK) ==
+	    AARCH64_SIMD_VECTOR_ELEMENT_MOVE_PATTERN) {
+		u8 imm5 = (instruction >> 16) & 0x1fU;
+		u8 imm4 = (instruction >> 11) & 0xfU;
+
+		if (!((imm5 == 8 && imm4 == 0) ||
+		      (imm5 == 20 && imm4 == 8)))
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = imm5 == 20 ? sizeof(u32) : sizeof(u64);
+		decoded.result_size = decoded.access_size;
+		decoded.simd_destination_index = imm5 == 20 ? 2 : 0;
+		decoded.simd_source_index = imm4 == 8 ? 2 : 0;
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_DUP_2D_GPR_MASK) ==
+	    AARCH64_SIMD_DUP_2D_GPR_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.immediate = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_AND_16B_MASK) ==
+	    AARCH64_SIMD_AND_16B_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.logical_op = TCTI_LOGICAL_AND;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_ORR_4S_0X30_MASK) ==
+	    AARCH64_SIMD_ORR_4S_0X30_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.logical_op = TCTI_LOGICAL_ORR;
+		decoded.logical_immediate = 0x0000003000000030ULL;
 		return decoded;
 	}
 

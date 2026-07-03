@@ -123,6 +123,16 @@ static int tcti_fault_requirements(enum tcti_access access,
 	}
 }
 
+static int tcti_sync_faulted_user_window(unsigned long address)
+{
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	return orlix_sync_current_user_fault_window(address, 0);
+#else
+	(void)address;
+	return 0;
+#endif
+}
+
 int tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
 			   enum tcti_access access)
 {
@@ -154,7 +164,7 @@ retry:
 	if (fault_signal_pending(fault, regs))
 		return 0;
 	if (fault & VM_FAULT_COMPLETED)
-		return 0;
+		return tcti_sync_faulted_user_window(address);
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
 			goto out_of_memory;
@@ -172,14 +182,18 @@ retry:
 	}
 
 	mmap_read_unlock(mm);
-	return 0;
+	return tcti_sync_faulted_user_window(address);
 
 bad_area:
 	mmap_read_unlock(mm);
 bad_area_nosemaphore:
-	pr_info("Orlix TCTI: user fault task=%s pid=%d pc=%#llx lr=%#llx sp=%#llx addr=%#lx access=%d si=%d\n",
+	pr_info("Orlix TCTI: user fault task=%s pid=%d pc=%#llx lr=%#llx sp=%#llx x0=%#llx x1=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x12=%#llx x13=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x29=%#llx addr=%#lx access=%d si=%d\n",
 		current->comm, task_pid_nr(current), regs->pc,
-		regs->regs[30], regs->sp, address, access, si_code);
+		regs->regs[30], regs->sp, regs->regs[0], regs->regs[1],
+		regs->regs[8], regs->regs[9], regs->regs[10], regs->regs[11],
+		regs->regs[12], regs->regs[13], regs->regs[19],
+		regs->regs[20], regs->regs[21], regs->regs[22],
+		regs->regs[29], address, access, si_code);
 	orlix_force_user_fault_signal(address, 0, si_code);
 	return 0;
 

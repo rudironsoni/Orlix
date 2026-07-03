@@ -35,6 +35,9 @@ enum tcti_decode_class {
 	TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
 	TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
 	TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+	TCTI_DECODE_SIMD_VECTOR_LOGICAL,
+	TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
 };
 
 enum tcti_memory_index_mode {
@@ -153,6 +156,8 @@ struct tcti_decoded_instruction {
 	u8 bitfield_immr;
 	u8 bitfield_imms;
 	u8 rs;
+	u8 simd_destination_index;
+	u8 simd_source_index;
 	bool acquire;
 	bool release;
 	bool exclusive;

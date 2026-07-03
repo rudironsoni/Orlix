@@ -2,8 +2,11 @@
 #include <linux/errno.h>
 #include <linux/minmax.h>
 #include <linux/mm.h>
+#include <linux/sched.h>
+#include <linux/sched/task_stack.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
+#include <asm/hosted_exec.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <asm/processor.h>
@@ -27,6 +30,118 @@ static int tcti_access_required_vm_flags(enum tcti_access access,
 	default:
 		return -EINVAL;
 	}
+}
+
+static int tcti_fault_in_user_page(struct mm_struct *mm, unsigned long address,
+				   enum tcti_access access)
+{
+	struct pt_regs *regs = task_pt_regs(current);
+	vm_flags_t required;
+	bool tried = false;
+	int ret;
+
+	ret = tcti_access_required_vm_flags(access, &required);
+	if (ret)
+		return ret;
+
+	if (faulthandler_disabled())
+		return -EFAULT;
+
+retry:
+	{
+		struct vm_area_struct *vma;
+		unsigned int flags = FAULT_FLAG_DEFAULT | FAULT_FLAG_USER;
+		vm_fault_t fault;
+
+		if (access == TCTI_ACCESS_WRITE)
+			flags |= FAULT_FLAG_WRITE;
+		if (access == TCTI_ACCESS_FETCH)
+			flags |= FAULT_FLAG_INSTRUCTION;
+		if (tried)
+			flags |= FAULT_FLAG_TRIED;
+
+		vma = lock_mm_and_find_vma(mm, address, regs);
+		if (!vma)
+			return -EFAULT;
+
+		if (!(vma->vm_flags & required)) {
+			mmap_read_unlock(mm);
+			return -EACCES;
+		}
+
+		fault = handle_mm_fault(vma, address, flags, regs);
+		if (fault_signal_pending(fault, regs))
+			return -EINTR;
+		if (fault & VM_FAULT_COMPLETED)
+			return 0;
+		if (fault & VM_FAULT_RETRY) {
+			tried = true;
+			goto retry;
+		}
+		if (unlikely(fault & VM_FAULT_ERROR)) {
+			int err = vm_fault_to_errno(fault, 0);
+
+			mmap_read_unlock(mm);
+			return err ? err : -EFAULT;
+		}
+
+		mmap_read_unlock(mm);
+		return 0;
+	}
+}
+
+static void tcti_log_fetch_resolution_failure(struct mm_struct *mm,
+					      unsigned long pc, int ret)
+{
+	struct vm_area_struct *vma;
+	unsigned long vm_start = 0;
+	unsigned long vm_end = 0;
+	unsigned long vm_flags = 0;
+	unsigned long pgd_bits = 0;
+	unsigned long p4d_bits = 0;
+	unsigned long pud_bits = 0;
+	unsigned long pmd_bits = 0;
+	unsigned long pte_bits = 0;
+	pgd_t *pgd;
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *pte;
+
+	if (!mm)
+		return;
+
+	mmap_read_lock(mm);
+	vma = find_vma(mm, pc);
+	if (vma && pc >= vma->vm_start && pc < vma->vm_end) {
+		vm_start = vma->vm_start;
+		vm_end = vma->vm_end;
+		vm_flags = vma->vm_flags;
+	}
+	pgd = pgd_offset(mm, pc);
+	pgd_bits = pgd_val(*pgd);
+	if (!pgd_none(*pgd) && !pgd_bad(*pgd)) {
+		p4d = p4d_offset(pgd, pc);
+		p4d_bits = p4d_val(*p4d);
+		if (!p4d_none(*p4d) && !p4d_bad(*p4d)) {
+			pud = pud_offset(p4d, pc);
+			pud_bits = pud_val(*pud);
+			if (!pud_none(*pud) && !pud_bad(*pud)) {
+				pmd = pmd_offset(pud, pc);
+				pmd_bits = pmd_val(*pmd);
+				if (!pmd_none(*pmd) && !pmd_bad(*pmd)) {
+					pte = pte_offset_kernel(pmd, pc);
+					pte_bits = pte_val(READ_ONCE(*pte));
+				}
+			}
+		}
+	}
+	mmap_read_unlock(mm);
+
+	pr_info("Orlix TCTI: fetch fault detail task=%s pid=%d pc=%#lx ret=%d task_size=%#lx vma=%#lx-%#lx flags=%#lx pgd=%#lx p4d=%#lx pud=%#lx pmd=%#lx pte=%#lx\n",
+		current->comm, task_pid_nr(current), pc, ret, TASK_SIZE,
+		vm_start, vm_end, vm_flags, pgd_bits, p4d_bits, pud_bits,
+		pmd_bits, pte_bits);
 }
 
 static int tcti_resolve_user_data_locked(struct mm_struct *mm,
@@ -78,6 +193,13 @@ static int tcti_resolve_user_data_locked(struct mm_struct *mm,
 		return -EACCES;
 	if (access == TCTI_ACCESS_WRITE && !pte_write(entry))
 		return -EACCES;
+	if (access == TCTI_ACCESS_WRITE &&
+	    (!pte_dirty(entry) || !pte_young(entry))) {
+		entry = pte_mkdirty(pte_mkyoung(entry));
+		set_pte(pte, entry);
+	}
+	if (access == TCTI_ACCESS_WRITE)
+		set_page_dirty(pte_page(entry));
 
 	if (host_data)
 		*host_data = (char *)__va(PFN_PHYS(pte_pfn(entry))) +
@@ -145,6 +267,41 @@ int tcti_fetch_instruction(struct mm_struct *mm, unsigned long pc,
 	if (!ret)
 		*instruction = get_unaligned_le32(host_data);
 	mmap_read_unlock(mm);
+	if (ret == -EFAULT || ret == -EACCES) {
+		ret = tcti_fault_in_user_page(mm, pc, TCTI_ACCESS_FETCH);
+		if (ret) {
+			tcti_log_fetch_resolution_failure(mm, pc, ret);
+			return ret;
+		}
+
+		mmap_read_lock(mm);
+		ret = tcti_resolve_user_data_locked(mm, pc, TCTI_ACCESS_FETCH,
+						    &host_data, NULL, NULL);
+		if (!ret)
+			*instruction = get_unaligned_le32(host_data);
+		mmap_read_unlock(mm);
+		if (ret == -EFAULT) {
+			/*
+			 * Final authorization still comes from VM_EXEC and the
+			 * executable PTE check above. This only gives hosted
+			 * file-backed pages a data-fault population pass before
+			 * TCTI retries the executable fetch resolution.
+			 */
+			if (tcti_fault_in_user_page(mm, pc, TCTI_ACCESS_READ))
+				return ret;
+
+			mmap_read_lock(mm);
+			ret = tcti_resolve_user_data_locked(mm, pc,
+							    TCTI_ACCESS_FETCH,
+							    &host_data, NULL, NULL);
+			if (!ret)
+				*instruction = get_unaligned_le32(host_data);
+			mmap_read_unlock(mm);
+		}
+	}
+
+	if (ret)
+		tcti_log_fetch_resolution_failure(mm, pc, ret);
 
 	return ret;
 }
@@ -170,6 +327,7 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 				   (size_t)(PAGE_SIZE -
 					    offset_in_page(current_va)));
 		void *host_data = NULL;
+		void *host_page = NULL;
 		int ret;
 
 		mmap_read_lock(mm);
@@ -178,12 +336,28 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 		if (!ret) {
 			if (access == TCTI_ACCESS_READ)
 				memcpy((char *)buffer + copied, host_data, chunk);
-			else
+			else {
 				memcpy(host_data, (char *)buffer + copied, chunk);
+				host_page = (void *)((unsigned long)host_data &
+						     PAGE_MASK);
+			}
 		}
 		mmap_read_unlock(mm);
+		if (ret) {
+			ret = tcti_fault_in_user_page(mm, current_va, access);
+			if (!ret)
+				continue;
+		}
 		if (ret)
 			return ret;
+#if defined(ORLIX_APP_HOSTED_BOOT)
+		if (access == TCTI_ACCESS_WRITE) {
+			ret = orlix_refresh_current_user_mapping_page_from_kernel(
+				current_va, host_page);
+			if (ret)
+				return ret;
+		}
+#endif
 
 		copied += chunk;
 	}
