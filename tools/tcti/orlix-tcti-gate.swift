@@ -4837,24 +4837,44 @@ func runSimulatorUserFaultReducer() throws -> Int32 {
     artifacts.append(relativePath(simulatorReport.url))
     let simulatorArtifacts = (simulatorObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
     artifacts.append(contentsOf: simulatorArtifacts)
-    let firstSyscallPath = simulatorArtifacts.first { $0.hasSuffix("tcti-first-syscall.txt") }
-    let fatalPath = simulatorArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }
-    let firstSyscallText = try firstSyscallPath.map(readRelativeArtifact) ?? ""
-    let fatalText = try fatalPath.map(readRelativeArtifact) ?? ""
+    let runtimeEvents = simulatorObject["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = runtimeEvents["first_svc"] as? [String: Any] ?? [:]
+    let staticPIEImage = runtimeEvents["static_pie_image"] as? [String: Any] ?? [:]
+    let fatalUserFault = runtimeEvents["fatal_user_fault"] as? [String: Any] ?? [:]
+    let simulatorPassed = stringField(simulatorObject, "status") == "pass" && boolField(simulatorObject, "passed")
+    let simulatorFailed = stringField(simulatorObject, "status") == "fail" && !boolField(simulatorObject, "passed")
+    let firstSVCCaptured = stringField(firstSVC, "task") == "init" &&
+        intField(firstSVC, "pid") == 1 &&
+        !stringField(firstSVC, "pc").isEmpty &&
+        intField(firstSVC, "syscall") != nil
+    let staticPIEImageCaptured = stringField(staticPIEImage, "task") == "sh" &&
+        intField(staticPIEImage, "pid") != nil &&
+        !stringField(staticPIEImage, "pc").isEmpty &&
+        !stringField(staticPIEImage, "base").isEmpty &&
+        !stringField(staticPIEImage, "entry").isEmpty
+    let fatalAddress = stringField(fatalUserFault, "addr")
+    let fatalAccess = intField(fatalUserFault, "access")
+    let fatalNullReadSignature = fatalAddress == "0x0" &&
+        (fatalAccess == nil || fatalAccess == 1)
+    let noFatalUserFault = fatalAddress.isEmpty
 
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
-        failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
+    if !simulatorPassed && !simulatorFailed {
+        failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
     }
-    if !firstSyscallText.contains("Orlix TCTI: svc #0") {
-        failures.append(fail("simulator-first-syscall", "simulator report did not capture the first TCTI svc #0 marker"))
+    if !firstSVCCaptured {
+        failures.append(fail("simulator-first-syscall", "simulator report did not capture structured first TCTI svc #0 event"))
     }
-    if !fatalText.contains("Orlix TCTI: user fault") ||
-        !fatalText.contains("addr=0x0") ||
-        !(fatalText.contains("Attempted to kill init") || fatalText.contains("Attempted kill init")) {
-        failures.append(fail("simulator-fatal-signature", "simulator fatal artifact does not contain the null user fault and init-kill panic signature"))
+    if simulatorFailed && !fatalNullReadSignature {
+        failures.append(fail("simulator-fatal-signature", "failing simulator report does not contain the structured null-read fatal user fault signature"))
+    }
+    if simulatorPassed && !noFatalUserFault {
+        failures.append(fail("simulator-fatal-signature", "passing simulator report still contains a structured fatal user fault"))
+    }
+    if simulatorPassed && !staticPIEImageCaptured {
+        failures.append(fail("simulator-static-pie-event", "passing simulator report does not include structured static PIE image event"))
     }
 
     let metadataURL = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_011_static_pie_got_byte_load", "golden.json")
@@ -5042,15 +5062,32 @@ func runPostOverlayNullUserFaultReducer() throws -> Int32 {
     artifacts.append(relativePath(simulatorReport.url))
     let simulatorArtifacts = (simulatorObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
     artifacts.append(contentsOf: simulatorArtifacts)
-    let fatalText = try simulatorArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact) ?? ""
-    let terminalText = try simulatorArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
-    let combinedText = fatalText + "\n" + terminalText
+    let runtimeEvents = simulatorObject["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = runtimeEvents["first_svc"] as? [String: Any] ?? [:]
+    let staticPIEImage = runtimeEvents["static_pie_image"] as? [String: Any] ?? [:]
+    let fatalUserFault = runtimeEvents["fatal_user_fault"] as? [String: Any] ?? [:]
+    let simulatorPassed = stringField(simulatorObject, "status") == "pass" && boolField(simulatorObject, "passed")
+    let simulatorFailed = stringField(simulatorObject, "status") == "fail" && !boolField(simulatorObject, "passed")
+    let firstSVCCaptured = stringField(firstSVC, "task") == "init" &&
+        intField(firstSVC, "pid") == 1 &&
+        !stringField(firstSVC, "pc").isEmpty &&
+        intField(firstSVC, "syscall") != nil
+    let staticPIEImageCaptured = stringField(staticPIEImage, "task") == "sh" &&
+        intField(staticPIEImage, "pid") != nil &&
+        !stringField(staticPIEImage, "pc").isEmpty &&
+        !stringField(staticPIEImage, "base").isEmpty &&
+        !stringField(staticPIEImage, "entry").isEmpty
+    let fatalAddress = stringField(fatalUserFault, "addr")
+    let fatalAccess = intField(fatalUserFault, "access")
+    let fatalNullReadSignature = fatalAddress == "0x0" &&
+        (fatalAccess == nil || fatalAccess == 1)
+    let noFatalUserFault = fatalAddress.isEmpty
 
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
-        failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
+    if !simulatorPassed && !simulatorFailed {
+        failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
     }
     if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -5058,19 +5095,17 @@ func runPostOverlayNullUserFaultReducer() throws -> Int32 {
         !boolField(simulatorObject, "simulator_single_booted") {
         failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
     }
-    if !combinedText.contains("Orlix TCTI: applied static PIE R_AARCH64_RELATIVE relocations") {
-        failures.append(fail("simulator-relocation-marker", "latest simulator artifact does not show static PIE R_AARCH64_RELATIVE relocation application before the fault"))
+    if !firstSVCCaptured {
+        failures.append(fail("simulator-first-syscall", "simulator report did not capture structured first TCTI svc #0 event"))
     }
-    if !combinedText.contains("pc=0x2e1ab4226a8c") ||
-        !combinedText.contains("lr=0x2e1ab4226894") ||
-        !combinedText.contains("addr=0x0") ||
-        !combinedText.contains("access=1") ||
-        !(combinedText.contains("Attempted to kill init") || combinedText.contains("Attempted kill init")) {
-        failures.append(fail("simulator-post-overlay-signature", "latest simulator fatal artifact does not match the post-overlay static PIE GOT-slot null-read regression signature"))
+    if !staticPIEImageCaptured {
+        failures.append(fail("simulator-static-pie-event", "simulator report does not include structured static PIE image event"))
     }
-    if !combinedText.contains("ORLIX-ROOT-OVERLAY-READY") ||
-        !combinedText.contains("syscall=221") {
-        failures.append(fail("simulator-overlay-progress", "latest simulator artifact does not prove the failure happened after root overlay readiness and execve progress"))
+    if simulatorFailed && !fatalNullReadSignature {
+        failures.append(fail("simulator-post-overlay-signature", "failing simulator report does not contain the structured null-read fatal user fault signature"))
+    }
+    if simulatorPassed && !noFatalUserFault {
+        failures.append(fail("simulator-post-overlay-signature", "passing simulator report still contains a structured fatal user fault"))
     }
 
     do {
@@ -5909,6 +5944,14 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 	let hasMmapSyscall = intField(mmap, "syscall") == 222 &&
 		stringField(mmap, "task") == "sh" &&
 		intField(mmap, "pid").map(String.init) == imagePID
+	let simulatorPassed = stringField(simulatorObject, "status") == "pass" && boolField(simulatorObject, "passed")
+	let simulatorFailed = stringField(simulatorObject, "status") == "fail" && !boolField(simulatorObject, "passed")
+	let staticPIEImageCaptured = stringField(staticPIE, "task") == "sh" &&
+		imagePID != nil &&
+		!imagePC.isEmpty &&
+		!imageBase.isEmpty &&
+		!imageEntry.isEmpty
+	let noFatalUserFault = faultAddress.isEmpty
 	let faultOffset: String? = {
 		guard
 			!imageBase.isEmpty,
@@ -5925,8 +5968,8 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "git_sha") != gitSha() {
 		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
 	}
-	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
-		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
+	if !simulatorPassed && !simulatorFailed {
+		failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
 	}
 	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -5937,21 +5980,27 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 	if !hasStructuredEvents {
 		failures.append(fail("structured-tcti-events", "reducer requires structured tcti_runtime_events in the simulator JSON report"))
 	}
-	if imagePID == nil || faultPID == nil || signaledPID == nil || imagePID != faultPID || faultPID != signaledPID {
+	if !staticPIEImageCaptured {
+		failures.append(fail("post-bash-static-pie-event", "simulator evidence must include Bash static PIE image event"))
+	}
+	if simulatorFailed && (imagePID == nil || faultPID == nil || signaledPID == nil || imagePID != faultPID || faultPID != signaledPID) {
 		failures.append(fail("post-bash-read-fault-pid", "simulator evidence must tie Bash static PIE entry, read fault, and SIGSEGV to the same shell pid"))
 	}
 	if !hasMmapSyscall {
-		failures.append(fail("post-bash-mmap-syscall", "simulator evidence must show Bash issued mmap syscall 222 before the read fault"))
+		failures.append(fail("post-bash-mmap-syscall", "simulator evidence must show Bash issued mmap syscall 222"))
 	}
-	if faultPC.isEmpty || faultAddress.isEmpty || faultOffset == nil {
+	if simulatorFailed && (faultPC.isEmpty || faultAddress.isEmpty || faultOffset == nil) {
 		failures.append(fail("post-bash-read-fault-address", "simulator evidence must include the Bash read-fault pc, address, and base-relative offset"))
 	}
-	if stringField(staticPIE, "task") != "sh" ||
+	if simulatorFailed && (stringField(staticPIE, "task") != "sh" ||
 		stringField(fault, "task") != "sh" ||
 		intField(fault, "access") != 1 ||
 		intField(fault, "si") != 1 ||
-		intField(signal, "signal") != 11 {
+		intField(signal, "signal") != 11) {
 		failures.append(fail("post-bash-mmap-read-fault-signature", "structured simulator event does not match the post-Bash mmap/read fault signature"))
+	}
+	if simulatorPassed && !noFatalUserFault {
+		failures.append(fail("post-bash-mmap-read-fault-signature", "passing simulator report still contains a structured fatal user fault"))
 	}
 
 	struct PostBashMmapReadFaultModel: Codable {

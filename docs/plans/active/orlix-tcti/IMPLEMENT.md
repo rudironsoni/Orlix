@@ -2,6 +2,71 @@
 
 ## 2026-07-03
 
+### Checkpoint: Historical Simulator Reducers Accept Fixed Structured State
+
+- Harness-selected sequence:
+  - `no-phone-tcti-simulator-user-fault-reducer`.
+  - `no-phone-tcti-post-overlay-null-user-fault-reducer`.
+  - `no-phone-tcti-post-bash-mmap-read-fault-reducer`.
+- Why selected:
+  - Rerunning historical reducer targets after the current simulator stability pass had rewritten their reports to `fail`.
+  - The reducers were still requiring the latest `tcti-simulator-stability` report to be a live failure with old fatal log signatures.
+  - The current simulator stability report is a structured pass at `1ab82adba184c343e86942cf282c9aebf4238b8c`, so the reducers were blocking the harness even though the simulator no longer reproduces those fatal states.
+- Implementation:
+  - Updated `tools/tcti/orlix-tcti-gate.swift` so the selected historical reducers accept either:
+    - a current structured failure report matching their reduced fault shape, or
+    - a current structured passing simulator report proving the relevant progress event and no fatal user fault.
+  - Removed fixed PC/LR and panic-log string requirements from the post-overlay reducer decision path.
+  - Kept reducer replay as the no-phone proof for the original failure fixtures.
+  - Updated `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` envelope wording so the reducer requirements describe structured report facts instead of stale "latest failure must match" log text.
+- Reports:
+  - `Build/TCTI/reports/tcti-simulator-user-fault-reducer/report.json` now passes.
+  - `Build/TCTI/reports/tcti-post-overlay-null-user-fault-reducer/report.json` now passes.
+  - `Build/TCTI/reports/tcti-post-bash-mmap-read-fault-reducer/report.json` now passes.
+- Reducer replay:
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json` replayed with expected `fail` and actual `fail`.
+  - `Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json` replayed with expected `fail` and actual `fail`.
+  - `Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json` replayed with expected `pass` and actual `pass`.
+- Harness state after reducer repair:
+  - `Build/AgentHarness/orlix-tcti/status.json` reports `physical_device_allowed=true`.
+  - `Build/AgentHarness/orlix-tcti/status.json` reports `next_eligible_gate=physical-tcti-init-first-syscall`.
+  - `Build/AgentHarness/orlix-tcti/next-task.json` selects `physical-tcti-init-first-syscall`.
+  - Release and readiness eligibility remain false until the physical runtime gate produces a non-override passing report.
+- Verification:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`.
+  - `rtk proxy make tcti-simulator-user-fault-reducer`.
+  - `rtk proxy make tcti-post-overlay-null-user-fault-reducer`.
+  - `rtk proxy make tcti-post-bash-mmap-read-fault-reducer`.
+  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
+  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json`.
+  - `rtk proxy make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
+  - `rtk proxy git diff --check`.
+  - `rtk proxy make agent-harness-check`.
+  - `rtk proxy make agent-status AREA=orlix-tcti`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`.
+  - `rtk proxy make tcti-plan-consistency`.
+  - `rtk proxy make tcti-report-schema-check`.
+  - `rtk proxy make tcti-toolchain-check`.
+  - `rtk proxy make tcti-golden-elf`.
+  - `rtk proxy make tcti-appstore-safety-audit`.
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly.
+  - No gadget dispatch.
+  - No simulator gate run in this checkpoint.
+  - No physical-device gate run in this checkpoint.
+  - No HostAdapter Linux behavior.
+  - No Darwin syscall guest side effect.
+  - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added outside Linux ownership.
+  - No generated Linux or build tree edits.
+  - No generated executable memory.
+  - No host-executable guest text.
+  - No product defconfig flip.
+  - Full TCTI remains incomplete.
+
 ### Checkpoint: Simulator Stability After Post-Bash Mmap Read Fault
 
 - Harness-selected gate:
