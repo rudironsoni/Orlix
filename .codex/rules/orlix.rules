@@ -87,11 +87,10 @@ prefix_rule(
   pattern = ["xcrun", "simctl"],
   decision = "allow",
   justification = "Simulator inspection and control are required to verify the app-hosted runtime.",
-  match = [
-    "xcrun simctl list",
-    "xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b",
-    "xcrun simctl shutdown all",
-  ],
+	match = [
+		"xcrun simctl list",
+		"xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+	],
   not_match = [
     "xcodebuild -version",
   ],
@@ -101,11 +100,10 @@ prefix_rule(
   pattern = ["rtk", "xcrun", "simctl"],
   decision = "allow",
   justification = "Simulator inspection and control are required to verify the app-hosted runtime.",
-  match = [
-    "rtk xcrun simctl list",
-    "rtk xcrun simctl bootstatus E65F0D05-980C-4368-8CDC-2D2BF3E05757 -b",
-    "rtk xcrun simctl shutdown all",
-  ],
+	match = [
+		"rtk xcrun simctl list",
+		"rtk xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+	],
   not_match = [
     "rtk xcodebuild -version",
   ],

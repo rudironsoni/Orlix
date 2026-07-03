@@ -16,6 +16,8 @@ bundle_id="${ORLIX_APP_BUNDLE_ID:-com.rudironsoni.Orlix}"
 report_dir="${REPORT_DIR:-${ORLIX_RUNTIME_REPORT_DIR:-Build/Reports/runtime}}"
 device_id="${ORLIX_DEVICE_ID:-}"
 simulator_id="${ORLIX_SIMULATOR_ID:-${ORLIX_BETA_SIMULATOR_ID:-}}"
+required_simulator_id="${ORLIX_TCTI_REQUIRED_SIMULATOR_ID:-C47ED88D-0D0A-420D-8C78-D4C1D34A276D}"
+required_simulator_name="${ORLIX_TCTI_REQUIRED_SIMULATOR_NAME:-Orlix-iPhone-15-Pro-Max}"
 capture_seconds="${ORLIX_RUNTIME_GATE_CAPTURE_SECONDS:-45}"
 simulator_boot_timeout_seconds="${ORLIX_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
 development_team="${ORLIX_DEVELOPMENT_TEAM:-}"
@@ -29,6 +31,9 @@ build_root="${ORLIX_BUILD_ROOT:-}"
 
 devices_json=""
 device_name=""
+simulator_booted_count=""
+simulator_booted_ids=""
+simulator_single_booted="false"
 device_xcode_id=""
 device_ddi_available=""
 app_path=""
@@ -93,6 +98,10 @@ write_report() {
 		printf -- '- capture seconds: `%s`\n' "$capture_seconds"
 		if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
 			printf -- '- simulator boot timeout seconds: `%s`\n' "$simulator_boot_timeout_seconds"
+			printf -- '- required simulator id: `%s`\n' "$required_simulator_id"
+			printf -- '- required simulator name: `%s`\n' "$required_simulator_name"
+			printf -- '- booted simulator count: `%s`\n' "${simulator_booted_count:-unknown}"
+			printf -- '- single required simulator booted: `%s`\n' "$simulator_single_booted"
 		fi
 		printf -- '- status: `%s`\n\n' "$status"
 		printf '## Result\n\n%s\n\n' "$message"
@@ -175,6 +184,129 @@ failure_context_json() {
 JSON
 }
 
+json_number_or_null() {
+	local value="$1"
+	if [[ "$value" =~ ^-?[0-9]+$ ]]; then
+		printf '%s' "$value"
+	else
+		printf 'null'
+	fi
+}
+
+log_field() {
+	local line="$1"
+	local key="$2"
+	printf '%s\n' "$line" | sed -nE "s/.*(^|[[:space:]])${key}=([^[:space:]]+).*/\\2/p" | head -1
+}
+
+tcti_runtime_events_json() {
+	local first_svc_line=""
+	local static_pie_line=""
+	local mmap_line=""
+	local fault_line=""
+	local signaled_line=""
+	local first_svc_task=""
+	local first_svc_pid=""
+	local first_svc_pc=""
+	local first_svc_syscall=""
+	local static_pie_task=""
+	local static_pie_pid=""
+	local static_pie_pc=""
+	local static_pie_base=""
+	local static_pie_entry=""
+	local mmap_task=""
+	local mmap_pid=""
+	local mmap_pc=""
+	local mmap_syscall=""
+	local mmap_x0=""
+	local mmap_x1=""
+	local mmap_x2=""
+	local mmap_x3=""
+	local fault_task=""
+	local fault_pid=""
+	local fault_pc=""
+	local fault_lr=""
+	local fault_sp=""
+	local fault_addr=""
+	local fault_access=""
+	local fault_si=""
+	local signaled_pid=""
+	local signaled_signal=""
+
+	first_svc_line="$(grep -h -F 'Orlix TCTI: svc #0' "$artifact_dir"/tcti-first-syscall.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | head -1 || true)"
+	static_pie_line="$(grep -h -E 'Orlix TCTI: static PIE image task=sh ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	mmap_line="$(grep -h -E 'Orlix TCTI: svc #0 task=sh .* syscall=222' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	fault_line="$(grep -h -E 'Orlix TCTI: user fault ' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	signaled_line="$(grep -h -E 'orlix-init: process signaled pid=[0-9]+ signal=[0-9]+' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+
+	first_svc_task="$(log_field "$first_svc_line" task)"
+	first_svc_pid="$(log_field "$first_svc_line" pid)"
+	first_svc_pc="$(log_field "$first_svc_line" pc)"
+	first_svc_syscall="$(log_field "$first_svc_line" syscall)"
+	static_pie_task="$(log_field "$static_pie_line" task)"
+	static_pie_pid="$(log_field "$static_pie_line" pid)"
+	static_pie_pc="$(log_field "$static_pie_line" pc)"
+	static_pie_base="$(log_field "$static_pie_line" base)"
+	static_pie_entry="$(log_field "$static_pie_line" entry)"
+	mmap_task="$(log_field "$mmap_line" task)"
+	mmap_pid="$(log_field "$mmap_line" pid)"
+	mmap_pc="$(log_field "$mmap_line" pc)"
+	mmap_syscall="$(log_field "$mmap_line" syscall)"
+	mmap_x0="$(log_field "$mmap_line" x0)"
+	mmap_x1="$(log_field "$mmap_line" x1)"
+	mmap_x2="$(log_field "$mmap_line" x2)"
+	mmap_x3="$(log_field "$mmap_line" x3)"
+	fault_task="$(log_field "$fault_line" task)"
+	fault_pid="$(log_field "$fault_line" pid)"
+	fault_pc="$(log_field "$fault_line" pc)"
+	fault_lr="$(log_field "$fault_line" lr)"
+	fault_sp="$(log_field "$fault_line" sp)"
+	fault_addr="$(log_field "$fault_line" addr)"
+	fault_access="$(log_field "$fault_line" access)"
+	fault_si="$(log_field "$fault_line" si)"
+	signaled_pid="$(printf '%s\n' "$signaled_line" | sed -nE 's/.*pid=([0-9]+).*/\1/p' | head -1)"
+	signaled_signal="$(printf '%s\n' "$signaled_line" | sed -nE 's/.*signal=([0-9]+).*/\1/p' | head -1)"
+
+	cat <<JSON
+{
+    "first_svc": {
+      "task": $(json_string_or_null "$first_svc_task"),
+      "pid": $(json_number_or_null "$first_svc_pid"),
+      "pc": $(json_string_or_null "$first_svc_pc"),
+      "syscall": $(json_number_or_null "$first_svc_syscall")
+    },
+    "static_pie_image": {
+      "task": $(json_string_or_null "$static_pie_task"),
+      "pid": $(json_number_or_null "$static_pie_pid"),
+      "pc": $(json_string_or_null "$static_pie_pc"),
+      "base": $(json_string_or_null "$static_pie_base"),
+      "entry": $(json_string_or_null "$static_pie_entry")
+    },
+    "last_mmap_syscall": {
+      "task": $(json_string_or_null "$mmap_task"),
+      "pid": $(json_number_or_null "$mmap_pid"),
+      "pc": $(json_string_or_null "$mmap_pc"),
+      "syscall": $(json_number_or_null "$mmap_syscall"),
+      "args": [$(json_string_or_null "$mmap_x0"), $(json_string_or_null "$mmap_x1"), $(json_string_or_null "$mmap_x2"), $(json_string_or_null "$mmap_x3")]
+    },
+    "fatal_user_fault": {
+      "task": $(json_string_or_null "$fault_task"),
+      "pid": $(json_number_or_null "$fault_pid"),
+      "pc": $(json_string_or_null "$fault_pc"),
+      "lr": $(json_string_or_null "$fault_lr"),
+      "sp": $(json_string_or_null "$fault_sp"),
+      "addr": $(json_string_or_null "$fault_addr"),
+      "access": $(json_number_or_null "$fault_access"),
+      "si": $(json_number_or_null "$fault_si")
+    },
+    "signaled_process": {
+      "pid": $(json_number_or_null "$signaled_pid"),
+      "signal": $(json_number_or_null "$signaled_signal")
+    }
+  }
+JSON
+}
+
 write_json_report() {
 	local status="$1"
 	local passed="$2"
@@ -194,9 +326,13 @@ write_json_report() {
 	local escaped_configuration
 	local escaped_destination
 	local escaped_profile
-	local escaped_scheme
+		local escaped_scheme
+		local escaped_required_simulator_id
+		local escaped_required_simulator_name
+		local escaped_simulator_booted_ids
 	local artifacts_json
 	local failure_context
+	local tcti_runtime_events
 	local preflight_only="false"
 	if [ -n "$runtime_preflight_only" ]; then
 		preflight_only="true"
@@ -207,10 +343,14 @@ write_json_report() {
 	escaped_bundle_id="$(json_escape "$bundle_id")"
 	escaped_configuration="$(json_escape "$configuration")"
 	escaped_destination="$(json_escape "$destination")"
-	escaped_profile="$(json_escape "$profile")"
-	escaped_scheme="$(json_escape "$scheme")"
+		escaped_profile="$(json_escape "$profile")"
+		escaped_scheme="$(json_escape "$scheme")"
+		escaped_required_simulator_id="$(json_escape "$required_simulator_id")"
+		escaped_required_simulator_name="$(json_escape "$required_simulator_name")"
+		escaped_simulator_booted_ids="$(json_escape "$simulator_booted_ids")"
 	artifacts_json="$(json_artifacts_array)"
 	failure_context="$(failure_context_json)"
+	tcti_runtime_events="$(tcti_runtime_events_json)"
 	cat >"$json_report.tmp" <<JSON
 {
   "artifacts": $artifacts_json,
@@ -242,13 +382,19 @@ write_json_report() {
   "profile": "$escaped_profile",
   "readiness_gate_eligible": $readiness_eligible,
   "release_gate_eligible": $release_eligible,
-  "scheme": "$escaped_scheme",
-  "selected_device_id": $(json_string_or_null "$device_id"),
-  "selected_device_name": $(json_string_or_null "$device_name"),
-  "selected_xcode_device_id": $(json_string_or_null "$device_xcode_id"),
-  "status": "$status",
+	  "scheme": "$escaped_scheme",
+	  "selected_device_id": $(json_string_or_null "$device_id"),
+	  "selected_device_name": $(json_string_or_null "$device_name"),
+	  "selected_xcode_device_id": $(json_string_or_null "$device_xcode_id"),
+	  "simulator_booted_count": $(json_string_or_null "$simulator_booted_count"),
+	  "simulator_booted_ids": "$escaped_simulator_booted_ids",
+	  "simulator_single_booted": $simulator_single_booted,
+	  "tcti_required_simulator_id": "$escaped_required_simulator_id",
+	  "tcti_required_simulator_name": "$escaped_required_simulator_name",
+	  "status": "$status",
   "summary": "$escaped_message",
   "target": "$gate",
+  "tcti_runtime_events": $tcti_runtime_events,
   "virtual_cpu_model": "orlix-aarch64-v1"
 }
 JSON
@@ -304,6 +450,10 @@ simulator_tcti_stability_report_passed() {
 	report_has_passed "$path" || return 1
 	grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$path" || return 1
 	grep -q '"destination"[[:space:]]*:[[:space:]]*"iphonesimulator"' "$path" || return 1
+	grep -q "\"selected_device_id\"[[:space:]]*:[[:space:]]*\"$required_simulator_id\"" "$path" || return 1
+	grep -q "\"selected_device_name\"[[:space:]]*:[[:space:]]*\"$required_simulator_name\"" "$path" || return 1
+	grep -q '"simulator_booted_count"[[:space:]]*:[[:space:]]*"1"' "$path" || return 1
+	grep -q '"simulator_single_booted"[[:space:]]*:[[:space:]]*true' "$path" || return 1
 	grep -Eq '"(gate|target)"[[:space:]]*:[[:space:]]*"tcti-simulator-stability"' "$path" || return 1
 	grep -q '"backend"[[:space:]]*:[[:space:]]*"tcti"' "$path" || return 1
 	grep -q '"profile"[[:space:]]*:[[:space:]]*"tcti_runtime"' "$path" || return 1
@@ -320,13 +470,7 @@ physical_tcti_preflight() {
 	if autonomous_tcti_reports_passed && simulator_tcti_stability_report_passed; then
 		return 0
 	fi
-	if [ "$tcti_device_override" = "I_ACCEPT_DEVICE_DEBUG_DEBT" ]; then
-		[ -n "$tcti_device_override_reason" ] ||
-			die "ORLIX_TCTI_DEVICE_OVERRIDE_REASON is required when using ORLIX_TCTI_DEVICE_OVERRIDE."
-		tcti_evidence_mode=1
-		return 0
-	fi
-	die "Physical TCTI gates require passing autonomous TCTI reports and a current passing simulator stability report before device work. Set ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT and ORLIX_TCTI_DEVICE_OVERRIDE_REASON only for evidence collection."
+	die "Physical TCTI gates require passing autonomous TCTI reports and a current passing simulator stability report before device work."
 }
 
 validate_gate() {
@@ -413,7 +557,78 @@ for runtime, devices in data.get("devices", {}).items():
 
 for identifier, name, state in matches:
     print(f"{identifier} {name} [{state}]")
+	PY
+}
+
+assert_tcti_simulator_scope() {
+	case "$gate" in
+	tcti-*) ;;
+	*) return ;;
+	esac
+
+	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
+		return
+	fi
+
+	if [ -z "$required_simulator_id" ] || [ -z "$required_simulator_name" ]; then
+		die "TCTI simulator gates require ORLIX_TCTI_REQUIRED_SIMULATOR_ID and ORLIX_TCTI_REQUIRED_SIMULATOR_NAME."
+	fi
+	if [ -n "$simulator_id" ] && [ "$simulator_id" != "$required_simulator_id" ]; then
+		die "TCTI simulator gates must use ${required_simulator_name} (${required_simulator_id}); got simulator id \`${simulator_id}\`."
+	fi
+	simulator_id="$required_simulator_id"
+}
+
+assert_single_required_simulator_booted() {
+	local allow_zero="${1:-false}"
+	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
+		return
+	fi
+
+	local simulator_state_json="$artifact_dir/simulator-booted-state.json"
+	local booted_txt="$artifact_dir/simulator-booted.txt"
+
+	xcrun simctl list devices -j >"$simulator_state_json" 2>"$artifact_dir/simulator-booted-state.stderr" ||
+		die "\`xcrun simctl list devices\` failed while checking booted simulator state."
+
+	python3 - "$simulator_state_json" <<'PY' >"$booted_txt"
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+
+for devices in data.get("devices", {}).values():
+    if not isinstance(devices, list):
+        continue
+    for device in devices:
+        if not isinstance(device, dict):
+            continue
+        if device.get("state") != "Booted":
+            continue
+        udid = device.get("udid")
+        name = device.get("name")
+        if isinstance(udid, str) and isinstance(name, str):
+            print(f"{udid}\t{name}")
 PY
+	simulator_booted_count="$(wc -l <"$booted_txt" | tr -d '[:space:]')"
+	simulator_booted_ids="$(cut -f1 "$booted_txt" | paste -sd, -)"
+
+	if [ "$simulator_booted_count" -eq 0 ] && [ "$allow_zero" = "true" ]; then
+		return
+	fi
+	if [ "$simulator_booted_count" -ne 1 ]; then
+		die "TCTI simulator gates require exactly one booted simulator, ${required_simulator_name} (${required_simulator_id}); found ${simulator_booted_count}."
+	fi
+
+	local booted_id booted_name
+	IFS=$'\t' read -r booted_id booted_name <"$booted_txt"
+	if [ "$booted_id" != "$required_simulator_id" ] || [ "$booted_name" != "$required_simulator_name" ]; then
+		die "TCTI simulator gates require the only booted simulator to be ${required_simulator_name} (${required_simulator_id}); found ${booted_name:-unknown} (${booted_id:-unknown})."
+	fi
+
+	simulator_single_booted="true"
 }
 
 select_device() {
@@ -445,12 +660,87 @@ select_device() {
 	fi
 }
 
+assert_tcti_simulator_scope_top_level() {
+	case "$gate" in
+	tcti-*) ;;
+	*) return ;;
+	esac
+
+	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
+		return
+	fi
+
+	if [ -z "$required_simulator_id" ] || [ -z "$required_simulator_name" ]; then
+		die "TCTI simulator gates require ORLIX_TCTI_REQUIRED_SIMULATOR_ID and ORLIX_TCTI_REQUIRED_SIMULATOR_NAME."
+	fi
+	if [ -n "$simulator_id" ] && [ "$simulator_id" != "$required_simulator_id" ]; then
+		die "TCTI simulator gates must use ${required_simulator_name} (${required_simulator_id}); got simulator id \`${simulator_id}\`."
+	fi
+	simulator_id="$required_simulator_id"
+}
+
+assert_single_required_simulator_booted_top_level() {
+	local allow_zero="${1:-false}"
+	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
+		return
+	fi
+
+	local simulator_state_json="$artifact_dir/simulator-booted-state.json"
+	local booted_txt="$artifact_dir/simulator-booted.txt"
+
+	xcrun simctl list devices -j >"$simulator_state_json" 2>"$artifact_dir/simulator-booted-state.stderr" ||
+		die "\`xcrun simctl list devices\` failed while checking booted simulator state."
+
+	python3 - "$simulator_state_json" <<'PY' >"$booted_txt"
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+
+for devices in data.get("devices", {}).values():
+    if not isinstance(devices, list):
+        continue
+    for device in devices:
+        if not isinstance(device, dict):
+            continue
+        if device.get("state") != "Booted":
+            continue
+        udid = device.get("udid")
+        name = device.get("name")
+        if isinstance(udid, str) and isinstance(name, str):
+            print(f"{udid}\t{name}")
+PY
+	simulator_booted_count="$(wc -l <"$booted_txt" | tr -d '[:space:]')"
+	simulator_booted_ids="$(cut -f1 "$booted_txt" | paste -sd, -)"
+
+	if [ "$simulator_booted_count" -eq 0 ] && [ "$allow_zero" = "true" ]; then
+		return
+	fi
+	if [ "$simulator_booted_count" -ne 1 ]; then
+		die "TCTI simulator gates require exactly one booted simulator, ${required_simulator_name} (${required_simulator_id}); found ${simulator_booted_count}."
+	fi
+
+	local booted_id booted_name
+	IFS=$'\t' read -r booted_id booted_name <"$booted_txt"
+	if [ "$booted_id" != "$required_simulator_id" ] || [ "$booted_name" != "$required_simulator_name" ]; then
+		die "TCTI simulator gates require the only booted simulator to be ${required_simulator_name} (${required_simulator_id}); found ${booted_name:-unknown} (${booted_id:-unknown})."
+	fi
+
+	simulator_single_booted="true"
+}
+
 select_simulator() {
+	assert_tcti_simulator_scope_top_level
 	if [ -n "$device_id" ]; then
 		return
 	fi
 	if [ -n "$simulator_id" ]; then
 		device_id="$simulator_id"
+		if [ "$device_id" = "$required_simulator_id" ]; then
+			device_name="$required_simulator_name"
+		fi
 		return
 	fi
 
@@ -784,30 +1074,36 @@ capture_launch() {
 	local launch_pid
 	set +e
 	if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
-		local launch_status
+		local launch_status log_stream_pid
 		touch "$artifact_dir/launch.json" "$artifact_dir/launch.log"
+		run_command_with_timeout "$((capture_seconds + 15))" \
+			"$artifact_dir/simulator-unified.log" \
+			"$artifact_dir/simulator-unified.stderr" \
+			xcrun simctl spawn "$device_id" log stream \
+				--level info \
+				--style compact \
+				--predicate 'subsystem == "com.rudironsoni.Orlix"' &
+		log_stream_pid=$!
+		sleep 1
 		run_command_with_timeout "$capture_seconds" \
 			"$artifact_dir/launch-console.log" \
 			"$artifact_dir/launch.stderr" \
+			env SIMCTL_CHILD_ORLIX_SIMULATOR_CAPTURE_TERMINAL_OUTPUT=1 \
 			xcrun simctl launch \
 			--terminate-running-process \
-			--console \
-			"$device_id" \
-			"$bundle_id"
+				--console \
+				"$device_id" \
+				"$bundle_id"
 		launch_status=$?
+		xcrun simctl terminate "$device_id" "$bundle_id" >/dev/null 2>&1 || true
+		wait "$log_stream_pid" || true
+		collect_simulator_terminal_capture
 		set -e
 		if [ "$launch_status" -ne 0 ] && [ "$launch_status" -ne 124 ]; then
 			failure_stage="simulator-launch"
 			failure_exit_status="$launch_status"
 			die "Launching Orlix on simulator failed."
 		fi
-		xcrun simctl spawn "$device_id" log show \
-			--last "$((capture_seconds + 60))s" \
-			--info \
-			--style compact \
-			--predicate 'subsystem == "com.rudironsoni.Orlix"' \
-			>"$artifact_dir/simulator-unified.log" \
-			2>"$artifact_dir/simulator-unified.stderr" || true
 		return
 	else
 		xcrun devicectl --timeout "$((capture_seconds + 15))" \
@@ -830,6 +1126,26 @@ capture_launch() {
 	wait "$launch_pid" >/dev/null 2>&1 || true
 }
 
+collect_simulator_terminal_capture() {
+	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
+		return
+	fi
+
+	local data_container
+	data_container="$(xcrun simctl get_app_container "$device_id" "$bundle_id" data 2>"$artifact_dir/app-container.stderr" || true)"
+	if [ -z "$data_container" ]; then
+		touch "$artifact_dir/simulator-terminal-output.txt"
+		return
+	fi
+	printf '%s\n' "$data_container" >"$artifact_dir/app-container.txt"
+	local capture_path="$data_container/tmp/orlix-simulator-terminal-output.txt"
+	if [ -f "$capture_path" ]; then
+		cp "$capture_path" "$artifact_dir/simulator-terminal-output.txt"
+	else
+		touch "$artifact_dir/simulator-terminal-output.txt"
+	fi
+}
+
 assert_no_host_exec_guest_text() {
 	if grep -E -i 'guest.*(PROT_EXEC|EXECUTE)|attempted_prot=.*EXEC|vm_protect.*EXEC|mmap.*PROT_EXEC' \
 		"$artifact_dir"/launch*.log "$artifact_dir"/launch*.stderr \
@@ -843,9 +1159,10 @@ assert_no_simulator_fatal_runtime() {
 	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
 		die "Gate \`$gate\` is simulator-only."
 	fi
-	if grep -E -i 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|crash' \
+	if grep -E 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|Fatal error|crash|Crash|orlix-init: process signaled .* signal=11|orlix-init: shell exit status=.*139' \
 		"$artifact_dir"/launch-console.log \
 		"$artifact_dir"/launch.log \
+		"$artifact_dir"/simulator-terminal-output.txt \
 		"$artifact_dir"/simulator-unified.log \
 		>"$artifact_dir/tcti-simulator-fatal-runtime.txt" 2>/dev/null; then
 		failure_stage="tcti-simulator-stability"
@@ -860,6 +1177,7 @@ assert_gate_markers() {
 		grep -F 'Orlix TCTI: svc #0' \
 			"$artifact_dir/launch-console.log" \
 			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-terminal-output.txt" \
 			"$artifact_dir/simulator-unified.log" \
 			>"$artifact_dir/tcti-first-syscall.txt" 2>/dev/null || {
 			failure_stage="tcti-first-syscall-marker"
@@ -870,6 +1188,7 @@ assert_gate_markers() {
 		grep -F 'Orlix TCTI: svc #0' \
 			"$artifact_dir/launch-console.log" \
 			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-terminal-output.txt" \
 			"$artifact_dir/simulator-unified.log" \
 			>"$artifact_dir/tcti-first-syscall.txt" 2>/dev/null || {
 			failure_stage="tcti-first-syscall-marker"
@@ -881,6 +1200,7 @@ assert_gate_markers() {
 		grep -E 'linux-console|Orlix TCTI: svc #0|ORLIX|Linux version' \
 			"$artifact_dir/launch-console.log" \
 			"$artifact_dir/launch.log" \
+			"$artifact_dir/simulator-terminal-output.txt" \
 			"$artifact_dir/simulator-unified.log" \
 			>"$artifact_dir/tcti-console-write.txt" 2>/dev/null || {
 			failure_stage="tcti-console-write-marker"
@@ -917,10 +1237,12 @@ main() {
 	require_command python3
 
 	select_target
+	assert_single_required_simulator_booted_top_level true
 	build_kernel_for_gate
 	assert_tcti_kernel_config
 	build_app_for_target
 	install_app "$app_path"
+	assert_single_required_simulator_booted_top_level false
 	capture_launch
 	assert_no_host_exec_guest_text
 	assert_gate_markers

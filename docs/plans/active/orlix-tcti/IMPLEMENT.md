@@ -173,10 +173,10 @@ Boundary:
     - `simulator-tcti-init-first-syscall`.
     - `simulator-tcti-runtime-stability`.
   - Direct physical `runtime-validation` preflight now also requires a current passing simulator stability JSON report before non-override device work can proceed.
-  - The stability gate allowed scope is intentionally narrow:
-    - `tools/runtime/orlix-runtime-validation.sh`.
-    - `docs/plans/active/orlix-tcti/IMPLEMENT.md`.
-  - Production TCTI files are not allowed by this gate. The simulator failure must first be reduced into a no-phone fixture before production patching.
+- The initial stability gate allowed scope was intentionally narrow:
+  - `tools/runtime/orlix-runtime-validation.sh`.
+  - `docs/plans/active/orlix-tcti/IMPLEMENT.md`.
+- Production TCTI files were not allowed before reduction. After the no-phone reducer gates captured the simulator fatal runtime signatures, the current `simulator-tcti-runtime-stability` envelope may allow scoped `arch/orlix` TCTI, process, and mm fixes required by the reducer-backed simulator failure. The gate remains simulator-only and still forbids physical-device work, production assembly, gadget expansion, HostAdapter Linux behavior, Darwin syscall behavior, generated-tree edits, product defconfig flips, and Linux runtime semantics outside upstream Linux ownership.
 - Runtime validation behavior:
   - `tcti-simulator-stability` is simulator-only.
   - It requires the captured `Orlix TCTI: svc #0` marker.
@@ -3118,6 +3118,110 @@ Harness state checkpoint:
 - `agent-status` recognizes `first-gadget-init-001-exit` passed.
 - `agent-next` advances to the next certification gate.
 - Release and readiness gates remain ineligible.
+
+### Checkpoint: Simulator TCTI Runtime Stability Passes
+
+- Harness-selected gate before the runtime fix: `simulator-tcti-runtime-stability`.
+- Selected command:
+  `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Simulator used: `Orlix-iPhone-15-Pro-Max` (`C47ED88D-0D0A-420D-8C78-D4C1D34A276D`).
+- Single-simulator constraint: verified only the pinned simulator was booted before simulator gate runs.
+- Structured failure reducer:
+  - Added `tcti_runtime_events` to simulator runtime-validation JSON so reducers consume machine-readable failure facts instead of grepping prose logs.
+  - Added `tcti-post-bash-mmap-read-fault-reducer`.
+  - Report: `Build/TCTI/reports/tcti-post-bash-mmap-read-fault-reducer/report.json`.
+  - Reducer: `Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json`.
+  - Replay: `make tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json` exited `0`.
+- Runtime fix:
+  - `tcti_handle_user_fault()` now synchronizes the hosted user fault window after Linux faults in a valid TCTI user page.
+  - This keeps Linux MM as the authority and only refreshes the host-visible mapping window before TCTI retries the instruction.
+  - No HostAdapter Linux behavior, Darwin syscall behavior, VFS, fd table, process, signal, scheduler, or custom Linux runtime semantics were added.
+- Passing simulator report:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260703T082036Z-25210.json`.
+  - `status=pass`, `passed=true`.
+  - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - `selected_device_name=Orlix-iPhone-15-Pro-Max`.
+  - `simulator_single_booted=true`.
+  - Forbidden behavior remained false: `generated_exec_memory`, `host_exec_guest_text`, `host_x18`, `map_jit`, `native_ios_api_exposure_to_guest`, `rwx`.
+- Harness status after the pass:
+  - `simulator-tcti-runtime-stability=pass`.
+  - `physical_device_allowed=true`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+  - `agent-next` selects `physical-tcti-init-first-syscall`.
+- Boundary:
+  - No custom MCP added.
+  - No `tools/agent` added.
+  - No production TCTI assembly added.
+  - No physical-device gate run in this checkpoint.
+  - No product defconfig flip.
+  - No generated Linux/build tree edits.
+  - The simulator gate is now the evidence-backed prerequisite for any later physical-device request.
+- Verification:
+  - `rtk proxy git diff --check`: pass.
+  - `rtk proxy make agent-harness-check`: pass.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: pass, simulator stability pass recorded.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: pass, next selected gate is physical first-syscall.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: pass.
+  - `rtk proxy make tcti-plan-consistency`: pass.
+  - `rtk proxy make tcti-report-schema-check`: pass.
+  - `rtk proxy make tcti-toolchain-check`: pass.
+  - `rtk proxy make tcti-golden-elf`: pass.
+  - `rtk proxy make tcti-golden-elf CASE=init_001_exit EXECUTE=switch-debug`: pass.
+  - `rtk proxy make tcti-appstore-safety-audit`: pass.
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=development`: pass.
+  - `rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=release`: pass.
+
+### Checkpoint: Simulator TCTI Progress Through Static PIE Relocation And SIMD Self-Move
+
+- Harness-selected gates advanced through:
+  - `tcti-static-pie-relocation-fix`
+  - `no-phone-tcti-simd-self-move-reducer`
+  - `tcti-simd-self-move-fix`
+  - `no-phone-tcti-brk-trap-reducer`
+- Required simulator: `Orlix-iPhone-15-Pro-Max` (`C47ED88D-0D0A-420D-8C78-D4C1D34A276D`).
+- Simulator-only rule remained active. Physical-device gates stayed blocked.
+- Static PIE `R_AARCH64_RELATIVE` relocation support moved the runtime past the prior null GOT byte-load user fault:
+  - previous blocker: `user fault addr=0x0 access=1`, init killed with `exitcode=0x0000000b`;
+  - current evidence shows `Orlix TCTI: applied static PIE R_AARCH64_RELATIVE relocations`;
+  - the simulator now reaches real TCTI syscall markers again.
+- Narrow decoded SIMD support added only for the observed no-op lane self-move:
+  - instruction: `0x6e080400`;
+  - disassembly: `mov v0.d[0], v0.d[0]`;
+  - supported behavior: decoded no-op only when `rd == rn`, lane `0`, width `64`;
+  - no broad SIMD/vector register model added.
+- Reducer and fix reports:
+  - `Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json`
+  - `Build/TCTI/reports/tcti-simd-self-move-reducer/report.json`
+  - `Build/TCTI/reports/tcti-simd-self-move-fix/report.json`
+  - `Build/TCTI/reports/tcti-brk-trap-reducer/report.json`
+- Replayed reducers:
+  - `Build/TCTI/reproducers/tcti-simd-self-move-reducer/execution-simd-self-move-unsupported.json`
+  - `Build/TCTI/reproducers/tcti-brk-trap-reducer/execution-brk-trap-unsupported.json`
+- Latest pinned simulator stability report:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260702T205020Z-95399.json`
+  - status: `fail`;
+  - selected simulator: `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`;
+  - reached syscall `178`;
+  - reached syscall `222` (`mmap`);
+  - current blocker: unsupported `0xd4200020`, `brk #0x1`, init killed with `exitcode=0x00000004`.
+- Current interpretation:
+  - `brk #0x1` is not a semantic success path and must not be implemented as a no-op;
+  - disassembly shows a guard around GOT slot `0x43348`, which remains zero while neighboring static PIE relative GOT entries are relocated;
+  - next production work must address the underlying static-PIE startup/GOT cause through a reduced no-phone proof before simulator stability can pass.
+
+Boundary:
+
+- No custom MCP added.
+- No `tools/agent` added.
+- No physical-device gate run.
+- No production TCTI assembly added.
+- No gadget dispatch added.
+- No product defconfig flip.
+- No HostAdapter Linux behavior added.
+- No Darwin guest syscall side effects added.
+- No VFS, fd table, process model, scheduler, signal, or Linux runtime semantics added.
+- No BRK-as-success no-op added.
 
 ### Checkpoint: Structural Golden `init_007_mprotect`
 

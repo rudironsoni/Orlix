@@ -1,4 +1,4 @@
-$(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -10,14 +10,15 @@ $(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	command -v "$(ORLIXOS_AR)" >/dev/null 2>&1 || { echo "llvm-ar is required to build Bash; set ORLIXOS_AR=/path/to/llvm-ar" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_RANLIB)" >/dev/null 2>&1 || { echo "llvm-ranlib is required to build Bash; set ORLIXOS_RANLIB=/path/to/llvm-ranlib" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package Bash; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_OBJDUMP)" >/dev/null 2>&1 || { echo "llvm-objdump is required to inspect Bash; set ORLIXOS_OBJDUMP=/path/to/llvm-objdump" >&2; exit 1; }; \
 	export PATH="$(ORLIXOS_PACKAGE_BOOTSTRAP_PATH)"; \
 	command -v bison >/dev/null 2>&1 || { echo "GNU bison is required to build Bash; set ORLIXOS_PACKAGE_BOOTSTRAP_PATH to include it" >&2; exit 1; }; \
 	rm -rf "$(ORLIXOS_BASH_BUILD_DIR)" "$(ORLIXOS_BASH_BINARY)"; \
 	mkdir -p "$(ORLIXOS_BASH_BUILD_DIR)" "$(dir $(ORLIXOS_BASH_BINARY))"; \
 	cd "$(ORLIXOS_BASH_BUILD_DIR)"; \
-	export CC="$(ORLIXOS_CC_COMMAND) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fno-pie"; \
+	export CC="$(ORLIXOS_CC_COMMAND) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE"; \
 	export CFLAGS="-O2 -Wno-unknown-warning-option"; \
-	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
+	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
 	export LIBS="$$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $$rtlib -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
 	export AR="$(ORLIXOS_AR)"; \
 	export RANLIB="$(ORLIXOS_RANLIB)"; \
@@ -29,7 +30,8 @@ $(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	$(MAKE) -j1 bash; \
 	cp "$(ORLIXOS_BASH_BUILD_DIR)/bash" "$(ORLIXOS_BASH_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_BASH_BINARY)"; \
-	file "$(ORLIXOS_BASH_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_BASH_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_BASH_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_BASH_BINARY)" >&2; exit 1; }; \
+	"$(ORLIXOS_OBJDUMP)" -p "$(ORLIXOS_BASH_BINARY)" | awk '/^[[:space:]]*LOAD[[:space:]]/ && $$0 !~ /align 2\*\*14/ { print "Orlix Bash PT_LOAD is not 16 KiB aligned: " $$0 > "/dev/stderr"; bad=1 } END { exit bad }'; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=bash\nversion=%s\nsha256=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(BASH_VERSION)" "$(BASH_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.stamp"; \
 	rm -rf "$(ORLIXOS_BASH_BUILD_DIR)"; \
 	echo "built Orlix Linux Bash package input: $(ORLIXOS_BASH_BINARY)"

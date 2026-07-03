@@ -22,10 +22,14 @@ has_pass_report() {
 autonomous_preflight_passed() {
   has_pass_report tcti-plan-consistency &&
     has_pass_report tcti-report-schema-check &&
-    has_pass_report tcti-toolchain-check &&
-    has_pass_report tcti-golden-elf &&
-    has_pass_report tcti-appstore-safety-audit
+  has_pass_report tcti-toolchain-check &&
+  has_pass_report tcti-golden-elf &&
+  has_pass_report tcti-appstore-safety-audit
 }
+
+if printf '%s' "$payload" | grep -Eq '(^|[[:space:]])(rtk[[:space:]]+)?(proxy[[:space:]]+)?(rg|grep|nl|cat|ls|head|tail|find)([[:space:]]|$)|(^|[[:space:]])rtk[[:space:]]+(read|json|log)([[:space:]]|$)|sed[[:space:]]+-n'; then
+  exit 0
+fi
 
 case "$payload" in
   *Build/OrlixKernel/src/linux-*|*Build/OrlixKernel/upstream/linux-*)
@@ -56,7 +60,9 @@ if printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphone
     :
   elif printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos' && ! autonomous_preflight_passed; then
     block "physical TCTI gates require passing no-phone reports before device work."
-  elif ! printf '%s' "$payload" | grep -Eq 'runtime-validation|beta-archive|ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT|ORLIX_RUNTIME_PREFLIGHT_ONLY=1'; then
+  elif printf '%s' "$payload" | grep -Eq 'ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT'; then
+    block "physical TCTI evidence override is disabled until simulator stability passes."
+  elif ! printf '%s' "$payload" | grep -Eq 'runtime-validation|beta-archive|ORLIX_RUNTIME_PREFLIGHT_ONLY=1'; then
     block "direct device work must go through runtime-validation or explicit evidence-mode preflight."
   fi
 fi

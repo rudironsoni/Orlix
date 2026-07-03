@@ -162,6 +162,7 @@ targets:
           - $(SRCROOT)/OrlixOS/Sources/init/init.c
           - $(SRCROOT)/OrlixOS/Sources/init/rootinit.c
           - $(SRCROOT)/OrlixOS/Sources/make/config.mk
+          - $(SRCROOT)/OrlixOS/Sources/make/packages.mk
           - $(SRCROOT)/OrlixOS/Sources/make/rootfs.mk
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
@@ -241,6 +242,7 @@ targets:
           $SRCROOT/OrlixOS/Sources/init/init.c
             $SRCROOT/OrlixOS/Sources/init/rootinit.c
             $SRCROOT/OrlixOS/Sources/make/config.mk
+            $SRCROOT/OrlixOS/Sources/make/packages.mk
             $SRCROOT/OrlixOS/Sources/make/rootfs.mk
             $SRCROOT/OrlixKernel/Makefile
             $SRCROOT/OrlixKernel/Sources/ports/orlix/configs

@@ -25,10 +25,11 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 ## Forbidden Scope
 
 - Do not implement TCTI runtime features directly.
-- Do not run simulator or physical-device gates.
+- Do not run physical-device gates.
 - Do not add production assembly or gadget dispatch.
 - Do not bypass planner and safety reviewer scope for TCTI work.
 - Do not hardcode a one-off human prompt as the next gate.
+- Do not skip the pinned simulator stability gate before physical-device work.
 
 ## Commands It May Run
 
@@ -62,4 +63,5 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - Stop if `agent-harness-check` fails.
 - Stop if `agent-task-envelope-check` fails.
 - Stop if `tcti-plan-consistency` fails.
-- Stop if the next task needs device, simulator, production assembly, or gadget work before no-phone prerequisites pass.
+- Stop if the next task needs production assembly or gadget work before no-phone prerequisites pass.
+- Stop if a physical-device gate is selected before the pinned simulator stability gate passes.

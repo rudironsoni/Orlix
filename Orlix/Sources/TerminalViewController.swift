@@ -24,6 +24,7 @@ final class TerminalViewController: UIViewController {
     private lazy var linuxSessionResult = launchConfiguration.makeLinuxSession()
     private var terminalOutput: OrlixTerminalOutput?
     private lazy var terminalView = TerminalView(frame: .zero)
+    private let simulatorCapture = SimulatorTerminalCapture()
     private lazy var terminalSession: InMemoryTerminalSession = {
         return InMemoryTerminalSession(
             write: { [weak self] data in
@@ -107,12 +108,15 @@ final class TerminalViewController: UIViewController {
         }
         didStartBoot = true
 
+        simulatorCapture.reset()
         terminalSession.receive("Orlix\r\n")
+        simulatorCapture.append("Orlix\r\n")
         guard let session = linuxSession else {
 #if DEBUG || ORLIX_BETA_OBSERVABILITY
             Self.terminalUILogger.error("linux session unavailable at terminal activation")
 #endif
             terminalSession.receive(launchConfiguration.failureMessage + "\r\n")
+            simulatorCapture.append(launchConfiguration.failureMessage + "\r\n")
             return
         }
 #if DEBUG || ORLIX_BETA_OBSERVABILITY
@@ -120,7 +124,9 @@ final class TerminalViewController: UIViewController {
             "boot starting profile=\(Self.profileDisplayName(session.bootConfig.profile), privacy: .public)"
         )
 #endif
-        terminalSession.receive(launchConfiguration.startMessage(for: session) + "\r\n")
+        let startMessage = launchConfiguration.startMessage(for: session) + "\r\n"
+        terminalSession.receive(startMessage)
+        simulatorCapture.append(startMessage)
         startBootWatchdog(for: session)
         bootQueue.async { [weak self] in
             let status = session.boot()
@@ -131,7 +137,9 @@ final class TerminalViewController: UIViewController {
                 )
 #endif
                 self?.cancelBootWatchdog()
-                self?.terminalSession.receive(status.message + "\r\n")
+                let statusMessage = status.message + "\r\n"
+                self?.terminalSession.receive(statusMessage)
+                self?.simulatorCapture.append(statusMessage)
             }
         }
     }
@@ -201,13 +209,16 @@ final class TerminalViewController: UIViewController {
 
         guard !text.isEmpty else { return }
         terminalSession.receive(text)
+        simulatorCapture.append(text)
     }
 
     private func startBootWatchdog(for session: OrlixLinuxSession) {
         cancelBootWatchdog()
         let workItem = DispatchWorkItem { [weak self, weak session] in
             guard let self, let session else { return }
-            self.terminalSession.receive(Self.bootWatchdogMessage(for: session))
+            let message = Self.bootWatchdogMessage(for: session)
+            self.terminalSession.receive(message)
+            self.simulatorCapture.append(message)
         }
         bootWatchdogWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
@@ -516,6 +527,44 @@ extension TerminalViewController:
     func terminalDidResize(columns _: Int, rows _: Int) {}
 
     func terminalDidClose(processAlive _: Bool) {}
+}
+
+private final class SimulatorTerminalCapture {
+    private static let enabledValue = "1"
+    private let lock = NSLock()
+    private let url: URL?
+
+    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        guard environment["ORLIX_SIMULATOR_CAPTURE_TERMINAL_OUTPUT"] == Self.enabledValue else {
+            url = nil
+            return
+        }
+        url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("orlix-simulator-terminal-output.txt")
+    }
+
+    func reset() {
+        guard let url else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        try? Data().write(to: url, options: [.atomic])
+    }
+
+    func append(_ text: String) {
+        guard let url, let data = text.data(using: .utf8), !data.isEmpty else {
+            return
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        if FileManager.default.fileExists(atPath: url.path),
+           let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+            return
+        }
+        try? data.write(to: url, options: [.atomic])
+    }
 }
 
 private extension UIColor {
