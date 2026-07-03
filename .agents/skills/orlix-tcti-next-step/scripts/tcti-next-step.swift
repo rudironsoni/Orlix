@@ -930,6 +930,13 @@ func supersededSimulatorReducerGate(
     )
 }
 
+func staticPIEGOTNullReadSignature(_ text: String) -> Bool {
+    text.contains("Orlix TCTI: user fault") &&
+        text.contains("addr=0x0") &&
+        text.contains("access=1") &&
+        (text.contains("Attempted kill init") || text.contains("Attempted to kill init"))
+}
+
 func brkTrapSignature(_ text: String) -> Bool {
     text.contains("insn=0xd4200020") ||
         (text.contains("BRK") && text.contains("exitcode=0x00000004"))
@@ -1355,7 +1362,12 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
     case "simulator-tcti-init-first-syscall":
         return simulatorFirstSyscallPass(gate)
     case "no-phone-tcti-simulator-user-fault-reducer":
-        return basicReportGate(gate, target: "tcti-simulator-user-fault-reducer")
+        return supersededSimulatorReducerGate(
+            gate,
+            target: "tcti-simulator-user-fault-reducer",
+            staleSignature: staticPIEGOTNullReadSignature,
+            supersededBy: ["tcti-repro", "tcti-static-pie-relocation-fix"]
+        )
     case "tcti-static-pie-relocation-fix":
         return simulatorStaticPIERelocationFixPass(gate)
     case "no-phone-tcti-simd-self-move-reducer":
