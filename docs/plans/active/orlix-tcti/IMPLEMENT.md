@@ -2,6 +2,37 @@
 
 ## 2026-07-03
 
+### Checkpoint: Static PIE Relocation Gate Advances Past GOT Null Read
+
+- Harness-selected gate:
+  - `tcti-static-pie-relocation-fix`.
+  - Command: `make tcti-gate TARGET=tcti-static-pie-relocation-fix`.
+- Evidence:
+  - The no-phone reducer still replays through:
+    - `make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json`.
+  - Replay report:
+    - `Build/TCTI/reports/tcti-repro/report.json`.
+    - `status=pass`, `expected_status=fail`, `actual_replay_status=fail`.
+  - Static PIE fix report:
+    - `Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json`.
+    - `status=pass`, `passed=true`.
+  - Current simulator stability report no longer matches the old static PIE GOT null-read fatal signature.
+  - Fresh simulator stability now progresses to `sh` and records `signaled_process.signal=6`, so the next harness-selected gate remains simulator runtime stability rather than phone work.
+- Harness correction:
+  - `no-phone-tcti-simulator-user-fault-reducer` is now treated as superseded when the static PIE GOT null-read reducer still replays through `tcti-repro` and the current simulator stability report no longer matches that signature.
+  - `tcti-static-pie-relocation-fix` accepts the exact reducer replay report as reducer proof when the old reducer gate is no longer the current simulator failure.
+- Boundary:
+  - No phone gate was run.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter Linux behavior was added.
+  - No Darwin syscall guest side effect was added.
+  - No VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics were added.
+  - No generated Linux or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - Full TCTI remains incomplete.
+
 ### Checkpoint: Simulator Console Usability Required Before Phone Gates
 
 - Reason for change:

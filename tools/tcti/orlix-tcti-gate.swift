@@ -5089,14 +5089,25 @@ func runStaticPIERelocationFix() throws -> Int32 {
     }
 
     let reducerReportURL = buildPath("reports", "tcti-simulator-user-fault-reducer", "report.json")
+    let reproReportURL = buildPath("reports", "tcti-repro", "report.json")
+    var reducerProofPassed = false
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
         artifacts.append(relativePath(reducerReportURL))
-        if stringField(reducerReport, "status") != "pass" ||
-            !boolField(reducerReport, "passed") {
-            failures.append(fail("reducer-report", "static PIE GOT null-read reducer report is missing or not passing"))
-        }
-    } else {
-        failures.append(fail("reducer-report", "missing tcti-simulator-user-fault-reducer report"))
+        reducerProofPassed = stringField(reducerReport, "status") == "pass" &&
+            boolField(reducerReport, "passed")
+    }
+    if !reducerProofPassed, let reproReport = try? loadJSON(reproReportURL) as? [String: Any] {
+        let reproArtifacts = (reproReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+        artifacts.append(relativePath(reproReportURL))
+        reducerProofPassed = stringField(reproReport, "status") == "pass" &&
+            boolField(reproReport, "passed") &&
+            stringField(reproReport, "git_sha") == gitSha() &&
+            stringField(reproReport, "expected_status") == "fail" &&
+            stringField(reproReport, "actual_replay_status") == "fail" &&
+            reproArtifacts.contains("Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json")
+    }
+    if !reducerProofPassed {
+        failures.append(fail("reducer-report", "static PIE GOT null-read reducer must either pass its reducer gate or replay through tcti-repro"))
     }
 
     let engineURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
