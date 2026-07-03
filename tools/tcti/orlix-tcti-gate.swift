@@ -9320,6 +9320,92 @@ func runSIMDORR4SFix() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
+    let target = "tcti-post-busybox-sigabrt-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-static-busybox-start",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator tcti-static-busybox-start report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No simulator static BusyBox start failure report was available for the SIGABRT reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let text = reportArtifacts
+        .compactMap { try? readRelativeArtifact($0) }
+        .joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let staticPID = intField(staticPIE, "pid")
+    let signaledPID = intField(signal, "pid")
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "latest simulator static BusyBox start report is stale for current HEAD"))
+    }
+    if stringField(object, "status") != "fail" || boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "SIGABRT reducer requires the current simulator static BusyBox start failure report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        stringField(object, "simulator_booted_count") != "1" ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires a current pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    if stringField(staticPIE, "task") != "sh" || staticPID == nil {
+        failures.append(fail("static-pie-sh", "simulator evidence must show static PIE image task=sh before the abort"))
+    }
+    if intField(signal, "signal") != 6 || signaledPID == nil || staticPID != signaledPID {
+        failures.append(fail("sigabrt-sh", "simulator evidence must tie SIGABRT signal=6 to the static BusyBox shell pid"))
+    }
+    if !text.contains("Orlix TCTI: static PIE image task=sh") ||
+        !text.contains("syscall=134") ||
+        !text.contains("syscall=129") ||
+        !text.contains("syscall=139 x0=0x6") {
+        failures.append(fail("sigabrt-syscall-shape", "simulator artifacts must show sh reached rt_sigaction, kill(SIGABRT), and rt_sigreturn shape before signal=6"))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-busybox-sigabrt-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "The pinned simulator reaches static BusyBox /bin/sh under TCTI and then the shell exits via SIGABRT signal=6; reduce that report-backed failure before production TCTI patching.",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced the pinned simulator static BusyBox SIGABRT failure to report-backed no-phone evidence.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
 let tctiTargets = [
     "tcti-plan-consistency",
     "tcti-report-schema-check",
@@ -9357,6 +9443,7 @@ let tctiTargets = [
     "tcti-post-exec-sh-fetch-fault-reducer",
     "tcti-post-pie-sh-entry-fetch-fault-reducer",
     "tcti-post-bash-mmap-read-fault-reducer",
+    "tcti-post-busybox-sigabrt-reducer",
 ]
 
 func dispatch(_ target: String) throws -> Int32 {
@@ -9433,6 +9520,8 @@ case "tcti-post-exec-sh-fetch-fault-reducer":
 		return try runPostPIESHEntryFetchFaultReducer()
 	case "tcti-post-bash-mmap-read-fault-reducer":
 		return try runPostBashMmapReadFaultReducer()
+    case "tcti-post-busybox-sigabrt-reducer":
+        return try runPostBusyBoxSIGABRTReducer()
 	default:
 		throw GateError.usage("unknown TCTI target: \(target)")
 	}
