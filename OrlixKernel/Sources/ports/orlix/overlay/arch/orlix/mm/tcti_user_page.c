@@ -90,6 +90,16 @@ retry:
 	}
 }
 
+static int tcti_sync_faulted_user_window(unsigned long address)
+{
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	return orlix_sync_current_user_fault_window(address, 0);
+#else
+	(void)address;
+	return 0;
+#endif
+}
+
 static void tcti_log_fetch_resolution_failure(struct mm_struct *mm,
 					      unsigned long pc, int ret)
 {
@@ -345,8 +355,12 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 		mmap_read_unlock(mm);
 		if (ret) {
 			ret = tcti_fault_in_user_page(mm, current_va, access);
-			if (!ret)
+			if (!ret) {
+				ret = tcti_sync_faulted_user_window(current_va);
+				if (ret)
+					return ret;
 				continue;
+			}
 		}
 		if (ret)
 			return ret;
