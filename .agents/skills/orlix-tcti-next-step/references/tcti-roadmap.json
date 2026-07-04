@@ -43,7 +43,7 @@
         "Stop if product defconfigs default to TCTI.",
         "Stop if ADR or PLAN stale references contradict the current TCTI ownership model."
       ],
-      "proof_tier": "kernel",
+      "proof_tier": "rail",
       "acceptance_weight": "blocker",
       "real_stack_required": false,
       "can_claim_runtime_readiness": false
@@ -86,7 +86,7 @@
       "stop_conditions": [
         "Stop if status and passed semantics are ambiguous."
       ],
-      "proof_tier": "seed",
+      "proof_tier": "rail",
       "acceptance_weight": "blocker",
       "real_stack_required": false,
       "can_claim_runtime_readiness": false
@@ -203,7 +203,7 @@
         "Stop if the remediation would delete unrelated HostAdapter boot, memory mapping, terminal, or observability plumbing.",
         "Stop if the selected change cannot preserve native hosted execution behind an explicit non-product debug or test boundary."
       ],
-      "proof_tier": "release",
+      "proof_tier": "safety",
       "acceptance_weight": "blocker",
       "real_stack_required": false,
       "can_claim_runtime_readiness": false

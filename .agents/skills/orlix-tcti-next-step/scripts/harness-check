@@ -360,6 +360,38 @@ check_skills() {
   expect_command_fails "bad pass report without proof-tier metadata" \
     "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
     validate-report "$root/.agents/skills/orlix-tcti-next-step/fixtures/report.bad.pass-missing-proof-tier.json"
+
+  if ! "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
+    validate-roadmap "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json" >/dev/null 2>&1; then
+    fail "real roadmap proof-tier policy failed before executable target check"
+  fi
+
+  if ! make -s -C "$root" tcti-gate-list | grep -qx 'tcti-kernel-syscall-dispatch-smoke'; then
+    fail "tcti-gate-list must include tcti-kernel-syscall-dispatch-smoke"
+  fi
+
+  tmp="${TMPDIR:-/tmp}/orlix-tcti-harness-check-$$"
+  rm -rf "$tmp"
+  mkdir -p "$tmp"
+  if ORLIX_TCTI_BUILD_ROOT="$tmp" make -s -C "$root" tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke >/dev/null 2>&1; then
+    fail "tcti-kernel-syscall-dispatch-smoke must TODO-fail until real kernel proof is implemented"
+  fi
+  report="$tmp/reports/tcti-kernel-syscall-dispatch-smoke/report.json"
+  if ! test -f "$report"; then
+    fail "tcti-kernel-syscall-dispatch-smoke did not emit report.json"
+  elif ! jq -e '
+    .status == "todo" and
+    .passed == false and
+    .proof_tier == "kernel" and
+    .acceptance_weight == "blocker" and
+    .real_stack_required == true and
+    .can_claim_runtime_readiness == false and
+    .readiness_gate_eligible == false and
+    .release_gate_eligible == false
+  ' "$report" >/dev/null; then
+    fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier TODO metadata"
+  fi
+  rm -rf "$tmp"
 }
 
 check_mcp() {
