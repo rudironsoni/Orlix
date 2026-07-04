@@ -2,6 +2,49 @@
 
 ## 2026-07-04
 
+### Checkpoint: No-Phone Kernel Syscall Dispatch Smoke Executes
+
+- Harness-selected gate: `tcti-kernel-syscall-dispatch-smoke`.
+- Added a no-phone, kernel test-owned host executor for `make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime`.
+- Runner source: `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_syscall_dispatch_smoke_runner.c`.
+- Shared smoke helper: `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/syscall_dispatch_smoke.h`.
+- The runner compiles and executes the shared TCTI syscall-dispatch smoke helper with the real AArch64 decoder and emits KTAP plus `ORLIX-KUNIT-RUNNER-*` fields.
+- `make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke` now records:
+  - `workload_hook_compiled=true`;
+  - `workload_hook_executed=true`;
+  - `kunit_output_has_ktap=true`;
+  - `kunit_runner_attempted=true`;
+  - `kunit_runner_blocked=false`;
+  - `kunit_test_object_present=true`;
+  - `kunit_test_symbol_present=true`;
+  - `kunit_named_test_executed=true`;
+  - `kunit_named_test_passed=true`;
+  - `svc_boundary_reached=true`;
+  - `syscall_number_observed=__NR_getpid`;
+  - `orlix_syscall_dispatch_entered=true`;
+  - `linux_syscall_return_state_written=true`;
+  - `runtime_observed_syscalls=1`;
+  - `runtime_observed_orlix_syscall_dispatch_entries=1`.
+- Report path: `Build/TCTI/reports/tcti-kernel-syscall-dispatch-smoke/report.json`.
+- Evidence artifacts:
+  - `Build/TCTI/kernel_syscall_dispatch_smoke/evidence.json`;
+  - `Build/TCTI/kernel_syscall_dispatch_smoke/kunit-run.txt`;
+  - `Build/TCTI/kernel_syscall_dispatch_smoke/kunit-execution-evidence.json`.
+- Pass reducer: `Build/TCTI/reproducers/tcti-kernel-syscall-dispatch-smoke/kernel-syscall-dispatch-smoke-pass.json`.
+- Harness follow-on:
+  - `agent-next` now selects `tcti-kernel-execve-binfmt-elf-smoke`.
+  - `tools/tcti/orlix-tcti-gate.swift` lists that next selected target and emits an honest TODO report so `agent-task-envelope-check` cannot point at an unsupported command.
+  - `agent-harness-check` isolates its temp nested `make tcti-gate` invocation from inherited `MAKEFLAGS`/`MFLAGS` so the temp proof fixture behaves the same under direct script and Make-wrapped execution.
+- Boundary:
+  - This is kernel proof tier evidence for the no-phone syscall-dispatch smoke hook, not product runtime readiness.
+  - No simulator gate run.
+  - No phone or physical-device gate run.
+  - No production assembly added.
+  - No gadget dispatch added.
+  - No HostAdapter, OrlixOS, app-owned, VFS, fd table, process, signal, wait, exec, scheduler, or broad Linux runtime semantics added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No product defconfig flip.
+
 ### Checkpoint: Kernel KUnit Run Target Fails Closed
 
 - Harness-selected gate remains `tcti-kernel-syscall-dispatch-smoke`.
