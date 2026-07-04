@@ -4647,6 +4647,16 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Failed Kernel Blocker Remains Selected
+
+- Harness issue: after PR #27, `agent-next` could select `simulator-tcti-runtime-stability` while `tcti-kernel-syscall-dispatch-smoke` had a current failing real-stack report.
+- Root cause: `baseGateStatus` did not map generic roadmap `make tcti-gate TARGET=...` commands back to their `Build/TCTI/reports/<target>/report.json` reports, so the kernel gate appeared as `missing` with reason `unknown roadmap gate`.
+- Policy: a failed real-stack blocker report does not satisfy prerequisites and must not hand off to simulator work by accident.
+- Fix: unknown roadmap gates with a parseable `tcti-gate TARGET=<target>` now use `basicReportGate`, so the scheduler consumes the gate-runner report before selecting the next task.
+- Behavioral guard: `agent-harness-check` generates the kernel syscall dispatch smoke report in a temp TCTI build root, runs `tcti-next-step.swift status` against that root, and verifies the kernel gate is `state=fail`, `passed=false`, `satisfies_prerequisite=false`, and report-backed.
+- Current expected next gate remains `tcti-kernel-syscall-dispatch-smoke` until the no-phone OrlixKernel EL0 workload hook exists or a conscious documented simulator handoff policy replaces this blocker.
+- Boundary: no simulator gate, phone gate, production assembly, gadget dispatch, HostAdapter Linux semantics, OrlixOS Linux semantics, app Linux semantics, generated tree edits, or product defconfig flip.
+
 ### Checkpoint: Simulator-First Physical Gate Block Hardened
 
 - Harness-selected gate: `simulator-tcti-static-busybox-shell-command`.
