@@ -76,6 +76,10 @@ The next-task envelope is the implementation scope contract. It must include:
 
 - selected gate id
 - selected gate command
+- selected gate proof tier
+- selected gate acceptance weight
+- whether the selected gate requires the real stack
+- whether the selected gate can claim runtime readiness
 - prerequisite gates and report paths
 - why the gate was selected
 - allowed scope
@@ -94,6 +98,12 @@ The envelope validator must fail if:
 - forbidden scope is empty
 - validation commands are missing
 - expected report paths are missing
+- a seed or golden gate claims runtime readiness
+- a Coreutils or upstream-package gate depends only on golden ELF or seed probes
+- an OCI gate lacks OrlixOS rootfs/session proof
+- a physical-device gate lacks simulator and real-stack prerequisites
+- a product-default flip lacks real-stack and device proof
+- a passing report fixture lacks proof-tier metadata
 - a physical-device gate is selected while no-phone gates are incomplete
 - a physical-device gate is selected while the explicit pinned simulator readiness list has any missing, stale, failing, evidence-only, preflight-only, or emergency-override report
 - a gadget gate is selected before switch-debug oracle coverage exists
@@ -131,6 +141,33 @@ Current roadmap state after the latest no-phone proofs and simulator policy corr
 - This status is proof of sequencing only. It is not a completion claim for TCTI, product readiness, or physical-device support.
 
 No custom Orlix MCP may be introduced for these workflows. Repo-local workflow logic belongs in `.agents/skills`; `.codex` is only an adapter; MCP is reserved for external/proven tools such as LLDB MCP, Context7, OpenAI Docs MCP, or externally configured issue-tracker and GitHub MCP.
+
+## TCTI Proof Tiers
+
+The TCTI harness is an engineering manager over proof tiers, not a second runtime oracle. The roadmap must classify gates with:
+
+- `proof_tier`: `seed`, `kernel`, `kselftest`, `mlibc`, `mlibc-uapi`, `shell`, `coreutils`, `oci`, `simulator`, `device`, or `release`
+- `acceptance_weight`: `probe`, `blocker`, `readiness`, or `release`
+- `real_stack_required`
+- `can_claim_runtime_readiness`
+
+Tier meaning:
+
+- tier 0, `seed`: synthetic seed probes, golden ELF, switch-debug, reducers, and switch-vs-gadget differentials
+- tier 1, `kernel`: OrlixKernel/TCTI syscall, exec, fault, wait, reaping, and console probes
+- tier 2, `kselftest`: Linux kselftest or kernel-interface subset proof
+- tier 3, `mlibc`: real OrlixMLibC libc/sysdeps proof
+- tier 4, `mlibc-uapi`: OrlixMLibC-linked syscall/UAPI programs
+- tier 5, `shell`: POSIX shell environment proof
+- tier 6, `coreutils`: real Coreutils or upstream package command proof
+- tier 7, `oci`: OrlixOS OCI/rootfs/session materialization and command proof
+- tier 8, `simulator`: app-hosted simulator proof through runtime validation
+- tier 9, `device`: physical-device certification
+- tier 10, `release`: product default flip and release gates
+
+Golden ELF gates remain useful, but only as microscopes, reducers, and trace-led seed probes. They can unlock implementation prerequisites. They cannot mark Orlix Linux-usable, package-ready, simulator-ready, device-ready, or release-ready.
+
+The real acceptance path is Linux, libc, packages, OCI, app-hosted simulator, device proof, forbidden-behavior checks, and product default gating. Do not call TCTI complete until the kernel/kselftest subset, OrlixMLibC real test subset, OrlixMLibC-linked syscall/UAPI programs, shell smoke, Coreutils subset, OCI rootfs materialization and command execution, app-hosted simulator proof, physical first-syscall proof, physical console proof, forbidden behavior false, and product defconfig flip gates pass.
 
 ## Physical Evidence Being Corrected
 

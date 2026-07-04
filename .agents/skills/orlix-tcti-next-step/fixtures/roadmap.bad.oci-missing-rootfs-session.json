@@ -1,0 +1,41 @@
+{
+  "area": "orlix-tcti",
+  "description": "Bad fixture: OCI proof must reference delivered OS materialization evidence.",
+  "gates": [
+    {
+      "id": "bad-oci-layout-only",
+      "command": "make tcti-gate TARGET=tcti-oci-image-layout-parse",
+      "kind": "real-stack-oci",
+      "proof_tier": "oci",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [],
+      "allowed_scope": [
+        "tools/tcti/orlix-tcti-gate.swift"
+      ],
+      "forbidden_scope": [
+        "Do not fake Docker behavior."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-oci-image-layout-parse/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-oci-image-layout-parse"
+      ],
+      "reducer_requirements": [
+        "This fixture omits the required delivered OS materialization proof and must fail."
+      ],
+      "required_subagents_or_skills": [
+        "oci-orlixos-worker"
+      ],
+      "commit_message_template": "test(tcti): bad oci fixture",
+      "stop_conditions": [
+        "This fixture must fail."
+      ]
+    }
+  ]
+}
