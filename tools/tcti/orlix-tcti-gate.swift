@@ -904,6 +904,35 @@ func sourceFilesContainNone(root: URL, needles: [String]) -> Bool {
     return true
 }
 
+func kernelSyscallDispatchKUnitEvidence(from output: String) -> [String: String] {
+    let testName = "tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch"
+    let hasKTAP = output.range(of: #"(?m)^(KTAP|TAP) version\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^ok\s+[0-9]+\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^not ok\s+[0-9]+\b"#, options: .regularExpression) != nil
+    let namedPass = output.range(
+        of: #"(?m)^ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): pass") ||
+        output.contains("\(testName)=pass")
+    let namedFailure = output.range(
+        of: #"(?m)^not ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): fail") ||
+        output.contains("\(testName)=fail")
+    let namedMentioned = output.contains(testName)
+
+    return [
+        "kunit_test_name": testName,
+        "kunit_output_has_ktap": hasKTAP ? "true" : "false",
+        "kunit_named_test_mentioned": namedMentioned ? "true" : "false",
+        "kunit_named_test_executed": (namedPass || namedFailure) ? "true" : "false",
+        "kunit_named_test_passed": namedPass ? "true" : "false",
+        "kunit_named_test_failed": namedFailure ? "true" : "false",
+    ]
+}
+
 func runKernelSyscallDispatchSmoke() throws -> Int32 {
     let target = "tcti-kernel-syscall-dispatch-smoke"
     let command = "make tcti-gate TARGET=\(target)"
@@ -919,6 +948,7 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     let outputRoot = buildPath("kernel_syscall_dispatch_smoke")
     let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
     let kunitOutputURL = outputRoot.appendingPathComponent("kunit-build.txt")
+    let kunitExecutionEvidenceURL = outputRoot.appendingPathComponent("kunit-execution-evidence.json")
     let kunitCommand = "make -f OrlixKernel/Makefile kunit PROFILE=\(kernelProfile)"
     try ensureDirectory(outputRoot)
 
@@ -936,6 +966,7 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         "git_sha": gitSha(),
         "kernel_profile": kernelProfile,
         "kernel_config": relativePath(kernelConfig),
+        "kunit_command": kunitCommand,
         "workload_hook_command": kunitCommand,
         "workload_hook_compiled": "false",
         "workload_hook_executed": "false",
@@ -1016,54 +1047,76 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     }
     try kunitOutput.write(to: kunitOutputURL, atomically: true, encoding: .utf8)
 
+    let sourceFailureCount = failures.count
+    let kunitEvidence = kernelSyscallDispatchKUnitEvidence(from: kunitOutput)
+    try writeJSON(kunitEvidence, to: kunitExecutionEvidenceURL)
+    for (key, value) in kunitEvidence {
+        evidence[key] = value
+    }
+
+    let namedKUnitTestPassed = kunitEvidence["kunit_named_test_passed"] == "true"
     let blocker: String
-    if kunitBuildPassed {
-        evidence["tcti_entered"] = "tcti_kernel_syscall_dispatch_smoke_for_tests"
-        evidence["svc_boundary_reached"] = "hook compiled; no no-phone runner executed assertion"
-        evidence["syscall_number_observed"] = "__NR_getpid in kernel hook"
-        evidence["orlix_syscall_dispatch_entered"] = "hook compiled; no no-phone runner executed assertion"
-        evidence["linux_syscall_return_state_written"] = "hook compiled; no no-phone runner executed assertion"
-        blocker = "No no-phone KUnit/kernel runner currently executes tcti_kernel_syscall_dispatch_smoke_for_tests from tcti-gate; the kernel hook compiles but runtime syscall-dispatch observation is not available."
-        failures.append(fail("kernel-workload-hook-runner-missing", blocker))
+    if kunitBuildPassed && namedKUnitTestPassed {
+        evidence["workload_hook_executed"] = "true"
+        evidence["tcti_entered"] = "tcti_kernel_syscall_dispatch_smoke_for_tests via KUnit test tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch"
+        evidence["svc_boundary_reached"] = "true"
+        evidence["syscall_number_observed"] = "__NR_getpid"
+        evidence["orlix_syscall_dispatch_entered"] = "true"
+        evidence["linux_syscall_return_state_written"] = "true"
+        evidence["runtime_syscall_number_observed"] = "__NR_getpid"
+        evidence["runtime_orlix_syscall_dispatch_reached"] = "true"
+        blocker = ""
+    } else if kunitBuildPassed {
+        blocker = "KUnit runner does not expose machine-readable execution evidence for tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch."
+        failures.append(fail("kernel-workload-kunit-execution-evidence-missing", blocker))
     } else {
         blocker = "KUnit build could not compile the no-phone TCTI syscall dispatch workload hook."
     }
-    failures.append(fail("kernel-workload-execution-missing", blocker))
-    evidence["blocker"] = blocker
-    evidence["gate_result"] = "fail"
+    if !blocker.isEmpty {
+        failures.append(fail("kernel-workload-execution-missing", blocker))
+        evidence["blocker"] = blocker
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence["gate_result"] = status.rawValue
 
     try writeJSON(evidence, to: evidenceURL)
     let reducer = try writeReducer(
         target: target,
-        caseID: "kernel-syscall-dispatch-smoke-fail",
+        caseID: status == .pass ? "kernel-syscall-dispatch-smoke-pass" : "kernel-syscall-dispatch-smoke-fail",
         command: command,
-        reason: blocker,
-        artifacts: [relativePath(evidenceURL), relativePath(kunitOutputURL)],
-        expectedStatus: .fail
+        reason: blocker.isEmpty ? "kernel syscall dispatch KUnit smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(kunitOutputURL), relativePath(kunitExecutionEvidenceURL)],
+        expectedStatus: status
     )
-    let artifacts = [relativePath(evidenceURL), relativePath(kunitOutputURL), relativePath(reducer)]
+    let artifacts = [relativePath(evidenceURL), relativePath(kunitOutputURL), relativePath(kunitExecutionEvidenceURL), relativePath(reducer)]
     let reportURL = try writeReport(report(
         target: target,
-        status: .fail,
-        summary: "Kernel/TCTI syscall dispatch workload hook exists and is invoked through the KUnit build path, but no no-phone kernel runner executes it yet to observe runtime entry into orlix_syscall_dispatch.",
+        status: status,
+        summary: status == .pass
+            ? "Kernel/TCTI syscall dispatch KUnit smoke executed and passed the named hook test."
+            : "Kernel/TCTI syscall dispatch workload hook compiles, but the current no-phone KUnit path does not expose machine-readable execution evidence for the named hook test.",
         command: command,
         failures: failures,
         artifacts: artifacts,
         counters: [
             "source_evidence_facts": evidence.count,
-            "source_proof_failures": max(failures.count - 1, 0),
+            "source_proof_failures": sourceFailureCount,
             "kernel_workload_hook_compile_passes": kunitBuildPassed ? 1 : 0,
-            "runtime_observed_syscalls": 0,
-            "runtime_observed_orlix_syscall_dispatch_entries": 0,
+            "kunit_named_tests_executed": namedKUnitTestPassed ? 1 : 0,
+            "runtime_observed_syscalls": namedKUnitTestPassed ? 1 : 0,
+            "runtime_observed_orlix_syscall_dispatch_entries": namedKUnitTestPassed ? 1 : 0,
         ],
         kernelProfile: kernelProfile,
         kernelConfig: relativePath(kernelConfig),
         evidence: evidence
     ))
-    print("fail: \(relativePath(reportURL))")
-    print("blocker: \(blocker)")
-    print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
-    return 1
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
 }
 
 func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
