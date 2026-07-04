@@ -379,17 +379,35 @@ check_skills() {
   report="$tmp/reports/tcti-kernel-syscall-dispatch-smoke/report.json"
   if ! test -f "$report"; then
     fail "tcti-kernel-syscall-dispatch-smoke did not emit report.json"
-  elif ! jq -e '
-    .status == "todo" and
-    .passed == false and
-    .proof_tier == "kernel" and
-    .acceptance_weight == "blocker" and
-    .real_stack_required == true and
-    .can_claim_runtime_readiness == false and
-    .readiness_gate_eligible == false and
-    .release_gate_eligible == false
-  ' "$report" >/dev/null; then
-    fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier TODO metadata"
+  else
+    if ! jq -e '
+      .status == "todo" and
+      .passed == false and
+      .proof_tier == "kernel" and
+      .acceptance_weight == "blocker" and
+      .real_stack_required == true and
+      .can_claim_runtime_readiness == false and
+      .readiness_gate_eligible == false and
+      .release_gate_eligible == false
+    ' "$report" >/dev/null; then
+      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier TODO metadata"
+    fi
+    if ! jq -n -e \
+      --slurpfile report "$report" \
+      --slurpfile roadmap "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json" '
+        ($report[0]) as $report |
+        (
+          $roadmap[0].gates[]
+          | select(.command | contains("TARGET=" + $report.target))
+          | select(.proof_tier != null)
+        ) as $gate |
+        $report.proof_tier == $gate.proof_tier and
+        $report.acceptance_weight == $gate.acceptance_weight and
+        $report.real_stack_required == $gate.real_stack_required and
+        $report.can_claim_runtime_readiness == $gate.can_claim_runtime_readiness
+      ' >/dev/null; then
+      fail "tcti-kernel-syscall-dispatch-smoke report metadata does not match roadmap metadata"
+    fi
   fi
   rm -rf "$tmp"
 }
