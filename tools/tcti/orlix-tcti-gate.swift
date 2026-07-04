@@ -46,12 +46,15 @@ struct Report: Codable {
     let status: String
     let passed: Bool
     let summary: String
+    let command: String?
     let proofTier: String
     let acceptanceWeight: String
     let realStackRequired: Bool
     let canClaimRuntimeReadiness: Bool
     let gitSha: String
     let backend: String
+    let kernelProfile: String?
+    let kernelConfig: String?
     let virtualCpuModel: String
     let hostPageSize: Int
     let guestPageSize: Int
@@ -64,6 +67,7 @@ struct Report: Codable {
     let autonomousTestsBypassed: Bool
     let bypassReason: String
     let coverageWarnings: [String]
+    let evidence: [String: String]?
     let expectedStatus: String?
     let actualReplayStatus: String?
     let execution: ExecutionReport?
@@ -74,12 +78,15 @@ struct Report: Codable {
         case status
         case passed
         case summary
+        case command
         case proofTier = "proof_tier"
         case acceptanceWeight = "acceptance_weight"
         case realStackRequired = "real_stack_required"
         case canClaimRuntimeReadiness = "can_claim_runtime_readiness"
         case gitSha = "git_sha"
         case backend
+        case kernelProfile = "kernel_profile"
+        case kernelConfig = "kernel_config"
         case virtualCpuModel = "virtual_cpu_model"
         case hostPageSize = "host_page_size"
         case guestPageSize = "guest_page_size"
@@ -92,6 +99,7 @@ struct Report: Codable {
         case autonomousTestsBypassed = "autonomous_tests_bypassed"
         case bypassReason = "bypass_reason"
         case coverageWarnings = "coverage_warnings"
+        case evidence
         case expectedStatus = "expected_status"
         case actualReplayStatus = "actual_replay_status"
         case execution
@@ -719,11 +727,15 @@ func report(
     target: String,
     status: GateStatus,
     summary: String,
+    command: String? = nil,
     failures: [Failure] = [],
     artifacts: [String] = [],
     forbiddenBehavior: [String: Bool] = forbiddenDefaults(),
     counters: [String: Int] = [:],
     coverageWarnings: [String] = [],
+    kernelProfile: String? = nil,
+    kernelConfig: String? = nil,
+    evidence: [String: String]? = nil,
     releaseGateEligible: Bool? = nil,
     readinessGateEligible: Bool? = nil,
     autonomousTestsBypassed: Bool = false,
@@ -739,12 +751,15 @@ func report(
         status: status.rawValue,
         passed: status.passed,
         summary: summary,
+        command: command,
         proofTier: metadata.proofTier,
         acceptanceWeight: metadata.acceptanceWeight,
         realStackRequired: metadata.realStackRequired,
         canClaimRuntimeReadiness: metadata.canClaimRuntimeReadiness,
         gitSha: gitSha(),
         backend: "tcti",
+        kernelProfile: kernelProfile,
+        kernelConfig: kernelConfig,
         virtualCpuModel: "orlix-aarch64-v1",
         hostPageSize: hostPageSize(),
         guestPageSize: 4096,
@@ -757,6 +772,7 @@ func report(
         autonomousTestsBypassed: autonomousTestsBypassed,
         bypassReason: bypassReason,
         coverageWarnings: coverageWarnings,
+        evidence: evidence,
         expectedStatus: expectedStatus,
         actualReplayStatus: actualReplayStatus,
         execution: execution
@@ -784,12 +800,15 @@ func writeReport(_ value: Report) throws -> URL {
 
     - status: `\(value.status)`
     - passed: `\(value.passed)`
+    \(value.command.map { "- command: `\($0)`" } ?? "")
     - proof tier: `\(value.proofTier)`
     - acceptance weight: `\(value.acceptanceWeight)`
     - real stack required: `\(value.realStackRequired)`
     - can claim runtime readiness: `\(value.canClaimRuntimeReadiness)`
     - readiness gate eligible: `\(value.readinessGateEligible)`
     - release gate eligible: `\(value.releaseGateEligible)`
+    \(value.kernelProfile.map { "- kernel profile: `\($0)`" } ?? "")
+    \(value.kernelConfig.map { "- kernel config: `\($0)`" } ?? "")
     - virtual CPU: `\(value.virtualCpuModel)`
 
     ## Summary
@@ -803,6 +822,10 @@ func writeReport(_ value: Report) throws -> URL {
     ## Artifacts
 
     \(value.artifacts.isEmpty ? "- none" : value.artifacts.map { "- `\($0)`" }.joined(separator: "\n"))
+
+    ## Evidence
+
+    \(value.evidence.map { evidence in evidence.keys.sorted().map { key in "- `\(key)`: \(evidence[key] ?? "")" }.joined(separator: "\n") } ?? "- none")
 
     """
     try markdown.write(to: directory.appendingPathComponent("report.md"), atomically: true, encoding: .utf8)
@@ -861,11 +884,136 @@ func writeTodo(target: String, caseID: String = "todo", summary: String) throws 
     return 1
 }
 
+func sourceTextContains(_ text: String, _ needle: String) -> Bool {
+    text.range(of: needle, options: [.regularExpression]) != nil
+}
+
+func sourceFilesContainNone(root: URL, needles: [String]) -> Bool {
+    guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: nil) else {
+        return true
+    }
+    for case let url as URL in enumerator {
+        guard url.hasDirectoryPath == false,
+              let text = try? String(contentsOf: url, encoding: .utf8) else {
+            continue
+        }
+        for needle in needles where sourceTextContains(text, needle) {
+            return false
+        }
+    }
+    return true
+}
+
 func runKernelSyscallDispatchSmoke() throws -> Int32 {
-    try writeTodo(
-        target: "tcti-kernel-syscall-dispatch-smoke",
-        summary: "Real kernel/TCTI syscall dispatch smoke is not implemented yet. Required proof: execute the real OrlixKernel/TCTI workload, record the actual command, kernel profile or config, current git SHA, Linux-owned syscall dispatch facts through orlix_syscall_dispatch, forbidden_behavior fields, and reducer artifacts for failures. This target is supported so the roadmap command is executable, but it must not pass until that real-stack proof exists."
+    let target = "tcti-kernel-syscall-dispatch-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let kernelConfig = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "tcti_runtime_defconfig")
+    let hostedExec = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "hosted_exec.c")
+    let tctiEngine = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let tctiReport = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "report.c")
+    let syscall = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "syscall.c")
+    let hostAdapter = path("OrlixHostAdapter", "Sources")
+    let outputRoot = buildPath("kernel_syscall_dispatch_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+
+    let configText = try readText(kernelConfig)
+    let hostedExecText = try readText(hostedExec)
+    let engineText = try readText(tctiEngine)
+    let reportText = try readText(tctiReport)
+    let syscallText = try readText(syscall)
+    var failures: [Failure] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "kernel_config": relativePath(kernelConfig),
+        "runtime_syscall_number_observed": "false",
+        "runtime_orlix_syscall_dispatch_reached": "false",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("kernel-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    requireSourceFact("tcti_config_selected", configText, #"CONFIG_ORLIX_HOSTED_EXEC_TCTI=y"#, kernelConfig)
+    requireSourceFact("native_hosted_exec_disabled", configText, #"# CONFIG_ORLIX_HOSTED_EXEC_NATIVE is not set"#, kernelConfig)
+    requireSourceFact("hosted_entry_selects_tcti", hostedExecText, #"orlix_tcti_enter_user\(regs\)"#, hostedExec)
+    requireSourceFact("hosted_entry_panics_without_backend", hostedExecText, #"no hosted execution backend configured"#, hostedExec)
+    requireSourceFact("tcti_decodes_svc_boundary", engineText, #"decoded\.decode_class == TCTI_DECODE_SVC"#, tctiEngine)
+    requireSourceFact("tcti_returns_syscall_exit", engineText, #"result\.reason = TCTI_EXIT_SYSCALL"#, tctiEngine)
+    requireSourceFact("tcti_reports_syscall_boundary", engineText, #"tcti_report_syscall\(current, regs, &result\)"#, tctiEngine)
+    requireSourceFact("tcti_handles_syscall", engineText, #"static void orlix_tcti_handle_syscall"#, tctiEngine)
+    requireSourceFact("syscall_number_from_x8", engineText, #"regs->syscallno = regs->regs\[8\]"#, tctiEngine)
+    requireSourceFact("svc_pc_advances", engineText, #"regs->pc \+= sizeof\(u32\)"#, tctiEngine)
+    requireSourceFact("tcti_enters_linux_dispatch", engineText, #"orlix_syscall_dispatch\(regs\)"#, tctiEngine)
+    requireSourceFact("tcti_reports_syscall_return", engineText, #"tcti_report_syscall_return\(current, regs, nr, pc\)"#, tctiEngine)
+    requireSourceFact("kernel_dispatch_symbol", syscallText, #"long orlix_syscall_dispatch\(struct pt_regs \*regs\)"#, syscall)
+    requireSourceFact("kernel_dispatch_uses_linux_table", syscallText, #"sys_call_table\[array_index_nospec\(nr, __NR_syscalls\)\]"#, syscall)
+    requireSourceFact("kernel_dispatch_sets_linux_return", syscallText, #"syscall_set_return_value\(current, regs, 0, ret\)"#, syscall)
+    requireSourceFact("kernel_dispatch_runs_exit_to_user_work", syscallText, #"orlix_exit_to_user_mode_work\(regs\)"#, syscall)
+    requireSourceFact("svc_log_marker", reportText, #"Orlix TCTI: svc #0"#, tctiReport)
+    requireSourceFact("syscall_return_log_marker", reportText, #"Orlix TCTI: syscall return"#, tctiReport)
+
+    let hostAdapterOwnsLinuxSyscalls = !sourceFilesContainNone(
+        root: hostAdapter,
+        needles: [
+            #"orlix_syscall_dispatch"#,
+            #"sys_call_table"#,
+            #"TCTI_EXIT_SYSCALL"#,
+            #"regs->syscallno"#,
+            #"__NR_[A-Za-z0-9_]+"#,
+        ]
     )
+    if hostAdapterOwnsLinuxSyscalls {
+        failures.append(fail("hostadapter-syscall-semantics", "HostAdapter sources must not own Linux syscall dispatch semantics"))
+        evidence["hostadapter_linux_syscall_semantics"] = "present"
+    } else {
+        evidence["hostadapter_linux_syscall_semantics"] = "absent"
+    }
+
+    let blocker = "No no-phone OrlixKernel workload hook currently executes an EL0 task through orlix_tcti_enter_user and observes orlix_syscall_dispatch at runtime from tcti-gate."
+    failures.append(fail("kernel-workload-execution-missing", blocker))
+    evidence["blocker"] = blocker
+    evidence["gate_result"] = "fail"
+
+    try writeJSON(evidence, to: evidenceURL)
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "kernel-syscall-dispatch-smoke-fail",
+        command: command,
+        reason: blocker,
+        artifacts: [relativePath(evidenceURL)],
+        expectedStatus: .fail
+    )
+    let artifacts = [relativePath(evidenceURL), relativePath(reducer)]
+    let reportURL = try writeReport(report(
+        target: target,
+        status: .fail,
+        summary: "Kernel/TCTI syscall dispatch source path is present, but no executable no-phone kernel workload hook exists yet to observe runtime entry into orlix_syscall_dispatch. This is a real fail report, not a TODO.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": max(failures.count - 1, 0),
+            "runtime_observed_syscalls": 0,
+            "runtime_observed_orlix_syscall_dispatch_entries": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: relativePath(kernelConfig),
+        evidence: evidence
+    ))
+    print("fail: \(relativePath(reportURL))")
+    print("blocker: \(blocker)")
+    print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    return 1
 }
 
 func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
@@ -952,6 +1100,20 @@ func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = r
         }
         if canClaimRuntimeReadiness != expected.canClaimRuntimeReadiness {
             errors.append("report target \(target) can_claim_runtime_readiness=\(canClaimRuntimeReadiness.map(String.init) ?? "missing") does not match roadmap can_claim_runtime_readiness=\(expected.canClaimRuntimeReadiness)")
+        }
+    }
+    for key in ["command", "kernel_profile", "kernel_config"] {
+        if let value = dictionary[key], !(value is String) {
+            errors.append("field \(key) must be string")
+        }
+    }
+    if let evidence = dictionary["evidence"] {
+        guard let values = evidence as? [String: Any] else {
+            errors.append("field evidence must be object")
+            return errors
+        }
+        for (key, value) in values where !(value is String) {
+            errors.append("evidence.\(key) must be string")
         }
     }
     if status == nil || !allowed.contains(status!) {

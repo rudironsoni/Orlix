@@ -400,16 +400,17 @@ check_skills() {
   tmp="${TMPDIR:-/tmp}/orlix-tcti-harness-check-$$"
   rm -rf "$tmp"
   mkdir -p "$tmp"
-  if ORLIX_TCTI_BUILD_ROOT="$tmp" make -s -C "$root" tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke >/dev/null 2>&1; then
-    fail "tcti-kernel-syscall-dispatch-smoke must TODO-fail until real kernel proof is implemented"
-  fi
+  ORLIX_TCTI_BUILD_ROOT="$tmp" make -s -C "$root" tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke >/dev/null 2>&1 || true
   report="$tmp/reports/tcti-kernel-syscall-dispatch-smoke/report.json"
   if ! test -f "$report"; then
     fail "tcti-kernel-syscall-dispatch-smoke did not emit report.json"
   else
     if ! jq -e '
-      .status == "todo" and
-      .passed == false and
+      .status != "todo" and
+      (
+        (.status == "pass" and .passed == true) or
+        (.status == "fail" and .passed == false)
+      ) and
       .proof_tier == "kernel" and
       .acceptance_weight == "blocker" and
       .real_stack_required == true and
@@ -417,7 +418,7 @@ check_skills() {
       .readiness_gate_eligible == false and
       .release_gate_eligible == false
     ' "$report" >/dev/null; then
-      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier TODO metadata"
+      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier pass/fail metadata"
     fi
     if ! roadmap_report_metadata_matches \
       "$report" \
