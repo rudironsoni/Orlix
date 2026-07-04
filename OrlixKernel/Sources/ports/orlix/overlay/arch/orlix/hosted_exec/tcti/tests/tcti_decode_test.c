@@ -2,6 +2,7 @@
 #include <kunit/test.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
+#include <asm/unistd.h>
 
 #include "../block_cache.h"
 #include "../decode_aarch64.h"
@@ -1538,6 +1539,30 @@ static void tcti_syscall_handoff_uses_guest_x8_and_advances_pc(struct kunit *tes
 	KUNIT_EXPECT_EQ(test, 0x21012cULL, regs.pc);
 }
 
+static void tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch(struct kunit *test)
+{
+	struct tcti_kernel_syscall_dispatch_smoke_result result;
+	struct pt_regs regs = { 0 };
+
+	regs.pc = 0x210128;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+
+	KUNIT_ASSERT_TRUE(test,
+			  tcti_kernel_syscall_dispatch_smoke_for_tests(&regs,
+								       &result));
+	KUNIT_EXPECT_TRUE(test, result.decoded_svc);
+	KUNIT_EXPECT_TRUE(test, result.svc_boundary_reached);
+	KUNIT_EXPECT_TRUE(test, result.handoff_prepared);
+	KUNIT_EXPECT_EQ(test, __NR_getpid, result.observed_syscall_nr);
+	KUNIT_EXPECT_TRUE(test, result.orlix_syscall_dispatch_entered);
+	KUNIT_EXPECT_TRUE(test, result.linux_return_state_written);
+	KUNIT_EXPECT_EQ(test, result.return_value, (long)result.return_x0);
+	KUNIT_EXPECT_EQ(test, NO_SYSCALL, result.syscallno_after_dispatch);
+	KUNIT_EXPECT_GE(test, result.return_value, 0L);
+}
+
 static void tcti_successful_execve_return_restores_el0_pstate(struct kunit *test)
 {
 	struct pt_regs regs = { 0 };
@@ -2970,6 +2995,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_program_executes_init001_movz_prefix),
 	KUNIT_CASE(tcti_gadget_program_matches_switch_debug_init001_movz_prefix),
 	KUNIT_CASE(tcti_syscall_handoff_uses_guest_x8_and_advances_pc),
+	KUNIT_CASE(tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch),
 	KUNIT_CASE(tcti_successful_execve_return_restores_el0_pstate),
 	KUNIT_CASE(tcti_static_pie_initial_tls_uses_pt_tls),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),

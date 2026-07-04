@@ -413,13 +413,17 @@ check_skills() {
       ) and
       .proof_tier == "kernel" and
       .acceptance_weight == "blocker" and
-      .real_stack_required == true and
-      .can_claim_runtime_readiness == false and
-      .readiness_gate_eligible == false and
-      .release_gate_eligible == false
-    ' "$report" >/dev/null; then
-      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier pass/fail metadata"
-    fi
+	      .real_stack_required == true and
+	      .can_claim_runtime_readiness == false and
+	      .readiness_gate_eligible == false and
+	      .release_gate_eligible == false and
+	      .evidence.workload_hook_compiled == "true" and
+	      .evidence.workload_hook_executed == "false" and
+	      (.evidence.blocker | contains("No no-phone KUnit/kernel runner currently executes")) and
+	      any(.artifacts[]; . == "Build/TCTI/kernel_syscall_dispatch_smoke/kunit-build.txt" or endswith("/kernel_syscall_dispatch_smoke/kunit-build.txt"))
+	    ' "$report" >/dev/null; then
+	      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier and KUnit hook metadata"
+	    fi
     if ! roadmap_report_metadata_matches \
       "$report" \
       "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json"; then
