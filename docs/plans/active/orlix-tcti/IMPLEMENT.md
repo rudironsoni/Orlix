@@ -2,6 +2,39 @@
 
 ## 2026-07-04
 
+### Checkpoint: Kernel Syscall Dispatch Gate Parses KUnit Execution Evidence
+
+- Harness-selected gate remains `tcti-kernel-syscall-dispatch-smoke`.
+- Updated `tools/tcti/orlix-tcti-gate.swift` so the gate distinguishes:
+  - KUnit object build success.
+  - Machine-readable KUnit execution evidence for `tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch`.
+  - Runtime syscall-dispatch observation.
+- Added gate parser artifact:
+  - `Build/TCTI/kernel_syscall_dispatch_smoke/kunit-execution-evidence.json`.
+- Current result:
+  - `make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke` still fails honestly.
+  - `workload_hook_compiled=true`.
+  - `workload_hook_executed=false`.
+  - `kunit_output_has_ktap=false`.
+  - `kunit_named_test_executed=false`.
+  - `runtime_observed_syscalls=0`.
+  - `runtime_observed_orlix_syscall_dispatch_entries=0`.
+- Narrowed blocker:
+  - `KUnit runner does not expose machine-readable execution evidence for tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch.`
+- Reducer:
+  - `Build/TCTI/reproducers/tcti-kernel-syscall-dispatch-smoke/kernel-syscall-dispatch-smoke-fail.json`.
+  - Replay confirms actual status `fail`.
+- Post-commit freshness:
+  - Reran plan, safety, selected kernel smoke, reducer replay, schema, harness, status, next, and envelope checks after committing the code change.
+  - The selected report is current for the amended checkpoint commit.
+- Boundary:
+  - No simulator gate run.
+  - No phone or physical-device gate run.
+  - No production assembly added.
+  - No gadget dispatch added.
+  - No HostAdapter, OrlixOS, or app-owned Linux syscall semantics added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+
 ### Checkpoint: Kernel Syscall Dispatch Smoke Emits Real Fail Proof
 
 - Harness-selected work was overridden by the product direction to implement the real selected kernel gate body instead of adding more proof-tier contract work.
